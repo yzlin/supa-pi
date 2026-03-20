@@ -1,0 +1,108 @@
+{
+  "$schema": "./node_modules/@biomejs/biome/configuration_schema.json",
+  "assist": {
+    "actions": {
+      "source": {
+        "useSortedAttributes": "off",
+        "useSortedInterfaceMembers": "off",
+        "organizeImports": {
+          "level": "on",
+          "options": {
+            "groups": [
+              [":NODE:", ":BUN:"],
+              ":BLANK_LINE:",
+              [":PACKAGE:", ":PACKAGE_WITH_PROTOCOL:"],
+              ":BLANK_LINE:",
+              ":ALIAS:",
+              ":BLANK_LINE:",
+              ":PATH:",
+              ":BLANK_LINE:",
+              "**",
+            ],
+          },
+        },
+      },
+    },
+  },
+  "linter": {
+    "includes": ["extensions", "!**/node_modules"],
+    "enabled": true,
+    "rules": {
+      "recommended": true,
+      "a11y": {
+        "noSvgWithoutTitle": "off",
+        "useKeyWithClickEvents": "off",
+      },
+      "style": {
+        "noNonNullAssertion": "off",
+        "noParameterAssign": "error",
+        "useAsConstAssertion": "error",
+        "useDefaultParameterLast": "error",
+        "useEnumInitializers": "error",
+        "useSelfClosingElements": "error",
+        "useSingleVarDeclarator": "error",
+        "noUnusedTemplateLiteral": "error",
+        "useNumberNamespace": "error",
+        "noInferrableTypes": "error",
+        "noUselessElse": "error",
+        "noMagicNumbers": "off",
+        "useDefaultSwitchClause": "off",
+        "useConsistentTypeDefinitions": {
+          "level": "error",
+          "options": {
+            "style": "interface",
+          },
+          "fix": "safe",
+        },
+        "useConsistentBuiltinInstantiation": {
+          "level": "error",
+          "fix": "safe",
+        },
+        "useBlockStatements": {
+          "level": "error",
+          "fix": "safe",
+        },
+      },
+      "correctness": {
+        "noUnusedImports": {
+          "level": "error",
+          "fix": "safe",
+        },
+        "useExhaustiveDependencies": "off",
+        "noUnusedFunctionParameters": {
+          "level": "error",
+          "fix": "safe",
+        },
+      },
+      "nursery": {
+        "noShadow": "warn",
+        "noEqualsToNull": "off",
+      },
+      "suspicious": {
+        "noConsole": "off",
+      },
+      "complexity": {
+        "noExcessiveCognitiveComplexity": "off",
+        "noUselessFragments": {
+          "level": "error",
+          "fix": "safe",
+        },
+      },
+      "performance": {
+        "noNamespaceImport": "info",
+        "noBarrelFile": "off",
+      },
+    },
+  },
+  "formatter": {
+    "enabled": true,
+    "indentStyle": "space",
+    "indentWidth": 2,
+  },
+  "vcs": {
+    "enabled": true,
+    "clientKind": "git",
+    "useIgnoreFile": true,
+  },
+  "extends": ["ultracite/biome/core"],
+}

@@ -1,0 +1,25 @@
+{
+  "name": "supa-pi",
+  "version": "1.0.0",
+  "description": "Ethan's pi coding agent harness",
+  "readme": "README.md",
+  "type": "module",
+  "pi": {
+    "extensions": [
+      "./extensions/questionnaire.ts",
+      "./extensions/rules.ts",
+      "./extensions/plan",
+      "./extensions/skills.ts"
+    ]
+  },
+  "peerDependencies": {
+    "@mariozechner/pi-coding-agent": "*",
+    "@mariozechner/pi-ai": "*",
+    "@mariozechner/pi-tui": "*",
+    "@sinclair/typebox": "*"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.4.7",
+    "ultracite": "^7.3.1"
+  }
+}
