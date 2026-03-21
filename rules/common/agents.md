@@ -22,6 +22,12 @@ No user prompt needed:
 3. Bug fix or new feature - Use **tdd-guide** agent
 4. Architectural decision - Use **architect** agent
 
+## Subagent Strategy
+- Use subagents liberally to keep main context window clean  
+- Offload research, exploration, and parallel analysis to subagents  
+- For complex problems, throw more compute at it via subagents  
+- One task per subagent for focused execution  
+
 ## Parallel Task Execution
 
 ALWAYS use parallel Task execution for independent operations:
