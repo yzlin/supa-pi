@@ -36,7 +36,8 @@ if [ ! -f "$EXPECTED_DIR/settings.json" ]; then
     "npm:pi-web-access",
     "npm:glimpseui",
     "npm:pi-skill-palette",
-    "npm:pi-btw"
+    "npm:pi-btw",
+    "npm:claude-agent-sdk-pi"
   ],
   "hideThinkingBlock": false,
   "workingVibe": "zen",
@@ -57,6 +58,7 @@ else
   echo '  "npm:glimpseui"'
   echo '  "npm:pi-skill-palette"'
   echo '  "npm:pi-btw"'
+  echo '  "npm:claude-agent-sdk-pi"'
   echo ""
 fi
 
@@ -73,6 +75,7 @@ pi install npm:pi-web-access 2>/dev/null || echo "  pi-web-access already instal
 pi install npm:glimpseui 2>/dev/null || echo "  glimpseui already installed"
 pi install npm:pi-skill-palette 2>/dev/null || echo "  pi-skill-palette already installed"
 pi install npm:pi-btw 2>/dev/null || echo "  pi-btw already installed"
+pi install npm:claude-agent-sdk-pi 2>/dev/null || echo "  claude-agent-sdk-pi already installed"
 echo ""
 
 echo "✅ Setup complete!"
