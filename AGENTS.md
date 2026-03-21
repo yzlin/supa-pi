@@ -10,6 +10,12 @@
 - Style: telegraph. Drop filler/grammar. Min tokens (global AGENTS + replies).
 - Smallest change that solves task; no drive-by refactors
 
+## Subagent Strategy
+- Use subagents liberally to keep main context window clean  
+- Offload research, exploration, and parallel analysis to subagents  
+- For complex problems, throw more compute at it via subagents  
+- One task per subagent for focused execution  
+
 ## Docs
 
 - Start: run docs list (`docs-list` here if present; ignore if not installed); open docs before coding.
