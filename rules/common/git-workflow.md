@@ -17,8 +17,6 @@ Types: feat, fix, refactor, build, ci, chore, docs, style, perf, test
 4. Keep commits atomic (one logical change per commit)
 5. Quote paths with special characters (`[]`, `()`, spaces) in git commands
 
-Note: Configure attribution settings in `opencode.json` if needed.
-
 ## Pull Request Workflow
 
 When creating PRs:

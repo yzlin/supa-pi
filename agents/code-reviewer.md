@@ -106,7 +106,6 @@ Add your project-specific checks here. Examples:
 
 ## Post-Review Actions
 
-Since hooks are not available in OpenCode, remember to:
 - Run `prettier --write` on modified files after reviewing
 - Run `tsc --noEmit` to verify type safety
 - Check for console.log statements and remove them

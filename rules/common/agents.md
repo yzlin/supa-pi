@@ -2,8 +2,6 @@
 
 ## Available Agents
 
-Configured in `opencode.json` under `agent`:
-
 | Agent | Purpose | When to Use |
 |-------|---------|-------------|
 | planner | Implementation planning | Complex features, refactoring |

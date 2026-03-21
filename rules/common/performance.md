@@ -17,14 +17,6 @@
 - Maximum reasoning requirements
 - Research and analysis tasks
 
-Configure in `opencode.json`:
-```json
-{
-  "model": "openai/gpt-5.4",
-  "small_model": "openai/gpt-5.3-codex-spark"
-}
-```
-
 ## Context Window Management
 
 Avoid last 20% of context window for:
