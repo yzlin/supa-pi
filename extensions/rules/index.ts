@@ -65,9 +65,22 @@ export default function rulesExtension(pi: ExtensionAPI) {
       return;
     }
 
+    const promptPath = path.join(
+      path.dirname(new URL(import.meta.url).pathname),
+      "prompt.md"
+    );
+    const prompt = fs.readFileSync(promptPath, "utf8").trim();
+
     return {
       systemPrompt:
         event.systemPrompt +
+        `
+---
+
+${prompt}
+
+---
+` +
         (userRuleFiles.length > 0
           ? `
 

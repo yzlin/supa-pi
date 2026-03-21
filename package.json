@@ -7,7 +7,7 @@
   "pi": {
     "extensions": [
       "./extensions/questionnaire.ts",
-      "./extensions/rules.ts",
+      "./extensions/rules",
       "./extensions/plan",
       "./extensions/skills.ts"
     ]
