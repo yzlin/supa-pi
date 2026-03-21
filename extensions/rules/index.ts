@@ -74,15 +74,10 @@ export default function rulesExtension(pi: ExtensionAPI) {
     return {
       systemPrompt:
         event.systemPrompt +
-        `
----
-
-${prompt}
-
----
-` +
+        prompt +
         (userRuleFiles.length > 0
           ? `
+<rules>
 
 ## User Rules
 
@@ -104,6 +99,7 @@ ${projectRuleFiles.map((f) => `- ${path.join(".pi", "rules", f)}`).join("\n")}
         `
 
 When working on tasks related to these rules, use the read tool to load the relevant rule files for guidance.
+</rules>
 `,
     };
   });
