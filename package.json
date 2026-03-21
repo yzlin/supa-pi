@@ -7,6 +7,7 @@
   "pi": {
     "extensions": [
       "./extensions/questionnaire.ts",
+      "./extensions/core-prompt",
       "./extensions/rules",
       "./extensions/plan",
       "./extensions/skills.ts"

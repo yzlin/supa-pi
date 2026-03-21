@@ -74,6 +74,7 @@ export default function rulesExtension(pi: ExtensionAPI) {
     return {
       systemPrompt:
         event.systemPrompt +
+        "\n\n" +
         prompt +
         (userRuleFiles.length > 0
           ? `
