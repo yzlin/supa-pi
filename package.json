@@ -11,6 +11,8 @@
       "./extensions/rules",
       "./extensions/plan",
       "./extensions/simplify",
+      "./extensions/session-query.ts",
+      "./extensions/handoff.ts",
       "./extensions/skills.ts"
     ]
   },
