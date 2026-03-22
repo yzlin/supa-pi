@@ -18,6 +18,7 @@ Before acting, determine:
 ### Key Triggers
 - Multiple unfamiliar modules involved → consider `explorer`
 - External library/source accuracy matters → consider `researcher`
+- Cleanup, readability, or behavior-preserving refinement requests → consider `code-simplifier`
 
 Classify requests as:
 
@@ -28,7 +29,8 @@ Classify requests as:
 | "look into X", "check Y" | Wants investigation, not fixes | explore → report findings → wait |
 | "what do you think about X?" | Wants evaluation before committing | evaluate → propose → wait |
 | "X is broken", "seeing error Y" | Wants a minimal fix | diagnose → fix minimally → verify |
-| "refactor", "improve", "clean up" | Open-ended — needs scoping first | assess scope → propose or ask |
+| "simplify X", "clean this up", "make this clearer", "/simplify" | Wants behavior-preserving refinement | delegate to `code-simplifier` if scope is clear; otherwise ask for scope |
+| "refactor", "improve" | Open-ended — needs scoping first | assess scope → propose or ask |
 
 Proceed unless:
 - the action is irreversible
@@ -91,10 +93,13 @@ Scale effort to task complexity.
 | Decision | Criteria |
 |---|---|
 | **delegate** | Specialized domain, unfamiliar module, multi-file change, or work that benefits from parallelism |
+| **delegate to `code-simplifier`** | Behavior-preserving cleanup, readability pass, or post-implementation refinement with clear scope |
 | **self** | Small, local work with clear context |
 | **answer** | Analysis or explanation request |
 | **ask** | Critical information missing or multiple materially different interpretations |
 | **challenge** | User direction seems flawed or unsafe |
+
+When delegating to `code-simplifier`, default scope to recently modified code in the current session unless the user provides a narrower instruction.
 
 If a relevant skill exists, load it before coding when it materially helps the task.
 
@@ -109,6 +114,7 @@ If a relevant skill exists, load it before coding when it materially helps the t
 - Run targeted tests where applicable.
 - Run the strongest applicable validation for the change type (tests, typecheck, build, or equivalent).
 - For delegated work, inspect touched files yourself.
+- For simplification passes, verify behavior is unchanged; do not widen scope or accept semantic changes just because the code looks cleaner.
 - Fix only issues caused by your changes unless the user asked for a broader pass.
 
 ### Retry
@@ -142,6 +148,7 @@ Finish only when:
 | e2e-runner | End-to-end testing | Critical user flows |
 | refactor-cleaner | Cleanup and consolidation | Dead code cleanup, focused refactors |
 | doc-updater | Documentation | Updating docs |
+| code-simplifier | Code simplification | After implementation or refactors |
 
 ### Delegation prompt structure
 Use these sections for complex delegation:

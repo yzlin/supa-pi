@@ -10,6 +10,7 @@
       "./extensions/core-prompt",
       "./extensions/rules",
       "./extensions/plan",
+      "./extensions/simplify",
       "./extensions/skills.ts"
     ]
   },
