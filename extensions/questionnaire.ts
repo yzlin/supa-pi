@@ -47,6 +47,66 @@ interface QuestionnaireResult {
   cancelled: boolean;
 }
 
+interface AssistantTextBlock {
+  type: string;
+  text?: string;
+}
+
+function getAssistantText(content: AssistantTextBlock[]): string {
+  return content
+    .filter((block) => block.type === "text" && typeof block.text === "string")
+    .map((block) => block.text)
+    .join("\n")
+    .trim();
+}
+
+function hasToolCall(content: { type: string }[]): boolean {
+  return content.some((block) => block.type === "toolCall");
+}
+
+const QUESTIONNAIRE_REDIRECT_MESSAGE_TYPE = "questionnaire-auto-redirect";
+const QUESTIONNAIRE_MISS_LOG_TYPE = "questionnaire-plain-text-miss";
+
+function looksLikePlainTextClarification(text: string): boolean {
+  if (!text.includes("?")) {
+    return false;
+  }
+
+  return /\b(could you|can you|would you|do you want|would you prefer|do you prefer|which|what should|should i|any preference|please clarify|confirm)\b/i.test(
+    text
+  );
+}
+
+function hasAutoRedirectMessage(
+  messages: Array<{ role: string; customType?: string }>
+): boolean {
+  return messages.some(
+    (message) =>
+      message.role === "custom" &&
+      message.customType === QUESTIONNAIRE_REDIRECT_MESSAGE_TYPE
+  );
+}
+
+interface QuestionnaireMissLog {
+  source: "interactive" | "rpc" | "extension" | null;
+  redirectedAlready: boolean;
+  autoRedirected: boolean;
+  text: string;
+  timestamp: string;
+}
+
+function getQuestionnaireMissLogs(
+  entries: Array<{ type: string; customType?: string; data?: unknown }>
+): QuestionnaireMissLog[] {
+  return entries
+    .filter(
+      (entry) =>
+        entry.type === "custom" &&
+        entry.customType === QUESTIONNAIRE_MISS_LOG_TYPE
+    )
+    .map((entry) => entry.data as QuestionnaireMissLog);
+}
+
 // Schema
 const QuestionOptionSchema = Type.Object({
   value: Type.String({ description: "The value returned when selected" }),
@@ -92,11 +152,80 @@ function errorResult(
 }
 
 export default function questionnaire(pi: ExtensionAPI) {
+  let lastInputSource: "interactive" | "rpc" | "extension" | null = null;
+
+  pi.on("input", async (event) => {
+    lastInputSource = event.source;
+    return undefined;
+  });
+
+  pi.registerCommand("questionnaire-stats", {
+    description: "Show questionnaire miss and redirect stats for this session",
+    handler: async (_args, ctx) => {
+      const logs = getQuestionnaireMissLogs(ctx.sessionManager.getEntries());
+      if (logs.length === 0) {
+        ctx.ui.notify(
+          "No questionnaire misses logged in this session.",
+          "info"
+        );
+        return;
+      }
+
+      const sourceCounts = {
+        interactive: 0,
+        rpc: 0,
+        extension: 0,
+        unknown: 0,
+      };
+      let autoRedirected = 0;
+      let redirectedAlready = 0;
+
+      for (const log of logs) {
+        if (log.source === "interactive") sourceCounts.interactive++;
+        else if (log.source === "rpc") sourceCounts.rpc++;
+        else if (log.source === "extension") sourceCounts.extension++;
+        else sourceCounts.unknown++;
+
+        if (log.autoRedirected) autoRedirected++;
+        if (log.redirectedAlready) redirectedAlready++;
+      }
+
+      const recent = logs
+        .slice(-5)
+        .reverse()
+        .map((log, index) => {
+          const source = log.source ?? "unknown";
+          const flags = [
+            log.autoRedirected ? "redirected" : "not redirected",
+            log.redirectedAlready ? "after redirect" : null,
+          ]
+            .filter(Boolean)
+            .join(", ");
+          const preview = truncateToWidth(log.text.replace(/\s+/g, " "), 90);
+          return `${index + 1}. [${source}] ${flags} — ${preview}`;
+        });
+
+      pi.sendMessage({
+        customType: "questionnaire-stats",
+        content: `Questionnaire stats\n\nTotal misses: ${logs.length}\nAuto-redirected: ${autoRedirected}\nRepeated after redirect: ${redirectedAlready}\n\nBy source:\n- interactive: ${sourceCounts.interactive}\n- rpc: ${sourceCounts.rpc}\n- extension: ${sourceCounts.extension}\n- unknown: ${sourceCounts.unknown}\n\nRecent misses:\n${recent.join("\n")}`,
+        display: true,
+      });
+    },
+  });
+
   pi.registerTool({
     name: "questionnaire",
     label: "Questionnaire",
     description:
       "Ask the user one or more questions. Use for clarifying requirements, getting preferences, or confirming decisions. For single questions, shows a simple option list. For multiple questions, shows a tab-based interface.",
+    promptSnippet:
+      "Ask the user structured clarifying questions in the interactive main session",
+    promptGuidelines: [
+      "When you need user input in the interactive main session, prefer questionnaire over asking plain-text questions.",
+      "Use a single question with options for simple clarifications; use multiple questions only when several answers are needed together.",
+      "Keep questions short, decision-oriented, and limited to what is needed to proceed.",
+      "Do not use questionnaire in background or non-interactive contexts.",
+    ],
     parameters: QuestionnaireParams,
 
     async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
@@ -472,5 +601,97 @@ export default function questionnaire(pi: ExtensionAPI) {
       });
       return new Text(lines.join("\n"), 0, 0);
     },
+  });
+
+  pi.on("before_agent_start", async (event, ctx) => {
+    if (!ctx.hasUI) {
+      return undefined;
+    }
+
+    return {
+      systemPrompt:
+        event.systemPrompt +
+        `
+
+QUESTION-ASKING RULES:
+- If you need clarification from the user and interactive UI is available, prefer the questionnaire tool over asking plain-text questions.
+- Use questionnaire for preferences, confirmations, missing requirements, and tradeoff choices that materially affect the work.
+- Ask at most 1-3 focused questions at a time.
+- Do not use questionnaire in background, subagent, or non-interactive contexts.
+`,
+    };
+  });
+
+  pi.on("agent_end", async (event, ctx) => {
+    if (!ctx.hasUI) {
+      return;
+    }
+
+    const usedQuestionnaire = event.messages.some(
+      (message) =>
+        message.role === "toolResult" && message.toolName === "questionnaire"
+    );
+    if (usedQuestionnaire) {
+      return;
+    }
+
+    const assistantMessages = event.messages.filter(
+      (message) => message.role === "assistant"
+    );
+    const lastAssistant = assistantMessages.at(-1);
+    if (!lastAssistant || lastAssistant.stopReason !== "stop") {
+      return;
+    }
+    if (hasToolCall(lastAssistant.content)) {
+      return;
+    }
+
+    const text = getAssistantText(lastAssistant.content);
+    if (!looksLikePlainTextClarification(text)) {
+      return;
+    }
+
+    const redirectedAlready = hasAutoRedirectMessage(event.messages);
+    const shouldAutoRedirect =
+      lastInputSource === "interactive" && !redirectedAlready;
+
+    pi.appendEntry(QUESTIONNAIRE_MISS_LOG_TYPE, {
+      source: lastInputSource,
+      redirectedAlready,
+      autoRedirected: shouldAutoRedirect,
+      text,
+      timestamp: new Date().toISOString(),
+    });
+
+    if (redirectedAlready) {
+      ctx.ui.notify(
+        "Assistant still asked a plain-text clarification after redirect. Prefer questionnaire manually.",
+        "warning"
+      );
+      return;
+    }
+
+    if (!shouldAutoRedirect) {
+      ctx.ui.notify(
+        "Assistant asked a plain-text clarification. Logged for tuning; no auto-redirect outside interactive TUI.",
+        "warning"
+      );
+      return;
+    }
+
+    ctx.ui.notify(
+      "Assistant asked a plain-text clarification. Auto-redirecting it to questionnaire.",
+      "warning"
+    );
+
+    pi.sendMessage(
+      {
+        customType: QUESTIONNAIRE_REDIRECT_MESSAGE_TYPE,
+        content:
+          "Extension correction: you asked the user a plain-text clarification in an interactive session. Re-ask only the necessary clarification using the questionnaire tool instead of plain text. Ask at most 1-3 focused questions.",
+        display: false,
+      },
+      { triggerTurn: true }
+    );
   });
 }
