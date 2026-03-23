@@ -14,6 +14,7 @@
       "./extensions/session-query.ts",
       "./extensions/handoff.ts",
       "./extensions/btw",
+      "./extensions/ast-grep",
       "./extensions/skills.ts"
     ]
   },
