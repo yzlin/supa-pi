@@ -13,6 +13,8 @@
  *   /handoff -model anthropic/claude-haiku-4-5 check other places that need this fix
  *
  * The generated prompt appears as a draft in the editor for review/editing.
+ *
+ * Credits: This extension was originally developed by @pasky. Modified and enhanced by @yzlin.
  */
 
 import { AgentMessage } from "@mariozechner/pi-agent-core";
