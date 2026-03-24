@@ -1,72 +1,77 @@
 # Plan
 
-A planning workflow that offloads brainstorming and plan creation to a dedicated interactive subagent, keeping the main session clean for orchestration.
+A planning workflow for investigating the request, clarifying the important branches, and producing a high-confidence implementation plan in this session.
 
-**Announce at start:** "Let me investigate first, then I'll open a dedicated planning session where we can work through this together."
+**Announce at start:** "Let me investigate first, then we’ll work through the plan together here."
 
 ---
 
 ## The Flow
 
 ```
-Phase 1: Quick Investigation (main session)
+Phase 1: Quick Investigation
     ↓
-Phase 2: Plan (interactive — user collaborates here)
+Phase 2: Clarify + Plan (interactive in this session)
 ```
 
 ---
 
 ## Phase 1: Quick Investigation
 
-**If deeper context is needed** (large codebase, unfamiliar architecture), spawn an autonomous explore subagent first:
+**If deeper context is needed** (large codebase, unfamiliar architecture, or unclear constraints), spawn an autonomous explorer subagent first:
 
 ```typescript
 Agent({
-  subagent_type: "Explore",
-  prompt: "Analyze the codebase. Map file structure, key modules, patterns, and conventions. Summarize findings concisely for a planning session.",
-  description: "This agent will quickly explore the codebase to gather relevant context for planning. It should focus on high-level structure, key modules, and any patterns that might influence the plan. The output will be a concise summary that can be fed into the planner agent in Phase 2.",
-  model: "gpt-5.4",
+  subagent_type: "explorer",
+  prompt: "Analyze the codebase. Map file structure, key modules, patterns, and conventions. Summarize only the findings that matter for planning this task.",
+  description: "Explore codebase for planning context",
   thinking: "medium"
 })
 ```
 
-Read the explore's summary from the subagent result before proceeding.
+Read the explore summary before proceeding. Summarize the relevant findings briefly before asking planning questions.
 
 ---
 
-## Phase 2: Plan
+## Phase 2: Clarify + Plan
 
 ## Your Task
 
-Use [findings from Phase 1 here] as context.
+Use the findings from Phase 1 as context. Continue in this session.
 
-### **Restate Requirements**
+### Restate Requirements
 
-**Goals:**: Clarify what needs to be built
+**Goal:** Clarify what needs to be built.
 
-1. use `questionnaire` tool to clarify ambiguities in the user request up front
-2. Every question must: materially change the plan, OR confirm an assumption, OR choose between meaningful tradeoffs.
-3. Offer only meaningful choices; don't include filler options that are obviously wrong.
-4. Interview me relentlessly about every aspect of this plan until we reach a shared understanding. Walk down each branch of the design tree, resolving dependencies between decisions one-by-one.
+1. Use the `questionnaire` tool to clarify ambiguities in the user request up front.
+2. Every question must materially change the plan, confirm an assumption, or choose between meaningful tradeoffs.
+3. Ask only 1-3 focused questions per turn.
+4. Offer only meaningful choices; do not include filler options that are obviously wrong.
+5. Interview me relentlessly about every aspect of this plan until we reach a shared understanding — but do it efficiently. Walk down each branch of the design tree in dependency order, resolve decisions one-by-one, and stop asking once additional questions would no longer materially change the plan.
+6. For any provided options, mark the recommended option and give a short reason.
+7. Do not claim 100% certainty. Aim for the highest justified confidence and explicitly call out remaining unknowns or assumptions.
 
-### **Identify Risks**
+### Identify Risks
 
-**Goals:** Surface potential issues, blockers, and dependencies
+**Goal:** Surface potential issues, blockers, dependencies, and assumptions.
 
-### **Create Step Plan**
+### Create Step Plan
 
-**Goals:** Break down implementation into phases
+**Goal:** Break implementation into clear phases with ordered steps.
 
-### **Wait for Confirmation**
+### Wait for Confirmation
 
-**Goals:** MUST receive user approval before proceeding
+**Goal:** MUST receive user approval before proceeding.
 
-Use `questionnaire` tool to ask for confirmation [yes/no/modify] on the plan before any code is written
+Use the `questionnaire` tool to ask for confirmation `[yes / no / modify]` on the plan before any code is written.
 
 ## Output Format
 
 ### Requirements Restatement
 [Clear, concise restatement of what will be built]
+
+### Investigation Findings
+[Only the findings that materially influence the plan]
 
 ### Implementation Phases
 [Phase 1: Description]
@@ -80,18 +85,22 @@ Use `questionnaire` tool to ask for confirmation [yes/no/modify] on the plan bef
 ...
 
 ### Dependencies
-[List external dependencies, APIs, services needed]
+[List external dependencies, APIs, services, migrations, approvals, or environment needs]
 
 ### Risks
 - HIGH: [Critical risks that could block implementation]
 - MEDIUM: [Moderate risks to address]
 - LOW: [Minor concerns]
 
+### Assumptions / Unknowns
+- [Assumption or unresolved point]
+
 ### Estimated Complexity
-[HIGH/MEDIUM/LOW with time estimates]
+[HIGH / MEDIUM / LOW with rough effort estimate]
 
-**WAITING FOR CONFIRMATION**: Proceed with this plan? (yes/no/modify)
+### Confidence
+[High / Medium / Low with one-line reason]
 
-**CRITICAL**: Do NOT write any code until the user explicitly confirms with "yes", "proceed", or similar affirmative response.
+**WAITING FOR CONFIRMATION**: Proceed with this plan? (`yes` / `no` / `modify`)
 
----
+**CRITICAL**: Do NOT write any code until the user explicitly confirms with `yes`, `proceed`, or a similar affirmative response.

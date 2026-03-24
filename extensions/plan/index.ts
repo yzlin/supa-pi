@@ -1,11 +1,19 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
+import { fileURLToPath } from "node:url";
 
 import { ExtensionAPI } from "@mariozechner/pi-coding-agent";
 
+const PROMPT = fs
+  .readFileSync(
+    path.join(path.dirname(fileURLToPath(import.meta.url)), "prompt.md"),
+    "utf8"
+  )
+  .trim();
+
 export default function (pi: ExtensionAPI) {
   pi.registerCommand("plan", {
-    description: "Start a planning session: /plan <what to build>",
+    description: "Investigate and plan in this session: /plan <what to build>",
     handler: async (args, ctx) => {
       const task = (args ?? "").trim();
       if (!task) {
@@ -13,13 +21,15 @@ export default function (pi: ExtensionAPI) {
         return;
       }
 
-      // Load the plan skill from the subagents extension directory
-      const promptPath = path.join(
-        path.dirname(new URL(import.meta.url).pathname),
-        "prompt.md"
-      );
-      const prompt = fs.readFileSync(promptPath, "utf8").trim();
-      pi.sendUserMessage(`${prompt}\n\nTask: ${task}`);
+      const message = `${PROMPT}\n\nTask: ${task}`;
+
+      if (ctx.isIdle()) {
+        pi.sendUserMessage(message);
+        return;
+      }
+
+      pi.sendUserMessage(message, { deliverAs: "followUp" });
+      ctx.ui.notify("Queued /plan as a follow-up", "info");
     },
   });
 }
