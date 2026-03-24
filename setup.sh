@@ -36,8 +36,9 @@ if [ ! -f "$EXPECTED_DIR/settings.json" ]; then
     "npm:pi-web-access",
     "npm:glimpseui",
     "npm:pi-skill-palette",
-    "npm:pi-btw",
-    "npm:claude-agent-sdk-pi"
+    "npm:claude-agent-sdk-pi",
+    "npm:pi-anycopy",
+    "npm:pi-rtk"
   ],
   "hideThinkingBlock": false,
   "workingVibe": "zen",
