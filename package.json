@@ -13,6 +13,7 @@
       "./extensions/simplify",
       "./extensions/session-query.ts",
       "./extensions/handoff.ts",
+      "./extensions/context",
       "./extensions/btw",
       "./extensions/ast-grep",
       "./extensions/skills.ts"
