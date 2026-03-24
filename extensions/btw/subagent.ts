@@ -51,6 +51,19 @@ export type DisplayItem =
   | { type: "text"; text: string }
   | { type: "toolCall"; name: string; args: Record<string, any> };
 
+export function appendFinalOutput(currentOutput: string, nextOutput: string) {
+  return currentOutput ? `${currentOutput}\n${nextOutput}` : nextOutput;
+}
+
+export function resolveExitCode(
+  stopReason: string | undefined,
+  aborted: boolean
+) {
+  return stopReason === "error" || stopReason === "aborted" || aborted
+    ? 1
+    : 0;
+}
+
 // ---------------------------------------------------------------------------
 // Usage helpers
 // ---------------------------------------------------------------------------
@@ -300,7 +313,10 @@ export async function runSubagent(
             for (const part of msg.content) {
               if (part.type === "text") {
                 result.displayItems.push({ type: "text", text: part.text });
-                result.finalOutput = part.text;
+                result.finalOutput = appendFinalOutput(
+                  result.finalOutput,
+                  part.text
+                );
               } else if (part.type === "toolCall") {
                 result.displayItems.push({
                   type: "toolCall",
@@ -320,10 +336,14 @@ export async function runSubagent(
       }
     }
 
-    if (result.stopReason === "error" || result.stopReason === "aborted") {
-      result.exitCode = 1;
-    } else if (result.exitCode === -1) {
-      result.exitCode = 0;
+    if (signal?.aborted) {
+      result.stopReason = "aborted";
+    }
+    if (result.exitCode === -1) {
+      result.exitCode = resolveExitCode(
+        result.stopReason,
+        signal?.aborted === true
+      );
     }
   } catch (err) {
     result.exitCode = 1;

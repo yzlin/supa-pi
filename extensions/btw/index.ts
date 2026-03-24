@@ -1,5 +1,5 @@
 /**
- * /btw command — run a subagent in the background while continuing to work.
+ * /btw command - run a subagent in the background while continuing to work.
  *
  * Usage:
  *   /btw check if there are any TODO comments in src/
@@ -26,7 +26,7 @@ import {
 } from "@mariozechner/pi-coding-agent";
 import { Box, Markdown, Spacer, Text } from "@mariozechner/pi-tui";
 
-import { resolveModelAndThinking } from "./helper";
+import { parseBtwArgs, resolveModelAndThinking } from "./helper";
 import {
   btwTaskPreview,
   formatToolCall,
@@ -58,7 +58,7 @@ export default function (pi: ExtensionAPI) {
   const pendingWidgetRemovals = new Map<string, () => void>();
 
   pi.on("turn_end", () => {
-    // Resolve all pending widget removal promises — the steered custom
+    // Resolve all pending widget removal promises - the steered custom
     // messages render at turn boundary, so widgets can now be removed.
     for (const [, resolve] of pendingWidgetRemovals) resolve();
     pendingWidgetRemovals.clear();
@@ -142,17 +142,7 @@ export default function (pi: ExtensionAPI) {
     description:
       "Run a single-shot subagent in the background (-model <provider/id>)",
     handler: async (args, ctx) => {
-      // Parse optional -model flags
-      let remaining = args;
-      let modelOpt: string | undefined;
-
-      const modelMatch = remaining.match(/(?:^|\s)-model\s+(\S+)/);
-      if (modelMatch) {
-        modelOpt = modelMatch[1];
-        remaining = remaining.replace(modelMatch[0], " ");
-      }
-
-      const task = remaining.trim();
+      const { model: modelOpt, task } = parseBtwArgs(args);
       if (!task) {
         ctx.ui.notify("Usage: /btw [-model <provider/id>] <prompt>", "error");
         return;
@@ -163,15 +153,21 @@ export default function (pi: ExtensionAPI) {
         return;
       }
 
-      // Resolve model/thinking
-      const { model: targetModel, thinkingLevel } =
-        await resolveModelAndThinking(
-          ctx.cwd,
-          ctx.modelRegistry,
-          ctx.model,
-          pi.getThinkingLevel(),
-          { model: modelOpt }
-        );
+      const {
+        model: targetModel,
+        thinkingLevel,
+        error: modelError,
+      } = resolveModelAndThinking(
+        ctx.modelRegistry,
+        ctx.model,
+        pi.getThinkingLevel(),
+        { model: modelOpt }
+      );
+
+      if (modelError) {
+        ctx.ui.notify(modelError, "error");
+        return;
+      }
 
       if (!targetModel) {
         ctx.ui.notify("No model available.", "error");
@@ -218,7 +214,7 @@ export default function (pi: ExtensionAPI) {
         placement: "aboveEditor",
       });
 
-      // Fire and forget — run in background, update widget on progress
+      // Fire and forget - run in background, update widget on progress
       runSubagent(
         systemPrompt,
         taskWithContext,
@@ -226,7 +222,7 @@ export default function (pi: ExtensionAPI) {
         targetModel,
         thinkingLevel,
         apiKeyResolver,
-        undefined, // no abort signal — runs to completion
+        undefined, // no abort signal - runs to completion
         (progressResult) => {
           // Update widget with live tool call feed
           ctx.ui.setWidget(
@@ -242,7 +238,7 @@ export default function (pi: ExtensionAPI) {
 
           // Send fully rendered result as a custom message in the chat.
           // Filtered out of LLM context by the context event handler above.
-          // triggerTurn: false is critical — without it, sendMessage mid-stream
+          // triggerTurn: false is critical - without it, sendMessage mid-stream
           // tries to start a new turn which corrupts conversation state.
           const icon = result.exitCode === 0 ? "✓" : "✗";
           pi.sendMessage(
@@ -264,7 +260,7 @@ export default function (pi: ExtensionAPI) {
               (_tui, theme) => renderBtwResult(result, theme),
               { placement: "aboveEditor" }
             );
-            // Wait for current turn to end — the steered custom message
+            // Wait for current turn to end - the steered custom message
             // renders at that point, so we can remove the widget.
             await new Promise<void>((resolve) => {
               pendingWidgetRemovals.set(widgetKey, resolve);
@@ -280,7 +276,7 @@ export default function (pi: ExtensionAPI) {
           );
         });
 
-      // Command returns immediately — subagent runs in background
+      // Command returns immediately - subagent runs in background
     },
   });
 }
