@@ -2,25 +2,68 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-EXPECTED_DIR="$HOME/.pi/agent"
+PI_AGENT_DIR="$HOME/.pi/agent"
+
+link_dir_contents() {
+  local source_dir="$1"
+  local target_dir="$2"
+  local label="$3"
+
+  mkdir -p "$target_dir"
+
+  if [ "$(cd "$source_dir" && pwd)" = "$(cd "$target_dir" && pwd)" ]; then
+    echo "$label already live at $target_dir"
+    return
+  fi
+
+  local linked_any=false
+  local source_path
+  for source_path in "$source_dir"/*; do
+    if [ ! -e "$source_path" ]; then
+      continue
+    fi
+
+    local name
+    name="$(basename "$source_path")"
+    local target_path="$target_dir/$name"
+
+    if [ -L "$target_path" ] && [ "$(readlink "$target_path")" = "$source_path" ]; then
+      echo "  $label/$name already linked"
+      continue
+    fi
+
+    if [ -e "$target_path" ] || [ -L "$target_path" ]; then
+      echo "  Skipping $label/$name — $target_path already exists"
+      continue
+    fi
+
+    ln -s "$source_path" "$target_path"
+    echo "  Linked $label/$name"
+    linked_any=true
+  done
+
+  if [ "$linked_any" = false ]; then
+    echo "  No $label entries needed linking"
+  fi
+}
 
 # Verify we're in the right place
-if [ "$SCRIPT_DIR" != "$EXPECTED_DIR" ]; then
+if [ "$SCRIPT_DIR" != "$PI_AGENT_DIR" ]; then
   echo "⚠️  This repo should be cloned to ~/.pi/agent/"
   echo "   Current location: $SCRIPT_DIR"
-  echo "   Expected: $EXPECTED_DIR"
+  echo "   Expected: $PI_AGENT_DIR"
   echo ""
-  echo "   Run: git clone git@github.com:yzlin/supa-pi $EXPECTED_DIR"
+  echo "   Run: git clone git@github.com:yzlin/supa-pi $PI_AGENT_DIR"
   exit 1
 fi
 
-echo "Setting up supa-pi at $EXPECTED_DIR"
+echo "Setting up supa-pi at $PI_AGENT_DIR"
 echo ""
 
 # Create settings.json if it doesn't exist
-if [ ! -f "$EXPECTED_DIR/settings.json" ]; then
+if [ ! -f "$PI_AGENT_DIR/settings.json" ]; then
   echo "Creating settings.json..."
-  cat > "$EXPECTED_DIR/settings.json" << 'EOF'
+  cat > "$PI_AGENT_DIR/settings.json" << 'EOF'
 {
   "defaultProvider": "openai-codex",
   "defaultModel": "gpt-5.4",
@@ -77,6 +120,14 @@ pi install npm:glimpseui 2>/dev/null || echo "  glimpseui already installed"
 pi install npm:pi-skill-palette 2>/dev/null || echo "  pi-skill-palette already installed"
 pi install npm:pi-btw 2>/dev/null || echo "  pi-btw already installed"
 pi install npm:claude-agent-sdk-pi 2>/dev/null || echo "  claude-agent-sdk-pi already installed"
+echo ""
+
+echo "Linking skills..."
+link_dir_contents "$SCRIPT_DIR/skills" "$PI_AGENT_DIR/skills" "skills"
+echo ""
+
+echo "Linking prompts..."
+link_dir_contents "$SCRIPT_DIR/prompts" "$PI_AGENT_DIR/prompts" "prompts"
 echo ""
 
 echo "✅ Setup complete!"

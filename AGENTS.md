@@ -2,7 +2,6 @@
 
 ## Agent Protocol
 
-- "Make a note" => edit AGENTS.md (shortcut; not a blocker). Ignore `CLAUDE.md`.
 - No `./runner`. Guardrails: use `trash` for deletes.
 - Bugs: add regression test when it fits.
 - Editor: `zed <path>`.
@@ -24,6 +23,14 @@
 - Conflicts: call out; pick safer path.
 - Unrecognized changes: assume other agent; keep going; focus your changes. If it causes issues, stop + ask user.
 - Leave breadcrumb notes in thread.
+
+## Evidence baseline
+
+- Do not invent citations, URLs, file references, or facts.
+- If a claim is uncertain or unverified, say so explicitly.
+- Distinguish clearly between verified facts, informed inferences, and hypotheses.
+- For factual claims about the codebase, prefer grounding in actual files.
+- For factual claims about external tools/libraries, prefer official docs or directly cited sources.
 
 ## Tools
 
