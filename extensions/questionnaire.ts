@@ -67,6 +67,10 @@ function hasToolCall(content: { type: string }[]): boolean {
 const QUESTIONNAIRE_REDIRECT_MESSAGE_TYPE = "questionnaire-auto-redirect";
 const QUESTIONNAIRE_MISS_LOG_TYPE = "questionnaire-plain-text-miss";
 
+export function getQuestionnaireRedirectCorrectionMessage(): string {
+  return "Extension correction: you asked the user a plain-text clarification in an interactive session. Re-ask only the necessary clarification using the questionnaire tool instead of plain text. Ask at most 1-3 focused questions. After receiving the answer, continue the original task immediately and provide the pending result instead of stopping after a brief acknowledgment. Only stop early if materially new information is still required.";
+}
+
 function looksLikePlainTextClarification(text: string): boolean {
   if (!text.includes("?")) {
     return false;
@@ -687,8 +691,7 @@ QUESTION-ASKING RULES:
     pi.sendMessage(
       {
         customType: QUESTIONNAIRE_REDIRECT_MESSAGE_TYPE,
-        content:
-          "Extension correction: you asked the user a plain-text clarification in an interactive session. Re-ask only the necessary clarification using the questionnaire tool instead of plain text. Ask at most 1-3 focused questions.",
+        content: getQuestionnaireRedirectCorrectionMessage(),
         display: false,
       },
       { triggerTurn: true }
