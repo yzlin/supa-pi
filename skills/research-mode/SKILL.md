@@ -1,6 +1,6 @@
 ---
 name: research-mode
-description: Strict evidence mode for multi-turn research tasks. Use when accuracy matters more than speed: investigations, comparisons, document analysis, and source-grounded recommendations. Stays active until the user says to exit research mode.
+description: "Strict evidence mode for multi-turn research tasks. Use when accuracy matters more than speed: investigations, comparisons, document analysis, and source-grounded recommendations. Stays active until the user says to exit research mode."
 ---
 
 # Research Mode
