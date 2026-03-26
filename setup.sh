@@ -47,6 +47,25 @@ link_dir_contents() {
   fi
 }
 
+link_file() {
+  local source_path="$1"
+  local target_path="$2"
+  local label="$3"
+
+  if [ -L "$target_path" ] && [ "$(readlink "$target_path")" = "$source_path" ]; then
+    echo "$label already linked"
+    return
+  fi
+
+  if [ -e "$target_path" ] || [ -L "$target_path" ]; then
+    echo "Skipping $label — $target_path already exists"
+    return
+  fi
+
+  ln -s "$source_path" "$target_path"
+  echo "Linked $label"
+}
+
 # Verify we're in the right place
 if [ "$SCRIPT_DIR" != "$PI_AGENT_DIR" ]; then
   echo "⚠️  This repo should be cloned to ~/.pi/agent/"
@@ -128,6 +147,10 @@ echo ""
 
 echo "Linking prompts..."
 link_dir_contents "$SCRIPT_DIR/prompts" "$PI_AGENT_DIR/prompts" "prompts"
+echo ""
+
+echo "Linking fzf.json..."
+link_file "$SCRIPT_DIR/fzf.json" "$PI_AGENT_DIR/fzf.json" "fzf.json"
 echo ""
 
 echo "✅ Setup complete!"
