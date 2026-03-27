@@ -27,6 +27,7 @@ import {
 import { Box, Markdown, Spacer, Text } from "@mariozechner/pi-tui";
 
 import { parseBtwArgs, resolveModelAndThinking } from "./helper";
+import { getProviderApiKeyForModel } from "../llm-auth";
 import {
   btwTaskPreview,
   formatToolCall,
@@ -184,7 +185,7 @@ export default function (pi: ExtensionAPI) {
 
       const systemPrompt = ctx.getSystemPrompt();
       const apiKeyResolver = async (_provider: string) => {
-        return ctx.modelRegistry.getApiKey(targetModel!);
+        return getProviderApiKeyForModel(ctx.modelRegistry, targetModel!);
       };
 
       // Serialize current conversation context for the subagent

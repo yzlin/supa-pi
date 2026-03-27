@@ -22,6 +22,8 @@ import {
 import { Container, Markdown, Spacer, Text } from "@mariozechner/pi-tui";
 import { Type } from "@sinclair/typebox";
 
+import { getModelAuthOrThrow } from "./llm-auth";
+
 const QUERY_SYSTEM_PROMPT = `You are a session context assistant. Given the conversation history from a pi coding session and a question, provide a concise answer based on the session contents.
 
 Focus on:
@@ -140,7 +142,10 @@ export default function (pi: ExtensionAPI) {
       }
 
       try {
-        const apiKey = await ctx.modelRegistry.getApiKey(queryModel);
+        const { apiKey, headers } = await getModelAuthOrThrow(
+          ctx.modelRegistry,
+          queryModel
+        );
 
         const userMessage: Message = {
           role: "user",
@@ -156,7 +161,7 @@ export default function (pi: ExtensionAPI) {
         const response = await complete(
           queryModel,
           { systemPrompt: QUERY_SYSTEM_PROMPT, messages: [userMessage] },
-          { apiKey, signal }
+          { apiKey, headers, signal }
         );
 
         if (response.stopReason === "aborted") {

@@ -32,6 +32,8 @@ import {
 } from "@mariozechner/pi-coding-agent";
 import { Type } from "@sinclair/typebox";
 
+import { getModelAuthOrThrow } from "./llm-auth";
+
 const CONTEXT_SUMMARY_SYSTEM_PROMPT = `You are a context transfer assistant. Given a conversation history and the user's goal for a new thread, generate a focused prompt that:
 
 1. Summarizes relevant context from the conversation (decisions made, approaches taken, key findings)
@@ -63,6 +65,7 @@ Files involved:
 async function generateContextSummary(
   model: any,
   apiKey: string | undefined,
+  headers: Record<string, string> | undefined,
   messages: AgentMessage[],
   goal: string,
   signal?: AbortSignal
@@ -83,7 +86,7 @@ async function generateContextSummary(
   const response = await complete(
     model,
     { systemPrompt: CONTEXT_SUMMARY_SYSTEM_PROMPT, messages: [userMessage] },
-    { apiKey, signal }
+    { apiKey, headers, signal }
   );
 
   if (response.stopReason === "aborted") {
@@ -190,10 +193,14 @@ async function performHandoff(
     loader.onAbort = () => done(null);
 
     const doGenerate = async () => {
-      const apiKey = await ctx.modelRegistry.getApiKey(ctx.model!);
+      const { apiKey, headers } = await getModelAuthOrThrow(
+        ctx.modelRegistry,
+        ctx.model!
+      );
       return generateContextSummary(
         ctx.model!,
         apiKey,
+        headers,
         messages,
         goal,
         loader.signal
