@@ -16,6 +16,7 @@
       "./extensions/context",
       "./extensions/btw",
       "./extensions/ast-grep",
+      "./extensions/pi-rtk",
       "./extensions/skills.ts"
     ]
   },
