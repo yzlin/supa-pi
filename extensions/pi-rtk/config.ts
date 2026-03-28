@@ -19,14 +19,14 @@ export const DEFAULT_PI_RTK_CONFIG: PiRtkConfig = {
   guardWhenRtkMissing: true,
   showRewriteNotifications: false,
   outputCompaction: {
-    enabled: false,
-    compactBash: false,
-    compactGrep: false,
-    compactRead: false,
+    enabled: true,
+    compactBash: true,
+    compactGrep: true,
+    compactRead: true,
     readSourceFilteringEnabled: false,
     maxLines: DEFAULT_OUTPUT_MAX_LINES,
     maxChars: DEFAULT_OUTPUT_MAX_CHARS,
-    trackSavings: false,
+    trackSavings: true,
   },
 };
 

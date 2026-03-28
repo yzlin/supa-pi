@@ -32,6 +32,16 @@ describe("pi-rtk config", () => {
     expect(loadPiRtkConfig(cwd)).toEqual(DEFAULT_PI_RTK_CONFIG);
   });
 
+  it("enables output compaction by default", () => {
+    expect(DEFAULT_PI_RTK_CONFIG.outputCompaction).toMatchObject({
+      enabled: true,
+      compactBash: true,
+      compactGrep: true,
+      compactRead: true,
+      trackSavings: true,
+    });
+  });
+
   it("falls back safely on malformed JSON", () => {
     const cwd = createTempDir();
     mkdirSync(join(cwd, ".pi"), { recursive: true });
@@ -59,6 +69,9 @@ describe("pi-rtk config", () => {
         maxLines: 1,
       },
     });
+    expect(normalized.outputCompaction.maxChars).toBe(
+      DEFAULT_PI_RTK_CONFIG.outputCompaction.maxChars
+    );
   });
 
   it("saves and loads a roundtrip config", () => {

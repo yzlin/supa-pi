@@ -5,6 +5,7 @@ import {
 
 import { registerRtkCommands } from "./commands";
 import { loadPiRtkConfig } from "./config";
+import { createRtkToolResultHandler } from "./output-compaction";
 import { clearRtkBinaryPathCache, resolveRtkCommand } from "./rewrite";
 import { createPiRtkRuntime } from "./runtime";
 import { createRtkUserBashHandler } from "./user-bash";
@@ -80,6 +81,7 @@ export default function piRtkExtension(pi: ExtensionAPI): void {
     },
   });
 
+  pi.on("tool_result", createRtkToolResultHandler(runtime));
   pi.on("user_bash", createRtkUserBashHandler(runtime));
   registerRtkCommands(pi, runtime);
 }

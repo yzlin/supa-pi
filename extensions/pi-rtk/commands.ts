@@ -12,6 +12,23 @@ import {
 import { renderRtkStats } from "./stats";
 import type { PiRtkConfig, PiRtkRuntime } from "./types";
 
+const RTK_SUBCOMMANDS = [
+  { value: "show", description: "Show config, runtime, and counters" },
+  { value: "verify", description: "Refresh RTK availability" },
+  { value: "stats", description: "Show rewrite stats" },
+  { value: "clear-stats", description: "Reset session counters" },
+  { value: "reset", description: "Restore default config" },
+  { value: "help", description: "Show help" },
+  { value: "enable", description: "Enable RTK rewrites" },
+  { value: "disable", description: "Disable RTK rewrites" },
+  { value: "mode", description: "Set rewrite mode" },
+] as const;
+
+const RTK_MODES = [
+  { value: "rewrite", description: "Rewrite commands before execution" },
+  { value: "suggest", description: "Suggest-only mode" },
+] as const;
+
 function formatBoolean(value: boolean): string {
   return value ? "on" : "off";
 }
@@ -73,12 +90,63 @@ function buildHelpMessage(): string {
   ].join("\n");
 }
 
+function getRtkArgumentCompletions(argumentPrefix: string) {
+  const hasTrailingSpace = /\s$/.test(argumentPrefix);
+  const trimmedStart = argumentPrefix.trimStart();
+
+  if (trimmedStart.length === 0) {
+    return RTK_SUBCOMMANDS.map(({ value, description }) => ({
+      value,
+      label: value,
+      description,
+    }));
+  }
+
+  // Keep trailing-space state for nested completions; unlike the handler, we
+  // cannot discard empty tokens here.
+  const parts = trimmedStart.split(/\s+/);
+  const subcommand = parts[0] ?? "";
+  const nextToken = parts[1] ?? "";
+  const hasExtraTokens = parts.length > 2;
+
+  if (subcommand === "mode" && (hasTrailingSpace || nextToken.length > 0)) {
+    if (hasExtraTokens || (hasTrailingSpace && nextToken.length > 0)) {
+      return null;
+    }
+
+    const filteredModes = RTK_MODES.filter(({ value }) =>
+      value.startsWith(nextToken)
+    );
+
+    return filteredModes.length > 0
+      ? filteredModes.map(({ value, description }) => ({
+          value: `mode ${value}`,
+          label: value,
+          description,
+        }))
+      : null;
+  }
+
+  const filteredSubcommands = RTK_SUBCOMMANDS.filter(({ value }) =>
+    value.startsWith(subcommand)
+  );
+
+  return filteredSubcommands.length > 0
+    ? filteredSubcommands.map(({ value, description }) => ({
+        value,
+        label: value,
+        description,
+      }))
+    : null;
+}
+
 export function registerRtkCommands(
   pi: ExtensionAPI,
   runtime: PiRtkRuntime
 ): void {
   pi.registerCommand("rtk", {
     description: "Manage RTK rewrite settings and stats",
+    getArgumentCompletions: getRtkArgumentCompletions,
     handler: async (args, ctx) => {
       const [command = "help", ...rest] = args
         .trim()

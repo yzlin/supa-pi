@@ -13,7 +13,7 @@ describe("pi-rtk stats", () => {
 
     expect(output).toContain("No data yet.");
     expect(output).toContain("overall savings");
-    expect(output).toContain("off");
+    expect(output).toContain("(no data)");
   });
 
   it("renders partial values", () => {
@@ -24,6 +24,7 @@ describe("pi-rtk stats", () => {
     store.recordRewriteFallback();
     store.recordUserBashAttempt();
     store.recordUserBashRewrite();
+    store.recordToolSavings("bash", 100, 40);
 
     const output = renderRtkStats(store.snapshot(), DEFAULT_PI_RTK_CONFIG);
 
@@ -31,6 +32,9 @@ describe("pi-rtk stats", () => {
     expect(output).toContain("50%");
     expect(output).toContain("user !cmd");
     expect(output).toContain("1/1");
+    expect(output).toContain("overall savings");
+    expect(output).toContain("60%");
+    expect(output).toContain("100→40 chars");
   });
 
   it("renders 100 percent bars", () => {
@@ -38,10 +42,17 @@ describe("pi-rtk stats", () => {
   });
 
   it("renders off-state rows", () => {
-    const output = renderRtkStats(
-      createPiRtkMetricsStore().snapshot(),
-      DEFAULT_PI_RTK_CONFIG
-    );
+    const output = renderRtkStats(createPiRtkMetricsStore().snapshot(), {
+      ...DEFAULT_PI_RTK_CONFIG,
+      outputCompaction: {
+        ...DEFAULT_PI_RTK_CONFIG.outputCompaction,
+        enabled: false,
+        compactBash: false,
+        compactGrep: false,
+        compactRead: false,
+        trackSavings: false,
+      },
+    });
 
     expect(output).toContain("bash savings");
     expect(output).toContain("grep savings");
@@ -49,7 +60,7 @@ describe("pi-rtk stats", () => {
     expect(output).toContain("off");
   });
 
-  it("keeps row widths stable", () => {
+  it("keeps progress bars aligned", () => {
     const output = renderRtkStats(
       createPiRtkMetricsStore().snapshot(),
       DEFAULT_PI_RTK_CONFIG
@@ -58,7 +69,7 @@ describe("pi-rtk stats", () => {
       .split("\n")
       .filter((line) => line.includes("█") || line.includes("░"));
 
-    const lengths = new Set(lines.map((line) => line.length));
-    expect(lengths.size).toBeGreaterThan(0);
+    const barStarts = new Set(lines.map((line) => line.search(/[█░]/)));
+    expect(barStarts.size).toBe(1);
   });
 });
