@@ -26,17 +26,10 @@ const MIN_BODY_HEIGHT = 12;
 const CHROME_ROWS = 8;
 const HELP =
   "↑↓/j/k scroll · pgup/pgdn or ctrl+b/ctrl+f faster · home/end · esc/q/enter close";
-const ANSI_ENABLED =
-  Boolean(process.stdout?.isTTY) || process.env.FORCE_COLOR === "1";
-const ANSI = {
-  reset: "\u001B[0m",
-  command: "\u001B[38;5;81m",
-  impactFill: "\u001B[38;5;80m",
-  impactEmpty: "\u001B[38;5;239m",
-  percentExcellent: "\u001B[38;5;150m",
-  percentGood: "\u001B[38;5;114m",
-  percentMedium: "\u001B[38;5;222m",
-  percentLow: "\u001B[38;5;210m",
+
+type ThemeLike = {
+  fg(color: string, text: string): string;
+  bold(text: string): string;
 };
 
 function formatPercent(value: number): string {
@@ -70,39 +63,51 @@ export function renderProgressBar(percent: number, width = BAR_WIDTH): string {
   return `${repeat("█", filled)}${repeat("░", width - filled)}`;
 }
 
-function colorize(text: string, color: string): string {
-  if (!ANSI_ENABLED || !text) {
+function applyThemeColor(
+  theme: ThemeLike | undefined,
+  color: string,
+  text: string
+): string {
+  if (!theme || !text) {
     return text;
   }
 
-  return `${color}${text}${ANSI.reset}`;
+  return theme.fg(color, text);
 }
 
-function getSavingsPercentColor(percent: number): string {
+function getSavingsPercentTone(percent: number): string {
   if (percent >= 90) {
-    return ANSI.percentExcellent;
+    return "success";
   }
 
   if (percent >= 75) {
-    return ANSI.percentGood;
+    return "accent";
   }
 
   if (percent >= 50) {
-    return ANSI.percentMedium;
+    return "warning";
   }
 
-  return ANSI.percentLow;
+  return "error";
 }
 
-function formatColoredPercent(percent: number, width: number): string {
+function formatColoredPercent(
+  percent: number,
+  width: number,
+  theme?: ThemeLike
+): string {
   const value = formatPercent(percent).padStart(width);
-  return colorize(value, getSavingsPercentColor(percent));
+  return applyThemeColor(theme, getSavingsPercentTone(percent), value);
 }
 
-function renderImpactBar(percent: number, width: number): string {
+function renderImpactBar(
+  percent: number,
+  width: number,
+  theme?: ThemeLike
+): string {
   const clamped = Math.max(0, Math.min(100, percent));
   const filled = Math.round((clamped / 100) * width);
-  return `${colorize(repeat("█", filled), ANSI.impactFill)}${colorize(repeat("░", width - filled), ANSI.impactEmpty)}`;
+  return `${applyThemeColor(theme, "accent", repeat("█", filled))}${applyThemeColor(theme, "dim", repeat("░", width - filled))}`;
 }
 
 function padSummaryLabel(label: string): string {
@@ -198,7 +203,8 @@ function buildSummaryLines(
 
 function buildTableLines(
   metrics: PiRtkMetricsSnapshot,
-  width: number
+  width: number,
+  theme?: ThemeLike
 ): string[] {
   const rows = metrics.commands.slice(0, MAX_TABLE_ROWS);
   const rankWidth = rows.length >= 10 ? 4 : 3;
@@ -239,14 +245,15 @@ function buildTableLines(
 
   const lines = rows.map((command, index) => {
     const rank = `${index + 1}.`.padEnd(rankWidth);
-    const commandLabel = colorize(
-      formatCommandLabel(command, commandWidth).padEnd(commandWidth),
-      ANSI.command
+    const commandLabel = applyThemeColor(
+      theme,
+      "accent",
+      formatCommandLabel(command, commandWidth).padEnd(commandWidth)
     );
     const impactShare =
       totalSavedTokens > 0 ? (command.savedTokens / totalSavedTokens) * 100 : 0;
 
-    return `${rank} ${commandLabel} ${String(command.count).padStart(countWidth)} ${formatTokens(command.savedTokens).padStart(savedWidth)} ${formatColoredPercent(command.savingsPercent, avgWidth)} ${formatDuration(command.avgExecMs).padStart(timeWidth)} ${renderImpactBar(impactShare, impactWidth)}`;
+    return `${rank} ${commandLabel} ${String(command.count).padStart(countWidth)} ${formatTokens(command.savedTokens).padStart(savedWidth)} ${formatColoredPercent(command.savingsPercent, avgWidth, theme)} ${formatDuration(command.avgExecMs).padStart(timeWidth)} ${renderImpactBar(impactShare, impactWidth, theme)}`;
   });
 
   if (metrics.commands.length > rows.length) {
@@ -261,10 +268,15 @@ function buildTableLines(
 function buildBodyLines(
   metrics: PiRtkMetricsSnapshot,
   config: PiRtkConfig,
-  width: number
+  width: number,
+  theme?: ThemeLike
 ): string[] {
   const summary = buildSummaryLines(metrics, config);
-  const table = buildTableLines(metrics, Math.max(TABLE_MIN_WIDTH, width));
+  const table = buildTableLines(
+    metrics,
+    Math.max(TABLE_MIN_WIDTH, width),
+    theme
+  );
   return [...summary, "", ...table];
 }
 
@@ -318,7 +330,7 @@ function buildStatusLine(
   return `${HELP} · ${from}-${to}/${totalRows}`;
 }
 
-function decorateLines(lines: string[], theme: any): string[] {
+function decorateLines(lines: string[], theme: ThemeLike): string[] {
   return lines.map((line) => {
     if (line === "RTK Token Savings (Session Scope)" || line === "By Command") {
       return theme.bold(theme.fg("toolTitle", line));
@@ -386,7 +398,7 @@ export async function showRtkStatsView(
 
         cachedWidth = width;
         cachedBody = fitRenderedLinesToWidth(
-          decorateLines(buildBodyLines(metrics, config, width), theme),
+          decorateLines(buildBodyLines(metrics, config, width, theme), theme),
           Math.max(8, width)
         );
         return cachedBody;
