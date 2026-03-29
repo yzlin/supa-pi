@@ -4,18 +4,25 @@ import { DEFAULT_PI_RTK_CONFIG } from "./config";
 import { createPiRtkMetricsStore } from "./metrics";
 import { renderProgressBar, renderRtkStats } from "./stats";
 
+function stripAnsi(text: string): string {
+  return text.replace(/\u001B\[[0-9;]*m/g, "");
+}
+
 describe("pi-rtk stats", () => {
   it("renders a friendly no-data state", () => {
-    const output = renderRtkStats(
-      createPiRtkMetricsStore().snapshot(),
-      DEFAULT_PI_RTK_CONFIG,
-      120
+    const output = stripAnsi(
+      renderRtkStats(
+        createPiRtkMetricsStore().snapshot(),
+        DEFAULT_PI_RTK_CONFIG,
+        120
+      )
     );
 
     expect(output).toContain("RTK Token Savings (Session Scope)");
     expect(output).toContain("No session savings yet.");
     expect(output).toContain("By Command");
-    expect(output).toContain("Impact chart");
+    expect(output).toContain("Impact");
+    expect(output).not.toContain("Impact chart");
   });
 
   it("renders summary, table, and impact rows", () => {
@@ -41,30 +48,63 @@ describe("pi-rtk stats", () => {
       execMs: 3,
     });
 
-    const output = renderRtkStats(store.snapshot(), DEFAULT_PI_RTK_CONFIG, 132);
+    const output = stripAnsi(
+      renderRtkStats(store.snapshot(), DEFAULT_PI_RTK_CONFIG, 132)
+    );
 
     expect(output).toContain("Total commands:");
     expect(output).toContain("Efficiency meter:");
     expect(output).toContain("Rewrite rate:");
     expect(output).toContain("By Command");
     expect(output).toContain("rtk git diff main");
-    expect(output).toContain("Impact chart");
-    expect(output).toContain("1.  rtk git diff main");
+    expect(output).toContain("Impact");
+    expect(output).not.toContain("Impact chart");
+
+    const commandLine = output
+      .split("\n")
+      .find(
+        (line) => line.includes("1.") && line.includes("rtk git diff main")
+      );
+
+    expect(commandLine).toBeDefined();
+    expect(commandLine).toContain("█");
+  });
+
+  it("shows hidden row count when commands exceed the table limit", () => {
+    const store = createPiRtkMetricsStore();
+
+    for (let index = 0; index < 11; index += 1) {
+      const id = String(index + 1);
+      store.startCommand(id, "bash", `rtk cmd ${id}`, 0);
+      store.completeCommand(id, {
+        inputText: "x ".repeat(200 + index * 10),
+        outputText: "x ".repeat(20),
+        execMs: 10 + index,
+      });
+    }
+
+    const output = stripAnsi(
+      renderRtkStats(store.snapshot(), DEFAULT_PI_RTK_CONFIG, 132)
+    );
+
+    expect(output).toContain("+ 1 more command row(s)");
   });
 
   it("renders off-state warnings", () => {
-    const output = renderRtkStats(createPiRtkMetricsStore().snapshot(), {
-      ...DEFAULT_PI_RTK_CONFIG,
-      enabled: false,
-      outputCompaction: {
-        ...DEFAULT_PI_RTK_CONFIG.outputCompaction,
+    const output = stripAnsi(
+      renderRtkStats(createPiRtkMetricsStore().snapshot(), {
+        ...DEFAULT_PI_RTK_CONFIG,
         enabled: false,
-        compactBash: false,
-        compactGrep: false,
-        compactRead: false,
-        trackSavings: false,
-      },
-    });
+        outputCompaction: {
+          ...DEFAULT_PI_RTK_CONFIG.outputCompaction,
+          enabled: false,
+          compactBash: false,
+          compactGrep: false,
+          compactRead: false,
+          trackSavings: false,
+        },
+      })
+    );
 
     expect(output).toContain("RTK is disabled");
     expect(output).toContain("Output compaction is off");
@@ -74,7 +114,7 @@ describe("pi-rtk stats", () => {
     expect(renderProgressBar(100)).toBe("████████████████████");
   });
 
-  it("uses stacked layout on narrower widths", () => {
+  it("keeps impact inline on narrower widths", () => {
     const store = createPiRtkMetricsStore();
     store.startCommand("1", "bash", "rtk find", 0);
     store.completeCommand("1", {
@@ -83,11 +123,15 @@ describe("pi-rtk stats", () => {
       execMs: 12,
     });
 
-    const output = renderRtkStats(store.snapshot(), DEFAULT_PI_RTK_CONFIG, 88);
-    const byCommandIndex = output.indexOf("By Command");
-    const impactIndex = output.indexOf("Impact chart");
+    const output = stripAnsi(
+      renderRtkStats(store.snapshot(), DEFAULT_PI_RTK_CONFIG, 88)
+    );
+    const commandLine = output
+      .split("\n")
+      .find((line) => line.includes("1.") && line.includes("rtk find"));
 
-    expect(byCommandIndex).toBeGreaterThan(-1);
-    expect(impactIndex).toBeGreaterThan(byCommandIndex);
+    expect(output).not.toContain("Impact chart");
+    expect(commandLine).toBeDefined();
+    expect(commandLine).toContain("█");
   });
 });

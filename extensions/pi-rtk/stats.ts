@@ -18,13 +18,26 @@ const BAR_WIDTH = 20;
 const SUMMARY_LABEL_WIDTH = 18;
 const TEXT_FALLBACK_WIDTH = 72;
 const TABLE_MIN_WIDTH = 76;
-const SIDE_BY_SIDE_WIDTH = 112;
 const MAX_TABLE_ROWS = 10;
+const IMPACT_BAR_MIN_WIDTH = 12;
+const IMPACT_BAR_MAX_WIDTH = 18;
 const OVERLAY_HEIGHT_RATIO = 0.9;
 const MIN_BODY_HEIGHT = 12;
 const CHROME_ROWS = 8;
 const HELP =
   "↑↓/j/k scroll · pgup/pgdn or ctrl+b/ctrl+f faster · home/end · esc/q/enter close";
+const ANSI_ENABLED =
+  Boolean(process.stdout?.isTTY) || process.env.FORCE_COLOR === "1";
+const ANSI = {
+  reset: "\u001B[0m",
+  command: "\u001B[38;5;81m",
+  impactFill: "\u001B[38;5;80m",
+  impactEmpty: "\u001B[38;5;239m",
+  percentExcellent: "\u001B[38;5;150m",
+  percentGood: "\u001B[38;5;114m",
+  percentMedium: "\u001B[38;5;222m",
+  percentLow: "\u001B[38;5;210m",
+};
 
 function formatPercent(value: number): string {
   return `${value.toFixed(1)}%`;
@@ -55,6 +68,41 @@ export function renderProgressBar(percent: number, width = BAR_WIDTH): string {
   const clamped = Math.max(0, Math.min(100, percent));
   const filled = Math.round((clamped / 100) * width);
   return `${repeat("█", filled)}${repeat("░", width - filled)}`;
+}
+
+function colorize(text: string, color: string): string {
+  if (!ANSI_ENABLED || !text) {
+    return text;
+  }
+
+  return `${color}${text}${ANSI.reset}`;
+}
+
+function getSavingsPercentColor(percent: number): string {
+  if (percent >= 90) {
+    return ANSI.percentExcellent;
+  }
+
+  if (percent >= 75) {
+    return ANSI.percentGood;
+  }
+
+  if (percent >= 50) {
+    return ANSI.percentMedium;
+  }
+
+  return ANSI.percentLow;
+}
+
+function formatColoredPercent(percent: number, width: number): string {
+  const value = formatPercent(percent).padStart(width);
+  return colorize(value, getSavingsPercentColor(percent));
+}
+
+function renderImpactBar(percent: number, width: number): string {
+  const clamped = Math.max(0, Math.min(100, percent));
+  const filled = Math.round((clamped / 100) * width);
+  return `${colorize(repeat("█", filled), ANSI.impactFill)}${colorize(repeat("░", width - filled), ANSI.impactEmpty)}`;
 }
 
 function padSummaryLabel(label: string): string {
@@ -158,16 +206,31 @@ function buildTableLines(
   const savedWidth = 8;
   const avgWidth = 7;
   const timeWidth = 9;
+  const impactWidth = Math.max(
+    IMPACT_BAR_MIN_WIDTH,
+    Math.min(IMPACT_BAR_MAX_WIDTH, Math.floor(width * 0.17))
+  );
   const commandWidth = Math.max(
     16,
-    width - (rankWidth + countWidth + savedWidth + avgWidth + timeWidth + 5)
+    width -
+      (rankWidth +
+        countWidth +
+        savedWidth +
+        avgWidth +
+        timeWidth +
+        impactWidth +
+        6)
+  );
+  const totalSavedTokens = metrics.commands.reduce(
+    (sum, command) => sum + command.savedTokens,
+    0
   );
 
   const header = [
     "By Command",
     "",
-    `${"#".padEnd(rankWidth)} ${"Command".padEnd(commandWidth)} ${"Count".padStart(countWidth)} ${"Saved".padStart(savedWidth)} ${"Avg%".padStart(avgWidth)} ${"Time".padStart(timeWidth)}`,
-    `${repeat("-", rankWidth)} ${repeat("-", commandWidth)} ${repeat("-", countWidth)} ${repeat("-", savedWidth)} ${repeat("-", avgWidth)} ${repeat("-", timeWidth)}`,
+    `${"#".padEnd(rankWidth)} ${"Command".padEnd(commandWidth)} ${"Count".padStart(countWidth)} ${"Saved".padStart(savedWidth)} ${"Avg%".padStart(avgWidth)} ${"Time".padStart(timeWidth)} ${"Impact".padEnd(impactWidth)}`,
+    `${repeat("-", rankWidth)} ${repeat("-", commandWidth)} ${repeat("-", countWidth)} ${repeat("-", savedWidth)} ${repeat("-", avgWidth)} ${repeat("-", timeWidth)} ${repeat("-", impactWidth)}`,
   ];
 
   if (rows.length === 0) {
@@ -176,7 +239,14 @@ function buildTableLines(
 
   const lines = rows.map((command, index) => {
     const rank = `${index + 1}.`.padEnd(rankWidth);
-    return `${rank} ${formatCommandLabel(command, commandWidth).padEnd(commandWidth)} ${String(command.count).padStart(countWidth)} ${formatTokens(command.savedTokens).padStart(savedWidth)} ${formatPercent(command.savingsPercent).padStart(avgWidth)} ${formatDuration(command.avgExecMs).padStart(timeWidth)}`;
+    const commandLabel = colorize(
+      formatCommandLabel(command, commandWidth).padEnd(commandWidth),
+      ANSI.command
+    );
+    const impactShare =
+      totalSavedTokens > 0 ? (command.savedTokens / totalSavedTokens) * 100 : 0;
+
+    return `${rank} ${commandLabel} ${String(command.count).padStart(countWidth)} ${formatTokens(command.savedTokens).padStart(savedWidth)} ${formatColoredPercent(command.savingsPercent, avgWidth)} ${formatDuration(command.avgExecMs).padStart(timeWidth)} ${renderImpactBar(impactShare, impactWidth)}`;
   });
 
   if (metrics.commands.length > rows.length) {
@@ -188,58 +258,6 @@ function buildTableLines(
   return [...header, ...lines];
 }
 
-function buildImpactChartLines(
-  metrics: PiRtkMetricsSnapshot,
-  width: number
-): string[] {
-  const rows = metrics.impactChart;
-  const barWidth = Math.max(8, width - 18);
-  const lines = ["Impact chart", ""];
-
-  if (rows.length === 0) {
-    return [...lines, "No saved-token impact yet."];
-  }
-
-  for (const [index, row] of rows.entries()) {
-    const label = truncatePlain(row.label, Math.max(8, width - 20));
-    lines.push(`${index + 1}. ${label}`);
-    lines.push(
-      `   ${renderProgressBar(row.sharePercent, barWidth)} ${formatPercent(row.sharePercent)}`
-    );
-  }
-
-  return lines;
-}
-
-function mergeColumns(
-  left: string[],
-  right: string[],
-  width: number,
-  gap = 3
-): string[] {
-  const leftWidth = Math.max(
-    0,
-    Math.min(
-      width - gap - 16,
-      left.reduce((max, line) => Math.max(max, visibleWidth(line)), 0)
-    )
-  );
-  const rightWidth = Math.max(16, width - leftWidth - gap);
-  const rows = Math.max(left.length, right.length);
-  const lines: string[] = [];
-
-  for (let index = 0; index < rows; index += 1) {
-    const leftLine = truncateToWidth(left[index] ?? "", leftWidth);
-    const rightLine = truncateToWidth(right[index] ?? "", rightWidth);
-    const paddedLeft = `${leftLine}${" ".repeat(
-      Math.max(0, leftWidth - visibleWidth(leftLine) + gap)
-    )}`;
-    lines.push(truncateToWidth(`${paddedLeft}${rightLine}`, width));
-  }
-
-  return lines;
-}
-
 function buildBodyLines(
   metrics: PiRtkMetricsSnapshot,
   config: PiRtkConfig,
@@ -247,17 +265,7 @@ function buildBodyLines(
 ): string[] {
   const summary = buildSummaryLines(metrics, config);
   const table = buildTableLines(metrics, Math.max(TABLE_MIN_WIDTH, width));
-  const impact = buildImpactChartLines(
-    metrics,
-    Math.max(24, Math.floor(width * 0.3))
-  );
-
-  if (width >= SIDE_BY_SIDE_WIDTH) {
-    const mergedTable = mergeColumns(table, impact, width, 4);
-    return [...summary, "", ...mergedTable];
-  }
-
-  return [...summary, "", ...table, "", ...impact];
+  return [...summary, "", ...table];
 }
 
 export function renderRtkStats(
@@ -312,11 +320,7 @@ function buildStatusLine(
 
 function decorateLines(lines: string[], theme: any): string[] {
   return lines.map((line) => {
-    if (
-      line === "RTK Token Savings (Session Scope)" ||
-      line === "By Command" ||
-      line === "Impact chart"
-    ) {
+    if (line === "RTK Token Savings (Session Scope)" || line === "By Command") {
       return theme.bold(theme.fg("toolTitle", line));
     }
 
@@ -334,8 +338,7 @@ function decorateLines(lines: string[], theme: any): string[] {
 
     if (
       line.startsWith("No session savings yet") ||
-      line.startsWith("No command rows yet") ||
-      line.startsWith("No saved-token impact yet")
+      line.startsWith("No command rows yet")
     ) {
       return theme.fg("dim", line);
     }
