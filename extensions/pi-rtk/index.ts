@@ -5,7 +5,10 @@ import {
 
 import { registerRtkCommands } from "./commands";
 import { loadPiRtkConfig } from "./config";
-import { createRtkToolResultHandler } from "./output-compaction";
+import {
+  createRtkToolExecutionStartHandler,
+  createRtkToolResultHandler,
+} from "./output-compaction";
 import { clearRtkBinaryPathCache, resolveRtkCommand } from "./rewrite";
 import { createPiRtkRuntime } from "./runtime";
 import { createRtkUserBashHandler } from "./user-bash";
@@ -68,6 +71,15 @@ export default function piRtkExtension(pi: ExtensionAPI): void {
         runtime.metrics.recordRewriteFallback();
       }
 
+      const config = runtime.getConfig();
+      if (
+        config.outputCompaction.enabled &&
+        config.outputCompaction.trackSavings &&
+        config.outputCompaction.compactBash
+      ) {
+        runtime.metrics.startCommand(toolCallId, "bash", resolution.command);
+      }
+
       return bashTool.execute(
         toolCallId,
         {
@@ -81,6 +93,7 @@ export default function piRtkExtension(pi: ExtensionAPI): void {
     },
   });
 
+  pi.on("tool_execution_start", createRtkToolExecutionStartHandler(runtime));
   pi.on("tool_result", createRtkToolResultHandler(runtime));
   pi.on("user_bash", createRtkUserBashHandler(runtime));
   registerRtkCommands(pi, runtime);

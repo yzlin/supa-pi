@@ -143,7 +143,7 @@ export function createRtkUserBashHandler(
 
     return {
       operations: {
-        exec(command, cwd, options) {
+        async exec(command, cwd, options) {
           runtime.metrics.recordUserBashAttempt();
           const resolution = (deps?.resolveCommand ?? resolveRtkCommand)(
             command,
@@ -164,7 +164,38 @@ export function createRtkUserBashHandler(
             }
           }
 
-          return local.exec(resolution.command, cwd, options);
+          const metricsConfig = runtime.getConfig();
+          const startedAt = Date.now();
+          const commandId = `user-bash:${startedAt}:${Math.random()
+            .toString(36)
+            .slice(2)}`;
+
+          if (
+            metricsConfig.outputCompaction.enabled &&
+            metricsConfig.outputCompaction.trackSavings
+          ) {
+            runtime.metrics.startCommand(
+              commandId,
+              "user-bash",
+              resolution.command,
+              startedAt
+            );
+          }
+
+          try {
+            const result = await local.exec(resolution.command, cwd, options);
+            runtime.metrics.completeCommand(commandId, {
+              // user_bash does not expose a final text payload here, so we only
+              // retain timing and command identity in session stats.
+              execMs: Date.now() - startedAt,
+            });
+            return result;
+          } catch (error) {
+            runtime.metrics.completeCommand(commandId, {
+              execMs: Date.now() - startedAt,
+            });
+            throw error;
+          }
         },
       },
     };

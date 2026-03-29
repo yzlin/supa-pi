@@ -9,7 +9,7 @@ import {
   resetPiRtkConfig,
   savePiRtkConfig,
 } from "./config";
-import { renderRtkStats } from "./stats";
+import { showRtkStatsView } from "./stats";
 import type { PiRtkConfig, PiRtkRuntime } from "./types";
 
 const RTK_SUBCOMMANDS = [
@@ -171,9 +171,10 @@ export function registerRtkCommands(
         }
 
         case "stats": {
-          ctx.ui.notify(
-            renderRtkStats(runtime.metrics.snapshot(), runtime.getConfig()),
-            "info"
+          await showRtkStatsView(
+            ctx,
+            runtime.metrics.snapshot(),
+            runtime.getConfig()
           );
           return;
         }

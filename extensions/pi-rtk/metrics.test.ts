@@ -12,6 +12,17 @@ describe("pi-rtk metrics", () => {
     expect(metrics.userBashAttempts).toBe(0);
     expect(metrics.userBashRewrites).toBe(0);
     expect(metrics.overallSavingsPercent).toBe(0);
+    expect(metrics.summary).toEqual({
+      totalCommands: 0,
+      totalInputTokens: 0,
+      totalOutputTokens: 0,
+      totalSavedTokens: 0,
+      avgSavingsPercent: 0,
+      totalExecMs: 0,
+      avgExecMs: 0,
+    });
+    expect(metrics.commands).toEqual([]);
+    expect(metrics.impactChart).toEqual([]);
     expect(metrics.toolSavingsByName.bash).toEqual({
       calls: 0,
       originalChars: 0,
@@ -42,14 +53,30 @@ describe("pi-rtk metrics", () => {
     });
   });
 
-  it("aggregates savings by tool", () => {
+  it("aggregates savings by tool and by command", () => {
     const store = createPiRtkMetricsStore();
 
     store.recordToolSavings("bash", 100, 40);
     store.recordToolSavings("bash", 50, 25);
     store.recordToolSavings("read", 10, 10);
 
-    expect(store.snapshot()).toMatchObject({
+    store.startCommand("1", "bash", "rtk git diff main", 0);
+    store.completeCommand("1", {
+      inputText: "a ".repeat(1200),
+      outputText: "a ".repeat(300),
+      execMs: 47,
+    });
+
+    store.startCommand("2", "read", "read", 0);
+    store.completeCommand("2", {
+      inputText: "b ".repeat(1000),
+      outputText: "b ".repeat(700),
+      execMs: 3,
+    });
+
+    const snapshot = store.snapshot();
+
+    expect(snapshot).toMatchObject({
       totalOriginalChars: 160,
       totalFinalChars: 75,
       totalSavedChars: 85,
@@ -67,14 +94,52 @@ describe("pi-rtk metrics", () => {
         },
       },
     });
+
+    expect(snapshot.summary.totalCommands).toBe(2);
+    expect(snapshot.summary.totalSavedTokens).toBeGreaterThan(0);
+    expect(snapshot.summary.avgExecMs).toBe(25);
+    expect(snapshot.commands[0]?.label).toBe("rtk git diff main");
+    expect(snapshot.commands[0]?.savedTokens).toBeGreaterThan(
+      snapshot.commands[1]?.savedTokens ?? 0
+    );
+    expect(snapshot.impactChart[0]?.label).toBe("rtk git diff main");
   });
 
-  it("resets all counters", () => {
+  it("keeps rows sorted by saved tokens", () => {
+    const store = createPiRtkMetricsStore();
+
+    store.startCommand("1", "bash", "high", 0);
+    store.completeCommand("1", {
+      inputText: "x ".repeat(1800),
+      outputText: "x ".repeat(200),
+      execMs: 10,
+    });
+
+    store.startCommand("2", "bash", "low", 0);
+    store.completeCommand("2", {
+      inputText: "x ".repeat(800),
+      outputText: "x ".repeat(500),
+      execMs: 10,
+    });
+
+    expect(store.snapshot().commands.map((row) => row.label)).toEqual([
+      "high",
+      "low",
+    ]);
+  });
+
+  it("resets all counters and session rows", () => {
     const store = createPiRtkMetricsStore();
 
     store.recordRewriteAttempt();
     store.recordRewriteApplied();
     store.recordToolSavings("bash", 100, 20);
+    store.startCommand("1", "bash", "rtk ls", 0);
+    store.completeCommand("1", {
+      inputText: "x ".repeat(500),
+      outputText: "x ".repeat(100),
+      execMs: 12,
+    });
     store.reset();
 
     expect(store.snapshot()).toMatchObject({
@@ -83,6 +148,8 @@ describe("pi-rtk metrics", () => {
       totalOriginalChars: 0,
       totalFinalChars: 0,
       totalSavedChars: 0,
+      hasCommandData: false,
     });
+    expect(store.snapshot().commands).toEqual([]);
   });
 });

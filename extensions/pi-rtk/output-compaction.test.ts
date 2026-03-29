@@ -1,8 +1,8 @@
 import { describe, expect, it } from "bun:test";
 
-import { createRtkToolResultHandler } from "./output-compaction";
 import { DEFAULT_PI_RTK_CONFIG } from "./config";
 import { createPiRtkMetricsStore } from "./metrics";
+import { createRtkToolResultHandler } from "./output-compaction";
 import type { PiRtkConfig, PiRtkRuntime } from "./types";
 
 function createRuntime(config?: PiRtkConfig): PiRtkRuntime {
@@ -146,7 +146,9 @@ describe("pi-rtk output compaction", () => {
     } as any);
 
     expect(result).toBeUndefined();
-    expect(runtime.metrics.snapshot().toolSavingsByName.grep?.calls ?? 0).toBe(0);
+    expect(runtime.metrics.snapshot().toolSavingsByName.grep?.calls ?? 0).toBe(
+      0
+    );
   });
 
   it("skips compaction when the tool-specific flag is off", async () => {
@@ -173,10 +175,12 @@ describe("pi-rtk output compaction", () => {
     } as any);
 
     expect(result).toBeUndefined();
-    expect(runtime.metrics.snapshot().toolSavingsByName.grep?.calls ?? 0).toBe(0);
+    expect(runtime.metrics.snapshot().toolSavingsByName.grep?.calls ?? 0).toBe(
+      0
+    );
   });
 
-  it("does not record savings for no-op compaction", async () => {
+  it("tracks no-op compaction calls without saved chars", async () => {
     const runtime = createRuntime({
       ...DEFAULT_PI_RTK_CONFIG,
       outputCompaction: {
@@ -201,7 +205,11 @@ describe("pi-rtk output compaction", () => {
     } as any);
 
     expect(result).toBeUndefined();
-    expect(runtime.metrics.snapshot().toolSavingsByName.read?.calls ?? 0).toBe(0);
+    expect(runtime.metrics.snapshot().toolSavingsByName.read).toEqual({
+      calls: 1,
+      originalChars: 3,
+      finalChars: 3,
+    });
   });
 
   it("treats maxChars as characters rather than bytes", async () => {

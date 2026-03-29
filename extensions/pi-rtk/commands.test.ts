@@ -1,7 +1,7 @@
 import { describe, expect, it } from "bun:test";
 
-import { DEFAULT_PI_RTK_CONFIG } from "./config";
 import { registerRtkCommands } from "./commands";
+import { DEFAULT_PI_RTK_CONFIG } from "./config";
 import type { PiRtkRuntime } from "./types";
 
 describe("pi-rtk commands", () => {
@@ -20,6 +20,8 @@ describe("pi-rtk commands", () => {
         recordUserBashAttempt() {},
         recordUserBashRewrite() {},
         recordToolSavings() {},
+        startCommand() {},
+        completeCommand() {},
         reset() {},
         snapshot: () => ({
           rewriteAttempts: 0,
@@ -35,6 +37,18 @@ describe("pi-rtk commands", () => {
           rewriteRatePercent: 0,
           fallbackRatePercent: 0,
           userBashRewriteRatePercent: 0,
+          summary: {
+            totalCommands: 0,
+            totalInputTokens: 0,
+            totalOutputTokens: 0,
+            totalSavedTokens: 0,
+            avgSavingsPercent: 0,
+            totalExecMs: 0,
+            avgExecMs: 0,
+          },
+          commands: [],
+          impactChart: [],
+          hasCommandData: false,
         }),
       },
     };

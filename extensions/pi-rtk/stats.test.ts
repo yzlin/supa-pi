@@ -8,15 +8,17 @@ describe("pi-rtk stats", () => {
   it("renders a friendly no-data state", () => {
     const output = renderRtkStats(
       createPiRtkMetricsStore().snapshot(),
-      DEFAULT_PI_RTK_CONFIG
+      DEFAULT_PI_RTK_CONFIG,
+      120
     );
 
-    expect(output).toContain("No data yet.");
-    expect(output).toContain("overall savings");
-    expect(output).toContain("(no data)");
+    expect(output).toContain("RTK Token Savings (Session Scope)");
+    expect(output).toContain("No session savings yet.");
+    expect(output).toContain("By Command");
+    expect(output).toContain("Impact chart");
   });
 
-  it("renders partial values", () => {
+  it("renders summary, table, and impact rows", () => {
     const store = createPiRtkMetricsStore();
     store.recordRewriteAttempt();
     store.recordRewriteAttempt();
@@ -24,26 +26,36 @@ describe("pi-rtk stats", () => {
     store.recordRewriteFallback();
     store.recordUserBashAttempt();
     store.recordUserBashRewrite();
-    store.recordToolSavings("bash", 100, 40);
 
-    const output = renderRtkStats(store.snapshot(), DEFAULT_PI_RTK_CONFIG);
+    store.startCommand("1", "bash", "rtk git diff main", 0);
+    store.completeCommand("1", {
+      inputText: "a ".repeat(2000),
+      outputText: "a ".repeat(200),
+      execMs: 47,
+    });
 
-    expect(output).toContain("rewrites");
-    expect(output).toContain("50%");
-    expect(output).toContain("user !cmd");
-    expect(output).toContain("1/1");
-    expect(output).toContain("overall savings");
-    expect(output).toContain("60%");
-    expect(output).toContain("100→40 chars");
+    store.startCommand("2", "read", "read", 0);
+    store.completeCommand("2", {
+      inputText: "b ".repeat(1200),
+      outputText: "b ".repeat(700),
+      execMs: 3,
+    });
+
+    const output = renderRtkStats(store.snapshot(), DEFAULT_PI_RTK_CONFIG, 132);
+
+    expect(output).toContain("Total commands:");
+    expect(output).toContain("Efficiency meter:");
+    expect(output).toContain("Rewrite rate:");
+    expect(output).toContain("By Command");
+    expect(output).toContain("rtk git diff main");
+    expect(output).toContain("Impact chart");
+    expect(output).toContain("1.  rtk git diff main");
   });
 
-  it("renders 100 percent bars", () => {
-    expect(renderProgressBar(100)).toBe("██████████");
-  });
-
-  it("renders off-state rows", () => {
+  it("renders off-state warnings", () => {
     const output = renderRtkStats(createPiRtkMetricsStore().snapshot(), {
       ...DEFAULT_PI_RTK_CONFIG,
+      enabled: false,
       outputCompaction: {
         ...DEFAULT_PI_RTK_CONFIG.outputCompaction,
         enabled: false,
@@ -54,22 +66,28 @@ describe("pi-rtk stats", () => {
       },
     });
 
-    expect(output).toContain("bash savings");
-    expect(output).toContain("grep savings");
-    expect(output).toContain("read savings");
-    expect(output).toContain("off");
+    expect(output).toContain("RTK is disabled");
+    expect(output).toContain("Output compaction is off");
   });
 
-  it("keeps progress bars aligned", () => {
-    const output = renderRtkStats(
-      createPiRtkMetricsStore().snapshot(),
-      DEFAULT_PI_RTK_CONFIG
-    );
-    const lines = output
-      .split("\n")
-      .filter((line) => line.includes("█") || line.includes("░"));
+  it("renders 100 percent bars", () => {
+    expect(renderProgressBar(100)).toBe("████████████████████");
+  });
 
-    const barStarts = new Set(lines.map((line) => line.search(/[█░]/)));
-    expect(barStarts.size).toBe(1);
+  it("uses stacked layout on narrower widths", () => {
+    const store = createPiRtkMetricsStore();
+    store.startCommand("1", "bash", "rtk find", 0);
+    store.completeCommand("1", {
+      inputText: "x ".repeat(800),
+      outputText: "x ".repeat(100),
+      execMs: 12,
+    });
+
+    const output = renderRtkStats(store.snapshot(), DEFAULT_PI_RTK_CONFIG, 88);
+    const byCommandIndex = output.indexOf("By Command");
+    const impactIndex = output.indexOf("Impact chart");
+
+    expect(byCommandIndex).toBeGreaterThan(-1);
+    expect(impactIndex).toBeGreaterThan(byCommandIndex);
   });
 });

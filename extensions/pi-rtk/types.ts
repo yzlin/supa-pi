@@ -1,5 +1,6 @@
 export type PiRtkMode = "rewrite" | "suggest";
 export type PiRtkToolName = "bash" | "grep" | "read";
+export type PiRtkTrackedToolName = PiRtkToolName | "user-bash";
 export type PiRtkRewriteStatus =
   | "disabled"
   | "suggest"
@@ -39,6 +40,35 @@ export interface PiRtkToolSavings {
   finalChars: number;
 }
 
+export interface PiRtkCommandMetrics {
+  label: string;
+  toolName: PiRtkTrackedToolName;
+  count: number;
+  inputTokens: number;
+  outputTokens: number;
+  savedTokens: number;
+  savingsPercent: number;
+  totalExecMs: number;
+  avgExecMs: number;
+}
+
+export interface PiRtkImpactChartDatum {
+  label: string;
+  savedTokens: number;
+  sharePercent: number;
+  cumulativeSharePercent: number;
+}
+
+export interface PiRtkMetricsSummary {
+  totalCommands: number;
+  totalInputTokens: number;
+  totalOutputTokens: number;
+  totalSavedTokens: number;
+  avgSavingsPercent: number;
+  totalExecMs: number;
+  avgExecMs: number;
+}
+
 export interface PiRtkMetricsSnapshot {
   rewriteAttempts: number;
   rewritesApplied: number;
@@ -53,6 +83,18 @@ export interface PiRtkMetricsSnapshot {
   rewriteRatePercent: number;
   fallbackRatePercent: number;
   userBashRewriteRatePercent: number;
+  summary: PiRtkMetricsSummary;
+  commands: PiRtkCommandMetrics[];
+  impactChart: PiRtkImpactChartDatum[];
+  hasCommandData: boolean;
+}
+
+export interface PiRtkCommandCompletionOptions {
+  label?: string;
+  inputText?: string;
+  outputText?: string;
+  endedAt?: number;
+  execMs?: number;
 }
 
 export interface PiRtkMetricsStore {
@@ -65,6 +107,16 @@ export interface PiRtkMetricsStore {
     toolName: PiRtkToolName | string,
     originalChars: number,
     finalChars: number
+  ): void;
+  startCommand(
+    commandId: string,
+    toolName: PiRtkTrackedToolName,
+    label: string,
+    startedAt?: number
+  ): void;
+  completeCommand(
+    commandId: string,
+    options?: PiRtkCommandCompletionOptions
   ): void;
   reset(): void;
   snapshot(): PiRtkMetricsSnapshot;
