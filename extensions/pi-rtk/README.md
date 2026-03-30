@@ -27,7 +27,7 @@ Default limits:
 
 ## `/rtk stats`
 
-The dashboard is screenshot-inspired and includes:
+The dashboard includes:
 - summary totals for tracked commands
 - estimated input/output/saved tokens
 - total/average execution time

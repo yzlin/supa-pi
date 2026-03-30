@@ -166,7 +166,7 @@ function buildSummaryLines(
   const summary = metrics.summary;
   const lines = [
     "RTK Token Savings (Session Scope)",
-    "Estimated tokens · session-only · screenshot-inspired",
+    "Estimated tokens · session-only",
     "",
   ];
 
@@ -336,7 +336,7 @@ function decorateLines(lines: string[], theme: ThemeLike): string[] {
       return theme.bold(theme.fg("toolTitle", line));
     }
 
-    if (line === "Estimated tokens · session-only · screenshot-inspired") {
+    if (line === "Estimated tokens · session-only") {
       return theme.fg("muted", line);
     }
 
