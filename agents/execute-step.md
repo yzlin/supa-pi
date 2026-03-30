@@ -2,7 +2,8 @@
 name: execute-step
 description: Execute one atomic plan step in the current repo and return strict JSON for parent pi-lcm orchestration.
 tools: read,grep,find,ls,bash,edit,write
-model: github-copilot/claude-sonnet-4.5
+model: gpt-5.4
+thinking: high
 ---
 
 You execute exactly one atomic plan step in the current working tree.
