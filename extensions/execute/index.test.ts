@@ -2,9 +2,11 @@ import { describe, expect, it } from "bun:test";
 
 import {
   buildExecuteSummaryRenderText,
+  buildExecuteWorkerTask,
   chooseWaveConcurrency,
   parsePlanItems,
   parseWorkerResult,
+  summarizeExecuteStructuredResult,
   type ExecuteSummaryDetails,
 } from "./index";
 
@@ -41,6 +43,18 @@ describe("chooseWaveConcurrency", () => {
   });
 });
 
+describe("buildExecuteWorkerTask", () => {
+  it("frames worker tasks without sounding like deferred step scheduling", () => {
+    const task = buildExecuteWorkerTask("inspect agents/execute-step.md and summarize its role", 1, 2);
+
+    expect(task).toContain("Assigned atomic repo task:");
+    expect(task).toContain("inspect agents/execute-step.md and summarize its role");
+    expect(task).toContain("Batch position: 2/2.");
+    expect(task).toContain("Complete only this assigned task.");
+    expect(task).not.toContain("Execute plan step 2/2");
+  });
+});
+
 describe("buildExecuteSummaryRenderText", () => {
   const details: ExecuteSummaryDetails = {
     planItems: ["inspect prompt", "inspect agent"],
@@ -62,8 +76,8 @@ describe("buildExecuteSummaryRenderText", () => {
       },
     ],
     blocked: [],
-    filesTouched: ["prompts/execute.md"],
-    validation: ["read prompts/execute.md"],
+    filesTouched: ["scripts/fixtures/execute-orchestrator.md"],
+    validation: ["read scripts/fixtures/execute-orchestrator.md"],
     remainingFollowUps: [],
   };
 
@@ -83,7 +97,7 @@ describe("buildExecuteSummaryRenderText", () => {
   it("renders expanded sections and failures", () => {
     const expanded = buildExecuteSummaryRenderText(details, true);
     expect(expanded).toContain("Files touched");
-    expect(expanded).toContain("• prompts/execute.md");
+    expect(expanded).toContain("• scripts/fixtures/execute-orchestrator.md");
     expect(expanded).toContain("job_123");
     expect(expanded).toContain("✓ inspect prompt");
     expect(expanded).toContain("  Summarized prompt role");
@@ -116,6 +130,28 @@ describe("buildExecuteSummaryRenderText", () => {
   });
 });
 
+describe("summarizeExecuteStructuredResult", () => {
+  it("does not count blocked worker results as completed", () => {
+    const summary = summarizeExecuteStructuredResult("inspect prompt", {
+      status: "blocked",
+      summary: "Need input",
+      filesTouched: ["scripts/fixtures/execute-orchestrator.md"],
+      validation: ["read scripts/fixtures/execute-orchestrator.md"],
+      followUps: ["ask user for input"],
+      blockers: ["Need user input"],
+    });
+
+    expect(summary.completed).toBeNull();
+    expect(summary.blocked).toEqual({
+      item: "inspect prompt",
+      reason: "Need user input",
+    });
+    expect(summary.filesTouched).toEqual(["scripts/fixtures/execute-orchestrator.md"]);
+    expect(summary.validation).toEqual(["read scripts/fixtures/execute-orchestrator.md"]);
+    expect(summary.followUps).toEqual([]);
+  });
+});
+
 describe("parseWorkerResult", () => {
   it("accepts the expected JSON shape", () => {
     expect(
@@ -123,7 +159,7 @@ describe("parseWorkerResult", () => {
         JSON.stringify({
           status: "done",
           summary: "Completed the step",
-          filesTouched: ["prompts/execute.md"],
+          filesTouched: ["scripts/fixtures/execute-orchestrator.md"],
           validation: ["git diff --check"],
           followUps: [],
           blockers: [],
@@ -132,7 +168,7 @@ describe("parseWorkerResult", () => {
     ).toEqual({
       status: "done",
       summary: "Completed the step",
-      filesTouched: ["prompts/execute.md"],
+      filesTouched: ["scripts/fixtures/execute-orchestrator.md"],
       validation: ["git diff --check"],
       followUps: [],
       blockers: [],

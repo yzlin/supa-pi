@@ -7,7 +7,13 @@ import type { MapResultRecord } from "../../../pi-lcm/src/types.ts";
 
 const COMMAND_NAME = "execute";
 const EXECUTE_AGENT = "execute-step";
-const TASK_TEMPLATE = "Execute plan step {index}/{total}: {item}";
+const TASK_TEMPLATE = [
+  "Assigned atomic repo task:",
+  "{item}",
+  "",
+  "Batch position: {index}/{total}.",
+  "Complete only this assigned task.",
+].join("\n");
 const MAX_WAVE_ITEMS = 25;
 const MAX_WAVES = 10;
 const DEFAULT_MAX_ATTEMPTS = 1;
@@ -33,6 +39,14 @@ interface ExecuteCompletedItem {
 interface ExecuteBlockedItem {
   item: string;
   reason: string;
+}
+
+interface ExecuteStructuredResultSummary {
+  completed: ExecuteCompletedItem | null;
+  blocked: ExecuteBlockedItem | null;
+  filesTouched: string[];
+  validation: string[];
+  followUps: string[];
 }
 
 interface ExecuteWaveSummary {
@@ -89,6 +103,9 @@ export const parsePlanItems = (input: string): string[] => {
 
 export const chooseWaveConcurrency = (items: string[]): number =>
   items.some((item) => RISKY_STEP_PATTERN.test(item)) ? WRITE_HEAVY_CONCURRENCY : READ_ONLY_CONCURRENCY;
+
+export const buildExecuteWorkerTask = (item: string, index: number, total: number): string =>
+  buildMapTask(TASK_TEMPLATE, item, index, total);
 
 const isStringArray = (value: unknown): value is string[] => Array.isArray(value) && value.every((entry) => typeof entry === "string");
 
@@ -257,7 +274,7 @@ const runWave = async (
   wave: number
 ): Promise<{ summary: ExecuteWaveSummary; results: MapResultRecord[] }> => {
   const maxConcurrency = Math.min(chooseWaveConcurrency(items), items.length);
-  const agent = resolveMapAgent(ctx.cwd, EXECUTE_AGENT, "project");
+  const agent = resolveMapAgent(ctx.cwd, EXECUTE_AGENT, "both");
   const job = await runtime.store.createMapJob({
     kind: "agentic_map",
     agentName: agent.name,
@@ -279,7 +296,7 @@ const runWave = async (
       const item = items[index];
       if (!item) return;
 
-      const task = buildMapTask(TASK_TEMPLATE, item, index, items.length);
+      const task = buildExecuteWorkerTask(item, index, items.length);
       const execution = await runAgentTask({
         cwd: ctx.cwd,
         agent,
@@ -480,6 +497,39 @@ const buildBlockedReason = (result: ExecuteStepResult): string => {
   return blockers.length > 0 ? blockers.join("; ") : result.summary;
 };
 
+export const summarizeExecuteStructuredResult = (
+  item: string,
+  result: ExecuteStepResult
+): ExecuteStructuredResultSummary => {
+  const filesTouched = result.filesTouched.map((entry) => entry.trim()).filter(Boolean);
+  const validation = result.validation.map((entry) => entry.trim()).filter(Boolean);
+
+  if (result.status === "blocked") {
+    return {
+      completed: null,
+      blocked: {
+        item,
+        reason: buildBlockedReason(result),
+      },
+      filesTouched,
+      validation,
+      followUps: [],
+    };
+  }
+
+  return {
+    completed: {
+      item,
+      status: result.status,
+      summary: result.summary,
+    },
+    blocked: null,
+    filesTouched,
+    validation,
+    followUps: result.followUps.map((entry) => entry.trim()).filter(Boolean),
+  };
+};
+
 export const executePlan = async (pi: ExtensionAPI, args: string, ctx: ExtensionCommandContext): Promise<void> => {
   const planItems = parsePlanItems(args);
   if (planItems.length === 0) {
@@ -491,7 +541,7 @@ export const executePlan = async (pi: ExtensionAPI, args: string, ctx: Extension
 
   try {
     const runtime = await ensureRuntime(ctx);
-    resolveMapAgent(ctx.cwd, EXECUTE_AGENT, "project");
+    resolveMapAgent(ctx.cwd, EXECUTE_AGENT, "both");
 
     const pendingItems = [...planItems];
     const seenFollowUps = new Set(pendingItems);
@@ -520,28 +570,23 @@ export const executePlan = async (pi: ExtensionAPI, args: string, ctx: Extension
         }
 
         const structured = result.structuredOutput as ExecuteStepResult;
-        completed.push({
-          item: result.item,
-          status: structured.status,
-          summary: structured.summary,
-        });
+        const summary = summarizeExecuteStructuredResult(result.item, structured);
 
-        for (const file of structured.filesTouched.map((entry) => entry.trim()).filter(Boolean)) {
+        if (summary.completed) {
+          completed.push(summary.completed);
+        }
+        if (summary.blocked) {
+          blocked.push(summary.blocked);
+        }
+
+        for (const file of summary.filesTouched) {
           filesTouched.add(file);
         }
-        for (const check of structured.validation.map((entry) => entry.trim()).filter(Boolean)) {
+        for (const check of summary.validation) {
           validation.add(check);
         }
 
-        if (structured.status === "blocked") {
-          blocked.push({
-            item: result.item,
-            reason: buildBlockedReason(structured),
-          });
-          continue;
-        }
-
-        for (const followUp of structured.followUps.map((entry) => entry.trim()).filter(Boolean)) {
+        for (const followUp of summary.followUps) {
           if (seenFollowUps.has(followUp)) continue;
           seenFollowUps.add(followUp);
           pendingItems.push(followUp);

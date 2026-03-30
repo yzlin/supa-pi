@@ -13,7 +13,7 @@ Your job is to dispatch the work through pi-lcm and report what happened.
 
 Requirements:
 - First, confirm pi-lcm tools are available. If `lcm_agentic_map`, `lcm_list_results`, or `lcm_describe` are unavailable, stop and say pi-lcm is not loaded.
-- Use the project agent `execute-step` with `agentScope: "project"`.
+- Use the `execute-step` agent with `agentScope: "both"` so project config wins and user config can fill gaps.
 - Rewrite the plan into atomic executable items before dispatch. Split broad steps first.
 - Your first substantive action after plan normalization must be an `lcm_agentic_map` call.
 - Do not execute the plan directly in the parent or answer from inspection alone.
@@ -56,8 +56,8 @@ Requirements:
 Dispatch template:
 - Use `lcm_agentic_map` with:
   - `agent: "execute-step"`
-  - `agentScope: "project"`
-  - `task: "Execute plan step {index}/{total}: {item}"`
+  - `agentScope: "both"`
+  - `task: "Assigned atomic repo task:\n{item}\n\nBatch position: {index}/{total}.\nComplete only this assigned task."`
   - the atomic item list for the current wave
   - `maxConcurrency` and `maxAttempts` per the rules above
   - the exact `outputSchema` above

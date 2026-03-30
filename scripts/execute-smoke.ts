@@ -1,8 +1,8 @@
 import { executePlan } from "../extensions/execute/index.ts";
 
 const DEFAULT_PLAN = [
-  "inspect prompts/execute.md and summarize its role",
-  "inspect .pi/agents/execute-step.md and summarize its role",
+  "inspect scripts/fixtures/execute-orchestrator.md and summarize its role",
+  "inspect agents/execute-step.md and summarize its role",
 ].join("\n");
 
 const rawPlan = process.argv.slice(2).join(" ").trim() || DEFAULT_PLAN;
