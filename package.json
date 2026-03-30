@@ -10,6 +10,7 @@
       "./extensions/core-prompt",
       "./extensions/rules",
       "./extensions/plan",
+      "./extensions/execute",
       "./extensions/simplify",
       "./extensions/session-query.ts",
       "./extensions/handoff.ts",
@@ -19,6 +20,9 @@
       "./extensions/pi-rtk",
       "./extensions/skills.ts"
     ]
+  },
+  "scripts": {
+    "smoke:execute": "bun ./scripts/execute-smoke.ts"
   },
   "peerDependencies": {
     "@mariozechner/pi-coding-agent": "*",
