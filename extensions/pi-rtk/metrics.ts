@@ -4,16 +4,24 @@ import { estimateTokens } from "@mariozechner/pi-coding-agent";
 import type {
   PiRtkCommandCompletionOptions,
   PiRtkCommandMetrics,
-  PiRtkImpactChartDatum,
   PiRtkMetricsSnapshot,
   PiRtkMetricsStore,
+  PiRtkStatsRow,
   PiRtkToolName,
   PiRtkToolSavings,
   PiRtkTrackedToolName,
 } from "./types";
 
 const DEFAULT_TOOL_NAMES = ["bash", "grep", "read"] as const;
-const MAX_IMPACT_CHART_POINTS = 8;
+const COMPOUND_COMMAND_FAMILY_NAMES = [
+  "git",
+  "gh",
+  "npm",
+  "pnpm",
+  "bun",
+  "cargo",
+  "python",
+] as const;
 
 interface MutablePiRtkCommandMetrics {
   label: string;
@@ -29,6 +37,15 @@ interface MutablePendingCommand {
   label: string;
   toolName: PiRtkTrackedToolName;
   startedAt: number;
+}
+
+interface MutablePiRtkStatsRow {
+  label: string;
+  count: number;
+  inputTokens: number;
+  outputTokens: number;
+  savedTokens: number;
+  totalExecMs: number;
 }
 
 interface MutablePiRtkMetricsState {
@@ -109,6 +126,17 @@ function cloneToolSavingsMap(
   );
 }
 
+function createEmptyStatsRow(label: string): MutablePiRtkStatsRow {
+  return {
+    label,
+    count: 0,
+    inputTokens: 0,
+    outputTokens: 0,
+    savedTokens: 0,
+    totalExecMs: 0,
+  };
+}
+
 function clampNonNegative(value: number): number {
   if (!Number.isFinite(value)) {
     return 0;
@@ -187,9 +215,15 @@ function getOrCreateCommandMetrics(
   return created;
 }
 
-function compareCommands(
-  left: PiRtkCommandMetrics,
-  right: PiRtkCommandMetrics
+function compareStatsRows(
+  left: Pick<
+    PiRtkStatsRow,
+    "label" | "savedTokens" | "inputTokens" | "count" | "totalExecMs"
+  >,
+  right: Pick<
+    PiRtkStatsRow,
+    "label" | "savedTokens" | "inputTokens" | "count" | "totalExecMs"
+  >
 ): number {
   return (
     right.savedTokens - left.savedTokens ||
@@ -200,12 +234,9 @@ function compareCommands(
   );
 }
 
-function toCommandMetrics(
-  row: MutablePiRtkCommandMetrics
-): PiRtkCommandMetrics {
+function toStatsRow(row: MutablePiRtkStatsRow): PiRtkStatsRow {
   return {
     label: row.label,
-    toolName: row.toolName,
     count: row.count,
     inputTokens: row.inputTokens,
     outputTokens: row.outputTokens,
@@ -217,28 +248,110 @@ function toCommandMetrics(
   };
 }
 
-function buildImpactChart(
-  commands: PiRtkCommandMetrics[]
-): PiRtkImpactChartDatum[] {
-  const ranked = commands.filter((command) => command.savedTokens > 0);
-  const totalSavedTokens = ranked.reduce(
-    (sum, command) => sum + command.savedTokens,
-    0
-  );
+function toCommandMetrics(
+  row: MutablePiRtkCommandMetrics
+): PiRtkCommandMetrics {
+  return {
+    ...toStatsRow(row),
+    toolName: row.toolName,
+  };
+}
 
-  let cumulativeSavedTokens = 0;
-  return ranked.slice(0, MAX_IMPACT_CHART_POINTS).map((command) => {
-    cumulativeSavedTokens += command.savedTokens;
-    return {
-      label: command.label,
-      savedTokens: command.savedTokens,
-      sharePercent: toPrecisePercent(command.savedTokens, totalSavedTokens),
-      cumulativeSharePercent: toPrecisePercent(
-        cumulativeSavedTokens,
-        totalSavedTokens
-      ),
-    };
-  });
+function normalizeCommandFamilyToken(token: string): string {
+  return token.replace(/^["'`]+|["'`]+$/g, "");
+}
+
+function getCommandFamilyLabel(
+  toolName: PiRtkTrackedToolName,
+  label: string
+): string {
+  if (toolName === "read" || toolName === "grep") {
+    return toolName;
+  }
+
+  const tokens = label
+    .split(/\s+/)
+    .map(normalizeCommandFamilyToken)
+    .filter(Boolean);
+
+  if (tokens[0] === "rtk") {
+    tokens.shift();
+  }
+
+  if (tokens.length === 0) {
+    return "(unknown)";
+  }
+
+  const [first, second] = tokens;
+  if (
+    second &&
+    !second.startsWith("-") &&
+    COMPOUND_COMMAND_FAMILY_NAMES.includes(first)
+  ) {
+    return `${first} ${second}`;
+  }
+
+  return first;
+}
+
+function aggregateStatsRows<T extends MutablePiRtkCommandMetrics>(
+  rows: T[],
+  getLabel: (row: T) => string
+): PiRtkStatsRow[] {
+  const aggregates = Object.create(null) as Record<
+    string,
+    MutablePiRtkStatsRow
+  >;
+
+  for (const row of rows) {
+    const label = getLabel(row);
+    const aggregate = aggregates[label] ?? createEmptyStatsRow(label);
+
+    aggregate.count += row.count;
+    aggregate.inputTokens += row.inputTokens;
+    aggregate.outputTokens += row.outputTokens;
+    aggregate.savedTokens += row.savedTokens;
+    aggregate.totalExecMs += row.totalExecMs;
+    aggregates[label] = aggregate;
+  }
+
+  return Object.values(aggregates).map(toStatsRow).sort(compareStatsRows);
+}
+
+function createEmptySummary(): PiRtkMetricsSnapshot["summary"] {
+  return {
+    totalCommands: 0,
+    totalInputTokens: 0,
+    totalOutputTokens: 0,
+    totalSavedTokens: 0,
+    avgSavingsPercent: 0,
+    totalExecMs: 0,
+    avgExecMs: 0,
+  };
+}
+
+function buildSummary(
+  commands: PiRtkCommandMetrics[]
+): PiRtkMetricsSnapshot["summary"] {
+  const summary = commands.reduce((totals, command) => {
+    totals.totalCommands += command.count;
+    totals.totalInputTokens += command.inputTokens;
+    totals.totalOutputTokens += command.outputTokens;
+    totals.totalSavedTokens += command.savedTokens;
+    totals.totalExecMs += command.totalExecMs;
+    return totals;
+  }, createEmptySummary());
+
+  summary.avgSavingsPercent = toPrecisePercent(
+    summary.totalSavedTokens,
+    summary.totalInputTokens
+  );
+  summary.avgExecMs =
+    summary.totalCommands > 0
+      ? Math.round(summary.totalExecMs / summary.totalCommands)
+      : 0;
+
+  return summary;
 }
 
 export function createPiRtkMetricsStore(): PiRtkMetricsStore {
@@ -319,37 +432,13 @@ export function createPiRtkMetricsStore(): PiRtkMetricsStore {
         0,
         state.totalOriginalChars - state.totalFinalChars
       );
-      const commands = Object.values(state.commandMetricsByKey)
-        .map(toCommandMetrics)
-        .sort(compareCommands);
-      const summary = commands.reduce(
-        (totals, command) => {
-          totals.totalCommands += command.count;
-          totals.totalInputTokens += command.inputTokens;
-          totals.totalOutputTokens += command.outputTokens;
-          totals.totalSavedTokens += command.savedTokens;
-          totals.totalExecMs += command.totalExecMs;
-          return totals;
-        },
-        {
-          totalCommands: 0,
-          totalInputTokens: 0,
-          totalOutputTokens: 0,
-          totalSavedTokens: 0,
-          avgSavingsPercent: 0,
-          totalExecMs: 0,
-          avgExecMs: 0,
-        }
+      const commandRows = Object.values(state.commandMetricsByKey);
+      const commands = commandRows.map(toCommandMetrics).sort(compareStatsRows);
+      const tools = aggregateStatsRows(commandRows, (row) => row.toolName);
+      const commandFamilies = aggregateStatsRows(commandRows, (row) =>
+        getCommandFamilyLabel(row.toolName, row.label)
       );
-
-      summary.avgSavingsPercent = toPrecisePercent(
-        summary.totalSavedTokens,
-        summary.totalInputTokens
-      );
-      summary.avgExecMs =
-        summary.totalCommands > 0
-          ? Math.round(summary.totalExecMs / summary.totalCommands)
-          : 0;
+      const summary = buildSummary(commands);
 
       return {
         rewriteAttempts: state.rewriteAttempts,
@@ -378,8 +467,9 @@ export function createPiRtkMetricsStore(): PiRtkMetricsStore {
           state.userBashAttempts
         ),
         summary,
+        tools,
+        commandFamilies,
         commands,
-        impactChart: buildImpactChart(commands),
         hasCommandData: summary.totalCommands > 0,
       };
     },

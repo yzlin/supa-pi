@@ -28,21 +28,21 @@ Default limits:
 ## `/rtk stats`
 
 The dashboard includes:
-- summary totals for tracked commands
+- overview totals for tracked commands
 - estimated input/output/saved tokens
 - total/average execution time
 - efficiency meter
-- ranked "By Command" rows
-- right-side impact chart on wider terminals
+- ranked "By Tool" rows
+- ranked "Top Command Families" rows
+- ranked "Raw Command Rows" for exact executed commands
 - clear empty/off states when RTK or savings tracking is disabled
 
 Ranking defaults to saved tokens, then total input tokens, count, and time.
 
-Tracked command rows currently aggregate:
-- rewritten `bash` tool commands by executed command text
-- `read`
-- `grep`
-- user `!cmd` executions (timing only unless output compaction savings are available)
+Tracked groupings currently aggregate:
+- tools: `bash`, `read`, `grep`, and `user-bash`
+- command families: normalized bash/user-bash command prefixes plus `read`/`grep`
+- raw command rows: exact rewritten/executed command text for `bash` and `user-bash`, plus `read`/`grep`
 
 ## Config
 

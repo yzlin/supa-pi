@@ -12,13 +12,16 @@ import type {
   PiRtkCommandMetrics,
   PiRtkConfig,
   PiRtkMetricsSnapshot,
+  PiRtkStatsRow,
 } from "./types";
 
 const BAR_WIDTH = 20;
 const SUMMARY_LABEL_WIDTH = 18;
 const TEXT_FALLBACK_WIDTH = 72;
 const TABLE_MIN_WIDTH = 76;
-const MAX_TABLE_ROWS = 10;
+const MAX_TOOL_ROWS = 4;
+const MAX_FAMILY_ROWS = 8;
+const MAX_COMMAND_ROWS = 10;
 const IMPACT_BAR_MIN_WIDTH = 12;
 const IMPACT_BAR_MAX_WIDTH = 18;
 const OVERLAY_HEIGHT_RATIO = 0.9;
@@ -57,9 +60,13 @@ function repeat(char: string, count: number): string {
   return char.repeat(Math.max(0, count));
 }
 
-export function renderProgressBar(percent: number, width = BAR_WIDTH): string {
+function getBarFillWidth(percent: number, width: number): number {
   const clamped = Math.max(0, Math.min(100, percent));
-  const filled = Math.round((clamped / 100) * width);
+  return Math.round((clamped / 100) * width);
+}
+
+export function renderProgressBar(percent: number, width = BAR_WIDTH): string {
+  const filled = getBarFillWidth(percent, width);
   return `${repeat("█", filled)}${repeat("░", width - filled)}`;
 }
 
@@ -105,8 +112,7 @@ function renderImpactBar(
   width: number,
   theme?: ThemeLike
 ): string {
-  const clamped = Math.max(0, Math.min(100, percent));
-  const filled = Math.round((clamped / 100) * width);
+  const filled = getBarFillWidth(percent, width);
   return `${applyThemeColor(theme, "accent", repeat("█", filled))}${applyThemeColor(theme, "dim", repeat("░", width - filled))}`;
 }
 
@@ -128,6 +134,10 @@ function formatCommandLabel(
 ): string {
   const prefix = command.toolName === "user-bash" ? "! " : "";
   return truncatePlain(`${prefix}${command.label}`, width);
+}
+
+function formatStatsRowLabel(row: PiRtkStatsRow, width: number): string {
+  return truncatePlain(row.label, width);
 }
 
 function buildStatusNotes(
@@ -164,50 +174,51 @@ function buildSummaryLines(
   config: PiRtkConfig
 ): string[] {
   const summary = metrics.summary;
-  const lines = [
+  const statusNotes = buildStatusNotes(metrics, config);
+
+  return [
     "RTK Token Savings (Session Scope)",
     "Estimated tokens · session-only",
     "",
+    ...statusNotes,
+    ...(statusNotes.length > 0 ? [""] : []),
+    "Overview",
+    "",
+    `${padSummaryLabel("Total commands:")}${summary.totalCommands}`,
+    `${padSummaryLabel("Input tokens:")}${formatTokens(summary.totalInputTokens)}`,
+    `${padSummaryLabel("Output tokens:")}${formatTokens(summary.totalOutputTokens)}`,
+    `${padSummaryLabel("Tokens saved:")}${formatTokens(summary.totalSavedTokens)} (${formatPercent(summary.avgSavingsPercent)})`,
+    `${padSummaryLabel("Total exec time:")}${formatDuration(summary.totalExecMs)} (avg ${formatDuration(summary.avgExecMs)})`,
+    `${padSummaryLabel("Efficiency meter:")}${renderProgressBar(summary.avgSavingsPercent)} ${formatPercent(summary.avgSavingsPercent)}`,
+    `${padSummaryLabel("Rewrite rate:")}${metrics.rewritesApplied}/${metrics.rewriteAttempts} (${metrics.rewriteRatePercent}%) · fallbacks ${metrics.rewriteFallbacks}`,
+    `${padSummaryLabel("User !cmd:")}${metrics.userBashRewrites}/${metrics.userBashAttempts} rewrites (${metrics.userBashRewriteRatePercent}%)`,
   ];
-
-  lines.push(...buildStatusNotes(metrics, config));
-  if (lines[lines.length - 1] !== "") {
-    lines.push("");
-  }
-
-  lines.push(`${padSummaryLabel("Total commands:")}${summary.totalCommands}`);
-  lines.push(
-    `${padSummaryLabel("Input tokens:")}${formatTokens(summary.totalInputTokens)}`
-  );
-  lines.push(
-    `${padSummaryLabel("Output tokens:")}${formatTokens(summary.totalOutputTokens)}`
-  );
-  lines.push(
-    `${padSummaryLabel("Tokens saved:")}${formatTokens(summary.totalSavedTokens)} (${formatPercent(summary.avgSavingsPercent)})`
-  );
-  lines.push(
-    `${padSummaryLabel("Total exec time:")}${formatDuration(summary.totalExecMs)} (avg ${formatDuration(summary.avgExecMs)})`
-  );
-  lines.push(
-    `${padSummaryLabel("Efficiency meter:")}${renderProgressBar(summary.avgSavingsPercent)} ${formatPercent(summary.avgSavingsPercent)}`
-  );
-  lines.push(
-    `${padSummaryLabel("Rewrite rate:")}${metrics.rewritesApplied}/${metrics.rewriteAttempts} (${metrics.rewriteRatePercent}%) · fallbacks ${metrics.rewriteFallbacks}`
-  );
-  lines.push(
-    `${padSummaryLabel("User !cmd:")}${metrics.userBashRewrites}/${metrics.userBashAttempts} rewrites (${metrics.userBashRewriteRatePercent}%)`
-  );
-
-  return lines;
 }
 
-function buildTableLines(
-  metrics: PiRtkMetricsSnapshot,
-  width: number,
-  theme?: ThemeLike
-): string[] {
-  const rows = metrics.commands.slice(0, MAX_TABLE_ROWS);
-  const rankWidth = rows.length >= 10 ? 4 : 3;
+function buildRankedTableLines<T extends PiRtkStatsRow>(options: {
+  title: string;
+  labelHeader: string;
+  rows: T[];
+  width: number;
+  theme?: ThemeLike;
+  maxRows: number;
+  emptyMessage: string;
+  hiddenLabel: string;
+  formatLabel: (row: T, width: number) => string;
+}): string[] {
+  const {
+    title,
+    labelHeader,
+    rows,
+    width,
+    theme,
+    maxRows,
+    emptyMessage,
+    hiddenLabel,
+    formatLabel,
+  } = options;
+  const visibleRows = rows.slice(0, maxRows);
+  const rankWidth = visibleRows.length >= 10 ? 4 : 3;
   const countWidth = 5;
   const savedWidth = 8;
   const avgWidth = 7;
@@ -216,7 +227,7 @@ function buildTableLines(
     IMPACT_BAR_MIN_WIDTH,
     Math.min(IMPACT_BAR_MAX_WIDTH, Math.floor(width * 0.17))
   );
-  const commandWidth = Math.max(
+  const labelWidth = Math.max(
     16,
     width -
       (rankWidth +
@@ -227,42 +238,93 @@ function buildTableLines(
         impactWidth +
         6)
   );
-  const totalSavedTokens = metrics.commands.reduce(
-    (sum, command) => sum + command.savedTokens,
-    0
-  );
+  const totalSavedTokens = rows.reduce((sum, row) => sum + row.savedTokens, 0);
 
   const header = [
-    "By Command",
+    title,
     "",
-    `${"#".padEnd(rankWidth)} ${"Command".padEnd(commandWidth)} ${"Count".padStart(countWidth)} ${"Saved".padStart(savedWidth)} ${"Avg%".padStart(avgWidth)} ${"Time".padStart(timeWidth)} ${"Impact".padEnd(impactWidth)}`,
-    `${repeat("-", rankWidth)} ${repeat("-", commandWidth)} ${repeat("-", countWidth)} ${repeat("-", savedWidth)} ${repeat("-", avgWidth)} ${repeat("-", timeWidth)} ${repeat("-", impactWidth)}`,
+    `${"#".padEnd(rankWidth)} ${labelHeader.padEnd(labelWidth)} ${"Count".padStart(countWidth)} ${"Saved".padStart(savedWidth)} ${"Avg%".padStart(avgWidth)} ${"Time".padStart(timeWidth)} ${"Impact".padEnd(impactWidth)}`,
+    `${repeat("-", rankWidth)} ${repeat("-", labelWidth)} ${repeat("-", countWidth)} ${repeat("-", savedWidth)} ${repeat("-", avgWidth)} ${repeat("-", timeWidth)} ${repeat("-", impactWidth)}`,
   ];
 
-  if (rows.length === 0) {
-    return [...header, "No command rows yet."];
+  if (visibleRows.length === 0) {
+    return [...header, emptyMessage];
   }
 
-  const lines = rows.map((command, index) => {
+  const lines = visibleRows.map((row, index) => {
     const rank = `${index + 1}.`.padEnd(rankWidth);
-    const commandLabel = applyThemeColor(
+    const formattedLabel = applyThemeColor(
       theme,
       "accent",
-      formatCommandLabel(command, commandWidth).padEnd(commandWidth)
+      formatLabel(row, labelWidth).padEnd(labelWidth)
     );
     const impactShare =
-      totalSavedTokens > 0 ? (command.savedTokens / totalSavedTokens) * 100 : 0;
+      totalSavedTokens > 0 ? (row.savedTokens / totalSavedTokens) * 100 : 0;
 
-    return `${rank} ${commandLabel} ${String(command.count).padStart(countWidth)} ${formatTokens(command.savedTokens).padStart(savedWidth)} ${formatColoredPercent(command.savingsPercent, avgWidth, theme)} ${formatDuration(command.avgExecMs).padStart(timeWidth)} ${renderImpactBar(impactShare, impactWidth, theme)}`;
+    return `${rank} ${formattedLabel} ${String(row.count).padStart(countWidth)} ${formatTokens(row.savedTokens).padStart(savedWidth)} ${formatColoredPercent(row.savingsPercent, avgWidth, theme)} ${formatDuration(row.avgExecMs).padStart(timeWidth)} ${renderImpactBar(impactShare, impactWidth, theme)}`;
   });
 
-  if (metrics.commands.length > rows.length) {
+  if (rows.length > visibleRows.length) {
     lines.push(
-      `+ ${metrics.commands.length - rows.length} more command row(s)`
+      `+ ${rows.length - visibleRows.length} more ${hiddenLabel} row(s)`
     );
   }
 
   return [...header, ...lines];
+}
+
+function buildToolLines(
+  metrics: PiRtkMetricsSnapshot,
+  width: number,
+  theme?: ThemeLike
+): string[] {
+  return buildRankedTableLines({
+    title: "By Tool",
+    labelHeader: "Tool",
+    rows: metrics.tools,
+    width,
+    theme,
+    maxRows: MAX_TOOL_ROWS,
+    emptyMessage: "No tool rows yet.",
+    hiddenLabel: "tool",
+    formatLabel: formatStatsRowLabel,
+  });
+}
+
+function buildCommandFamilyLines(
+  metrics: PiRtkMetricsSnapshot,
+  width: number,
+  theme?: ThemeLike
+): string[] {
+  return buildRankedTableLines({
+    title: "Top Command Families",
+    labelHeader: "Family",
+    rows: metrics.commandFamilies,
+    width,
+    theme,
+    maxRows: MAX_FAMILY_ROWS,
+    emptyMessage: "No command families yet.",
+    hiddenLabel: "command family",
+    formatLabel: formatStatsRowLabel,
+  });
+}
+
+function buildRawCommandLines(
+  metrics: PiRtkMetricsSnapshot,
+  width: number,
+  theme?: ThemeLike
+): string[] {
+  return buildRankedTableLines({
+    title: "Raw Command Rows",
+    labelHeader: "Command",
+    rows: metrics.commands,
+    width,
+    theme,
+    maxRows: MAX_COMMAND_ROWS,
+    emptyMessage: "No raw command rows yet.",
+    hiddenLabel: "raw command",
+    formatLabel: formatCommandLabel,
+  });
 }
 
 function buildBodyLines(
@@ -271,13 +333,17 @@ function buildBodyLines(
   width: number,
   theme?: ThemeLike
 ): string[] {
-  const summary = buildSummaryLines(metrics, config);
-  const table = buildTableLines(
-    metrics,
-    Math.max(TABLE_MIN_WIDTH, width),
-    theme
-  );
-  return [...summary, "", ...table];
+  const tableWidth = Math.max(TABLE_MIN_WIDTH, width);
+
+  return [
+    ...buildSummaryLines(metrics, config),
+    "",
+    ...buildToolLines(metrics, tableWidth, theme),
+    "",
+    ...buildCommandFamilyLines(metrics, tableWidth, theme),
+    "",
+    ...buildRawCommandLines(metrics, tableWidth, theme),
+  ];
 }
 
 export function renderRtkStats(
@@ -331,8 +397,16 @@ function buildStatusLine(
 }
 
 function decorateLines(lines: string[], theme: ThemeLike): string[] {
+  const sectionTitles = new Set([
+    "RTK Token Savings (Session Scope)",
+    "Overview",
+    "By Tool",
+    "Top Command Families",
+    "Raw Command Rows",
+  ]);
+
   return lines.map((line) => {
-    if (line === "RTK Token Savings (Session Scope)" || line === "By Command") {
+    if (sectionTitles.has(line)) {
       return theme.bold(theme.fg("toolTitle", line));
     }
 
@@ -348,10 +422,7 @@ function decorateLines(lines: string[], theme: ThemeLike): string[] {
       return theme.fg("warning", line);
     }
 
-    if (
-      line.startsWith("No session savings yet") ||
-      line.startsWith("No command rows yet")
-    ) {
+    if (line.startsWith("No ")) {
       return theme.fg("dim", line);
     }
 

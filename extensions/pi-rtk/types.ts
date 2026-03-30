@@ -40,9 +40,8 @@ export interface PiRtkToolSavings {
   finalChars: number;
 }
 
-export interface PiRtkCommandMetrics {
+export interface PiRtkStatsRow {
   label: string;
-  toolName: PiRtkTrackedToolName;
   count: number;
   inputTokens: number;
   outputTokens: number;
@@ -52,11 +51,8 @@ export interface PiRtkCommandMetrics {
   avgExecMs: number;
 }
 
-export interface PiRtkImpactChartDatum {
-  label: string;
-  savedTokens: number;
-  sharePercent: number;
-  cumulativeSharePercent: number;
+export interface PiRtkCommandMetrics extends PiRtkStatsRow {
+  toolName: PiRtkTrackedToolName;
 }
 
 export interface PiRtkMetricsSummary {
@@ -84,8 +80,9 @@ export interface PiRtkMetricsSnapshot {
   fallbackRatePercent: number;
   userBashRewriteRatePercent: number;
   summary: PiRtkMetricsSummary;
+  tools: PiRtkStatsRow[];
+  commandFamilies: PiRtkStatsRow[];
   commands: PiRtkCommandMetrics[];
-  impactChart: PiRtkImpactChartDatum[];
   hasCommandData: boolean;
 }
 

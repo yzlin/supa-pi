@@ -19,13 +19,16 @@ describe("pi-rtk stats", () => {
     );
 
     expect(output).toContain("RTK Token Savings (Session Scope)");
+    expect(output).toContain("Overview");
     expect(output).toContain("No session savings yet.");
-    expect(output).toContain("By Command");
+    expect(output).toContain("By Tool");
+    expect(output).toContain("Top Command Families");
+    expect(output).toContain("Raw Command Rows");
     expect(output).toContain("Impact");
-    expect(output).not.toContain("Impact chart");
+    expect(output).not.toContain("By Command");
   });
 
-  it("renders summary, table, and impact rows", () => {
+  it("renders summary, tool rows, family rows, and raw commands", () => {
     const store = createPiRtkMetricsStore();
     store.recordRewriteAttempt();
     store.recordRewriteAttempt();
@@ -41,8 +44,15 @@ describe("pi-rtk stats", () => {
       execMs: 47,
     });
 
-    store.startCommand("2", "read", "read", 0);
+    store.startCommand("2", "bash", "rtk git diff HEAD~1", 0);
     store.completeCommand("2", {
+      inputText: "a ".repeat(1600),
+      outputText: "a ".repeat(400),
+      execMs: 28,
+    });
+
+    store.startCommand("3", "read", "read", 0);
+    store.completeCommand("3", {
       inputText: "b ".repeat(1200),
       outputText: "b ".repeat(700),
       execMs: 3,
@@ -55,22 +65,23 @@ describe("pi-rtk stats", () => {
     expect(output).toContain("Total commands:");
     expect(output).toContain("Efficiency meter:");
     expect(output).toContain("Rewrite rate:");
-    expect(output).toContain("By Command");
+    expect(output).toContain("By Tool");
+    expect(output).toContain("Top Command Families");
+    expect(output).toContain("Raw Command Rows");
+    expect(output).toContain("bash");
+    expect(output).toContain("git diff");
     expect(output).toContain("rtk git diff main");
     expect(output).toContain("Impact");
-    expect(output).not.toContain("Impact chart");
 
-    const commandLine = output
+    const familyLine = output
       .split("\n")
-      .find(
-        (line) => line.includes("1.") && line.includes("rtk git diff main")
-      );
+      .find((line) => line.includes("1.") && line.includes("git diff"));
 
-    expect(commandLine).toBeDefined();
-    expect(commandLine).toContain("█");
+    expect(familyLine).toBeDefined();
+    expect(familyLine).toContain("█");
   });
 
-  it("shows hidden row count when commands exceed the table limit", () => {
+  it("shows hidden row count when raw commands exceed the table limit", () => {
     const store = createPiRtkMetricsStore();
 
     for (let index = 0; index < 11; index += 1) {
@@ -87,7 +98,7 @@ describe("pi-rtk stats", () => {
       renderRtkStats(store.snapshot(), DEFAULT_PI_RTK_CONFIG, 132)
     );
 
-    expect(output).toContain("+ 1 more command row(s)");
+    expect(output).toContain("+ 1 more raw command row(s)");
   });
 
   it("renders off-state warnings", () => {
@@ -116,7 +127,7 @@ describe("pi-rtk stats", () => {
 
   it("keeps impact inline on narrower widths", () => {
     const store = createPiRtkMetricsStore();
-    store.startCommand("1", "bash", "rtk find", 0);
+    store.startCommand("1", "bash", "rtk find src -name '*.ts'", 0);
     store.completeCommand("1", {
       inputText: "x ".repeat(800),
       outputText: "x ".repeat(100),
@@ -126,12 +137,11 @@ describe("pi-rtk stats", () => {
     const output = stripAnsi(
       renderRtkStats(store.snapshot(), DEFAULT_PI_RTK_CONFIG, 88)
     );
-    const commandLine = output
+    const familyLine = output
       .split("\n")
-      .find((line) => line.includes("1.") && line.includes("rtk find"));
+      .find((line) => line.includes("1.") && line.includes("find"));
 
-    expect(output).not.toContain("Impact chart");
-    expect(commandLine).toBeDefined();
-    expect(commandLine).toContain("█");
+    expect(familyLine).toBeDefined();
+    expect(familyLine).toContain("█");
   });
 });

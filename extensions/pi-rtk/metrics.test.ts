@@ -21,8 +21,9 @@ describe("pi-rtk metrics", () => {
       totalExecMs: 0,
       avgExecMs: 0,
     });
+    expect(metrics.tools).toEqual([]);
+    expect(metrics.commandFamilies).toEqual([]);
     expect(metrics.commands).toEqual([]);
-    expect(metrics.impactChart).toEqual([]);
     expect(metrics.toolSavingsByName.bash).toEqual({
       calls: 0,
       originalChars: 0,
@@ -53,7 +54,7 @@ describe("pi-rtk metrics", () => {
     });
   });
 
-  it("aggregates savings by tool and by command", () => {
+  it("aggregates savings by tool, family, and raw command", () => {
     const store = createPiRtkMetricsStore();
 
     store.recordToolSavings("bash", 100, 40);
@@ -67,8 +68,15 @@ describe("pi-rtk metrics", () => {
       execMs: 47,
     });
 
-    store.startCommand("2", "read", "read", 0);
+    store.startCommand("2", "bash", "rtk git diff HEAD~1", 0);
     store.completeCommand("2", {
+      inputText: "a ".repeat(800),
+      outputText: "a ".repeat(200),
+      execMs: 31,
+    });
+
+    store.startCommand("3", "read", "read", 0);
+    store.completeCommand("3", {
       inputText: "b ".repeat(1000),
       outputText: "b ".repeat(700),
       execMs: 3,
@@ -95,17 +103,20 @@ describe("pi-rtk metrics", () => {
       },
     });
 
-    expect(snapshot.summary.totalCommands).toBe(2);
+    expect(snapshot.summary.totalCommands).toBe(3);
     expect(snapshot.summary.totalSavedTokens).toBeGreaterThan(0);
-    expect(snapshot.summary.avgExecMs).toBe(25);
+    expect(snapshot.summary.avgExecMs).toBe(27);
+    expect(snapshot.tools[0]?.label).toBe("bash");
+    expect(snapshot.tools[0]?.count).toBe(2);
+    expect(snapshot.commandFamilies[0]?.label).toBe("git diff");
+    expect(snapshot.commandFamilies[0]?.count).toBe(2);
     expect(snapshot.commands[0]?.label).toBe("rtk git diff main");
     expect(snapshot.commands[0]?.savedTokens).toBeGreaterThan(
       snapshot.commands[1]?.savedTokens ?? 0
     );
-    expect(snapshot.impactChart[0]?.label).toBe("rtk git diff main");
   });
 
-  it("keeps rows sorted by saved tokens", () => {
+  it("keeps raw command rows sorted by saved tokens", () => {
     const store = createPiRtkMetricsStore();
 
     store.startCommand("1", "bash", "high", 0);
@@ -126,6 +137,19 @@ describe("pi-rtk metrics", () => {
       "high",
       "low",
     ]);
+  });
+
+  it("normalizes user-bash command families", () => {
+    const store = createPiRtkMetricsStore();
+
+    store.startCommand("1", "user-bash", "rtk git status `main`", 0);
+    store.completeCommand("1", {
+      inputText: "x ".repeat(900),
+      outputText: "x ".repeat(100),
+      execMs: 14,
+    });
+
+    expect(store.snapshot().commandFamilies[0]?.label).toBe("git status");
   });
 
   it("resets all counters and session rows", () => {
@@ -150,6 +174,8 @@ describe("pi-rtk metrics", () => {
       totalSavedChars: 0,
       hasCommandData: false,
     });
+    expect(store.snapshot().tools).toEqual([]);
+    expect(store.snapshot().commandFamilies).toEqual([]);
     expect(store.snapshot().commands).toEqual([]);
   });
 });
