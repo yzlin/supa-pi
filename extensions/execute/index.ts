@@ -1,12 +1,21 @@
 import { randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
-import type { ExtensionAPI, ExtensionCommandContext } from "@mariozechner/pi-coding-agent";
-import { Box, Text, matchesKey, truncateToWidth } from "@mariozechner/pi-tui";
 
-import { ensureRuntime } from "../../../pi-lcm/src/runtime.ts";
-import { buildMapTask, resolveMapAgent, runAgentTask, runLlmTask } from "../../../pi-lcm/src/map-runner.ts";
+import type {
+  ExtensionAPI,
+  ExtensionCommandContext,
+} from "@mariozechner/pi-coding-agent";
+import { Box, matchesKey, Text, truncateToWidth } from "@mariozechner/pi-tui";
+
 import type { MapTaskProgressEvent } from "../../../pi-lcm/src/map-runner.ts";
+import {
+  buildMapTask,
+  resolveMapAgent,
+  runAgentTask,
+  runLlmTask,
+} from "../../../pi-lcm/src/map-runner.ts";
+import { ensureRuntime } from "../../../pi-lcm/src/runtime.ts";
 import type { MapResultRecord } from "../../../pi-lcm/src/types.ts";
 
 const COMMAND_NAME = "execute";
@@ -27,9 +36,15 @@ const EXECUTE_TASK_RPC_TIMEOUT_MS = 1_000;
 const EXECUTE_TASK_SOURCE = "execute";
 const EXECUTE_ROOT_SUBJECT = "Execute plan";
 const EXECUTE_ROOT_ACTIVE_FORM = "Executing plan";
-const RISKY_STEP_PATTERN = /\b(add|change|create|delete|edit|fix|implement|migrate|move|refactor|remove|rename|replace|update|write)\b/i;
+const RISKY_STEP_PATTERN =
+  /\b(add|change|create|delete|edit|fix|implement|migrate|move|refactor|remove|rename|replace|update|write)\b/i;
 const PLAN_REFERENCE_PREFIX = "@";
-const FILE_BACKED_PLAN_EXTENSIONS = new Set([".md", ".markdown", ".mdx", ".txt"]);
+const FILE_BACKED_PLAN_EXTENSIONS = new Set([
+  ".md",
+  ".markdown",
+  ".mdx",
+  ".txt",
+]);
 const EXECUTE_PROGRESS_WIDGET_HISTORY_LIMIT = 8;
 const EXECUTE_PROGRESS_DETAIL_PREVIEW_LENGTH = 96;
 const EXECUTE_PROGRESS_DETAIL_FULL_LENGTH = 4_000;
@@ -85,8 +100,12 @@ interface ExecuteTaskUpdateInput {
 
 interface ExecuteTasksBridge {
   isAvailable(): boolean;
-  createTask(input: ExecuteTaskCreateInput): Promise<ExecuteTaskSnapshot | undefined>;
-  updateTask(input: ExecuteTaskUpdateInput): Promise<ExecuteTaskUpdateResult | undefined>;
+  createTask(
+    input: ExecuteTaskCreateInput
+  ): Promise<ExecuteTaskSnapshot | undefined>;
+  updateTask(
+    input: ExecuteTaskUpdateInput
+  ): Promise<ExecuteTaskUpdateResult | undefined>;
   setTaskActive(taskId: string, active: boolean): Promise<boolean>;
 }
 
@@ -117,7 +136,10 @@ export interface ExecutePlanDependencies {
     ctx: ExtensionCommandContext
   ) => Promise<ExecuteTasksBridge | null>;
   createExecutionId?: () => string;
-  digestPlanItems?: (input: ExecutePlanDigestInput, ctx: ExtensionCommandContext) => Promise<string[]>;
+  digestPlanItems?: (
+    input: ExecutePlanDigestInput,
+    ctx: ExtensionCommandContext
+  ) => Promise<string[]>;
 }
 
 interface ExecuteCompletedItem {
@@ -209,9 +231,7 @@ interface ExecuteWaveItemCompletionUpdate {
 const uniqueStrings = (values: string[]): string[] => [...new Set(values)];
 
 const normalizePlanLine = (line: string): string =>
-  line
-    .replace(/^\s*(?:[-*+]\s+|\d+[.)]\s+|\[[ xX]\]\s+)/, "")
-    .trim();
+  line.replace(/^\s*(?:[-*+]\s+|\d+[.)]\s+|\[[ xX]\]\s+)/, "").trim();
 
 const isMarkdownPlanListLine = (line: string): boolean =>
   /^\s*(?:[-*+]\s+|\d+[.)]\s+|\[[ xX]\]\s+)/.test(line);
@@ -226,10 +246,13 @@ const isLikelyPlanFilePath = (input: string): boolean => {
     return false;
   }
 
-  return FILE_BACKED_PLAN_EXTENSIONS.has(path.extname(normalized).toLowerCase());
+  return FILE_BACKED_PLAN_EXTENSIONS.has(
+    path.extname(normalized).toLowerCase()
+  );
 };
 
-const EMBEDDED_PLAN_REFERENCE_PATTERN = /(?:^|\s)@(?:"([^"\n]+)"|'([^'\n]+)'|([^\s]+))/;
+const EMBEDDED_PLAN_REFERENCE_PATTERN =
+  /(?:^|\s)@(?:"([^"\n]+)"|'([^'\n]+)'|([^\s]+))/;
 
 const normalizeExecutePlanItems = (items: string[]): string[] =>
   uniqueStrings(
@@ -239,7 +262,9 @@ const normalizeExecutePlanItems = (items: string[]): string[] =>
       .filter(Boolean)
   );
 
-const extractEmbeddedPlanReference = (input: string): { reference: string; remainingArgs: string } | null => {
+const extractEmbeddedPlanReference = (
+  input: string
+): { reference: string; remainingArgs: string } | null => {
   const match = input.match(EMBEDDED_PLAN_REFERENCE_PATTERN);
   if (!match || match.index == null) {
     return null;
@@ -306,8 +331,15 @@ const resolveExecutePlanReference = (
   cwd: string,
   explicitReference: boolean,
   remainingArgs = ""
-): { filePath: string; displayPath: string; explicitReference: boolean; remainingArgs: string } => ({
-  filePath: path.isAbsolute(reference) ? reference : path.resolve(cwd, reference),
+): {
+  filePath: string;
+  displayPath: string;
+  explicitReference: boolean;
+  remainingArgs: string;
+} => ({
+  filePath: path.isAbsolute(reference)
+    ? reference
+    : path.resolve(cwd, reference),
   displayPath: reference,
   explicitReference,
   remainingArgs,
@@ -316,7 +348,12 @@ const resolveExecutePlanReference = (
 const resolveExecutePlanPath = (
   input: string,
   cwd: string
-): { filePath: string; displayPath: string; explicitReference: boolean; remainingArgs: string } | null => {
+): {
+  filePath: string;
+  displayPath: string;
+  explicitReference: boolean;
+  remainingArgs: string;
+} | null => {
   const trimmed = input.trim();
   if (!trimmed) {
     return null;
@@ -332,8 +369,16 @@ const resolveExecutePlanPath = (
   }
 
   const embeddedReference = extractEmbeddedPlanReference(trimmed);
-  if (embeddedReference && looksLikeEmbeddedPlanReference(embeddedReference.reference)) {
-    return resolveExecutePlanReference(embeddedReference.reference, cwd, true, embeddedReference.remainingArgs);
+  if (
+    embeddedReference &&
+    looksLikeEmbeddedPlanReference(embeddedReference.reference)
+  ) {
+    return resolveExecutePlanReference(
+      embeddedReference.reference,
+      cwd,
+      true,
+      embeddedReference.remainingArgs
+    );
   }
 
   if (!isLikelyPlanFilePath(trimmed)) {
@@ -346,7 +391,11 @@ const resolveExecutePlanPath = (
 const readReferencedPlanSource = async (
   input: string,
   cwd: string
-): Promise<{ sourceText: string; sourceLabel: string; directive: string } | null> => {
+): Promise<{
+  sourceText: string;
+  sourceLabel: string;
+  directive: string;
+} | null> => {
   const resolvedPath = resolveExecutePlanPath(input, cwd);
   if (!resolvedPath) {
     return null;
@@ -365,14 +414,19 @@ const readReferencedPlanSource = async (
     }
 
     const message = error instanceof Error ? error.message : String(error);
-    throw new Error(`Unable to read plan file ${resolvedPath.displayPath}: ${message}`);
+    throw new Error(
+      `Unable to read plan file ${resolvedPath.displayPath}: ${message}`
+    );
   }
 };
 
 const resolveExecutePlanInput = async (
   input: string,
   cwd: string
-): Promise<{ planItems: string[]; digestInput: ExecutePlanDigestInput | null }> => {
+): Promise<{
+  planItems: string[];
+  digestInput: ExecutePlanDigestInput | null;
+}> => {
   const referencedPlan = await readReferencedPlanSource(input, cwd);
   if (referencedPlan) {
     const fallbackItems = parsePlanDocumentItems(referencedPlan.sourceText);
@@ -395,12 +449,18 @@ const resolveExecutePlanInput = async (
 };
 
 export const chooseWaveConcurrency = (items: string[]): number =>
-  items.some((item) => RISKY_STEP_PATTERN.test(item)) ? WRITE_HEAVY_CONCURRENCY : READ_ONLY_CONCURRENCY;
+  items.some((item) => RISKY_STEP_PATTERN.test(item))
+    ? WRITE_HEAVY_CONCURRENCY
+    : READ_ONLY_CONCURRENCY;
 
-export const buildExecuteWorkerTask = (item: string, index: number, total: number): string =>
-  buildMapTask(TASK_TEMPLATE, item, index, total);
+export const buildExecuteWorkerTask = (
+  item: string,
+  index: number,
+  total: number
+): string => buildMapTask(TASK_TEMPLATE, item, index, total);
 
-const isStringArray = (value: unknown): value is string[] => Array.isArray(value) && value.every((entry) => typeof entry === "string");
+const isStringArray = (value: unknown): value is string[] =>
+  Array.isArray(value) && value.every((entry) => typeof entry === "string");
 
 const stripJsonCodeFence = (value: string): string => {
   const trimmed = value.trim();
@@ -424,7 +484,9 @@ const buildExecutePlanDigestTask = (input: ExecutePlanDigestInput): string => {
     "- Use concise imperative phrasing.",
     "- Omit headings, milestones, and parent-orchestrator meta steps.",
     "- Keep already-atomic tasks mostly unchanged.",
-    input.directive ? `User directive: ${input.directive}` : "User directive: execute the plan.",
+    input.directive
+      ? `User directive: ${input.directive}`
+      : "User directive: execute the plan.",
     `Plan source: ${input.sourceLabel}`,
     `Initially extracted items:\n${extractedItems}`,
     `Full plan:\n${input.sourceText.trim()}`,
@@ -440,12 +502,11 @@ const parseExecutePlanDigestResult = (outputText: string): string[] => {
     throw new Error(`Plan digester returned invalid JSON: ${message}`);
   }
 
-  const items =
-    Array.isArray(parsed)
-      ? parsed
-      : parsed && typeof parsed === "object"
-        ? (parsed as { items?: unknown }).items
-        : undefined;
+  const items = Array.isArray(parsed)
+    ? parsed
+    : parsed && typeof parsed === "object"
+      ? (parsed as { items?: unknown }).items
+      : undefined;
 
   if (!Array.isArray(items)) {
     throw new Error("Plan digester result is missing items[]");
@@ -468,7 +529,9 @@ const digestExecutePlanItems = async (
   });
 
   if (result.isError) {
-    throw new Error(result.errorMessage ?? result.stderr.trim() ?? "Plan digester failed");
+    throw new Error(
+      result.errorMessage ?? result.stderr.trim() ?? "Plan digester failed"
+    );
   }
 
   return parseExecutePlanDigestResult(result.outputText);
@@ -488,7 +551,11 @@ export const parseWorkerResult = (outputText: string): ExecuteStepResult => {
   }
 
   const result = parsed as Partial<ExecuteStepResult>;
-  if (result.status !== "done" && result.status !== "blocked" && result.status !== "needs_followup") {
+  if (
+    result.status !== "done" &&
+    result.status !== "blocked" &&
+    result.status !== "needs_followup"
+  ) {
     throw new Error("Worker result is missing a valid status");
   }
   if (typeof result.summary !== "string") {
@@ -517,9 +584,6 @@ export const parseWorkerResult = (outputText: string): ExecuteStepResult => {
   };
 };
 
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  Boolean(value) && typeof value === "object" && !Array.isArray(value);
-
 type ExecuteRpcReply<T = void> =
   | { success: true; data?: T }
   | { success: false; error: string };
@@ -536,16 +600,19 @@ const executeRpcCall = <T>(
       unsubscribe();
       reject(new Error(`${channel} timeout`));
     }, timeoutMs);
-    const unsubscribe = pi.events.on(`${channel}:reply:${requestId}`, (raw: unknown) => {
-      unsubscribe();
-      clearTimeout(timer);
-      const reply = raw as ExecuteRpcReply<T>;
-      if (reply.success) {
-        resolve(reply.data as T);
-        return;
+    const unsubscribe = pi.events.on(
+      `${channel}:reply:${requestId}`,
+      (raw: unknown) => {
+        unsubscribe();
+        clearTimeout(timer);
+        const reply = raw as ExecuteRpcReply<T>;
+        if (reply.success) {
+          resolve(reply.data as T);
+          return;
+        }
+        reject(new Error(reply.error));
       }
-      reject(new Error(reply.error));
-    });
+    );
     pi.events.emit(channel, { requestId, ...params });
   });
 };
@@ -559,13 +626,23 @@ const buildExecuteMetadata = (
   ...metadata,
 });
 
-const buildExecuteItemActiveForm = (item: string): string => `Executing: ${item}`;
+const buildExecuteItemActiveForm = (item: string): string =>
+  `Executing: ${item}`;
 
-const buildExecuteItemDescription = (item: string, index: number, total: number): string =>
-  [`Plan item ${index + 1}/${total}`, "", item].join("\n");
+const buildExecuteItemDescription = (
+  item: string,
+  index: number,
+  total: number
+): string => [`Plan item ${index + 1}/${total}`, "", item].join("\n");
 
 const buildFollowUpDescription = (item: string, parentItem: string): string =>
-  ["Follow-up work discovered during /execute", "", item, "", `Parent item: ${parentItem}`].join("\n");
+  [
+    "Follow-up work discovered during /execute",
+    "",
+    item,
+    "",
+    `Parent item: ${parentItem}`,
+  ].join("\n");
 
 const buildBlockerDescription = (item: string, reason: string): string =>
   [`Blocked while executing: ${item}`, "", reason].join("\n");
@@ -625,12 +702,15 @@ const decodeExecuteJsonishString = (value: string): string =>
 
 const collectExecuteJsonishFields = (value: string): string[] => {
   const matches: string[] = [];
-  const fieldPattern = /"(text|error|message|stderr)"\s*:\s*"((?:\\.|[^"\\])*)/g;
+  const fieldPattern =
+    /"(text|error|message|stderr)"\s*:\s*"((?:\\.|[^"\\])*)/g;
 
   for (const match of value.matchAll(fieldPattern)) {
     const fragment = match[2];
     if (!fragment) continue;
-    const decoded = decodeExecuteJsonishString(fragment).replace(/\s+/g, " ").trim();
+    const decoded = decodeExecuteJsonishString(fragment)
+      .replace(/\s+/g, " ")
+      .trim();
     if (decoded) {
       matches.push(decoded);
     }
@@ -639,7 +719,8 @@ const collectExecuteJsonishFields = (value: string): string[] => {
   return matches;
 };
 
-const flattenInline = (value: string): string => value.replace(/\s+/g, " ").trim();
+const flattenInline = (value: string): string =>
+  value.replace(/\s+/g, " ").trim();
 
 const formatInlineLabel = (value: string, maxLength?: number): string => {
   const flattened = flattenInline(value);
@@ -647,16 +728,25 @@ const formatInlineLabel = (value: string, maxLength?: number): string => {
     return "";
   }
 
-  return typeof maxLength === "number" ? truncateInline(flattened, maxLength) : flattened;
+  return typeof maxLength === "number"
+    ? truncateInline(flattened, maxLength)
+    : flattened;
 };
 
-const formatExecuteToolDetail = (toolName: string | undefined, detail: string, maxLength: number): string => {
+const formatExecuteToolDetail = (
+  toolName: string | undefined,
+  detail: string,
+  maxLength: number
+): string => {
   const flattened = flattenInline(detail);
   if (!flattened) {
     return "";
   }
 
-  const effectiveMaxLength = toolName === "edit" || toolName === "write" ? Math.min(maxLength, 56) : maxLength;
+  const effectiveMaxLength =
+    toolName === "edit" || toolName === "write"
+      ? Math.min(maxLength, 56)
+      : maxLength;
   return truncateInline(flattened, effectiveMaxLength);
 };
 
@@ -677,7 +767,10 @@ const formatExecuteProgressDetail = (
   const looksStructured = trimmed.startsWith("{") || trimmed.startsWith("[");
   let parsed: unknown = trimmed;
   let parsedStructuredValue = false;
-  if ((trimmed.startsWith("{") && trimmed.endsWith("}")) || (trimmed.startsWith("[") && trimmed.endsWith("]"))) {
+  if (
+    (trimmed.startsWith("{") && trimmed.endsWith("}")) ||
+    (trimmed.startsWith("[") && trimmed.endsWith("]"))
+  ) {
     try {
       parsed = JSON.parse(trimmed);
       parsedStructuredValue = true;
@@ -686,7 +779,9 @@ const formatExecuteProgressDetail = (
     }
   }
 
-  const structuredText = parsedStructuredValue ? collectExecuteProgressText(parsed) : [];
+  const structuredText = parsedStructuredValue
+    ? collectExecuteProgressText(parsed)
+    : [];
   const extracted = structuredText
     .concat(collectExecuteJsonishFields(trimmed))
     .map((entry) => entry.replace(/\s+/g, " ").trim())
@@ -696,7 +791,11 @@ const formatExecuteProgressDetail = (
     return formatExecuteToolDetail(toolName, extracted[0] ?? "", maxLength);
   }
 
-  if (parsedStructuredValue || looksStructured || /"content"\s*:\s*\[\s*\]/.test(trimmed)) {
+  if (
+    parsedStructuredValue ||
+    looksStructured ||
+    /"content"\s*:\s*\[\s*\]/.test(trimmed)
+  ) {
     return "";
   }
 
@@ -718,12 +817,20 @@ export const buildExecuteLiveStatus = (
     case "tool_start":
       return `Wave ${wave}: ${itemLabel} — ${event.toolName}…`;
     case "tool_update": {
-      const detail = formatExecuteProgressDetail(event.toolName, event.text, detailMaxLength);
+      const detail = formatExecuteProgressDetail(
+        event.toolName,
+        event.text,
+        detailMaxLength
+      );
       return `Wave ${wave}: ${itemLabel} — ${event.toolName}${detail ? `: ${detail}` : ""}`;
     }
     case "tool_end": {
       const outcome = event.isError ? "error" : "done";
-      const detail = formatExecuteProgressDetail(event.toolName, event.text, detailMaxLength);
+      const detail = formatExecuteProgressDetail(
+        event.toolName,
+        event.text,
+        detailMaxLength
+      );
       return `Wave ${wave}: ${itemLabel} — ${event.toolName} ${outcome}${detail ? `: ${detail}` : ""}`;
     }
   }
@@ -736,11 +843,14 @@ const buildExecuteLiveProgressEntry = (
   options: { itemMaxLength?: number; detailMaxLength?: number } = {}
 ): ExecuteProgressWidgetEntry => {
   const headline = `Wave ${wave}: ${formatInlineLabel(item, options.itemMaxLength)}`;
-  const detailMaxLength = options.detailMaxLength ?? EXECUTE_PROGRESS_DETAIL_FULL_LENGTH;
+  const detailMaxLength =
+    options.detailMaxLength ?? EXECUTE_PROGRESS_DETAIL_FULL_LENGTH;
 
   switch (event.type) {
     case "assistant_text": {
-      const detail = formatExecuteProgressDetail(undefined, event.text, detailMaxLength) || "Thinking…";
+      const detail =
+        formatExecuteProgressDetail(undefined, event.text, detailMaxLength) ||
+        "Thinking…";
       return {
         headline,
         blockLabel: "thinking",
@@ -758,7 +868,12 @@ const buildExecuteLiveProgressEntry = (
         tone: "accent",
       };
     case "tool_update": {
-      const detail = formatExecuteProgressDetail(event.toolName, event.text, detailMaxLength) || null;
+      const detail =
+        formatExecuteProgressDetail(
+          event.toolName,
+          event.text,
+          detailMaxLength
+        ) || null;
       return {
         headline,
         blockLabel: "tool update",
@@ -769,7 +884,11 @@ const buildExecuteLiveProgressEntry = (
     }
     case "tool_end": {
       const detail =
-        formatExecuteProgressDetail(event.toolName, event.text, detailMaxLength) ||
+        formatExecuteProgressDetail(
+          event.toolName,
+          event.text,
+          detailMaxLength
+        ) ||
         (event.isError ? "Tool failed without additional detail" : "Completed");
       return {
         headline,
@@ -809,7 +928,11 @@ const defaultExecuteProgressRenderStyles: ExecuteProgressRenderStyles = {
   warning: (text) => text,
 };
 
-const buildExecuteProgressBar = (completedItems: number, totalItems: number, width = 10): string => {
+const buildExecuteProgressBar = (
+  completedItems: number,
+  totalItems: number,
+  width = 10
+): string => {
   if (totalItems <= 0) {
     return `[${"░".repeat(width)}]`;
   }
@@ -819,17 +942,41 @@ const buildExecuteProgressBar = (completedItems: number, totalItems: number, wid
   return `[${"█".repeat(filled)}${"░".repeat(Math.max(0, width - filled))}]`;
 };
 
+const getExecuteWaveStatus = (
+  wave: Pick<ExecuteWidgetWaveState, "errorCount">,
+  styles: ExecuteProgressRenderStyles,
+  active: boolean
+): string => {
+  if (active) {
+    return styles.accent("running");
+  }
+
+  if (wave.errorCount > 0) {
+    return styles.warning(`${wave.errorCount} errors`);
+  }
+
+  return styles.success("ok");
+};
+
 const formatExecuteWidgetWaveLine = (
-  wave: Pick<ExecuteWidgetWaveState, "wave" | "totalItems" | "completedItems" | "errorCount" | "queuedFollowUps">,
+  wave: Pick<
+    ExecuteWidgetWaveState,
+    "wave" | "totalItems" | "completedItems" | "errorCount" | "queuedFollowUps"
+  >,
   styles: ExecuteProgressRenderStyles,
   active = false
 ): string => {
-  const status = active ? styles.accent("running") : wave.errorCount > 0 ? styles.warning(`${wave.errorCount} errors`) : styles.success("ok");
-  const followUps = wave.queuedFollowUps > 0 ? `${wave.queuedFollowUps} follow-ups` : "no follow-ups";
+  const status = getExecuteWaveStatus(wave, styles, active);
+  const followUps =
+    wave.queuedFollowUps > 0
+      ? `${wave.queuedFollowUps} follow-ups`
+      : "no follow-ups";
   return `${styles.dim("•")} Wave ${wave.wave}  ${buildExecuteProgressBar(wave.completedItems, wave.totalItems)}  ${wave.completedItems}/${wave.totalItems} done  ${status}  ${styles.dim(followUps)}`;
 };
 
-const splitExecuteCurrentStatus = (currentStatus: string): { headline: string; detail: string | null } => {
+const splitExecuteCurrentStatus = (
+  currentStatus: string
+): { headline: string; detail: string | null } => {
   const trimmed = currentStatus.trim();
   const separatorIndex = trimmed.lastIndexOf(" — ");
   if (separatorIndex === -1) {
@@ -842,7 +989,11 @@ const splitExecuteCurrentStatus = (currentStatus: string): { headline: string; d
   };
 };
 
-const formatExecuteProgressTone = (tone: ExecuteProgressTone, text: string, styles: ExecuteProgressRenderStyles): string => {
+const formatExecuteProgressTone = (
+  tone: ExecuteProgressTone,
+  text: string,
+  styles: ExecuteProgressRenderStyles
+): string => {
   switch (tone) {
     case "success":
       return styles.success(text);
@@ -861,14 +1012,22 @@ const isExecuteCurrentStatusExpandable = (
   currentEntry?: ExecuteProgressWidgetEntry
 ): boolean => {
   if (currentEntry) {
-    return Boolean(currentEntry.detail && currentEntry.detail.length > EXECUTE_PROGRESS_DETAIL_PREVIEW_LENGTH);
+    return Boolean(
+      currentEntry.detail &&
+        currentEntry.detail.length > EXECUTE_PROGRESS_DETAIL_PREVIEW_LENGTH
+    );
   }
 
   const { detail } = splitExecuteCurrentStatus(currentStatus);
-  return Boolean(detail && detail.length > EXECUTE_PROGRESS_DETAIL_PREVIEW_LENGTH);
+  return Boolean(
+    detail && detail.length > EXECUTE_PROGRESS_DETAIL_PREVIEW_LENGTH
+  );
 };
 
-const getExecuteProgressDetailText = (detail: string | null | undefined, expanded: boolean): string | null => {
+const getExecuteProgressDetailText = (
+  detail: string | null | undefined,
+  expanded: boolean
+): string | null => {
   if (!detail) {
     return null;
   }
@@ -887,10 +1046,15 @@ const appendExecuteProgressEntryLines = (
   expanded = false
 ): void => {
   const detailText = getExecuteProgressDetailText(entry.detail, expanded);
-  const metadata = entry.metadata.length > 0 ? ` ${styles.dim(entry.metadata.join(" · "))}` : "";
+  const metadata =
+    entry.metadata.length > 0
+      ? ` ${styles.dim(entry.metadata.join(" · "))}`
+      : "";
 
   lines.push(`${styles.dim("•")} ${entry.headline}`);
-  lines.push(`  ${formatExecuteProgressTone(entry.tone, `[${entry.blockLabel}]`, styles)}${metadata}`);
+  lines.push(
+    `  ${formatExecuteProgressTone(entry.tone, `[${entry.blockLabel}]`, styles)}${metadata}`
+  );
   if (detailText) {
     lines.push(`  ${styles.dim("↳")} ${detailText}`);
   }
@@ -924,12 +1088,18 @@ const appendExecuteCurrentStatusLines = (
   }
 
   if (isExecuteCurrentStatusExpandable(current, currentEntry)) {
-    lines.push(styles.dim(expanded ? "ctrl+o collapse current detail" : "ctrl+o expand current detail"));
+    lines.push(
+      styles.dim(
+        expanded
+          ? "ctrl+o collapse current detail"
+          : "ctrl+o expand current detail"
+      )
+    );
   }
 };
 
 const formatExecuteRecentHistoryStatus = (
-  entry: { status: string; entry?: ExecuteProgressWidgetEntry },
+  entry: ExecuteProgressHistoryEntry,
   previousHeadline?: string
 ): string => {
   const headline = entry.entry?.headline?.trim();
@@ -938,18 +1108,44 @@ const formatExecuteRecentHistoryStatus = (
   }
 
   const prefix = `${headline} — `;
-  return entry.status.startsWith(prefix) ? entry.status.slice(prefix.length).trim() : entry.status;
+  return entry.status.startsWith(prefix)
+    ? entry.status.slice(prefix.length).trim()
+    : entry.status;
 };
 
 const formatExecuteRecentHistoryLine = (
-  entry: { status: string; entry?: ExecuteProgressWidgetEntry },
+  entry: ExecuteProgressHistoryEntry,
   styles: ExecuteProgressRenderStyles,
   renderWidth?: number,
   previousHeadline?: string
 ): string => {
   const status = formatExecuteRecentHistoryStatus(entry, previousHeadline);
   const line = `${styles.dim("•")} ${status}`;
-  return typeof renderWidth === "number" && Number.isFinite(renderWidth) ? truncateToWidth(line, renderWidth, "…") : line;
+
+  if (typeof renderWidth !== "number" || !Number.isFinite(renderWidth)) {
+    return line;
+  }
+
+  return truncateToWidth(line, renderWidth, "…");
+};
+
+const normalizeExecuteProgressHistoryEntry = (
+  entry: string | ExecuteProgressHistoryEntry
+): ExecuteProgressHistoryEntry | null => {
+  if (typeof entry === "string") {
+    const status = entry.trim();
+    return status ? { status } : null;
+  }
+
+  const status = entry.status.trim();
+  if (!status) {
+    return null;
+  }
+
+  return {
+    status,
+    entry: entry.entry,
+  };
 };
 
 export const buildExecuteProgressWidgetRenderText = (
@@ -962,10 +1158,14 @@ export const buildExecuteProgressWidgetRenderText = (
   currentEntry?: ExecuteProgressWidgetEntry,
   renderWidth?: number
 ): string => {
-  const lines = [styles.accent("/execute"), styles.dim(buildExecuteWidgetPreview(planItems))];
+  const lines = [
+    styles.accent("/execute"),
+    styles.dim(buildExecuteWidgetPreview(planItems)),
+  ];
 
   if (progress) {
-    const totalItems = progress.completedItems + progress.blockedItems + progress.remainingItems;
+    const totalItems =
+      progress.completedItems + progress.blockedItems + progress.remainingItems;
     const terminalItems = progress.completedItems + progress.blockedItems;
     lines.push(
       "",
@@ -990,28 +1190,33 @@ export const buildExecuteProgressWidgetRenderText = (
         const isActiveWave = progress.activeWave?.wave === wave.wave;
         lines.push(formatExecuteWidgetWaveLine(wave, styles, isActiveWave));
         if (isActiveWave && progress.activeWave?.activeItem) {
-          lines.push(`  ${styles.dim("active:")} ${formatInlineLabel(progress.activeWave.activeItem)}`);
+          lines.push(
+            `  ${styles.dim("active:")} ${formatInlineLabel(progress.activeWave.activeItem)}`
+          );
         }
       }
     }
   }
 
   const current = currentStatus.trim();
-  appendExecuteCurrentStatusLines(lines, currentStatus, expandedCurrentStatus, styles, currentEntry);
+  appendExecuteCurrentStatusLines(
+    lines,
+    currentStatus,
+    expandedCurrentStatus,
+    styles,
+    currentEntry
+  );
 
   const normalizedHistory = history
-    .map((entry) =>
-      typeof entry === "string"
-        ? { status: entry.trim(), entry: undefined }
-        : {
-            status: entry.status.trim(),
-            entry: entry.entry,
-          }
-    )
-    .filter((entry) => entry.status);
+    .map(normalizeExecuteProgressHistoryEntry)
+    .filter((entry): entry is ExecuteProgressHistoryEntry => entry !== null);
   const historyWithoutCurrent =
-    current && normalizedHistory.at(-1)?.status === current ? normalizedHistory.slice(0, -1) : normalizedHistory;
-  const visibleHistory = historyWithoutCurrent.slice(-EXECUTE_PROGRESS_WIDGET_HISTORY_LIMIT);
+    current && normalizedHistory.at(-1)?.status === current
+      ? normalizedHistory.slice(0, -1)
+      : normalizedHistory;
+  const visibleHistory = historyWithoutCurrent.slice(
+    -EXECUTE_PROGRESS_WIDGET_HISTORY_LIMIT
+  );
   const skipped = historyWithoutCurrent.length - visibleHistory.length;
 
   if (visibleHistory.length > 0) {
@@ -1021,7 +1226,14 @@ export const buildExecuteProgressWidgetRenderText = (
     }
     let previousRecentHeadline: string | undefined;
     for (const entry of visibleHistory) {
-      lines.push(formatExecuteRecentHistoryLine(entry, styles, renderWidth, previousRecentHeadline));
+      lines.push(
+        formatExecuteRecentHistoryLine(
+          entry,
+          styles,
+          renderWidth,
+          previousRecentHeadline
+        )
+      );
       previousRecentHeadline = entry.entry?.headline?.trim() || undefined;
     }
   }
@@ -1124,18 +1336,26 @@ export const createExecuteTasksBridge = async (
     uiCtx: ctx.ui,
     sessionId: ctx.sessionManager.getSessionId(),
   };
-  const withRpcContext = (params: Record<string, unknown>): Record<string, unknown> => ({
+  const withRpcContext = (
+    params: Record<string, unknown>
+  ): Record<string, unknown> => ({
     ...params,
     ...rpcContext,
   });
 
   try {
-    await executeRpcCall<{ version?: string | number }>(pi, "tasks:rpc:ping", withRpcContext({}));
+    await executeRpcCall<{ version?: string | number }>(
+      pi,
+      "tasks:rpc:ping",
+      withRpcContext({})
+    );
   } catch {
     return null;
   }
 
-  const callIfAvailable = async <T>(fn: () => Promise<T>): Promise<T | undefined> => {
+  const callIfAvailable = async <T>(
+    fn: () => Promise<T>
+  ): Promise<T | undefined> => {
     try {
       return await fn();
     } catch {
@@ -1146,9 +1366,21 @@ export const createExecuteTasksBridge = async (
   return {
     isAvailable: () => true,
     createTask: async (input) =>
-      await callIfAvailable(() => executeRpcCall<ExecuteTaskSnapshot>(pi, "tasks:rpc:create", withRpcContext(input))),
+      await callIfAvailable(() =>
+        executeRpcCall<ExecuteTaskSnapshot>(
+          pi,
+          "tasks:rpc:create",
+          withRpcContext(input)
+        )
+      ),
     updateTask: async (input) =>
-      await callIfAvailable(() => executeRpcCall<ExecuteTaskUpdateResult>(pi, "tasks:rpc:update", withRpcContext(input))),
+      await callIfAvailable(() =>
+        executeRpcCall<ExecuteTaskUpdateResult>(
+          pi,
+          "tasks:rpc:update",
+          withRpcContext(input)
+        )
+      ),
     setTaskActive: async (taskId, active) => {
       const result = await callIfAvailable(() =>
         executeRpcCall<{ taskId: string; active: boolean }>(
@@ -1277,7 +1509,9 @@ const runWave = async (
   items: string[],
   wave: number,
   onProgress?: (update: ExecuteLiveProgressUpdate) => void,
-  onItemComplete?: (update: ExecuteWaveItemCompletionUpdate) => void | Promise<void>
+  onItemComplete?: (
+    update: ExecuteWaveItemCompletionUpdate
+  ) => void | Promise<void>
 ): Promise<{ summary: ExecuteWaveSummary; results: MapResultRecord[] }> => {
   const maxConcurrency = Math.min(chooseWaveConcurrency(items), items.length);
   const agent = resolveMapAgent(ctx.cwd, EXECUTE_AGENT, "both");
@@ -1343,20 +1577,31 @@ const runWave = async (
     }
   };
 
-  await Promise.all(Array.from({ length: maxConcurrency }, async () => worker()));
-  const completedJob = await runtime.store.completeMapJob(job.publicId, "completed");
+  await Promise.all(
+    Array.from({ length: maxConcurrency }, async () => worker())
+  );
+  const completedJob = await runtime.store.completeMapJob(
+    job.publicId,
+    "completed"
+  );
   const queuedFollowUps = results.reduce((count, result) => {
-    if (!result?.structuredOutput || typeof result.structuredOutput !== "object") {
+    if (
+      !result?.structuredOutput ||
+      typeof result.structuredOutput !== "object"
+    ) {
       return count;
     }
-    const followUps = (result.structuredOutput as Partial<ExecuteStepResult>).followUps;
+    const followUps = (result.structuredOutput as Partial<ExecuteStepResult>)
+      .followUps;
     return count + (Array.isArray(followUps) ? followUps.length : 0);
   }, 0);
 
   const orderedResults = items.map((item, index) => {
     const result = results[index];
     if (!result) {
-      throw new Error(`Wave ${wave} missing result for item ${index + 1}: ${item}`);
+      throw new Error(
+        `Wave ${wave} missing result for item ${index + 1}: ${item}`
+      );
     }
     return result;
   });
@@ -1379,9 +1624,13 @@ interface ExecuteErrorDetails {
 }
 
 const isExecuteErrorDetails = (value: unknown): value is ExecuteErrorDetails =>
-  Boolean(value) && typeof value === "object" && typeof (value as { error?: unknown }).error === "string";
+  Boolean(value) &&
+  typeof value === "object" &&
+  typeof (value as { error?: unknown }).error === "string";
 
-const isExecuteSummaryDetails = (value: unknown): value is ExecuteSummaryDetails =>
+const isExecuteSummaryDetails = (
+  value: unknown
+): value is ExecuteSummaryDetails =>
   Boolean(value) &&
   typeof value === "object" &&
   Array.isArray((value as { planItems?: unknown }).planItems) &&
@@ -1400,7 +1649,11 @@ interface ExecuteRenderStyles {
   error: (text: string) => string;
 }
 
-const sendExecuteSummaryMessage = (pi: ExtensionAPI, content: string, details: unknown): void => {
+const sendExecuteSummaryMessage = (
+  pi: ExtensionAPI,
+  content: string,
+  details: unknown
+): void => {
   pi.sendMessage(
     {
       customType: "execute-summary",
@@ -1435,13 +1688,18 @@ export const buildExecuteSummaryRenderText = (
   compactWidth = 140
 ): string => {
   if (isExecuteErrorDetails(details)) {
-    return [styles.error("/execute failed"), `${styles.error("!")} ${details.error}`].join("\n");
+    return [
+      styles.error("/execute failed"),
+      `${styles.error("!")} ${details.error}`,
+    ].join("\n");
   }
 
   const lines = [
     styles.accent("/execute"),
     `Plan ${details.planItems.length}  Waves ${details.waves.length}  ${styles.success(`Done ${details.completed.length}`)}  ${styles.warning(`Blocked ${details.blocked.length}`)}`,
-    styles.dim(`Files ${details.filesTouched.length}  Validation ${details.validation.length}`),
+    styles.dim(
+      `Files ${details.filesTouched.length}  Validation ${details.validation.length}`
+    ),
   ];
   const compactLineWidth = Math.max(72, compactWidth);
 
@@ -1449,18 +1707,27 @@ export const buildExecuteSummaryRenderText = (
   if (visibleWaves.length > 0) {
     lines.push("", styles.accent("Waves"));
     for (const wave of visibleWaves) {
-      const statusLabel = wave.errorCount > 0 ? styles.warning(`${wave.errorCount} errors`) : styles.success("ok");
+      const statusLabel =
+        wave.errorCount > 0
+          ? styles.warning(`${wave.errorCount} errors`)
+          : styles.success("ok");
       const jobLabel = expanded ? `  ${styles.dim(wave.jobId)}` : "";
       lines.push(
         `${styles.dim("•")} Wave ${wave.wave}${jobLabel}  ${wave.completedItems}/${wave.totalItems} done  ${statusLabel}  ${styles.dim(`${wave.queuedFollowUps} follow-ups`)}`
       );
     }
     if (!expanded && details.waves.length > visibleWaves.length) {
-      lines.push(styles.dim(`… ${details.waves.length - visibleWaves.length} more wave(s)`));
+      lines.push(
+        styles.dim(
+          `… ${details.waves.length - visibleWaves.length} more wave(s)`
+        )
+      );
     }
   }
 
-  const visibleCompleted = expanded ? details.completed : details.completed.slice(0, 3);
+  const visibleCompleted = expanded
+    ? details.completed
+    : details.completed.slice(0, 3);
   if (visibleCompleted.length > 0) {
     lines.push("", styles.accent("Completed"));
     for (const item of visibleCompleted) {
@@ -1468,15 +1735,23 @@ export const buildExecuteSummaryRenderText = (
         lines.push(`${styles.success("✓")} ${item.item}`);
         lines.push(`  ${item.summary}`);
       } else {
-        lines.push(`${styles.success("✓")} ${truncateInline(`${item.item} — ${item.summary}`, compactLineWidth)}`);
+        lines.push(
+          `${styles.success("✓")} ${truncateInline(`${item.item} — ${item.summary}`, compactLineWidth)}`
+        );
       }
     }
     if (!expanded && details.completed.length > visibleCompleted.length) {
-      lines.push(styles.dim(`… ${details.completed.length - visibleCompleted.length} more completed item(s)`));
+      lines.push(
+        styles.dim(
+          `… ${details.completed.length - visibleCompleted.length} more completed item(s)`
+        )
+      );
     }
   }
 
-  const visibleBlocked = expanded ? details.blocked : details.blocked.slice(0, 3);
+  const visibleBlocked = expanded
+    ? details.blocked
+    : details.blocked.slice(0, 3);
   if (visibleBlocked.length > 0) {
     lines.push("", styles.accent("Blocked"));
     for (const item of visibleBlocked) {
@@ -1484,11 +1759,17 @@ export const buildExecuteSummaryRenderText = (
         lines.push(`${styles.warning("!")} ${item.item}`);
         lines.push(`  ${item.reason}`);
       } else {
-        lines.push(`${styles.warning("!")} ${truncateInline(`${item.item} — ${item.reason}`, compactLineWidth)}`);
+        lines.push(
+          `${styles.warning("!")} ${truncateInline(`${item.item} — ${item.reason}`, compactLineWidth)}`
+        );
       }
     }
     if (!expanded && details.blocked.length > visibleBlocked.length) {
-      lines.push(styles.dim(`… ${details.blocked.length - visibleBlocked.length} more blocked item(s)`));
+      lines.push(
+        styles.dim(
+          `… ${details.blocked.length - visibleBlocked.length} more blocked item(s)`
+        )
+      );
     }
   }
 
@@ -1501,21 +1782,35 @@ export const buildExecuteSummaryRenderText = (
 
   if (details.validation.length > 0) {
     lines.push("", styles.accent("Validation"));
-    for (const check of expanded ? details.validation : details.validation.slice(0, 5)) {
-      lines.push(`${styles.dim("•")} ${truncateInline(check, expanded ? 400 : compactLineWidth)}`);
+    for (const check of expanded
+      ? details.validation
+      : details.validation.slice(0, 5)) {
+      lines.push(
+        `${styles.dim("•")} ${truncateInline(check, expanded ? 400 : compactLineWidth)}`
+      );
     }
     if (!expanded && details.validation.length > 5) {
-      lines.push(styles.dim(`… ${details.validation.length - 5} more validation step(s)`));
+      lines.push(
+        styles.dim(`… ${details.validation.length - 5} more validation step(s)`)
+      );
     }
   }
 
   if (details.remainingFollowUps.length > 0) {
     lines.push("", styles.accent("Remaining follow-ups"));
-    for (const followUp of expanded ? details.remainingFollowUps : details.remainingFollowUps.slice(0, 5)) {
-      lines.push(`${styles.dim("→")} ${truncateInline(followUp, expanded ? 400 : compactLineWidth)}`);
+    for (const followUp of expanded
+      ? details.remainingFollowUps
+      : details.remainingFollowUps.slice(0, 5)) {
+      lines.push(
+        `${styles.dim("→")} ${truncateInline(followUp, expanded ? 400 : compactLineWidth)}`
+      );
     }
     if (!expanded && details.remainingFollowUps.length > 5) {
-      lines.push(styles.dim(`… ${details.remainingFollowUps.length - 5} more follow-up(s)`));
+      lines.push(
+        styles.dim(
+          `… ${details.remainingFollowUps.length - 5} more follow-up(s)`
+        )
+      );
     }
   }
 
@@ -1528,7 +1823,12 @@ export const buildExecuteSummaryRenderText = (
       details.remainingFollowUps.length > 0 ||
       details.validation.length > 5;
     if (hasHiddenDetails) {
-      lines.push("", styles.dim("↵ expand for job ids, full summaries, files, and follow-ups"));
+      lines.push(
+        "",
+        styles.dim(
+          "↵ expand for job ids, full summaries, files, and follow-ups"
+        )
+      );
     }
   }
 
@@ -1536,7 +1836,9 @@ export const buildExecuteSummaryRenderText = (
 };
 
 const buildBlockedReason = (result: ExecuteStepResult): string => {
-  const blockers = uniqueStrings(result.blockers.map((entry) => entry.trim()).filter(Boolean));
+  const blockers = uniqueStrings(
+    result.blockers.map((entry) => entry.trim()).filter(Boolean)
+  );
   return blockers.length > 0 ? blockers.join("; ") : result.summary;
 };
 
@@ -1544,8 +1846,12 @@ export const summarizeExecuteStructuredResult = (
   item: string,
   result: ExecuteStepResult
 ): ExecuteStructuredResultSummary => {
-  const filesTouched = result.filesTouched.map((entry) => entry.trim()).filter(Boolean);
-  const validation = result.validation.map((entry) => entry.trim()).filter(Boolean);
+  const filesTouched = result.filesTouched
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+  const validation = result.validation
+    .map((entry) => entry.trim())
+    .filter(Boolean);
 
   if (result.status === "blocked") {
     return {
@@ -1633,7 +1939,10 @@ export const executePlan = async (
   const removeTerminalInputListener = ctx.ui.onTerminalInput((data) => {
     if (
       !(matchesKey(data, "ctrl+o") || data === "\u000f") ||
-      !isExecuteCurrentStatusExpandable(currentStatusForWidget || currentStatus, currentProgressEntry)
+      !isExecuteCurrentStatusExpandable(
+        currentStatusForWidget || currentStatus,
+        currentProgressEntry
+      )
     ) {
       return undefined;
     }
@@ -1643,9 +1952,12 @@ export const executePlan = async (
     return { consume: true };
   });
 
-  const digestPlanItemsImpl = dependencies.digestPlanItems ?? digestExecutePlanItems;
+  const digestPlanItemsImpl =
+    dependencies.digestPlanItems ?? digestExecutePlanItems;
   if (digestInput) {
-    recordProgress(`Digesting ${digestInput.sourceLabel} into executable tasks...`);
+    recordProgress(
+      `Digesting ${digestInput.sourceLabel} into executable tasks...`
+    );
     try {
       const digestedItems = await digestPlanItemsImpl(digestInput, ctx);
       if (digestedItems.length > 0) {
@@ -1653,12 +1965,18 @@ export const executePlan = async (
         progressState.remainingItems = planItems.length;
         recordProgress(`Prepared ${planItems.length} executable task(s)`);
       } else {
-        ctx.ui.notify("Unable to digest plan, using parsed items: digester returned no tasks", "warning");
+        ctx.ui.notify(
+          "Unable to digest plan, using parsed items: digester returned no tasks",
+          "warning"
+        );
         recordProgress(`Using ${planItems.length} parsed plan item(s)`);
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      ctx.ui.notify(`Unable to digest plan, using parsed items: ${message}`, "warning");
+      ctx.ui.notify(
+        `Unable to digest plan, using parsed items: ${message}`,
+        "warning"
+      );
       recordProgress(`Using ${planItems.length} parsed plan item(s)`);
     }
   }
@@ -1672,8 +1990,11 @@ export const executePlan = async (
 
   const ensureRuntimeImpl = dependencies.ensureRuntime ?? ensureRuntime;
   const runWaveImpl = dependencies.runWave ?? runWave;
-  const createTasksBridgeImpl = dependencies.createTasksBridge ?? createExecuteTasksBridge;
-  const executionId = (dependencies.createExecutionId ?? (() => `execute:${Date.now()}`))();
+  const createTasksBridgeImpl =
+    dependencies.createTasksBridge ?? createExecuteTasksBridge;
+  const executionId = (
+    dependencies.createExecutionId ?? (() => `execute:${Date.now()}`)
+  )();
 
   let taskBridge: ExecuteTasksBridge | null = null;
   let rootTaskId: string | undefined;
@@ -1685,7 +2006,10 @@ export const executePlan = async (
     resolveMapAgent(ctx.cwd, EXECUTE_AGENT, "both");
     taskBridge = await createTasksBridgeImpl(pi, ctx);
     if (!taskBridge) {
-      ctx.ui.notify("/execute: pi-tasks bridge unavailable — load pi-tasks to see live task progress", "info");
+      ctx.ui.notify(
+        "/execute: pi-tasks bridge unavailable — load pi-tasks to see live task progress",
+        "info"
+      );
     }
 
     const pendingItems: ExecuteQueuedItem[] = [];
@@ -1697,7 +2021,9 @@ export const executePlan = async (
     const waves: ExecuteWaveSummary[] = [];
     const blockerTaskIds = new Set<string>();
 
-    const createBridgeTask = async (input: ExecuteTaskCreateInput): Promise<string | undefined> => {
+    const createBridgeTask = async (
+      input: ExecuteTaskCreateInput
+    ): Promise<string | undefined> => {
       if (!taskBridge?.isAvailable()) {
         return undefined;
       }
@@ -1721,14 +2047,18 @@ export const executePlan = async (
         subject: EXECUTE_ROOT_SUBJECT,
         description: args.trim(),
         activeForm: EXECUTE_ROOT_ACTIVE_FORM,
-        metadata: buildExecuteMetadata(executionId, { planCount: planItems.length }),
+        metadata: buildExecuteMetadata(executionId, {
+          planCount: planItems.length,
+        }),
       });
       if (rootTaskId) {
         await taskBridge.updateTask({
           taskId: rootTaskId,
           status: "in_progress",
           owner: EXECUTE_TASK_SOURCE,
-          metadata: buildExecuteMetadata(executionId, { planCount: planItems.length }),
+          metadata: buildExecuteMetadata(executionId, {
+            planCount: planItems.length,
+          }),
         });
         await taskBridge.setTaskActive(rootTaskId, true);
       }
@@ -1795,13 +2125,22 @@ export const executePlan = async (
               activeItem: update.item,
             };
           }
-          const compactStatus = buildExecuteLiveStatus(update.wave, update.item, update.event);
+          const compactStatus = buildExecuteLiveStatus(
+            update.wave,
+            update.item,
+            update.event
+          );
           recordProgress(
             compactStatus,
             compactStatus,
-            buildExecuteLiveProgressEntry(update.wave, update.item, update.event, {
-              detailMaxLength: EXECUTE_PROGRESS_DETAIL_FULL_LENGTH,
-            })
+            buildExecuteLiveProgressEntry(
+              update.wave,
+              update.item,
+              update.event,
+              {
+                detailMaxLength: EXECUTE_PROGRESS_DETAIL_FULL_LENGTH,
+              }
+            )
           );
         },
         async (update) => {
@@ -1840,8 +2179,12 @@ export const executePlan = async (
                   },
                 });
               } else {
-                const structured = update.result.structuredOutput as ExecuteStepResult;
-                const resultSummary = summarizeExecuteStructuredResult(update.item, structured);
+                const structured = update.result
+                  .structuredOutput as ExecuteStepResult;
+                const resultSummary = summarizeExecuteStructuredResult(
+                  update.item,
+                  structured
+                );
                 await taskBridge.updateTask({
                   taskId: entry.taskId,
                   status: resultSummary.blocked ? "pending" : "completed",
@@ -1867,8 +2210,12 @@ export const executePlan = async (
           if (update.result?.isError ?? update.isError) {
             blockedDelta = 1;
           } else if (update.result?.structuredOutput) {
-            const structured = update.result.structuredOutput as ExecuteStepResult;
-            const resultSummary = summarizeExecuteStructuredResult(update.item, structured);
+            const structured = update.result
+              .structuredOutput as ExecuteStepResult;
+            const resultSummary = summarizeExecuteStructuredResult(
+              update.item,
+              structured
+            );
             completedDelta = resultSummary.completed ? 1 : 0;
             blockedDelta = resultSummary.blocked ? 1 : 0;
           } else {
@@ -1880,12 +2227,16 @@ export const executePlan = async (
             ...progressState.activeWave,
             activeItem: update.item,
             completedItems,
-            errorCount: progressState.activeWave.errorCount + (update.isError ? 1 : 0),
-            queuedFollowUps: progressState.activeWave.queuedFollowUps + update.followUpCount,
+            errorCount:
+              progressState.activeWave.errorCount + (update.isError ? 1 : 0),
+            queuedFollowUps:
+              progressState.activeWave.queuedFollowUps + update.followUpCount,
           };
           progressState.completedItems += completedDelta;
           progressState.blockedItems += blockedDelta;
-          progressState.remainingItems = pendingItems.length + Math.max(0, waveItems.length - completedItems);
+          progressState.remainingItems =
+            pendingItems.length +
+            Math.max(0, waveItems.length - completedItems);
           refreshProgressWidget();
         }
       );
@@ -1917,7 +2268,8 @@ export const executePlan = async (
 
         if (result.isError) {
           const reason =
-            (result.errorMessage ?? result.stderr.trim()) || `Worker exited with code ${result.exitCode}`;
+            (result.errorMessage ?? result.stderr.trim()) ||
+            `Worker exited with code ${result.exitCode}`;
           blocked.push({ item: result.item, reason });
 
           if (entry.taskId && taskBridge?.isAvailable()) {
@@ -1945,7 +2297,10 @@ export const executePlan = async (
         }
 
         const structured = result.structuredOutput as ExecuteStepResult;
-        const resultSummary = summarizeExecuteStructuredResult(result.item, structured);
+        const resultSummary = summarizeExecuteStructuredResult(
+          result.item,
+          structured
+        );
 
         if (resultSummary.completed) {
           completed.push(resultSummary.completed);
@@ -1964,10 +2319,14 @@ export const executePlan = async (
         if (entry.taskId && taskBridge?.isAvailable()) {
           await taskBridge.setTaskActive(entry.taskId, false);
           if (resultSummary.blocked) {
-            const blockerTaskId = await createBlockerTask(result.item, resultSummary.blocked.reason, {
-              blockerForTaskId: entry.taskId,
-              rootTaskId,
-            });
+            const blockerTaskId = await createBlockerTask(
+              result.item,
+              resultSummary.blocked.reason,
+              {
+                blockerForTaskId: entry.taskId,
+                rootTaskId,
+              }
+            );
             if (blockerTaskId) {
               blockerTaskIds.add(blockerTaskId);
             }
@@ -2036,10 +2395,14 @@ export const executePlan = async (
         item: "remaining follow-ups",
         reason,
       });
-      const blockerTaskId = await createBlockerTask("remaining follow-ups", reason, {
-        rootTaskId,
-        blockerType: "max_waves",
-      });
+      const blockerTaskId = await createBlockerTask(
+        "remaining follow-ups",
+        reason,
+        {
+          rootTaskId,
+          blockerType: "max_waves",
+        }
+      );
       if (blockerTaskId) {
         blockerTaskIds.add(blockerTaskId);
       }
@@ -2087,7 +2450,9 @@ export const executePlan = async (
         }),
       });
     }
-    sendExecuteSummaryMessage(pi, `## /execute failed\n\n- ${message}`, { error: message });
+    sendExecuteSummaryMessage(pi, `## /execute failed\n\n- ${message}`, {
+      error: message,
+    });
   } finally {
     removeTerminalInputListener();
     ctx.ui.setWidget(widgetKey, undefined);
@@ -2106,7 +2471,12 @@ class ExecuteSummaryBody {
 
   render(width: number): string[] {
     this.text.setText(
-      buildExecuteSummaryRenderText(this.details, this.expanded, this.styles, Math.max(72, width - 4))
+      buildExecuteSummaryRenderText(
+        this.details,
+        this.expanded,
+        this.styles,
+        Math.max(72, width - 4)
+      )
     );
     return this.text.render(width);
   }
@@ -2129,21 +2499,26 @@ export const startExecutePlan = (
 };
 
 export default function executeExtension(pi: ExtensionAPI): void {
-  pi.registerMessageRenderer("execute-summary", (message, { expanded }, theme) => {
-    const details = isExecuteSummaryDetails(message.details) || isExecuteErrorDetails(message.details)
-      ? message.details
-      : { error: String(message.content ?? "Unknown /execute result") };
-    const styles = {
-      accent: (text: string) => theme.fg("accent", text),
-      dim: (text: string) => theme.fg("dim", text),
-      success: (text: string) => theme.fg("success", text),
-      warning: (text: string) => theme.fg("warning", text),
-      error: (text: string) => theme.fg("error", text),
-    } satisfies ExecuteRenderStyles;
-    const box = new Box(1, 1, (text) => theme.bg("customMessageBg", text));
-    box.addChild(new ExecuteSummaryBody(details, expanded, styles));
-    return box;
-  });
+  pi.registerMessageRenderer(
+    "execute-summary",
+    (message, { expanded }, theme) => {
+      const details =
+        isExecuteSummaryDetails(message.details) ||
+        isExecuteErrorDetails(message.details)
+          ? message.details
+          : { error: String(message.content ?? "Unknown /execute result") };
+      const styles = {
+        accent: (text: string) => theme.fg("accent", text),
+        dim: (text: string) => theme.fg("dim", text),
+        success: (text: string) => theme.fg("success", text),
+        warning: (text: string) => theme.fg("warning", text),
+        error: (text: string) => theme.fg("error", text),
+      } satisfies ExecuteRenderStyles;
+      const box = new Box(1, 1, (text) => theme.bg("customMessageBg", text));
+      box.addChild(new ExecuteSummaryBody(details, expanded, styles));
+      return box;
+    }
+  );
 
   pi.registerCommand(COMMAND_NAME, {
     description: "Execute a plan via pi-lcm wave jobs: /execute <plan>",

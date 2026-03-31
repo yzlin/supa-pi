@@ -73,6 +73,10 @@
           "level": "error",
           "fix": "safe",
         },
+        "noUnusedVariables": {
+          "level": "error",
+          "fix": "safe",
+        },
       },
       "nursery": {
         "noShadow": "warn",
