@@ -1,7 +1,7 @@
 {
   "commands": {
     "file": {
-      "list": "fd --type f",
+      "list": "fd --type f --type d",
       "action": "@{{selected}}",
       "shortcut": "@"
     }
