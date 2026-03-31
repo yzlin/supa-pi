@@ -18,7 +18,7 @@ import {
 import { ensureRuntime } from "../../../pi-lcm/src/runtime.ts";
 import type { MapResultRecord } from "../../../pi-lcm/src/types.ts";
 
-const COMMAND_NAME = "execute";
+const COMMAND_NAME = "execute-wave";
 const EXECUTE_AGENT = "execute-step";
 const TASK_TEMPLATE = [
   "Assigned atomic repo task:",
@@ -475,7 +475,7 @@ const buildExecutePlanDigestTask = (input: ExecutePlanDigestInput): string => {
       : "- none extracted";
 
   return [
-    "Rewrite this implementation plan into an ordered list of atomic repo tasks for /execute.",
+    "Rewrite this implementation plan into an ordered list of atomic repo tasks for /execute-wave.",
     'Return JSON only in this exact shape: {"items":["task 1","task 2"]}',
     "Rules:",
     "- Break broad bullets or phases into concrete executable tasks.",
@@ -637,7 +637,7 @@ const buildExecuteItemDescription = (
 
 const buildFollowUpDescription = (item: string, parentItem: string): string =>
   [
-    "Follow-up work discovered during /execute",
+    "Follow-up work discovered during /execute-wave",
     "",
     item,
     "",
@@ -1159,7 +1159,7 @@ export const buildExecuteProgressWidgetRenderText = (
   renderWidth?: number
 ): string => {
   const lines = [
-    styles.accent("/execute"),
+    styles.accent("/execute-wave"),
     styles.dim(buildExecuteWidgetPreview(planItems)),
   ];
 
@@ -1396,7 +1396,7 @@ export const createExecuteTasksBridge = async (
 
 const buildSummaryMessage = (details: ExecuteSummaryDetails): string => {
   const lines = [
-    "## /execute summary",
+    "## /execute-wave summary",
     "",
     `- Initial plan items: ${details.planItems.length}`,
     `- Waves executed: ${details.waves.length}`,
@@ -1689,13 +1689,13 @@ export const buildExecuteSummaryRenderText = (
 ): string => {
   if (isExecuteErrorDetails(details)) {
     return [
-      styles.error("/execute failed"),
+      styles.error("/execute-wave failed"),
       `${styles.error("!")} ${details.error}`,
     ].join("\n");
   }
 
   const lines = [
-    styles.accent("/execute"),
+    styles.accent("/execute-wave"),
     `Plan ${details.planItems.length}  Waves ${details.waves.length}  ${styles.success(`Done ${details.completed.length}`)}  ${styles.warning(`Blocked ${details.blocked.length}`)}`,
     styles.dim(
       `Files ${details.filesTouched.length}  Validation ${details.validation.length}`
@@ -1982,7 +1982,7 @@ export const executePlan = async (
   }
 
   if (planItems.length === 0) {
-    ctx.ui.notify("Usage: /execute <plan>", "warning");
+    ctx.ui.notify("Usage: /execute-wave <plan>", "warning");
     ctx.ui.setWidget(widgetKey, undefined);
     ctx.ui.setStatus(COMMAND_NAME, "");
     return;
@@ -2007,7 +2007,7 @@ export const executePlan = async (
     taskBridge = await createTasksBridgeImpl(pi, ctx);
     if (!taskBridge) {
       ctx.ui.notify(
-        "/execute: pi-tasks bridge unavailable — load pi-tasks to see live task progress",
+        "/execute-wave: pi-tasks bridge unavailable — load pi-tasks to see live task progress",
         "info"
       );
     }
@@ -2450,7 +2450,7 @@ export const executePlan = async (
         }),
       });
     }
-    sendExecuteSummaryMessage(pi, `## /execute failed\n\n- ${message}`, {
+    sendExecuteSummaryMessage(pi, `## /execute-wave failed\n\n- ${message}`, {
       error: message,
     });
   } finally {
@@ -2494,7 +2494,7 @@ export const startExecutePlan = (
 ): void => {
   void executePlanImpl(pi, args, ctx).catch((error) => {
     const message = error instanceof Error ? error.message : String(error);
-    ctx.ui.notify(`/execute failed: ${message}`, "error");
+    ctx.ui.notify(`/execute-wave failed: ${message}`, "error");
   });
 };
 
@@ -2506,7 +2506,7 @@ export default function executeExtension(pi: ExtensionAPI): void {
         isExecuteSummaryDetails(message.details) ||
         isExecuteErrorDetails(message.details)
           ? message.details
-          : { error: String(message.content ?? "Unknown /execute result") };
+          : { error: String(message.content ?? "Unknown /execute-wave result") };
       const styles = {
         accent: (text: string) => theme.fg("accent", text),
         dim: (text: string) => theme.fg("dim", text),
@@ -2521,7 +2521,7 @@ export default function executeExtension(pi: ExtensionAPI): void {
   );
 
   pi.registerCommand(COMMAND_NAME, {
-    description: "Execute a plan via pi-lcm wave jobs: /execute <plan>",
+    description: "Execute a plan via pi-lcm wave jobs: /execute-wave <plan>",
     handler: async (args, ctx) => {
       startExecutePlan(pi, args ?? "", ctx);
     },

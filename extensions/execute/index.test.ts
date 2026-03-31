@@ -245,7 +245,7 @@ describe("buildExecuteProgressWidgetLines", () => {
       }
     );
 
-    expect(lines[0]).toBe("/execute");
+    expect(lines[0]).toBe("/execute-wave");
     expect(lines[1]).toContain("2 items — inspect prompt");
     expect(lines).toContain("Overall [███████░░░]  2 done  0 blocked  1 remaining");
     expect(lines).toContain("Waves");
@@ -512,7 +512,7 @@ describe("buildExecuteSummaryRenderText", () => {
   it("renders a compact summary", () => {
     const text = buildExecuteSummaryRenderText(details, false, undefined, 90);
 
-    expect(text).toContain("/execute");
+    expect(text).toContain("/execute-wave");
     expect(text).toContain("Plan 2  Waves 1  Done 1  Blocked 0");
     expect(text).toContain("Waves");
     expect(text).toContain("Completed");
@@ -557,7 +557,7 @@ describe("buildExecuteSummaryRenderText", () => {
     expect(expanded).toContain("ok");
 
     const failed = buildExecuteSummaryRenderText({ error: "boom" }, false);
-    expect(failed).toContain("/execute failed");
+    expect(failed).toContain("/execute-wave failed");
     expect(failed).toContain("! boom");
   });
 
@@ -826,7 +826,7 @@ describe("startExecutePlan", () => {
     await Promise.resolve();
 
     expect(notifications).toContainEqual({
-      message: "/execute failed: boom",
+      message: "/execute-wave failed: boom",
       level: "error",
     });
   });
@@ -954,11 +954,11 @@ describe("executePlan task bridge", () => {
       fallbackItems: ["inspect execute bridge", "wire task breakdown"],
     });
     expect(statuses).toContainEqual({
-      key: "execute",
+      key: "execute-wave",
       value: "Digesting plan.md into executable tasks...",
     });
     expect(statuses).toContainEqual({
-      key: "execute",
+      key: "execute-wave",
       value: "Prepared 3 executable task(s)",
     });
     expect(widgets.some((entry) => Array.isArray(entry.widget) && entry.widget.join("\n").includes("Digesting plan.md into executable tasks..."))).toBe(true);
@@ -1039,7 +1039,7 @@ describe("executePlan task bridge", () => {
       level: "warning",
     });
     expect(statuses).toContainEqual({
-      key: "execute",
+      key: "execute-wave",
       value: "Digesting plan.md into executable tasks...",
     });
     expect(widgets.some((entry) => Array.isArray(entry.widget) && entry.widget.join("\n").includes("Digesting plan.md into executable tasks..."))).toBe(true);
@@ -1108,7 +1108,7 @@ describe("executePlan task bridge", () => {
       },
     ]);
     expect(notifications).toContainEqual({
-      message: "/execute: pi-tasks bridge unavailable — load pi-tasks to see live task progress",
+      message: "/execute-wave: pi-tasks bridge unavailable — load pi-tasks to see live task progress",
       level: "info",
     });
     expect(widgets[0]).toMatchObject({
@@ -1128,11 +1128,11 @@ describe("executePlan task bridge", () => {
     ).toBe(true);
     expect(widgets.some((entry) => Array.isArray(entry.widget) && entry.widget.join("\n").includes("Recent"))).toBe(true);
     expect(statuses).toContainEqual({
-      key: "execute",
+      key: "execute-wave",
       value: "Wave 1 complete — 1/1 done, 0 errors, 0 follow-ups",
     });
     expect(widgets.at(-1)).toMatchObject({ key: expect.stringContaining("execute-"), widget: undefined });
-    expect(statuses.at(-1)).toEqual({ key: "execute", value: "" });
+    expect(statuses.at(-1)).toEqual({ key: "execute-wave", value: "" });
   });
 
   it("updates active wave counts in the widget as items finish", async () => {
