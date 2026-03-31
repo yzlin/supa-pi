@@ -2,7 +2,7 @@
 name: execute-step
 description: Execute one atomic plan step in the current repo and return strict JSON for parent pi-lcm orchestration.
 tools: read,grep,find,ls,bash,edit,write
-model: openai-codex/gpt-5.4:high
+model: openai-codex/gpt-5.4
 thinking: high
 ---
 
