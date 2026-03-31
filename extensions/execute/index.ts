@@ -175,6 +175,21 @@ interface ExecuteProgressWidgetState {
   waves: ExecuteWaveSummary[];
 }
 
+type ExecuteProgressTone = "accent" | "success" | "warning" | "dim";
+
+interface ExecuteProgressWidgetEntry {
+  headline: string;
+  blockLabel: string;
+  metadata: string[];
+  detail: string | null;
+  tone: ExecuteProgressTone;
+}
+
+interface ExecuteProgressHistoryEntry {
+  status: string;
+  entry?: ExecuteProgressWidgetEntry;
+}
+
 interface ExecuteLiveProgressUpdate {
   wave: number;
   item: string;
@@ -712,6 +727,59 @@ export const buildExecuteLiveStatus = (
   }
 };
 
+const buildExecuteLiveProgressEntry = (
+  wave: number,
+  item: string,
+  event: MapTaskProgressEvent,
+  options: { itemMaxLength?: number; detailMaxLength?: number } = {}
+): ExecuteProgressWidgetEntry => {
+  const headline = `Wave ${wave}: ${truncateInline(item, options.itemMaxLength ?? 120)}`;
+  const detailMaxLength = options.detailMaxLength ?? EXECUTE_PROGRESS_DETAIL_FULL_LENGTH;
+
+  switch (event.type) {
+    case "assistant_text": {
+      const detail = formatExecuteProgressDetail(undefined, event.text, detailMaxLength) || "Thinking…";
+      return {
+        headline,
+        blockLabel: "thinking",
+        metadata: [],
+        detail,
+        tone: "accent",
+      };
+    }
+    case "tool_start":
+      return {
+        headline,
+        blockLabel: "tool call",
+        metadata: [event.toolName],
+        detail: null,
+        tone: "accent",
+      };
+    case "tool_update": {
+      const detail = formatExecuteProgressDetail(event.toolName, event.text, detailMaxLength) || null;
+      return {
+        headline,
+        blockLabel: "tool update",
+        metadata: [event.toolName],
+        detail,
+        tone: "accent",
+      };
+    }
+    case "tool_end": {
+      const detail =
+        formatExecuteProgressDetail(event.toolName, event.text, detailMaxLength) ||
+        (event.isError ? "Tool failed without additional detail" : "Completed");
+      return {
+        headline,
+        blockLabel: event.isError ? "tool error" : "tool result",
+        metadata: [event.toolName, event.isError ? "error" : "ok"],
+        detail,
+        tone: event.isError ? "warning" : "success",
+      };
+    }
+  }
+};
+
 const buildExecuteWidgetPreview = (planItems: string[]): string => {
   if (planItems.length === 0) {
     return "waiting for plan items";
@@ -760,7 +828,7 @@ const formatExecuteWidgetWaveLine = (
 
 const splitExecuteCurrentStatus = (currentStatus: string): { headline: string; detail: string | null } => {
   const trimmed = currentStatus.trim();
-  const separatorIndex = trimmed.indexOf(" — ");
+  const separatorIndex = trimmed.lastIndexOf(" — ");
   if (separatorIndex === -1) {
     return { headline: trimmed, detail: null };
   }
@@ -771,37 +839,85 @@ const splitExecuteCurrentStatus = (currentStatus: string): { headline: string; d
   };
 };
 
-const isExecuteCurrentStatusExpandable = (currentStatus: string): boolean => {
+const formatExecuteProgressTone = (tone: ExecuteProgressTone, text: string, styles: ExecuteProgressRenderStyles): string => {
+  switch (tone) {
+    case "success":
+      return styles.success(text);
+    case "warning":
+      return styles.warning(text);
+    case "dim":
+      return styles.dim(text);
+    case "accent":
+    default:
+      return styles.accent(text);
+  }
+};
+
+const isExecuteCurrentStatusExpandable = (
+  currentStatus: string,
+  currentEntry?: ExecuteProgressWidgetEntry
+): boolean => {
+  if (currentEntry) {
+    return Boolean(currentEntry.detail && currentEntry.detail.length > EXECUTE_PROGRESS_DETAIL_PREVIEW_LENGTH);
+  }
+
   const { detail } = splitExecuteCurrentStatus(currentStatus);
   return Boolean(detail && detail.length > EXECUTE_PROGRESS_DETAIL_PREVIEW_LENGTH);
+};
+
+const appendExecuteProgressEntryLines = (
+  lines: string[],
+  entry: ExecuteProgressWidgetEntry,
+  styles: ExecuteProgressRenderStyles,
+  expanded = false
+): void => {
+  const detailText = entry.detail
+    ? entry.detail.length > EXECUTE_PROGRESS_DETAIL_PREVIEW_LENGTH && !expanded
+      ? truncateInline(entry.detail, EXECUTE_PROGRESS_DETAIL_PREVIEW_LENGTH)
+      : entry.detail
+    : null;
+  const metadata = entry.metadata.length > 0 ? ` ${styles.dim(entry.metadata.join(" · "))}` : "";
+
+  lines.push(`${styles.dim("•")} ${entry.headline}`);
+  lines.push(`  ${formatExecuteProgressTone(entry.tone, `[${entry.blockLabel}]`, styles)}${metadata}`);
+  if (detailText) {
+    lines.push(`  ${styles.dim("↳")} ${detailText}`);
+  }
 };
 
 const appendExecuteCurrentStatusLines = (
   lines: string[],
   currentStatus: string,
   expanded: boolean,
-  styles: ExecuteProgressRenderStyles
+  styles: ExecuteProgressRenderStyles,
+  currentEntry?: ExecuteProgressWidgetEntry
 ): void => {
   const current = currentStatus.trim();
   if (!current) {
     return;
   }
 
-  const { headline, detail } = splitExecuteCurrentStatus(current);
-  const expandable = isExecuteCurrentStatusExpandable(current);
-  const detailText = detail
-    ? expandable && !expanded
-      ? truncateInline(detail, EXECUTE_PROGRESS_DETAIL_PREVIEW_LENGTH)
-      : detail
-    : null;
+  lines.push("", styles.accent("Current"));
 
-  lines.push("", styles.accent("Current"), `${styles.dim("•")} ${headline}`);
+  if (currentEntry) {
+    appendExecuteProgressEntryLines(lines, currentEntry, styles, expanded);
+  } else {
+    const { headline, detail } = splitExecuteCurrentStatus(current);
+    const expandable = isExecuteCurrentStatusExpandable(current);
+    const detailText = detail
+      ? expandable && !expanded
+        ? truncateInline(detail, EXECUTE_PROGRESS_DETAIL_PREVIEW_LENGTH)
+        : detail
+      : null;
 
-  if (detailText) {
-    lines.push(`${styles.dim("↳")} ${detailText}`);
+    lines.push(`${styles.dim("•")} ${headline}`);
+
+    if (detailText) {
+      lines.push(`  ${styles.dim("↳")} ${detailText}`);
+    }
   }
 
-  if (expandable) {
+  if (isExecuteCurrentStatusExpandable(current, currentEntry)) {
     lines.push(styles.dim(expanded ? "ctrl+o collapse current detail" : "ctrl+o expand current detail"));
   }
 };
@@ -809,10 +925,11 @@ const appendExecuteCurrentStatusLines = (
 export const buildExecuteProgressWidgetRenderText = (
   planItems: string[],
   currentStatus: string,
-  history: string[],
+  history: Array<string | ExecuteProgressHistoryEntry>,
   progress?: ExecuteProgressWidgetState,
   styles: ExecuteProgressRenderStyles = defaultExecuteProgressRenderStyles,
-  expandedCurrentStatus = false
+  expandedCurrentStatus = false,
+  currentEntry?: ExecuteProgressWidgetEntry
 ): string => {
   const lines = [styles.accent("/execute"), styles.dim(buildExecuteWidgetPreview(planItems))];
 
@@ -849,11 +966,20 @@ export const buildExecuteProgressWidgetRenderText = (
   }
 
   const current = currentStatus.trim();
-  appendExecuteCurrentStatusLines(lines, currentStatus, expandedCurrentStatus, styles);
+  appendExecuteCurrentStatusLines(lines, currentStatus, expandedCurrentStatus, styles, currentEntry);
 
-  const normalizedHistory = history.map((entry) => entry.trim()).filter(Boolean);
+  const normalizedHistory = history
+    .map((entry) =>
+      typeof entry === "string"
+        ? { status: entry.trim(), entry: undefined }
+        : {
+            status: entry.status.trim(),
+            entry: entry.entry,
+          }
+    )
+    .filter((entry) => entry.status);
   const historyWithoutCurrent =
-    current && normalizedHistory.at(-1) === current ? normalizedHistory.slice(0, -1) : normalizedHistory;
+    current && normalizedHistory.at(-1)?.status === current ? normalizedHistory.slice(0, -1) : normalizedHistory;
   const visibleHistory = historyWithoutCurrent.slice(-EXECUTE_PROGRESS_WIDGET_HISTORY_LIMIT);
   const skipped = historyWithoutCurrent.length - visibleHistory.length;
 
@@ -863,7 +989,7 @@ export const buildExecuteProgressWidgetRenderText = (
       lines.push(styles.dim(`… ${skipped} earlier updates`));
     }
     for (const entry of visibleHistory) {
-      lines.push(`${styles.dim("•")} ${entry}`);
+      lines.push(`${styles.dim("•")} ${entry.status}`);
     }
   }
 
@@ -873,11 +999,20 @@ export const buildExecuteProgressWidgetRenderText = (
 export const buildExecuteProgressWidgetLines = (
   planItems: string[],
   currentStatus: string,
-  history: string[],
+  history: Array<string | ExecuteProgressHistoryEntry>,
   progress?: ExecuteProgressWidgetState,
-  expandedCurrentStatus = false
+  expandedCurrentStatus = false,
+  currentEntry?: ExecuteProgressWidgetEntry
 ): string[] =>
-  buildExecuteProgressWidgetRenderText(planItems, currentStatus, history, progress, undefined, expandedCurrentStatus).split("\n");
+  buildExecuteProgressWidgetRenderText(
+    planItems,
+    currentStatus,
+    history,
+    progress,
+    undefined,
+    expandedCurrentStatus,
+    currentEntry
+  ).split("\n");
 
 class ExecuteProgressWidgetBody {
   private readonly text = new Text();
@@ -885,10 +1020,11 @@ class ExecuteProgressWidgetBody {
   constructor(
     private readonly planItems: string[],
     private readonly currentStatus: string,
-    private readonly history: string[],
+    private readonly history: ExecuteProgressHistoryEntry[],
     private readonly progress: ExecuteProgressWidgetState | undefined,
     private readonly styles: ExecuteProgressRenderStyles,
-    private readonly expandedCurrentStatus: boolean
+    private readonly expandedCurrentStatus: boolean,
+    private readonly currentEntry?: ExecuteProgressWidgetEntry
   ) {}
 
   render(width: number): string[] {
@@ -899,7 +1035,8 @@ class ExecuteProgressWidgetBody {
         this.history,
         this.progress,
         this.styles,
-        this.expandedCurrentStatus
+        this.expandedCurrentStatus,
+        this.currentEntry
       )
     );
     return this.text.render(width);
@@ -915,9 +1052,10 @@ const updateExecuteProgressWidget = (
   widgetKey: string,
   planItems: string[],
   currentStatus: string,
-  history: string[],
+  history: ExecuteProgressHistoryEntry[],
   progress?: ExecuteProgressWidgetState,
-  expandedCurrentStatus = false
+  expandedCurrentStatus = false,
+  currentEntry?: ExecuteProgressWidgetEntry
 ): void => {
   ctx.ui.setWidget(
     widgetKey,
@@ -933,7 +1071,8 @@ const updateExecuteProgressWidget = (
           success: (text: string) => theme.fg("success", text),
           warning: (text: string) => theme.fg("warning", text),
         },
-        expandedCurrentStatus
+        expandedCurrentStatus,
+        currentEntry
       ),
     {
       placement: "aboveEditor",
@@ -1417,9 +1556,10 @@ export const executePlan = async (
   }
 
   const widgetKey = `execute-${++executeWidgetCounter}`;
-  const progressHistory: string[] = [];
+  const progressHistory: ExecuteProgressHistoryEntry[] = [];
   let currentStatus = "";
   let currentStatusForWidget = "";
+  let currentProgressEntry: ExecuteProgressWidgetEntry | undefined;
   let expandedCurrentStatus = false;
   const progressState: ExecuteProgressWidgetState = {
     completedItems: 0,
@@ -1436,14 +1576,20 @@ export const executePlan = async (
       currentStatusForWidget || currentStatus,
       progressHistory,
       progressState,
-      expandedCurrentStatus
+      expandedCurrentStatus,
+      currentProgressEntry
     );
   };
 
-  const recordProgress = (status: string, widgetStatus = status): void => {
+  const recordProgress = (
+    status: string,
+    widgetStatus = status,
+    entry?: ExecuteProgressWidgetEntry
+  ): void => {
     currentStatus = status;
     currentStatusForWidget = widgetStatus;
-    progressHistory.push(status);
+    currentProgressEntry = entry;
+    progressHistory.push({ status, entry });
     refreshProgressWidget();
     ctx.ui.setStatus(COMMAND_NAME, status);
   };
@@ -1451,7 +1597,7 @@ export const executePlan = async (
   const removeTerminalInputListener = ctx.ui.onTerminalInput((data) => {
     if (
       !(matchesKey(data, "ctrl+o") || data === "\u000f") ||
-      !isExecuteCurrentStatusExpandable(currentStatusForWidget || currentStatus)
+      !isExecuteCurrentStatusExpandable(currentStatusForWidget || currentStatus, currentProgressEntry)
     ) {
       return undefined;
     }
@@ -1613,9 +1759,11 @@ export const executePlan = async (
               activeItem: update.item,
             };
           }
+          const compactStatus = buildExecuteLiveStatus(update.wave, update.item, update.event);
           recordProgress(
-            buildExecuteLiveStatus(update.wave, update.item, update.event),
-            buildExecuteLiveStatus(update.wave, update.item, update.event, {
+            compactStatus,
+            compactStatus,
+            buildExecuteLiveProgressEntry(update.wave, update.item, update.event, {
               itemMaxLength: 120,
               detailMaxLength: EXECUTE_PROGRESS_DETAIL_FULL_LENGTH,
             })

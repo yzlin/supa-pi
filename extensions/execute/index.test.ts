@@ -175,14 +175,14 @@ describe("buildExecuteProgressWidgetLines", () => {
   it("shows wave progress, current status, and recent worker activity", () => {
     const lines = buildExecuteProgressWidgetLines(
       ["inspect prompt", "inspect agent"],
-      "Wave 2: inspect prompt — read…",
+      "Wave 2: inspect prompt — read done: opened extensions/execute/index.ts",
       [
-        "Executing 2 plan item(s)...",
-        "Wave 1: 2 item(s)",
-        "Wave 1 complete — 2/2 done, 0 errors, 0 follow-ups",
-        "Wave 2: 1 item(s)",
-        "Wave 2: inspect prompt — thinking…",
-        "Wave 2: inspect prompt — read…",
+        { status: "Executing 2 plan item(s)..." },
+        { status: "Wave 1: 2 item(s)" },
+        { status: "Wave 1 complete — 2/2 done, 0 errors, 0 follow-ups" },
+        { status: "Wave 2: 1 item(s)" },
+        { status: "Wave 2: inspect prompt — thinking…" },
+        { status: "Wave 2: inspect prompt — read done: opened extensions/execute/index.ts" },
       ],
       {
         completedItems: 2,
@@ -206,6 +206,14 @@ describe("buildExecuteProgressWidgetLines", () => {
           queuedFollowUps: 0,
           activeItem: "inspect prompt",
         },
+      },
+      false,
+      {
+        headline: "Wave 2: inspect prompt",
+        blockLabel: "tool result",
+        metadata: ["read", "ok"],
+        detail: "opened extensions/execute/index.ts",
+        tone: "success",
       }
     );
 
@@ -218,40 +226,18 @@ describe("buildExecuteProgressWidgetLines", () => {
     expect(lines).toContain("  active: inspect prompt");
     expect(lines).toContain("Current");
     expect(lines).toContain("• Wave 2: inspect prompt");
-    expect(lines).toContain("↳ read…");
+    expect(lines).toContain("  [tool result] read · ok");
+    expect(lines).toContain("  ↳ opened extensions/execute/index.ts");
     expect(lines).toContain("Recent");
     expect(lines).toContain("• Wave 2: inspect prompt — thinking…");
-    expect(lines).not.toContain("• Wave 2: inspect prompt — read…");
+    expect(lines).not.toContain("• Wave 2: inspect prompt — read done: opened extensions/execute/index.ts");
   });
 
-  it("shows ctrl+o hint and expanded current detail for long status content", () => {
-    const longDetail =
-      "read done: if (selector.type === 'pseudo-class' && selector.kind === 'active') { applySemanticTokens(theme); return lightDarkCoreVars; }";
-
-    const collapsed = buildExecuteProgressWidgetLines(
+  it("does not offer expansion when the structured current entry has no detail", () => {
+    const lines = buildExecuteProgressWidgetLines(
       ["inspect prompt"],
-      `Wave 1: Add semantic colors — ${longDetail}`,
-      ["Wave 1: Add semantic colors — thinking…"],
-      {
-        completedItems: 0,
-        blockedItems: 0,
-        remainingItems: 1,
-        waves: [],
-        activeWave: {
-          wave: 1,
-          totalItems: 1,
-          completedItems: 0,
-          errorCount: 0,
-          queuedFollowUps: 0,
-          activeItem: "Add semantic colors",
-        },
-      }
-    );
-
-    const expanded = buildExecuteProgressWidgetLines(
-      ["inspect prompt"],
-      `Wave 1: Add semantic colors — ${longDetail}`,
-      ["Wave 1: Add semantic colors — thinking…"],
+      "Wave 1: Add semantic colors — this old detail should not keep the expand hint alive",
+      [{ status: "Wave 1: Add semantic colors — thinking…" }],
       {
         completedItems: 0,
         blockedItems: 0,
@@ -266,7 +252,74 @@ describe("buildExecuteProgressWidgetLines", () => {
           activeItem: "Add semantic colors",
         },
       },
-      true
+      false,
+      {
+        headline: "Wave 1: Add semantic colors",
+        blockLabel: "tool call",
+        metadata: ["read"],
+        detail: null,
+        tone: "accent",
+      }
+    );
+
+    expect(lines).not.toContain("ctrl+o expand current detail");
+    expect(lines).toContain("  [tool call] read");
+  });
+
+  it("shows ctrl+o hint and expanded current detail for long status content", () => {
+    const longDetail =
+      "read done: if (selector.type === 'pseudo-class' && selector.kind === 'active') { applySemanticTokens(theme); return lightDarkCoreVars; }";
+
+    const currentEntry = {
+      headline: "Wave 1: Add semantic colors",
+      blockLabel: "tool result",
+      metadata: ["read", "ok"],
+      detail: longDetail,
+      tone: "success",
+    } as const;
+
+    const collapsed = buildExecuteProgressWidgetLines(
+      ["inspect prompt"],
+      `Wave 1: Add semantic colors — ${longDetail}`,
+      [{ status: "Wave 1: Add semantic colors — thinking…" }],
+      {
+        completedItems: 0,
+        blockedItems: 0,
+        remainingItems: 1,
+        waves: [],
+        activeWave: {
+          wave: 1,
+          totalItems: 1,
+          completedItems: 0,
+          errorCount: 0,
+          queuedFollowUps: 0,
+          activeItem: "Add semantic colors",
+        },
+      },
+      false,
+      currentEntry
+    );
+
+    const expanded = buildExecuteProgressWidgetLines(
+      ["inspect prompt"],
+      `Wave 1: Add semantic colors — ${longDetail}`,
+      [{ status: "Wave 1: Add semantic colors — thinking…" }],
+      {
+        completedItems: 0,
+        blockedItems: 0,
+        remainingItems: 1,
+        waves: [],
+        activeWave: {
+          wave: 1,
+          totalItems: 1,
+          completedItems: 0,
+          errorCount: 0,
+          queuedFollowUps: 0,
+          activeItem: "Add semantic colors",
+        },
+      },
+      true,
+      currentEntry
     );
 
     expect(collapsed).toContain("ctrl+o expand current detail");
@@ -313,6 +366,31 @@ describe("buildExecuteSummaryRenderText", () => {
     expect(text).not.toContain("job_123");
     expect(text).toContain("✓ inspect prompt — Summarized prompt role");
     expect(text).toContain("↵ expand for job ids, full summaries, files, and follow-ups");
+  });
+
+  it("keeps plan items containing em dashes intact in fallback current status rendering", () => {
+    const lines = buildExecuteProgressWidgetLines(
+      ["inspect prompt"],
+      "Wave 1: fix dark — light mode toggle — read done: opened theme.ts",
+      [],
+      {
+        completedItems: 0,
+        blockedItems: 0,
+        remainingItems: 1,
+        waves: [],
+        activeWave: {
+          wave: 1,
+          totalItems: 1,
+          completedItems: 0,
+          errorCount: 0,
+          queuedFollowUps: 0,
+          activeItem: "fix dark — light mode toggle",
+        },
+      }
+    );
+
+    expect(lines).toContain("• Wave 1: fix dark — light mode toggle");
+    expect(lines).toContain("  ↳ read done: opened theme.ts");
   });
 
   it("renders expanded sections and failures", () => {
