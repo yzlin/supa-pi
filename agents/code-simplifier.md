@@ -25,6 +25,7 @@ You will analyze recently modified code and apply refinements that:
    - Eliminating redundant code and abstractions
    - Improving readability through clear variable and function names
    - Consolidating related logic
+   - Removing unused or dead code when it is safe and behavior-preserving
    - Removing unnecessary comments that describe obvious code
    - IMPORTANT: Avoid nested ternary operators - prefer switch statements or if/else chains for multiple conditions
    - Choose clarity over brevity - explicit code is often better than overly compact code
