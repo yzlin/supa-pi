@@ -19,6 +19,9 @@ import {
   type ExecuteSummaryDetails,
 } from "./index";
 
+const LONG_PLAN_ITEM =
+  "Add a small light/dark semantic color variable set to src/global.css for Uniwind and map each token to existing values from src/libs/unistyles/themes/light.ts and src/libs/unistyles/themes/dark.ts.";
+
 describe("parsePlanItems", () => {
   it("parses numbered multiline plans", () => {
     expect(
@@ -169,6 +172,31 @@ describe("buildExecuteLiveStatus", () => {
       }),
     ).toContain("grep done: contexts/theme.tsx-25- UnistylesRuntime.setTheme(theme)");
   });
+
+  it("keeps long plan item labels intact before width-based rendering", () => {
+    expect(
+      buildExecuteLiveStatus(7, LONG_PLAN_ITEM, {
+        type: "assistant_text",
+        text: "thinking",
+      })
+    ).toBe(`Wave 7: ${LONG_PLAN_ITEM} — thinking…`);
+  });
+
+  it("still allows compact status history entries when an explicit item cap is provided", () => {
+    expect(
+      buildExecuteLiveStatus(
+        7,
+        LONG_PLAN_ITEM,
+        {
+          type: "assistant_text",
+          text: "thinking",
+        },
+        {
+          itemMaxLength: 24,
+        }
+      )
+    ).toBe("Wave 7: Add a small light/dark… — thinking…");
+  });
 });
 
 describe("buildExecuteProgressWidgetLines", () => {
@@ -231,6 +259,132 @@ describe("buildExecuteProgressWidgetLines", () => {
     expect(lines).toContain("Recent");
     expect(lines).toContain("• Wave 2: inspect prompt — thinking…");
     expect(lines).not.toContain("• Wave 2: inspect prompt — read done: opened extensions/execute/index.ts");
+  });
+
+  it("keeps long plan preview, active item, and current headline text intact", () => {
+    const lines = buildExecuteProgressWidgetLines(
+      [LONG_PLAN_ITEM, "short follow-up"],
+      `Wave 1: ${LONG_PLAN_ITEM} — thinking…`,
+      [{ status: `Wave 1: ${LONG_PLAN_ITEM} — thinking…` }],
+      {
+        completedItems: 0,
+        blockedItems: 0,
+        remainingItems: 2,
+        waves: [],
+        activeWave: {
+          wave: 1,
+          totalItems: 2,
+          completedItems: 0,
+          errorCount: 0,
+          queuedFollowUps: 0,
+          activeItem: LONG_PLAN_ITEM,
+        },
+      },
+      false,
+      {
+        headline: `Wave 1: ${LONG_PLAN_ITEM}`,
+        blockLabel: "thinking",
+        metadata: [],
+        detail: "Thinking…",
+        tone: "accent",
+      }
+    );
+
+    expect(lines[1]).toBe(`2 items — ${LONG_PLAN_ITEM}`);
+    expect(lines).toContain(`  active: ${LONG_PLAN_ITEM}`);
+    expect(lines).toContain(`• Wave 1: ${LONG_PLAN_ITEM}`);
+  });
+
+  it("truncates Recent lines to the actual render width instead of pre-truncating stored history", () => {
+    const recentStatus = `Wave 1: ${LONG_PLAN_ITEM} — read done: import { StyleSheet, UnistylesRuntime } from \"react-native-unistyles\";`;
+    const lines = buildExecuteProgressWidgetLines(
+      [LONG_PLAN_ITEM],
+      "Wave 1: inspect prompt — thinking…",
+      [
+        { status: "Executing 1 plan item(s)..." },
+        { status: recentStatus },
+      ],
+      {
+        completedItems: 0,
+        blockedItems: 0,
+        remainingItems: 1,
+        waves: [],
+        activeWave: {
+          wave: 1,
+          totalItems: 1,
+          completedItems: 0,
+          errorCount: 0,
+          queuedFollowUps: 0,
+          activeItem: LONG_PLAN_ITEM,
+        },
+      },
+      false,
+      undefined,
+      80
+    );
+
+    expect(lines).toContain("Recent");
+    expect(lines.some((line) => line.startsWith("• Wave 1: Add a small light/dark semantic color variable set"))).toBe(true);
+    expect(lines.some((line) => line.includes("…"))).toBe(true);
+    expect(lines).not.toContain(`• ${recentStatus}`);
+  });
+
+  it("omits repeated Recent item labels for consecutive updates from the same worker item", () => {
+    const firstStatus = `Wave 1: ${LONG_PLAN_ITEM} — read…`;
+    const secondStatus = `Wave 1: ${LONG_PLAN_ITEM} — read done: @import \"tailwindcss\"; @import \"uniwind\";`;
+    const thirdStatus = `Wave 1: ${LONG_PLAN_ITEM} — find done: No files found matching pattern`;
+    const lines = buildExecuteProgressWidgetLines(
+      [LONG_PLAN_ITEM],
+      "Wave 2: inspect prompt — thinking…",
+      [
+        {
+          status: firstStatus,
+          entry: {
+            headline: `Wave 1: ${LONG_PLAN_ITEM}`,
+            blockLabel: "tool call",
+            metadata: ["read"],
+            detail: null,
+            tone: "accent",
+          },
+        },
+        {
+          status: secondStatus,
+          entry: {
+            headline: `Wave 1: ${LONG_PLAN_ITEM}`,
+            blockLabel: "tool result",
+            metadata: ["read", "ok"],
+            detail: '@import "tailwindcss"; @import "uniwind";',
+            tone: "success",
+          },
+        },
+        {
+          status: thirdStatus,
+          entry: {
+            headline: `Wave 1: ${LONG_PLAN_ITEM}`,
+            blockLabel: "tool result",
+            metadata: ["find", "ok"],
+            detail: "No files found matching pattern",
+            tone: "success",
+          },
+        },
+      ],
+      {
+        completedItems: 0,
+        blockedItems: 0,
+        remainingItems: 1,
+        waves: [],
+      },
+      false,
+      undefined,
+      240
+    );
+
+    expect(lines).toContain("Recent");
+    expect(lines).toContain(`• ${firstStatus}`);
+    expect(lines).toContain('• read done: @import "tailwindcss"; @import "uniwind";');
+    expect(lines).toContain("• find done: No files found matching pattern");
+    expect(lines).not.toContain(`• ${secondStatus}`);
+    expect(lines).not.toContain(`• ${thirdStatus}`);
   });
 
   it("does not offer expansion when the structured current entry has no detail", () => {

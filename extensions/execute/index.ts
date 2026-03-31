@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import type { ExtensionAPI, ExtensionCommandContext } from "@mariozechner/pi-coding-agent";
-import { Box, Text, matchesKey } from "@mariozechner/pi-tui";
+import { Box, Text, matchesKey, truncateToWidth } from "@mariozechner/pi-tui";
 
 import { ensureRuntime } from "../../../pi-lcm/src/runtime.ts";
 import { buildMapTask, resolveMapAgent, runAgentTask, runLlmTask } from "../../../pi-lcm/src/map-runner.ts";
@@ -639,23 +639,25 @@ const collectExecuteJsonishFields = (value: string): string[] => {
   return matches;
 };
 
-const formatExecuteToolDetail = (toolName: string | undefined, detail: string, maxLength: number): string => {
-  const flattened = detail.replace(/\s+/g, " ").trim();
+const flattenInline = (value: string): string => value.replace(/\s+/g, " ").trim();
+
+const formatInlineLabel = (value: string, maxLength?: number): string => {
+  const flattened = flattenInline(value);
   if (!flattened) {
     return "";
   }
 
-  switch (toolName) {
-    case "bash":
-    case "read":
-    case "grep":
-      return truncateInline(flattened, maxLength);
-    case "edit":
-    case "write":
-      return truncateInline(flattened, Math.min(maxLength, 56));
-    default:
-      return truncateInline(flattened, maxLength);
+  return typeof maxLength === "number" ? truncateInline(flattened, maxLength) : flattened;
+};
+
+const formatExecuteToolDetail = (toolName: string | undefined, detail: string, maxLength: number): string => {
+  const flattened = flattenInline(detail);
+  if (!flattened) {
+    return "";
   }
+
+  const effectiveMaxLength = toolName === "edit" || toolName === "write" ? Math.min(maxLength, 56) : maxLength;
+  return truncateInline(flattened, effectiveMaxLength);
 };
 
 const formatExecuteProgressDetail = (
@@ -707,7 +709,7 @@ export const buildExecuteLiveStatus = (
   event: MapTaskProgressEvent,
   options: { itemMaxLength?: number; detailMaxLength?: number } = {}
 ): string => {
-  const itemLabel = truncateInline(item, options.itemMaxLength ?? 56);
+  const itemLabel = formatInlineLabel(item, options.itemMaxLength);
   const detailMaxLength = options.detailMaxLength ?? 72;
 
   switch (event.type) {
@@ -733,7 +735,7 @@ const buildExecuteLiveProgressEntry = (
   event: MapTaskProgressEvent,
   options: { itemMaxLength?: number; detailMaxLength?: number } = {}
 ): ExecuteProgressWidgetEntry => {
-  const headline = `Wave ${wave}: ${truncateInline(item, options.itemMaxLength ?? 120)}`;
+  const headline = `Wave ${wave}: ${formatInlineLabel(item, options.itemMaxLength)}`;
   const detailMaxLength = options.detailMaxLength ?? EXECUTE_PROGRESS_DETAIL_FULL_LENGTH;
 
   switch (event.type) {
@@ -785,11 +787,12 @@ const buildExecuteWidgetPreview = (planItems: string[]): string => {
     return "waiting for plan items";
   }
 
+  const firstItem = formatInlineLabel(planItems[0] ?? "");
   if (planItems.length === 1) {
-    return truncateInline(planItems[0] ?? "", 72);
+    return firstItem;
   }
 
-  return `${planItems.length} items — ${truncateInline(planItems[0] ?? "", 48)}`;
+  return `${planItems.length} items — ${firstItem}`;
 };
 
 interface ExecuteProgressRenderStyles {
@@ -865,17 +868,25 @@ const isExecuteCurrentStatusExpandable = (
   return Boolean(detail && detail.length > EXECUTE_PROGRESS_DETAIL_PREVIEW_LENGTH);
 };
 
+const getExecuteProgressDetailText = (detail: string | null | undefined, expanded: boolean): string | null => {
+  if (!detail) {
+    return null;
+  }
+
+  if (detail.length > EXECUTE_PROGRESS_DETAIL_PREVIEW_LENGTH && !expanded) {
+    return truncateInline(detail, EXECUTE_PROGRESS_DETAIL_PREVIEW_LENGTH);
+  }
+
+  return detail;
+};
+
 const appendExecuteProgressEntryLines = (
   lines: string[],
   entry: ExecuteProgressWidgetEntry,
   styles: ExecuteProgressRenderStyles,
   expanded = false
 ): void => {
-  const detailText = entry.detail
-    ? entry.detail.length > EXECUTE_PROGRESS_DETAIL_PREVIEW_LENGTH && !expanded
-      ? truncateInline(entry.detail, EXECUTE_PROGRESS_DETAIL_PREVIEW_LENGTH)
-      : entry.detail
-    : null;
+  const detailText = getExecuteProgressDetailText(entry.detail, expanded);
   const metadata = entry.metadata.length > 0 ? ` ${styles.dim(entry.metadata.join(" · "))}` : "";
 
   lines.push(`${styles.dim("•")} ${entry.headline}`);
@@ -903,12 +914,7 @@ const appendExecuteCurrentStatusLines = (
     appendExecuteProgressEntryLines(lines, currentEntry, styles, expanded);
   } else {
     const { headline, detail } = splitExecuteCurrentStatus(current);
-    const expandable = isExecuteCurrentStatusExpandable(current);
-    const detailText = detail
-      ? expandable && !expanded
-        ? truncateInline(detail, EXECUTE_PROGRESS_DETAIL_PREVIEW_LENGTH)
-        : detail
-      : null;
+    const detailText = getExecuteProgressDetailText(detail, expanded);
 
     lines.push(`${styles.dim("•")} ${headline}`);
 
@@ -922,6 +928,30 @@ const appendExecuteCurrentStatusLines = (
   }
 };
 
+const formatExecuteRecentHistoryStatus = (
+  entry: { status: string; entry?: ExecuteProgressWidgetEntry },
+  previousHeadline?: string
+): string => {
+  const headline = entry.entry?.headline?.trim();
+  if (!headline || previousHeadline !== headline) {
+    return entry.status;
+  }
+
+  const prefix = `${headline} — `;
+  return entry.status.startsWith(prefix) ? entry.status.slice(prefix.length).trim() : entry.status;
+};
+
+const formatExecuteRecentHistoryLine = (
+  entry: { status: string; entry?: ExecuteProgressWidgetEntry },
+  styles: ExecuteProgressRenderStyles,
+  renderWidth?: number,
+  previousHeadline?: string
+): string => {
+  const status = formatExecuteRecentHistoryStatus(entry, previousHeadline);
+  const line = `${styles.dim("•")} ${status}`;
+  return typeof renderWidth === "number" && Number.isFinite(renderWidth) ? truncateToWidth(line, renderWidth, "…") : line;
+};
+
 export const buildExecuteProgressWidgetRenderText = (
   planItems: string[],
   currentStatus: string,
@@ -929,7 +959,8 @@ export const buildExecuteProgressWidgetRenderText = (
   progress?: ExecuteProgressWidgetState,
   styles: ExecuteProgressRenderStyles = defaultExecuteProgressRenderStyles,
   expandedCurrentStatus = false,
-  currentEntry?: ExecuteProgressWidgetEntry
+  currentEntry?: ExecuteProgressWidgetEntry,
+  renderWidth?: number
 ): string => {
   const lines = [styles.accent("/execute"), styles.dim(buildExecuteWidgetPreview(planItems))];
 
@@ -959,7 +990,7 @@ export const buildExecuteProgressWidgetRenderText = (
         const isActiveWave = progress.activeWave?.wave === wave.wave;
         lines.push(formatExecuteWidgetWaveLine(wave, styles, isActiveWave));
         if (isActiveWave && progress.activeWave?.activeItem) {
-          lines.push(`  ${styles.dim("active:")} ${truncateInline(progress.activeWave.activeItem, 72)}`);
+          lines.push(`  ${styles.dim("active:")} ${formatInlineLabel(progress.activeWave.activeItem)}`);
         }
       }
     }
@@ -988,8 +1019,10 @@ export const buildExecuteProgressWidgetRenderText = (
     if (skipped > 0) {
       lines.push(styles.dim(`… ${skipped} earlier updates`));
     }
+    let previousRecentHeadline: string | undefined;
     for (const entry of visibleHistory) {
-      lines.push(`${styles.dim("•")} ${entry.status}`);
+      lines.push(formatExecuteRecentHistoryLine(entry, styles, renderWidth, previousRecentHeadline));
+      previousRecentHeadline = entry.entry?.headline?.trim() || undefined;
     }
   }
 
@@ -1002,7 +1035,8 @@ export const buildExecuteProgressWidgetLines = (
   history: Array<string | ExecuteProgressHistoryEntry>,
   progress?: ExecuteProgressWidgetState,
   expandedCurrentStatus = false,
-  currentEntry?: ExecuteProgressWidgetEntry
+  currentEntry?: ExecuteProgressWidgetEntry,
+  renderWidth?: number
 ): string[] =>
   buildExecuteProgressWidgetRenderText(
     planItems,
@@ -1011,7 +1045,8 @@ export const buildExecuteProgressWidgetLines = (
     progress,
     undefined,
     expandedCurrentStatus,
-    currentEntry
+    currentEntry,
+    renderWidth
   ).split("\n");
 
 class ExecuteProgressWidgetBody {
@@ -1036,7 +1071,8 @@ class ExecuteProgressWidgetBody {
         this.progress,
         this.styles,
         this.expandedCurrentStatus,
-        this.currentEntry
+        this.currentEntry,
+        width
       )
     );
     return this.text.render(width);
@@ -1385,7 +1421,7 @@ const defaultRenderStyles: ExecuteRenderStyles = {
 };
 
 const truncateInline = (value: string, maxLength: number): string => {
-  const flattened = value.replace(/\s+/g, " ").trim();
+  const flattened = flattenInline(value);
   if (flattened.length <= maxLength) {
     return flattened;
   }
@@ -1764,7 +1800,6 @@ export const executePlan = async (
             compactStatus,
             compactStatus,
             buildExecuteLiveProgressEntry(update.wave, update.item, update.event, {
-              itemMaxLength: 120,
               detailMaxLength: EXECUTE_PROGRESS_DETAIL_FULL_LENGTH,
             })
           );
