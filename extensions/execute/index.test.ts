@@ -4,7 +4,8 @@ import path from "node:path";
 import { describe, expect, it } from "bun:test";
 import initTasksExtension from "../../../pi-tasks/src/index";
 
-import {
+import executeExtension, {
+  buildExecuteCommandMessage,
   buildExecuteLiveStatus,
   buildExecuteProgressWidgetLines,
   buildExecuteSummaryRenderText,
@@ -680,6 +681,7 @@ function createMockCtx() {
     terminalInputHandlers,
     ctx: {
       cwd: process.cwd(),
+      isIdle: () => true,
       sessionManager: {
         getSessionId: () => "execute-test",
         getEntries: () => [],
@@ -732,10 +734,18 @@ function createMockCtx() {
 function createMockPiRuntime() {
   const lifecycleHandlers = new Map<string, Array<(...args: any[]) => unknown>>();
   const eventHandlers = new Map<string, Array<(data: unknown) => void>>();
+  const commands = new Map<string, { handler: (...args: any[]) => unknown }>();
+  const sentUserMessages: Array<{ content: unknown; options?: unknown }> = [];
 
   const pi = {
     registerTool() {},
-    registerCommand() {},
+    registerMessageRenderer() {},
+    registerCommand(name: string, options: { handler: (...args: any[]) => unknown }) {
+      commands.set(name, options);
+    },
+    sendUserMessage(content: unknown, options?: unknown) {
+      sentUserMessages.push({ content, options });
+    },
     on(event: string, handler: (...args: any[]) => unknown) {
       if (!lifecycleHandlers.has(event)) {
         lifecycleHandlers.set(event, []);
@@ -766,6 +776,8 @@ function createMockPiRuntime() {
 
   return {
     pi,
+    commands,
+    sentUserMessages,
     async fireLifecycle(event: string, ...args: any[]) {
       for (const handler of lifecycleHandlers.get(event) ?? []) {
         await handler(...args);
@@ -773,6 +785,75 @@ function createMockPiRuntime() {
     },
   };
 }
+
+describe("execute command", () => {
+  it("sends the orchestrator prompt immediately when idle", async () => {
+    const runtime = createMockPiRuntime();
+    const { ctx, notifications } = createMockCtx();
+
+    executeExtension(runtime.pi as never);
+    const handler = runtime.commands.get("execute")?.handler;
+
+    expect(handler).toBeDefined();
+    await handler?.("implement @plan.md", ctx as never);
+
+    expect(runtime.sentUserMessages).toEqual([
+      {
+        content: buildExecuteCommandMessage("implement @plan.md"),
+        options: undefined,
+      },
+    ]);
+    expect(runtime.sentUserMessages[0]?.content).toContain(
+      "Execute the requested plan in this session."
+    );
+    expect(runtime.sentUserMessages[0]?.content).toContain(
+      "Task: implement @plan.md"
+    );
+    expect(notifications).toEqual([]);
+  });
+
+  it("queues the orchestrator prompt as a follow-up when busy", async () => {
+    const runtime = createMockPiRuntime();
+    const { ctx, notifications } = createMockCtx();
+
+    executeExtension(runtime.pi as never);
+    const handler = runtime.commands.get("execute")?.handler;
+
+    expect(handler).toBeDefined();
+    await handler?.(
+      "implement @plan.md",
+      { ...ctx, isIdle: () => false } as never
+    );
+
+    expect(runtime.sentUserMessages).toEqual([
+      {
+        content: buildExecuteCommandMessage("implement @plan.md"),
+        options: { deliverAs: "followUp" },
+      },
+    ]);
+    expect(notifications).toContainEqual({
+      message: "Queued /execute as a follow-up",
+      level: "info",
+    });
+  });
+
+  it("warns when /execute is missing a plan", async () => {
+    const runtime = createMockPiRuntime();
+    const { ctx, notifications } = createMockCtx();
+
+    executeExtension(runtime.pi as never);
+    const handler = runtime.commands.get("execute")?.handler;
+
+    expect(handler).toBeDefined();
+    await handler?.("   ", ctx as never);
+
+    expect(runtime.sentUserMessages).toEqual([]);
+    expect(notifications).toContainEqual({
+      message: "Usage: /execute <plan>",
+      level: "warning",
+    });
+  });
+});
 
 describe("startExecutePlan", () => {
   it("launches execute work without awaiting completion", async () => {
