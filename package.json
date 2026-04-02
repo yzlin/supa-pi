@@ -18,6 +18,7 @@
       "./extensions/btw",
       "./extensions/ast-grep",
       "./extensions/pi-rtk",
+      "./extensions/init-deep",
       "./extensions/smart-docs",
       "./extensions/skills.ts"
     ]
