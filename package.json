@@ -11,6 +11,7 @@
       "./extensions/rules",
       "./extensions/plan",
       "./extensions/execute",
+      "./extensions/research",
       "./extensions/simplify",
       "./extensions/session-query.ts",
       "./extensions/handoff.ts",
