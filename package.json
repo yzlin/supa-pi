@@ -23,9 +23,7 @@
       "./extensions/skills.ts"
     ]
   },
-  "scripts": {
-    "smoke:execute": "bun ./scripts/execute-smoke.ts"
-  },
+  "scripts": {},
   "peerDependencies": {
     "@mariozechner/pi-coding-agent": "*",
     "@mariozechner/pi-ai": "*",
