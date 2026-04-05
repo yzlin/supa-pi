@@ -21,6 +21,7 @@
       "./extensions/pi-rtk",
       "./extensions/init-deep",
       "./extensions/smart-docs",
+      "./extensions/om",
       "./extensions/skills.ts"
     ]
   },
