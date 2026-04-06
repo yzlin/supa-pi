@@ -44,9 +44,11 @@ import {
   selectLatestOmObservationBufferForBranch,
   selectLatestOmReflectionBufferForBranch,
 } from "./restore";
+import { createOmStatusSnapshot, showOmStatusView } from "./status";
 import type {
   OmConfigInput,
   OmObservationBufferEnvelopeV1,
+  OmRecentEvent,
   OmReflectionBufferEnvelopeV1,
   OmStateV1,
 } from "./types";
@@ -145,6 +147,11 @@ export {
   OmStateEnvelopeV1Schema,
   OmStateV1Schema,
 } from "./schema";
+export {
+  createOmStatusSnapshot,
+  formatOmStatusSummary,
+  showOmStatusView,
+} from "./status";
 export type {
   OmActiveThread,
   OmBranchDelta,
@@ -161,6 +168,7 @@ export type {
   OmObserverResult,
   OmObserverWindow,
   OmPromptTurn,
+  OmRecentEvent,
   OmReflection,
   OmReflectionBuffer,
   OmReflectionBufferEnvelopeV1,
@@ -198,6 +206,12 @@ interface OmRestorePlanCacheContext {
 interface OmLifecycleContext extends OmRestorePlanCacheContext {
   model?: Parameters<typeof invokeOmObserver>[0]["model"];
   modelRegistry: Parameters<typeof invokeOmObserver>[0]["modelRegistry"];
+  ui?: {
+    notify(
+      message: string,
+      level?: "info" | "warning" | "error" | "success"
+    ): void;
+  };
 }
 
 interface OmRuntimeState {
@@ -207,6 +221,7 @@ interface OmRuntimeState {
   state: OmStateV1;
   pendingObservationBuffer: OmObservationBufferEnvelopeV1 | null;
   pendingReflectionBuffer: OmReflectionBufferEnvelopeV1 | null;
+  recentEvents: OmRecentEvent[];
 }
 
 interface OmCommandContext extends OmLifecycleContext {
@@ -218,6 +233,8 @@ interface OmCommandContext extends OmLifecycleContext {
   };
 }
 
+const OM_RECENT_EVENT_LIMIT = 8;
+
 function createOmInvokeContext(
   ctx: OmLifecycleContext
 ): Parameters<typeof invokeOmObserver>[0] {
@@ -225,6 +242,158 @@ function createOmInvokeContext(
     model: ctx.model,
     modelRegistry: ctx.modelRegistry,
   };
+}
+
+function appendOmRecentEvents(
+  currentEvents: readonly OmRecentEvent[],
+  nextEvents: readonly OmRecentEvent[]
+): OmRecentEvent[] {
+  return [...currentEvents, ...nextEvents].slice(-OM_RECENT_EVENT_LIMIT);
+}
+
+function pushOmRecentEvents(
+  runtimeState: OmRuntimeState,
+  nextEvents: readonly OmRecentEvent[]
+): OmRuntimeState {
+  if (nextEvents.length === 0) {
+    return runtimeState;
+  }
+
+  return {
+    ...runtimeState,
+    recentEvents: appendOmRecentEvents(runtimeState.recentEvents, nextEvents),
+  };
+}
+
+function pluralize(word: string, count: number): string {
+  return `${count} ${word}${count === 1 ? "" : "s"}`;
+}
+
+function joinOmDeltaParts(parts: string[]): string {
+  if (parts.length === 0) {
+    return "no durable memory";
+  }
+
+  return parts.join(", ");
+}
+
+function createOmEvent(input: {
+  createdAt: string;
+  level: OmRecentEvent["level"];
+  message: string;
+}): OmRecentEvent {
+  return {
+    createdAt: input.createdAt,
+    level: input.level,
+    message: input.message,
+  };
+}
+
+function createObserverAppliedEvent(
+  updatedAt: string,
+  observerResult: import("./types").OmObserverResult
+): OmRecentEvent {
+  const parts = [
+    observerResult.observations.length > 0
+      ? `+${pluralize("observation", observerResult.observations.length)}`
+      : null,
+    observerResult.stableFacts.length > 0
+      ? `+${pluralize("fact", observerResult.stableFacts.length)}`
+      : null,
+    observerResult.activeThreads.length > 0
+      ? `+${pluralize("thread", observerResult.activeThreads.length)}`
+      : null,
+  ].filter((value): value is string => Boolean(value));
+
+  return createOmEvent({
+    createdAt: updatedAt,
+    level: "success",
+    message: `OM observer applied: ${joinOmDeltaParts(parts)}.`,
+  });
+}
+
+function createObserverCursorAdvanceEvent(
+  updatedAt: string,
+  pendingEntryCount: number
+): OmRecentEvent {
+  return createOmEvent({
+    createdAt: updatedAt,
+    level: "info",
+    message: `OM advanced cursor across ${pluralize("pending entry", pendingEntryCount)}; no new durable memory.`,
+  });
+}
+
+function createObservationBufferEvent(
+  updatedAt: string,
+  sourceEntryCount: number
+): OmRecentEvent {
+  return createOmEvent({
+    createdAt: updatedAt,
+    level: "info",
+    message: `OM buffered observation work for ${pluralize("entry", sourceEntryCount)}.`,
+  });
+}
+
+function createObservationBufferActivationEvent(
+  updatedAt: string,
+  observerResult: import("./types").OmObserverResult
+): OmRecentEvent {
+  const appliedEvent = createObserverAppliedEvent(updatedAt, observerResult);
+  return {
+    ...appliedEvent,
+    message: appliedEvent.message.replace(
+      "OM observer applied",
+      "OM activated buffered observation"
+    ),
+  };
+}
+
+function createBufferSupersededEvent(
+  updatedAt: string,
+  kind: "observation" | "reflection"
+): OmRecentEvent {
+  return createOmEvent({
+    createdAt: updatedAt,
+    level: "warning",
+    message: `OM superseded stale ${kind} buffer.`,
+  });
+}
+
+function createReflectionBufferEvent(
+  updatedAt: string,
+  sourceObservationCount: number
+): OmRecentEvent {
+  return createOmEvent({
+    createdAt: updatedAt,
+    level: "info",
+    message: `OM buffered reflection work for ${pluralize("observation", sourceObservationCount)}.`,
+  });
+}
+
+function createReflectionAppliedEvent(
+  updatedAt: string,
+  observationCount: number,
+  reflectionCount: number,
+  prefix = "OM reflected"
+): OmRecentEvent {
+  return createOmEvent({
+    createdAt: updatedAt,
+    level: "success",
+    message: `${prefix} ${pluralize("observation", observationCount)} into ${pluralize("reflection", reflectionCount)}.`,
+  });
+}
+
+function notifyOmRecentEvents(
+  ctx: OmLifecycleContext,
+  recentEvents: readonly OmRecentEvent[]
+): void {
+  if (typeof ctx.ui?.notify !== "function") {
+    return;
+  }
+
+  for (const event of recentEvents) {
+    ctx.ui.notify(event.message, event.level);
+  }
 }
 
 export interface OmExtensionDeps {
@@ -271,7 +440,8 @@ function createOmRuntimeState(
   pendingObservationBuffer: OmObservationBufferEnvelopeV1 | null,
   pendingReflectionBuffer: OmReflectionBufferEnvelopeV1 | null,
   now: () => string,
-  config?: OmConfigInput | Record<string, unknown>
+  config?: OmConfigInput | Record<string, unknown>,
+  recentEvents: readonly OmRecentEvent[] = []
 ): OmRuntimeState {
   return {
     restorePlan,
@@ -283,6 +453,7 @@ function createOmRuntimeState(
       : createEmptyOmState(now, config),
     pendingObservationBuffer,
     pendingReflectionBuffer,
+    recentEvents: [...recentEvents],
   };
 }
 
@@ -334,7 +505,8 @@ export function createOmExtension(deps: OmExtensionDeps = {}) {
         selectLatestOmReflectionBufferForBranch(entries, branchEntries).match
           ?.envelope ?? null,
         now,
-        config
+        config,
+        runtimeState?.recentEvents ?? []
       );
       runtimeState = nextRuntimeState;
       return nextRuntimeState;
@@ -376,30 +548,29 @@ export function createOmExtension(deps: OmExtensionDeps = {}) {
       return refreshRuntimeState(ctx);
     };
 
-    const notifyStatus = (ctx: OmCommandContext): void => {
+    const notifyStatus = async (ctx: OmCommandContext): Promise<void> => {
       const currentRuntimeState = getRuntimeState(ctx);
-      const parts = [
-        `facts=${currentRuntimeState.state.stableFacts.length}`,
-        `threads=${currentRuntimeState.state.activeThreads.length}`,
-        `observations=${currentRuntimeState.state.observations.length}`,
-        `reflections=${currentRuntimeState.state.reflections.length}`,
-        `lastProcessed=${currentRuntimeState.state.lastProcessedEntryId ?? "none"}`,
-      ];
+      const snapshot = createOmStatusSnapshot({
+        state: currentRuntimeState.state,
+        branchEntries: ctx.sessionManager.getBranch(),
+        restorePlan: currentRuntimeState.restorePlan,
+        pendingObservationBuffer: currentRuntimeState.pendingObservationBuffer,
+        pendingReflectionBuffer: currentRuntimeState.pendingReflectionBuffer,
+        recentEvents: currentRuntimeState.recentEvents,
+      });
 
-      if (currentRuntimeState.restorePlan) {
-        parts.push(
-          `restore=${currentRuntimeState.restorePlan.mode}/${currentRuntimeState.restorePlan.reason}`
-        );
-      }
-
-      ctx.ui.notify(parts.join(" | "), "info");
+      await showOmStatusView(ctx, snapshot);
     };
 
     const runObserverAndReflector = async (
       ctx: OmLifecycleContext,
       currentRuntimeState: OmRuntimeState,
       options: { forceRebuild?: boolean } = {}
-    ): Promise<{ state: OmStateV1; shouldPersist: boolean }> => {
+    ): Promise<{
+      state: OmStateV1;
+      shouldPersist: boolean;
+      recentEvents: OmRecentEvent[];
+    }> => {
       const branchEntries = ctx.sessionManager.getBranch();
       const shouldRebuild =
         options.forceRebuild === true ||
@@ -436,6 +607,7 @@ export function createOmExtension(deps: OmExtensionDeps = {}) {
       let nextRuntimeState = currentRuntimeState;
       const updatedAt = now();
       const invokeContext = createOmInvokeContext(ctx);
+      const recentEvents: OmRecentEvent[] = [];
 
       if (
         !shouldRebuild &&
@@ -464,6 +636,12 @@ export function createOmExtension(deps: OmExtensionDeps = {}) {
                 updatedAt
               )
             );
+            recentEvents.push(
+              createObservationBufferEvent(
+                updatedAt,
+                observationBufferWindow.pendingEntryIds.length
+              )
+            );
           }
         }
       }
@@ -486,8 +664,18 @@ export function createOmExtension(deps: OmExtensionDeps = {}) {
             updatedAt
           )
         );
+        recentEvents.push(
+          createBufferSupersededEvent(updatedAt, "observation")
+        );
       }
 
+      const observerResult = shouldActivateObservationBuffer
+        ? (
+            nextRuntimeState.pendingObservationBuffer as OmObservationBufferEnvelopeV1
+          ).buffer.result
+        : window.status === "ready"
+          ? await invokeObserverFn(invokeContext, baseState, window)
+          : createEmptyOmObserverResult();
       const observerApplied = shouldActivateObservationBuffer
         ? applyOmObserverResult(
             baseState,
@@ -495,19 +683,10 @@ export function createOmExtension(deps: OmExtensionDeps = {}) {
               nextRuntimeState.pendingObservationBuffer as OmObservationBufferEnvelopeV1,
               window
             ),
-            (
-              nextRuntimeState.pendingObservationBuffer as OmObservationBufferEnvelopeV1
-            ).buffer.result,
+            observerResult,
             updatedAt
           )
-        : applyOmObserverResult(
-            baseState,
-            window,
-            window.status === "ready"
-              ? await invokeObserverFn(invokeContext, baseState, window)
-              : createEmptyOmObserverResult(),
-            updatedAt
-          );
+        : applyOmObserverResult(baseState, window, observerResult, updatedAt);
 
       if (shouldActivateObservationBuffer) {
         nextRuntimeState = persistObservationBuffer(
@@ -516,6 +695,23 @@ export function createOmExtension(deps: OmExtensionDeps = {}) {
             nextRuntimeState.pendingObservationBuffer as OmObservationBufferEnvelopeV1,
             "activated",
             updatedAt
+          )
+        );
+        recentEvents.push(
+          createObservationBufferActivationEvent(updatedAt, observerResult)
+        );
+      } else if (observerApplied.status === "applied") {
+        recentEvents.push(
+          createObserverAppliedEvent(updatedAt, observerResult)
+        );
+      } else if (
+        observerApplied.reason === "cursor-advanced" &&
+        window.pendingEntryIds.length > 0
+      ) {
+        recentEvents.push(
+          createObserverCursorAdvanceEvent(
+            updatedAt,
+            window.pendingEntryIds.length
           )
         );
       }
@@ -546,6 +742,12 @@ export function createOmExtension(deps: OmExtensionDeps = {}) {
                 updatedAt
               )
             );
+            recentEvents.push(
+              createReflectionBufferEvent(
+                updatedAt,
+                reflectionBufferWindow.observationsToReflect.length
+              )
+            );
           }
         }
       }
@@ -567,8 +769,20 @@ export function createOmExtension(deps: OmExtensionDeps = {}) {
             updatedAt
           )
         );
+        recentEvents.push(createBufferSupersededEvent(updatedAt, "reflection"));
       }
 
+      const reflectorResult = shouldActivateReflectionBuffer
+        ? (
+            nextRuntimeState.pendingReflectionBuffer as OmReflectionBufferEnvelopeV1
+          ).buffer.result
+        : reflectorWindow.status === "ready"
+          ? await invokeReflectorFn(
+              invokeContext,
+              observerApplied.state,
+              reflectorWindow
+            )
+          : createEmptyOmReflectorResult();
       const reflectorApplied = shouldActivateReflectionBuffer
         ? applyOmReflectorResult(
             observerApplied.state,
@@ -576,25 +790,23 @@ export function createOmExtension(deps: OmExtensionDeps = {}) {
               observerApplied.state,
               nextRuntimeState.pendingReflectionBuffer as OmReflectionBufferEnvelopeV1
             ),
-            (
-              nextRuntimeState.pendingReflectionBuffer as OmReflectionBufferEnvelopeV1
-            ).buffer.result,
+            reflectorResult,
             updatedAt
           )
         : applyOmReflectorResult(
             observerApplied.state,
             reflectorWindow,
-            reflectorWindow.status === "ready"
-              ? await invokeReflectorFn(
-                  invokeContext,
-                  observerApplied.state,
-                  reflectorWindow
-                )
-              : createEmptyOmReflectorResult(),
+            reflectorResult,
             updatedAt
           );
 
       if (shouldActivateReflectionBuffer) {
+        const activatedReflectionObservationCount =
+          createOmReflectionActivationWindow(
+            observerApplied.state,
+            nextRuntimeState.pendingReflectionBuffer as OmReflectionBufferEnvelopeV1
+          ).observationsToReflect.length;
+
         nextRuntimeState = persistReflectionBuffer(
           ctx,
           updateOmReflectionBufferStatus(
@@ -603,12 +815,29 @@ export function createOmExtension(deps: OmExtensionDeps = {}) {
             updatedAt
           )
         );
+        recentEvents.push(
+          createReflectionAppliedEvent(
+            updatedAt,
+            activatedReflectionObservationCount,
+            reflectorResult.reflections.length,
+            "OM activated buffered reflection"
+          )
+        );
+      } else if (reflectorApplied.status === "applied") {
+        recentEvents.push(
+          createReflectionAppliedEvent(
+            updatedAt,
+            reflectorWindow.observationsToReflect.length,
+            reflectorResult.reflections.length
+          )
+        );
       }
 
       return {
         state: reflectorApplied.state,
         shouldPersist:
           observerApplied.shouldPersist || reflectorApplied.shouldPersist,
+        recentEvents,
       };
     };
 
@@ -625,10 +854,15 @@ export function createOmExtension(deps: OmExtensionDeps = {}) {
         state: nextRuntimeState.state,
         pendingObservationBuffer: null,
         pendingReflectionBuffer: null,
+        recentEvents: appendOmRecentEvents(
+          currentRuntimeState.recentEvents,
+          nextRuntimeState.recentEvents
+        ),
       };
 
       if (nextRuntimeState.shouldPersist) {
         persistRuntimeState(ctx, nextRuntimeState.state);
+        notifyOmRecentEvents(ctx, nextRuntimeState.recentEvents);
         ctx.ui.notify("Observational memory rebuilt.", "success");
         return;
       }
@@ -641,7 +875,8 @@ export function createOmExtension(deps: OmExtensionDeps = {}) {
 
     pi.registerCommand("om-status", {
       description: "Show observational memory status",
-      handler: async (_args, ctx) => notifyStatus(ctx as OmCommandContext),
+      handler: async (_args, ctx) =>
+        await notifyStatus(ctx as OmCommandContext),
     });
 
     pi.registerCommand("om-clear", {
@@ -721,11 +956,19 @@ export function createOmExtension(deps: OmExtensionDeps = {}) {
       );
 
       if (!nextRuntimeState.shouldPersist) {
-        refreshRuntimeState(ctx);
+        runtimeState = pushOmRecentEvents(
+          refreshRuntimeState(ctx),
+          nextRuntimeState.recentEvents
+        );
+        notifyOmRecentEvents(ctx, nextRuntimeState.recentEvents);
         return;
       }
 
-      persistRuntimeState(ctx, nextRuntimeState.state);
+      runtimeState = pushOmRecentEvents(
+        persistRuntimeState(ctx, nextRuntimeState.state),
+        nextRuntimeState.recentEvents
+      );
+      notifyOmRecentEvents(ctx, nextRuntimeState.recentEvents);
     });
   };
 }

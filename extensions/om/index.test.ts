@@ -7,6 +7,7 @@ import omExtension, {
   createOmExtension,
   createOmRestorePlanCache,
 } from "./index";
+import { createOmStatusSnapshot, formatOmStatusSummary } from "./status";
 import { estimateOmObservationTokens, estimateOmTurnTokens } from "./tokens";
 import type { OmStateV1 } from "./types";
 import {
@@ -531,7 +532,7 @@ describe("om compaction hook wiring", () => {
 });
 
 describe("om admin commands", () => {
-  it("reports runtime counts through /om-status", async () => {
+  it("reports runtime counts and buffer load through /om-status", async () => {
     const persistedEnvelope = createOmStateEnvelope(
       createSampleState({
         observations: [
@@ -571,19 +572,90 @@ describe("om admin commands", () => {
       }),
       createOmBranchScope([{ id: "entry-1" }, { id: "om-state" }])
     );
+    const observationBuffer = {
+      version: OM_STATE_VERSION,
+      branchScope: createOmBranchScope([
+        { id: "entry-1" },
+        { id: "om-state" },
+        { id: "entry-2" },
+        { id: "obs-buffer-entry" },
+      ]),
+      buffer: {
+        id: "obs-buffer-entry",
+        kind: "observation" as const,
+        status: "pending" as const,
+        cursorId: "entry-1",
+        cursorAdvanceEntryId: "entry-2",
+        sourceEntryIds: ["entry-2"],
+        messageTokens: 123,
+        result: createEmptyOmObserverResult(),
+        createdAt: "2026-04-04T00:00:00.000Z",
+        updatedAt: "2026-04-04T00:00:00.000Z",
+      },
+    };
+    const reflectionBuffer = {
+      version: OM_STATE_VERSION,
+      branchScope: {
+        leafId: "entry-1",
+        entryIds: [],
+        lastEntryId: "entry-1",
+      },
+      buffer: {
+        id: "refl-buffer-entry",
+        kind: "reflection" as const,
+        status: "pending" as const,
+        sourceObservationIds: ["obs-1"],
+        observationTokens: 77,
+        result: { reflections: [] },
+        createdAt: "2026-04-04T00:00:00.000Z",
+        updatedAt: "2026-04-04T00:00:00.000Z",
+      },
+    };
     const harness = createOmHarness({
       entries: [
-        { id: "entry-1", type: "message" },
+        createMessageEntry("entry-1", "user", "Start OM."),
         {
           id: "om-state",
           type: "custom",
           customType: OM_STATE_CUSTOM_TYPE,
           data: persistedEnvelope,
         },
+        createMessageEntry(
+          "entry-2",
+          "assistant",
+          "A pending response for buffering."
+        ),
+        {
+          id: "obs-buffer-entry",
+          type: "custom",
+          customType: OM_OBSERVATION_BUFFER_CUSTOM_TYPE,
+          data: { buffer: observationBuffer.buffer },
+        },
+        {
+          id: "refl-buffer-entry",
+          type: "custom",
+          customType: OM_REFLECTION_BUFFER_CUSTOM_TYPE,
+          data: { buffer: reflectionBuffer.buffer },
+        },
       ],
       branchEntries: [
-        { id: "entry-1", type: "message" },
+        createMessageEntry("entry-1", "user", "Start OM."),
         { id: "om-state", type: "custom", customType: OM_STATE_CUSTOM_TYPE },
+        createMessageEntry(
+          "entry-2",
+          "assistant",
+          "A pending response for buffering."
+        ),
+        {
+          id: "obs-buffer-entry",
+          type: "custom",
+          customType: OM_OBSERVATION_BUFFER_CUSTOM_TYPE,
+        },
+        {
+          id: "refl-buffer-entry",
+          type: "custom",
+          customType: OM_REFLECTION_BUFFER_CUSTOM_TYPE,
+        },
       ],
     });
 
@@ -594,6 +666,185 @@ describe("om admin commands", () => {
     expect(harness.notifications.at(-1)?.message).toContain("threads=1");
     expect(harness.notifications.at(-1)?.message).toContain("observations=1");
     expect(harness.notifications.at(-1)?.message).toContain("reflections=1");
+    expect(harness.notifications.at(-1)?.message).toContain("obsBuffer=123/");
+    expect(harness.notifications.at(-1)?.message).toContain("reflBuffer=77/");
+  });
+
+  it("reports recent OM activity after observer and reflector work", async () => {
+    const persistedEnvelope = createOmStateEnvelope(
+      createSampleState({
+        observations: [
+          {
+            id: "obs-0",
+            kind: "fact",
+            summary: "Older note to make reflection eligible.",
+            sourceEntryIds: ["entry-1"],
+            createdAt: "2026-04-04T00:00:00.000Z",
+          },
+        ],
+        configSnapshot: {
+          ...DEFAULT_OM_CONFIG_SNAPSHOT,
+          observation: {
+            ...DEFAULT_OM_CONFIG_SNAPSHOT.observation,
+            messageTokens: 1,
+          },
+          reflection: {
+            ...DEFAULT_OM_CONFIG_SNAPSHOT.reflection,
+            observationTokens: 1,
+          },
+          observationMessageTokens: 1,
+          reflectionObservationTokens: 1,
+        },
+      }),
+      createOmBranchScope([{ id: "entry-1" }, { id: "om-state" }])
+    );
+    const harness = createOmHarness(
+      {
+        entries: [
+          createMessageEntry("entry-1", "user", "Already processed."),
+          {
+            id: "om-state",
+            type: "custom",
+            customType: OM_STATE_CUSTOM_TYPE,
+            data: persistedEnvelope,
+          },
+          createMessageEntry("entry-2", "assistant", "Do the next thing."),
+        ],
+        branchEntries: [
+          createMessageEntry("entry-1", "user", "Already processed."),
+          { id: "om-state", type: "custom", customType: OM_STATE_CUSTOM_TYPE },
+          createMessageEntry("entry-2", "assistant", "Do the next thing."),
+        ],
+      },
+      {
+        invokeObserverFn: async () => ({
+          observations: [
+            {
+              kind: "decision",
+              summary: "User asked for the next thing.",
+            },
+          ],
+          stableFacts: [
+            {
+              id: "fact-next-step",
+              text: "User wants the next action.",
+            },
+          ],
+          activeThreads: [],
+        }),
+        invokeReflectorFn: async () => ({
+          reflections: [
+            {
+              summary: "Condensed observer note.",
+            },
+          ],
+        }),
+      }
+    );
+
+    harness.sessionStart?.({}, harness.ctx);
+    await harness.turnEnd?.({}, harness.ctx);
+    await harness.commands.get("om-status")?.handler("", harness.ctx);
+
+    expect(harness.notifications).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          message: "OM observer applied: +1 observation, +1 fact.",
+          level: "success",
+        }),
+        expect.objectContaining({
+          message: "OM reflected 1 observation into 1 reflection.",
+          level: "success",
+        }),
+      ])
+    );
+    expect(harness.notifications.at(-1)?.message).toContain("events=2");
+    expect(harness.notifications.at(-1)?.message).toContain(
+      "lastEvent=OM reflected 1 observation into 1 reflection."
+    );
+  });
+
+  it("builds a detailed status snapshot", () => {
+    const branchEntries = [
+      createMessageEntry("entry-1", "user", "Initial request."),
+      createMessageEntry("entry-2", "assistant", "Pending follow-up."),
+    ];
+    const snapshot = createOmStatusSnapshot({
+      state: createSampleState({
+        lastProcessedEntryId: "entry-1",
+        observations: [
+          {
+            id: "obs-1",
+            kind: "fact",
+            summary: "Recent note.",
+            sourceEntryIds: ["entry-1"],
+            createdAt: "2026-04-04T00:00:00.000Z",
+          },
+        ],
+        reflections: [],
+        configSnapshot: {
+          ...DEFAULT_OM_CONFIG_SNAPSHOT,
+          observation: {
+            ...DEFAULT_OM_CONFIG_SNAPSHOT.observation,
+            messageTokens: 200,
+            bufferTokens: 0.5,
+          },
+          reflection: {
+            ...DEFAULT_OM_CONFIG_SNAPSHOT.reflection,
+            observationTokens: 100,
+            bufferActivation: 0.25,
+          },
+        },
+      }),
+      branchEntries,
+      restorePlan: null,
+      pendingObservationBuffer: {
+        version: OM_STATE_VERSION,
+        branchScope: createOmBranchScope(branchEntries),
+        buffer: {
+          id: "obs-buffer-1",
+          kind: "observation",
+          status: "pending",
+          cursorId: "entry-1",
+          cursorAdvanceEntryId: "entry-2",
+          sourceEntryIds: ["entry-2"],
+          messageTokens: 40,
+          result: createEmptyOmObserverResult(),
+          createdAt: "2026-04-04T00:00:00.000Z",
+          updatedAt: "2026-04-04T00:00:00.000Z",
+        },
+      },
+      pendingReflectionBuffer: {
+        version: OM_STATE_VERSION,
+        branchScope: {
+          leafId: "entry-1",
+          entryIds: [],
+          lastEntryId: "entry-1",
+        },
+        buffer: {
+          id: "refl-buffer-1",
+          kind: "reflection",
+          status: "pending",
+          sourceObservationIds: ["obs-1"],
+          observationTokens: 25,
+          result: { reflections: [] },
+          createdAt: "2026-04-04T00:00:00.000Z",
+          updatedAt: "2026-04-04T00:00:00.000Z",
+        },
+      },
+    });
+
+    expect(snapshot.observer.pendingEntryCount).toBe(1);
+    expect(snapshot.observer.bufferThresholdTokens).toBe(100);
+    expect(snapshot.observer.bufferStatus).toBe("pending");
+    expect(snapshot.reflector.bufferThresholdTokens).toBe(25);
+    expect(snapshot.reflector.bufferStatus).toBe("pending");
+    expect(formatOmStatusSummary(snapshot)).toContain(
+      "obsBuffer=40/100 pending"
+    );
+    expect(formatOmStatusSummary(snapshot)).toContain(
+      "reflBuffer=25/25 pending"
+    );
   });
 
   it("clears persisted OM state through /om-clear", async () => {

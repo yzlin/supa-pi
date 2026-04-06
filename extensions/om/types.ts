@@ -94,6 +94,12 @@ export interface OmStateV1 {
   updatedAt: string;
 }
 
+export interface OmRecentEvent {
+  createdAt: string;
+  level: "info" | "warning" | "error" | "success";
+  message: string;
+}
+
 export interface OmStateEnvelopeV1 {
   version: OmStateVersion;
   branchScope: OmBranchScope;
