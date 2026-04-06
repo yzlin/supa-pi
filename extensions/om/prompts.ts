@@ -35,12 +35,17 @@ function renderTurnList(turns: OmPromptTurn[]): string[] {
 }
 
 function renderContinuationList(input: OmHeaderInput): string[] {
-  return [
-    input.currentTask ? `- Current task: ${input.currentTask}` : null,
-    input.suggestedNextResponse
-      ? `- Suggested next response: ${input.suggestedNextResponse}`
-      : null,
-  ].filter((line): line is string => Boolean(line));
+  const lines: string[] = [];
+
+  if (input.currentTask) {
+    lines.push(`- Current task: ${input.currentTask}`);
+  }
+
+  if (input.suggestedNextResponse) {
+    lines.push(`- Suggested next response: ${input.suggestedNextResponse}`);
+  }
+
+  return lines;
 }
 
 function renderObservationList(observations: OmObservation[]): string[] {

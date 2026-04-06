@@ -251,26 +251,22 @@ function formatAttachmentPlaceholder(
 
 function extractContentPartText(part: unknown): string {
   const record = asRecord(part);
-  const type = normalizeText(record.type);
 
-  if (type === "text") {
-    return normalizeText(record.text);
+  switch (normalizeText(record.type)) {
+    case "text":
+      return normalizeText(record.text);
+    case "tool-call":
+    case "toolCall": {
+      const name = normalizeText(record.name);
+      return name ? `tool call: ${name}` : "";
+    }
+    case "image":
+      return formatAttachmentPlaceholder("Image", record);
+    case "file":
+      return formatAttachmentPlaceholder("File", record);
+    default:
+      return "";
   }
-
-  if (type === "tool-call" || type === "toolCall") {
-    const name = normalizeText(record.name);
-    return name ? `tool call: ${name}` : "";
-  }
-
-  if (type === "image") {
-    return formatAttachmentPlaceholder("Image", record);
-  }
-
-  if (type === "file") {
-    return formatAttachmentPlaceholder("File", record);
-  }
-
-  return "";
 }
 
 function extractTextParts(content: unknown): string[] {
@@ -280,8 +276,8 @@ function extractTextParts(content: unknown): string[] {
   }
 
   if (!Array.isArray(content)) {
-    const text =
-      extractContentPartText(content) || normalizeText(asRecord(content).text);
+    const partText = extractContentPartText(content);
+    const text = partText || normalizeText(asRecord(content).text);
     return text ? [text] : [];
   }
 
@@ -930,24 +926,24 @@ function applyOmContinuationHints(
   suggestedNextResponse?: string;
   hasContinuationUpdates: boolean;
 } {
+  const nextCurrentTask = normalizeContinuationHint(observerResult.currentTask);
+  const nextSuggestedNextResponse = normalizeContinuationHint(
+    observerResult.suggestedNextResponse
+  );
   const currentTask =
     observerResult.currentTask === undefined
       ? state.currentTask
-      : (normalizeContinuationHint(observerResult.currentTask) ??
-        state.currentTask);
+      : (nextCurrentTask ?? state.currentTask);
   const suggestedNextResponse =
     observerResult.suggestedNextResponse === undefined
       ? state.suggestedNextResponse
-      : (normalizeContinuationHint(observerResult.suggestedNextResponse) ??
-        state.suggestedNextResponse);
+      : (nextSuggestedNextResponse ?? state.suggestedNextResponse);
 
   return {
     ...(currentTask ? { currentTask } : {}),
     ...(suggestedNextResponse ? { suggestedNextResponse } : {}),
     hasContinuationUpdates:
-      normalizeContinuationHint(observerResult.currentTask) !== undefined ||
-      normalizeContinuationHint(observerResult.suggestedNextResponse) !==
-        undefined,
+      nextCurrentTask !== undefined || nextSuggestedNextResponse !== undefined,
   };
 }
 

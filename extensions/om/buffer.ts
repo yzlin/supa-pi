@@ -405,27 +405,30 @@ export function canActivateOmObservationBuffer(
     return false;
   }
 
+  const { buffer } = envelope;
+
   return (
-    envelope.buffer.status === "pending" &&
-    envelope.buffer.cursorId === state.lastProcessedEntryId &&
-    envelope.buffer.sourceEntryIds.length > 0 &&
-    envelope.buffer.sourceEntryIds.every(
+    buffer.status === "pending" &&
+    buffer.cursorId === state.lastProcessedEntryId &&
+    buffer.sourceEntryIds.length > 0 &&
+    buffer.sourceEntryIds.every(
       (entryId, index) => window.pendingEntryIds[index] === entryId
     )
   );
 }
 
 export function createOmObservationActivationWindow(
-  buffer: OmObservationBufferEnvelopeV1,
+  bufferEnvelope: OmObservationBufferEnvelopeV1,
   window: OmObserverWindow
 ): OmObserverWindow {
+  const { buffer } = bufferEnvelope;
+  const sourceEntryIds = new Set(buffer.sourceEntryIds);
+
   return {
     ...window,
-    pendingEntryIds: [...buffer.buffer.sourceEntryIds],
-    newTurns: window.newTurns.filter((turn) =>
-      buffer.buffer.sourceEntryIds.includes(turn.id)
-    ),
-    cursorAdvanceEntryId: buffer.buffer.cursorAdvanceEntryId,
+    pendingEntryIds: [...buffer.sourceEntryIds],
+    newTurns: window.newTurns.filter((turn) => sourceEntryIds.has(turn.id)),
+    cursorAdvanceEntryId: buffer.cursorAdvanceEntryId,
   };
 }
 
