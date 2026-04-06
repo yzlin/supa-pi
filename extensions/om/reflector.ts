@@ -53,7 +53,7 @@ export interface OmReflectorInvokeOptions {
   signal?: AbortSignal;
   completeFn?: (
     model: OmReflectorModel,
-    context: { messages: UserMessage[] },
+    context: { messages: UserMessage[]; systemPrompt?: string },
     options?: {
       apiKey?: string;
       headers?: Record<string, string>;
@@ -61,6 +61,9 @@ export interface OmReflectorInvokeOptions {
     }
   ) => Promise<AssistantMessage>;
 }
+
+const OM_REFLECTOR_SYSTEM_PROMPT =
+  "You are the observational memory reflector for pi. Follow the user prompt exactly and return strict JSON only.";
 
 const OM_REFLECTOR_MODEL_FALLBACKS = [
   ["anthropic", "claude-haiku-4-5"],
@@ -271,6 +274,7 @@ export async function invokeOmReflector(
     const response = await runComplete(
       model,
       {
+        systemPrompt: OM_REFLECTOR_SYSTEM_PROMPT,
         messages: [
           {
             role: "user",

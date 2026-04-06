@@ -53,7 +53,7 @@ export interface OmCompactionOptions {
   signal?: AbortSignal;
   completeFn?: (
     model: OmCompactionModel,
-    context: { messages: UserMessage[] },
+    context: { messages: UserMessage[]; systemPrompt?: string },
     options?: {
       apiKey?: string;
       headers?: Record<string, string>;
@@ -61,6 +61,9 @@ export interface OmCompactionOptions {
     }
   ) => Promise<AssistantMessage>;
 }
+
+const OM_COMPACTION_SYSTEM_PROMPT =
+  "You are updating a running pi compaction summary. Follow the user prompt exactly and return concise markdown only.";
 
 const OM_COMPACTION_MODEL_FALLBACKS = [
   ["google", "gemini-2.5-flash"],
@@ -152,6 +155,7 @@ export async function generateOmCompactionSummary(
     const response = await runComplete(
       model,
       {
+        systemPrompt: OM_COMPACTION_SYSTEM_PROMPT,
         messages: [
           {
             role: "user",

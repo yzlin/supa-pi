@@ -20,6 +20,7 @@ import {
 import type {
   OmActiveThread,
   OmObserverApplyResult,
+  OmObserverDiagnostic,
   OmObserverPromptInput,
   OmObserverResult,
   OmObserverWindow,
@@ -94,14 +95,18 @@ export interface OmObserverInvokeOptions {
   signal?: AbortSignal;
   completeFn?: (
     model: OmObserverModel,
-    context: { messages: UserMessage[] },
+    context: { messages: UserMessage[]; systemPrompt?: string },
     options?: {
       apiKey?: string;
       headers?: Record<string, string>;
       signal?: AbortSignal;
     }
   ) => Promise<AssistantMessage>;
+  onDiagnostic?: (diagnostic: OmObserverDiagnostic) => void;
 }
+
+const OM_OBSERVER_SYSTEM_PROMPT =
+  "You are the observational memory observer for pi. Follow the user prompt exactly and return strict JSON only.";
 
 const OM_OBSERVER_MODEL_FALLBACKS = [
   ["anthropic", "claude-haiku-4-5"],
@@ -127,14 +132,62 @@ function resolveOmObserverModel(
   return null;
 }
 
-function extractAssistantTextContent(message: AssistantMessage): string {
-  return message.content
-    .filter(
-      (part): part is { type: "text"; text: string } => part.type === "text"
-    )
+function formatOmObserverModelLabel(model: OmObserverModel): string {
+  return `${model.provider}/${model.id}`;
+}
+
+function buildOmTextPreview(text: string, maxChars = 240): string | undefined {
+  const normalized = text.replace(/\s+/g, " ").trim();
+
+  if (!normalized) {
+    return undefined;
+  }
+
+  if (normalized.length <= maxChars) {
+    return normalized;
+  }
+
+  return `${normalized.slice(0, maxChars - 3)}...`;
+}
+
+function summarizeAssistantResponse(
+  message: AssistantMessage,
+  model: OmObserverModel
+): {
+  text: string;
+  meta: OmObserverDiagnostic["meta"];
+} {
+  const content = Array.isArray(message.content) ? message.content : [];
+  const textParts = content.filter(
+    (part): part is { type: "text"; text: string } => part.type === "text"
+  );
+  const text = textParts
     .map((part) => part.text)
     .join("\n")
     .trim();
+  const contentTypes = [
+    ...new Set(
+      content.map((part) => normalizeText(asRecord(part).type) || "unknown")
+    ),
+  ];
+
+  return {
+    text,
+    meta: {
+      model: formatOmObserverModelLabel(model),
+      stopReason:
+        typeof message.stopReason === "string" ? message.stopReason : null,
+      errorMessage:
+        typeof message.errorMessage === "string"
+          ? normalizeText(message.errorMessage)
+          : undefined,
+      textPreview: buildOmTextPreview(text),
+      contentPartCount: content.length,
+      textPartCount: textParts.length,
+      textCharCount: text.length,
+      contentTypes,
+    },
+  };
 }
 
 function asRecord(value: unknown): Record<string, unknown> {
@@ -450,6 +503,179 @@ export function createEmptyOmObserverResult(): OmObserverResult {
   };
 }
 
+function emitOmObserverDiagnostic(
+  options: OmObserverInvokeOptions,
+  code: OmObserverDiagnostic["code"],
+  meta?: OmObserverDiagnostic["meta"]
+): void {
+  options.onDiagnostic?.({
+    code,
+    ...(meta ? { meta } : {}),
+  });
+}
+
+function extractFencedJsonBlock(text: string): string | null {
+  const fenceMatch = text.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
+
+  if (!fenceMatch) {
+    return null;
+  }
+
+  const fencedText = fenceMatch[1]?.trim();
+  return fencedText ? fencedText : null;
+}
+
+function unwrapJsonStringValue(value: unknown, maxDepth = 2): unknown {
+  let current = value;
+
+  for (
+    let depth = 0;
+    depth < maxDepth && typeof current === "string";
+    depth += 1
+  ) {
+    const trimmed = current.trim();
+
+    if (!trimmed) {
+      return trimmed;
+    }
+
+    try {
+      current = JSON.parse(trimmed) as unknown;
+    } catch {
+      return current;
+    }
+  }
+
+  return current;
+}
+
+function normalizeOmObserverResultCandidate(value: unknown): {
+  result: OmObserverResult | null;
+  missingTopLevelKeys?: string[];
+  parsedTopLevelKeys?: string[];
+} {
+  const unwrappedValue = unwrapJsonStringValue(value);
+
+  if (isOmObserverResult(unwrappedValue)) {
+    return {
+      result: structuredClone(unwrappedValue),
+      missingTopLevelKeys: [],
+      parsedTopLevelKeys: Object.keys(asRecord(unwrappedValue)),
+    };
+  }
+
+  const record = asRecord(unwrappedValue);
+  const parsedTopLevelKeys = Object.keys(record);
+
+  if (parsedTopLevelKeys.length === 0) {
+    return {
+      result: null,
+    };
+  }
+
+  const requiredTopLevelKeys = [
+    "observations",
+    "stableFacts",
+    "activeThreads",
+  ] as const;
+  const missingTopLevelKeys = requiredTopLevelKeys.filter(
+    (key) => !(key in record)
+  );
+  const normalizedValue = {
+    observations:
+      "observations" in record ? record.observations : ([] as unknown[]),
+    stableFacts:
+      "stableFacts" in record ? record.stableFacts : ([] as unknown[]),
+    activeThreads:
+      "activeThreads" in record ? record.activeThreads : ([] as unknown[]),
+  } satisfies Record<(typeof requiredTopLevelKeys)[number], unknown>;
+
+  if (!isOmObserverResult(normalizedValue)) {
+    return {
+      result: null,
+      missingTopLevelKeys,
+      parsedTopLevelKeys,
+    };
+  }
+
+  return {
+    result: normalizedValue,
+    missingTopLevelKeys,
+    parsedTopLevelKeys,
+  };
+}
+
+function parseOmObserverResultPayload(text: unknown): {
+  result: OmObserverResult;
+  diagnosticCode: OmObserverDiagnostic["code"] | null;
+  diagnosticMeta?: OmObserverDiagnostic["meta"];
+} {
+  const normalizedInput = normalizeOmObserverResultCandidate(text);
+
+  if (normalizedInput.result) {
+    return {
+      result: normalizedInput.result,
+      diagnosticCode: null,
+    };
+  }
+
+  if (typeof text !== "string") {
+    return {
+      result: createEmptyOmObserverResult(),
+      diagnosticCode: "empty-output",
+    };
+  }
+
+  const trimmedText = text.trim();
+  if (!trimmedText) {
+    return {
+      result: createEmptyOmObserverResult(),
+      diagnosticCode: "empty-output",
+    };
+  }
+
+  const jsonCandidates = [
+    extractFencedJsonBlock(trimmedText),
+    trimmedText,
+  ].filter(
+    (candidate, index, candidates): candidate is string =>
+      Boolean(candidate) && candidates.indexOf(candidate) === index
+  );
+
+  for (const jsonCandidate of jsonCandidates) {
+    try {
+      const parsedValue = JSON.parse(jsonCandidate) as unknown;
+      const normalizedCandidate =
+        normalizeOmObserverResultCandidate(parsedValue);
+
+      if (normalizedCandidate.result) {
+        return {
+          result: normalizedCandidate.result,
+          diagnosticCode: null,
+        };
+      }
+
+      if (normalizedCandidate.parsedTopLevelKeys) {
+        return {
+          result: createEmptyOmObserverResult(),
+          diagnosticCode: "invalid-output",
+          diagnosticMeta: {
+            parsedTopLevelKeys: normalizedCandidate.parsedTopLevelKeys,
+            missingTopLevelKeys: normalizedCandidate.missingTopLevelKeys,
+          },
+        };
+      }
+    } catch {
+      continue;
+    }
+  }
+
+  return {
+    result: createEmptyOmObserverResult(),
+    diagnosticCode: "invalid-output",
+  };
+}
+
 export async function invokeOmObserver(
   context: OmObserverInvokeContext,
   state: OmStateV1,
@@ -457,18 +683,25 @@ export async function invokeOmObserver(
   options: OmObserverInvokeOptions = {}
 ): Promise<OmObserverResult> {
   if (window.status !== "ready") {
+    emitOmObserverDiagnostic(options, "window-not-ready");
     return createEmptyOmObserverResult();
   }
 
   const model = resolveOmObserverModel(context);
   if (!model) {
+    emitOmObserverDiagnostic(options, "missing-model");
     return createEmptyOmObserverResult();
   }
+
+  const modelMeta = {
+    model: formatOmObserverModelLabel(model),
+  };
 
   let auth: { apiKey?: string; headers?: Record<string, string> };
   try {
     auth = await getModelAuthOrThrow(context.modelRegistry, model);
   } catch {
+    emitOmObserverDiagnostic(options, "auth-failed", modelMeta);
     return createEmptyOmObserverResult();
   }
 
@@ -479,6 +712,7 @@ export async function invokeOmObserver(
     const response = await runComplete(
       model,
       {
+        systemPrompt: OM_OBSERVER_SYSTEM_PROMPT,
         messages: [
           {
             role: "user",
@@ -494,62 +728,46 @@ export async function invokeOmObserver(
       }
     );
 
+    const responseSummary = summarizeAssistantResponse(response, model);
+
     if (response.stopReason === "aborted") {
+      emitOmObserverDiagnostic(options, "aborted", responseSummary.meta);
       return createEmptyOmObserverResult();
     }
 
-    return parseOmObserverResultText(extractAssistantTextContent(response));
+    if (response.stopReason === "error") {
+      emitOmObserverDiagnostic(options, "provider-error", responseSummary.meta);
+      return createEmptyOmObserverResult();
+    }
+
+    const { result, diagnosticCode, diagnosticMeta } =
+      parseOmObserverResultPayload(responseSummary.text);
+
+    if (diagnosticCode) {
+      emitOmObserverDiagnostic(options, diagnosticCode, {
+        ...responseSummary.meta,
+        ...diagnosticMeta,
+      });
+      return result;
+    }
+
+    if (
+      result.observations.length === 0 &&
+      result.stableFacts.length === 0 &&
+      result.activeThreads.length === 0
+    ) {
+      emitOmObserverDiagnostic(options, "empty-result", responseSummary.meta);
+    }
+
+    return result;
   } catch {
+    emitOmObserverDiagnostic(options, "completion-error", modelMeta);
     return createEmptyOmObserverResult();
   }
-}
-
-function extractFencedJsonBlock(text: string): string | null {
-  const fenceMatch = text.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
-
-  if (!fenceMatch) {
-    return null;
-  }
-
-  const fencedText = fenceMatch[1]?.trim();
-  return fencedText ? fencedText : null;
 }
 
 export function parseOmObserverResultText(text: unknown): OmObserverResult {
-  if (isOmObserverResult(text)) {
-    return structuredClone(text);
-  }
-
-  if (typeof text !== "string") {
-    return createEmptyOmObserverResult();
-  }
-
-  const trimmedText = text.trim();
-  if (!trimmedText) {
-    return createEmptyOmObserverResult();
-  }
-
-  const jsonCandidates = [
-    extractFencedJsonBlock(trimmedText),
-    trimmedText,
-  ].filter(
-    (candidate, index, candidates): candidate is string =>
-      Boolean(candidate) && candidates.indexOf(candidate) === index
-  );
-
-  for (const jsonCandidate of jsonCandidates) {
-    try {
-      const parsedValue = JSON.parse(jsonCandidate) as unknown;
-
-      if (isOmObserverResult(parsedValue)) {
-        return parsedValue;
-      }
-    } catch {
-      continue;
-    }
-  }
-
-  return createEmptyOmObserverResult();
+  return parseOmObserverResultPayload(text).result;
 }
 
 function normalizeSourceEntryIds(

@@ -14,7 +14,12 @@ import {
 } from "./observer";
 import { isOmObserverResult } from "./schema";
 import { estimateOmObservationTokens, estimateOmTurnTokens } from "./tokens";
-import type { OmObserverResult, OmStateV1 } from "./types";
+import type {
+  OmObserverDiagnostic,
+  OmObserverDiagnosticCode,
+  OmObserverResult,
+  OmStateV1,
+} from "./types";
 import { OM_STATE_VERSION } from "./version";
 
 function createSampleState(overrides: Partial<OmStateV1> = {}): OmStateV1 {
@@ -223,6 +228,66 @@ Trailing prose that should be ignored.`);
         {
           id: "fact-fenced",
           text: "Parser accepts fenced JSON blocks.",
+        },
+      ],
+      activeThreads: [],
+    });
+    expect(isOmObserverResult(parsedResult)).toBe(true);
+  });
+
+  it("normalizes missing top-level observer arrays to empty arrays", () => {
+    const parsedResult = parseOmObserverResultText(
+      JSON.stringify({
+        observations: [
+          {
+            kind: "fact",
+            summary:
+              "Codex omitted empty arrays but returned valid observations.",
+            sourceEntryIds: ["entry-2"],
+          },
+        ],
+      })
+    );
+
+    expect(parsedResult).toEqual({
+      observations: [
+        {
+          kind: "fact",
+          summary:
+            "Codex omitted empty arrays but returned valid observations.",
+          sourceEntryIds: ["entry-2"],
+        },
+      ],
+      stableFacts: [],
+      activeThreads: [],
+    });
+    expect(isOmObserverResult(parsedResult)).toBe(true);
+  });
+
+  it("parses double-encoded observer JSON strings", () => {
+    const parsedResult = parseOmObserverResultText(
+      JSON.stringify(
+        JSON.stringify({
+          observations: [],
+          stableFacts: [
+            {
+              id: "fact-double-encoded",
+              text: "Observer parser unwraps a JSON string payload once.",
+              sourceEntryIds: ["entry-2"],
+            },
+          ],
+          activeThreads: [],
+        })
+      )
+    );
+
+    expect(parsedResult).toEqual({
+      observations: [],
+      stableFacts: [
+        {
+          id: "fact-double-encoded",
+          text: "Observer parser unwraps a JSON string payload once.",
+          sourceEntryIds: ["entry-2"],
         },
       ],
       activeThreads: [],
@@ -846,6 +911,7 @@ Trailing prose that should be ignored.`);
       ],
     };
     let capturedPrompt = "";
+    let capturedSystemPrompt = "";
     let capturedOptions:
       | {
           apiKey?: string;
@@ -877,6 +943,7 @@ Trailing prose that should be ignored.`);
         async completeFn(model, completionContext, options) {
           expect(model).toEqual({ provider: "openai", id: "gpt-5-mini" });
           expect(completionContext.messages).toHaveLength(1);
+          capturedSystemPrompt = completionContext.systemPrompt ?? "";
           capturedPrompt =
             (completionContext.messages[0]?.content as { text?: string }[])[0]
               ?.text ?? "";
@@ -887,6 +954,9 @@ Trailing prose that should be ignored.`);
     );
 
     expect(result).toEqual(expectedResult);
+    expect(capturedSystemPrompt).toContain(
+      "observational memory observer for pi"
+    );
     expect(capturedPrompt).toContain("Please capture this observer update.");
     expect(capturedPrompt).toContain("Observer update captured.");
     expect(capturedOptions).toEqual({
@@ -900,6 +970,7 @@ Trailing prose that should be ignored.`);
     const state = createSampleState();
     const window = createReadyWindow(state);
     let completionCalls = 0;
+    const diagnostics: OmObserverDiagnosticCode[] = [];
 
     const result = await invokeOmObserver(
       {
@@ -919,6 +990,9 @@ Trailing prose that should be ignored.`);
       state,
       window,
       {
+        onDiagnostic(diagnostic) {
+          diagnostics.push(diagnostic.code);
+        },
         async completeFn() {
           completionCalls += 1;
           return createAssistantResponse("{}");
@@ -928,6 +1002,57 @@ Trailing prose that should be ignored.`);
 
     expect(result).toEqual(createEmptyOmObserverResult());
     expect(completionCalls).toBe(0);
+    expect(diagnostics).toEqual(["auth-failed"]);
+  });
+
+  it("returns an empty observer result for provider errors and preserves the error message metadata", async () => {
+    const state = createSampleState();
+    const window = createReadyWindow(state);
+    const diagnostics: OmObserverDiagnostic[] = [];
+
+    const result = await invokeOmObserver(
+      {
+        model: { provider: "openai-codex", id: "gpt-5.4" },
+        modelRegistry: {
+          find() {
+            return undefined;
+          },
+          async getApiKey() {
+            return "observer-token";
+          },
+        },
+      },
+      state,
+      window,
+      {
+        onDiagnostic(diagnostic) {
+          diagnostics.push(diagnostic);
+        },
+        async completeFn() {
+          return createAssistantResponse("", {
+            content: [],
+            stopReason: "error",
+            errorMessage: "backend rejected codex observer request",
+          });
+        },
+      }
+    );
+
+    expect(result).toEqual(createEmptyOmObserverResult());
+    expect(diagnostics).toEqual([
+      {
+        code: "provider-error",
+        meta: {
+          model: "openai-codex/gpt-5.4",
+          stopReason: "error",
+          errorMessage: "backend rejected codex observer request",
+          contentPartCount: 0,
+          textPartCount: 0,
+          textCharCount: 0,
+          contentTypes: [],
+        },
+      },
+    ]);
   });
 
   it("returns an empty observer result for invalid or empty model output", async () => {
@@ -944,20 +1069,96 @@ Trailing prose that should be ignored.`);
         },
       },
     };
+    const invalidDiagnostics: OmObserverDiagnostic[] = [];
+    const emptyDiagnostics: OmObserverDiagnostic[] = [];
 
     const invalidResult = await invokeOmObserver(context, state, window, {
+      onDiagnostic(diagnostic) {
+        invalidDiagnostics.push(diagnostic);
+      },
       async completeFn() {
-        return createAssistantResponse("{not json}");
+        return createAssistantResponse(
+          "Not JSON. I found a fact and a thread but will explain them in prose."
+        );
       },
     });
     const emptyResult = await invokeOmObserver(context, state, window, {
+      onDiagnostic(diagnostic) {
+        emptyDiagnostics.push(diagnostic);
+      },
       async completeFn() {
-        return createAssistantResponse("", { content: [] });
+        return createAssistantResponse("", {
+          content: [{ type: "tool-call", name: "noop" }] as any,
+          stopReason: "stop",
+        });
       },
     });
 
     expect(invalidResult).toEqual(createEmptyOmObserverResult());
     expect(emptyResult).toEqual(createEmptyOmObserverResult());
+    expect(invalidDiagnostics).toEqual([
+      {
+        code: "invalid-output",
+        meta: {
+          model: "openai/gpt-5-mini",
+          stopReason: "stop",
+          textPreview:
+            "Not JSON. I found a fact and a thread but will explain them in prose.",
+          contentPartCount: 1,
+          textPartCount: 1,
+          textCharCount: 69,
+          contentTypes: ["text"],
+        },
+      },
+    ]);
+    expect(emptyDiagnostics).toEqual([
+      {
+        code: "empty-output",
+        meta: {
+          model: "openai/gpt-5-mini",
+          stopReason: "stop",
+          contentPartCount: 1,
+          textPartCount: 0,
+          textCharCount: 0,
+          contentTypes: ["tool-call"],
+        },
+      },
+    ]);
+  });
+
+  it("reports empty-result diagnostics when the model returns valid empty JSON", async () => {
+    const state = createSampleState();
+    const window = createReadyWindow(state);
+    const diagnostics: OmObserverDiagnosticCode[] = [];
+
+    const result = await invokeOmObserver(
+      {
+        model: { provider: "openai", id: "gpt-5-mini" },
+        modelRegistry: {
+          find() {
+            return undefined;
+          },
+          async getApiKey() {
+            return "observer-token";
+          },
+        },
+      },
+      state,
+      window,
+      {
+        onDiagnostic(diagnostic) {
+          diagnostics.push(diagnostic.code);
+        },
+        async completeFn() {
+          return createAssistantResponse(
+            JSON.stringify(createEmptyOmObserverResult())
+          );
+        },
+      }
+    );
+
+    expect(result).toEqual(createEmptyOmObserverResult());
+    expect(diagnostics).toEqual(["empty-result"]);
   });
 
   it("selects a fallback observer model when context.model is absent", async () => {

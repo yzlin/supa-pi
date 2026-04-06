@@ -363,6 +363,7 @@ describe("om reflector helpers", () => {
     const window = createOmReflectorWindow(state);
     const completeCalls: Array<{
       model: { id: string; provider: string };
+      systemPrompt?: string;
       prompt: string;
       apiKey?: string;
       headers?: Record<string, string>;
@@ -389,6 +390,7 @@ describe("om reflector helpers", () => {
         completeFn: async (model, context, options) => {
           completeCalls.push({
             model,
+            systemPrompt: context.systemPrompt,
             prompt:
               context.messages[0]?.content[0]?.type === "text"
                 ? context.messages[0].content[0].text
@@ -419,6 +421,9 @@ describe("om reflector helpers", () => {
         },
       ],
     });
+    expect(completeCalls[0]?.systemPrompt).toContain(
+      "observational memory reflector for pi"
+    );
     expect(completeCalls).toHaveLength(1);
     expect(completeCalls[0]).toMatchObject({
       model: { id: "test-model", provider: "openai" },

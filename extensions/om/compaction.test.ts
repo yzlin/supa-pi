@@ -115,6 +115,7 @@ describe("om compaction helper", () => {
 
   it("merges OM state into the generated summary and keeps repeated augmentation stable", async () => {
     const state = createSampleState();
+    const capturedSystemPrompts: string[] = [];
     const context = {
       model: {
         id: "test-model",
@@ -140,10 +141,12 @@ describe("om compaction helper", () => {
         tokensBefore: 42,
       },
       {
-        completeFn: async () =>
-          createAssistantResponse(
+        completeFn: async (_model, completionContext) => {
+          capturedSystemPrompts.push(completionContext.systemPrompt ?? "");
+          return createAssistantResponse(
             "## Goal\nShip OM\n\n## Progress\nObserver and reflector helpers landed."
-          ),
+          );
+        },
       }
     );
 
@@ -153,6 +156,9 @@ describe("om compaction helper", () => {
     });
     expect(result?.summary).toContain("## Goal");
     expect(result?.summary).toContain("## Observational Memory");
+    expect(capturedSystemPrompts[0]).toContain(
+      "updating a running pi compaction summary"
+    );
     expect(result?.summary?.match(/## Observational Memory/g)?.length).toBe(1);
 
     const stableRepeat = await generateOmCompactionSummary(

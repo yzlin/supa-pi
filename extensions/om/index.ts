@@ -48,6 +48,8 @@ import { createOmStatusSnapshot, showOmStatusView } from "./status";
 import type {
   OmConfigInput,
   OmObservationBufferEnvelopeV1,
+  OmObserverDiagnostic,
+  OmObserverDiagnosticCode,
   OmRecentEvent,
   OmReflectionBufferEnvelopeV1,
   OmStateV1,
@@ -164,6 +166,8 @@ export type {
   OmObservationBuffer,
   OmObservationBufferEnvelopeV1,
   OmObserverApplyResult,
+  OmObserverDiagnostic,
+  OmObserverDiagnosticCode,
   OmObserverPromptInput,
   OmObserverResult,
   OmObserverWindow,
@@ -234,6 +238,67 @@ interface OmCommandContext extends OmLifecycleContext {
 }
 
 const OM_RECENT_EVENT_LIMIT = 8;
+const OM_RETRYABLE_OBSERVER_DIAGNOSTIC_CODES =
+  new Set<OmObserverDiagnosticCode>([
+    "missing-model",
+    "auth-failed",
+    "aborted",
+    "provider-error",
+    "empty-output",
+    "invalid-output",
+    "completion-error",
+  ]);
+
+const OM_DIAGNOSTIC_EVENT_CONFIG = {
+  "missing-model": {
+    level: "warning",
+    template: (scope: string, itemLabel: string) =>
+      `OM ${scope} skipped ${itemLabel}: no observer model available.`,
+  },
+  "auth-failed": {
+    level: "warning",
+    template: (scope: string, itemLabel: string) =>
+      `OM ${scope} skipped ${itemLabel}: model auth unavailable.`,
+  },
+  aborted: {
+    level: "warning",
+    template: (scope: string, itemLabel: string) =>
+      `OM ${scope} aborted while processing ${itemLabel}.`,
+  },
+  "provider-error": {
+    level: "error",
+    template: (scope: string, itemLabel: string) =>
+      `OM ${scope} provider returned an error while processing ${itemLabel}.`,
+  },
+  "empty-output": {
+    level: "warning",
+    template: (scope: string, itemLabel: string) =>
+      `OM ${scope} returned empty output for ${itemLabel}.`,
+  },
+  "invalid-output": {
+    level: "warning",
+    template: (scope: string, itemLabel: string) =>
+      `OM ${scope} returned invalid JSON for ${itemLabel}.`,
+  },
+  "completion-error": {
+    level: "error",
+    template: (scope: string, itemLabel: string) =>
+      `OM ${scope} failed while processing ${itemLabel}.`,
+  },
+  "empty-result": {
+    level: "info",
+    template: (scope: string, itemLabel: string) =>
+      `OM ${scope} returned no durable memory for ${itemLabel}.`,
+  },
+} as const satisfies Partial<
+  Record<
+    OmObserverDiagnosticCode,
+    {
+      level: OmRecentEvent["level"];
+      template: (scope: string, itemLabel: string) => string;
+    }
+  >
+>;
 
 function createOmInvokeContext(
   ctx: OmLifecycleContext
@@ -266,7 +331,15 @@ function pushOmRecentEvents(
 }
 
 function pluralize(word: string, count: number): string {
-  return `${count} ${word}${count === 1 ? "" : "s"}`;
+  if (count === 1) {
+    return `${count} ${word}`;
+  }
+
+  if (/[^aeiou]y$/i.test(word)) {
+    return `${count} ${word.slice(0, -1)}ies`;
+  }
+
+  return `${count} ${word}s`;
 }
 
 function joinOmDeltaParts(parts: string[]): string {
@@ -320,6 +393,110 @@ function createObserverCursorAdvanceEvent(
     createdAt: updatedAt,
     level: "info",
     message: `OM advanced cursor across ${pluralize("pending entry", pendingEntryCount)}; no new durable memory.`,
+  });
+}
+
+function isRetryableObserverDiagnostic(
+  diagnostic: OmObserverDiagnostic | null
+): boolean {
+  return (
+    diagnostic !== null &&
+    OM_RETRYABLE_OBSERVER_DIAGNOSTIC_CODES.has(diagnostic.code)
+  );
+}
+
+function formatObserverDiagnosticMeta(
+  diagnostic: OmObserverDiagnostic
+): string {
+  const meta = diagnostic.meta;
+  if (!meta) {
+    return "";
+  }
+
+  const parts = [
+    meta.model ? `model=${meta.model}` : null,
+    meta.stopReason ? `stop=${meta.stopReason}` : null,
+    meta.errorMessage ? `error=${meta.errorMessage}` : null,
+    typeof meta.contentPartCount === "number"
+      ? `parts=${meta.contentPartCount}`
+      : null,
+    typeof meta.textPartCount === "number"
+      ? `textParts=${meta.textPartCount}`
+      : null,
+    typeof meta.textCharCount === "number"
+      ? `textChars=${meta.textCharCount}`
+      : null,
+    meta.contentTypes && meta.contentTypes.length > 0
+      ? `types=${meta.contentTypes.join(",")}`
+      : null,
+    diagnostic.code === "invalid-output" &&
+    meta.parsedTopLevelKeys &&
+    meta.parsedTopLevelKeys.length > 0
+      ? `keys=${meta.parsedTopLevelKeys.join(",")}`
+      : null,
+    diagnostic.code === "invalid-output" &&
+    meta.missingTopLevelKeys &&
+    meta.missingTopLevelKeys.length > 0
+      ? `missing=${meta.missingTopLevelKeys.join(",")}`
+      : null,
+    diagnostic.code === "invalid-output" && meta.textPreview
+      ? `preview=${JSON.stringify(meta.textPreview)}`
+      : null,
+  ].filter((value): value is string => Boolean(value));
+
+  return parts.length > 0 ? ` [${parts.join(" ")}]` : "";
+}
+
+function createObserverFamilyDiagnosticEvent(input: {
+  updatedAt: string;
+  scope: "observer" | "observation buffer";
+  itemLabel: string;
+  diagnostic: OmObserverDiagnostic;
+  fallbackEvent: OmRecentEvent;
+}): OmRecentEvent {
+  const config = OM_DIAGNOSTIC_EVENT_CONFIG[input.diagnostic.code];
+
+  if (!config) {
+    return input.fallbackEvent;
+  }
+
+  return createOmEvent({
+    createdAt: input.updatedAt,
+    level: config.level,
+    message:
+      config.template(input.scope, input.itemLabel) +
+      formatObserverDiagnosticMeta(input.diagnostic),
+  });
+}
+
+function createObserverDiagnosticEvent(
+  updatedAt: string,
+  pendingEntryCount: number,
+  diagnostic: OmObserverDiagnostic
+): OmRecentEvent {
+  return createObserverFamilyDiagnosticEvent({
+    updatedAt,
+    scope: "observer",
+    itemLabel: pluralize("pending entry", pendingEntryCount),
+    diagnostic,
+    fallbackEvent: createObserverCursorAdvanceEvent(
+      updatedAt,
+      pendingEntryCount
+    ),
+  });
+}
+
+function createObservationBufferDiagnosticEvent(
+  updatedAt: string,
+  sourceEntryCount: number,
+  diagnostic: OmObserverDiagnostic
+): OmRecentEvent {
+  return createObserverFamilyDiagnosticEvent({
+    updatedAt,
+    scope: "observation buffer",
+    itemLabel: pluralize("entry", sourceEntryCount),
+    diagnostic,
+    fallbackEvent: createObservationBufferEvent(updatedAt, sourceEntryCount),
   });
 }
 
@@ -621,10 +798,16 @@ export function createOmExtension(deps: OmExtensionDeps = {}) {
         );
 
         if (observationBufferWindow) {
+          let observationBufferDiagnostic: OmObserverDiagnostic | null = null;
           const bufferedObserverResult = await invokeObserverFn(
             invokeContext,
             baseState,
-            observationBufferWindow
+            observationBufferWindow,
+            {
+              onDiagnostic(diagnostic) {
+                observationBufferDiagnostic = diagnostic;
+              },
+            }
           );
 
           if (hasOmObserverBufferPayload(bufferedObserverResult)) {
@@ -640,6 +823,14 @@ export function createOmExtension(deps: OmExtensionDeps = {}) {
               createObservationBufferEvent(
                 updatedAt,
                 observationBufferWindow.pendingEntryIds.length
+              )
+            );
+          } else if (observationBufferDiagnostic) {
+            recentEvents.push(
+              createObservationBufferDiagnosticEvent(
+                updatedAt,
+                observationBufferWindow.pendingEntryIds.length,
+                observationBufferDiagnostic
               )
             );
           }
@@ -669,13 +860,22 @@ export function createOmExtension(deps: OmExtensionDeps = {}) {
         );
       }
 
+      let observerDiagnostic: OmObserverDiagnostic | null = null;
       const observerResult = shouldActivateObservationBuffer
         ? (
             nextRuntimeState.pendingObservationBuffer as OmObservationBufferEnvelopeV1
           ).buffer.result
         : window.status === "ready"
-          ? await invokeObserverFn(invokeContext, baseState, window)
+          ? await invokeObserverFn(invokeContext, baseState, window, {
+              onDiagnostic(diagnostic) {
+                observerDiagnostic = diagnostic;
+              },
+            })
           : createEmptyOmObserverResult();
+      const shouldRetryObserverWindow =
+        !shouldActivateObservationBuffer &&
+        window.status === "ready" &&
+        isRetryableObserverDiagnostic(observerDiagnostic);
       const observerApplied = shouldActivateObservationBuffer
         ? applyOmObserverResult(
             baseState,
@@ -686,7 +886,15 @@ export function createOmExtension(deps: OmExtensionDeps = {}) {
             observerResult,
             updatedAt
           )
-        : applyOmObserverResult(baseState, window, observerResult, updatedAt);
+        : shouldRetryObserverWindow
+          ? {
+              status: "noop" as const,
+              reason: "observer-failed" as const,
+              state: baseState,
+              envelope: createOmStateEnvelope(baseState, window.branchScope),
+              shouldPersist: false,
+            }
+          : applyOmObserverResult(baseState, window, observerResult, updatedAt);
 
       if (shouldActivateObservationBuffer) {
         nextRuntimeState = persistObservationBuffer(
@@ -705,14 +913,21 @@ export function createOmExtension(deps: OmExtensionDeps = {}) {
           createObserverAppliedEvent(updatedAt, observerResult)
         );
       } else if (
-        observerApplied.reason === "cursor-advanced" &&
+        (observerApplied.reason === "cursor-advanced" ||
+          observerApplied.reason === "observer-failed") &&
         window.pendingEntryIds.length > 0
       ) {
         recentEvents.push(
-          createObserverCursorAdvanceEvent(
-            updatedAt,
-            window.pendingEntryIds.length
-          )
+          observerDiagnostic
+            ? createObserverDiagnosticEvent(
+                updatedAt,
+                window.pendingEntryIds.length,
+                observerDiagnostic
+              )
+            : createObserverCursorAdvanceEvent(
+                updatedAt,
+                window.pendingEntryIds.length
+              )
         );
       }
 

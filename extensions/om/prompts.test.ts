@@ -119,6 +119,15 @@ describe("om prompt helpers", () => {
     expect(observerPrompt).toContain(
       "activeThreads[].status must be one of: active, blocked, waiting, done"
     );
+    expect(observerPrompt).toContain(
+      'Always include all three top-level arrays even when some are empty: {"observations":[],"stableFacts":[],"activeThreads":[]}.'
+    );
+    expect(observerPrompt).toContain(
+      'stableFacts[] items must be objects like {"id":"fact-id","text":"fact text","sourceEntryIds":["entry-id"]}.'
+    );
+    expect(observerPrompt).toContain(
+      'activeThreads[] items must be objects like {"id":"thread-id","title":"title","status":"active","summary":"optional","sourceEntryIds":["entry-id"]}.'
+    );
     expect(observerPrompt).toContain("leafId: entry-4");
     expect(observerPrompt).toContain("lastProcessedEntryId: entry-2");
     expect(observerPrompt).toContain("<previous_observations>");

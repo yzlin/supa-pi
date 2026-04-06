@@ -875,31 +875,45 @@ describe("om admin commands", () => {
   });
 
   it("rebuilds OM from the current branch through /om-rebuild", async () => {
-    const harness = createOmHarness({
-      branchEntries: [
-        {
-          id: "entry-1",
-          type: "message",
-          message: {
-            role: "user",
-            content: [{ type: "text", text: "Rebuild this branch." }],
+    const harness = createOmHarness(
+      {
+        branchEntries: [
+          {
+            id: "entry-1",
+            type: "message",
+            message: {
+              role: "user",
+              content: [{ type: "text", text: "Rebuild this branch." }],
+            },
           },
-        },
-        {
-          id: "entry-2",
-          type: "message",
-          message: {
-            role: "assistant",
-            content: [
-              {
-                type: "text",
-                text: "No model available, but advance the cursor.",
-              },
-            ],
+          {
+            id: "entry-2",
+            type: "message",
+            message: {
+              role: "assistant",
+              content: [
+                {
+                  type: "text",
+                  text: "Observer can rebuild this branch now.",
+                },
+              ],
+            },
           },
-        },
-      ],
-    });
+        ],
+      },
+      {
+        invokeObserverFn: async () => ({
+          observations: [
+            {
+              kind: "decision",
+              summary: "Rebuild captured the current branch state.",
+            },
+          ],
+          stableFacts: [],
+          activeThreads: [],
+        }),
+      }
+    );
 
     harness.sessionStart?.({}, harness.ctx);
     await harness.commands.get("om-rebuild")?.handler("", harness.ctx);
@@ -910,6 +924,11 @@ describe("om admin commands", () => {
       data: {
         state: {
           lastProcessedEntryId: "entry-2",
+          observations: [
+            expect.objectContaining({
+              summary: "Rebuild captured the current branch state.",
+            }),
+          ],
         },
       },
     });
@@ -1057,6 +1076,402 @@ describe("om turn_end observer wiring", () => {
         },
       },
     });
+  });
+
+  it("surfaces a missing-model diagnostic without advancing the cursor", async () => {
+    const persistedEnvelope = createOmStateEnvelope(
+      createSampleState({
+        lastProcessedEntryId: "entry-1",
+        configSnapshot: {
+          ...DEFAULT_OM_CONFIG_SNAPSHOT,
+          observation: {
+            ...DEFAULT_OM_CONFIG_SNAPSHOT.observation,
+            messageTokens: 1,
+          },
+          observationMessageTokens: 1,
+          reflectionMinObservationCount: Number.MAX_SAFE_INTEGER,
+        },
+      }),
+      createOmBranchScope([{ id: "entry-1" }, { id: "om-state" }])
+    );
+    let observerCalls = 0;
+    const harness = createOmHarness(
+      {
+        entries: [
+          { id: "entry-1", type: "message" },
+          {
+            id: "om-state",
+            type: "custom",
+            customType: OM_STATE_CUSTOM_TYPE,
+            data: persistedEnvelope,
+          },
+          { id: "entry-2", type: "message" },
+        ],
+        branchEntries: [
+          createMessageEntry("entry-1", "user", "Already processed."),
+          {
+            id: "om-state",
+            type: "custom",
+            customType: OM_STATE_CUSTOM_TYPE,
+          },
+          createMessageEntry(
+            "entry-2",
+            "assistant",
+            "Threshold-crossing observer turn."
+          ),
+        ],
+      },
+      {
+        invokeObserverFn: async (_ctx, _state, _window, options) => {
+          observerCalls += 1;
+          options?.onDiagnostic?.({ code: "missing-model" });
+          return createEmptyOmObserverResult();
+        },
+      }
+    );
+
+    harness.sessionStart?.({}, harness.ctx);
+    await harness.turnEnd?.({}, harness.ctx);
+    await harness.turnEnd?.({}, harness.ctx);
+
+    expect(observerCalls).toBe(2);
+    expect(harness.appendedEntries).toHaveLength(0);
+    expect(harness.notifications).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          message:
+            "OM observer skipped 1 pending entry: no observer model available.",
+          level: "warning",
+        }),
+      ])
+    );
+  });
+
+  it("surfaces provider error metadata when the main observer returns stop=error", async () => {
+    const persistedEnvelope = createOmStateEnvelope(
+      createSampleState({
+        lastProcessedEntryId: "entry-1",
+        configSnapshot: {
+          ...DEFAULT_OM_CONFIG_SNAPSHOT,
+          observation: {
+            ...DEFAULT_OM_CONFIG_SNAPSHOT.observation,
+            messageTokens: 1,
+          },
+          observationMessageTokens: 1,
+          reflectionMinObservationCount: Number.MAX_SAFE_INTEGER,
+        },
+      }),
+      createOmBranchScope([{ id: "entry-1" }, { id: "om-state" }])
+    );
+    const harness = createOmHarness(
+      {
+        entries: [
+          { id: "entry-1", type: "message" },
+          {
+            id: "om-state",
+            type: "custom",
+            customType: OM_STATE_CUSTOM_TYPE,
+            data: persistedEnvelope,
+          },
+          { id: "entry-2", type: "message" },
+        ],
+        branchEntries: [
+          createMessageEntry("entry-1", "user", "Already processed."),
+          {
+            id: "om-state",
+            type: "custom",
+            customType: OM_STATE_CUSTOM_TYPE,
+          },
+          createMessageEntry(
+            "entry-2",
+            "assistant",
+            "Threshold-crossing observer turn."
+          ),
+        ],
+      },
+      {
+        invokeObserverFn: async (_ctx, _state, _window, options) => {
+          options?.onDiagnostic?.({
+            code: "provider-error",
+            meta: {
+              model: "openai-codex/gpt-5.4",
+              stopReason: "error",
+              errorMessage: "backend rejected codex observer request",
+              contentPartCount: 0,
+              textPartCount: 0,
+              textCharCount: 0,
+              contentTypes: [],
+            },
+          });
+          return createEmptyOmObserverResult();
+        },
+      }
+    );
+
+    harness.sessionStart?.({}, harness.ctx);
+    await harness.turnEnd?.({}, harness.ctx);
+
+    expect(harness.appendedEntries).toHaveLength(0);
+    expect(harness.notifications).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          message:
+            "OM observer provider returned an error while processing 1 pending entry. [model=openai-codex/gpt-5.4 stop=error error=backend rejected codex observer request parts=0 textParts=0 textChars=0]",
+          level: "error",
+        }),
+      ])
+    );
+  });
+
+  it("surfaces invalid JSON previews when the main observer returns prose", async () => {
+    const persistedEnvelope = createOmStateEnvelope(
+      createSampleState({
+        lastProcessedEntryId: "entry-1",
+        configSnapshot: {
+          ...DEFAULT_OM_CONFIG_SNAPSHOT,
+          observation: {
+            ...DEFAULT_OM_CONFIG_SNAPSHOT.observation,
+            messageTokens: 1,
+          },
+          observationMessageTokens: 1,
+          reflectionMinObservationCount: Number.MAX_SAFE_INTEGER,
+        },
+      }),
+      createOmBranchScope([{ id: "entry-1" }, { id: "om-state" }])
+    );
+    const harness = createOmHarness(
+      {
+        entries: [
+          { id: "entry-1", type: "message" },
+          {
+            id: "om-state",
+            type: "custom",
+            customType: OM_STATE_CUSTOM_TYPE,
+            data: persistedEnvelope,
+          },
+          { id: "entry-2", type: "message" },
+        ],
+        branchEntries: [
+          createMessageEntry("entry-1", "user", "Already processed."),
+          {
+            id: "om-state",
+            type: "custom",
+            customType: OM_STATE_CUSTOM_TYPE,
+          },
+          createMessageEntry(
+            "entry-2",
+            "assistant",
+            "Threshold-crossing observer turn."
+          ),
+        ],
+      },
+      {
+        invokeObserverFn: async (_ctx, _state, _window, options) => {
+          options?.onDiagnostic?.({
+            code: "invalid-output",
+            meta: {
+              model: "openai-codex/gpt-5.4",
+              stopReason: "stop",
+              textPreview:
+                "I found several useful observations and will summarize them in prose instead of strict JSON.",
+              contentPartCount: 1,
+              textPartCount: 1,
+              textCharCount: 92,
+              contentTypes: ["text"],
+            },
+          });
+          return createEmptyOmObserverResult();
+        },
+      }
+    );
+
+    harness.sessionStart?.({}, harness.ctx);
+    await harness.turnEnd?.({}, harness.ctx);
+
+    expect(harness.appendedEntries).toHaveLength(0);
+    expect(harness.notifications).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          message:
+            'OM observer returned invalid JSON for 1 pending entry. [model=openai-codex/gpt-5.4 stop=stop parts=1 textParts=1 textChars=92 types=text preview="I found several useful observations and will summarize them in prose instead of strict JSON."]',
+          level: "warning",
+        }),
+      ])
+    );
+  });
+
+  it("surfaces observer response metadata when the main observer returns empty output", async () => {
+    const persistedEnvelope = createOmStateEnvelope(
+      createSampleState({
+        lastProcessedEntryId: "entry-1",
+        configSnapshot: {
+          ...DEFAULT_OM_CONFIG_SNAPSHOT,
+          observation: {
+            ...DEFAULT_OM_CONFIG_SNAPSHOT.observation,
+            messageTokens: 1,
+          },
+          observationMessageTokens: 1,
+          reflectionMinObservationCount: Number.MAX_SAFE_INTEGER,
+        },
+      }),
+      createOmBranchScope([{ id: "entry-1" }, { id: "om-state" }])
+    );
+    const harness = createOmHarness(
+      {
+        entries: [
+          { id: "entry-1", type: "message" },
+          {
+            id: "om-state",
+            type: "custom",
+            customType: OM_STATE_CUSTOM_TYPE,
+            data: persistedEnvelope,
+          },
+          { id: "entry-2", type: "message" },
+        ],
+        branchEntries: [
+          createMessageEntry("entry-1", "user", "Already processed."),
+          {
+            id: "om-state",
+            type: "custom",
+            customType: OM_STATE_CUSTOM_TYPE,
+          },
+          createMessageEntry(
+            "entry-2",
+            "assistant",
+            "Threshold-crossing observer turn."
+          ),
+        ],
+      },
+      {
+        invokeObserverFn: async (_ctx, _state, _window, options) => {
+          options?.onDiagnostic?.({
+            code: "empty-output",
+            meta: {
+              model: "openai/gpt-5-mini",
+              stopReason: "stop",
+              contentPartCount: 1,
+              textPartCount: 0,
+              textCharCount: 0,
+              contentTypes: ["tool-call"],
+            },
+          });
+          return createEmptyOmObserverResult();
+        },
+      }
+    );
+
+    harness.sessionStart?.({}, harness.ctx);
+    await harness.turnEnd?.({}, harness.ctx);
+
+    expect(harness.appendedEntries).toHaveLength(0);
+    expect(harness.notifications).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          message:
+            "OM observer returned empty output for 1 pending entry. [model=openai/gpt-5-mini stop=stop parts=1 textParts=0 textChars=0 types=tool-call]",
+          level: "warning",
+        }),
+      ])
+    );
+  });
+
+  it("surfaces diagnostics when buffered observation precompute fails", async () => {
+    const bufferedTurns = [
+      {
+        id: "entry-2",
+        role: "assistant",
+        text: "Long buffered observer turn.",
+      },
+      {
+        id: "entry-3",
+        role: "user",
+        text: "Second buffered observer turn.",
+      },
+    ];
+    const tailTurn = {
+      id: "entry-4",
+      role: "assistant",
+      text: "Short tail turn.",
+    };
+    const observationThreshold =
+      estimateTurnBudget([...bufferedTurns, tailTurn]) + 1;
+    let observerCalls = 0;
+    const persistedEnvelope = createOmStateEnvelope(
+      createSampleState({
+        lastProcessedEntryId: "entry-1",
+        configSnapshot: {
+          ...DEFAULT_OM_CONFIG_SNAPSHOT,
+          observation: {
+            ...DEFAULT_OM_CONFIG_SNAPSHOT.observation,
+            messageTokens: observationThreshold,
+            bufferTokens: 0.5,
+            bufferActivation: 0.5,
+          },
+          observationMessageTokens: observationThreshold,
+          reflectionMinObservationCount: Number.MAX_SAFE_INTEGER,
+        },
+      }),
+      createOmBranchScope([{ id: "entry-1" }, { id: "om-state" }])
+    );
+    const harness = createOmHarness(
+      {
+        entries: [
+          { id: "entry-1", type: "message" },
+          {
+            id: "om-state",
+            type: "custom",
+            customType: OM_STATE_CUSTOM_TYPE,
+            data: persistedEnvelope,
+          },
+          { id: "entry-2", type: "message" },
+          { id: "entry-3", type: "message" },
+          { id: "entry-4", type: "message" },
+        ],
+        branchEntries: [
+          createMessageEntry("entry-1", "user", "Already processed."),
+          {
+            id: "om-state",
+            type: "custom",
+            customType: OM_STATE_CUSTOM_TYPE,
+          },
+          createMessageEntry("entry-2", "assistant", bufferedTurns[0].text),
+          createMessageEntry("entry-3", "user", bufferedTurns[1].text),
+          createMessageEntry("entry-4", "assistant", tailTurn.text),
+        ],
+      },
+      {
+        invokeObserverFn: async (_ctx, _state, _window, options) => {
+          observerCalls += 1;
+          options?.onDiagnostic?.({
+            code: "empty-output",
+            meta: {
+              model: "openai/gpt-5-mini",
+              stopReason: "stop",
+              contentPartCount: 1,
+              textPartCount: 0,
+              textCharCount: 0,
+              contentTypes: ["tool-call"],
+            },
+          });
+          return createEmptyOmObserverResult();
+        },
+      }
+    );
+
+    harness.sessionStart?.({}, harness.ctx);
+    await harness.turnEnd?.({}, harness.ctx);
+
+    expect(observerCalls).toBe(1);
+    expect(harness.appendedEntries).toHaveLength(0);
+    expect(harness.notifications).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          message:
+            "OM observation buffer returned empty output for 2 entries. [model=openai/gpt-5-mini stop=stop parts=1 textParts=0 textChars=0 types=tool-call]",
+          level: "warning",
+        }),
+      ])
+    );
   });
 
   it("persists a noop cursor advance once when non-OM custom entries are pending", async () => {

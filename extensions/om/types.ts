@@ -100,6 +100,35 @@ export interface OmRecentEvent {
   message: string;
 }
 
+export type OmObserverDiagnosticCode =
+  | "window-not-ready"
+  | "missing-model"
+  | "auth-failed"
+  | "aborted"
+  | "provider-error"
+  | "empty-output"
+  | "invalid-output"
+  | "completion-error"
+  | "empty-result";
+
+export interface OmObserverDiagnosticMeta {
+  model?: string;
+  stopReason?: string | null;
+  errorMessage?: string;
+  textPreview?: string;
+  contentPartCount?: number;
+  textPartCount?: number;
+  textCharCount?: number;
+  contentTypes?: string[];
+  parsedTopLevelKeys?: string[];
+  missingTopLevelKeys?: string[];
+}
+
+export interface OmObserverDiagnostic {
+  code: OmObserverDiagnosticCode;
+  meta?: OmObserverDiagnosticMeta;
+}
+
 export interface OmStateEnvelopeV1 {
   version: OmStateVersion;
   branchScope: OmBranchScope;
@@ -182,6 +211,7 @@ export interface OmObserverApplyResult {
     | "updated-state"
     | "threshold-not-met"
     | "cursor-advanced"
+    | "observer-failed"
     | "no-new-entries"
     | "requires-rebuild";
   state: OmStateV1;

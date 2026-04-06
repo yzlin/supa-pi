@@ -325,6 +325,9 @@ export function createOmStatusSnapshot<
 
 export function formatOmStatusSummary(snapshot: OmStatusSnapshot): string {
   const lastEvent = snapshot.recentEvents.at(-1)?.message;
+  const failureSummary = summarizeRecentFailures(snapshot.recentEvents)
+    .map(({ label, count }) => `${label}×${count}`)
+    .join(", ");
 
   return [
     `facts=${snapshot.counts.stableFacts}`,
@@ -338,6 +341,7 @@ export function formatOmStatusSummary(snapshot: OmStatusSnapshot): string {
     `obsBuffer=${formatCount(snapshot.observer.bufferTokens)}/${formatCount(snapshot.observer.bufferThresholdTokens)} ${snapshot.observer.bufferStatus}`,
     `refl=${formatCount(snapshot.reflector.retainedObservationTokens)}/${formatCount(snapshot.reflector.thresholdTokens)} ${snapshot.reflector.status}/${snapshot.reflector.reason}`,
     `reflBuffer=${formatCount(snapshot.reflector.bufferTokens)}/${formatCount(snapshot.reflector.bufferThresholdTokens)} ${snapshot.reflector.bufferStatus}`,
+    failureSummary ? `failures=${failureSummary}` : null,
     lastEvent ? `lastEvent=${lastEvent}` : null,
   ]
     .filter((value): value is string => Boolean(value))
@@ -362,17 +366,130 @@ function renderDetailLine(input: {
   return `${input.left} ${input.theme.fg("dim", "·")} ${input.right}`;
 }
 
+function getRecentEventTone(event: OmRecentEvent): string {
+  if (event.level === "error") {
+    return "error";
+  }
+
+  if (event.level === "warning") {
+    return "warning";
+  }
+
+  if (event.level === "success") {
+    return "success";
+  }
+
+  return "accent";
+}
+
 function renderRecentEventLine(event: OmRecentEvent, theme: ThemeLike): string {
-  const tone =
-    event.level === "error"
-      ? "error"
-      : event.level === "warning"
-        ? "warning"
-        : event.level === "success"
-          ? "success"
-          : "accent";
+  const tone = getRecentEventTone(event);
 
   return `${theme.fg("muted", formatRecentEventTime(event.createdAt))} ${theme.fg(tone, event.message)}`;
+}
+
+function wrapPlainText(text: string, maxWidth: number): string[] {
+  if (maxWidth <= 0 || text.length === 0) {
+    return [text];
+  }
+
+  const lines: string[] = [];
+  let remaining = text;
+
+  while (visibleWidth(remaining) > maxWidth) {
+    const segment = truncateToWidth(remaining, maxWidth);
+
+    if (!segment) {
+      break;
+    }
+
+    lines.push(segment);
+    remaining = remaining.slice(segment.length);
+  }
+
+  if (remaining.length > 0 || lines.length === 0) {
+    lines.push(remaining);
+  }
+
+  return lines;
+}
+
+function renderRecentEventLines(
+  event: OmRecentEvent,
+  theme: ThemeLike,
+  width: number
+): string[] {
+  const previewMarker = " preview=";
+  const previewMarkerIndex = event.message.indexOf(previewMarker);
+  const closingBracketIndex = event.message.lastIndexOf("]");
+
+  if (previewMarkerIndex === -1 || closingBracketIndex === -1) {
+    return [frameLine(renderRecentEventLine(event, theme), width)];
+  }
+
+  const messagePrefix = event.message.slice(0, previewMarkerIndex);
+  const previewText = event.message.slice(
+    previewMarkerIndex + previewMarker.length,
+    closingBracketIndex
+  );
+  const messageSuffix = event.message.slice(closingBracketIndex);
+  const tone = getRecentEventTone(event);
+  const timestampPrefix = `${formatRecentEventTime(event.createdAt)} `;
+  const detailPrefix = "  ";
+  const previewWidth = Math.max(8, width - 4 - detailPrefix.length);
+
+  return [
+    frameLine(
+      `${theme.fg("muted", timestampPrefix)}${theme.fg(tone, messagePrefix)}`,
+      width
+    ),
+    frameLine(`${detailPrefix}${theme.fg(tone, "preview=")}`, width),
+    ...wrapPlainText(previewText, previewWidth).map((line) =>
+      frameLine(`${detailPrefix}${theme.fg(tone, line)}`, width)
+    ),
+    frameLine(`${detailPrefix}${theme.fg(tone, messageSuffix)}`, width),
+  ];
+}
+
+const OM_RECENT_FAILURE_MATCHERS = [
+  ["no observer model available", "missing-model"],
+  ["model auth unavailable", "auth-failed"],
+  ["provider returned an error", "provider-error"],
+  ["returned invalid JSON", "invalid-json"],
+  ["returned empty output", "empty-output"],
+  ["aborted while processing", "aborted"],
+  ["failed while processing", "completion-error"],
+] as const satisfies ReadonlyArray<readonly [string, string]>;
+
+function classifyRecentFailure(event: OmRecentEvent): string | null {
+  for (const [needle, label] of OM_RECENT_FAILURE_MATCHERS) {
+    if (event.message.includes(needle)) {
+      return label;
+    }
+  }
+
+  return null;
+}
+
+function summarizeRecentFailures(
+  recentEvents: readonly OmRecentEvent[]
+): Array<{ label: string; count: number }> {
+  const counts = new Map<string, number>();
+
+  for (const event of recentEvents) {
+    const label = classifyRecentFailure(event);
+
+    if (label) {
+      counts.set(label, (counts.get(label) ?? 0) + 1);
+    }
+  }
+
+  return [...counts.entries()]
+    .map(([label, count]) => ({ label, count }))
+    .sort(
+      (left, right) =>
+        right.count - left.count || left.label.localeCompare(right.label)
+    );
 }
 
 export async function showOmStatusView(
@@ -411,6 +528,7 @@ export async function showOmStatusView(
           snapshot.reflector.bufferTokens,
           snapshot.reflector.bufferThresholdTokens
         );
+        const recentFailures = summarizeRecentFailures(snapshot.recentEvents);
 
         return [
           border(frameWidth, "╭", "─", "╮"),
@@ -535,6 +653,21 @@ export async function showOmStatusView(
             }),
             frameWidth
           ),
+          ...(recentFailures.length > 0
+            ? [
+                border(frameWidth, "├", "─", "┤"),
+                frameLine(
+                  theme.bold(theme.fg("toolTitle", "Recent failures")),
+                  frameWidth
+                ),
+                ...recentFailures.map(({ label, count }) =>
+                  frameLine(
+                    `${theme.fg("warning", label)} ${theme.fg("dim", "×")} ${formatCount(count)}`,
+                    frameWidth
+                  )
+                ),
+              ]
+            : []),
           border(frameWidth, "├", "─", "┤"),
           frameLine(
             theme.bold(theme.fg("toolTitle", "Recent activity")),
@@ -544,8 +677,8 @@ export async function showOmStatusView(
             ? [...snapshot.recentEvents]
                 .slice(-5)
                 .reverse()
-                .map((event) =>
-                  frameLine(renderRecentEventLine(event, theme), frameWidth)
+                .flatMap((event) =>
+                  renderRecentEventLines(event, theme, frameWidth)
                 )
             : [
                 frameLine(
