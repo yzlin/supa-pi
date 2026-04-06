@@ -10,6 +10,7 @@ import type {
   OmStateV1,
 } from "./types";
 import {
+  OM_CONTINUATION_MAX_LENGTH,
   OM_OBSERVATION_KINDS,
   OM_STATE_VERSION,
   OM_THREAD_STATUSES,
@@ -20,6 +21,10 @@ const StringListSchema = Type.Array(Type.String(), {
 });
 
 const TimestampSchema = Type.String({ minLength: 1 });
+const ContinuationHintSchema = Type.String({
+  minLength: 1,
+  maxLength: OM_CONTINUATION_MAX_LENGTH,
+});
 
 function literalUnion(values: readonly string[]) {
   return Type.Union(values.map((value) => Type.Literal(value)));
@@ -115,6 +120,8 @@ export const OmObserverResultSchema = Type.Object({
   observations: Type.Array(OmObserverResultObservationSchema),
   stableFacts: Type.Array(OmObserverResultFactSchema),
   activeThreads: Type.Array(OmObserverResultThreadSchema),
+  currentTask: Type.Optional(ContinuationHintSchema),
+  suggestedNextResponse: Type.Optional(ContinuationHintSchema),
 });
 
 export const OmReflectionSchema = Type.Object({
@@ -149,6 +156,8 @@ export const OmStateV1Schema = Type.Object({
   reflections: Type.Array(OmReflectionSchema),
   stableFacts: Type.Array(OmStableFactSchema),
   activeThreads: Type.Array(OmActiveThreadSchema),
+  currentTask: Type.Optional(ContinuationHintSchema),
+  suggestedNextResponse: Type.Optional(ContinuationHintSchema),
   configSnapshot: OmConfigSnapshotSchema,
   updatedAt: TimestampSchema,
 });

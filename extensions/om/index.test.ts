@@ -937,6 +937,250 @@ describe("om admin commands", () => {
       level: "success",
     });
   });
+
+  it("recalls a valid observation from current branch OM state", async () => {
+    const persistedEnvelope = createOmStateEnvelope(
+      createSampleState({
+        observations: [
+          {
+            id: "obs-1",
+            kind: "decision",
+            summary: "Add a recall command for branch-local OM sources.",
+            sourceEntryIds: ["entry-1", "entry-2", "entry-3"],
+            createdAt: "2026-04-04T00:02:00.000Z",
+          },
+        ],
+      }),
+      createOmBranchScope([
+        { id: "entry-1" },
+        { id: "entry-2" },
+        { id: "entry-3" },
+        { id: "om-state" },
+      ])
+    );
+    const harness = createOmHarness({
+      entries: [
+        createMessageEntry("entry-1", "user", "Please add recall support."),
+        createMessageEntry(
+          "entry-2",
+          "assistant",
+          "I will inspect the OM runtime state."
+        ),
+        createMessageEntry(
+          "entry-3",
+          "toolResult",
+          "Resolved raw source entries from the active branch."
+        ),
+        {
+          id: "om-state",
+          type: "custom",
+          customType: OM_STATE_CUSTOM_TYPE,
+          data: persistedEnvelope,
+        },
+      ],
+      branchEntries: [
+        createMessageEntry("entry-1", "user", "Please add recall support."),
+        createMessageEntry(
+          "entry-2",
+          "assistant",
+          "I will inspect the OM runtime state."
+        ),
+        createMessageEntry(
+          "entry-3",
+          "toolResult",
+          "Resolved raw source entries from the active branch."
+        ),
+        {
+          id: "om-state",
+          type: "custom",
+          customType: OM_STATE_CUSTOM_TYPE,
+        },
+      ],
+    });
+
+    harness.sessionStart?.({}, harness.ctx);
+    await harness.commands.get("om-recall")?.handler("obs-1", harness.ctx);
+
+    expect(harness.notifications.at(-1)).toEqual({
+      message: expect.stringContaining(
+        "Observation obs-1 [decision]\nCreated: 2026-04-04T00:02:00.000Z\nSummary: Add a recall command for branch-local OM sources."
+      ),
+      level: "info",
+    });
+    expect(harness.notifications.at(-1)?.message).toContain(
+      "1. entry-1 [user]\n   Please add recall support."
+    );
+    expect(harness.notifications.at(-1)?.message).toContain(
+      "2. entry-2 [assistant]\n   I will inspect the OM runtime state."
+    );
+    expect(harness.notifications.at(-1)?.message).toContain(
+      "3. entry-3 [toolResult]\n   Resolved raw source entries from the active branch."
+    );
+  });
+
+  it("renders recalled source entries in branch chronology", async () => {
+    const persistedEnvelope = createOmStateEnvelope(
+      createSampleState({
+        observations: [
+          {
+            id: "obs-chronological",
+            kind: "thread",
+            summary: "Recall should follow branch order, not source id order.",
+            sourceEntryIds: ["entry-3", "entry-1", "entry-2"],
+            createdAt: "2026-04-04T00:03:00.000Z",
+          },
+        ],
+      }),
+      createOmBranchScope([
+        { id: "entry-1" },
+        { id: "entry-2" },
+        { id: "entry-3" },
+        { id: "om-state" },
+      ])
+    );
+    const harness = createOmHarness({
+      entries: [
+        createMessageEntry("entry-1", "user", "First branch message."),
+        createMessageEntry("entry-2", "assistant", "Second branch message."),
+        createMessageEntry("entry-3", "toolResult", "Third branch message."),
+        {
+          id: "om-state",
+          type: "custom",
+          customType: OM_STATE_CUSTOM_TYPE,
+          data: persistedEnvelope,
+        },
+      ],
+      branchEntries: [
+        createMessageEntry("entry-1", "user", "First branch message."),
+        createMessageEntry("entry-2", "assistant", "Second branch message."),
+        createMessageEntry("entry-3", "toolResult", "Third branch message."),
+        {
+          id: "om-state",
+          type: "custom",
+          customType: OM_STATE_CUSTOM_TYPE,
+        },
+      ],
+    });
+
+    harness.sessionStart?.({}, harness.ctx);
+    await harness.commands
+      .get("om-recall")
+      ?.handler("obs-chronological", harness.ctx);
+
+    const recallMessage = harness.notifications.at(-1)?.message ?? "";
+
+    expect(recallMessage.indexOf("entry-1 [user]")).toBeLessThan(
+      recallMessage.indexOf("entry-2 [assistant]")
+    );
+    expect(recallMessage.indexOf("entry-2 [assistant]")).toBeLessThan(
+      recallMessage.indexOf("entry-3 [toolResult]")
+    );
+  });
+
+  it("reports when the requested observation id is missing", async () => {
+    const persistedEnvelope = createOmStateEnvelope(
+      createSampleState({
+        observations: [
+          {
+            id: "obs-existing",
+            kind: "fact",
+            summary: "Existing observation.",
+            sourceEntryIds: ["entry-1"],
+            createdAt: "2026-04-04T00:04:00.000Z",
+          },
+        ],
+      }),
+      createOmBranchScope([{ id: "entry-1" }, { id: "om-state" }])
+    );
+    const harness = createOmHarness({
+      entries: [
+        createMessageEntry("entry-1", "user", "Existing entry."),
+        {
+          id: "om-state",
+          type: "custom",
+          customType: OM_STATE_CUSTOM_TYPE,
+          data: persistedEnvelope,
+        },
+      ],
+      branchEntries: [
+        createMessageEntry("entry-1", "user", "Existing entry."),
+        { id: "om-state", type: "custom", customType: OM_STATE_CUSTOM_TYPE },
+      ],
+    });
+
+    harness.sessionStart?.({}, harness.ctx);
+    await harness.commands
+      .get("om-recall")
+      ?.handler("obs-missing", harness.ctx);
+
+    expect(harness.notifications.at(-1)).toEqual({
+      message: "Observation obs-missing not found in current branch OM state.",
+      level: "warning",
+    });
+  });
+
+  it("shows partial missing source entries during recall", async () => {
+    const persistedEnvelope = createOmStateEnvelope(
+      createSampleState({
+        observations: [
+          {
+            id: "obs-partial",
+            kind: "risk",
+            summary: "One source is outside the branch and one is missing.",
+            sourceEntryIds: ["entry-1", "foreign-entry", "missing-entry"],
+            createdAt: "2026-04-04T00:05:00.000Z",
+          },
+        ],
+      }),
+      createOmBranchScope([{ id: "entry-1" }, { id: "om-state" }])
+    );
+    const harness = createOmHarness({
+      entries: [
+        createMessageEntry("entry-1", "user", "Visible branch source."),
+        createMessageEntry(
+          "foreign-entry",
+          "assistant",
+          "Other branch source."
+        ),
+        {
+          id: "om-state",
+          type: "custom",
+          customType: OM_STATE_CUSTOM_TYPE,
+          data: persistedEnvelope,
+        },
+      ],
+      branchEntries: [
+        createMessageEntry("entry-1", "user", "Visible branch source."),
+        { id: "om-state", type: "custom", customType: OM_STATE_CUSTOM_TYPE },
+      ],
+    });
+
+    harness.sessionStart?.({}, harness.ctx);
+    await harness.commands
+      .get("om-recall")
+      ?.handler("obs-partial", harness.ctx);
+
+    const recallMessage = harness.notifications.at(-1)?.message ?? "";
+
+    expect(recallMessage).toContain(
+      "1. entry-1 [user]\n   Visible branch source."
+    );
+    expect(recallMessage).toContain(
+      "Missing source entries: foreign-entry, missing-entry"
+    );
+  });
+
+  it("reports empty OM state when recall runs before runtime state exists", async () => {
+    const harness = createOmHarness();
+
+    await harness.commands.get("om-recall")?.handler("obs-1", harness.ctx);
+
+    expect(harness.notifications.at(-1)).toEqual({
+      message:
+        "Observation obs-1 not found: current branch OM has no observations.",
+      level: "warning",
+    });
+  });
 });
 
 describe("om turn_end observer wiring", () => {

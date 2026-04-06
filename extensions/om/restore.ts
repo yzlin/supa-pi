@@ -180,10 +180,32 @@ function normalizeOmBranchScope(
   };
 }
 
+function normalizeContinuationHint(value: unknown): string | undefined {
+  if (typeof value !== "string") {
+    return undefined;
+  }
+
+  const normalized = value.trim();
+  return normalized.length > 0 ? normalized : undefined;
+}
+
 function normalizeOmState(value: unknown): OmStateV1 | null {
   if (Value.Check(OmStateV1Schema, value)) {
+    const clonedState = structuredClone(value);
+    const currentTask = normalizeContinuationHint(clonedState.currentTask);
+    const suggestedNextResponse = normalizeContinuationHint(
+      clonedState.suggestedNextResponse
+    );
+    const {
+      currentTask: _currentTask,
+      suggestedNextResponse: _suggestedNextResponse,
+      ...baseState
+    } = clonedState;
+
     return {
-      ...structuredClone(value),
+      ...baseState,
+      ...(currentTask ? { currentTask } : {}),
+      ...(suggestedNextResponse ? { suggestedNextResponse } : {}),
       configSnapshot: normalizeOmConfigSnapshot(value.configSnapshot),
     };
   }
@@ -204,6 +226,16 @@ function normalizeOmState(value: unknown): OmStateV1 | null {
     activeThreads: Array.isArray(record.activeThreads)
       ? record.activeThreads
       : [],
+    ...(normalizeContinuationHint(record.currentTask)
+      ? { currentTask: normalizeContinuationHint(record.currentTask) }
+      : {}),
+    ...(normalizeContinuationHint(record.suggestedNextResponse)
+      ? {
+          suggestedNextResponse: normalizeContinuationHint(
+            record.suggestedNextResponse
+          ),
+        }
+      : {}),
     configSnapshot: normalizeOmConfigSnapshot(record.configSnapshot),
     updatedAt,
   } satisfies OmStateV1;

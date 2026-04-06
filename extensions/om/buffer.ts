@@ -50,6 +50,58 @@ function normalizeText(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
 }
 
+function normalizeAttachmentLabel(value: unknown): string {
+  const label = normalizeText(value);
+  if (!label) {
+    return "";
+  }
+
+  const withoutQuery = label.split(/[?#]/, 1)[0] ?? label;
+  const segments = withoutQuery.split(/[\\/]/).filter(Boolean);
+
+  return segments.at(-1) ?? withoutQuery;
+}
+
+function formatAttachmentPlaceholder(
+  kind: "Image" | "File",
+  record: Record<string, unknown>
+): string {
+  const label =
+    normalizeAttachmentLabel(record.filename) ||
+    normalizeAttachmentLabel(record.fileName) ||
+    normalizeAttachmentLabel(record.name) ||
+    normalizeAttachmentLabel(record.path) ||
+    normalizeAttachmentLabel(record.url) ||
+    normalizeText(record.mimeType) ||
+    kind.toLowerCase();
+
+  return `[${kind}: ${label}]`;
+}
+
+function extractContentPartText(part: unknown): string {
+  const record = asRecord(part);
+  const type = normalizeText(record.type);
+
+  if (type === "text") {
+    return normalizeText(record.text);
+  }
+
+  if (type === "tool-call" || type === "toolCall") {
+    const name = normalizeText(record.name);
+    return name ? `tool call: ${name}` : "";
+  }
+
+  if (type === "image") {
+    return formatAttachmentPlaceholder("Image", record);
+  }
+
+  if (type === "file") {
+    return formatAttachmentPlaceholder("File", record);
+  }
+
+  return "";
+}
+
 function extractTextParts(content: unknown): string[] {
   if (typeof content === "string") {
     const text = normalizeText(content);
@@ -57,25 +109,14 @@ function extractTextParts(content: unknown): string[] {
   }
 
   if (!Array.isArray(content)) {
-    const text = normalizeText(asRecord(content).text);
+    const text =
+      extractContentPartText(content) || normalizeText(asRecord(content).text);
     return text ? [text] : [];
   }
 
   return content.flatMap((part) => {
-    const record = asRecord(part);
-    const type = normalizeText(record.type);
-
-    if (type === "text") {
-      const text = normalizeText(record.text);
-      return text ? [text] : [];
-    }
-
-    if (type === "tool-call") {
-      const name = normalizeText(record.name);
-      return name ? [`tool call: ${name}`] : [];
-    }
-
-    return [];
+    const text = extractContentPartText(part);
+    return text ? [text] : [];
   });
 }
 

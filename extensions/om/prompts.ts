@@ -11,6 +11,7 @@ import type {
   OmStableFact,
 } from "./types";
 import {
+  OM_CONTINUATION_MAX_LENGTH,
   OM_OBSERVATION_KINDS,
   OM_PROMPT_VERSION,
   OM_THREAD_STATUSES,
@@ -31,6 +32,15 @@ function renderThreadList(threads: OmActiveThread[]): string[] {
 
 function renderTurnList(turns: OmPromptTurn[]): string[] {
   return turns.map((turn) => `[${turn.id}] ${turn.role}: ${turn.text}`);
+}
+
+function renderContinuationList(input: OmHeaderInput): string[] {
+  return [
+    input.currentTask ? `- Current task: ${input.currentTask}` : null,
+    input.suggestedNextResponse
+      ? `- Suggested next response: ${input.suggestedNextResponse}`
+      : null,
+  ].filter((line): line is string => Boolean(line));
 }
 
 function renderObservationList(observations: OmObservation[]): string[] {
@@ -105,8 +115,9 @@ export function buildOmHeader(input: OmHeaderInput): string {
     0,
     input.configSnapshot.headerMaxThreads
   );
+  const continuation = renderContinuationList(input);
 
-  if (facts.length === 0 && threads.length === 0) {
+  if (facts.length === 0 && threads.length === 0 && continuation.length === 0) {
     return "";
   }
 
@@ -115,6 +126,7 @@ export function buildOmHeader(input: OmHeaderInput): string {
     [
       { title: "Stable facts:", lines: renderFactList(facts) },
       { title: "Active threads:", lines: renderThreadList(threads) },
+      { title: "Continuation:", lines: continuation },
     ],
     input.configSnapshot.headerMaxTokens
   )
@@ -135,8 +147,10 @@ export function buildOmObserverPrompt(input: OmObserverPromptInput): string {
     "You are the observational memory observer for pi.",
     "Capture only branch-local, user-relevant memory. Do not invent facts.",
     "Return strict JSON only. No prose. No markdown fences.",
-    'Output must be a single JSON object with exactly these top-level arrays: {"observations":[],"stableFacts":[],"activeThreads":[]}.',
+    "Output must be a single JSON object with top-level arrays observations, stableFacts, activeThreads, plus optional currentTask and suggestedNextResponse strings.",
     'Always include all three top-level arrays even when some are empty: {"observations":[],"stableFacts":[],"activeThreads":[]}.',
+    `currentTask and suggestedNextResponse are optional short strings (max ${OM_CONTINUATION_MAX_LENGTH} chars). Provide either field only to overwrite the prior continuation hint; omit it to retain the prior value.`,
+    "Do not clear continuation hints by returning empty arrays alone.",
     `observations[].kind must be one of: ${OM_OBSERVATION_KINDS.join(", ")}`,
     'observations[] items must be objects like {"kind":"fact","summary":"summary","sourceEntryIds":["entry-id"]}.',
     'stableFacts[] items must be objects like {"id":"fact-id","text":"fact text","sourceEntryIds":["entry-id"]}.',

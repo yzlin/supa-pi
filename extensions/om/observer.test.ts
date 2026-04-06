@@ -2,6 +2,7 @@ import { describe, expect, it } from "bun:test";
 
 import { type AssistantMessage } from "@mariozechner/pi-ai";
 
+import { createOmObservationBufferWindow } from "./buffer";
 import { DEFAULT_OM_CONFIG_SNAPSHOT } from "./config";
 import {
   applyOmObserverResult,
@@ -11,6 +12,7 @@ import {
   createOmObserverWindow,
   invokeOmObserver,
   parseOmObserverResultText,
+  serializeOmObserverEntry,
 } from "./observer";
 import { isOmObserverResult } from "./schema";
 import { estimateOmObservationTokens, estimateOmTurnTokens } from "./tokens";
@@ -59,6 +61,21 @@ function createMessageEntry(id: string, role: string, text: string) {
     message: {
       role,
       content: [{ type: "text", text }],
+    },
+  };
+}
+
+function createStructuredMessageEntry(
+  id: string,
+  role: string,
+  content: unknown
+) {
+  return {
+    id,
+    type: "message" as const,
+    message: {
+      role,
+      content,
     },
   };
 }
@@ -293,6 +310,102 @@ Trailing prose that should be ignored.`);
       activeThreads: [],
     });
     expect(isOmObserverResult(parsedResult)).toBe(true);
+  });
+
+  it("serializes mixed text and attachment parts in source order", () => {
+    const entry = createStructuredMessageEntry("entry-2", "user", [
+      { type: "text", text: "Need this first." },
+      { type: "image", filename: "wireframe.png" },
+      { type: "file", path: "/tmp/spec.pdf" },
+      { type: "text", text: "Need this last." },
+    ]);
+
+    expect(serializeOmObserverEntry(entry)).toEqual({
+      id: "entry-2",
+      role: "user",
+      text: "Need this first.\n[Image: wireframe.png]\n[File: spec.pdf]\nNeed this last.",
+    });
+  });
+
+  it("serializes attachment-only turns with readable placeholders", () => {
+    const entry = createStructuredMessageEntry("entry-2", "assistant", [
+      {
+        type: "image",
+        url: "https://cdn.example.com/uploads/screenshot.webp?token=abc",
+      },
+      { type: "file", name: "handoff.txt" },
+    ]);
+
+    expect(serializeOmObserverEntry(entry)).toEqual({
+      id: "entry-2",
+      role: "assistant",
+      text: "[Image: screenshot.webp]\n[File: handoff.txt]",
+    });
+  });
+
+  it("ignores unsupported and noisy parts while keeping readable placeholders", () => {
+    const entry = createStructuredMessageEntry("entry-2", "user", [
+      { type: "reasoning", text: "ignore this" },
+      { type: "text", text: " Keep this. " },
+      { type: "image", path: "/tmp/architecture.svg?cache=1" },
+      { type: "text", text: "   " },
+      { type: "metadata", value: { noisy: true } },
+      { type: "file", fileName: "notes.md" },
+      null,
+      { type: "unknown" },
+    ]);
+
+    expect(serializeOmObserverEntry(entry)).toEqual({
+      id: "entry-2",
+      role: "user",
+      text: "Keep this.\n[Image: architecture.svg]\n[File: notes.md]",
+    });
+  });
+
+  it("keeps placeholder-bearing turns intact when observation buffering slices the branch tail", () => {
+    const placeholderEntry = createStructuredMessageEntry("entry-2", "user", [
+      { type: "text", text: "Keep this." },
+      { type: "image", filename: "architecture.svg" },
+      { type: "file", filename: "notes.md" },
+    ]);
+    const tailTurn = {
+      id: "entry-3",
+      role: "assistant",
+      text: "Newest turn stays in the live observer window.",
+    };
+    const tailTurnTokens = estimateOmTurnTokens(tailTurn);
+
+    expect(
+      createOmObservationBufferWindow(
+        [
+          createMessageEntry("entry-1", "assistant", "Already processed."),
+          placeholderEntry,
+          createMessageEntry("entry-3", "assistant", tailTurn.text),
+        ],
+        "entry-1",
+        {
+          ...DEFAULT_OM_CONFIG_SNAPSHOT,
+          observation: {
+            ...DEFAULT_OM_CONFIG_SNAPSHOT.observation,
+            messageTokens: tailTurnTokens,
+            bufferTokens: 1,
+            bufferActivation: 0,
+          },
+          observationMessageTokens: tailTurnTokens,
+        }
+      )
+    ).toMatchObject({
+      status: "ready",
+      pendingEntryIds: ["entry-2"],
+      cursorAdvanceEntryId: "entry-2",
+      newTurns: [
+        {
+          id: "entry-2",
+          role: "user",
+          text: "Keep this.\n[Image: architecture.svg]\n[File: notes.md]",
+        },
+      ],
+    });
   });
 
   it("returns threshold-not-met until pending serialized turns cross the token threshold", () => {
@@ -1345,6 +1458,96 @@ Trailing prose that should be ignored.`);
     ]);
     expect(applied.envelope.branchScope).toEqual(window.branchScope);
     expect(applied.envelope.state).toEqual(applied.state);
+  });
+
+  it("overwrites provided continuation hints and retains omitted ones", () => {
+    const state = createSampleState({
+      currentTask: "Keep the old task until the observer updates it.",
+      suggestedNextResponse: "Return the current validation summary.",
+    });
+    const window = createReadyWindow(state);
+
+    const applied = applyOmObserverResult(
+      state,
+      window,
+      {
+        observations: [],
+        stableFacts: [],
+        activeThreads: [],
+        currentTask: "Finish OM continuation hints and tests.",
+      },
+      "2026-04-04T02:00:00.000Z"
+    );
+
+    expect(applied).toMatchObject({
+      status: "applied",
+      reason: "updated-state",
+      shouldPersist: true,
+    });
+    expect(applied.state.currentTask).toBe(
+      "Finish OM continuation hints and tests."
+    );
+    expect(applied.state.suggestedNextResponse).toBe(
+      "Return the current validation summary."
+    );
+  });
+
+  it("retains continuation hints when the observer omits them", () => {
+    const state = createSampleState({
+      currentTask: "Keep tracking OM continuation coverage.",
+      suggestedNextResponse: "Summarize the remaining validation work.",
+    });
+    const window = createReadyWindow(state);
+
+    const applied = applyOmObserverResult(
+      state,
+      window,
+      { observations: [], stableFacts: [], activeThreads: [] },
+      "2026-04-04T02:00:00.000Z"
+    );
+
+    expect(applied).toMatchObject({
+      status: "noop",
+      reason: "cursor-advanced",
+      shouldPersist: true,
+    });
+    expect(applied.state.currentTask).toBe(
+      "Keep tracking OM continuation coverage."
+    );
+    expect(applied.state.suggestedNextResponse).toBe(
+      "Summarize the remaining validation work."
+    );
+  });
+
+  it("does not auto-clear continuation hints from blank observer strings", () => {
+    const state = createSampleState({
+      currentTask: "Keep the current task visible.",
+      suggestedNextResponse: "Keep the suggested next response visible.",
+    });
+    const window = createReadyWindow(state);
+
+    const applied = applyOmObserverResult(
+      state,
+      window,
+      {
+        observations: [],
+        stableFacts: [],
+        activeThreads: [],
+        currentTask: "   ",
+        suggestedNextResponse: "\n\t",
+      },
+      "2026-04-04T02:00:00.000Z"
+    );
+
+    expect(applied).toMatchObject({
+      status: "noop",
+      reason: "cursor-advanced",
+      shouldPersist: true,
+    });
+    expect(applied.state.currentTask).toBe("Keep the current task visible.");
+    expect(applied.state.suggestedNextResponse).toBe(
+      "Keep the suggested next response visible."
+    );
   });
 
   it("does not advance the cursor when the observer threshold is not met", () => {

@@ -221,6 +221,58 @@ function stringifyUnknown(value: unknown): string {
   }
 }
 
+function normalizeAttachmentLabel(value: unknown): string {
+  const label = normalizeText(value);
+  if (!label) {
+    return "";
+  }
+
+  const withoutQuery = label.split(/[?#]/, 1)[0] ?? label;
+  const segments = withoutQuery.split(/[\\/]/).filter(Boolean);
+
+  return segments.at(-1) ?? withoutQuery;
+}
+
+function formatAttachmentPlaceholder(
+  kind: "Image" | "File",
+  record: Record<string, unknown>
+): string {
+  const label =
+    normalizeAttachmentLabel(record.filename) ||
+    normalizeAttachmentLabel(record.fileName) ||
+    normalizeAttachmentLabel(record.name) ||
+    normalizeAttachmentLabel(record.path) ||
+    normalizeAttachmentLabel(record.url) ||
+    normalizeText(record.mimeType) ||
+    kind.toLowerCase();
+
+  return `[${kind}: ${label}]`;
+}
+
+function extractContentPartText(part: unknown): string {
+  const record = asRecord(part);
+  const type = normalizeText(record.type);
+
+  if (type === "text") {
+    return normalizeText(record.text);
+  }
+
+  if (type === "tool-call" || type === "toolCall") {
+    const name = normalizeText(record.name);
+    return name ? `tool call: ${name}` : "";
+  }
+
+  if (type === "image") {
+    return formatAttachmentPlaceholder("Image", record);
+  }
+
+  if (type === "file") {
+    return formatAttachmentPlaceholder("File", record);
+  }
+
+  return "";
+}
+
 function extractTextParts(content: unknown): string[] {
   if (typeof content === "string") {
     const text = normalizeText(content);
@@ -228,25 +280,14 @@ function extractTextParts(content: unknown): string[] {
   }
 
   if (!Array.isArray(content)) {
-    const text = normalizeText(asRecord(content).text);
+    const text =
+      extractContentPartText(content) || normalizeText(asRecord(content).text);
     return text ? [text] : [];
   }
 
   return content.flatMap((part) => {
-    const record = asRecord(part);
-    const type = normalizeText(record.type);
-
-    if (type === "text") {
-      const text = normalizeText(record.text);
-      return text ? [text] : [];
-    }
-
-    if (type === "tool-call") {
-      const name = normalizeText(record.name);
-      return name ? [`tool call: ${name}`] : [];
-    }
-
-    return [];
+    const text = extractContentPartText(part);
+    return text ? [text] : [];
   });
 }
 
@@ -484,6 +525,10 @@ export function createOmObserverPromptInput(
     newTurns: [...window.newTurns],
     stableFacts: structuredClone(state.stableFacts),
     activeThreads: structuredClone(state.activeThreads),
+    ...(state.currentTask ? { currentTask: state.currentTask } : {}),
+    ...(state.suggestedNextResponse
+      ? { suggestedNextResponse: state.suggestedNextResponse }
+      : {}),
     configSnapshot: state.configSnapshot,
   };
 }
@@ -588,7 +633,12 @@ function normalizeOmObserverResultCandidate(value: unknown): {
       "stableFacts" in record ? record.stableFacts : ([] as unknown[]),
     activeThreads:
       "activeThreads" in record ? record.activeThreads : ([] as unknown[]),
-  } satisfies Record<(typeof requiredTopLevelKeys)[number], unknown>;
+    ...("currentTask" in record ? { currentTask: record.currentTask } : {}),
+    ...("suggestedNextResponse" in record
+      ? { suggestedNextResponse: record.suggestedNextResponse }
+      : {}),
+  } satisfies Record<(typeof requiredTopLevelKeys)[number], unknown> &
+    Record<string, unknown>;
 
   if (!isOmObserverResult(normalizedValue)) {
     return {
@@ -865,6 +915,42 @@ function createObservationId(
   return `obs-${cursorAdvanceEntryId ?? "root"}-${updatedAt}-${index + 1}`;
 }
 
+function normalizeContinuationHint(
+  value: string | undefined
+): string | undefined {
+  const normalized = normalizeText(value);
+  return normalized || undefined;
+}
+
+function applyOmContinuationHints(
+  state: OmStateV1,
+  observerResult: OmObserverResult
+): {
+  currentTask?: string;
+  suggestedNextResponse?: string;
+  hasContinuationUpdates: boolean;
+} {
+  const currentTask =
+    observerResult.currentTask === undefined
+      ? state.currentTask
+      : (normalizeContinuationHint(observerResult.currentTask) ??
+        state.currentTask);
+  const suggestedNextResponse =
+    observerResult.suggestedNextResponse === undefined
+      ? state.suggestedNextResponse
+      : (normalizeContinuationHint(observerResult.suggestedNextResponse) ??
+        state.suggestedNextResponse);
+
+  return {
+    ...(currentTask ? { currentTask } : {}),
+    ...(suggestedNextResponse ? { suggestedNextResponse } : {}),
+    hasContinuationUpdates:
+      normalizeContinuationHint(observerResult.currentTask) !== undefined ||
+      normalizeContinuationHint(observerResult.suggestedNextResponse) !==
+        undefined,
+  };
+}
+
 export function applyOmObserverResult(
   state: OmStateV1,
   window: OmObserverWindow,
@@ -925,6 +1011,8 @@ export function applyOmObserverResult(
 
   const nextLastProcessedEntryId =
     window.cursorAdvanceEntryId ?? clonedState.lastProcessedEntryId;
+  const { hasContinuationUpdates, ...continuationHints } =
+    applyOmContinuationHints(clonedState, observerResult);
   const nextObservations = observerResult.observations.map(
     (observation, index) => ({
       id: createObservationId(window.cursorAdvanceEntryId, updatedAt, index),
@@ -939,6 +1027,7 @@ export function applyOmObserverResult(
   );
   const nextState: OmStateV1 = {
     ...clonedState,
+    ...continuationHints,
     lastProcessedEntryId: nextLastProcessedEntryId,
     observations: [...clonedState.observations, ...nextObservations],
     stableFacts: mergeStableFacts(
@@ -958,7 +1047,8 @@ export function applyOmObserverResult(
   const hasObserverUpdates =
     nextObservations.length > 0 ||
     observerResult.stableFacts.length > 0 ||
-    observerResult.activeThreads.length > 0;
+    observerResult.activeThreads.length > 0 ||
+    hasContinuationUpdates;
 
   if (!hasObserverUpdates) {
     return {

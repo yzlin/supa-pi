@@ -31,6 +31,7 @@ import {
   createEmptyOmObserverResult,
   createOmObserverWindow,
   invokeOmObserver,
+  serializeOmObserverEntry,
 } from "./observer";
 import { injectOmHeaderMessage } from "./prompt-integration";
 import {
@@ -235,6 +236,33 @@ interface OmCommandContext extends OmLifecycleContext {
       level?: "info" | "warning" | "error" | "success"
     ): void;
   };
+}
+
+interface OmRecallSourceEntry {
+  id: string;
+  type?: string;
+  customType?: string;
+  message?: {
+    role?: string;
+    content?: unknown;
+    toolName?: string;
+    command?: string;
+    output?: string;
+    customType?: string;
+    summary?: string;
+    display?: boolean;
+    excludeFromContext?: boolean;
+  };
+}
+
+interface OmResolvedObservationSources {
+  renderedSources: Array<{
+    id: string;
+    role: string;
+    text: string;
+    order: number;
+  }>;
+  missingSourceEntryIds: string[];
 }
 
 const OM_RECENT_EVENT_LIMIT = 8;
@@ -632,6 +660,97 @@ function createOmRuntimeState(
     pendingReflectionBuffer,
     recentEvents: [...recentEvents],
   };
+}
+
+function resolveObservationSources(
+  ctx: OmRestorePlanCacheContext,
+  sourceEntryIds: readonly string[]
+): OmResolvedObservationSources {
+  const allEntries =
+    ctx.sessionManager.getEntries() as readonly OmRecallSourceEntry[];
+  const branchEntryIds = ctx.sessionManager
+    .getBranch()
+    .map((entry) => entry.id);
+  const entriesById = new Map(allEntries.map((entry) => [entry.id, entry]));
+  const branchOrder = new Map(
+    branchEntryIds.map((entryId, index) => [entryId, index] as const)
+  );
+  const renderedSources: OmResolvedObservationSources["renderedSources"] = [];
+  const missingSourceEntryIds: string[] = [];
+  const seenSourceEntryIds = new Set<string>();
+
+  for (const sourceEntryId of sourceEntryIds) {
+    if (!sourceEntryId || seenSourceEntryIds.has(sourceEntryId)) {
+      continue;
+    }
+
+    seenSourceEntryIds.add(sourceEntryId);
+    const sourceOrder = branchOrder.get(sourceEntryId);
+    const sourceEntry = entriesById.get(sourceEntryId);
+
+    if (sourceOrder === undefined || !sourceEntry) {
+      missingSourceEntryIds.push(sourceEntryId);
+      continue;
+    }
+
+    const serializedEntry = serializeOmObserverEntry(sourceEntry);
+    if (!serializedEntry) {
+      missingSourceEntryIds.push(sourceEntryId);
+      continue;
+    }
+
+    renderedSources.push({
+      id: sourceEntryId,
+      role: serializedEntry.role,
+      text: serializedEntry.text,
+      order: sourceOrder,
+    });
+  }
+
+  renderedSources.sort((left, right) => left.order - right.order);
+
+  return {
+    renderedSources,
+    missingSourceEntryIds,
+  };
+}
+
+function formatIndentedBlock(text: string, prefix = "   "): string {
+  return text
+    .split("\n")
+    .map((line) => `${prefix}${line}`)
+    .join("\n");
+}
+
+function formatObservationRecallMessage(
+  observation: OmStateV1["observations"][number],
+  sources: OmResolvedObservationSources
+): string {
+  const lines = [
+    `Observation ${observation.id} [${observation.kind}]`,
+    `Created: ${observation.createdAt}`,
+    `Summary: ${observation.summary}`,
+  ];
+
+  if (sources.renderedSources.length === 0) {
+    lines.push("", "Source entries: none available.");
+  } else {
+    lines.push("", "Source entries:");
+
+    for (const [index, source] of sources.renderedSources.entries()) {
+      lines.push(`${index + 1}. ${source.id} [${source.role}]`);
+      lines.push(formatIndentedBlock(source.text));
+    }
+  }
+
+  if (sources.missingSourceEntryIds.length > 0) {
+    lines.push(
+      "",
+      `Missing source entries: ${sources.missingSourceEntryIds.join(", ")}`
+    );
+  }
+
+  return lines.join("\n");
 }
 
 export function createOmRestorePlanCache() {
@@ -1088,6 +1207,42 @@ export function createOmExtension(deps: OmExtensionDeps = {}) {
       );
     };
 
+    const recallObservation = async (
+      args: string,
+      ctx: OmCommandContext
+    ): Promise<void> => {
+      const observationId = args.trim();
+
+      if (!observationId) {
+        ctx.ui.notify("Usage: /om-recall <observation-id>", "warning");
+        return;
+      }
+
+      const currentRuntimeState = getRuntimeState(ctx);
+      const observation = currentRuntimeState.state.observations.find(
+        (candidate) => candidate.id === observationId
+      );
+
+      if (!observation) {
+        ctx.ui.notify(
+          currentRuntimeState.state.observations.length === 0
+            ? `Observation ${observationId} not found: current branch OM has no observations.`
+            : `Observation ${observationId} not found in current branch OM state.`,
+          "warning"
+        );
+        return;
+      }
+
+      const sources = resolveObservationSources(
+        ctx,
+        observation.sourceEntryIds
+      );
+      ctx.ui.notify(
+        formatObservationRecallMessage(observation, sources),
+        "info"
+      );
+    };
+
     pi.registerCommand("om-status", {
       description: "Show observational memory status",
       handler: async (_args, ctx) =>
@@ -1111,6 +1266,14 @@ export function createOmExtension(deps: OmExtensionDeps = {}) {
       description: "Rebuild observational memory from the current branch",
       handler: async (_args, ctx) => {
         await rebuildState(ctx as OmCommandContext);
+      },
+    });
+
+    pi.registerCommand("om-recall", {
+      description:
+        "Recall the raw branch-local source entries behind an OM observation",
+      handler: async (args, ctx) => {
+        await recallObservation(args, ctx as OmCommandContext);
       },
     });
 

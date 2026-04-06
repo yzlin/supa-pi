@@ -18,13 +18,15 @@ import {
 } from "./tokens";
 
 describe("om prompt helpers", () => {
-  it("builds a bounded OM header from stable facts and active threads", () => {
+  it("builds a bounded OM header from stable facts, active threads, and continuation hints", () => {
     const header = buildOmHeader({
       configSnapshot: {
         ...DEFAULT_OM_CONFIG_SNAPSHOT,
         headerMaxFacts: 1,
         headerMaxThreads: 1,
       },
+      currentTask: "Finish the OM milestone safely.",
+      suggestedNextResponse: "Return the targeted test results.",
       stableFacts: [
         {
           id: "fact-1",
@@ -64,6 +66,11 @@ describe("om prompt helpers", () => {
     expect(header).toContain(
       "- [active] Ship OM scaffold — Shared modules and tests."
     );
+    expect(header).toContain("Continuation:");
+    expect(header).toContain("- Current task: Finish the OM milestone safely.");
+    expect(header).toContain(
+      "- Suggested next response: Return the targeted test results."
+    );
     expect(header).not.toContain("branch-local after /fork");
     expect(header).not.toContain("Implement lifecycle hooks");
   });
@@ -101,6 +108,8 @@ describe("om prompt helpers", () => {
         },
       ],
       activeThreads: [],
+      currentTask: "Keep the OM observer aligned with the active branch.",
+      suggestedNextResponse: "Summarize the next safe implementation step.",
       configSnapshot: DEFAULT_OM_CONFIG_SNAPSHOT,
     });
 
@@ -130,6 +139,15 @@ describe("om prompt helpers", () => {
     );
     expect(observerPrompt).toContain("leafId: entry-4");
     expect(observerPrompt).toContain("lastProcessedEntryId: entry-2");
+    expect(observerPrompt).toContain(
+      "currentTask and suggestedNextResponse are optional short strings"
+    );
+    expect(observerPrompt).toContain(
+      "- Current task: Keep the OM observer aligned with the active branch."
+    );
+    expect(observerPrompt).toContain(
+      "- Suggested next response: Summarize the next safe implementation step."
+    );
     expect(observerPrompt).toContain("<previous_observations>");
     expect(observerPrompt).toContain(
       "[obs-1] (decision) Keep the newest branch-local observation visible."

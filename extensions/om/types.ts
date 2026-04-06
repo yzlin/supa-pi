@@ -83,7 +83,12 @@ export interface OmBranchScope {
   lastEntryId: string | null;
 }
 
-export interface OmStateV1 {
+export interface OmContinuationHints {
+  currentTask?: string;
+  suggestedNextResponse?: string;
+}
+
+export interface OmStateV1 extends OmContinuationHints {
   version: OmStateVersion;
   lastProcessedEntryId: string | null;
   observations: OmObservation[];
@@ -148,7 +153,7 @@ export interface OmPromptTurn {
   text: string;
 }
 
-export interface OmHeaderInput {
+export interface OmHeaderInput extends OmContinuationHints {
   stableFacts: OmStableFact[];
   activeThreads: OmActiveThread[];
   configSnapshot: OmConfigSnapshot;
@@ -181,7 +186,7 @@ export interface OmObserverResultThread {
   sourceEntryIds?: string[];
 }
 
-export interface OmObserverResult {
+export interface OmObserverResult extends OmContinuationHints {
   observations: OmObserverResultObservation[];
   stableFacts: OmObserverResultFact[];
   activeThreads: OmObserverResultThread[];

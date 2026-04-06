@@ -242,6 +242,34 @@ describe("om restore helpers", () => {
     });
   });
 
+  it("restores trimmed continuation hints from legacy OM state payloads", () => {
+    const branchScope = createOmBranchScope([{ id: "entry-1" }]);
+
+    const migrated = normalizeOmStateEnvelope(
+      {
+        branchScope,
+        state: {
+          version: OM_STATE_VERSION,
+          lastProcessedEntryId: "entry-1",
+          observations: [],
+          reflections: [],
+          stableFacts: [],
+          activeThreads: [],
+          currentTask: "  Finish the OM continuation milestone.  ",
+          suggestedNextResponse: "\n\t",
+          configSnapshot: DEFAULT_OM_CONFIG_SNAPSHOT,
+          updatedAt: "2026-04-04T00:00:00.000Z",
+        },
+      },
+      branchScope
+    );
+
+    expect(migrated?.state.currentTask).toBe(
+      "Finish the OM continuation milestone."
+    );
+    expect(migrated?.state).not.toHaveProperty("suggestedNextResponse");
+  });
+
   it("fills missing token-budget config fields when restoring legacy OM state", () => {
     const branchScope = createOmBranchScope([{ id: "entry-1" }]);
 

@@ -77,6 +77,10 @@ describe("om status view", () => {
         observations: 2,
         reflections: 1,
       },
+      continuation: {
+        currentTask: "Finish OM continuation coverage.",
+        suggestedNextResponse: "Return the targeted OM validation summary.",
+      },
       recentEvents: [
         {
           createdAt: "2026-04-05T00:00:01.000Z",
@@ -149,6 +153,10 @@ describe("om status view", () => {
     expect(renders[0]?.join("\n")).toContain("Observational Memory Status");
     expect(renders[0]?.join("\n")).toContain("Buffered observation");
     expect(renders[0]?.join("\n")).toContain("Buffered reflection");
+    expect(renders[0]?.join("\n")).toContain("Continuation");
+    expect(renders[0]?.join("\n")).toContain(
+      "Finish OM continuation coverage."
+    );
     expect(renders[0]?.join("\n")).toContain("Recent activity");
     expect(renders[0]?.join("\n")).toContain(
       "OM observer applied: +1 observation, +1 fact."

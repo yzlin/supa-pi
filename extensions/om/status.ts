@@ -50,6 +50,10 @@ export interface OmStatusSnapshot {
     observations: number;
     reflections: number;
   };
+  continuation?: {
+    currentTask?: string;
+    suggestedNextResponse?: string;
+  };
   recentEvents: OmRecentEvent[];
   lastProcessedEntryId: string | null;
   restore: string;
@@ -224,6 +228,10 @@ function sumObservationTokens(state: OmStateV1): number {
   );
 }
 
+function getContinuationHints(snapshot: OmStatusSnapshot) {
+  return snapshot.continuation ?? {};
+}
+
 export function createOmStatusSnapshot<
   TEntry extends OmStatusEntryLike,
 >(input: {
@@ -287,6 +295,12 @@ export function createOmStatusSnapshot<
       observations: state.observations.length,
       reflections: state.reflections.length,
     },
+    continuation: {
+      ...(state.currentTask ? { currentTask: state.currentTask } : {}),
+      ...(state.suggestedNextResponse
+        ? { suggestedNextResponse: state.suggestedNextResponse }
+        : {}),
+    },
     recentEvents: input.recentEvents ? [...input.recentEvents] : [],
     lastProcessedEntryId: state.lastProcessedEntryId,
     restore: restorePlan ? `${restorePlan.mode}/${restorePlan.reason}` : "none",
@@ -324,6 +338,7 @@ export function createOmStatusSnapshot<
 }
 
 export function formatOmStatusSummary(snapshot: OmStatusSnapshot): string {
+  const continuation = getContinuationHints(snapshot);
   const lastEvent = snapshot.recentEvents.at(-1)?.message;
   const failureSummary = summarizeRecentFailures(snapshot.recentEvents)
     .map(({ label, count }) => `${label}×${count}`)
@@ -335,6 +350,10 @@ export function formatOmStatusSummary(snapshot: OmStatusSnapshot): string {
     `observations=${snapshot.counts.observations}`,
     `reflections=${snapshot.counts.reflections}`,
     `events=${snapshot.recentEvents.length}`,
+    continuation.currentTask ? `currentTask=${continuation.currentTask}` : null,
+    continuation.suggestedNextResponse
+      ? `nextResponse=${continuation.suggestedNextResponse}`
+      : null,
     `lastProcessed=${snapshot.lastProcessedEntryId ?? "none"}`,
     `restore=${snapshot.restore}`,
     `obs=${formatCount(snapshot.observer.pendingTokens)}/${formatCount(snapshot.observer.thresholdTokens)} ${snapshot.observer.status}/${snapshot.observer.reason}`,
@@ -509,6 +528,7 @@ export async function showOmStatusView(
           return [truncateToWidth(formatOmStatusSummary(snapshot), width)];
         }
 
+        const continuation = getContinuationHints(snapshot);
         const frameWidth = width;
         const innerWidth = Math.max(8, frameWidth - 4);
         const barWidth = Math.max(12, Math.min(BAR_WIDTH, innerWidth));
@@ -559,6 +579,31 @@ export async function showOmStatusView(
             `${theme.fg("muted", "last processed")} ${snapshot.lastProcessedEntryId ?? "none"}`,
             frameWidth
           ),
+          ...(continuation.currentTask || continuation.suggestedNextResponse
+            ? [
+                border(frameWidth, "├", "─", "┤"),
+                frameLine(
+                  theme.bold(theme.fg("toolTitle", "Continuation")),
+                  frameWidth
+                ),
+                ...(continuation.currentTask
+                  ? [
+                      frameLine(
+                        `${theme.fg("muted", "Current task")} ${continuation.currentTask}`,
+                        frameWidth
+                      ),
+                    ]
+                  : []),
+                ...(continuation.suggestedNextResponse
+                  ? [
+                      frameLine(
+                        `${theme.fg("muted", "Suggested next response")} ${continuation.suggestedNextResponse}`,
+                        frameWidth
+                      ),
+                    ]
+                  : []),
+              ]
+            : []),
           border(frameWidth, "├", "─", "┤"),
           frameLine(
             theme.bold(theme.fg("toolTitle", "Observer pipeline")),

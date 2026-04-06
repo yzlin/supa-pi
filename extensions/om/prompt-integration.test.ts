@@ -74,8 +74,13 @@ function createSampleState(overrides: Partial<OmStateV1> = {}): OmStateV1 {
 }
 
 describe("om prompt integration helpers", () => {
-  it("builds a bounded hidden OM header message", () => {
-    const message = createOmHeaderContextMessage(createSampleState());
+  it("builds a bounded hidden OM header message with continuation hints when present", () => {
+    const message = createOmHeaderContextMessage(
+      createSampleState({
+        currentTask: "Finish OM continuation coverage.",
+        suggestedNextResponse: "Return the targeted OM validation summary.",
+      })
+    );
 
     expect(message).toMatchObject({
       role: "custom",
@@ -85,6 +90,13 @@ describe("om prompt integration helpers", () => {
     expect(message?.content).toContain("[Observational Memory]");
     expect(message?.content).toContain("User prefers minimal diffs.");
     expect(message?.content).toContain("Finish OM extension");
+    expect(message?.content).toContain("Continuation:");
+    expect(message?.content).toContain(
+      "- Current task: Finish OM continuation coverage."
+    );
+    expect(message?.content).toContain(
+      "- Suggested next response: Return the targeted OM validation summary."
+    );
     expect(message?.content).not.toContain("OM stays branch-local.");
     expect(message?.content).not.toContain("Keep this hidden");
   });

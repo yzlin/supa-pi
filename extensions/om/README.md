@@ -6,7 +6,7 @@ Repo-native pi extension under `extensions/om`.
 
 - restores branch-local OM state on `session_start`
 - writes observer updates on `turn_end`
-- injects a tiny hidden OM header during `context`
+- injects a tiny hidden OM header during `context`, including optional continuation hints (`currentTask`, `suggestedNextResponse`) when present
 - augments compaction summaries via `session_before_compact` when a prior summary exists
 - supports lightweight admin commands
 - skips OM-owned persisted entries during observation so OM does not replay its own state or buffers
@@ -141,6 +141,7 @@ Migration rules:
 - invalid JSON diagnostics now include a compact truncated `preview="..."` of the raw text response so format drift is visible in `/om-status`
 - `/om-status` now wraps long invalid-json previews across multiple recent-activity lines so the payload is inspectable in the TUI
 - observer parsing now tolerates close codex-style JSON by defaulting omitted top-level arrays to `[]` and unwrapping a single JSON-string payload before strict schema validation
+- observer results may optionally include short `currentTask` / `suggestedNextResponse` continuation hints; provided values overwrite prior hints, omitted values retain prior hints, and blank strings do not auto-clear the current continuation
 - retryable observer failures (`missing-model`, `auth-failed`, `aborted`, `empty-output`, `invalid-output`, `completion-error`) do not advance `lastProcessedEntryId`, so the same raw window can be retried later
 - stale-state rebuilds and `/om-rebuild` force an immediate pass with an effective threshold of `1`
 
