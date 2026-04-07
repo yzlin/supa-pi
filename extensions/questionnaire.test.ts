@@ -4,6 +4,7 @@ import { visibleWidth } from "@mariozechner/pi-tui";
 
 import questionnaire, {
   getQuestionnaireRedirectCorrectionMessage,
+  getRenderOptions,
   wrapQuestionnaireText,
 } from "./questionnaire";
 
@@ -33,6 +34,37 @@ describe("getQuestionnaireRedirectCorrectionMessage", () => {
     expect(message).toContain(
       "instead of stopping after a brief acknowledgment"
     );
+  });
+});
+
+describe("getRenderOptions", () => {
+  it("always appends the custom input option", () => {
+    const options = getRenderOptions({
+      options: [{ value: "json", label: "JSON" }],
+    });
+
+    expect(options).toHaveLength(2);
+    expect(options[0]).toMatchObject({ value: "json", label: "JSON" });
+    expect(options[1]).toMatchObject({
+      value: "__other__",
+      label: "Type something.",
+      isOther: true,
+    });
+  });
+
+  it("keeps the custom option last", () => {
+    const options = getRenderOptions({
+      options: [
+        { value: "high", label: "High" },
+        { value: "medium", label: "Medium" },
+      ],
+    });
+
+    expect(options.map((option) => option.label)).toEqual([
+      "High",
+      "Medium",
+      "Type something.",
+    ]);
   });
 });
 

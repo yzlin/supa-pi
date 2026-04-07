@@ -18,20 +18,22 @@ import {
 import { Type } from "@sinclair/typebox";
 
 // Types
-interface QuestionOption {
+export interface QuestionOption {
   value: string;
   label: string;
   description?: string;
 }
 
-type RenderOption = QuestionOption & { isOther?: boolean };
+export type RenderOption = QuestionOption & { isOther?: boolean };
+
+const CUSTOM_OPTION_VALUE = "__other__";
+const CUSTOM_OPTION_LABEL = "Type something.";
 
 interface Question {
   id: string;
   label: string;
   prompt: string;
   options: QuestionOption[];
-  allowOther: boolean;
 }
 
 interface Answer {
@@ -152,11 +154,6 @@ const QuestionSchema = Type.Object({
   options: Type.Array(QuestionOptionSchema, {
     description: "Available options to choose from",
   }),
-  allowOther: Type.Optional(
-    Type.Boolean({
-      description: "Allow 'Type something' option (default: true)",
-    })
-  ),
 });
 
 const QuestionnaireParams = Type.Object({
@@ -173,6 +170,19 @@ function errorResult(
     content: [{ type: "text", text: message }],
     details: { questions, answers: [], cancelled: true },
   };
+}
+
+export function getRenderOptions(question: {
+  options: QuestionOption[];
+}): RenderOption[] {
+  return [
+    ...question.options,
+    {
+      value: CUSTOM_OPTION_VALUE,
+      label: CUSTOM_OPTION_LABEL,
+      isOther: true,
+    },
+  ];
 }
 
 export default function questionnaire(pi: ExtensionAPI) {
@@ -241,7 +251,7 @@ export default function questionnaire(pi: ExtensionAPI) {
     name: "questionnaire",
     label: "Questionnaire",
     description:
-      "Ask the user one or more questions. Use for clarifying requirements, getting preferences, or confirming decisions. For single questions, shows a simple option list. For multiple questions, shows a tab-based interface.",
+      "Ask the user one or more questions. Use for clarifying requirements, getting preferences, or confirming decisions. Each question includes a final custom input option. For single questions, shows a simple option list. For multiple questions, shows a tab-based interface.",
     promptSnippet:
       "Ask the user structured clarifying questions in the interactive main session",
     promptGuidelines: [
@@ -266,7 +276,6 @@ export default function questionnaire(pi: ExtensionAPI) {
       const questions: Question[] = params.questions.map((q, i) => ({
         ...q,
         label: q.label || `Q${i + 1}`,
-        allowOther: q.allowOther !== false,
       }));
 
       const isMulti = questions.length > 1;
@@ -316,15 +325,7 @@ export default function questionnaire(pi: ExtensionAPI) {
           function currentOptions(): RenderOption[] {
             const q = currentQuestion();
             if (!q) return [];
-            const opts: RenderOption[] = [...q.options];
-            if (q.allowOther) {
-              opts.push({
-                value: "__other__",
-                label: "Type something.",
-                isOther: true,
-              });
-            }
-            return opts;
+            return getRenderOptions(q);
           }
 
           function allAnswered(): boolean {
