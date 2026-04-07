@@ -1,8 +1,28 @@
 import { describe, expect, it } from "bun:test";
 
+import { visibleWidth } from "@mariozechner/pi-tui";
+
 import questionnaire, {
   getQuestionnaireRedirectCorrectionMessage,
+  wrapQuestionnaireText,
 } from "./questionnaire";
+
+describe("wrapQuestionnaireText", () => {
+  it("wraps long questionnaire copy instead of truncating it", () => {
+    const text =
+      "This is a long questionnaire description that should wrap across multiple lines instead of getting cut off.";
+
+    const lines = wrapQuestionnaireText(text, 24);
+
+    expect(lines.length).toBeGreaterThan(1);
+    expect(lines.join(" ").replace(/\s+/g, " ").trim()).toBe(
+      text.replace(/\s+/g, " ").trim()
+    );
+    for (const line of lines) {
+      expect(visibleWidth(line)).toBeLessThanOrEqual(24);
+    }
+  });
+});
 
 describe("getQuestionnaireRedirectCorrectionMessage", () => {
   it("tells the assistant to continue the original task after the questionnaire answer", () => {
@@ -10,7 +30,9 @@ describe("getQuestionnaireRedirectCorrectionMessage", () => {
 
     expect(message).toContain("continue the original task immediately");
     expect(message).toContain("provide the pending result");
-    expect(message).toContain("instead of stopping after a brief acknowledgment");
+    expect(message).toContain(
+      "instead of stopping after a brief acknowledgment"
+    );
   });
 });
 
