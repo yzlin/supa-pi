@@ -1214,7 +1214,7 @@ export function createOmExtension(deps: OmExtensionDeps = {}) {
       const observationId = args.trim();
 
       if (!observationId) {
-        ctx.ui.notify("Usage: /om-recall <observation-id>", "warning");
+        ctx.ui.notify("Usage: /om recall <observation-id>", "warning");
         return;
       }
 
@@ -1243,37 +1243,122 @@ export function createOmExtension(deps: OmExtensionDeps = {}) {
       );
     };
 
-    pi.registerCommand("om-status", {
-      description: "Show observational memory status",
-      handler: async (_args, ctx) =>
-        await notifyStatus(ctx as OmCommandContext),
-    });
-
-    pi.registerCommand("om-clear", {
-      description:
-        "Clear persisted observational memory state for the current branch",
-      handler: async (_args, ctx) => {
-        const clearedState = createEmptyOmState(now);
-        persistRuntimeState(ctx as OmCommandContext, clearedState);
-        (ctx as OmCommandContext).ui.notify(
-          "Observational memory cleared.",
-          "success"
-        );
+    const omSubcommands = [
+      {
+        value: "status",
+        helpLabel: "status",
+        description: "Show observational memory status",
+        run: async (ctx: OmCommandContext, _args: string): Promise<void> => {
+          await notifyStatus(ctx);
+        },
       },
-    });
-
-    pi.registerCommand("om-rebuild", {
-      description: "Rebuild observational memory from the current branch",
-      handler: async (_args, ctx) => {
-        await rebuildState(ctx as OmCommandContext);
+      {
+        value: "clear",
+        helpLabel: "clear",
+        description:
+          "Clear persisted observational memory state for the current branch",
+        run: async (ctx: OmCommandContext, _args: string): Promise<void> => {
+          const clearedState = createEmptyOmState(now);
+          persistRuntimeState(ctx, clearedState);
+          ctx.ui.notify("Observational memory cleared.", "success");
+        },
       },
-    });
+      {
+        value: "rebuild",
+        helpLabel: "rebuild",
+        description: "Rebuild observational memory from the current branch",
+        run: async (ctx: OmCommandContext, _args: string): Promise<void> => {
+          await rebuildState(ctx);
+        },
+      },
+      {
+        value: "recall",
+        helpLabel: "recall <id>",
+        description:
+          "Recall the raw branch-local source entries behind an OM observation",
+        run: async (ctx: OmCommandContext, args: string): Promise<void> => {
+          await recallObservation(args, ctx);
+        },
+      },
+      {
+        value: "help",
+        helpLabel: "help",
+        description: "Show help",
+        run: async (ctx: OmCommandContext, _args: string): Promise<void> => {
+          ctx.ui.notify(buildOmHelpMessage(), "info");
+        },
+      },
+    ] as const;
 
-    pi.registerCommand("om-recall", {
-      description:
-        "Recall the raw branch-local source entries behind an OM observation",
+    function formatOmHelpLine(label: string, description: string): string {
+      return `${label.padEnd(20, " ")}${description}`;
+    }
+
+    function toOmCompletionItem(subcommand: {
+      value: string;
+      description: string;
+    }): {
+      value: string;
+      label: string;
+      description: string;
+    } {
+      return {
+        value: subcommand.value,
+        label: subcommand.value,
+        description: subcommand.description,
+      };
+    }
+
+    const buildOmHelpMessage = (): string =>
+      [
+        "Usage: /om <command>",
+        ...omSubcommands.map(({ helpLabel, description }) =>
+          formatOmHelpLine(helpLabel, description)
+        ),
+      ].join("\n");
+
+    const getOmArgumentCompletions = (argumentPrefix: string) => {
+      const trimmedStart = argumentPrefix.trimStart();
+
+      if (trimmedStart.length === 0) {
+        return omSubcommands.map(toOmCompletionItem);
+      }
+
+      const [subcommand = "", ...rest] = trimmedStart.split(/\s+/);
+      if (subcommand === "recall" && rest.length > 0) {
+        return null;
+      }
+
+      const filteredSubcommands = omSubcommands.filter(({ value }) =>
+        value.startsWith(subcommand)
+      );
+
+      return filteredSubcommands.length > 0
+        ? filteredSubcommands.map(toOmCompletionItem)
+        : null;
+    };
+
+    pi.registerCommand("om", {
+      description: "Manage observational memory diagnostics and admin actions",
+      getArgumentCompletions: getOmArgumentCompletions,
       handler: async (args, ctx) => {
-        await recallObservation(args, ctx as OmCommandContext);
+        const [command = "help", ...rest] = args
+          .trim()
+          .split(/\s+/)
+          .filter(Boolean);
+        const commandContext = ctx as OmCommandContext;
+        const subcommand = omSubcommands.find(({ value }) => value === command);
+
+        if (!subcommand) {
+          commandContext.ui.notify(
+            `Unknown /om command: ${command}`,
+            "warning"
+          );
+          commandContext.ui.notify(buildOmHelpMessage(), "info");
+          return;
+        }
+
+        await subcommand.run(commandContext, rest.join(" "));
       },
     });
 

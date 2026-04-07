@@ -14,13 +14,13 @@ Repo-native pi extension under `extensions/om`.
 
 ## Admin commands
 
-- `/om-status` — show a centered status modal with current OM counts, observer/reflector thresholds, buffer load, a compact grouped recent-failure summary, and recent OM activity
-- `/om-rebuild` — rebuild OM from the current branch
-- `/om-clear` — clear OM state for the current branch
+- `/om status` — show a centered status modal with current OM counts, observer/reflector thresholds, buffer load, a compact grouped recent-failure summary, and recent OM activity
+- `/om rebuild` — rebuild OM from the current branch
+- `/om clear` — clear OM state for the current branch
 
 ## TUI activity
 
-On meaningful `turn_end` transitions, OM now emits TUI notifications and keeps a bounded recent-activity log for `/om-status`.
+On meaningful `turn_end` transitions, OM now emits TUI notifications and keeps a bounded recent-activity log for `/om status`.
 
 Examples:
 
@@ -30,7 +30,7 @@ Examples:
 - OM raw completion calls now send a non-empty system prompt so codex-style providers that require `instructions` can run observer/reflector/compaction requests
 - observer returned no durable memory for a processed window
 - observation buffer precompute skipped/failed with a surfaced reason
-- grouped failure summary in `/om-status` such as `invalid-json×2, missing-model×1`
+- grouped failure summary in `/om status` such as `invalid-json×2, missing-model×1`
 - buffered observation created/activated/superseded
 - cursor advanced with no durable memory extracted
 - reflection applied
@@ -138,12 +138,12 @@ Migration rules:
 - if observer invocation fails, returns invalid/empty output, or returns a valid empty result, OM surfaces that reason in recent activity/notifications for the current window
 - empty-output diagnostics now include compact response metadata when available (for example `model=openai/gpt-5-mini stop=stop parts=1 textParts=0 textChars=0 types=tool-call`)
 - provider-side failures now surface as an error diagnostic instead of being collapsed into `empty-output`, including `error=...` when the provider returns an explicit message
-- invalid JSON diagnostics now include a compact truncated `preview="..."` of the raw text response so format drift is visible in `/om-status`
-- `/om-status` now wraps long invalid-json previews across multiple recent-activity lines so the payload is inspectable in the TUI
+- invalid JSON diagnostics now include a compact truncated `preview="..."` of the raw text response so format drift is visible in `/om status`
+- `/om status` now wraps long invalid-json previews across multiple recent-activity lines so the payload is inspectable in the TUI
 - observer parsing now tolerates close codex-style JSON by defaulting omitted top-level arrays to `[]` and unwrapping a single JSON-string payload before strict schema validation
 - observer results may optionally include short `currentTask` / `suggestedNextResponse` continuation hints; provided values overwrite prior hints, omitted values retain prior hints, and blank strings do not auto-clear the current continuation
 - retryable observer failures (`missing-model`, `auth-failed`, `aborted`, `empty-output`, `invalid-output`, `completion-error`) do not advance `lastProcessedEntryId`, so the same raw window can be retried later
-- stale-state rebuilds and `/om-rebuild` force an immediate pass with an effective threshold of `1`
+- stale-state rebuilds and `/om rebuild` force an immediate pass with an effective threshold of `1`
 
 ### `shareTokenBudget`
 

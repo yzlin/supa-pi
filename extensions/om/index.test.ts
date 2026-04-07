@@ -106,7 +106,10 @@ function createOmHarness(
   const handlers = new Map<string, (event: unknown, ctx: any) => unknown>();
   const commands = new Map<
     string,
-    { handler: (args: string, ctx: any) => unknown }
+    {
+      handler: (args: string, ctx: any) => unknown;
+      getArgumentCompletions?: (argumentPrefix: string) => unknown;
+    }
   >();
   const entries = [...(options?.entries ?? [])];
   const branchEntries = [...(options?.branchEntries ?? [])];
@@ -532,7 +535,58 @@ describe("om compaction hook wiring", () => {
 });
 
 describe("om admin commands", () => {
-  it("reports runtime counts and buffer load through /om-status", async () => {
+  it("registers grouped subcommand completions for /om", () => {
+    const harness = createOmHarness();
+    const command = harness.commands.get("om");
+
+    expect(command?.getArgumentCompletions).toBeFunction();
+    expect(command?.getArgumentCompletions?.("")).toEqual([
+      {
+        value: "status",
+        label: "status",
+        description: "Show observational memory status",
+      },
+      {
+        value: "clear",
+        label: "clear",
+        description:
+          "Clear persisted observational memory state for the current branch",
+      },
+      {
+        value: "rebuild",
+        label: "rebuild",
+        description: "Rebuild observational memory from the current branch",
+      },
+      {
+        value: "recall",
+        label: "recall",
+        description:
+          "Recall the raw branch-local source entries behind an OM observation",
+      },
+      {
+        value: "help",
+        label: "help",
+        description: "Show help",
+      },
+    ]);
+    expect(command?.getArgumentCompletions?.("re")).toEqual([
+      {
+        value: "rebuild",
+        label: "rebuild",
+        description: "Rebuild observational memory from the current branch",
+      },
+      {
+        value: "recall",
+        label: "recall",
+        description:
+          "Recall the raw branch-local source entries behind an OM observation",
+      },
+    ]);
+    expect(command?.getArgumentCompletions?.("recall ")).toBeNull();
+    expect(command?.getArgumentCompletions?.("zzz")).toBeNull();
+  });
+
+  it("reports runtime counts and buffer load through /om status", async () => {
     const persistedEnvelope = createOmStateEnvelope(
       createSampleState({
         observations: [
@@ -660,7 +714,7 @@ describe("om admin commands", () => {
     });
 
     harness.sessionStart?.({}, harness.ctx);
-    await harness.commands.get("om-status")?.handler("", harness.ctx);
+    await harness.commands.get("om")?.handler("status", harness.ctx);
 
     expect(harness.notifications.at(-1)?.message).toContain("facts=1");
     expect(harness.notifications.at(-1)?.message).toContain("threads=1");
@@ -744,7 +798,7 @@ describe("om admin commands", () => {
 
     harness.sessionStart?.({}, harness.ctx);
     await harness.turnEnd?.({}, harness.ctx);
-    await harness.commands.get("om-status")?.handler("", harness.ctx);
+    await harness.commands.get("om")?.handler("status", harness.ctx);
 
     expect(harness.notifications).toEqual(
       expect.arrayContaining([
@@ -847,13 +901,13 @@ describe("om admin commands", () => {
     );
   });
 
-  it("clears persisted OM state through /om-clear", async () => {
+  it("clears persisted OM state through /om clear", async () => {
     const harness = createOmHarness({
       branchEntries: [{ id: "entry-1", type: "message" }],
     });
 
     harness.sessionStart?.({}, harness.ctx);
-    await harness.commands.get("om-clear")?.handler("", harness.ctx);
+    await harness.commands.get("om")?.handler("clear", harness.ctx);
 
     expect(harness.appendedEntries).toHaveLength(1);
     expect(harness.appendedEntries[0]).toMatchObject({
@@ -874,7 +928,7 @@ describe("om admin commands", () => {
     });
   });
 
-  it("rebuilds OM from the current branch through /om-rebuild", async () => {
+  it("rebuilds OM from the current branch through /om rebuild", async () => {
     const harness = createOmHarness(
       {
         branchEntries: [
@@ -916,7 +970,7 @@ describe("om admin commands", () => {
     );
 
     harness.sessionStart?.({}, harness.ctx);
-    await harness.commands.get("om-rebuild")?.handler("", harness.ctx);
+    await harness.commands.get("om")?.handler("rebuild", harness.ctx);
 
     expect(harness.appendedEntries).toHaveLength(1);
     expect(harness.appendedEntries[0]).toMatchObject({
@@ -999,7 +1053,7 @@ describe("om admin commands", () => {
     });
 
     harness.sessionStart?.({}, harness.ctx);
-    await harness.commands.get("om-recall")?.handler("obs-1", harness.ctx);
+    await harness.commands.get("om")?.handler("recall obs-1", harness.ctx);
 
     expect(harness.notifications.at(-1)).toEqual({
       message: expect.stringContaining(
@@ -1064,8 +1118,8 @@ describe("om admin commands", () => {
 
     harness.sessionStart?.({}, harness.ctx);
     await harness.commands
-      .get("om-recall")
-      ?.handler("obs-chronological", harness.ctx);
+      .get("om")
+      ?.handler("recall obs-chronological", harness.ctx);
 
     const recallMessage = harness.notifications.at(-1)?.message ?? "";
 
@@ -1110,8 +1164,8 @@ describe("om admin commands", () => {
 
     harness.sessionStart?.({}, harness.ctx);
     await harness.commands
-      .get("om-recall")
-      ?.handler("obs-missing", harness.ctx);
+      .get("om")
+      ?.handler("recall obs-missing", harness.ctx);
 
     expect(harness.notifications.at(-1)).toEqual({
       message: "Observation obs-missing not found in current branch OM state.",
@@ -1157,8 +1211,8 @@ describe("om admin commands", () => {
 
     harness.sessionStart?.({}, harness.ctx);
     await harness.commands
-      .get("om-recall")
-      ?.handler("obs-partial", harness.ctx);
+      .get("om")
+      ?.handler("recall obs-partial", harness.ctx);
 
     const recallMessage = harness.notifications.at(-1)?.message ?? "";
 
@@ -1173,7 +1227,7 @@ describe("om admin commands", () => {
   it("reports empty OM state when recall runs before runtime state exists", async () => {
     const harness = createOmHarness();
 
-    await harness.commands.get("om-recall")?.handler("obs-1", harness.ctx);
+    await harness.commands.get("om")?.handler("recall obs-1", harness.ctx);
 
     expect(harness.notifications.at(-1)).toEqual({
       message:
