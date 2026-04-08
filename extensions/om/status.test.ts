@@ -1,20 +1,115 @@
 import { describe, expect, it } from "bun:test";
 
+import { Key } from "@mariozechner/pi-tui";
+
 import {
   formatOmStatusSummary,
   type OmStatusSnapshot,
   showOmStatusView,
 } from "./status";
 
+const TEST_THEME = {
+  fg: (_color: string, text: string) => text,
+  bold: (text: string) => text,
+};
+
+type OmStatusComponent = {
+  render(width: number): string[];
+  handleInput(data: string): void;
+};
+
+function createSnapshot(
+  overrides: Partial<OmStatusSnapshot> = {}
+): OmStatusSnapshot {
+  return {
+    counts: {
+      stableFacts: 0,
+      activeThreads: 0,
+      observations: 0,
+      reflections: 0,
+    },
+    entities: {
+      stableFacts: [],
+      activeThreads: [],
+      observations: [],
+      reflections: [],
+    },
+    recentEvents: [],
+    lastProcessedEntryId: null,
+    restore: "none",
+    updatedAt: "2026-04-05T00:00:00.000Z",
+    observer: {
+      status: "noop",
+      reason: "threshold-not-met",
+      pendingEntryCount: 0,
+      pendingTurnCount: 0,
+      pendingTokens: 0,
+      thresholdTokens: 100,
+      blockAfterTokens: 120,
+      bufferTokens: 0,
+      bufferThresholdTokens: 80,
+      bufferStatus: "none",
+      bufferSourceCount: 0,
+    },
+    reflector: {
+      status: "noop",
+      reason: "threshold-not-met",
+      retainedObservationCount: 0,
+      retainedObservationTokens: 0,
+      thresholdTokens: 100,
+      blockAfterTokens: 120,
+      observationsToReflectCount: 0,
+      bufferTokens: 0,
+      bufferThresholdTokens: 50,
+      bufferStatus: "none",
+      bufferSourceCount: 0,
+    },
+    ...overrides,
+  };
+}
+
+async function renderInteractiveSnapshot(snapshot: OmStatusSnapshot) {
+  const renders: string[][] = [];
+  let component: OmStatusComponent | null = null;
+
+  await showOmStatusView(
+    {
+      hasUI: true,
+      ui: {
+        notify() {},
+        async custom(factory: any) {
+          component = factory(
+            {
+              requestRender() {},
+            },
+            TEST_THEME,
+            {},
+            () => {}
+          );
+
+          renders.push(component.render(80));
+        },
+      },
+    } as any,
+    snapshot
+  );
+
+  expect(component).not.toBeNull();
+
+  return {
+    renders,
+    component: component as NonNullable<typeof component>,
+    rerender(width = 80) {
+      const next = component?.render(width) ?? [];
+      renders.push(next);
+      return next.join("\n");
+    },
+  };
+}
+
 describe("om status view", () => {
   it("summarizes repeated recent failure reasons compactly", () => {
-    const snapshot: OmStatusSnapshot = {
-      counts: {
-        stableFacts: 0,
-        activeThreads: 0,
-        observations: 0,
-        reflections: 0,
-      },
+    const snapshot = createSnapshot({
       recentEvents: [
         {
           createdAt: "2026-04-05T00:00:01.000Z",
@@ -33,49 +128,64 @@ describe("om status view", () => {
           message: "OM observation buffer returned invalid JSON for 1 entry.",
         },
       ],
-      lastProcessedEntryId: null,
-      restore: "none",
-      updatedAt: "2026-04-05T00:00:00.000Z",
-      observer: {
-        status: "noop",
-        reason: "threshold-not-met",
-        pendingEntryCount: 0,
-        pendingTurnCount: 0,
-        pendingTokens: 0,
-        thresholdTokens: 100,
-        blockAfterTokens: 120,
-        bufferTokens: 0,
-        bufferThresholdTokens: 80,
-        bufferStatus: "none",
-        bufferSourceCount: 0,
-      },
-      reflector: {
-        status: "noop",
-        reason: "threshold-not-met",
-        retainedObservationCount: 0,
-        retainedObservationTokens: 0,
-        thresholdTokens: 100,
-        blockAfterTokens: 120,
-        observationsToReflectCount: 0,
-        bufferTokens: 0,
-        bufferThresholdTokens: 50,
-        bufferStatus: "none",
-        bufferSourceCount: 0,
-      },
-    };
+    });
 
     expect(formatOmStatusSummary(snapshot)).toContain(
       "failures=invalid-json×2, missing-model×1"
     );
   });
 
-  it("renders the interactive overlay without throwing", async () => {
-    const snapshot: OmStatusSnapshot = {
+  it("renders the overview overlay with status metrics and activity", async () => {
+    const snapshot = createSnapshot({
       counts: {
         stableFacts: 1,
         activeThreads: 1,
         observations: 2,
         reflections: 1,
+      },
+      entities: {
+        stableFacts: [
+          {
+            id: "fact-1",
+            text: "User prefers minimal diffs.",
+            sourceEntryIds: ["entry-1"],
+            updatedAt: "2026-04-05T00:00:00.000Z",
+          },
+        ],
+        activeThreads: [
+          {
+            id: "thread-1",
+            title: "Finish OM continuation",
+            status: "active",
+            summary: "Keep the status overlay useful after compaction.",
+            sourceEntryIds: ["entry-2"],
+            updatedAt: "2026-04-05T00:00:00.000Z",
+          },
+        ],
+        observations: [
+          {
+            id: "obs-1",
+            kind: "fact",
+            summary: "User wants a browsable OM status view.",
+            sourceEntryIds: ["entry-1"],
+            createdAt: "2026-04-05T00:00:00.000Z",
+          },
+          {
+            id: "obs-2",
+            kind: "decision",
+            summary: "Add navigation before adding more OM commands.",
+            sourceEntryIds: ["entry-2"],
+            createdAt: "2026-04-05T00:00:01.000Z",
+          },
+        ],
+        reflections: [
+          {
+            id: "refl-1",
+            summary: "Status needs both metrics and inspectable content.",
+            sourceObservationIds: ["obs-1", "obs-2"],
+            createdAt: "2026-04-05T00:00:02.000Z",
+          },
+        ],
       },
       continuation: {
         currentTask: "Finish OM continuation coverage.",
@@ -95,7 +205,6 @@ describe("om status view", () => {
       ],
       lastProcessedEntryId: "entry-2",
       restore: "incremental/cursor-found",
-      updatedAt: "2026-04-05T00:00:00.000Z",
       observer: {
         status: "ready",
         reason: "new-turns",
@@ -122,55 +231,124 @@ describe("om status view", () => {
         bufferStatus: "pending",
         bufferSourceCount: 1,
       },
-    };
+    });
 
-    const renders: string[][] = [];
+    const view = await renderInteractiveSnapshot(snapshot);
+    const rendered = view.renders[0]?.join("\n") ?? "";
 
-    await showOmStatusView(
-      {
-        hasUI: true,
-        ui: {
-          notify() {},
-          async custom(factory: any) {
-            const component = factory(
-              {},
-              {
-                fg: (_color: string, text: string) => text,
-                bold: (text: string) => text,
-              },
-              {},
-              () => {}
-            );
+    expect(rendered).toContain("Observational Memory Status");
+    expect(rendered).toContain("Overview");
+    expect(rendered).toContain("Buffered observation");
+    expect(rendered).toContain("Buffered reflection");
+    expect(rendered).toContain("Continuation");
+    expect(rendered).toContain("Finish OM continuation coverage.");
+    expect(rendered).toContain("Recent activity");
+    expect(rendered).toContain("OM observer applied: +1 observation, +1 fact.");
+    expect(rendered).toContain("←→/tab tabs");
+  });
 
-            renders.push(component.render(80));
+  it("navigates across OM entity tabs and shows selected content", async () => {
+    const snapshot = createSnapshot({
+      counts: {
+        stableFacts: 2,
+        activeThreads: 1,
+        observations: 2,
+        reflections: 1,
+      },
+      entities: {
+        stableFacts: [
+          {
+            id: "fact-1",
+            text: "User prefers minimal diffs.",
+            sourceEntryIds: ["entry-1"],
+            updatedAt: "2026-04-05T00:00:00.000Z",
           },
-        },
-      } as any,
-      snapshot
+          {
+            id: "fact-2",
+            text: "User wants entity navigation in /om status.",
+            sourceEntryIds: ["entry-2", "entry-3"],
+            updatedAt: "2026-04-05T00:00:05.000Z",
+          },
+        ],
+        activeThreads: [
+          {
+            id: "thread-1",
+            title: "Ship OM browser",
+            status: "active",
+            summary: "Keep summary metrics but add inspectable entities.",
+            sourceEntryIds: ["entry-4"],
+            updatedAt: "2026-04-05T00:00:10.000Z",
+          },
+        ],
+        observations: [
+          {
+            id: "obs-1",
+            kind: "fact",
+            summary: "The current overlay only closes today.",
+            sourceEntryIds: ["entry-1"],
+            createdAt: "2026-04-05T00:00:20.000Z",
+          },
+          {
+            id: "obs-2",
+            kind: "decision",
+            summary: "Reuse tab-like navigation inside /om status.",
+            sourceEntryIds: ["entry-2", "entry-3"],
+            createdAt: "2026-04-05T00:00:30.000Z",
+          },
+        ],
+        reflections: [
+          {
+            id: "refl-1",
+            summary: "A tabbed browser keeps status and content in one place.",
+            sourceObservationIds: ["obs-1", "obs-2"],
+            createdAt: "2026-04-05T00:00:40.000Z",
+          },
+        ],
+      },
+    });
+
+    const view = await renderInteractiveSnapshot(snapshot);
+
+    view.component.handleInput(Key.right);
+    let rendered = view.rerender();
+    expect(rendered).toContain("Facts (2)");
+    expect(rendered).toContain("User prefers minimal diffs.");
+    expect(rendered).toContain("Source entries");
+
+    view.component.handleInput(Key.down);
+    rendered = view.rerender();
+    expect(rendered).toContain("fact-2");
+    expect(rendered).toContain("User wants entity navigation in /om status.");
+
+    view.component.handleInput(Key.right);
+    rendered = view.rerender();
+    expect(rendered).toContain("Threads (1)");
+    expect(rendered).toContain("Ship OM browser");
+    expect(rendered).toContain(
+      "Keep summary metrics but add inspectable entities."
     );
 
-    expect(renders).toHaveLength(1);
-    expect(renders[0]?.join("\n")).toContain("Observational Memory Status");
-    expect(renders[0]?.join("\n")).toContain("Buffered observation");
-    expect(renders[0]?.join("\n")).toContain("Buffered reflection");
-    expect(renders[0]?.join("\n")).toContain("Continuation");
-    expect(renders[0]?.join("\n")).toContain(
-      "Finish OM continuation coverage."
+    view.component.handleInput(Key.right);
+    rendered = view.rerender();
+    expect(rendered).toContain("Observations (2)");
+    expect(rendered).toContain("kind fact");
+
+    view.component.handleInput(Key.down);
+    rendered = view.rerender();
+    expect(rendered).toContain("obs-2");
+    expect(rendered).toContain("Reuse tab-like navigation inside /om status.");
+
+    view.component.handleInput(Key.right);
+    rendered = view.rerender();
+    expect(rendered).toContain("Reflections (1)");
+    expect(rendered).toContain(
+      "A tabbed browser keeps status and content in one place."
     );
-    expect(renders[0]?.join("\n")).toContain("Recent activity");
-    expect(renders[0]?.join("\n")).toContain(
-      "OM observer applied: +1 observation, +1 fact."
-    );
+    expect(rendered).toContain("Source observations");
   });
 
   it("wraps invalid-json previews across multiple recent-activity lines", async () => {
-    const snapshot: OmStatusSnapshot = {
-      counts: {
-        stableFacts: 0,
-        activeThreads: 0,
-        observations: 0,
-        reflections: 0,
-      },
+    const snapshot = createSnapshot({
       recentEvents: [
         {
           createdAt: "2026-04-05T00:00:03.000Z",
@@ -179,76 +357,18 @@ describe("om status view", () => {
             'OM observer returned invalid JSON for 1 pending entry. [model=openai-codex/gpt-5.4 stop=stop parts=1 textParts=1 textChars=92 types=text preview="{\"observations\":[{\"kind\":\"fact\",\"summary\":\"A very long structured response preview that should wrap across multiple lines in the overlay.\"}]}" ]',
         },
       ],
-      lastProcessedEntryId: null,
-      restore: "none",
-      updatedAt: "2026-04-05T00:00:00.000Z",
-      observer: {
-        status: "noop",
-        reason: "threshold-not-met",
-        pendingEntryCount: 0,
-        pendingTurnCount: 0,
-        pendingTokens: 0,
-        thresholdTokens: 100,
-        blockAfterTokens: 120,
-        bufferTokens: 0,
-        bufferThresholdTokens: 80,
-        bufferStatus: "none",
-        bufferSourceCount: 0,
-      },
-      reflector: {
-        status: "noop",
-        reason: "threshold-not-met",
-        retainedObservationCount: 0,
-        retainedObservationTokens: 0,
-        thresholdTokens: 100,
-        blockAfterTokens: 120,
-        observationsToReflectCount: 0,
-        bufferTokens: 0,
-        bufferThresholdTokens: 50,
-        bufferStatus: "none",
-        bufferSourceCount: 0,
-      },
-    };
+    });
 
-    const renders: string[][] = [];
+    const view = await renderInteractiveSnapshot(snapshot);
+    const rendered = view.renders[0]?.join("\n") ?? "";
 
-    await showOmStatusView(
-      {
-        hasUI: true,
-        ui: {
-          notify() {},
-          async custom(factory: any) {
-            const component = factory(
-              {},
-              {
-                fg: (_color: string, text: string) => text,
-                bold: (text: string) => text,
-              },
-              {},
-              () => {}
-            );
-
-            renders.push(component.render(80));
-          },
-        },
-      } as any,
-      snapshot
-    );
-
-    const rendered = renders[0]?.join("\n") ?? "";
     expect(rendered).toContain("preview=");
     expect(rendered).toContain('  "{"observations"');
     expect(rendered).toContain("multiple lines in the overlay.");
   });
 
-  it("renders a compact failure summary in the overlay", async () => {
-    const snapshot: OmStatusSnapshot = {
-      counts: {
-        stableFacts: 0,
-        activeThreads: 0,
-        observations: 0,
-        reflections: 0,
-      },
+  it("renders a compact failure summary in the overview overlay", async () => {
+    const snapshot = createSnapshot({
       recentEvents: [
         {
           createdAt: "2026-04-05T00:00:01.000Z",
@@ -267,64 +387,13 @@ describe("om status view", () => {
           message: "OM observation buffer returned invalid JSON for 1 entry.",
         },
       ],
-      lastProcessedEntryId: null,
-      restore: "none",
-      updatedAt: "2026-04-05T00:00:00.000Z",
-      observer: {
-        status: "noop",
-        reason: "threshold-not-met",
-        pendingEntryCount: 0,
-        pendingTurnCount: 0,
-        pendingTokens: 0,
-        thresholdTokens: 100,
-        blockAfterTokens: 120,
-        bufferTokens: 0,
-        bufferThresholdTokens: 80,
-        bufferStatus: "none",
-        bufferSourceCount: 0,
-      },
-      reflector: {
-        status: "noop",
-        reason: "threshold-not-met",
-        retainedObservationCount: 0,
-        retainedObservationTokens: 0,
-        thresholdTokens: 100,
-        blockAfterTokens: 120,
-        observationsToReflectCount: 0,
-        bufferTokens: 0,
-        bufferThresholdTokens: 50,
-        bufferStatus: "none",
-        bufferSourceCount: 0,
-      },
-    };
+    });
 
-    const renders: string[][] = [];
+    const view = await renderInteractiveSnapshot(snapshot);
+    const rendered = view.renders[0]?.join("\n") ?? "";
 
-    await showOmStatusView(
-      {
-        hasUI: true,
-        ui: {
-          notify() {},
-          async custom(factory: any) {
-            const component = factory(
-              {},
-              {
-                fg: (_color: string, text: string) => text,
-                bold: (text: string) => text,
-              },
-              {},
-              () => {}
-            );
-
-            renders.push(component.render(80));
-          },
-        },
-      } as any,
-      snapshot
-    );
-
-    expect(renders[0]?.join("\n")).toContain("Recent failures");
-    expect(renders[0]?.join("\n")).toContain("invalid-json × 2");
-    expect(renders[0]?.join("\n")).toContain("missing-model × 1");
+    expect(rendered).toContain("Recent failures");
+    expect(rendered).toContain("invalid-json × 2");
+    expect(rendered).toContain("missing-model × 1");
   });
 });

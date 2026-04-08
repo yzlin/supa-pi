@@ -4,6 +4,7 @@ import {
   matchesKey,
   truncateToWidth,
   visibleWidth,
+  wrapTextWithAnsi,
 } from "@mariozechner/pi-tui";
 
 import { diffOmBranchEntriesSince } from "./branch";
@@ -29,12 +30,52 @@ const OVERLAY_MIN_WIDTH = 76;
 const OVERLAY_MAX_WIDTH = 96;
 const TEXT_FALLBACK_WIDTH = 56;
 const BAR_WIDTH = 74;
-const HELP = "enter/esc/q close";
+const LIST_VISIBLE_ITEMS = 6;
+const DETAIL_VISIBLE_LINES = 10;
+const OVERVIEW_HELP = "←→/tab tabs · enter/esc/q close";
+const ENTITY_HELP =
+  "←→/tab tabs · ↑↓/j/k item · pgup/pgdn detail · home/end · enter/esc/q close";
+
+const PLAIN_THEME: ThemeLike = {
+  fg: (_color, text) => text,
+  bold: (text) => text,
+};
 
 type ThemeLike = {
   fg(color: string, text: string): string;
   bold(text: string): string;
 };
+
+type OmStatusEntityTabKey =
+  | "facts"
+  | "threads"
+  | "observations"
+  | "reflections";
+
+type OmStatusTabKey = "overview" | OmStatusEntityTabKey;
+
+interface OmStatusTabDefinition {
+  key: OmStatusTabKey;
+  label: string;
+}
+
+interface OmStatusEntityItem {
+  id: string;
+  listLabel: string;
+  meta: string[];
+  sections: Array<{
+    label: string;
+    lines: string[];
+  }>;
+}
+
+const OM_STATUS_TABS: readonly OmStatusTabDefinition[] = [
+  { key: "overview", label: "Overview" },
+  { key: "facts", label: "Facts" },
+  { key: "threads", label: "Threads" },
+  { key: "observations", label: "Observations" },
+  { key: "reflections", label: "Reflections" },
+] as const;
 
 interface OmStatusEntryLike {
   id: string;
@@ -49,6 +90,12 @@ export interface OmStatusSnapshot {
     activeThreads: number;
     observations: number;
     reflections: number;
+  };
+  entities: {
+    stableFacts: OmStateV1["stableFacts"];
+    activeThreads: OmStateV1["activeThreads"];
+    observations: OmStateV1["observations"];
+    reflections: OmStateV1["reflections"];
   };
   continuation?: {
     currentTask?: string;
@@ -177,6 +224,22 @@ function centerText(content: string, width: number): string {
   return `${" ".repeat(left)}${clipped}${" ".repeat(right)}`;
 }
 
+function wrapRenderableText(text: string, width: number): string[] {
+  if (!text) {
+    return [""];
+  }
+
+  return text.split("\n").flatMap((line) => {
+    if (!line) {
+      return [""];
+    }
+
+    return wrapTextWithAnsi(line, width).map((item) =>
+      truncateToWidth(item, width)
+    );
+  });
+}
+
 function getStatusTone(status: string, reason: string): string {
   if (reason === "block-after") {
     return "warning";
@@ -230,6 +293,425 @@ function sumObservationTokens(state: OmStateV1): number {
 
 function getContinuationHints(snapshot: OmStatusSnapshot) {
   return snapshot.continuation ?? {};
+}
+
+function getTabLabel(snapshot: OmStatusSnapshot, key: OmStatusTabKey): string {
+  switch (key) {
+    case "facts":
+      return `Facts (${snapshot.entities.stableFacts.length})`;
+    case "threads":
+      return `Threads (${snapshot.entities.activeThreads.length})`;
+    case "observations":
+      return `Observations (${snapshot.entities.observations.length})`;
+    case "reflections":
+      return `Reflections (${snapshot.entities.reflections.length})`;
+    default:
+      return "Overview";
+  }
+}
+
+function renderTabBar(
+  snapshot: OmStatusSnapshot,
+  activeTab: OmStatusTabKey,
+  theme: ThemeLike,
+  width: number
+): string {
+  const separator = theme.fg("dim", " · ");
+  const text = OM_STATUS_TABS.map((tab) => {
+    const label = getTabLabel(snapshot, tab.key);
+    return tab.key === activeTab
+      ? theme.bold(theme.fg("accent", `[${label}]`))
+      : theme.fg("muted", label);
+  }).join(separator);
+
+  return truncateToWidth(text, width);
+}
+
+function clampIndex(value: number, itemCount: number): number {
+  if (itemCount <= 0) {
+    return 0;
+  }
+
+  return Math.max(0, Math.min(itemCount - 1, value));
+}
+
+function matchesInputKey(data: string, key: string): boolean {
+  return data === key || matchesKey(data, key);
+}
+
+function listOrNone(values: readonly string[]): string[] {
+  return values.length > 0 ? [...values] : ["none"];
+}
+
+function buildEntityItems(
+  snapshot: OmStatusSnapshot,
+  tabKey: OmStatusEntityTabKey
+): OmStatusEntityItem[] {
+  switch (tabKey) {
+    case "facts":
+      return snapshot.entities.stableFacts.map((fact) => ({
+        id: fact.id,
+        listLabel: `${fact.id} ${fact.text}`,
+        meta: [
+          `updated ${fact.updatedAt}`,
+          `sources ${formatCount(fact.sourceEntryIds.length)}`,
+        ],
+        sections: [
+          { label: "Text", lines: [fact.text] },
+          {
+            label: "Source entries",
+            lines: listOrNone(fact.sourceEntryIds),
+          },
+        ],
+      }));
+    case "threads":
+      return snapshot.entities.activeThreads.map((thread) => ({
+        id: thread.id,
+        listLabel: `${thread.id} [${thread.status}] ${thread.title}`,
+        meta: [
+          `status ${thread.status}`,
+          `updated ${thread.updatedAt}`,
+          `sources ${formatCount(thread.sourceEntryIds.length)}`,
+        ],
+        sections: [
+          { label: "Title", lines: [thread.title] },
+          {
+            label: "Summary",
+            lines: [thread.summary ?? "No summary recorded."],
+          },
+          {
+            label: "Source entries",
+            lines: listOrNone(thread.sourceEntryIds),
+          },
+        ],
+      }));
+    case "observations":
+      return snapshot.entities.observations.map((observation) => ({
+        id: observation.id,
+        listLabel: `${observation.id} [${observation.kind}] ${observation.summary}`,
+        meta: [
+          `kind ${observation.kind}`,
+          `created ${observation.createdAt}`,
+          `sources ${formatCount(observation.sourceEntryIds.length)}`,
+        ],
+        sections: [
+          { label: "Summary", lines: [observation.summary] },
+          {
+            label: "Source entries",
+            lines: listOrNone(observation.sourceEntryIds),
+          },
+        ],
+      }));
+    case "reflections":
+      return snapshot.entities.reflections.map((reflection) => ({
+        id: reflection.id,
+        listLabel: `${reflection.id} ${reflection.summary}`,
+        meta: [
+          `created ${reflection.createdAt}`,
+          `source observations ${formatCount(reflection.sourceObservationIds.length)}`,
+        ],
+        sections: [
+          { label: "Summary", lines: [reflection.summary] },
+          {
+            label: "Source observations",
+            lines: listOrNone(reflection.sourceObservationIds),
+          },
+        ],
+      }));
+  }
+}
+
+function buildEntityDetailLines(
+  item: OmStatusEntityItem,
+  width: number,
+  theme: ThemeLike
+): string[] {
+  const lines = [theme.bold(item.id)];
+
+  if (item.meta.length > 0) {
+    lines.push(theme.fg("muted", item.meta.join(" · ")));
+  }
+
+  for (const section of item.sections) {
+    lines.push("");
+    lines.push(theme.bold(section.label));
+
+    const sectionLines = section.lines.length > 0 ? section.lines : ["none"];
+    for (const sectionLine of sectionLines) {
+      lines.push(...wrapRenderableText(`  ${sectionLine}`, width));
+    }
+  }
+
+  return lines;
+}
+
+function getEntityDetailLineCount(
+  snapshot: OmStatusSnapshot,
+  tabKey: OmStatusEntityTabKey,
+  selectedIndex: number,
+  width: number
+): number {
+  const items = buildEntityItems(snapshot, tabKey);
+  if (items.length === 0) {
+    return 1;
+  }
+
+  return buildEntityDetailLines(
+    items[clampIndex(selectedIndex, items.length)],
+    Math.max(8, width),
+    PLAIN_THEME
+  ).length;
+}
+
+function renderOverviewLines(
+  snapshot: OmStatusSnapshot,
+  theme: ThemeLike,
+  frameWidth: number,
+  innerWidth: number
+): string[] {
+  const continuation = getContinuationHints(snapshot);
+  const barWidth = Math.max(12, Math.min(BAR_WIDTH, innerWidth));
+  const observerPercent = ratioToPercent(
+    snapshot.observer.pendingTokens,
+    snapshot.observer.thresholdTokens
+  );
+  const observerBufferPercent = ratioToPercent(
+    snapshot.observer.bufferTokens,
+    snapshot.observer.bufferThresholdTokens
+  );
+  const reflectorPercent = ratioToPercent(
+    snapshot.reflector.retainedObservationTokens,
+    snapshot.reflector.thresholdTokens
+  );
+  const reflectorBufferPercent = ratioToPercent(
+    snapshot.reflector.bufferTokens,
+    snapshot.reflector.bufferThresholdTokens
+  );
+  const recentFailures = summarizeRecentFailures(snapshot.recentEvents);
+
+  return [
+    frameLine(theme.bold(theme.fg("toolTitle", "Overview")), frameWidth),
+    frameLine(
+      `${theme.fg("accent", "■")} facts ${formatCount(snapshot.counts.stableFacts)}  ${theme.fg("accent", "■")} threads ${formatCount(snapshot.counts.activeThreads)}  ${theme.fg("accent", "■")} observations ${formatCount(snapshot.counts.observations)}  ${theme.fg("accent", "■")} reflections ${formatCount(snapshot.counts.reflections)}`,
+      frameWidth
+    ),
+    frameLine(
+      `${theme.fg("muted", "last processed")} ${snapshot.lastProcessedEntryId ?? "none"}`,
+      frameWidth
+    ),
+    ...(continuation.currentTask || continuation.suggestedNextResponse
+      ? [
+          border(frameWidth, "├", "─", "┤"),
+          frameLine(
+            theme.bold(theme.fg("toolTitle", "Continuation")),
+            frameWidth
+          ),
+          ...(continuation.currentTask
+            ? [
+                frameLine(
+                  `${theme.fg("muted", "Current task")} ${continuation.currentTask}`,
+                  frameWidth
+                ),
+              ]
+            : []),
+          ...(continuation.suggestedNextResponse
+            ? [
+                frameLine(
+                  `${theme.fg("muted", "Suggested next response")} ${continuation.suggestedNextResponse}`,
+                  frameWidth
+                ),
+              ]
+            : []),
+        ]
+      : []),
+    border(frameWidth, "├", "─", "┤"),
+    frameLine(
+      theme.bold(theme.fg("toolTitle", "Observer pipeline")),
+      frameWidth
+    ),
+    frameLine(
+      renderMetricLine({
+        label: "Pending raw turns",
+        current: snapshot.observer.pendingTokens,
+        threshold: snapshot.observer.thresholdTokens,
+        theme,
+      }),
+      frameWidth
+    ),
+    frameLine(renderProgressBar(observerPercent, barWidth, theme), frameWidth),
+    frameLine(
+      renderDetailLine({
+        left: `${theme.fg("muted", "window")} ${renderStatus(snapshot.observer.status, snapshot.observer.reason, theme)}`,
+        right: `${theme.fg("muted", "entries/turns/block")} ${formatCount(snapshot.observer.pendingEntryCount)}/${formatCount(snapshot.observer.pendingTurnCount)}/${formatCount(snapshot.observer.blockAfterTokens)}`,
+        theme,
+      }),
+      frameWidth
+    ),
+    frameLine(
+      renderMetricLine({
+        label: "Buffered observation",
+        current: snapshot.observer.bufferTokens,
+        threshold: snapshot.observer.bufferThresholdTokens,
+        theme,
+      }),
+      frameWidth
+    ),
+    frameLine(
+      renderProgressBar(observerBufferPercent, barWidth, theme),
+      frameWidth
+    ),
+    frameLine(
+      renderDetailLine({
+        left: `${theme.fg("muted", "buffer")} ${theme.fg(getStatusTone(snapshot.observer.bufferStatus, snapshot.observer.bufferStatus), snapshot.observer.bufferStatus)}`,
+        right: `${theme.fg("muted", "source entries")} ${formatCount(snapshot.observer.bufferSourceCount)}`,
+        theme,
+      }),
+      frameWidth
+    ),
+    border(frameWidth, "├", "─", "┤"),
+    frameLine(
+      theme.bold(theme.fg("toolTitle", "Reflector pipeline")),
+      frameWidth
+    ),
+    frameLine(
+      renderMetricLine({
+        label: "Retained observations",
+        current: snapshot.reflector.retainedObservationTokens,
+        threshold: snapshot.reflector.thresholdTokens,
+        theme,
+      }),
+      frameWidth
+    ),
+    frameLine(renderProgressBar(reflectorPercent, barWidth, theme), frameWidth),
+    frameLine(
+      renderDetailLine({
+        left: `${theme.fg("muted", "window")} ${renderStatus(snapshot.reflector.status, snapshot.reflector.reason, theme)}`,
+        right: `${theme.fg("muted", "observations/block")} ${formatCount(snapshot.reflector.retainedObservationCount)}/${formatCount(snapshot.reflector.blockAfterTokens)}`,
+        theme,
+      }),
+      frameWidth
+    ),
+    frameLine(
+      renderMetricLine({
+        label: "Buffered reflection",
+        current: snapshot.reflector.bufferTokens,
+        threshold: snapshot.reflector.bufferThresholdTokens,
+        theme,
+      }),
+      frameWidth
+    ),
+    frameLine(
+      renderProgressBar(reflectorBufferPercent, barWidth, theme),
+      frameWidth
+    ),
+    frameLine(
+      renderDetailLine({
+        left: `${theme.fg("muted", "buffer")} ${theme.fg(getStatusTone(snapshot.reflector.bufferStatus, snapshot.reflector.bufferStatus), snapshot.reflector.bufferStatus)}`,
+        right: `${theme.fg("muted", "to reflect/source")} ${formatCount(snapshot.reflector.observationsToReflectCount)}/${formatCount(snapshot.reflector.bufferSourceCount)}`,
+        theme,
+      }),
+      frameWidth
+    ),
+    ...(recentFailures.length > 0
+      ? [
+          border(frameWidth, "├", "─", "┤"),
+          frameLine(
+            theme.bold(theme.fg("toolTitle", "Recent failures")),
+            frameWidth
+          ),
+          ...recentFailures.map(({ label, count }) =>
+            frameLine(
+              `${theme.fg("warning", label)} ${theme.fg("dim", "×")} ${formatCount(count)}`,
+              frameWidth
+            )
+          ),
+        ]
+      : []),
+    border(frameWidth, "├", "─", "┤"),
+    frameLine(theme.bold(theme.fg("toolTitle", "Recent activity")), frameWidth),
+    ...(snapshot.recentEvents.length > 0
+      ? [...snapshot.recentEvents]
+          .slice(-5)
+          .reverse()
+          .flatMap((event) => renderRecentEventLines(event, theme, frameWidth))
+      : [
+          frameLine(
+            theme.fg("dim", "No recent OM activity in this session."),
+            frameWidth
+          ),
+        ]),
+  ];
+}
+
+function renderEntityLines(
+  snapshot: OmStatusSnapshot,
+  tabKey: OmStatusEntityTabKey,
+  selectedIndex: number,
+  detailScroll: number,
+  theme: ThemeLike,
+  frameWidth: number,
+  innerWidth: number
+): string[] {
+  const items = buildEntityItems(snapshot, tabKey);
+  const tabTitle = getTabLabel(snapshot, tabKey);
+
+  if (items.length === 0) {
+    return [
+      frameLine(theme.bold(theme.fg("toolTitle", tabTitle)), frameWidth),
+      frameLine(
+        theme.fg("dim", "No items in current branch OM state."),
+        frameWidth
+      ),
+    ];
+  }
+
+  const clampedSelection = clampIndex(selectedIndex, items.length);
+  const selectedItem = items[clampedSelection];
+  const listStart = Math.max(
+    0,
+    Math.min(
+      clampedSelection - Math.floor(LIST_VISIBLE_ITEMS / 2),
+      Math.max(0, items.length - LIST_VISIBLE_ITEMS)
+    )
+  );
+  const visibleItems = items.slice(listStart, listStart + LIST_VISIBLE_ITEMS);
+  const detailLines = buildEntityDetailLines(selectedItem, innerWidth, theme);
+  const maxDetailScroll = Math.max(
+    0,
+    detailLines.length - DETAIL_VISIBLE_LINES
+  );
+  const clampedDetailScroll = Math.max(
+    0,
+    Math.min(maxDetailScroll, detailScroll)
+  );
+  const visibleDetail = detailLines.slice(
+    clampedDetailScroll,
+    clampedDetailScroll + DETAIL_VISIBLE_LINES
+  );
+
+  return [
+    frameLine(theme.bold(theme.fg("toolTitle", tabTitle)), frameWidth),
+    frameLine(
+      `${theme.fg("muted", "Items")} ${listStart + 1}-${Math.min(items.length, listStart + visibleItems.length)}/${items.length}`,
+      frameWidth
+    ),
+    ...visibleItems.map((item, index) => {
+      const actualIndex = listStart + index;
+      const prefix =
+        actualIndex === clampedSelection ? theme.fg("accent", "> ") : "  ";
+      const color = actualIndex === clampedSelection ? "accent" : "text";
+      return frameLine(
+        `${prefix}${theme.fg(color, item.listLabel)}`,
+        frameWidth
+      );
+    }),
+    border(frameWidth, "├", "─", "┤"),
+    frameLine(
+      `${theme.fg("muted", "Selected")} ${selectedItem.id} ${theme.fg("dim", "·")} ${formatCount(clampedSelection + 1)}/${formatCount(items.length)} ${theme.fg("dim", "·")} ${theme.fg("muted", "detail")} ${clampedDetailScroll + 1}-${Math.min(detailLines.length, clampedDetailScroll + visibleDetail.length)}/${detailLines.length}`,
+      frameWidth
+    ),
+    ...visibleDetail.map((line) => frameLine(line, frameWidth)),
+  ];
 }
 
 export function createOmStatusSnapshot<
@@ -294,6 +776,24 @@ export function createOmStatusSnapshot<
       activeThreads: state.activeThreads.length,
       observations: state.observations.length,
       reflections: state.reflections.length,
+    },
+    entities: {
+      stableFacts: state.stableFacts.map((fact) => ({
+        ...fact,
+        sourceEntryIds: [...fact.sourceEntryIds],
+      })),
+      activeThreads: state.activeThreads.map((thread) => ({
+        ...thread,
+        sourceEntryIds: [...thread.sourceEntryIds],
+      })),
+      observations: state.observations.map((observation) => ({
+        ...observation,
+        sourceEntryIds: [...observation.sourceEntryIds],
+      })),
+      reflections: state.reflections.map((reflection) => ({
+        ...reflection,
+        sourceObservationIds: [...reflection.sourceObservationIds],
+      })),
     },
     continuation: {
       ...(state.currentTask ? { currentTask: state.currentTask } : {}),
@@ -521,231 +1021,206 @@ export async function showOmStatusView(
   }
 
   await ctx.ui.custom<void>(
-    (_tui, theme, _kb, done) => ({
-      invalidate() {},
-      render(width: number) {
-        if (width < TEXT_FALLBACK_WIDTH) {
-          return [truncateToWidth(formatOmStatusSummary(snapshot), width)];
-        }
+    (tui, theme, _kb, done) => {
+      let activeTabIndex = 0;
+      let lastInnerWidth = 80;
+      const selectionByTab: Record<OmStatusEntityTabKey, number> = {
+        facts: 0,
+        threads: 0,
+        observations: 0,
+        reflections: 0,
+      };
+      const detailScrollByTab: Record<OmStatusEntityTabKey, number> = {
+        facts: 0,
+        threads: 0,
+        observations: 0,
+        reflections: 0,
+      };
 
-        const continuation = getContinuationHints(snapshot);
-        const frameWidth = width;
-        const innerWidth = Math.max(8, frameWidth - 4);
-        const barWidth = Math.max(12, Math.min(BAR_WIDTH, innerWidth));
-        const observerPercent = ratioToPercent(
-          snapshot.observer.pendingTokens,
-          snapshot.observer.thresholdTokens
-        );
-        const observerBufferPercent = ratioToPercent(
-          snapshot.observer.bufferTokens,
-          snapshot.observer.bufferThresholdTokens
-        );
-        const reflectorPercent = ratioToPercent(
-          snapshot.reflector.retainedObservationTokens,
-          snapshot.reflector.thresholdTokens
-        );
-        const reflectorBufferPercent = ratioToPercent(
-          snapshot.reflector.bufferTokens,
-          snapshot.reflector.bufferThresholdTokens
-        );
-        const recentFailures = summarizeRecentFailures(snapshot.recentEvents);
+      const refresh = () => {
+        tui.requestRender?.();
+      };
 
-        return [
-          border(frameWidth, "╭", "─", "╮"),
-          frameLine(
-            centerText(
-              theme.bold(theme.fg("accent", "Observational Memory Status")),
-              innerWidth
-            ),
-            frameWidth
-          ),
-          frameLine(
-            centerText(
-              theme.fg(
-                "dim",
-                `restore ${snapshot.restore} · updated ${snapshot.updatedAt}`
+      const getActiveTab = (): OmStatusTabKey =>
+        OM_STATUS_TABS[activeTabIndex]?.key ?? "overview";
+
+      const moveTab = (delta: number) => {
+        activeTabIndex =
+          (activeTabIndex + delta + OM_STATUS_TABS.length) %
+          OM_STATUS_TABS.length;
+      };
+
+      return {
+        invalidate() {},
+        render(width: number) {
+          if (width < TEXT_FALLBACK_WIDTH) {
+            return [truncateToWidth(formatOmStatusSummary(snapshot), width)];
+          }
+
+          const frameWidth = width;
+          const innerWidth = Math.max(8, frameWidth - 4);
+          lastInnerWidth = innerWidth;
+          const activeTab = getActiveTab();
+          const bodyLines =
+            activeTab === "overview"
+              ? renderOverviewLines(snapshot, theme, frameWidth, innerWidth)
+              : renderEntityLines(
+                  snapshot,
+                  activeTab,
+                  selectionByTab[activeTab],
+                  detailScrollByTab[activeTab],
+                  theme,
+                  frameWidth,
+                  innerWidth
+                );
+
+          return [
+            border(frameWidth, "╭", "─", "╮"),
+            frameLine(
+              centerText(
+                theme.bold(theme.fg("accent", "Observational Memory Status")),
+                innerWidth
               ),
-              innerWidth
+              frameWidth
             ),
-            frameWidth
-          ),
-          border(frameWidth, "├", "─", "┤"),
-          frameLine(theme.bold(theme.fg("toolTitle", "Overview")), frameWidth),
-          frameLine(
-            `${theme.fg("accent", "■")} facts ${formatCount(snapshot.counts.stableFacts)}  ${theme.fg("accent", "■")} threads ${formatCount(snapshot.counts.activeThreads)}  ${theme.fg("accent", "■")} observations ${formatCount(snapshot.counts.observations)}  ${theme.fg("accent", "■")} reflections ${formatCount(snapshot.counts.reflections)}`,
-            frameWidth
-          ),
-          frameLine(
-            `${theme.fg("muted", "last processed")} ${snapshot.lastProcessedEntryId ?? "none"}`,
-            frameWidth
-          ),
-          ...(continuation.currentTask || continuation.suggestedNextResponse
-            ? [
-                border(frameWidth, "├", "─", "┤"),
-                frameLine(
-                  theme.bold(theme.fg("toolTitle", "Continuation")),
-                  frameWidth
+            frameLine(
+              centerText(
+                theme.fg(
+                  "dim",
+                  `restore ${snapshot.restore} · updated ${snapshot.updatedAt}`
                 ),
-                ...(continuation.currentTask
-                  ? [
-                      frameLine(
-                        `${theme.fg("muted", "Current task")} ${continuation.currentTask}`,
-                        frameWidth
-                      ),
-                    ]
-                  : []),
-                ...(continuation.suggestedNextResponse
-                  ? [
-                      frameLine(
-                        `${theme.fg("muted", "Suggested next response")} ${continuation.suggestedNextResponse}`,
-                        frameWidth
-                      ),
-                    ]
-                  : []),
-              ]
-            : []),
-          border(frameWidth, "├", "─", "┤"),
-          frameLine(
-            theme.bold(theme.fg("toolTitle", "Observer pipeline")),
-            frameWidth
-          ),
-          frameLine(
-            renderMetricLine({
-              label: "Pending raw turns",
-              current: snapshot.observer.pendingTokens,
-              threshold: snapshot.observer.thresholdTokens,
-              theme,
-            }),
-            frameWidth
-          ),
-          frameLine(
-            renderProgressBar(observerPercent, barWidth, theme),
-            frameWidth
-          ),
-          frameLine(
-            renderDetailLine({
-              left: `${theme.fg("muted", "window")} ${renderStatus(snapshot.observer.status, snapshot.observer.reason, theme)}`,
-              right: `${theme.fg("muted", "entries/turns/block")} ${formatCount(snapshot.observer.pendingEntryCount)}/${formatCount(snapshot.observer.pendingTurnCount)}/${formatCount(snapshot.observer.blockAfterTokens)}`,
-              theme,
-            }),
-            frameWidth
-          ),
-          frameLine(
-            renderMetricLine({
-              label: "Buffered observation",
-              current: snapshot.observer.bufferTokens,
-              threshold: snapshot.observer.bufferThresholdTokens,
-              theme,
-            }),
-            frameWidth
-          ),
-          frameLine(
-            renderProgressBar(observerBufferPercent, barWidth, theme),
-            frameWidth
-          ),
-          frameLine(
-            renderDetailLine({
-              left: `${theme.fg("muted", "buffer")} ${theme.fg(getStatusTone(snapshot.observer.bufferStatus, snapshot.observer.bufferStatus), snapshot.observer.bufferStatus)}`,
-              right: `${theme.fg("muted", "source entries")} ${formatCount(snapshot.observer.bufferSourceCount)}`,
-              theme,
-            }),
-            frameWidth
-          ),
-          border(frameWidth, "├", "─", "┤"),
-          frameLine(
-            theme.bold(theme.fg("toolTitle", "Reflector pipeline")),
-            frameWidth
-          ),
-          frameLine(
-            renderMetricLine({
-              label: "Retained observations",
-              current: snapshot.reflector.retainedObservationTokens,
-              threshold: snapshot.reflector.thresholdTokens,
-              theme,
-            }),
-            frameWidth
-          ),
-          frameLine(
-            renderProgressBar(reflectorPercent, barWidth, theme),
-            frameWidth
-          ),
-          frameLine(
-            renderDetailLine({
-              left: `${theme.fg("muted", "window")} ${renderStatus(snapshot.reflector.status, snapshot.reflector.reason, theme)}`,
-              right: `${theme.fg("muted", "observations/block")} ${formatCount(snapshot.reflector.retainedObservationCount)}/${formatCount(snapshot.reflector.blockAfterTokens)}`,
-              theme,
-            }),
-            frameWidth
-          ),
-          frameLine(
-            renderMetricLine({
-              label: "Buffered reflection",
-              current: snapshot.reflector.bufferTokens,
-              threshold: snapshot.reflector.bufferThresholdTokens,
-              theme,
-            }),
-            frameWidth
-          ),
-          frameLine(
-            renderProgressBar(reflectorBufferPercent, barWidth, theme),
-            frameWidth
-          ),
-          frameLine(
-            renderDetailLine({
-              left: `${theme.fg("muted", "buffer")} ${theme.fg(getStatusTone(snapshot.reflector.bufferStatus, snapshot.reflector.bufferStatus), snapshot.reflector.bufferStatus)}`,
-              right: `${theme.fg("muted", "to reflect/source")} ${formatCount(snapshot.reflector.observationsToReflectCount)}/${formatCount(snapshot.reflector.bufferSourceCount)}`,
-              theme,
-            }),
-            frameWidth
-          ),
-          ...(recentFailures.length > 0
-            ? [
-                border(frameWidth, "├", "─", "┤"),
-                frameLine(
-                  theme.bold(theme.fg("toolTitle", "Recent failures")),
-                  frameWidth
+                innerWidth
+              ),
+              frameWidth
+            ),
+            border(frameWidth, "├", "─", "┤"),
+            frameLine(
+              renderTabBar(snapshot, activeTab, theme, innerWidth),
+              frameWidth
+            ),
+            border(frameWidth, "├", "─", "┤"),
+            ...bodyLines,
+            border(frameWidth, "├", "─", "┤"),
+            frameLine(
+              centerText(
+                theme.fg(
+                  "dim",
+                  activeTab === "overview" ? OVERVIEW_HELP : ENTITY_HELP
                 ),
-                ...recentFailures.map(({ label, count }) =>
-                  frameLine(
-                    `${theme.fg("warning", label)} ${theme.fg("dim", "×")} ${formatCount(count)}`,
-                    frameWidth
-                  )
-                ),
-              ]
-            : []),
-          border(frameWidth, "├", "─", "┤"),
-          frameLine(
-            theme.bold(theme.fg("toolTitle", "Recent activity")),
-            frameWidth
-          ),
-          ...(snapshot.recentEvents.length > 0
-            ? [...snapshot.recentEvents]
-                .slice(-5)
-                .reverse()
-                .flatMap((event) =>
-                  renderRecentEventLines(event, theme, frameWidth)
-                )
-            : [
-                frameLine(
-                  theme.fg("dim", "No recent OM activity in this session."),
-                  frameWidth
-                ),
-              ]),
-          border(frameWidth, "├", "─", "┤"),
-          frameLine(centerText(theme.fg("dim", HELP), innerWidth), frameWidth),
-          border(frameWidth, "╰", "─", "╯"),
-        ];
-      },
-      handleInput(data: string) {
-        if (
-          matchesKey(data, Key.enter) ||
-          matchesKey(data, Key.escape) ||
-          data.toLowerCase() === "q"
-        ) {
-          done(undefined);
-        }
-      },
-    }),
+                innerWidth
+              ),
+              frameWidth
+            ),
+            border(frameWidth, "╰", "─", "╯"),
+          ];
+        },
+        handleInput(data: string) {
+          if (
+            matchesInputKey(data, Key.enter) ||
+            matchesInputKey(data, Key.escape) ||
+            data.toLowerCase() === "q"
+          ) {
+            done(undefined);
+            return;
+          }
+
+          if (
+            matchesInputKey(data, Key.tab) ||
+            matchesInputKey(data, Key.right) ||
+            data.toLowerCase() === "l"
+          ) {
+            moveTab(1);
+            refresh();
+            return;
+          }
+
+          if (
+            matchesInputKey(data, Key.shift("tab")) ||
+            matchesInputKey(data, Key.left) ||
+            data.toLowerCase() === "h"
+          ) {
+            moveTab(-1);
+            refresh();
+            return;
+          }
+
+          const activeTab = getActiveTab();
+          if (activeTab === "overview") {
+            return;
+          }
+
+          const items = buildEntityItems(snapshot, activeTab);
+          const maxIndex = Math.max(0, items.length - 1);
+
+          if (matchesInputKey(data, Key.up) || data.toLowerCase() === "k") {
+            selectionByTab[activeTab] = Math.max(
+              0,
+              selectionByTab[activeTab] - 1
+            );
+            detailScrollByTab[activeTab] = 0;
+            refresh();
+            return;
+          }
+
+          if (matchesInputKey(data, Key.down) || data.toLowerCase() === "j") {
+            selectionByTab[activeTab] = Math.min(
+              maxIndex,
+              selectionByTab[activeTab] + 1
+            );
+            detailScrollByTab[activeTab] = 0;
+            refresh();
+            return;
+          }
+
+          const maxDetailScroll = Math.max(
+            0,
+            getEntityDetailLineCount(
+              snapshot,
+              activeTab,
+              selectionByTab[activeTab],
+              lastInnerWidth
+            ) - DETAIL_VISIBLE_LINES
+          );
+
+          if (
+            matchesInputKey(data, Key.pageUp) ||
+            matchesInputKey(data, Key.ctrl("b"))
+          ) {
+            detailScrollByTab[activeTab] = Math.max(
+              0,
+              detailScrollByTab[activeTab] -
+                Math.max(1, DETAIL_VISIBLE_LINES - 2)
+            );
+            refresh();
+            return;
+          }
+
+          if (
+            matchesInputKey(data, Key.pageDown) ||
+            matchesInputKey(data, Key.ctrl("f"))
+          ) {
+            detailScrollByTab[activeTab] = Math.min(
+              maxDetailScroll,
+              detailScrollByTab[activeTab] +
+                Math.max(1, DETAIL_VISIBLE_LINES - 2)
+            );
+            refresh();
+            return;
+          }
+
+          if (matchesInputKey(data, Key.home)) {
+            detailScrollByTab[activeTab] = 0;
+            refresh();
+            return;
+          }
+
+          if (matchesInputKey(data, Key.end)) {
+            detailScrollByTab[activeTab] = maxDetailScroll;
+            refresh();
+          }
+        },
+      };
+    },
     {
       overlay: true,
       overlayOptions: {

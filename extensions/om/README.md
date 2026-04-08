@@ -14,13 +14,13 @@ Repo-native pi extension under `extensions/om`.
 
 ## Admin commands
 
-- `/om status` — show a centered status modal with current OM counts, observer/reflector thresholds, buffer load, a compact grouped recent-failure summary, and recent OM activity
+- `/om status` — show a centered status modal with current OM counts, observer/reflector thresholds, buffer load, a compact grouped recent-failure summary, recent OM activity, and tabs for browsing facts, threads, observations, and reflections
 - `/om rebuild` — rebuild OM from the current branch
 - `/om clear` — clear OM state for the current branch
 
 ## TUI activity
 
-On meaningful `turn_end` transitions, OM now emits TUI notifications and keeps a bounded recent-activity log for `/om status`.
+On meaningful `turn_end` transitions, OM emits TUI notifications and keeps a bounded recent-activity log for `/om status`. In the TUI modal, use `←→`/`tab` to switch tabs, then `↑↓` to move within the selected entity list.
 
 Examples:
 
