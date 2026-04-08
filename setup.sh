@@ -11,7 +11,7 @@ PI_PACKAGES=(
   "npm:pi-web-access"
   "npm:glimpseui"
   "npm:pi-skill-palette"
-  "npm:claude-agent-sdk-pi"
+  "npm:pi-claude-bridge"
   "npm:pi-anycopy"
   "npm:@plannotator/pi-extension"
   "../../dev/yzlin/pi-fzf"
