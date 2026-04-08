@@ -139,6 +139,7 @@ Migration rules:
 - empty-output diagnostics now include compact response metadata when available (for example `model=openai/gpt-5-mini stop=stop parts=1 textParts=0 textChars=0 types=tool-call`)
 - provider-side failures now surface as an error diagnostic instead of being collapsed into `empty-output`, including `error=...` when the provider returns an explicit message
 - invalid JSON diagnostics now include a compact truncated `preview="..."` of the raw text response so format drift is visible in `/om status`
+- when parsed JSON fails strict observer schema validation, invalid JSON diagnostics also include the first failing `schemaPath=...` and `schemaError="..."`
 - `/om status` now wraps long invalid-json previews across multiple recent-activity lines so the payload is inspectable in the TUI
 - observer parsing now tolerates close codex-style JSON by defaulting omitted top-level arrays to `[]` and unwrapping a single JSON-string payload before strict schema validation
 - observer results may optionally include short `currentTask` / `suggestedNextResponse` continuation hints; provided values overwrite prior hints, omitted values retain prior hints, and blank strings do not auto-clear the current continuation

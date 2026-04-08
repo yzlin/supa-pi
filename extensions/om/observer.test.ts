@@ -1239,6 +1239,70 @@ Trailing prose that should be ignored.`);
     ]);
   });
 
+  it("reports schema error details for JSON-looking invalid observer output", async () => {
+    const state = createSampleState();
+    const window = createReadyWindow(state);
+    const diagnostics: OmObserverDiagnostic[] = [];
+
+    const result = await invokeOmObserver(
+      {
+        model: { provider: "openai", id: "gpt-5-mini" },
+        modelRegistry: {
+          find() {
+            return undefined;
+          },
+          async getApiKey() {
+            return "observer-token";
+          },
+        },
+      },
+      state,
+      window,
+      {
+        onDiagnostic(diagnostic) {
+          diagnostics.push(diagnostic);
+        },
+        async completeFn() {
+          return createAssistantResponse(
+            JSON.stringify({
+              observations: [],
+              stableFacts: [],
+              activeThreads: [
+                {
+                  id: "thread-1",
+                  title: "Finish observer diagnostics",
+                  status: "in_progress",
+                },
+              ],
+            })
+          );
+        },
+      }
+    );
+
+    expect(result).toEqual(createEmptyOmObserverResult());
+    expect(diagnostics).toEqual([
+      {
+        code: "invalid-output",
+        meta: {
+          model: "openai/gpt-5-mini",
+          stopReason: "stop",
+          errorMessage: undefined,
+          textPreview:
+            '{"observations":[],"stableFacts":[],"activeThreads":[{"id":"thread-1","title":"Finish observer diagnostics","status":"in_progress"}]}',
+          contentPartCount: 1,
+          textPartCount: 1,
+          textCharCount: 133,
+          contentTypes: ["text"],
+          parsedTopLevelKeys: ["observations", "stableFacts", "activeThreads"],
+          missingTopLevelKeys: [],
+          validationErrorPath: "activeThreads[0].status",
+          validationErrorMessage: "Expected union value",
+        },
+      },
+    ]);
+  });
+
   it("reports empty-result diagnostics when the model returns valid empty JSON", async () => {
     const state = createSampleState();
     const window = createReadyWindow(state);

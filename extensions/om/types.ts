@@ -127,6 +127,8 @@ export interface OmObserverDiagnosticMeta {
   contentTypes?: string[];
   parsedTopLevelKeys?: string[];
   missingTopLevelKeys?: string[];
+  validationErrorPath?: string;
+  validationErrorMessage?: string;
 }
 
 export interface OmObserverDiagnostic {

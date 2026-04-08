@@ -12,7 +12,10 @@ import {
 } from "./branch";
 import { DEFAULT_OM_CONFIG_SNAPSHOT } from "./config";
 import { buildOmObserverPrompt } from "./prompts";
-import { isOmObserverResult } from "./schema";
+import {
+  getOmObserverResultValidationError,
+  isOmObserverResult,
+} from "./schema";
 import {
   estimateOmTurnTokens,
   selectObservationsWithinTokenBudget,
@@ -594,6 +597,8 @@ function normalizeOmObserverResultCandidate(value: unknown): {
   result: OmObserverResult | null;
   missingTopLevelKeys?: string[];
   parsedTopLevelKeys?: string[];
+  validationErrorPath?: string;
+  validationErrorMessage?: string;
 } {
   const unwrappedValue = unwrapJsonStringValue(value);
 
@@ -637,10 +642,14 @@ function normalizeOmObserverResultCandidate(value: unknown): {
     Record<string, unknown>;
 
   if (!isOmObserverResult(normalizedValue)) {
+    const validationError = getOmObserverResultValidationError(normalizedValue);
+
     return {
       result: null,
       missingTopLevelKeys,
       parsedTopLevelKeys,
+      validationErrorPath: validationError?.path,
+      validationErrorMessage: validationError?.message,
     };
   }
 
@@ -708,6 +717,8 @@ function parseOmObserverResultPayload(text: unknown): {
           diagnosticMeta: {
             parsedTopLevelKeys: normalizedCandidate.parsedTopLevelKeys,
             missingTopLevelKeys: normalizedCandidate.missingTopLevelKeys,
+            validationErrorPath: normalizedCandidate.validationErrorPath,
+            validationErrorMessage: normalizedCandidate.validationErrorMessage,
           },
         };
       }

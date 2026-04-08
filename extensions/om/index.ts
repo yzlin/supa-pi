@@ -467,6 +467,12 @@ function formatObserverDiagnosticMeta(
     meta.missingTopLevelKeys.length > 0
       ? `missing=${meta.missingTopLevelKeys.join(",")}`
       : null,
+    diagnostic.code === "invalid-output" && meta.validationErrorPath
+      ? `schemaPath=${meta.validationErrorPath}`
+      : null,
+    diagnostic.code === "invalid-output" && meta.validationErrorMessage
+      ? `schemaError=${JSON.stringify(meta.validationErrorMessage)}`
+      : null,
     diagnostic.code === "invalid-output" && meta.textPreview
       ? `preview=${JSON.stringify(meta.textPreview)}`
       : null,

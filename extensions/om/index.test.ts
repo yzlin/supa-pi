@@ -1576,6 +1576,9 @@ describe("om turn_end observer wiring", () => {
               textPartCount: 1,
               textCharCount: 92,
               contentTypes: ["text"],
+              validationErrorPath: "currentTask",
+              validationErrorMessage:
+                "Expected string length less or equal to 240",
             },
           });
           return createEmptyOmObserverResult();
@@ -1591,7 +1594,7 @@ describe("om turn_end observer wiring", () => {
       expect.arrayContaining([
         expect.objectContaining({
           message:
-            'OM observer returned invalid JSON for 1 pending entry. [model=openai-codex/gpt-5.4 stop=stop parts=1 textParts=1 textChars=92 types=text preview="I found several useful observations and will summarize them in prose instead of strict JSON."]',
+            'OM observer returned invalid JSON for 1 pending entry. [model=openai-codex/gpt-5.4 stop=stop parts=1 textParts=1 textChars=92 types=text schemaPath=currentTask schemaError="Expected string length less or equal to 240" preview="I found several useful observations and will summarize them in prose instead of strict JSON."]',
           level: "warning",
         }),
       ])

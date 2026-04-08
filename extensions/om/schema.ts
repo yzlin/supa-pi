@@ -227,6 +227,42 @@ export function isOmObserverResult(value: unknown): value is OmObserverResult {
   return Value.Check(OmObserverResultSchema, value);
 }
 
+function formatTypeBoxErrorPath(path: string): string {
+  if (!path || path === "/") {
+    return "(root)";
+  }
+
+  return path
+    .split("/")
+    .slice(1)
+    .filter((segment) => segment.length > 0)
+    .reduce((formattedPath, segment) => {
+      const decodedSegment = segment.replace(/~1/g, "/").replace(/~0/g, "~");
+
+      if (/^\d+$/.test(decodedSegment)) {
+        return `${formattedPath}[${decodedSegment}]`;
+      }
+
+      return formattedPath.length === 0
+        ? decodedSegment
+        : `${formattedPath}.${decodedSegment}`;
+    }, "");
+}
+
+export function getOmObserverResultValidationError(value: unknown): {
+  path: string;
+  message: string;
+} | null {
+  for (const error of Value.Errors(OmObserverResultSchema, value)) {
+    return {
+      path: formatTypeBoxErrorPath(error.path),
+      message: error.message,
+    };
+  }
+
+  return null;
+}
+
 export function isOmReflectorResult(
   value: unknown
 ): value is OmReflectorResult {
