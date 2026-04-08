@@ -3,6 +3,38 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PI_AGENT_DIR="$HOME/.pi/agent"
+PI_PACKAGES=(
+  "npm:@tintinweb/pi-subagents"
+  "npm:pi-mcp-adapter"
+  "npm:pi-rewind"
+  "npm:lsp-pi"
+  "npm:pi-powerline-footer"
+  "npm:pi-web-access"
+  "npm:glimpseui"
+  "npm:pi-skill-palette"
+  "npm:claude-agent-sdk-pi"
+  "npm:pi-anycopy"
+  "npm:@plannotator/pi-extension"
+  "../../dev/yzlin/pi-fzf"
+  "npm:pi-tool-display"
+  "npm:pi-promptsmith"
+  "npm:pi-token-burden"
+  "npm:@tintinweb/pi-tasks"
+)
+
+print_package_json_lines() {
+  local index
+  local last_index=$((${#PI_PACKAGES[@]} - 1))
+
+  for index in "${!PI_PACKAGES[@]}"; do
+    local suffix=","
+    if [ "$index" -eq "$last_index" ]; then
+      suffix=""
+    fi
+
+    printf '    "%s"%s\n' "${PI_PACKAGES[$index]}" "$suffix"
+  done
+}
 
 link_dir_contents() {
   local source_dir="$1"
@@ -92,63 +124,40 @@ echo ""
 # Create settings.json if it doesn't exist
 if [ ! -f "$PI_AGENT_DIR/settings.json" ]; then
   echo "Creating settings.json..."
-  cat > "$PI_AGENT_DIR/settings.json" << 'EOF'
+  {
+    cat <<EOF
 {
   "defaultProvider": "openai-codex",
   "defaultModel": "gpt-5.4",
   "defaultThinkingLevel": "xhigh",
   "packages": [
-    "npm:@tintinweb/pi-subagents",
-    "npm:@tintinweb/pi-tasks",
-    "npm:pi-mcp-adapter",
-    "npm:pi-rewind",
-    "npm:lsp-pi",
-    "npm:pi-powerline-footer",
-    "npm:@ogulcancelik/pi-ghostty-theme-sync",
-    "npm:pi-web-access",
-    "npm:glimpseui",
-    "npm:pi-skill-palette",
-    "npm:claude-agent-sdk-pi",
-    "npm:pi-anycopy",
-    "npm:pi-rtk"
+EOF
+    print_package_json_lines
+    cat <<'EOF'
   ],
   "hideThinkingBlock": false,
   "workingVibe": "zen",
   "workingVibeModel": "openai-codex/gpt-5.4-mini"
 }
 EOF
+  } > "$PI_AGENT_DIR/settings.json"
 else
   echo "settings.json already exists — skipping creation"
   echo "Make sure your packages list includes:"
-  echo '  "npm:@tintinweb/pi-subagents"'
-  echo '  "npm:@tintinweb/pi-tasks"'
-  echo '  "npm:pi-mcp-adapter"'
-  echo '  "npm:pi-rewind"'
-  echo '  "npm:lsp-pi"'
-  echo '  "npm:pi-powerline-footer"'
-  echo '  "npm:@ogulcancelik/pi-ghostty-theme-sync"'
-  echo '  "npm:pi-web-access"'
-  echo '  "npm:glimpseui"'
-  echo '  "npm:pi-skill-palette"'
-  echo '  "npm:pi-btw"'
-  echo '  "npm:claude-agent-sdk-pi"'
+
+  for package in "${PI_PACKAGES[@]}"; do
+    echo "  \"$package\""
+  done
+
   echo ""
 fi
 
 # Install packages
 echo "Installing packages..."
-pi install npm:@tintinweb/pi-subagents 2>/dev/null || echo "  @tintinweb/pi-subagents already installed"
-pi install npm:@tintinweb/pi-tasks 2>/dev/null || echo "  @tintinweb/pi-tasks already installed"
-pi install npm:pi-mcp-adapter 2>/dev/null || echo "  pi-mcp-adapter already installed"
-pi install npm:pi-rewind 2>/dev/null || echo "  pi-rewind already installed"
-pi install npm:lsp-pi 2>/dev/null || echo "  lsp-pi already installed"
-pi install npm:pi-powerline-footer 2>/dev/null || echo "  pi-powerline-footer already installed"
-pi install npm:@ogulcancelik/pi-ghostty-theme-sync 2>/dev/null || echo "  pi-ghostty-theme-sync already installed"
-pi install npm:pi-web-access 2>/dev/null || echo "  pi-web-access already installed"
-pi install npm:glimpseui 2>/dev/null || echo "  glimpseui already installed"
-pi install npm:pi-skill-palette 2>/dev/null || echo "  pi-skill-palette already installed"
-pi install npm:pi-btw 2>/dev/null || echo "  pi-btw already installed"
-pi install npm:claude-agent-sdk-pi 2>/dev/null || echo "  claude-agent-sdk-pi already installed"
+for package in "${PI_PACKAGES[@]}"; do
+  pi install "$package" 2>/dev/null || echo "  $package already installed"
+done
+
 echo ""
 
 link_dir_section "skills" "$SCRIPT_DIR/skills" "$PI_AGENT_DIR/skills"
