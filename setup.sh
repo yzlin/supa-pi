@@ -7,7 +7,6 @@ PI_PACKAGES=(
   "npm:@tintinweb/pi-subagents"
   "npm:pi-mcp-adapter"
   "npm:pi-rewind"
-  "npm:lsp-pi"
   "npm:pi-powerline-footer"
   "npm:pi-web-access"
   "npm:glimpseui"
