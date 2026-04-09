@@ -21,7 +21,11 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 
-import type { ExtensionUIContext } from "@mariozechner/pi-coding-agent";
+import {
+  getLanguageFromPath,
+  highlightCode,
+  type ExtensionUIContext,
+} from "@mariozechner/pi-coding-agent";
 import {
   Input,
   matchesKey,
@@ -119,17 +123,23 @@ function padVisibleText(text: string, width: number): string {
   return text + " ".repeat(Math.max(0, width - visibleWidth(text)));
 }
 
-function truncateVisibleText(text: string, maxWidth: number): string {
-  if (visibleWidth(text) <= maxWidth) return text;
-  let result = "";
-  let width = 0;
-  for (const char of text) {
-    const charWidth = visibleWidth(char);
-    if (width + charWidth > maxWidth - 1) break;
-    result += char;
-    width += charWidth;
+export function truncateVisibleText(text: string, maxWidth: number): string {
+  return truncateToWidth(text, maxWidth, "…");
+}
+
+export function highlightPreviewLine(line: string, lang?: string): string {
+  if (!lang) return line;
+
+  const match = line.match(/^(\s*\d+\s│ )(.*)$/u);
+  if (!match) return line;
+
+  const [, prefix, code] = match;
+  try {
+    const [highlighted = code] = highlightCode(code, lang);
+    return `${prefix}${highlighted}`;
+  } catch {
+    return line;
   }
-  return result + "…";
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -886,13 +896,15 @@ export class FileBrowserComponent {
         border("─".repeat(rightBorder) + "╮")
     );
 
+    const previewLanguage =
+      preview.kind === "file" ? getLanguageFromPath(preview.title) : undefined;
     const previewTitle = truncateVisibleText(preview.title, innerW - 1);
-    const titleLine =
-      preview.kind === "directory"
-        ? directory(previewTitle)
-        : preview.kind === "file"
-          ? bold(previewTitle)
-          : hint(previewTitle);
+    let titleLine = hint(previewTitle);
+    if (preview.kind === "directory") {
+      titleLine = directory(previewTitle);
+    } else if (preview.kind === "file") {
+      titleLine = bold(previewTitle);
+    }
     lines.push(row(` ${titleLine}`));
     lines.push(
       row(` ${hint(truncateVisibleText(preview.details, innerW - 1))}`)
@@ -906,11 +918,12 @@ export class FileBrowserComponent {
         continue;
       }
 
-      const truncatedLine = truncateVisibleText(line, innerW - 1);
-      const lineContent =
-        preview.kind === "file" && !truncatedLine.startsWith("…")
-          ? truncatedLine
-          : hint(truncatedLine);
+      const isCodePreviewLine = preview.kind === "file" && !line.startsWith("…");
+      const renderedLine = isCodePreviewLine
+        ? highlightPreviewLine(line, previewLanguage)
+        : line;
+      const truncatedLine = truncateVisibleText(renderedLine, innerW - 1);
+      const lineContent = isCodePreviewLine ? truncatedLine : hint(truncatedLine);
       lines.push(row(` ${lineContent}`));
     }
 

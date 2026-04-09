@@ -26,6 +26,7 @@ Notable interactions:
 - In the file picker, `space` queues or unqueues the highlighted file, or enters the highlighted directory
 - In the file picker, `enter` inserts the highlighted item plus any queued selections, while `esc` at the root inserts only queued selections
 - The picker opens as a near-full-height overlay, keeps the Files panel at a fixed height, and renders an internal preview pane below it that fills the remaining height for the highlighted file or directory
+- File previews in the preview pane use Pi's built-in syntax highlighting when the file type is recognized
 - The file picker's search box uses Pi's shared `Input` editing behavior for word/home/end cursor movement and related text editing shortcuts
 - Press `alt+v` to paste clipboard text raw into the editor
 - Optionally configure `doubleEscapeCommand` in `~/.pi/agent/editor-enhancements.json` or `.pi/editor-enhancements.json` to invoke an extension command on double-escape when the editor is empty and Pi is idle
