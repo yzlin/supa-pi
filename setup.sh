@@ -10,7 +10,7 @@ PI_PACKAGES=(
   "npm:pi-web-access"
   "npm:glimpseui"
   "npm:pi-skill-palette"
-  "npm:pi-claude-bridge"
+  "npm:claude-agent-sdk-pi"
   "npm:pi-anycopy"
   "npm:@plannotator/pi-extension"
   "npm:pi-tool-display"
@@ -137,7 +137,7 @@ EOF
   "workingVibeModel": "openai-codex/gpt-5.4-mini"
 }
 EOF
-  } > "$PI_AGENT_DIR/settings.json"
+  } >"$PI_AGENT_DIR/settings.json"
 else
   echo "settings.json already exists — skipping creation"
   echo "Make sure your packages list includes:"
