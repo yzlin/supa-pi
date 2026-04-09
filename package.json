@@ -22,6 +22,7 @@
       "./extensions/init-deep",
       "./extensions/smart-docs",
       "./extensions/om",
+      "./extensions/editor-enhancements",
       "./extensions/lsp",
       "./extensions/skills.ts"
     ]
