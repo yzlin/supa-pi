@@ -3,13 +3,26 @@ import { describe, expect, it } from "bun:test";
 import executeExtension from "./index";
 import { EXECUTE_PROMPT } from "./constants";
 
-function createMockCtx() {
+function createMockCtx(
+  branchEntries: Array<{
+    type: string;
+    message?: {
+      role: string;
+      content: string | Array<{ type?: string; text?: string }>;
+    };
+  }> = []
+) {
   const notifications: Array<{ message: string; level: string }> = [];
 
   return {
     notifications,
     ctx: {
       isIdle: () => true,
+      sessionManager: {
+        getBranch() {
+          return branchEntries;
+        },
+      },
       ui: {
         notify(message: string, level: string) {
           notifications.push({ message, level });
@@ -50,7 +63,7 @@ describe("execute command", () => {
 
     expect(runtime.sentUserMessages).toEqual([
       {
-        content: `${EXECUTE_PROMPT}\n\nTask: implement @plan.md`,
+        content: `${EXECUTE_PROMPT}\n\n<plan>\nimplement @plan.md\n</plan>`,
         options: undefined,
       },
     ]);
@@ -72,7 +85,7 @@ describe("execute command", () => {
 
     expect(runtime.sentUserMessages).toEqual([
       {
-        content: `${EXECUTE_PROMPT}\n\nTask: implement @plan.md`,
+        content: `${EXECUTE_PROMPT}\n\n<plan>\nimplement @plan.md\n</plan>`,
         options: { deliverAs: "followUp" },
       },
     ]);
@@ -82,7 +95,68 @@ describe("execute command", () => {
     });
   });
 
-  it("warns when /execute is missing a plan", async () => {
+  it("reuses the last session message when /execute has no args", async () => {
+    const runtime = createMockPiRuntime();
+    const { ctx, notifications } = createMockCtx([
+      {
+        type: "message",
+        message: {
+          role: "assistant",
+          content: [{ type: "text", text: "1. Ship it\n2. Validate it" }],
+        },
+      },
+    ]);
+
+    executeExtension(runtime.pi as never);
+    const handler = runtime.commands.get("execute")?.handler;
+
+    expect(handler).toBeDefined();
+    await handler?.("   ", ctx as never);
+
+    expect(runtime.sentUserMessages).toEqual([
+      {
+        content: `${EXECUTE_PROMPT}\n\n<plan>\n1. Ship it\n2. Validate it\n</plan>`,
+        options: undefined,
+      },
+    ]);
+    expect(notifications).toEqual([]);
+  });
+
+  it("skips prior /execute prompt wrappers when reusing the last message", async () => {
+    const runtime = createMockPiRuntime();
+    const { ctx, notifications } = createMockCtx([
+      {
+        type: "message",
+        message: {
+          role: "assistant",
+          content: [{ type: "text", text: "Ship the settings migration" }],
+        },
+      },
+      {
+        type: "message",
+        message: {
+          role: "user",
+          content: `${EXECUTE_PROMPT}\n\n<plan>\nold task\n</plan>`,
+        },
+      },
+    ]);
+
+    executeExtension(runtime.pi as never);
+    const handler = runtime.commands.get("execute")?.handler;
+
+    expect(handler).toBeDefined();
+    await handler?.("   ", ctx as never);
+
+    expect(runtime.sentUserMessages).toEqual([
+      {
+        content: `${EXECUTE_PROMPT}\n\n<plan>\nShip the settings migration\n</plan>`,
+        options: undefined,
+      },
+    ]);
+    expect(notifications).toEqual([]);
+  });
+
+  it("warns when /execute has no args and no reusable message", async () => {
     const runtime = createMockPiRuntime();
     const { ctx, notifications } = createMockCtx();
 
@@ -94,7 +168,8 @@ describe("execute command", () => {
 
     expect(runtime.sentUserMessages).toEqual([]);
     expect(notifications).toContainEqual({
-      message: "Usage: /execute <plan>",
+      message:
+        "Usage: /execute [plan] (or run it after a message to reuse that text)",
       level: "warning",
     });
   });
