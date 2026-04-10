@@ -8,6 +8,7 @@
  * - @ shortcut opens file browser (replaces built-in)
  * - Resume-picker-style search input editing
  * - Right arrow toggles files / enters directories when the search box is empty
+ * - Ctrl+N / Ctrl+P move down / up in picker lists
  * - Shift+Tab to toggle options panel (gitignore, hidden files)
  * - Configurable Tab completion modes: segment or best-match
  * - Fuzzy search and glob patterns
@@ -347,7 +348,11 @@ export class FileBrowserComponent {
       return;
     }
 
-    if (matchesKey(data, "up") || matchesKey(data, "left")) {
+    if (
+      matchesKey(data, "up") ||
+      matchesKey(data, "left") ||
+      matchesKey(data, "ctrl+p")
+    ) {
       if (visibleOptions.length > 0) {
         this.selectedOption =
           this.selectedOption === 0
@@ -357,7 +362,11 @@ export class FileBrowserComponent {
       return;
     }
 
-    if (matchesKey(data, "down") || matchesKey(data, "right")) {
+    if (
+      matchesKey(data, "down") ||
+      matchesKey(data, "right") ||
+      matchesKey(data, "ctrl+n")
+    ) {
       if (visibleOptions.length > 0) {
         this.selectedOption =
           this.selectedOption === visibleOptions.length - 1
@@ -430,7 +439,7 @@ export class FileBrowserComponent {
       return;
     }
 
-    if (matchesKey(data, "up")) {
+    if (matchesKey(data, "up") || matchesKey(data, "ctrl+p")) {
       if (this.filtered.length > 0) {
         this.selected =
           this.selected === 0 ? this.filtered.length - 1 : this.selected - 1;
@@ -438,7 +447,7 @@ export class FileBrowserComponent {
       return;
     }
 
-    if (matchesKey(data, "down")) {
+    if (matchesKey(data, "down") || matchesKey(data, "ctrl+n")) {
       if (this.filtered.length > 0) {
         this.selected =
           this.selected === this.filtered.length - 1 ? 0 : this.selected + 1;

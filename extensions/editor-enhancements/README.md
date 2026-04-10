@@ -24,6 +24,7 @@ This extension does not add a primary top-level slash command of its own. Its be
 Notable interactions:
 - Type `@` at token start to open the file picker
 - In the file picker, `space` queues or unqueues the highlighted file, or enters the highlighted directory
+- In the file picker, `ctrl+n` / `ctrl+p` move the highlight down / up in the file list and options panel
 - In the file picker, `enter` inserts the highlighted item plus any queued selections, while `esc` at the root inserts only queued selections
 - The picker opens as a near-full-height overlay, keeps the Files panel at a fixed height, and renders an internal preview pane below it that fills the remaining height for the highlighted file or directory
 - File previews in the preview pane use Pi's built-in syntax highlighting when the file type is recognized
