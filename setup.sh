@@ -162,10 +162,6 @@ link_dir_section "agents" "$SCRIPT_DIR/agents" "$PI_AGENT_DIR/agents"
 link_dir_section "prompts" "$SCRIPT_DIR/prompts" "$PI_AGENT_DIR/prompts"
 link_dir_section "rules" "$SCRIPT_DIR/rules" "$PI_AGENT_DIR/rules"
 
-echo "Linking fzf.json..."
-link_file "$SCRIPT_DIR/fzf.json" "$PI_AGENT_DIR/fzf.json" "fzf.json"
-echo ""
-
 echo "✅ Setup complete!"
 echo ""
 echo "Restart pi to pick up all changes."
