@@ -93,6 +93,32 @@ describe("file picker preview", () => {
     });
   });
 
+  it("shows all directory items when the preview pane has enough rows", () => {
+    const root = createTempDir();
+    mkdirSync(join(root, "agents"), { recursive: true });
+
+    const names = Array.from({ length: 16 }, (_, index) =>
+      `agent-${String(index + 1).padStart(2, "0")}.md`
+    );
+    for (const name of names) {
+      writeFileSync(join(root, "agents", name), name, "utf8");
+    }
+
+    const preview = loadPreviewData({
+      cwdRoot: root,
+      currentDir: root,
+      entry: entry("agents", true),
+      maxLines: 20,
+    });
+
+    expect(preview).toEqual({
+      kind: "directory",
+      title: "agents/",
+      details: "directory • 16 items",
+      lines: names,
+    });
+  });
+
   it("describes navigation previews for the parent entry", () => {
     const root = createTempDir();
     mkdirSync(join(root, "src"), { recursive: true });

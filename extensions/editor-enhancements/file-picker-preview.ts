@@ -5,7 +5,6 @@ import { isWithinCwd } from "./file-picker-data.js";
 import type { FileEntry } from "./file-picker-types.js";
 
 const DEFAULT_MAX_PREVIEW_BYTES = 16 * 1024;
-const DEFAULT_MAX_DIRECTORY_ITEMS = 12;
 
 type PreviewKind = "empty" | "file" | "directory" | "binary" | "navigation";
 
@@ -103,10 +102,7 @@ function buildDirectoryPreview(
         return left.label.localeCompare(right.label);
       });
 
-    const lineLimit = Math.max(
-      1,
-      Math.min(maxLines, DEFAULT_MAX_DIRECTORY_ITEMS)
-    );
+    const lineLimit = Math.max(1, maxLines);
     const lines = items.slice(0, lineLimit).map((item) => item.label);
     if (items.length > lineLimit) {
       lines.push(`… ${items.length - lineLimit} more`);
