@@ -4,6 +4,9 @@ A planning workflow for investigating the request, clarifying the important bran
 
 **Announce at start:** "Let me investigate first, then we’ll work through the plan together here."
 
+Requirements:
+- If the request includes `<request>...</request>`, ignore surrounding text and treat only the content inside that tag pair as the planning input.
+
 ---
 
 ## The Flow
