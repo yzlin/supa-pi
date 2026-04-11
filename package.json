@@ -27,7 +27,12 @@
       "./extensions/skills.ts"
     ]
   },
-  "scripts": {},
+  "scripts": {
+    "build:syntect-picker-preview": "node ./extensions/editor-enhancements/native/syntect-picker-preview/scripts/build.mjs",
+    "build:syntect-picker-preview:debug": "node ./extensions/editor-enhancements/native/syntect-picker-preview/scripts/build.mjs --debug",
+    "check:syntect-picker-preview": "cargo check --manifest-path ./extensions/editor-enhancements/native/syntect-picker-preview/Cargo.toml",
+    "test:syntect-picker-preview": "cargo test --manifest-path ./extensions/editor-enhancements/native/syntect-picker-preview/Cargo.toml"
+  },
   "peerDependencies": {
     "@mariozechner/pi-coding-agent": "*",
     "@mariozechner/pi-ai": "*",

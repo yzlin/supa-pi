@@ -5,6 +5,7 @@ export interface FileEntry {
 }
 
 export type TabCompletionMode = "segment" | "bestMatch";
+export type PreviewHighlightMode = "native" | "builtin";
 
 export interface PickerState {
   respectGitignore: boolean;
@@ -18,6 +19,7 @@ export interface PickerConfig {
   allowFolderSelection?: boolean;
   skipPatterns?: string[];
   tabCompletionMode?: TabCompletionMode;
+  previewHighlightMode?: PreviewHighlightMode;
 }
 
 export interface PickerRuntimeConfig {
@@ -26,6 +28,7 @@ export interface PickerRuntimeConfig {
   allowFolderSelection: boolean;
   skipPatterns: string[];
   tabCompletionMode: TabCompletionMode;
+  previewHighlightMode: PreviewHighlightMode;
 }
 
 export interface BrowserOption {

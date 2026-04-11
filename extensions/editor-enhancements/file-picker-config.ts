@@ -2,10 +2,12 @@ import type {
   PickerConfig,
   PickerRuntimeConfig,
   PickerState,
+  PreviewHighlightMode,
   TabCompletionMode,
 } from "./file-picker-types.js";
 
 export const DEFAULT_TAB_COMPLETION_MODE: TabCompletionMode = "bestMatch";
+export const DEFAULT_PREVIEW_HIGHLIGHT_MODE: PreviewHighlightMode = "native";
 
 export const DEFAULT_FILE_PICKER_CONFIG: PickerRuntimeConfig = {
   respectGitignore: true,
@@ -13,6 +15,7 @@ export const DEFAULT_FILE_PICKER_CONFIG: PickerRuntimeConfig = {
   allowFolderSelection: true,
   skipPatterns: ["node_modules"],
   tabCompletionMode: DEFAULT_TAB_COMPLETION_MODE,
+  previewHighlightMode: DEFAULT_PREVIEW_HIGHLIGHT_MODE,
 };
 
 export function normalizeTabCompletionMode(value: unknown): TabCompletionMode {
@@ -32,6 +35,14 @@ function normalizeSkipPatterns(value: unknown): string[] | undefined {
   return skipPatterns;
 }
 
+export function normalizePreviewHighlightMode(
+  value: unknown
+): PreviewHighlightMode {
+  return value === "builtin" || value === "native"
+    ? value
+    : DEFAULT_PREVIEW_HIGHLIGHT_MODE;
+}
+
 export function normalizeFilePickerConfig(
   value: unknown
 ): Partial<PickerRuntimeConfig> {
@@ -39,7 +50,10 @@ export function normalizeFilePickerConfig(
     return {};
   }
 
-  const parsed = value as PickerConfig & { tabCompletionMode?: unknown };
+  const parsed = value as PickerConfig & {
+    tabCompletionMode?: unknown;
+    previewHighlightMode?: unknown;
+  };
   const next: Partial<PickerRuntimeConfig> = {};
 
   if (typeof parsed.respectGitignore === "boolean") {
@@ -67,6 +81,12 @@ export function normalizeFilePickerConfig(
     );
   }
 
+  if (Object.prototype.hasOwnProperty.call(parsed, "previewHighlightMode")) {
+    next.previewHighlightMode = normalizePreviewHighlightMode(
+      parsed.previewHighlightMode
+    );
+  }
+
   return next;
 }
 
@@ -86,6 +106,8 @@ export function mergeFilePickerConfigs(
       ...config,
       skipPatterns: config.skipPatterns ?? merged.skipPatterns,
       tabCompletionMode: config.tabCompletionMode ?? merged.tabCompletionMode,
+      previewHighlightMode:
+        config.previewHighlightMode ?? merged.previewHighlightMode,
     };
   }
 

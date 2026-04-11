@@ -27,7 +27,7 @@ Notable interactions:
 - In the file picker, `ctrl+n` / `ctrl+p` move the highlight down / up in the file list and options panel
 - In the file picker, `enter` inserts the highlighted item plus any queued selections, while `esc` at the root inserts only queued selections
 - The picker opens as a near-full-height overlay, keeps the Files panel at a fixed height, and renders an internal preview pane below it that fills the remaining height for the highlighted file or directory
-- File previews in the preview pane use Pi's built-in syntax highlighting when the file type is recognized
+- File previews in the preview pane can use either the picker-local syntect native addon (`previewHighlightMode: "native"`) or Pi's built-in syntax highlighting (`previewHighlightMode: "builtin"`)
 - The file picker's search box uses Pi's shared `Input` editing behavior for word/home/end cursor movement and related text editing shortcuts
 - Press `alt+v` to paste clipboard text raw into the editor
 - Optionally configure `doubleEscapeCommand` in `~/.pi/agent/editor-enhancements.json` or `.pi/editor-enhancements.json` to invoke an extension command on double-escape when the editor is empty and Pi is idle
@@ -60,6 +60,9 @@ Put file picker settings under the nested `filePicker` key in either file (copy 
   - `tabCompletionMode`: `"segment"` or `"bestMatch"` (default `"bestMatch"`)
     - `"segment"`: prefix-only candidate matching, then complete one word-part at a time
     - `"bestMatch"`: use the strongest scoped fuzzy match and replace the whole query in one Tab
+  - `previewHighlightMode`: `"native"` or `"builtin"` (default `"native"`)
+    - `"native"`: use the picker-local Rust/syntect/bat-backed highlighter, with Pi built-in highlighting as runtime fallback if the native binary is unavailable
+    - `"builtin"`: always use Pi's built-in JS highlighter and skip native warmup/load work
 
 ```json
 {
@@ -73,7 +76,8 @@ Put file picker settings under the nested `filePicker` key in either file (copy 
     "skipHidden": true,
     "allowFolderSelection": true,
     "skipPatterns": ["node_modules"],
-    "tabCompletionMode": "bestMatch"
+    "tabCompletionMode": "bestMatch",
+    "previewHighlightMode": "native"
   }
 }
 ```
@@ -102,6 +106,23 @@ project-root/
     └── editor-enhancements/
         └── file-picker.json  # legacy fallback only
 ```
+
+## Native preview addon
+
+The file picker can use a local Rust/N-API addon at `extensions/editor-enhancements/native/syntect-picker-preview/` for richer preview highlighting.
+
+Build it from the repo root:
+
+```bash
+npm run build:syntect-picker-preview
+```
+
+Current scope:
+- picker preview only
+- macOS + Linux on `x64` / `arm64`
+- optional at runtime when `previewHighlightMode` is `"native"`; if the native binary is absent or fails to load, preview highlighting falls back to Pi's current JS highlighter
+- `.ts` / `.tsx` currently use syntect's built-in JavaScript grammar as an approximation because syntect's default dump does not ship native TypeScript grammars
+- native preview colors use bat's default themes: `Monokai Extended` for dark mode and `Monokai Extended Light` for light mode
 
 ## Notes
 

@@ -3,10 +3,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import {
-  getLanguageFromPath,
-  initTheme,
-} from "@mariozechner/pi-coding-agent";
+import { initTheme } from "@mariozechner/pi-coding-agent";
 import { visibleWidth } from "@mariozechner/pi-tui";
 
 import {
@@ -17,7 +14,7 @@ import {
 
 initTheme("dark");
 
-const previewLanguage = getLanguageFromPath("example.ts");
+const previewPath = "example.ts";
 const tempDirs: string[] = [];
 const originalCwd = process.cwd();
 
@@ -40,7 +37,7 @@ afterEach(() => {
 
 describe("file picker preview rendering", () => {
   it("syntax highlights only the code portion of numbered preview lines", () => {
-    const line = highlightPreviewLine(" 1 │ const answer = 42;", previewLanguage);
+    const line = highlightPreviewLine(" 1 │ const answer = 42;", previewPath);
 
     expect(line.startsWith(" 1 │ ")).toBe(true);
     expect(line).toContain("\x1b[");
@@ -48,7 +45,7 @@ describe("file picker preview rendering", () => {
   });
 
   it("leaves non-code preview rows unchanged", () => {
-    expect(highlightPreviewLine("… preview truncated", previewLanguage)).toBe(
+    expect(highlightPreviewLine("… preview truncated", previewPath)).toBe(
       "… preview truncated"
     );
   });
@@ -56,7 +53,7 @@ describe("file picker preview rendering", () => {
   it("truncates highlighted preview lines with ANSI-safe width handling", () => {
     const highlighted = highlightPreviewLine(
       " 1 │ const extraordinarilyLongIdentifier = 42;",
-      previewLanguage
+      previewPath
     );
 
     const truncated = truncateVisibleText(highlighted, 16);

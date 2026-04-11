@@ -22,11 +22,7 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 
-import {
-  getLanguageFromPath,
-  highlightCode,
-  type ExtensionUIContext,
-} from "@mariozechner/pi-coding-agent";
+import { type ExtensionUIContext } from "@mariozechner/pi-coding-agent";
 import {
   Input,
   matchesKey,
@@ -52,12 +48,14 @@ import {
   stripLeadingSlash,
   withQuerySlash,
 } from "./file-picker-filter.js";
+import { highlightPreviewLines } from "./file-picker-highlight.js";
 import { loadPreviewData } from "./file-picker-preview.js";
 import type {
   BrowserOption,
   CompletionEntry,
   FileBrowserAction,
   FileEntry,
+  PreviewHighlightMode,
   SelectedPath,
 } from "./file-picker-types.js";
 
@@ -128,19 +126,15 @@ export function truncateVisibleText(text: string, maxWidth: number): string {
   return truncateToWidth(text, maxWidth, "…");
 }
 
-export function highlightPreviewLine(line: string, lang?: string): string {
-  if (!lang) return line;
+export { highlightPreviewLine } from "./file-picker-highlight.js";
 
-  const match = line.match(/^(\s*\d+\s│ )(.*)$/u);
-  if (!match) return line;
+function inferPreviewThemeMode(theme: unknown): "dark" | "light" {
+  const name =
+    typeof theme === "object" && theme !== null && "name" in theme
+      ? String((theme as { name?: unknown }).name ?? "")
+      : "";
 
-  const [, prefix, code] = match;
-  try {
-    const [highlighted = code] = highlightCode(code, lang);
-    return `${prefix}${highlighted}`;
-  } catch {
-    return line;
-  }
+  return name.toLowerCase().includes("light") ? "light" : "dark";
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -148,6 +142,8 @@ export function highlightPreviewLine(line: string, lang?: string): string {
 // ═══════════════════════════════════════════════════════════════════════════
 
 export class FileBrowserComponent {
+  private readonly previewThemeMode: "dark" | "light";
+  private readonly previewHighlightMode: PreviewHighlightMode;
   readonly width = 120;
   private readonly maxVisible = 10;
   private readonly overlayHeightRatio = 0.94;
@@ -170,8 +166,14 @@ export class FileBrowserComponent {
   private options: BrowserOption[];
   private done: (action: FileBrowserAction) => void;
 
-  constructor(done: (action: FileBrowserAction) => void) {
+  constructor(
+    done: (action: FileBrowserAction) => void,
+    previewThemeMode: "dark" | "light" = "dark",
+    previewHighlightMode: PreviewHighlightMode = config.previewHighlightMode
+  ) {
     this.done = done;
+    this.previewThemeMode = previewThemeMode;
+    this.previewHighlightMode = previewHighlightMode;
     this.cwdRoot = getCwdRoot();
     this.currentDir = this.cwdRoot;
     this.selectedPaths = new Map();
@@ -922,8 +924,15 @@ export class FileBrowserComponent {
         border("─".repeat(rightBorder) + "╮")
     );
 
-    const previewLanguage =
-      preview.kind === "file" ? getLanguageFromPath(preview.title) : undefined;
+    const renderedPreviewLines =
+      preview.kind === "file"
+        ? highlightPreviewLines(
+            preview.lines,
+            preview.title,
+            this.previewThemeMode,
+            this.previewHighlightMode
+          )
+        : preview.lines;
     const previewTitle = truncateVisibleText(preview.title, innerW - 1);
     let titleLine = hint(previewTitle);
     if (preview.kind === "directory") {
@@ -938,18 +947,18 @@ export class FileBrowserComponent {
     lines.push(border(`├${"─".repeat(innerW)}┤`));
 
     for (let i = 0; i < bodyRows; i++) {
-      const line = preview.lines[i];
+      const line = renderedPreviewLines[i];
       if (line === undefined) {
         lines.push(row(""));
         continue;
       }
 
-      const isCodePreviewLine = preview.kind === "file" && !line.startsWith("…");
-      const renderedLine = isCodePreviewLine
-        ? highlightPreviewLine(line, previewLanguage)
-        : line;
-      const truncatedLine = truncateVisibleText(renderedLine, innerW - 1);
-      const lineContent = isCodePreviewLine ? truncatedLine : hint(truncatedLine);
+      const isCodePreviewLine =
+        preview.kind === "file" && !line.startsWith("…");
+      const truncatedLine = truncateVisibleText(line, innerW - 1);
+      const lineContent = isCodePreviewLine
+        ? truncatedLine
+        : hint(truncatedLine);
       lines.push(row(` ${lineContent}`));
     }
 
@@ -993,7 +1002,12 @@ export class FileBrowserComponent {
 
 export async function openFilePicker(ui: ExtensionUIContext): Promise<string> {
   const result = await ui.custom<FileBrowserAction>(
-    (_tui, _theme, _kb, done) => new FileBrowserComponent(done),
+    (_tui, theme, _kb, done) =>
+      new FileBrowserComponent(
+        done,
+        inferPreviewThemeMode(theme),
+        config.previewHighlightMode
+      ),
     {
       overlay: true,
       overlayOptions: {

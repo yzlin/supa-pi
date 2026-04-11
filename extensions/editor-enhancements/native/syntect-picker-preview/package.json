@@ -1,0 +1,13 @@
+{
+  "name": "@supa-pi/syntect-picker-preview",
+  "private": true,
+  "type": "commonjs",
+  "main": "./index.js",
+  "types": "./index.d.ts",
+  "scripts": {
+    "build": "node ./scripts/build.mjs",
+    "build:debug": "node ./scripts/build.mjs --debug",
+    "check": "cargo check",
+    "test": "cargo test"
+  }
+}

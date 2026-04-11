@@ -17,6 +17,7 @@ describe("editor enhancements config", () => {
           allowFolderSelection: false,
           skipPatterns: ["global"],
           tabCompletionMode: "segment",
+          previewHighlightMode: "builtin",
         },
       },
       {
@@ -49,6 +50,7 @@ describe("editor enhancements config", () => {
         allowFolderSelection: false,
         skipPatterns: ["project"],
         tabCompletionMode: "segment",
+        previewHighlightMode: "builtin",
       },
     });
   });
@@ -68,6 +70,7 @@ describe("editor enhancements config", () => {
         allowFolderSelection: false,
         skipPatterns: ["legacy-only"],
         tabCompletionMode: "segment",
+        previewHighlightMode: "builtin",
       }
     );
 
@@ -82,6 +85,7 @@ describe("editor enhancements config", () => {
         allowFolderSelection: false,
         skipPatterns: ["legacy-only"],
         tabCompletionMode: "segment",
+        previewHighlightMode: "builtin",
       },
     });
   });
