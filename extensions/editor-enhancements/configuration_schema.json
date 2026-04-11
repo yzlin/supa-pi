@@ -1,0 +1,68 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "editor-enhancements configuration",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "doubleEscapeCommand": {
+      "type": ["string", "null"],
+      "default": null,
+      "description": "Optional extension command name to invoke on empty-editor double-escape. Accepts either 'anycopy' or '/anycopy'."
+    },
+    "commandRemap": {
+      "type": "object",
+      "default": {},
+      "description": "Map of submitted slash command names to replacement command names. Keys and values may include a leading '/'; runtime normalization trims whitespace and strips the slash.",
+      "additionalProperties": {
+        "type": "string"
+      }
+    },
+    "filePicker": {
+      "$ref": "#/$defs/filePickerConfig"
+    }
+  },
+  "$defs": {
+    "filePickerConfig": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "respectGitignore": {
+          "type": "boolean",
+          "default": true,
+          "description": "Hide files ignored by .gitignore when browsing."
+        },
+        "skipHidden": {
+          "type": "boolean",
+          "default": true,
+          "description": "Hide dotfiles and hidden directories in the picker."
+        },
+        "allowFolderSelection": {
+          "type": "boolean",
+          "default": true,
+          "description": "Allow folders to be queued and inserted as @path/ refs."
+        },
+        "skipPatterns": {
+          "type": "array",
+          "description": "Directory or file name patterns skipped by the picker.",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "default": ["node_modules"]
+        },
+        "tabCompletionMode": {
+          "type": "string",
+          "enum": ["segment", "bestMatch"],
+          "default": "bestMatch",
+          "description": "How Tab completes file-picker queries. 'segment' advances one path segment at a time; 'bestMatch' replaces the query with the strongest scoped fuzzy match."
+        },
+        "previewHighlightMode": {
+          "type": "string",
+          "enum": ["native", "builtin"],
+          "default": "native",
+          "description": "How the preview pane highlights source code. 'native' uses the local syntect addon with builtin fallback; 'builtin' always uses Pi's JS highlighter."
+        }
+      }
+    }
+  }
+}

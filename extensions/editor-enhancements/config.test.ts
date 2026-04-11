@@ -13,6 +13,7 @@ describe("editor enhancements config", () => {
           test: "global-test",
         },
         filePicker: {
+          respectGitignore: false,
           skipHidden: true,
           allowFolderSelection: false,
           skipPatterns: ["global"],
@@ -29,11 +30,6 @@ describe("editor enhancements config", () => {
           skipHidden: false,
           skipPatterns: ["project"],
         },
-      },
-      {
-        respectGitignore: false,
-        allowFolderSelection: true,
-        skipPatterns: ["legacy"],
       }
     );
 
@@ -55,7 +51,7 @@ describe("editor enhancements config", () => {
     });
   });
 
-  it("falls back to legacy file picker config when newer configs omit it", () => {
+  it("uses defaults when file picker config is omitted", () => {
     const config = resolveRuntimeConfig(
       {
         doubleEscapeCommand: "global-command",
@@ -64,13 +60,6 @@ describe("editor enhancements config", () => {
         commandRemap: {
           tree: "anycopy",
         },
-      },
-      {
-        skipHidden: false,
-        allowFolderSelection: false,
-        skipPatterns: ["legacy-only"],
-        tabCompletionMode: "segment",
-        previewHighlightMode: "builtin",
       }
     );
 
@@ -79,14 +68,7 @@ describe("editor enhancements config", () => {
       commandRemap: {
         tree: "anycopy",
       },
-      filePicker: {
-        ...DEFAULT_FILE_PICKER_CONFIG,
-        skipHidden: false,
-        allowFolderSelection: false,
-        skipPatterns: ["legacy-only"],
-        tabCompletionMode: "segment",
-        previewHighlightMode: "builtin",
-      },
+      filePicker: DEFAULT_FILE_PICKER_CONFIG,
     });
   });
 });

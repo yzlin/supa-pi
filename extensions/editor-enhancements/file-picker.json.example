@@ -1,7 +1,0 @@
-{
-  "respectGitignore": true,
-  "skipHidden": true,
-  "allowFolderSelection": true,
-  "skipPatterns": ["node_modules"],
-  "tabCompletionMode": "bestMatch"
-}

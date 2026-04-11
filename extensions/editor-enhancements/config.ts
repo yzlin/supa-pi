@@ -94,26 +94,9 @@ function loadConfigFile(
   }
 }
 
-function loadLegacyFilePickerConfigFile(
-  configPath: string
-): Partial<PickerRuntimeConfig> | null {
-  if (!fs.existsSync(configPath)) {
-    return null;
-  }
-
-  try {
-    return normalizeFilePickerConfig(
-      JSON.parse(fs.readFileSync(configPath, "utf-8"))
-    );
-  } catch {
-    return null;
-  }
-}
-
 export function resolveRuntimeConfig(
   globalConfig: EditorEnhancementsConfigLayer | null,
-  projectConfig: EditorEnhancementsConfigLayer | null,
-  legacyFilePickerConfig: Partial<PickerRuntimeConfig> | null = null
+  projectConfig: EditorEnhancementsConfigLayer | null
 ): EditorEnhancementsRuntimeConfig {
   return {
     doubleEscapeCommand:
@@ -127,7 +110,6 @@ export function resolveRuntimeConfig(
     },
     filePicker: mergeFilePickerConfigs(
       DEFAULT_CONFIG.filePicker,
-      legacyFilePickerConfig,
       globalConfig?.filePicker,
       projectConfig?.filePicker
     ),
@@ -145,20 +127,6 @@ export function loadConfig(
   const projectConfig = loadConfigFile(
     path.join(cwd, ".pi", "editor-enhancements.json")
   );
-  const legacyFilePickerConfig = loadLegacyFilePickerConfigFile(
-    path.join(
-      homeDir,
-      ".pi",
-      "agent",
-      "extensions",
-      "editor-enhancements",
-      "file-picker.json"
-    )
-  );
 
-  return resolveRuntimeConfig(
-    globalConfig,
-    projectConfig,
-    legacyFilePickerConfig
-  );
+  return resolveRuntimeConfig(globalConfig, projectConfig);
 }

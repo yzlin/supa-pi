@@ -40,7 +40,19 @@ This extension primarily reads two config files:
 1. `~/.pi/agent/editor-enhancements.json` for global defaults
 2. `.pi/editor-enhancements.json` for project overrides
 
-Put file picker settings under the nested `filePicker` key in either file (copy from `config.json.example`):
+Put file picker settings under the nested `filePicker` key in either file (copy from `config.json.example`).
+
+Editor schema help: this extension now ships `extensions/editor-enhancements/configuration_schema.json`. I found no pi-side auto-discovery for that filename in this repo or the installed pi package, so use it as editor tooling only: either associate your config file with that schema in editor settings, or add a `$schema` path manually when your config location makes a stable relative path possible.
+
+For example, in this repo a project-local `.pi/editor-enhancements.json` can point at:
+
+```json
+{
+  "$schema": "../extensions/editor-enhancements/configuration_schema.json"
+}
+```
+
+Then add the rest of your config fields:
 
 - `doubleEscapeCommand`: optional extension command name to invoke on double-escape
   - default: `null`
@@ -86,13 +98,12 @@ Set `doubleEscapeCommand` to `null` to disable the remapping and keep Pi's nativ
 
 Runtime merge order for file picker config is:
 1. built-in defaults
-2. legacy `~/.pi/agent/extensions/editor-enhancements/file-picker.json` fallback, if present
-3. global `~/.pi/agent/editor-enhancements.json`
-4. project `.pi/editor-enhancements.json`
+2. global `~/.pi/agent/editor-enhancements.json`
+3. project `.pi/editor-enhancements.json`
 
-`commandRemap` maps are merged by key. `filePicker` values are merged by field, with later layers winning; `skipPatterns` comes from the last layer that sets it. New configs should use the nested `filePicker` key, but the legacy fallback file is still supported (see `file-picker.json.example`).
+`commandRemap` maps are merged by key. `filePicker` values are merged by field, with later layers winning; `skipPatterns` comes from the last layer that sets it.
 
-If you want all configs, they can coexist like this:
+Config layout:
 
 ```text
 project-root/
@@ -101,10 +112,7 @@ project-root/
 └── …
 
 ~/.pi/agent/
-├── editor-enhancements.json
-└── extensions/
-    └── editor-enhancements/
-        └── file-picker.json  # legacy fallback only
+└── editor-enhancements.json
 ```
 
 ## Native preview addon
