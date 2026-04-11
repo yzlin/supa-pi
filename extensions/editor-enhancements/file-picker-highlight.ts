@@ -154,16 +154,40 @@ function highlightCodeLines(
       themeMode,
     });
 
-    if (result.usedPlaintext || result.lines.length !== codeLines.length) {
+    if (result.usedPlaintext) {
+      return fallbackToBuiltinHighlight();
+    }
+
+    const highlightedLines = normalizeNativePreviewLines(result.lines, codeLines);
+    if (!highlightedLines) {
       return fallbackToBuiltinHighlight();
     }
 
     return codeLines.map(
-      (line, index) => `${line.prefix}${result.lines[index] ?? line.code}`
+      (line, index) => `${line.prefix}${highlightedLines[index] ?? line.code}`
     );
   } catch {
     return fallbackToBuiltinHighlight();
   }
+}
+
+function normalizeNativePreviewLines(
+  highlightedLines: string[],
+  codeLines: ParsedPreviewLine[]
+): string[] | null {
+  if (highlightedLines.length === codeLines.length) {
+    return highlightedLines;
+  }
+
+  const lastCodeLine = codeLines[codeLines.length - 1];
+  if (
+    highlightedLines.length + 1 === codeLines.length &&
+    lastCodeLine?.code === ""
+  ) {
+    return [...highlightedLines, ""];
+  }
+
+  return null;
 }
 
 export function highlightPreviewLine(

@@ -73,7 +73,7 @@ Then add the rest of your config fields:
     - `"segment"`: prefix-only candidate matching, then complete one word-part at a time
     - `"bestMatch"`: use the strongest scoped fuzzy match and replace the whole query in one Tab
   - `previewHighlightMode`: `"native"` or `"builtin"` (default `"native"`)
-    - `"native"`: use the picker-local Rust/syntect/bat-backed highlighter, with Pi built-in highlighting as runtime fallback if the native binary is unavailable
+    - `"native"`: use the picker-local Rust/syntect highlighter backed by bat's embedded compiled assets, with Pi built-in highlighting as runtime fallback if the native binary is unavailable
     - `"builtin"`: always use Pi's built-in JS highlighter and skip native warmup/load work
 
 ```json
@@ -129,8 +129,9 @@ Current scope:
 - picker preview only
 - macOS + Linux on `x64` / `arm64`
 - optional at runtime when `previewHighlightMode` is `"native"`; if the native binary is absent or fails to load, preview highlighting falls back to Pi's current JS highlighter
-- `.ts` / `.tsx` currently use syntect's built-in JavaScript grammar as an approximation because syntect's default dump does not ship native TypeScript grammars
-- native preview colors use bat's default themes: `Monokai Extended` for dark mode and `Monokai Extended Light` for light mode
+- syntax + theme resolution comes from bat's embedded compiled assets, not direct loading of the vendored `.tmTheme` files
+- native preview colors use bat's built-in `Monokai Extended` for dark mode and `Monokai Extended Light` for light mode
+- output matches bat's built-in compiled assets for those theme names; user-local bat config/theme overrides are not applied here
 
 ## Notes
 

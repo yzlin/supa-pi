@@ -70,6 +70,36 @@ describe("file picker native preview highlighting", () => {
     expect(highlighted[1]).toContain("\x1b[");
   });
 
+  it("keeps native highlighting when only the final preview line is empty", () => {
+    setNativeHighlightBindingLoaderForTests(() => ({
+      highlightPreview(input) {
+        expect(input.code).toBe("---\nname: session-query\n");
+        expect(input.filePath).toBe("@skills/session-query/SKILL.md");
+
+        return {
+          lines: ["<ansi frontmatter>", "<ansi name>"],
+          language: "Markdown",
+          usedPlaintext: false,
+        };
+      },
+    }));
+
+    expect(
+      highlightPreviewLines(
+        [
+          " 1 │ ---",
+          " 2 │ name: session-query",
+          " 3 │ ",
+        ],
+        "@skills/session-query/SKILL.md"
+      )
+    ).toEqual([
+      " 1 │ <ansi frontmatter>",
+      " 2 │ <ansi name>",
+      " 3 │ ",
+    ]);
+  });
+
   it("uses Pi built-in highlighting when configured", () => {
     setNativeHighlightBindingLoaderForTests(() => ({
       highlightPreview() {

@@ -8,6 +8,7 @@ publish = false
 crate-type = ["cdylib"]
 
 [dependencies]
+bat = { version = "0.26.1", default-features = false }
 napi = { version = "3.3.0", default-features = false, features = ["napi8"] }
 napi-derive = "3.2.5"
 syntect = { version = "5.3.0", default-features = false, features = ["default-fancy"] }

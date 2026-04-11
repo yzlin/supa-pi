@@ -1,21 +1,20 @@
 #![allow(non_snake_case)]
 
-use std::io::Cursor;
 use std::path::Path;
-use std::sync::LazyLock;
+use std::sync::{LazyLock, Mutex};
 
+use bat::{assets::HighlightingAssets, SyntaxMapping};
 use napi_derive::napi;
 use syntect::easy::HighlightLines;
-use syntect::highlighting::{Theme, ThemeSet};
+use syntect::highlighting::{Style, Theme};
 use syntect::parsing::{SyntaxReference, SyntaxSet};
-use syntect::util::as_24_bit_terminal_escaped;
+use syntect::util::LinesWithEndings;
 
-static SYNTAX_SET: LazyLock<SyntaxSet> = LazyLock::new(SyntaxSet::load_defaults_newlines);
-static BAT_THEME_DARK: LazyLock<Theme> =
-    LazyLock::new(|| load_embedded_theme(include_bytes!("../themes/Monokai Extended.tmTheme")));
-static BAT_THEME_LIGHT: LazyLock<Theme> = LazyLock::new(|| {
-    load_embedded_theme(include_bytes!("../themes/Monokai Extended Light.tmTheme"))
-});
+const BAT_THEME_DARK: &str = "Monokai Extended";
+const BAT_THEME_LIGHT: &str = "Monokai Extended Light";
+
+static HIGHLIGHTING_ASSETS: LazyLock<Mutex<HighlightingAssets>> =
+    LazyLock::new(|| Mutex::new(HighlightingAssets::from_binary()));
 
 #[allow(non_snake_case)]
 #[napi(object)]
@@ -35,97 +34,186 @@ pub struct HighlightPreviewResult {
 
 #[napi(js_name = "highlightPreview")]
 pub fn highlight_preview(input: HighlightPreviewInput) -> HighlightPreviewResult {
-    let syntax = resolve_syntax(input.filePath.as_deref());
+    let assets = HIGHLIGHTING_ASSETS
+        .lock()
+        .expect("highlighting assets mutex should not be poisoned");
+    let (syntax_set, syntax) = resolve_syntax(&assets, input.filePath.as_deref());
     let syntax_name = syntax.name.clone();
     let used_plaintext = syntax_name == "Plain Text";
-    let theme = resolve_theme(input.themeMode.as_deref());
+    let theme = resolve_theme(&assets, input.themeMode.as_deref());
 
     HighlightPreviewResult {
         lines: if used_plaintext {
             input.code.split('\n').map(str::to_string).collect()
         } else {
-            highlight_ansi_lines(&input.code, syntax, theme)
+            highlight_ansi_lines(&input.code, syntax_set, syntax, theme)
         },
         language: Some(syntax_name),
         usedPlaintext: used_plaintext,
     }
 }
 
-fn highlight_ansi_lines(code: &str, syntax: &SyntaxReference, theme: &Theme) -> Vec<String> {
-    let raw_lines: Vec<&str> = code.split('\n').collect();
+fn highlight_ansi_lines(
+    code: &str,
+    syntax_set: &SyntaxSet,
+    syntax: &SyntaxReference,
+    theme: &Theme,
+) -> Vec<String> {
     let mut highlighter = HighlightLines::new(syntax, theme);
 
-    raw_lines
-        .iter()
-        .enumerate()
-        .map(|(index, line)| {
-            let mut source = (*line).to_string();
-            if index + 1 < raw_lines.len() {
-                source.push('\n');
-            }
-
-            match highlighter.highlight_line(&source, &SYNTAX_SET) {
-                Ok(ranges) => as_24_bit_terminal_escaped(&ranges[..], false)
-                    .trim_end_matches('\n')
-                    .to_string(),
-                Err(_) => (*line).to_string(),
-            }
+    LinesWithEndings::from(code)
+        .map(|line| match highlighter.highlight_line(line, syntax_set) {
+            Ok(ranges) => format_bat_style_ranges(&trim_trailing_newline_range(&ranges)),
+            Err(_) => line.strip_suffix('\n').unwrap_or(line).to_string(),
         })
         .collect()
 }
 
-fn resolve_syntax(file_path: Option<&str>) -> &'static SyntaxReference {
-    if let Some(path) = file_path {
-        if let Some(extension) = Path::new(path).extension().and_then(|ext| ext.to_str()) {
-            let normalized_extension = extension.to_ascii_lowercase();
+fn format_bat_style_ranges(ranges: &[(Style, &str)]) -> String {
+    let mut escaped = String::new();
 
-            if let Some(alias) = aliased_extension(&normalized_extension) {
-                if let Some(syntax) = SYNTAX_SET
-                    .find_syntax_by_extension(alias)
-                    .or_else(|| SYNTAX_SET.find_syntax_by_token(alias))
-                {
-                    return syntax;
-                }
-            }
+    for (style, text) in ranges {
+        if text.is_empty() {
+            continue;
+        }
 
-            if let Some(syntax) = SYNTAX_SET
-                .find_syntax_by_extension(&normalized_extension)
-                .or_else(|| SYNTAX_SET.find_syntax_by_token(&normalized_extension))
-            {
-                return syntax;
-            }
+        if let Some(prefix) = foreground_escape(*style) {
+            escaped.push_str(&prefix);
+            escaped.push_str(text);
+            escaped.push_str("\u{1b}[0m");
+        } else {
+            escaped.push_str(text);
         }
     }
 
-    SYNTAX_SET.find_syntax_plain_text()
+    escaped
 }
 
-fn aliased_extension(extension: &str) -> Option<&'static str> {
-    match extension {
-        // syntect's default dump doesn't ship TypeScript/TSX grammars, so use
-        // JavaScript as the closest built-in approximation instead of dropping
-        // straight to plain text.
-        "ts" | "mts" | "cts" | "tsx" => Some("js"),
-        _ => None,
+fn foreground_escape(style: Style) -> Option<String> {
+    match style.foreground.a {
+        0 => match style.foreground.r {
+            0x00 => Some("\u{1b}[30m".to_string()),
+            0x01 => Some("\u{1b}[31m".to_string()),
+            0x02 => Some("\u{1b}[32m".to_string()),
+            0x03 => Some("\u{1b}[33m".to_string()),
+            0x04 => Some("\u{1b}[34m".to_string()),
+            0x05 => Some("\u{1b}[35m".to_string()),
+            0x06 => Some("\u{1b}[36m".to_string()),
+            0x07 => Some("\u{1b}[37m".to_string()),
+            value => Some(format!("\u{1b}[38;5;{value}m")),
+        },
+        1 => None,
+        _ => Some(format!(
+            "\u{1b}[38;2;{};{};{}m",
+            style.foreground.r, style.foreground.g, style.foreground.b
+        )),
     }
 }
 
-fn resolve_theme(theme_mode: Option<&str>) -> &'static Theme {
+fn trim_trailing_newline_range<'a>(ranges: &[(Style, &'a str)]) -> Vec<(Style, &'a str)> {
+    let mut trimmed_ranges = ranges.to_vec();
+
+    if let Some((_, text)) = trimmed_ranges.last_mut() {
+        if *text == "\n" {
+            trimmed_ranges.pop();
+        } else if let Some(without_newline) = text.strip_suffix('\n') {
+            *text = without_newline;
+        }
+    }
+
+    trimmed_ranges
+}
+
+fn resolve_syntax<'a>(
+    assets: &'a HighlightingAssets,
+    file_path: Option<&str>,
+) -> (&'a SyntaxSet, &'a SyntaxReference) {
+    let syntax_set = assets
+        .get_syntax_set()
+        .expect("bat compiled syntax set should always deserialize successfully");
+    let syntax_mapping = SyntaxMapping::new();
+
+    let syntax = file_path
+        .map(Path::new)
+        .and_then(|path| assets.get_syntax_for_path(path, &syntax_mapping).ok())
+        .map(|syntax_in_set| syntax_in_set.syntax)
+        .unwrap_or_else(|| syntax_set.find_syntax_plain_text());
+
+    (syntax_set, syntax)
+}
+
+fn resolve_theme<'a>(assets: &'a HighlightingAssets, theme_mode: Option<&str>) -> &'a Theme {
     match theme_mode {
-        Some("light") => &BAT_THEME_LIGHT,
-        _ => &BAT_THEME_DARK,
+        Some("light") => assets.get_theme(BAT_THEME_LIGHT),
+        _ => assets.get_theme(BAT_THEME_DARK),
     }
-}
-
-fn load_embedded_theme(theme_bytes: &[u8]) -> Theme {
-    let mut cursor = Cursor::new(theme_bytes);
-    ThemeSet::load_from_reader(&mut cursor)
-        .expect("embedded bat theme should always parse successfully")
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{highlight_preview, resolve_theme, HighlightPreviewInput};
+    use std::{fs, path::Path, process::Command};
+
+    use bat::{assets::HighlightingAssets, SyntaxMapping};
+
+    use super::{
+        highlight_ansi_lines, highlight_preview, HighlightPreviewInput, BAT_THEME_DARK,
+        BAT_THEME_LIGHT,
+    };
+
+    fn expected_bat_lines(code: &str, file_path: &str, theme_mode: &str) -> Vec<String> {
+        let assets = HighlightingAssets::from_binary();
+        let syntax_mapping = SyntaxMapping::new();
+        let syntax_in_set = assets
+            .get_syntax_for_path(file_path, &syntax_mapping)
+            .expect("bat should detect syntax for the fixture path");
+        let theme = match theme_mode {
+            "light" => assets.get_theme(BAT_THEME_LIGHT),
+            _ => assets.get_theme(BAT_THEME_DARK),
+        };
+
+        highlight_ansi_lines(code, syntax_in_set.syntax_set, syntax_in_set.syntax, theme)
+    }
+
+    fn bat_cli_lines(code: &str, file_path: &str, theme_name: &str) -> Vec<String> {
+        let fixture_path = std::env::temp_dir().join(format!(
+            "syntect-picker-preview-{}-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("system time should be after unix epoch")
+                .as_nanos(),
+            file_path,
+        ));
+        fs::write(&fixture_path, code).expect("temporary bat fixture should be writable");
+
+        let output = Command::new("bat")
+            .args([
+                "--paging=never",
+                "--style=plain",
+                "--color=always",
+                "--theme",
+                theme_name,
+                "--file-name",
+                file_path,
+            ])
+            .arg(&fixture_path)
+            .output()
+            .expect("bat should be installed for CLI parity tests");
+
+        let _ = fs::remove_file(&fixture_path);
+
+        assert!(
+            output.status.success(),
+            "bat command failed: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+
+        String::from_utf8(output.stdout)
+            .expect("bat stdout should be utf-8")
+            .lines()
+            .map(str::to_string)
+            .collect()
+    }
 
     #[test]
     fn highlights_known_extensions_without_losing_line_count() {
@@ -135,7 +223,7 @@ mod tests {
             themeMode: Some("dark".to_string()),
         });
 
-        assert_eq!(result.lines.len(), 4);
+        assert_eq!(result.lines.len(), 3);
         assert_eq!(result.language.as_deref(), Some("Rust"));
         assert!(!result.usedPlaintext);
         assert!(result.lines[0].contains("\u{1b}["));
@@ -143,25 +231,77 @@ mod tests {
     }
 
     #[test]
-    fn aliases_typescript_extensions_to_javascript() {
+    fn detects_typescript_with_bat_assets() {
         let result = highlight_preview(HighlightPreviewInput {
             code: "const answer: number = 42;\nexport default answer;\n".to_string(),
             filePath: Some("example.ts".to_string()),
             themeMode: Some("dark".to_string()),
         });
 
-        assert_eq!(result.lines.len(), 3);
-        assert_eq!(result.language.as_deref(), Some("JavaScript"));
+        assert_eq!(
+            result.lines,
+            expected_bat_lines(
+                "const answer: number = 42;\nexport default answer;\n",
+                "example.ts",
+                "dark",
+            )
+        );
+        assert_eq!(result.language.as_deref(), Some("TypeScript"));
         assert!(!result.usedPlaintext);
-        assert!(result.lines[0].contains("\u{1b}["));
     }
 
     #[test]
-    fn uses_bat_default_theme_names() {
-        assert_eq!(resolve_theme(Some("dark")).name.as_deref(), Some("Monokai Extended"));
+    fn uses_bat_compiled_theme_names() {
+        let assets = HighlightingAssets::from_binary();
+
         assert_eq!(
-            resolve_theme(Some("light")).name.as_deref(),
-            Some("Monokai Extended Light")
+            assets.get_theme(BAT_THEME_DARK).name.as_deref(),
+            Some(BAT_THEME_DARK)
+        );
+        assert_eq!(
+            assets.get_theme(BAT_THEME_LIGHT).name.as_deref(),
+            Some(BAT_THEME_LIGHT)
+        );
+    }
+
+    #[test]
+    fn matches_bat_highlighting_for_package_json() {
+        let mut code =
+            fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("package.json"))
+                .expect("package.json fixture should be readable");
+        if !code.ends_with('\n') {
+            code.push('\n');
+        }
+
+        let result = highlight_preview(HighlightPreviewInput {
+            code: code.clone(),
+            filePath: Some("package.json".to_string()),
+            themeMode: Some("dark".to_string()),
+        });
+
+        assert!(code.ends_with('\n'));
+        assert_eq!(result.language.as_deref(), Some("JSON"));
+        assert!(!result.usedPlaintext);
+        assert_eq!(
+            result.lines,
+            bat_cli_lines(&code, "package.json", BAT_THEME_DARK)
+        );
+    }
+
+    #[test]
+    fn matches_bat_highlighting_for_json_files() {
+        let code = "{\n  \"name\": \"supa-pi\",\n  \"enabled\": true\n}\n";
+        let result = highlight_preview(HighlightPreviewInput {
+            code: code.to_string(),
+            filePath: Some("config.json".to_string()),
+            themeMode: Some("light".to_string()),
+        });
+
+        assert_eq!(result.language.as_deref(), Some("JSON"));
+        assert!(!result.usedPlaintext);
+        assert_eq!(
+            result.lines,
+            expected_bat_lines(code, "config.json", "light")
         );
     }
 
