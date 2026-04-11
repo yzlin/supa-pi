@@ -747,6 +747,8 @@ export class FileBrowserComponent {
     lines.push(row(` ${searchPrompt}${normalizedSearchInput}${modeIndicator}`));
 
     const visibleOptions = this.getVisibleOptions();
+    const allowFolderSelection =
+      this.getOption("allowFolderSelection")?.enabled ?? true;
     if (visibleOptions.length > 0) {
       const optParts: string[] = [];
       for (let i = 0; i < visibleOptions.length; i++) {
@@ -820,6 +822,11 @@ export class FileBrowserComponent {
 
         if (isUpDir) {
           lines.push(row(`${prefix}   ${nameStr}`));
+        } else if (entry.isDirectory && !allowFolderSelection) {
+          const navMark = isSelectedEntry
+            ? selectedText("› ")
+            : directory("› ");
+          lines.push(row(`${prefix}${navMark}${nameStr}`));
         } else {
           const checkMark = isChecked ? checked("☑ ") : hint("☐ ");
           lines.push(row(`${prefix}${checkMark}${nameStr}`));
@@ -857,14 +864,24 @@ export class FileBrowserComponent {
         )
       );
     } else {
-      lines.push(row(hint(" No files or folders selected")));
+      lines.push(
+        row(
+          hint(
+            allowFolderSelection
+              ? " No files or folders selected"
+              : " No files selected"
+          )
+        )
+      );
     }
 
     lines.push(border(`├${"─".repeat(innerW)}┤`));
     lines.push(
       row(
         hint(
-          " ↑↓ nav  space queue  → open dir  tab complete  enter attach  esc done"
+          allowFolderSelection
+            ? " ↑↓ nav  space queue  → open dir  tab complete  enter attach  esc done"
+            : " ↑↓ nav  space queue file  →/space open dir  tab complete  enter attach  esc done"
         )
       )
     );

@@ -1,4 +1,7 @@
-import { describe, expect, it } from "bun:test";
+import { afterEach, describe, expect, it } from "bun:test";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
 import {
   getLanguageFromPath,
@@ -7,6 +10,7 @@ import {
 import { visibleWidth } from "@mariozechner/pi-tui";
 
 import {
+  FileBrowserComponent,
   highlightPreviewLine,
   truncateVisibleText,
 } from "./file-picker";
@@ -14,6 +18,25 @@ import {
 initTheme("dark");
 
 const previewLanguage = getLanguageFromPath("example.ts");
+const tempDirs: string[] = [];
+const originalCwd = process.cwd();
+
+function createTempDir(): string {
+  const dir = mkdtempSync(join(tmpdir(), "pi-file-picker-render-"));
+  tempDirs.push(dir);
+  return dir;
+}
+
+function stripAnsi(text: string): string {
+  return text.replace(/\x1b\[[0-9;]*m/g, "");
+}
+
+afterEach(() => {
+  process.chdir(originalCwd);
+  for (const dir of tempDirs.splice(0)) {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
 
 describe("file picker preview rendering", () => {
   it("syntax highlights only the code portion of numbered preview lines", () => {
@@ -41,5 +64,27 @@ describe("file picker preview rendering", () => {
     expect(visibleWidth(truncated)).toBe(16);
     expect(truncated).toContain("…");
     expect(truncated).toContain("\x1b[");
+  });
+});
+
+describe("file picker folder rendering", () => {
+  it("shows navigation markers instead of unchecked boxes for folders when folder selection is disabled", () => {
+    const root = createTempDir();
+    mkdirSync(join(root, "docs"), { recursive: true });
+    writeFileSync(join(root, "alpha.txt"), "alpha", "utf8");
+    process.chdir(root);
+
+    const browser = new FileBrowserComponent(() => {});
+    browser.handleInput("\u001b[Z");
+    browser.handleInput("\u001b[B");
+    browser.handleInput(" ");
+    browser.handleInput("\u001b");
+
+    const rendered = stripAnsi(browser.render(120).join("\n"));
+
+    expect(rendered).toContain("› docs/");
+    expect(rendered).not.toContain("☐ docs/");
+    expect(rendered).toContain("No files selected");
+    expect(rendered).toContain("space queue file");
   });
 });

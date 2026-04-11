@@ -55,7 +55,7 @@ Put file picker settings under the nested `filePicker` key in either file (copy 
 - `filePicker`: nested file picker config
   - `respectGitignore`: default `true`
   - `skipHidden`: default `true`
-  - `allowFolderSelection`: default `true`; when enabled, folders can be queued/attached as `@path/` refs while `→` still opens them for navigation
+  - `allowFolderSelection`: default `true`; when enabled, folders can be queued/attached as `@path/` refs while `→` still opens them for navigation; when disabled, folders stay visible for navigation and render with a nav marker instead of a checkbox
   - `skipPatterns`: default `["node_modules"]`
   - `tabCompletionMode`: `"segment"` or `"bestMatch"` (default `"bestMatch"`)
     - `"segment"`: prefix-only candidate matching, then complete one word-part at a time
