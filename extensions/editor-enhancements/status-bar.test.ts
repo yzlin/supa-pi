@@ -292,8 +292,83 @@ describe("status bar", () => {
         theme,
       });
 
-      expect(line).toContain("<success:◈ test-model>");
+      expect(line).toContain("<success:✦ test-model>");
       expect(line).toContain("<muted: => >");
+    } finally {
+      if (originalNerdFonts === undefined) {
+        delete process.env.POWERLINE_NERD_FONTS;
+      } else {
+        process.env.POWERLINE_NERD_FONTS = originalNerdFonts;
+      }
+    }
+  });
+
+  it("uses the refreshed nerd-font model icon by default", () => {
+    const originalNerdFonts = process.env.POWERLINE_NERD_FONTS;
+    process.env.POWERLINE_NERD_FONTS = "1";
+
+    try {
+      const ctx = {
+        model: {
+          id: "test-model",
+          name: "test-model",
+          reasoning: false,
+          contextWindow: 200000,
+        },
+        modelRegistry: {},
+        sessionManager: {
+          getBranch() {
+            return [];
+          },
+          getSessionId() {
+            return "session-12345678";
+          },
+        },
+        getContextUsage() {
+          return {
+            tokens: 25000,
+            contextWindow: 200000,
+            percent: 12.5,
+          };
+        },
+      } as unknown as ExtensionContext;
+
+      const footerData = {
+        getGitBranch() {
+          return "main";
+        },
+        getExtensionStatuses() {
+          return new Map();
+        },
+        getAvailableProviderCount() {
+          return 0;
+        },
+        onBranchChange() {
+          return () => {};
+        },
+      } satisfies ReadonlyFooterDataProvider;
+
+      const theme = {
+        fg(_color: string, text: string) {
+          return text;
+        },
+      } as any;
+
+      const line = renderStatusBarLine({
+        width: 40,
+        ctx,
+        footerData,
+        config: {
+          enabled: true,
+          preset: "default",
+          leftSegments: ["model"],
+          rightSegments: [],
+        },
+        sessionStartTime: Date.now(),
+        theme,
+      });
+
+      expect(line).toContain("\u{f544} test-model");
     } finally {
       if (originalNerdFonts === undefined) {
         delete process.env.POWERLINE_NERD_FONTS;

@@ -54,36 +54,36 @@ const THINKING_TEXT_NERD: Record<string, string> = {
 
 const NERD_ICONS: IconSet = {
   pi: "\uE22C",
-  model: "\uEC19",
-  folder: "\uF115",
+  model: "\uF544",
+  folder: "\uF07C",
   branch: "\uF126",
   git: "\uF1D3",
-  tokens: "\uE26B",
-  context: "\uE70F",
+  tokens: "\uF02B",
+  context: "\uF02D",
   cost: "\uF155",
   time: "\uF017",
-  cache: "\uF1C0",
-  input: "\uF090",
-  output: "\uF08B",
-  host: "\uF109",
+  cache: "\uF021",
+  input: "\uF063",
+  output: "\uF062",
+  host: "\uF108",
   session: "\uF550",
 };
 
 const ASCII_ICONS: IconSet = {
   pi: "π",
-  model: "◈",
-  folder: "📁",
+  model: "✦",
+  folder: "▣",
   branch: "⎇",
   git: "⎇",
-  tokens: "⊛",
+  tokens: "◎",
   context: "◫",
   cost: "$",
   time: "◷",
-  cache: "cache",
-  input: "in:",
-  output: "out:",
-  host: "host",
-  session: "id",
+  cache: "⟳",
+  input: "↙",
+  output: "↗",
+  host: "@",
+  session: "◇",
 };
 
 const NERD_SEPARATORS: SeparatorChars = {
@@ -115,14 +115,8 @@ const ASCII_SEPARATORS: SeparatorChars = {
 };
 
 export function hasNerdFonts(): boolean {
-  if (process.env.POWERLINE_NERD_FONTS === "1") return true;
   if (process.env.POWERLINE_NERD_FONTS === "0") return false;
-
-  if (process.env.GHOSTTY_RESOURCES_DIR) return true;
-
-  const term = (process.env.TERM_PROGRAM || "").toLowerCase();
-  const nerdTerms = ["iterm", "wezterm", "kitty", "ghostty", "alacritty"];
-  return nerdTerms.some((value) => term.includes(value));
+  return true;
 }
 
 export function getIcons(): IconSet {

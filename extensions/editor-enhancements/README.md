@@ -92,6 +92,7 @@ Then add the rest of your config fields:
     - `git.showBranch`, `git.showStaged`, `git.showUnstaged`, `git.showUntracked`: booleans
     - `time.format`: `12h` or `24h`
     - `time.showSeconds`: boolean
+  - icon mode: Nerd Font icons are on by default; set `POWERLINE_NERD_FONTS=0` before launching Pi to force ASCII fallbacks
   - supported segment ids: `pi`, `model`, `path`, `git`, `token_in`, `token_out`, `token_total`, `cost`, `context_pct`, `context_total`, `time_spent`, `time`, `session`, `hostname`, `cache_read`, `cache_write`, `thinking`, `extension_statuses`
 
 ```json
