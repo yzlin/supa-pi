@@ -25,6 +25,7 @@ node ./scripts/build.mjs
 ## Notes
 
 - The generated `.node` binaries are intentionally local build artifacts and are ignored by git.
+- Native file picker preview highlighting is powered by `bat` (https://github.com/sharkdp/bat) and `syntect` (https://github.com/trishume/syntect/).
 - Native preview syntax + theme resolution uses bat's embedded compiled assets via `bat::assets::HighlightingAssets::from_binary()`, instead of loading the vendored `.tmTheme` files directly.
 - Native preview colors use bat's built-in `Monokai Extended` for dark mode and `Monokai Extended Light` for light mode.
 - Output matches bat's built-in compiled assets for those theme names; user-local bat config/theme overrides are not applied here.

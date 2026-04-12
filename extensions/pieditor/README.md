@@ -10,6 +10,10 @@ The original extension concept and initial implementation came from `w-winter/do
 
 Please keep that upstream credit in place when updating this local version. This repo may continue evolving the extension in its own direction, but the original author should remain credited for the upstream design and starting point.
 
+File picker preview highlighting is also powered by:
+- `bat`: https://github.com/sharkdp/bat
+- `syntect`: https://github.com/trishume/syntect/
+
 This extension currently provides:
 - powerline-style status bar rendered in the editor's top border
 - `@`-triggered file picking for inserting `@path` refs at the cursor
@@ -174,6 +178,7 @@ Current scope:
 - picker preview only
 - macOS + Linux on `x64` / `arm64`
 - optional at runtime when `previewHighlightMode` is `"native"`; if the native binary is absent or fails to load, preview highlighting falls back to Pi's current JS highlighter
+- preview highlighting is powered by `bat` (https://github.com/sharkdp/bat) and `syntect` (https://github.com/trishume/syntect/)
 - syntax + theme resolution comes from bat's embedded compiled assets, not direct loading of the vendored `.tmTheme` files
 - native preview colors use bat's built-in `Monokai Extended` for dark mode and `Monokai Extended Light` for light mode
 - output matches bat's built-in compiled assets for those theme names; user-local bat config/theme overrides are not applied here
