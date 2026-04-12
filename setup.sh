@@ -12,7 +12,6 @@ PI_PACKAGES=(
   "npm:pi-skill-palette"
   "npm:claude-agent-sdk-pi"
   "npm:pi-anycopy"
-  "npm:@plannotator/pi-extension"
   "npm:pi-tool-display"
   "npm:pi-promptsmith"
   "npm:pi-token-burden"

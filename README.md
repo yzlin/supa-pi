@@ -118,7 +118,6 @@ The setup script installs these Pi packages if they are not already present:
 - `pi-skill-palette`
 - `claude-agent-sdk-pi`
 - `pi-anycopy`
-- `@plannotator/pi-extension`
 - `pi-tool-display`
 - `pi-promptsmith`
 - `pi-token-burden`
