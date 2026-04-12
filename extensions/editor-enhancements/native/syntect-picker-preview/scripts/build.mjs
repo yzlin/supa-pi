@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 
+import { spawnSync } from "node:child_process";
 import { copyFileSync, existsSync, mkdirSync, rmSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { spawnSync } from "node:child_process";
 
 const scriptDir = dirname(fileURLToPath(import.meta.url));
 const packageDir = dirname(scriptDir);
@@ -45,7 +45,9 @@ function runCargoBuild(target, isDebug) {
   });
 
   if (result.status !== 0) {
-    throw new Error(`cargo ${args.join(" ")} failed with code ${result.status ?? 1}`);
+    throw new Error(
+      `cargo ${args.join(" ")} failed with code ${result.status ?? 1}`
+    );
   }
 }
 

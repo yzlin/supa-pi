@@ -158,7 +158,10 @@ function highlightCodeLines(
       return fallbackToBuiltinHighlight();
     }
 
-    const highlightedLines = normalizeNativePreviewLines(result.lines, codeLines);
+    const highlightedLines = normalizeNativePreviewLines(
+      result.lines,
+      codeLines
+    );
     if (!highlightedLines) {
       return fallbackToBuiltinHighlight();
     }

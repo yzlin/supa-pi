@@ -1,5 +1,7 @@
 import { describe, expect, it } from "bun:test";
 
+import type { AutocompleteItem } from "@mariozechner/pi-tui";
+
 import { EnhancedEditor } from "./enhanced-editor";
 
 function createEditor(commandRemap: Record<string, string>) {
@@ -70,5 +72,44 @@ describe("EnhancedEditor command remap", () => {
     (editor as any).submitValue();
 
     expect(submitted).toBe("/anycopy src --depth 2");
+  });
+
+  it("forwards autocomplete request options to the wrapped provider", async () => {
+    const editor = createEditor({});
+    const signal = new AbortController().signal;
+    let receivedOptions:
+      | {
+          signal: AbortSignal;
+          force?: boolean;
+        }
+      | undefined;
+
+    editor.setAutocompleteProvider({
+      getSuggestions(
+        _lines: string[],
+        _cursorLine: number,
+        _cursorCol: number,
+        options?: { signal: AbortSignal; force?: boolean }
+      ) {
+        receivedOptions = options;
+        return Promise.resolve(null);
+      },
+      applyCompletion(
+        lines: string[],
+        cursorLine: number,
+        cursorCol: number,
+        _item: AutocompleteItem,
+        _prefix: string
+      ) {
+        return { lines, cursorLine, cursorCol };
+      },
+    } as any);
+
+    await (editor as any).autocompleteProvider.getSuggestions(["/tree"], 0, 5, {
+      signal,
+      force: true,
+    });
+
+    expect(receivedOptions).toEqual({ signal, force: true });
   });
 });

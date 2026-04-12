@@ -86,18 +86,10 @@ describe("file picker native preview highlighting", () => {
 
     expect(
       highlightPreviewLines(
-        [
-          " 1 │ ---",
-          " 2 │ name: session-query",
-          " 3 │ ",
-        ],
+        [" 1 │ ---", " 2 │ name: session-query", " 3 │ "],
         "@skills/session-query/SKILL.md"
       )
-    ).toEqual([
-      " 1 │ <ansi frontmatter>",
-      " 2 │ <ansi name>",
-      " 3 │ ",
-    ]);
+    ).toEqual([" 1 │ <ansi frontmatter>", " 2 │ <ansi name>", " 3 │ "]);
   });
 
   it("uses Pi built-in highlighting when configured", () => {

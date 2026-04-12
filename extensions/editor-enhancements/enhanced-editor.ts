@@ -1,278 +1,373 @@
-import { CustomEditor, type ExtensionUIContext, type KeybindingsManager } from "@mariozechner/pi-coding-agent";
-import {
-    type AutocompleteItem,
-    type AutocompleteProvider,
-    type AutocompleteSuggestions,
-    type EditorTheme,
-    type TUI,
-} from "@mariozechner/pi-tui";
 import * as Clipboard from "@mariozechner/clipboard";
+import {
+  CustomEditor,
+  type ExtensionUIContext,
+  type KeybindingsManager,
+} from "@mariozechner/pi-coding-agent";
+import {
+  type AutocompleteItem,
+  type AutocompleteProvider,
+  type EditorTheme,
+  type TUI,
+} from "@mariozechner/pi-tui";
 
 import { openFilePicker } from "./file-picker.js";
 import {
-    findCompletionShell,
-    getShellCompletions,
-    type ShellInfo,
+  findCompletionShell,
+  getShellCompletions,
+  type ShellInfo,
 } from "./shell-completions.js";
 
 type EnhancedEditorOptions = {
-    doubleEscapeCommand: string | null;
-    canTriggerDoubleEscapeCommand: () => boolean;
-    commandRemap: Record<string, string>;
+  doubleEscapeCommand: string | null;
+  canTriggerDoubleEscapeCommand: () => boolean;
+  commandRemap: Record<string, string>;
+};
+
+type AutocompleteSuggestionResult = {
+  items: AutocompleteItem[];
+  prefix: string;
+} | null;
+
+type Awaitable<T> = T | Promise<T>;
+
+type AutocompleteRequestOptions = {
+  signal: AbortSignal;
+  force?: boolean;
+};
+
+type CompatibleAutocompleteProvider = {
+  getSuggestions: (
+    lines: string[],
+    cursorLine: number,
+    cursorCol: number,
+    options?: AutocompleteRequestOptions
+  ) => Awaitable<AutocompleteSuggestionResult>;
+  applyCompletion: (
+    lines: string[],
+    cursorLine: number,
+    cursorCol: number,
+    item: AutocompleteItem,
+    prefix: string
+  ) => {
+    lines: string[];
+    cursorLine: number;
+    cursorCol: number;
+  };
+  getForceFileSuggestions?: (
+    lines: string[],
+    cursorLine: number,
+    cursorCol: number
+  ) => AutocompleteSuggestionResult;
+  shouldTriggerFileCompletion?: (
+    lines: string[],
+    cursorLine: number,
+    cursorCol: number
+  ) => boolean;
 };
 
 const DOUBLE_ESCAPE_WINDOW_MS = 500;
 
-function isAtCompletionContext(lines: string[], cursorLine: number, cursorCol: number): boolean {
-    const line = lines[cursorLine] ?? "";
-    const beforeCursor = line.slice(0, cursorCol);
-    return Boolean(beforeCursor.match(/(?:^|[\s])@[^\s]*$/));
+function isAtCompletionContext(
+  lines: string[],
+  cursorLine: number,
+  cursorCol: number
+): boolean {
+  const line = lines[cursorLine] ?? "";
+  const beforeCursor = line.slice(0, cursorCol);
+  return Boolean(beforeCursor.match(/(?:^|[\s])@[^\s]*$/));
 }
 
 function isBashMode(lines: string[]): boolean {
-    const text = lines.join("\n").trimStart();
-    return text.startsWith("!") || text.startsWith("!!");
+  const text = lines.join("\n").trimStart();
+  return text.startsWith("!") || text.startsWith("!!");
 }
 
-function extractCompletionTextUpToCursor(lines: string[], cursorLine: number, cursorCol: number): string {
-    const textLines = lines.slice(0, cursorLine + 1);
-    if (textLines.length > 0) {
-        textLines[textLines.length - 1] = (textLines[textLines.length - 1] ?? "").slice(0, cursorCol);
-    }
-    return textLines.join("\n");
+function extractCompletionTextUpToCursor(
+  lines: string[],
+  cursorLine: number,
+  cursorCol: number
+): string {
+  const textLines = lines.slice(0, cursorLine + 1);
+  if (textLines.length > 0) {
+    textLines[textLines.length - 1] = (
+      textLines[textLines.length - 1] ?? ""
+    ).slice(0, cursorCol);
+  }
+  return textLines.join("\n");
 }
 
-function wrapProviderWithShellAndAtFiltering(provider: AutocompleteProvider, shell: ShellInfo): AutocompleteProvider {
-    return {
-        async getSuggestions(
-            lines: string[],
-            cursorLine: number,
-            cursorCol: number,
-            options: { signal: AbortSignal; force?: boolean },
-        ): Promise<AutocompleteSuggestions | null> {
-            // If user is typing an @ reference, suppress the native autocomplete
-            // (we handle "@" ourselves by opening the picker)
-            if (isAtCompletionContext(lines, cursorLine, cursorCol)) {
-                return null;
-            }
+function wrapProviderWithShellAndAtFiltering(
+  provider: AutocompleteProvider,
+  shell: ShellInfo
+): AutocompleteProvider {
+  const compatibleProvider =
+    provider as unknown as CompatibleAutocompleteProvider;
 
-            if (isBashMode(lines)) {
-                const text = extractCompletionTextUpToCursor(lines, cursorLine, cursorCol);
-                const result = getShellCompletions(text, process.cwd(), shell);
-                if (result && result.items.length > 0) {
-                    return result;
-                }
-            }
+  const wrappedProvider: CompatibleAutocompleteProvider = {
+    getSuggestions(
+      lines: string[],
+      cursorLine: number,
+      cursorCol: number,
+      options?: AutocompleteRequestOptions
+    ): Awaitable<AutocompleteSuggestionResult> {
+      // If user is typing an @ reference, suppress the native autocomplete
+      // (we handle "@" ourselves by opening the picker)
+      if (isAtCompletionContext(lines, cursorLine, cursorCol)) {
+        return null;
+      }
 
-            return provider.getSuggestions(lines, cursorLine, cursorCol, options);
-        },
+      if (isBashMode(lines)) {
+        const text = extractCompletionTextUpToCursor(
+          lines,
+          cursorLine,
+          cursorCol
+        );
+        const result = getShellCompletions(text, process.cwd(), shell);
+        if (result && result.items.length > 0) {
+          return result;
+        }
+      }
 
-        applyCompletion(
-            lines: string[],
-            cursorLine: number,
-            cursorCol: number,
-            item: AutocompleteItem,
-            prefix: string,
-        ): { lines: string[]; cursorLine: number; cursorCol: number } {
-            if (isBashMode(lines)) {
-                const currentLine = lines[cursorLine] || "";
-                const prefixStart = cursorCol - prefix.length;
-                const beforePrefix = currentLine.slice(0, prefixStart);
-                const afterCursor = currentLine.slice(cursorCol);
+      return compatibleProvider.getSuggestions(lines, cursorLine, cursorCol, {
+        signal: options?.signal ?? new AbortController().signal,
+        force: options?.force,
+      });
+    },
 
-                // Don't add space after directories
-                const isDirectory = item.value.endsWith("/");
-                const suffix = isDirectory ? "" : " ";
+    applyCompletion(
+      lines: string[],
+      cursorLine: number,
+      cursorCol: number,
+      item: AutocompleteItem,
+      prefix: string
+    ): { lines: string[]; cursorLine: number; cursorCol: number } {
+      if (isBashMode(lines)) {
+        const currentLine = lines[cursorLine] || "";
+        const prefixStart = cursorCol - prefix.length;
+        const beforePrefix = currentLine.slice(0, prefixStart);
+        const afterCursor = currentLine.slice(cursorCol);
 
-                const newLine = beforePrefix + item.value + suffix + afterCursor;
-                const newLines = [...lines];
-                newLines[cursorLine] = newLine;
+        // Don't add space after directories
+        const isDirectory = item.value.endsWith("/");
+        const suffix = isDirectory ? "" : " ";
 
-                return {
-                    lines: newLines,
-                    cursorLine,
-                    cursorCol: prefixStart + item.value.length + suffix.length,
-                };
-            }
+        const newLine = beforePrefix + item.value + suffix + afterCursor;
+        const newLines = [...lines];
+        newLines[cursorLine] = newLine;
 
-            return provider.applyCompletion(lines, cursorLine, cursorCol, item, prefix);
-        },
+        return {
+          lines: newLines,
+          cursorLine,
+          cursorCol: prefixStart + item.value.length + suffix.length,
+        };
+      }
 
-        // Forward optional methods (duck typed)
-        getForceFileSuggestions(
-            lines: string[],
-            cursorLine: number,
-            cursorCol: number,
-        ): { items: AutocompleteItem[]; prefix: string } | null {
-            if (isBashMode(lines)) {
-                const text = extractCompletionTextUpToCursor(lines, cursorLine, cursorCol);
-                return getShellCompletions(text, process.cwd(), shell);
-            }
-            if ("getForceFileSuggestions" in provider) {
-                return (provider as any).getForceFileSuggestions(lines, cursorLine, cursorCol);
-            }
-            return this.getSuggestions(lines, cursorLine, cursorCol);
-        },
+      return provider.applyCompletion(
+        lines,
+        cursorLine,
+        cursorCol,
+        item,
+        prefix
+      );
+    },
 
-        shouldTriggerFileCompletion(lines: string[], cursorLine: number, cursorCol: number): boolean {
-            if (isBashMode(lines)) {
-                return true;
-            }
-            if ("shouldTriggerFileCompletion" in provider) {
-                return (provider as any).shouldTriggerFileCompletion(lines, cursorLine, cursorCol);
-            }
-            return true;
-        },
-    };
+    // Forward optional methods (duck typed)
+    getForceFileSuggestions(
+      lines: string[],
+      cursorLine: number,
+      cursorCol: number
+    ): AutocompleteSuggestionResult {
+      if (isBashMode(lines)) {
+        const text = extractCompletionTextUpToCursor(
+          lines,
+          cursorLine,
+          cursorCol
+        );
+        return getShellCompletions(text, process.cwd(), shell);
+      }
+      if (compatibleProvider.getForceFileSuggestions) {
+        return compatibleProvider.getForceFileSuggestions(
+          lines,
+          cursorLine,
+          cursorCol
+        );
+      }
+      return null;
+    },
+
+    shouldTriggerFileCompletion(
+      lines: string[],
+      cursorLine: number,
+      cursorCol: number
+    ): boolean {
+      if (isBashMode(lines)) {
+        return true;
+      }
+      if (compatibleProvider.shouldTriggerFileCompletion) {
+        return compatibleProvider.shouldTriggerFileCompletion(
+          lines,
+          cursorLine,
+          cursorCol
+        );
+      }
+      return true;
+    },
+  };
+
+  return wrappedProvider as unknown as AutocompleteProvider;
 }
 
 export class EnhancedEditor extends CustomEditor {
-    private readonly tuiInstance: TUI;
-    private openingPicker = false;
-    private wrappedAutocompleteProvider = false;
-    private lastEscapeTime = 0;
-    private submitHandler?: (text: string) => void;
+  private readonly tuiInstance: TUI;
+  private openingPicker = false;
+  private wrappedAutocompleteProvider = false;
+  private lastEscapeTime = 0;
+  private submitHandler?: (text: string) => void;
 
-    private shell: ShellInfo;
+  private shell: ShellInfo;
 
-    constructor(
-        tui: TUI,
-        theme: EditorTheme,
-        keybindings: KeybindingsManager,
-        private ui: ExtensionUIContext,
-        private options: EnhancedEditorOptions,
-        private keybindingsManager: KeybindingsManager = keybindings,
-    ) {
-        super(tui, theme, keybindings);
-        this.tuiInstance = tui;
-        this.shell = findCompletionShell();
+  constructor(
+    tui: TUI,
+    theme: EditorTheme,
+    keybindings: KeybindingsManager,
+    private ui: ExtensionUIContext,
+    private options: EnhancedEditorOptions,
+    private keybindingsManager: KeybindingsManager = keybindings
+  ) {
+    super(tui, theme, keybindings);
+    this.tuiInstance = tui;
+    this.shell = findCompletionShell();
 
-        this.installOnSubmitInterceptor();
+    this.installOnSubmitInterceptor();
 
-        this.ui.notify(`editor-enhancements loaded (shell: ${this.shell.type})`, "info");
+    this.ui.notify(
+      `editor-enhancements loaded (shell: ${this.shell.type})`,
+      "info"
+    );
+  }
+
+  private installOnSubmitInterceptor(): void {
+    Object.defineProperty(this, "onSubmit", {
+      get: (): ((text: string) => void) | undefined => this.submitHandler,
+      set: (fn: ((text: string) => void) | undefined) => {
+        this.submitHandler = fn
+          ? (text: string) => fn(this.remapCommand(text))
+          : undefined;
+      },
+      configurable: true,
+      enumerable: true,
+    });
+  }
+
+  private remapCommand(text: string): string {
+    const trimmed = text.trimStart();
+    if (!trimmed.startsWith("/")) return text;
+
+    const match = trimmed.match(/^\/([^\s:]+)(.*)/s);
+    if (!match) return text;
+
+    const [, cmd, rest] = match;
+    const target = this.options.commandRemap[cmd!];
+    return target ? `/${target}${rest}` : text;
+  }
+
+  setAutocompleteProvider(provider: AutocompleteProvider): void {
+    // Wrap once. If pi resets providers, we still want our wrapper.
+    if (!this.wrappedAutocompleteProvider && provider) {
+      const wrapped = wrapProviderWithShellAndAtFiltering(provider, this.shell);
+      super.setAutocompleteProvider(wrapped);
+      this.wrappedAutocompleteProvider = true;
+      return;
     }
 
-    private installOnSubmitInterceptor(): void {
-        Object.defineProperty(this, "onSubmit", {
-            get: (): ((text: string) => void) | undefined => this.submitHandler,
-            set: (fn: ((text: string) => void) | undefined) => {
-                this.submitHandler = fn
-                    ? (text: string) => fn(this.remapCommand(text))
-                    : undefined;
-            },
-            configurable: true,
-            enumerable: true,
-        });
+    super.setAutocompleteProvider(provider);
+  }
+
+  async openFilePickerAtCursor(): Promise<void> {
+    const refs = await openFilePicker(this.ui);
+    if (!refs) return;
+    this.insertTextAtCursor(refs + " ");
+    this.tuiInstance.requestRender();
+  }
+
+  async pasteClipboardRawAtCursor(): Promise<void> {
+    let text: string | undefined;
+    try {
+      text = await Clipboard.getText();
+    } catch {
+      text = undefined;
     }
 
-    private remapCommand(text: string): string {
-        const trimmed = text.trimStart();
-        if (!trimmed.startsWith("/")) return text;
+    if (!text) return;
 
-        const match = trimmed.match(/^\/([^\s:]+)(.*)/s);
-        if (!match) return text;
+    // Normalize line endings
+    const normalized = text.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
 
-        const [, cmd, rest] = match;
-        const target = this.options.commandRemap[cmd!];
-        return target ? `/${target}${rest}` : text;
+    // Insert using editor primitive (NOT bracketed paste), so it won't turn into [paste #..]
+    this.insertTextAtCursor(normalized);
+    this.tuiInstance.requestRender();
+  }
+
+  handleInput(data: string): void {
+    if (this.openingPicker) return;
+
+    if (this.shouldHandleConfiguredDoubleEscape(data)) {
+      this.handleConfiguredDoubleEscape();
+      return;
     }
 
-    setAutocompleteProvider(provider: AutocompleteProvider): void {
-        // Wrap once. If pi resets providers, we still want our wrapper.
-        if (!this.wrappedAutocompleteProvider && provider) {
-            const wrapped = wrapProviderWithShellAndAtFiltering(provider, this.shell);
-            super.setAutocompleteProvider(wrapped);
-            this.wrappedAutocompleteProvider = true;
-            return;
-        }
-
-        super.setAutocompleteProvider(provider);
+    if (!this.keybindingsManager.matches(data, "interrupt")) {
+      this.lastEscapeTime = 0;
     }
 
-    async openFilePickerAtCursor(): Promise<void> {
-        const refs = await openFilePicker(this.ui);
-        if (!refs) return;
-        this.insertTextAtCursor(refs + " ");
-        this.tuiInstance.requestRender();
+    // Intercept @ at token start to open picker
+    if (data === "@" && this.shouldTriggerFilePicker()) {
+      this.openingPicker = true;
+      if (this.isShowingAutocomplete()) {
+        // Escape cancels autocomplete in the base editor
+        super.handleInput("\x1b");
+      }
+      this.openFilePickerAtCursor().finally(() => {
+        this.openingPicker = false;
+      });
+      return;
     }
 
-    async pasteClipboardRawAtCursor(): Promise<void> {
-        let text: string | undefined;
-        try {
-            text = await Clipboard.getText();
-        } catch {
-            text = undefined;
-        }
+    super.handleInput(data);
+  }
 
-        if (!text) return;
+  private shouldHandleConfiguredDoubleEscape(data: string): boolean {
+    return Boolean(
+      this.options.doubleEscapeCommand &&
+        this.keybindingsManager.matches(data, "interrupt") &&
+        !this.isShowingAutocomplete() &&
+        !this.getText().trim() &&
+        this.options.canTriggerDoubleEscapeCommand()
+    );
+  }
 
-        // Normalize line endings
-        const normalized = text.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
-
-        // Insert using editor primitive (NOT bracketed paste), so it won't turn into [paste #..]
-        this.insertTextAtCursor(normalized);
-        this.tuiInstance.requestRender();
+  private handleConfiguredDoubleEscape(): void {
+    const now = Date.now();
+    if (now - this.lastEscapeTime >= DOUBLE_ESCAPE_WINDOW_MS) {
+      this.lastEscapeTime = now;
+      return;
     }
 
-    handleInput(data: string): void {
-        if (this.openingPicker) return;
+    this.lastEscapeTime = 0;
+    const command = this.options.doubleEscapeCommand;
+    if (!command || !this.onSubmit) return;
 
-        if (this.shouldHandleConfiguredDoubleEscape(data)) {
-            this.handleConfiguredDoubleEscape();
-            return;
-        }
+    this.onSubmit(`/${command}`);
+  }
 
-        if (!this.keybindingsManager.matches(data, "app.interrupt")) {
-            this.lastEscapeTime = 0;
-        }
+  private shouldTriggerFilePicker(): boolean {
+    const cursor = this.getCursor();
+    const line = this.getLines()[cursor.line] ?? "";
 
-        // Intercept @ at token start to open picker
-        if (data === "@" && this.shouldTriggerFilePicker()) {
-            this.openingPicker = true;
-            if (this.isShowingAutocomplete()) {
-                // Escape cancels autocomplete in the base editor
-                super.handleInput("\x1b");
-            }
-            this.openFilePickerAtCursor().finally(() => {
-                this.openingPicker = false;
-            });
-            return;
-        }
+    if (cursor.col === 0) return true;
 
-        super.handleInput(data);
-    }
-
-    private shouldHandleConfiguredDoubleEscape(data: string): boolean {
-        return Boolean(
-            this.options.doubleEscapeCommand &&
-                this.keybindingsManager.matches(data, "app.interrupt") &&
-                !this.isShowingAutocomplete() &&
-                !this.getText().trim() &&
-                this.options.canTriggerDoubleEscapeCommand(),
-        );
-    }
-
-    private handleConfiguredDoubleEscape(): void {
-        const now = Date.now();
-        if (now - this.lastEscapeTime >= DOUBLE_ESCAPE_WINDOW_MS) {
-            this.lastEscapeTime = now;
-            return;
-        }
-
-        this.lastEscapeTime = 0;
-        const command = this.options.doubleEscapeCommand;
-        if (!command || !this.onSubmit) return;
-
-        this.onSubmit(`/${command}`);
-    }
-
-    private shouldTriggerFilePicker(): boolean {
-        const cursor = this.getCursor();
-        const line = this.getLines()[cursor.line] ?? "";
-
-        if (cursor.col === 0) return true;
-
-        const before = line[cursor.col - 1];
-        return before === " " || before === "\t" || before === undefined;
-    }
+    const before = line[cursor.col - 1];
+    return before === " " || before === "\t" || before === undefined;
+  }
 }

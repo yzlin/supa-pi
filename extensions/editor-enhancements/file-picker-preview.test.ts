@@ -97,8 +97,9 @@ describe("file picker preview", () => {
     const root = createTempDir();
     mkdirSync(join(root, "agents"), { recursive: true });
 
-    const names = Array.from({ length: 16 }, (_, index) =>
-      `agent-${String(index + 1).padStart(2, "0")}.md`
+    const names = Array.from(
+      { length: 16 },
+      (_, index) => `agent-${String(index + 1).padStart(2, "0")}.md`
     );
     for (const name of names) {
       writeFileSync(join(root, "agents", name), name, "utf8");
