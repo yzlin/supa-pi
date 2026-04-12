@@ -13,13 +13,13 @@ import {
   type TUI,
 } from "@mariozechner/pi-tui";
 
+import type { StatusBarRuntimeConfig } from "./config.js";
 import { openFilePicker } from "./file-picker.js";
 import {
   findCompletionShell,
   getShellCompletions,
   type ShellInfo,
 } from "./shell-completions.js";
-import type { StatusBarRuntimeConfig } from "./config.js";
 import { renderStatusBarLine } from "./status-bar.js";
 
 type EnhancedEditorOptions = {
@@ -251,10 +251,7 @@ export class EnhancedEditor extends CustomEditor {
 
     this.installOnSubmitInterceptor();
 
-    this.ui.notify(
-      `editor-enhancements loaded (shell: ${this.shell.type})`,
-      "info"
-    );
+    this.ui.notify(`pieditor loaded (shell: ${this.shell.type})`, "info");
   }
 
   private installOnSubmitInterceptor(): void {
@@ -383,7 +380,11 @@ export class EnhancedEditor extends CustomEditor {
 
   render(width: number): string[] {
     const lines = super.render(width);
-    if (!this.options.statusBar.config.enabled || width < 10 || lines.length === 0) {
+    if (
+      !this.options.statusBar.config.enabled ||
+      width < 10 ||
+      lines.length === 0
+    ) {
       return lines;
     }
 

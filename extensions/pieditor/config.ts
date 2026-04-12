@@ -6,12 +6,12 @@ import {
   mergeFilePickerConfigs,
   normalizeFilePickerConfig,
 } from "./file-picker-config.js";
-import { mergeStatusBarSegmentOptions } from "./status-bar-config-utils.js";
 import type { PickerConfig, PickerRuntimeConfig } from "./file-picker-types.js";
+import { mergeStatusBarSegmentOptions } from "./status-bar-config-utils.js";
 import {
+  type ColorScheme,
   STATUS_BAR_SEGMENT_IDS,
   STATUS_BAR_SEMANTIC_COLORS,
-  type ColorScheme,
   type StatusBarPreset,
   type StatusBarSegmentId,
   type StatusBarSegmentOptions,
@@ -112,9 +112,13 @@ function normalizeStatusBarPreset(value: unknown): StatusBarPreset | null {
 }
 
 const STATUS_BAR_SEGMENT_ID_SET = new Set<string>(STATUS_BAR_SEGMENT_IDS);
-const STATUS_BAR_SEMANTIC_COLOR_SET = new Set<string>(STATUS_BAR_SEMANTIC_COLORS);
+const STATUS_BAR_SEMANTIC_COLOR_SET = new Set<string>(
+  STATUS_BAR_SEMANTIC_COLORS
+);
 
-function normalizeStatusBarSegments(value: unknown): StatusBarSegmentId[] | null {
+function normalizeStatusBarSegments(
+  value: unknown
+): StatusBarSegmentId[] | null {
   if (!Array.isArray(value)) {
     return null;
   }
@@ -138,7 +142,10 @@ function normalizeStatusBarColors(value: unknown): ColorScheme | null {
   const next: ColorScheme = {};
 
   for (const [key, candidate] of Object.entries(raw)) {
-    if (!STATUS_BAR_SEMANTIC_COLOR_SET.has(key) || typeof candidate !== "string") {
+    if (
+      !STATUS_BAR_SEMANTIC_COLOR_SET.has(key) ||
+      typeof candidate !== "string"
+    ) {
       continue;
     }
 
@@ -394,11 +401,9 @@ export function loadConfig(
   const homeDir = options.homeDir ?? os.homedir();
   const cwd = options.cwd ?? process.cwd();
   const globalConfig = loadConfigFile(
-    path.join(homeDir, ".pi", "agent", "editor-enhancements.json")
+    path.join(homeDir, ".pi", "agent", "pieditor.json")
   );
-  const projectConfig = loadConfigFile(
-    path.join(cwd, ".pi", "editor-enhancements.json")
-  );
+  const projectConfig = loadConfigFile(path.join(cwd, ".pi", "pieditor.json"));
 
   return resolveRuntimeConfig(globalConfig, projectConfig);
 }

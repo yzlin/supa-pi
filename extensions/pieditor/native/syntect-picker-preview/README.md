@@ -1,6 +1,6 @@
 # syntect-picker-preview
 
-Local picker-only native addon for `extensions/editor-enhancements`.
+Local picker-only native addon for `extensions/pieditor`.
 
 ## Scope
 

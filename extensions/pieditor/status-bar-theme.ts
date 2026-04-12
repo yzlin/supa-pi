@@ -76,7 +76,7 @@ export function applyColor(
         warnedInvalidThemeColors.clear();
       }
       console.debug(
-        `[editor-enhancements/status-bar] Invalid theme color "${key}"; falling back to "text".`,
+        `[pieditor/status-bar] Invalid theme color "${key}"; falling back to "text".`,
         error
       );
     }

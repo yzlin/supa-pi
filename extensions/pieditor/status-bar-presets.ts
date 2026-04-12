@@ -187,8 +187,7 @@ export function resolveStatusBarPresetDef(config: {
     ...preset,
     leftSegments: config.leftSegments ?? preset.leftSegments,
     rightSegments: config.rightSegments ?? preset.rightSegments,
-    separator:
-      config.separator ?? ` ${getSeparator(preset.separator).left} `,
+    separator: config.separator ?? ` ${getSeparator(preset.separator).left} `,
     colors: { ...preset.colors, ...config.colors },
     segmentOptions: mergeStatusBarSegmentOptions(
       preset.segmentOptions,

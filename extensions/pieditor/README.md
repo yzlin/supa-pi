@@ -1,10 +1,10 @@
-# editor-enhancements
+# pieditor
 
 A composite custom editor that combines several `setEditorComponent()`-based UX tweaks in one place so they remain compatible with each other.
 
 ## Attribution
 
-This repo maintains its own rewritten and independently evolving variant of `editor-enhancements`.
+This repo maintains its own rewritten and independently evolving variant of the upstream `editor-enhancements` extension, under the local name `pieditor`.
 The original extension concept and initial implementation came from `w-winter/dot314`:
 - https://github.com/w-winter/dot314/tree/main/extensions/editor-enhancements
 
@@ -31,25 +31,25 @@ Notable interactions:
 - File previews in the preview pane can use either the picker-local syntect native addon (`previewHighlightMode: "native"`) or Pi's built-in syntax highlighting (`previewHighlightMode: "builtin"`)
 - The file picker's search box uses Pi's shared `Input` editing behavior for word/home/end cursor movement and related text editing shortcuts
 - Press `alt+v` to paste clipboard text raw into the editor
-- Optionally configure `doubleEscapeCommand` in `~/.pi/agent/editor-enhancements.json` or `.pi/editor-enhancements.json` to invoke an extension command on double-escape when the editor is empty and Pi is idle
-- Optionally configure `commandRemap` in `~/.pi/agent/editor-enhancements.json` or `.pi/editor-enhancements.json` to redirect slash commands at submit time (e.g. typing `/tree` executes `/anycopy` instead)
+- Optionally configure `doubleEscapeCommand` in `~/.pi/agent/pieditor.json` or `.pi/pieditor.json` to invoke an extension command on double-escape when the editor is empty and Pi is idle
+- Optionally configure `commandRemap` in `~/.pi/agent/pieditor.json` or `.pi/pieditor.json` to redirect slash commands at submit time (e.g. typing `/tree` executes `/anycopy` instead)
 
 ## Configuration
 
 This extension primarily reads two config files:
 
-1. `~/.pi/agent/editor-enhancements.json` for global defaults
-2. `.pi/editor-enhancements.json` for project overrides
+1. `~/.pi/agent/pieditor.json` for global defaults
+2. `.pi/pieditor.json` for project overrides
 
 Put file picker settings under the nested `filePicker` key in either file (copy from `config.json.example`).
 
-Editor schema help: this extension now ships `extensions/editor-enhancements/configuration_schema.json`. I found no pi-side auto-discovery for that filename in this repo or the installed pi package, so use it as editor tooling only: either associate your config file with that schema in editor settings, or add a `$schema` path manually when your config location makes a stable relative path possible.
+Editor schema help: this extension now ships `extensions/pieditor/configuration_schema.json`. I found no pi-side auto-discovery for that filename in this repo or the installed pi package, so use it as editor tooling only: either associate your config file with that schema in editor settings, or add a `$schema` path manually when your config location makes a stable relative path possible.
 
-For example, in this repo a project-local `.pi/editor-enhancements.json` can point at:
+For example, in this repo a project-local `.pi/pieditor.json` can point at:
 
 ```json
 {
-  "$schema": "../extensions/editor-enhancements/configuration_schema.json"
+  "$schema": "../extensions/pieditor/configuration_schema.json"
 }
 ```
 
@@ -143,8 +143,8 @@ Set `doubleEscapeCommand` to `null` to disable the remapping and keep Pi's nativ
 
 Runtime merge order for file picker config is:
 1. built-in defaults
-2. global `~/.pi/agent/editor-enhancements.json`
-3. project `.pi/editor-enhancements.json`
+2. global `~/.pi/agent/pieditor.json`
+3. project `.pi/pieditor.json`
 
 `commandRemap` maps are merged by key. `filePicker` values are merged by field, with later layers winning; `skipPatterns` comes from the last layer that sets it. `statusBar` values are merged by field the same way; `leftSegments` and `rightSegments` are each replaced by the last layer that sets them, `separator` takes the last configured literal string, `colors` merge by semantic key, and `segmentOptions` merge per nested field.
 
@@ -153,16 +153,16 @@ Config layout:
 ```text
 project-root/
 ├── .pi/
-│   └── editor-enhancements.json
+│   └── pieditor.json
 └── …
 
 ~/.pi/agent/
-└── editor-enhancements.json
+└── pieditor.json
 ```
 
 ## Native preview addon
 
-The file picker can use a local Rust/N-API addon at `extensions/editor-enhancements/native/syntect-picker-preview/` for richer preview highlighting.
+The file picker can use a local Rust/N-API addon at `extensions/pieditor/native/syntect-picker-preview/` for richer preview highlighting.
 
 Build it from the repo root:
 

@@ -1,13 +1,12 @@
+import { describe, expect, it } from "bun:test";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 
-import { describe, expect, it } from "bun:test";
-
 import { loadConfig, resolveRuntimeConfig } from "./config";
 import { DEFAULT_FILE_PICKER_CONFIG } from "./file-picker-config";
 
-describe("editor enhancements config", () => {
+describe("pieditor config", () => {
   it("merges command and nested file picker config with project precedence", () => {
     const config = resolveRuntimeConfig(
       {
@@ -207,14 +206,14 @@ describe("editor enhancements config", () => {
   });
 
   it("preserves an empty literal separator from file config", () => {
-    const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "editor-enhancements-"));
+    const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "pieditor-"));
     const homeDir = path.join(tempRoot, "home");
     const cwd = path.join(tempRoot, "project");
 
     fs.mkdirSync(path.join(homeDir, ".pi", "agent"), { recursive: true });
     fs.mkdirSync(path.join(cwd, ".pi"), { recursive: true });
     fs.writeFileSync(
-      path.join(cwd, ".pi", "editor-enhancements.json"),
+      path.join(cwd, ".pi", "pieditor.json"),
       JSON.stringify({
         statusBar: {
           separator: "",

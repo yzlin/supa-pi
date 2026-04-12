@@ -1,5 +1,5 @@
 /**
- * editor-enhancements
+ * pieditor
  *
  * Local rewritten and independently evolving variant of the upstream
  * editor-enhancements extension from w-winter/dot314:
@@ -47,7 +47,7 @@ function resolveDoubleEscapeCommand(
   }
 
   ctx.ui.notify(
-    `editor-enhancements: configured doubleEscapeCommand '/${doubleEscapeCommand}' is not a registered extension command`,
+    `pieditor: configured doubleEscapeCommand '/${doubleEscapeCommand}' is not a registered extension command`,
     "warning"
   );
   return null;

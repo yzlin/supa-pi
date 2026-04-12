@@ -138,7 +138,9 @@ describe("status bar", () => {
 
     expect(modelIndex).toBeGreaterThanOrEqual(0);
     expect(contextIndex).toBeGreaterThan(modelIndex + "test-model".length);
-    expect(contextIndex - (modelIndex + "test-model".length)).toBeGreaterThan(1);
+    expect(contextIndex - (modelIndex + "test-model".length)).toBeGreaterThan(
+      1
+    );
     expect(line).not.toContain("main");
   });
 
@@ -228,29 +230,29 @@ describe("status bar", () => {
 
     try {
       const ctx = {
-      model: {
-        id: "test-model",
-        name: "test-model",
-        reasoning: false,
-        contextWindow: 200000,
-      },
-      modelRegistry: {},
-      sessionManager: {
-        getBranch() {
-          return [];
-        },
-        getSessionId() {
-          return "session-12345678";
-        },
-      },
-      getContextUsage() {
-        return {
-          tokens: 25000,
+        model: {
+          id: "test-model",
+          name: "test-model",
+          reasoning: false,
           contextWindow: 200000,
-          percent: 12.5,
-        };
-      },
-    } as unknown as ExtensionContext;
+        },
+        modelRegistry: {},
+        sessionManager: {
+          getBranch() {
+            return [];
+          },
+          getSessionId() {
+            return "session-12345678";
+          },
+        },
+        getContextUsage() {
+          return {
+            tokens: 25000,
+            contextWindow: 200000,
+            percent: 12.5,
+          };
+        },
+      } as unknown as ExtensionContext;
 
       const footerData = {
         getGitBranch() {
