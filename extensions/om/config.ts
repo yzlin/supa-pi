@@ -16,6 +16,7 @@ const DEFAULT_REFLECTION_CONFIG = Object.freeze({
 
 export const DEFAULT_OM_CONFIG_SNAPSHOT: OmConfigSnapshot = Object.freeze({
   enabled: true,
+  model: null,
   headerMaxFacts: 6,
   headerMaxThreads: 4,
   observerMaxTurns: 8,
@@ -44,6 +45,31 @@ function asRecord(value: unknown): Record<string, unknown> {
 
 function normalizeBoolean(value: unknown, fallback: boolean): boolean {
   return typeof value === "boolean" ? value : fallback;
+}
+
+function normalizeModelSpecifier(
+  value: unknown,
+  fallback: string | null
+): string | null {
+  if (typeof value !== "string") {
+    return fallback;
+  }
+
+  const normalized = value.trim();
+  if (!normalized) {
+    return fallback;
+  }
+
+  const slashIndex = normalized.indexOf("/");
+  if (slashIndex === -1) {
+    return normalized;
+  }
+
+  if (slashIndex <= 0 || slashIndex === normalized.length - 1) {
+    return fallback;
+  }
+
+  return normalized;
 }
 
 function normalizeInteger(value: unknown, fallback: number): number {
@@ -156,6 +182,10 @@ export function createOmConfigSnapshot(
       config.enabled,
       DEFAULT_OM_CONFIG_SNAPSHOT.enabled
     ),
+    model: normalizeModelSpecifier(
+      config.model,
+      DEFAULT_OM_CONFIG_SNAPSHOT.model
+    ),
     headerMaxFacts: normalizeInteger(
       config.headerMaxFacts,
       DEFAULT_OM_CONFIG_SNAPSHOT.headerMaxFacts
@@ -218,10 +248,15 @@ export function mergeOmConfigSnapshot(
   const overrideConfig = asRecord(overrides);
   const overrideObservation = asRecord(overrideConfig.observation);
   const overrideReflection = asRecord(overrideConfig.reflection);
+  const mergedModel =
+    overrideConfig.model === undefined
+      ? baseSnapshot.model
+      : normalizeModelSpecifier(overrideConfig.model, baseSnapshot.model);
 
   return createOmConfigSnapshot({
     ...baseSnapshot,
     ...overrideConfig,
+    model: mergedModel,
     observation: {
       ...baseSnapshot.observation,
       ...overrideObservation,

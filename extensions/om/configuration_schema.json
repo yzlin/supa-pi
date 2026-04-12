@@ -1,0 +1,174 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "observational memory configuration",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "enabled": {
+      "type": "boolean",
+      "default": true,
+      "description": "Enable or disable the OM extension runtime."
+    },
+    "model": {
+      "type": ["string", "null"],
+      "default": null,
+      "description": "Optional model override for OM observer/reflector/compaction calls. Accepts either 'provider/modelId' or a bare 'modelId'. Bare ids only resolve when they uniquely match an available model or already match the current session model."
+    },
+    "headerMaxFacts": {
+      "type": "integer",
+      "minimum": 1,
+      "default": 6,
+      "description": "Maximum number of stable facts included in the hidden OM header."
+    },
+    "headerMaxThreads": {
+      "type": "integer",
+      "minimum": 1,
+      "default": 4,
+      "description": "Maximum number of active threads included in the hidden OM header."
+    },
+    "observerMaxTurns": {
+      "type": "integer",
+      "minimum": 1,
+      "default": 8,
+      "description": "Maximum number of recent branch turns shown to the observer after token-based window selection."
+    },
+    "compactionMaxObservations": {
+      "type": "integer",
+      "minimum": 1,
+      "default": 6,
+      "description": "Maximum number of recent observations merged into compaction summaries."
+    },
+    "compactionMaxReflections": {
+      "type": "integer",
+      "minimum": 1,
+      "default": 6,
+      "description": "Maximum number of reflections merged into compaction summaries."
+    },
+    "reflectionMinObservationCount": {
+      "type": "integer",
+      "minimum": 1,
+      "default": 12,
+      "description": "Legacy compatibility knob kept on the snapshot; reflection readiness is now primarily token-based."
+    },
+    "observation": {
+      "$ref": "#/$defs/observationConfig"
+    },
+    "reflection": {
+      "$ref": "#/$defs/reflectionConfig"
+    },
+    "observationMessageTokens": {
+      "type": "integer",
+      "minimum": 1,
+      "default": 12000,
+      "description": "Legacy alias for observation.messageTokens. Nested canonical fields win when both are present."
+    },
+    "observationPreviousTokens": {
+      "$ref": "#/$defs/positiveIntegerOrFalse",
+      "default": 2000,
+      "description": "Legacy alias for observation.previousObserverTokens. Nested canonical fields win when both are present."
+    },
+    "reflectionObservationTokens": {
+      "type": "integer",
+      "minimum": 1,
+      "default": 8000,
+      "description": "Legacy alias for reflection.observationTokens. Nested canonical fields win when both are present."
+    },
+    "headerMaxTokens": {
+      "$ref": "#/$defs/positiveIntegerOrFalse",
+      "default": 800,
+      "description": "Token budget for the hidden OM header. Set false to disable token capping for the header."
+    },
+    "compactionMaxTokens": {
+      "$ref": "#/$defs/positiveIntegerOrFalse",
+      "default": 1200,
+      "description": "Token budget for the OM payload appended to compaction summaries. Set false to disable token capping for the payload."
+    },
+    "shareTokenBudget": {
+      "type": "boolean",
+      "default": false,
+      "description": "When true, reserve observer token budget for new turns first, then fit previous observations into the remaining space."
+    }
+  },
+  "$defs": {
+    "positiveIntegerOrFalse": {
+      "oneOf": [
+        {
+          "type": "integer",
+          "minimum": 1
+        },
+        {
+          "const": false
+        }
+      ]
+    },
+    "positiveNumberOrFalse": {
+      "oneOf": [
+        {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        {
+          "const": false
+        }
+      ]
+    },
+    "observationConfig": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "messageTokens": {
+          "type": "integer",
+          "minimum": 1,
+          "default": 12000,
+          "description": "Pending-turn token threshold required before the observer runs."
+        },
+        "previousObserverTokens": {
+          "$ref": "#/$defs/positiveIntegerOrFalse",
+          "default": 2000,
+          "description": "Token budget for replaying prior observations back to the observer. Set false to disable the explicit cap."
+        },
+        "bufferTokens": {
+          "$ref": "#/$defs/positiveNumberOrFalse",
+          "default": 0.2,
+          "description": "Observation buffer trigger. Ratios below 1 are resolved against observation.messageTokens; integers are treated as absolute token counts; false disables observation buffering."
+        },
+        "bufferActivation": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "default": 0.8,
+          "description": "How much raw message pressure the observation buffer clears on activation."
+        },
+        "blockAfter": {
+          "type": "number",
+          "minimum": 1,
+          "default": 1.2,
+          "description": "Safety ratio after which OM stops deferring observer work through buffering."
+        }
+      }
+    },
+    "reflectionConfig": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "observationTokens": {
+          "type": "integer",
+          "minimum": 1,
+          "default": 8000,
+          "description": "Retained observation token threshold required before reflection runs."
+        },
+        "bufferActivation": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "default": 0.5,
+          "description": "Fraction of the reflection threshold that triggers reflection prebuffering."
+        },
+        "blockAfter": {
+          "type": "number",
+          "minimum": 1,
+          "default": 1.2,
+          "description": "Safety ratio after which OM stops deferring reflection work through buffering."
+        }
+      }
+    }
+  }
+}

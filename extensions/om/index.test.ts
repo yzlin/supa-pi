@@ -391,6 +391,166 @@ describe("om session_start restore wiring", () => {
       },
     });
   });
+
+  it("prefers a configured OM model over ctx.model when the configured model exists", async () => {
+    let usedModel: unknown;
+    const configuredModel = { provider: "openai", id: "gpt-5-mini" };
+    const harness = createOmHarness(
+      {
+        branchEntries: [
+          createMessageEntry("entry-1", "user", "Start here."),
+          createMessageEntry("entry-2", "assistant", "Proceed now."),
+        ],
+      },
+      {
+        config: {
+          model: "openai/gpt-5-mini",
+          observation: {
+            messageTokens: 1,
+          },
+        },
+        invokeObserverFn: async (invokeContext) => {
+          usedModel = invokeContext.model;
+          return createEmptyOmObserverResult();
+        },
+      } as any
+    );
+
+    const ctx = harness.ctx as any;
+    ctx.model = { provider: "anthropic", id: "claude-haiku-4-5" };
+    ctx.modelRegistry.find = (provider: string, modelId: string) =>
+      provider === configuredModel.provider && modelId === configuredModel.id
+        ? configuredModel
+        : undefined;
+
+    harness.sessionStart?.({}, harness.ctx);
+    await harness.turnEnd?.({}, harness.ctx);
+
+    expect(usedModel).toEqual(configuredModel);
+  });
+
+  it("prefers a uniquely matched bare configured modelId over ctx.model", async () => {
+    let usedModel: unknown;
+    const configuredModel = { provider: "openai", id: "gpt-5-mini" };
+    const harness = createOmHarness(
+      {
+        branchEntries: [
+          createMessageEntry("entry-1", "user", "Start here."),
+          createMessageEntry("entry-2", "assistant", "Proceed now."),
+        ],
+      },
+      {
+        config: {
+          model: "gpt-5-mini",
+          observation: {
+            messageTokens: 1,
+          },
+        },
+        invokeObserverFn: async (invokeContext) => {
+          usedModel = invokeContext.model;
+          return createEmptyOmObserverResult();
+        },
+      } as any
+    );
+
+    const ctx = harness.ctx as any;
+    ctx.model = { provider: "anthropic", id: "claude-haiku-4-5" };
+    ctx.modelRegistry.getAvailable = () => [configuredModel];
+
+    harness.sessionStart?.({}, harness.ctx);
+    await harness.turnEnd?.({}, harness.ctx);
+
+    expect(usedModel).toEqual(configuredModel);
+  });
+
+  it("falls back to ctx.model and surfaces a warning when the configured OM model is unavailable", async () => {
+    let usedModel: unknown;
+    const sessionModel = { provider: "anthropic", id: "claude-haiku-4-5" };
+    const harness = createOmHarness(
+      {
+        branchEntries: [
+          createMessageEntry("entry-1", "user", "Start here."),
+          createMessageEntry("entry-2", "assistant", "Proceed now."),
+        ],
+      },
+      {
+        config: {
+          model: "openai/gpt-5-mini",
+          observation: {
+            messageTokens: 1,
+          },
+        },
+        invokeObserverFn: async (invokeContext) => {
+          usedModel = invokeContext.model;
+          return createEmptyOmObserverResult();
+        },
+      } as any
+    );
+
+    const ctx = harness.ctx as any;
+    ctx.model = sessionModel;
+    ctx.modelRegistry.find = () => undefined;
+
+    harness.sessionStart?.({}, harness.ctx);
+    await harness.turnEnd?.({}, harness.ctx);
+
+    expect(usedModel).toEqual(sessionModel);
+    expect(harness.notifications).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          message:
+            "OM configured model openai/gpt-5-mini is unavailable; falling back to the session model.",
+          level: "warning",
+        }),
+      ])
+    );
+  });
+
+  it("falls back to ctx.model and surfaces a warning when a bare configured modelId is ambiguous", async () => {
+    let usedModel: unknown;
+    const sessionModel = { provider: "anthropic", id: "claude-haiku-4-5" };
+    const harness = createOmHarness(
+      {
+        branchEntries: [
+          createMessageEntry("entry-1", "user", "Start here."),
+          createMessageEntry("entry-2", "assistant", "Proceed now."),
+        ],
+      },
+      {
+        config: {
+          model: "gpt-5-mini",
+          observation: {
+            messageTokens: 1,
+          },
+        },
+        invokeObserverFn: async (invokeContext) => {
+          usedModel = invokeContext.model;
+          return createEmptyOmObserverResult();
+        },
+      } as any
+    );
+
+    const ctx = harness.ctx as any;
+    ctx.model = sessionModel;
+    ctx.modelRegistry.getAvailable = () => [
+      { provider: "openai", id: "gpt-5-mini" },
+      { provider: "other", id: "gpt-5-mini" },
+    ];
+
+    harness.sessionStart?.({}, harness.ctx);
+    await harness.turnEnd?.({}, harness.ctx);
+
+    expect(usedModel).toEqual(sessionModel);
+    expect(harness.notifications).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          message:
+            "OM configured model gpt-5-mini matches multiple providers; falling back to the session model.",
+          level: "warning",
+        }),
+      ])
+    );
+  });
 });
 
 describe("om context header wiring", () => {

@@ -56,6 +56,7 @@ export const OmReflectionConfigSnapshotSchema = Type.Object({
 
 export const OmConfigSnapshotSchema = Type.Object({
   enabled: Type.Boolean(),
+  model: Type.Union([Type.String({ minLength: 1 }), Type.Null()]),
   headerMaxFacts: Type.Integer({ minimum: 1 }),
   headerMaxThreads: Type.Integer({ minimum: 1 }),
   observerMaxTurns: Type.Integer({ minimum: 1 }),

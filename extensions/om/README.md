@@ -38,24 +38,40 @@ Examples:
 
 ## Config file
 
-OM reads optional project-local config from `.pi/om.json` when the extension loads.
+OM reads optional global and project-local config when the extension loads.
 
 Precedence:
 
-1. `.pi/om.json`
-2. `DEFAULT_OM_CONFIG_SNAPSHOT`
+1. project `.pi/om.json`
+2. global `~/.pi/agent/om.json`
+3. `DEFAULT_OM_CONFIG_SNAPSHOT`
 
 Notes:
 
-- invalid or malformed `.pi/om.json` falls back to defaults
-- OM loads the file on extension load, so config changes require `/reload` or restart
-- persisted OM state keeps its `configSnapshot`, but runtime config is re-applied from the current file/defaults when OM restores state
+- invalid or malformed config files are ignored per layer
+- editor schema help: OM now ships `extensions/om/configuration_schema.json`; use it for editor tooling by associating your OM config file with that schema or adding a `$schema` path manually
+- project config overrides global config
+- `model` accepts either `provider/modelId` or a bare `modelId`; bare ids resolve only when they uniquely match an available model (or already match the current session model)
+- unknown or ambiguous configured models fall back to the session model, then OM's built-in fallback list, and surface a warning in recent OM activity
+- OM loads config on extension load, so config changes require `/reload` or restart
+- persisted OM state keeps its `configSnapshot`, but runtime config is re-applied from the current file/global/defaults when OM restores state
 
-Example `.pi/om.json`:
+For example, in this repo a project-local `.pi/om.json` can start with:
+
+```json
+{
+  "$schema": "../extensions/om/configuration_schema.json"
+}
+```
+
+Then add the rest of your config fields.
+
+Example `.pi/om.json` or `~/.pi/agent/om.json`:
 
 ```json
 {
   "enabled": true,
+  "model": "openai/gpt-5-mini",
   "shareTokenBudget": false,
   "headerMaxTokens": 800,
   "compactionMaxTokens": 1200,
@@ -80,6 +96,7 @@ Use the nested `observation` and `reflection` objects going forward.
 
 ```ts
 const omConfig = {
+  model: "openai/gpt-5-mini", // or a unique bare model id like "gpt-5-mini"
   shareTokenBudget: false,
   headerMaxTokens: 800,
   compactionMaxTokens: 1200,
@@ -100,6 +117,7 @@ const omConfig = {
 
 Current defaults in `DEFAULT_OM_CONFIG_SNAPSHOT`:
 
+- `model: null` (use session model, then OM fallback order)
 - `observation.messageTokens: 12000`
 - `observation.previousObserverTokens: 2000`
 - `observation.bufferTokens: 0.2`

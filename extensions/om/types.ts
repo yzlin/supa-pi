@@ -24,6 +24,7 @@ export interface OmReflectionConfigSnapshot {
 
 export interface OmConfigSnapshot {
   enabled: boolean;
+  model: string | null;
   headerMaxFacts: number;
   headerMaxThreads: number;
   observerMaxTurns: number;

@@ -48,6 +48,7 @@ import {
 import { createOmStatusSnapshot, showOmStatusView } from "./status";
 import type {
   OmConfigInput,
+  OmConfigSnapshot,
   OmObservationBufferEnvelopeV1,
   OmObserverDiagnostic,
   OmObserverDiagnosticCode,
@@ -92,7 +93,11 @@ export {
   DEFAULT_OM_CONFIG_SNAPSHOT,
   mergeOmConfigSnapshot,
 } from "./config";
-export { getOmConfigPath, loadOmConfig } from "./file-config";
+export {
+  getGlobalOmConfigPath,
+  getOmConfigPath,
+  loadOmConfig,
+} from "./file-config";
 export {
   applyOmObserverResult,
   buildOmObserverPromptForWindow,
@@ -328,13 +333,159 @@ const OM_DIAGNOSTIC_EVENT_CONFIG = {
   >
 >;
 
-function createOmInvokeContext(
-  ctx: OmLifecycleContext
-): Parameters<typeof invokeOmObserver>[0] {
+type OmResolvedModel = NonNullable<OmLifecycleContext["model"]>;
+type OmConfiguredModelStatus = "resolved" | "missing" | "ambiguous" | "none";
+
+function listOmAvailableModels(
+  modelRegistry: OmLifecycleContext["modelRegistry"]
+): OmResolvedModel[] {
+  return (modelRegistry.getAvailable?.() ??
+    modelRegistry.getAll?.() ??
+    []) as OmResolvedModel[];
+}
+
+function splitOmModelSpecifier(
+  modelSpecifier: string
+): { provider: string; modelId: string } | null {
+  const slashIndex = modelSpecifier.indexOf("/");
+  if (slashIndex === -1) {
+    return null;
+  }
+
   return {
-    model: ctx.model,
-    modelRegistry: ctx.modelRegistry,
+    provider: modelSpecifier.slice(0, slashIndex),
+    modelId: modelSpecifier.slice(slashIndex + 1),
   };
+}
+
+function matchesModelSpecifier(
+  model: OmResolvedModel,
+  modelSpecifier: string
+): boolean {
+  const parts = splitOmModelSpecifier(modelSpecifier);
+  if (!parts) {
+    return model.id === modelSpecifier;
+  }
+
+  return model.provider === parts.provider && model.id === parts.modelId;
+}
+
+function resolveOmConfiguredModel(
+  modelRegistry: OmLifecycleContext["modelRegistry"],
+  modelSpecifier: string | null | undefined,
+  currentModel?: OmLifecycleContext["model"]
+): {
+  model: OmLifecycleContext["model"];
+  status: OmConfiguredModelStatus;
+} {
+  if (!modelSpecifier) {
+    return { model: undefined, status: "none" };
+  }
+
+  if (currentModel && matchesModelSpecifier(currentModel, modelSpecifier)) {
+    return { model: currentModel, status: "resolved" };
+  }
+
+  const parts = splitOmModelSpecifier(modelSpecifier);
+  if (parts) {
+    const resolvedModel = modelRegistry.find(parts.provider, parts.modelId);
+
+    return {
+      model: resolvedModel,
+      status: resolvedModel ? "resolved" : "missing",
+    };
+  }
+
+  const candidates = listOmAvailableModels(modelRegistry).filter(
+    (model) => model.id === modelSpecifier
+  );
+  if (candidates.length === 1) {
+    return { model: candidates[0], status: "resolved" };
+  }
+
+  return {
+    model: undefined,
+    status: candidates.length > 1 ? "ambiguous" : "missing",
+  };
+}
+
+function createConfiguredModelFallbackEvent(
+  updatedAt: string,
+  modelSpecifier: string,
+  fallback: "session-model" | "om-fallbacks",
+  reason: "missing" | "ambiguous"
+): OmRecentEvent {
+  const suffix =
+    fallback === "session-model"
+      ? "falling back to the session model."
+      : "falling back to OM defaults.";
+
+  return createOmEvent({
+    createdAt: updatedAt,
+    level: "warning",
+    message:
+      reason === "ambiguous"
+        ? `OM configured model ${modelSpecifier} matches multiple providers; ${suffix}`
+        : `OM configured model ${modelSpecifier} is unavailable; ${suffix}`,
+  });
+}
+
+function createOmObserverInvokeContext(
+  modelRegistry: OmLifecycleContext["modelRegistry"],
+  model: OmLifecycleContext["model"]
+): Parameters<typeof invokeOmObserver>[0] {
+  return { model, modelRegistry };
+}
+
+function resolveOmInvokeContext(
+  ctx: OmLifecycleContext,
+  configSnapshot: OmConfigSnapshot | undefined,
+  updatedAt: string
+): {
+  invokeContext: Parameters<typeof invokeOmObserver>[0];
+  fallbackEvent: OmRecentEvent | null;
+} {
+  const configuredModelSpecifier = configSnapshot?.model ?? null;
+  const configuredModelResolution = resolveOmConfiguredModel(
+    ctx.modelRegistry,
+    configuredModelSpecifier,
+    ctx.model
+  );
+
+  if (configuredModelResolution.model) {
+    return {
+      invokeContext: createOmObserverInvokeContext(
+        ctx.modelRegistry,
+        configuredModelResolution.model
+      ),
+      fallbackEvent: null,
+    };
+  }
+
+  const fallbackEvent =
+    configuredModelSpecifier && configuredModelResolution.status !== "none"
+      ? createConfiguredModelFallbackEvent(
+          updatedAt,
+          configuredModelSpecifier,
+          ctx.model ? "session-model" : "om-fallbacks",
+          configuredModelResolution.status === "ambiguous"
+            ? "ambiguous"
+            : "missing"
+        )
+      : null;
+
+  return {
+    invokeContext: createOmObserverInvokeContext(ctx.modelRegistry, ctx.model),
+    fallbackEvent,
+  };
+}
+
+function createOmInvokeContext(
+  ctx: OmLifecycleContext,
+  configSnapshot?: OmConfigSnapshot
+): Parameters<typeof invokeOmObserver>[0] {
+  return resolveOmInvokeContext(ctx, configSnapshot, new Date().toISOString())
+    .invokeContext;
 }
 
 function appendOmRecentEvents(
@@ -908,8 +1059,14 @@ export function createOmExtension(deps: OmExtensionDeps = {}) {
 
       let nextRuntimeState = currentRuntimeState;
       const updatedAt = now();
-      const invokeContext = createOmInvokeContext(ctx);
-      const recentEvents: OmRecentEvent[] = [];
+      const { invokeContext, fallbackEvent } = resolveOmInvokeContext(
+        ctx,
+        baseState.configSnapshot,
+        updatedAt
+      );
+      const recentEvents: OmRecentEvent[] = fallbackEvent
+        ? [fallbackEvent]
+        : [];
 
       if (
         !shouldRebuild &&
@@ -1394,10 +1551,7 @@ export function createOmExtension(deps: OmExtensionDeps = {}) {
         ])
       );
       const compaction = await generateOmCompactionSummary(
-        {
-          model: ctx.model,
-          modelRegistry: ctx.modelRegistry,
-        },
+        createOmInvokeContext(ctx, runtimeState.state.configSnapshot),
         runtimeState.state,
         {
           conversationText,

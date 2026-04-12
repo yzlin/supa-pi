@@ -51,6 +51,7 @@ describe("om shared contracts", () => {
     expect(
       createOmConfigSnapshot({
         enabled: false,
+        model: "   ",
         headerMaxFacts: -5,
         headerMaxThreads: 0,
         observerMaxTurns: 3.8,
@@ -72,6 +73,7 @@ describe("om shared contracts", () => {
     ).toEqual({
       ...DEFAULT_OM_CONFIG_SNAPSHOT,
       enabled: false,
+      model: null,
       headerMaxFacts: 1,
       headerMaxThreads: 1,
       observerMaxTurns: 3,
@@ -93,6 +95,26 @@ describe("om shared contracts", () => {
       headerMaxTokens: false,
       compactionMaxTokens: 1,
       shareTokenBudget: true,
+    });
+  });
+
+  it("keeps a valid provider/modelId model override on the normalized snapshot", () => {
+    expect(
+      createOmConfigSnapshot({
+        model: "openai/gpt-5-mini",
+      })
+    ).toMatchObject({
+      model: "openai/gpt-5-mini",
+    });
+  });
+
+  it("keeps a bare modelId override on the normalized snapshot", () => {
+    expect(
+      createOmConfigSnapshot({
+        model: "gpt-5-mini",
+      })
+    ).toMatchObject({
+      model: "gpt-5-mini",
     });
   });
 
@@ -157,6 +179,7 @@ describe("om shared contracts", () => {
 
   it("exposes canonical nested token-budget defaults on the config snapshot contract", () => {
     expect(DEFAULT_OM_CONFIG_SNAPSHOT).toMatchObject({
+      model: null,
       observation: {
         messageTokens: 12000,
         previousObserverTokens: 2000,
