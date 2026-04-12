@@ -48,8 +48,10 @@ function createEditor(
     canTriggerDoubleEscapeCommand: () => false,
     commandRemap,
     statusBar: {
-      enabled: options?.statusBarEnabled ?? false,
-      preset: "default",
+      config: {
+        enabled: options?.statusBarEnabled ?? false,
+        preset: "default",
+      },
       getContext: () => options?.statusBarContext ?? null,
       getFooterData: () => options?.statusBarFooterData ?? null,
     },

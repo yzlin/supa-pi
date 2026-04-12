@@ -10,5 +10,29 @@
     "allowFolderSelection": true,
     "skipPatterns": ["node_modules"],
     "tabCompletionMode": "bestMatch"
+  },
+  "statusBar": {
+    "enabled": true,
+    "preset": "default",
+    "leftSegments": ["pi", "model", "path", "git"],
+    "rightSegments": ["context_pct", "extension_statuses"],
+    "separator": " | ",
+    "colors": {
+      "model": "success",
+      "separator": "muted",
+      "context": "#89d281"
+    },
+    "segmentOptions": {
+      "model": {
+        "showThinkingLevel": true
+      },
+      "path": {
+        "mode": "abbreviated",
+        "maxLength": 32
+      },
+      "git": {
+        "showUntracked": false
+      }
+    }
   }
 }

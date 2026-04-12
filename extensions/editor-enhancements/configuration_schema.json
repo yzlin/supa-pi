@@ -67,6 +67,119 @@
         }
       }
     },
+    "statusBarSegmentId": {
+      "type": "string",
+      "enum": [
+        "pi",
+        "model",
+        "path",
+        "git",
+        "token_in",
+        "token_out",
+        "token_total",
+        "cost",
+        "context_pct",
+        "context_total",
+        "time_spent",
+        "time",
+        "session",
+        "hostname",
+        "cache_read",
+        "cache_write",
+        "thinking",
+        "extension_statuses"
+      ]
+    },
+    "statusBarSegmentOptions": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "model": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "showThinkingLevel": {
+              "type": "boolean",
+              "description": "Show the current thinking level next to the model name when the model supports reasoning."
+            }
+          }
+        },
+        "path": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "mode": {
+              "type": "string",
+              "enum": ["basename", "abbreviated", "full"],
+              "description": "How to render the current working directory in the path segment."
+            },
+            "maxLength": {
+              "type": "integer",
+              "minimum": 1,
+              "description": "Maximum path length when using abbreviated mode."
+            }
+          }
+        },
+        "git": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "showBranch": {
+              "type": "boolean"
+            },
+            "showStaged": {
+              "type": "boolean"
+            },
+            "showUnstaged": {
+              "type": "boolean"
+            },
+            "showUntracked": {
+              "type": "boolean"
+            }
+          }
+        },
+        "time": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "format": {
+              "type": "string",
+              "enum": ["12h", "24h"]
+            },
+            "showSeconds": {
+              "type": "boolean"
+            }
+          }
+        }
+      }
+    },
+    "statusBarSeparatorText": {
+      "type": "string",
+      "description": "Literal separator text inserted between visible status bar segments. May be empty."
+    },
+    "statusBarColorValue": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Either a Pi theme color name or a #RRGGBB hex color."
+    },
+    "statusBarColors": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "pi": { "$ref": "#/$defs/statusBarColorValue" },
+        "model": { "$ref": "#/$defs/statusBarColorValue" },
+        "path": { "$ref": "#/$defs/statusBarColorValue" },
+        "gitDirty": { "$ref": "#/$defs/statusBarColorValue" },
+        "gitClean": { "$ref": "#/$defs/statusBarColorValue" },
+        "thinking": { "$ref": "#/$defs/statusBarColorValue" },
+        "context": { "$ref": "#/$defs/statusBarColorValue" },
+        "contextWarn": { "$ref": "#/$defs/statusBarColorValue" },
+        "contextError": { "$ref": "#/$defs/statusBarColorValue" },
+        "cost": { "$ref": "#/$defs/statusBarColorValue" },
+        "tokens": { "$ref": "#/$defs/statusBarColorValue" },
+        "separator": { "$ref": "#/$defs/statusBarColorValue" }
+      }
+    },
     "statusBarConfig": {
       "type": "object",
       "additionalProperties": false,
@@ -80,7 +193,32 @@
           "type": "string",
           "enum": ["default", "minimal", "compact", "full", "nerd", "ascii"],
           "default": "default",
-          "description": "Status bar layout preset."
+          "description": "Base status bar preset. Custom segment arrays inherit separator/colors/options from this preset."
+        },
+        "leftSegments": {
+          "type": "array",
+          "default": [],
+          "description": "Optional ordered list of segment ids to render on the left side of the status bar. When omitted, the preset default is used.",
+          "items": {
+            "$ref": "#/$defs/statusBarSegmentId"
+          }
+        },
+        "rightSegments": {
+          "type": "array",
+          "default": [],
+          "description": "Optional ordered list of segment ids to render on the right side of the status bar. When omitted, the preset default is used.",
+          "items": {
+            "$ref": "#/$defs/statusBarSegmentId"
+          }
+        },
+        "separator": {
+          "$ref": "#/$defs/statusBarSeparatorText"
+        },
+        "colors": {
+          "$ref": "#/$defs/statusBarColors"
+        },
+        "segmentOptions": {
+          "$ref": "#/$defs/statusBarSegmentOptions"
         }
       }
     }

@@ -1,8 +1,12 @@
+import { mergeStatusBarSegmentOptions } from "./status-bar-config-utils.js";
+import { getSeparator } from "./status-bar-icons.js";
 import { getDefaultColors } from "./status-bar-theme.js";
 import type {
+  BuiltinStatusBarPresetDef,
   ColorScheme,
   StatusBarPreset,
   StatusBarPresetDef,
+  StatusBarSegmentOptions,
 } from "./status-bar-types.js";
 
 const DEFAULT_COLORS: ColorScheme = getDefaultColors();
@@ -24,7 +28,10 @@ const NERD_COLORS: ColorScheme = {
   cost: "warning",
 };
 
-export const STATUS_BAR_PRESETS: Record<StatusBarPreset, StatusBarPresetDef> = {
+export const STATUS_BAR_PRESETS: Record<
+  StatusBarPreset,
+  BuiltinStatusBarPresetDef
+> = {
   default: {
     leftSegments: [
       "pi",
@@ -160,6 +167,32 @@ export const STATUS_BAR_PRESETS: Record<StatusBarPreset, StatusBarPresetDef> = {
   },
 };
 
-export function getStatusBarPreset(name: StatusBarPreset): StatusBarPresetDef {
+export function getStatusBarPreset(
+  name: StatusBarPreset
+): BuiltinStatusBarPresetDef {
   return STATUS_BAR_PRESETS[name] ?? STATUS_BAR_PRESETS.default;
+}
+
+export function resolveStatusBarPresetDef(config: {
+  preset: StatusBarPreset;
+  leftSegments?: StatusBarPresetDef["leftSegments"];
+  rightSegments?: StatusBarPresetDef["rightSegments"];
+  separator?: string;
+  colors?: ColorScheme;
+  segmentOptions?: StatusBarSegmentOptions;
+}): StatusBarPresetDef {
+  const preset = getStatusBarPreset(config.preset);
+
+  return {
+    ...preset,
+    leftSegments: config.leftSegments ?? preset.leftSegments,
+    rightSegments: config.rightSegments ?? preset.rightSegments,
+    separator:
+      config.separator ?? ` ${getSeparator(preset.separator).left} `,
+    colors: { ...preset.colors, ...config.colors },
+    segmentOptions: mergeStatusBarSegmentOptions(
+      preset.segmentOptions,
+      config.segmentOptions
+    ),
+  };
 }

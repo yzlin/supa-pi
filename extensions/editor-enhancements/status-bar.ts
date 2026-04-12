@@ -6,15 +6,14 @@ import type {
 } from "@mariozechner/pi-coding-agent";
 import { truncateToWidth, visibleWidth } from "@mariozechner/pi-tui";
 
+import type { StatusBarRuntimeConfig } from "./config.js";
 import { getGitStatus } from "./status-bar-git.js";
-import { getSeparator } from "./status-bar-icons.js";
-import { getStatusBarPreset } from "./status-bar-presets.js";
+import { resolveStatusBarPresetDef } from "./status-bar-presets.js";
 import { renderStatusBarSegment } from "./status-bar-segments.js";
 import { fg, getDefaultColors } from "./status-bar-theme.js";
 import type {
   ColorScheme,
   StatusBarContext,
-  StatusBarPreset,
   StatusBarPresetDef,
   StatusBarSegmentId,
   UsageStats,
@@ -43,9 +42,8 @@ function buildContentFromParts(
   colors: ColorScheme
 ): string {
   if (!parts.length) return "";
-  const separator = getSeparator(presetDef.separator).left;
-  const coloredSeparator = fg(theme, "separator", separator, colors);
-  return ` ${parts.join(` ${coloredSeparator} `)} `;
+  const coloredSeparator = fg(theme, "separator", presetDef.separator, colors);
+  return ` ${parts.join(coloredSeparator)} `;
 }
 
 function fitToWidth(content: string, width: number): string {
@@ -61,35 +59,68 @@ function computeTopContent(
   presetDef: StatusBarPresetDef,
   width: number
 ): string {
-  const separator = getSeparator(presetDef.separator);
-  const separatorWidth = visibleWidth(separator.left) + 2;
-  const allSegmentIds = [...presetDef.leftSegments, ...presetDef.rightSegments];
+  const renderSide = (segmentIds: StatusBarSegmentId[]) =>
+    segmentIds
+      .map((segId) => renderSegmentWithWidth(segId, ctx))
+      .filter((segment) => segment.visible)
+      .map((segment) => ({ content: segment.content, width: segment.width }));
 
-  const renderedSegments: { content: string; width: number }[] = [];
-  for (const segId of allSegmentIds) {
-    const rendered = renderSegmentWithWidth(segId, ctx);
-    if (rendered.visible) {
-      renderedSegments.push({
-        content: rendered.content,
-        width: rendered.width,
-      });
-    }
-  }
+  const leftSegments = renderSide(presetDef.leftSegments);
+  const rightSegments = renderSide(presetDef.rightSegments);
 
-  if (!renderedSegments.length) {
+  const getSide = (segments: { content: string; width: number }[]) => {
+    const content = buildContentFromParts(
+      segments.map((segment) => segment.content),
+      presetDef,
+      ctx.theme,
+      ctx.colors
+    );
+
+    return {
+      content,
+      width: visibleWidth(content),
+    };
+  };
+
+  if (!leftSegments.length && !rightSegments.length) {
     return "";
   }
 
-  let used = 2;
-  const accepted: string[] = [];
-  for (const segment of renderedSegments) {
-    const needed = segment.width + (accepted.length ? separatorWidth : 0);
-    if (used + needed > width) break;
-    accepted.push(segment.content);
-    used += needed;
+  let left = leftSegments;
+  let right = rightSegments;
+  let leftSide = getSide(left);
+  let rightSide = getSide(right);
+
+  while (leftSide.width + rightSide.width > width) {
+    if (right.length > 0) {
+      right = right.slice(0, -1);
+      rightSide = getSide(right);
+      continue;
+    }
+
+    if (left.length > 0) {
+      left = left.slice(0, -1);
+      leftSide = getSide(left);
+      continue;
+    }
+
+    break;
   }
 
-  return buildContentFromParts(accepted, presetDef, ctx.theme, ctx.colors);
+  if (!leftSide.content && !rightSide.content) {
+    return "";
+  }
+
+  if (!leftSide.content) {
+    return `${" ".repeat(Math.max(width - rightSide.width, 0))}${rightSide.content}`;
+  }
+
+  if (!rightSide.content) {
+    return leftSide.content;
+  }
+
+  const gapWidth = Math.max(width - leftSide.width - rightSide.width, 1);
+  return `${leftSide.content}${" ".repeat(gapWidth)}${rightSide.content}`;
 }
 
 function collectUsageStats(ctx: ExtensionContext): {
@@ -170,12 +201,12 @@ export function renderStatusBarLine(options: {
   width: number;
   ctx: ExtensionContext;
   footerData: ReadonlyFooterDataProvider | null;
-  preset: StatusBarPreset;
+  config: StatusBarRuntimeConfig;
   sessionStartTime: number;
   theme: Theme;
 }): string {
-  const { width, ctx, footerData, preset, sessionStartTime, theme } = options;
-  const presetDef = getStatusBarPreset(preset);
+  const { width, ctx, footerData, config, sessionStartTime, theme } = options;
+  const presetDef = resolveStatusBarPresetDef(config);
   const statusBarContext = buildStatusBarContext(
     ctx,
     footerData,

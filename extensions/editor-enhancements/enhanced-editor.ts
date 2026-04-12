@@ -19,16 +19,15 @@ import {
   getShellCompletions,
   type ShellInfo,
 } from "./shell-completions.js";
+import type { StatusBarRuntimeConfig } from "./config.js";
 import { renderStatusBarLine } from "./status-bar.js";
-import type { StatusBarPreset } from "./status-bar-types.js";
 
 type EnhancedEditorOptions = {
   doubleEscapeCommand: string | null;
   canTriggerDoubleEscapeCommand: () => boolean;
   commandRemap: Record<string, string>;
   statusBar: {
-    enabled: boolean;
-    preset: StatusBarPreset;
+    config: StatusBarRuntimeConfig;
     getContext: () => ExtensionContext | null;
     getFooterData: () => ReadonlyFooterDataProvider | null;
   };
@@ -384,7 +383,7 @@ export class EnhancedEditor extends CustomEditor {
 
   render(width: number): string[] {
     const lines = super.render(width);
-    if (!this.options.statusBar.enabled || width < 10 || lines.length === 0) {
+    if (!this.options.statusBar.config.enabled || width < 10 || lines.length === 0) {
       return lines;
     }
 
@@ -398,7 +397,7 @@ export class EnhancedEditor extends CustomEditor {
         width,
         ctx,
         footerData: this.options.statusBar.getFooterData(),
-        preset: this.options.statusBar.preset,
+        config: this.options.statusBar.config,
         sessionStartTime: this.sessionStartTime,
         theme: this.ui.theme,
       }),

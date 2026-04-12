@@ -92,8 +92,7 @@ export default function (pi: ExtensionAPI) {
         },
         commandRemap: config.commandRemap,
         statusBar: {
-          enabled: config.statusBar.enabled,
-          preset: config.statusBar.preset,
+          config: config.statusBar,
           getContext: () => activeContext,
           getFooterData: () => activeFooterData,
         },

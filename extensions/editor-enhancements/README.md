@@ -79,6 +79,20 @@ Then add the rest of your config fields:
 - `statusBar`: nested status-bar config
   - `enabled`: default `true`
   - `preset`: one of `default`, `minimal`, `compact`, `full`, `nerd`, `ascii`; default `default`
+  - `leftSegments`: optional ordered list of segment ids for the left side; when omitted, inherits the preset default
+  - `rightSegments`: optional ordered list of segment ids for the right side; when omitted, inherits the preset default
+  - `separator`: optional literal separator text inserted between visible segments; when omitted, inherits the preset separator; may be empty (`""`)
+  - `colors`: optional semantic color overrides layered on top of the preset palette
+    - supported color keys: `pi`, `model`, `path`, `gitDirty`, `gitClean`, `thinking`, `context`, `contextWarn`, `contextError`, `cost`, `tokens`, `separator`
+    - values may be Pi theme color names or `#RRGGBB` hex
+  - `segmentOptions`: optional per-segment overrides layered on top of the preset defaults
+    - `model.showThinkingLevel`: boolean
+    - `path.mode`: `basename`, `abbreviated`, or `full`
+    - `path.maxLength`: positive integer, used with `abbreviated`
+    - `git.showBranch`, `git.showStaged`, `git.showUnstaged`, `git.showUntracked`: booleans
+    - `time.format`: `12h` or `24h`
+    - `time.showSeconds`: boolean
+  - supported segment ids: `pi`, `model`, `path`, `git`, `token_in`, `token_out`, `token_total`, `cost`, `context_pct`, `context_total`, `time_spent`, `time`, `session`, `hostname`, `cache_read`, `cache_write`, `thinking`, `extension_statuses`
 
 ```json
 {
@@ -97,7 +111,27 @@ Then add the rest of your config fields:
   },
   "statusBar": {
     "enabled": true,
-    "preset": "default"
+    "preset": "default",
+    "leftSegments": ["pi", "model", "path", "git"],
+    "rightSegments": ["context_pct", "extension_statuses"],
+    "separator": " | ",
+    "colors": {
+      "model": "success",
+      "separator": "muted",
+      "context": "#89d281"
+    },
+    "segmentOptions": {
+      "model": {
+        "showThinkingLevel": true
+      },
+      "path": {
+        "mode": "abbreviated",
+        "maxLength": 32
+      },
+      "git": {
+        "showUntracked": false
+      }
+    }
   }
 }
 ```
@@ -111,7 +145,7 @@ Runtime merge order for file picker config is:
 2. global `~/.pi/agent/editor-enhancements.json`
 3. project `.pi/editor-enhancements.json`
 
-`commandRemap` maps are merged by key. `filePicker` values are merged by field, with later layers winning; `skipPatterns` comes from the last layer that sets it. `statusBar` values are merged by field the same way.
+`commandRemap` maps are merged by key. `filePicker` values are merged by field, with later layers winning; `skipPatterns` comes from the last layer that sets it. `statusBar` values are merged by field the same way; `leftSegments` and `rightSegments` are each replaced by the last layer that sets them, `separator` takes the last configured literal string, `colors` merge by semantic key, and `segmentOptions` merge per nested field.
 
 Config layout:
 
