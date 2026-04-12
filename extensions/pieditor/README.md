@@ -183,6 +183,10 @@ Current scope:
 - native preview colors use bat's built-in `Monokai Extended` for dark mode and `Monokai Extended Light` for light mode
 - output matches bat's built-in compiled assets for those theme names; user-local bat config/theme overrides are not applied here
 
+## Maintainer docs
+
+- [`docs/architecture.md`](./docs/architecture.md)
+
 ## Notes
 
 - The configured double-escape command is only triggered when the editor is empty and Pi is idle

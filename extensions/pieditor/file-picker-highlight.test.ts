@@ -5,6 +5,7 @@ import { initTheme } from "@mariozechner/pi-coding-agent";
 import {
   highlightPreviewLine,
   highlightPreviewLines,
+  resolveNativeHighlightBindingPathForTests,
   setNativeHighlightBindingLoaderForTests,
   warmPreviewHighlighter,
 } from "./file-picker-highlight";
@@ -120,6 +121,17 @@ describe("file picker native preview highlighting", () => {
     expect(
       highlightPreviewLines(["… preview truncated"], "example.ts")
     ).toEqual(["… preview truncated"]);
+  });
+
+  it("resolves the native binding module from the moved file-picker folder", () => {
+    const resolvedPath = resolveNativeHighlightBindingPathForTests();
+
+    expect(resolvedPath).not.toBeNull();
+    expect(
+      resolvedPath?.endsWith(
+        "extensions/pieditor/native/syntect-picker-preview/index.js"
+      )
+    ).toBe(true);
   });
 
   it("warms the native binding once for both theme modes", () => {

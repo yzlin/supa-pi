@@ -6,6 +6,7 @@ import type {
 } from "@mariozechner/pi-coding-agent";
 import type { AutocompleteItem } from "@mariozechner/pi-tui";
 
+import { matchesInterrupt } from "./editor/double-escape";
 import { EnhancedEditor } from "./enhanced-editor";
 
 function createEditor(
@@ -14,6 +15,10 @@ function createEditor(
     statusBarEnabled?: boolean;
     statusBarContext?: ExtensionContext | null;
     statusBarFooterData?: ReadonlyFooterDataProvider | null;
+    doubleEscapeCommand?: string | null;
+    getDoubleEscapeCommand?: () => string | null;
+    canTriggerDoubleEscapeCommand?: () => boolean;
+    interruptMatches?: boolean;
   }
 ) {
   const tui = {
@@ -29,8 +34,10 @@ function createEditor(
   } as any;
 
   const keybindings = {
-    matches() {
-      return false;
+    matches(_data: string, key: string) {
+      return key === "app.interrupt"
+        ? Boolean(options?.interruptMatches)
+        : false;
     },
   } as any;
 
@@ -44,8 +51,11 @@ function createEditor(
   } as any;
 
   return new EnhancedEditor(tui, theme, keybindings, ui, {
-    doubleEscapeCommand: null,
-    canTriggerDoubleEscapeCommand: () => false,
+    getDoubleEscapeCommand:
+      options?.getDoubleEscapeCommand ??
+      (() => options?.doubleEscapeCommand ?? null),
+    canTriggerDoubleEscapeCommand:
+      options?.canTriggerDoubleEscapeCommand ?? (() => false),
     commandRemap,
     statusBar: {
       config: {
@@ -101,6 +111,17 @@ describe("EnhancedEditor command remap", () => {
     expect(submitted).toBe("/anycopy src --depth 2");
   });
 
+  it("preserves keybindings manager method binding for interrupt checks", () => {
+    const keybindings = {
+      keysById: new Map([["app.interrupt", ["escape"]]]),
+      matches(_data: string, key: string) {
+        return this.keysById.has(key);
+      },
+    };
+
+    expect(matchesInterrupt(keybindings as any, "\x1b")).toBe(true);
+  });
+
   it("forwards autocomplete request options to the wrapped provider", async () => {
     const editor = createEditor({});
     const signal = new AbortController().signal;
@@ -138,6 +159,54 @@ describe("EnhancedEditor command remap", () => {
     });
 
     expect(receivedOptions).toEqual({ signal, force: true });
+  });
+
+  it("submits the configured command on double escape when idle and editor is empty", () => {
+    const submitted: string[] = [];
+    const editor = createEditor(
+      {},
+      {
+        doubleEscapeCommand: "anycopy",
+        canTriggerDoubleEscapeCommand: () => true,
+        interruptMatches: true,
+      }
+    );
+
+    editor.onSubmit = (text) => {
+      submitted.push(text);
+    };
+
+    editor.handleInput("\x1b");
+    editor.handleInput("\x1b");
+
+    expect(submitted).toEqual(["/anycopy"]);
+  });
+
+  it("supports commands that become available after editor attachment", () => {
+    const submitted: string[] = [];
+    let availableCommand: string | null = null;
+    const editor = createEditor(
+      {},
+      {
+        getDoubleEscapeCommand: () => availableCommand,
+        canTriggerDoubleEscapeCommand: () => true,
+        interruptMatches: true,
+      }
+    );
+
+    editor.onSubmit = (text) => {
+      submitted.push(text);
+    };
+
+    editor.handleInput("\x1b");
+    editor.handleInput("\x1b");
+    expect(submitted).toEqual([]);
+
+    availableCommand = "anycopy";
+    editor.handleInput("\x1b");
+    editor.handleInput("\x1b");
+
+    expect(submitted).toEqual(["/anycopy"]);
   });
 
   it("keeps the original top border below the status bar", () => {
