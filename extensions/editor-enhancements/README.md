@@ -4,13 +4,14 @@ A composite custom editor that combines several `setEditorComponent()`-based UX 
 
 ## Attribution
 
-This repo maintains its own rewritten local variant of `editor-enhancements`.
+This repo maintains its own rewritten and independently evolving variant of `editor-enhancements`.
 The original extension concept and initial implementation came from `w-winter/dot314`:
 - https://github.com/w-winter/dot314/tree/main/extensions/editor-enhancements
 
-Credit to the original author for the upstream extension and overall design direction.
+Please keep that upstream credit in place when updating this local version. This repo may continue evolving the extension in its own direction, but the original author should remain credited for the upstream design and starting point.
 
 This extension currently provides:
+- powerline-style status bar rendered in the editor's top border
 - `@`-triggered file picking for inserting `@path` refs at the cursor
 - shell completions in `!` / `!!` mode
 - `alt+v` raw clipboard paste that bypasses Pi's large-paste markers
@@ -75,6 +76,9 @@ Then add the rest of your config fields:
   - `previewHighlightMode`: `"native"` or `"builtin"` (default `"native"`)
     - `"native"`: use the picker-local Rust/syntect highlighter backed by bat's embedded compiled assets, with Pi built-in highlighting as runtime fallback if the native binary is unavailable
     - `"builtin"`: always use Pi's built-in JS highlighter and skip native warmup/load work
+- `statusBar`: nested status-bar config
+  - `enabled`: default `true`
+  - `preset`: one of `default`, `minimal`, `compact`, `full`, `nerd`, `ascii`; default `default`
 
 ```json
 {
@@ -90,9 +94,15 @@ Then add the rest of your config fields:
     "skipPatterns": ["node_modules"],
     "tabCompletionMode": "bestMatch",
     "previewHighlightMode": "native"
+  },
+  "statusBar": {
+    "enabled": true,
+    "preset": "default"
   }
 }
 ```
+
+Status bar presets are borrowed from `pi-powerline-footer`, but this extension ports only the bar itself — no stash UI, welcome overlay, or working vibes.
 
 Set `doubleEscapeCommand` to `null` to disable the remapping and keep Pi's native double-escape behavior. Set `commandRemap` to `{}` (or omit it) to disable command remapping.
 
@@ -101,7 +111,7 @@ Runtime merge order for file picker config is:
 2. global `~/.pi/agent/editor-enhancements.json`
 3. project `.pi/editor-enhancements.json`
 
-`commandRemap` maps are merged by key. `filePicker` values are merged by field, with later layers winning; `skipPatterns` comes from the last layer that sets it.
+`commandRemap` maps are merged by key. `filePicker` values are merged by field, with later layers winning; `skipPatterns` comes from the last layer that sets it. `statusBar` values are merged by field the same way.
 
 Config layout:
 

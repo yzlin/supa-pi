@@ -1,9 +1,12 @@
 /**
  * editor-enhancements
  *
- * Local rewritten variant of the upstream editor-enhancements extension from
- * w-winter/dot314:
+ * Local rewritten and independently evolving variant of the upstream
+ * editor-enhancements extension from w-winter/dot314:
  * https://github.com/w-winter/dot314/tree/main/extensions/editor-enhancements
+ *
+ * Keep attribution to the original upstream author even as this local version
+ * continues to diverge.
  *
  * Composite custom editor that combines:
  * - shell-completions (autocomplete wrapping for !/!! mode)
@@ -17,11 +20,13 @@
 import type {
   ExtensionAPI,
   ExtensionContext,
+  ReadonlyFooterDataProvider,
 } from "@mariozechner/pi-coding-agent";
 
 import { loadConfig } from "./config.js";
 import { EnhancedEditor } from "./enhanced-editor.js";
 import { warmPreviewHighlighter } from "./file-picker-highlight.js";
+import { invalidateGitBranch, invalidateGitStatus } from "./status-bar-git.js";
 
 function resolveDoubleEscapeCommand(
   pi: ExtensionAPI,
@@ -48,9 +53,24 @@ function resolveDoubleEscapeCommand(
   return null;
 }
 
+const GIT_BRANCH_PATTERNS = [
+  /\bgit\s+(checkout|switch|branch\s+-[dDmM]|merge|rebase|pull|reset|worktree)/,
+  /\bgit\s+stash\s+(pop|apply)/,
+];
+
+function mightChangeGitBranch(command: string): boolean {
+  return GIT_BRANCH_PATTERNS.some((pattern) => pattern.test(command));
+}
+
+function invalidateGitState(): void {
+  invalidateGitStatus();
+  invalidateGitBranch();
+}
+
 export default function (pi: ExtensionAPI) {
   let activeContext: ExtensionContext | null = null;
   let activeEditor: EnhancedEditor | null = null;
+  let activeFooterData: ReadonlyFooterDataProvider | null = null;
 
   const attachEditor = (ctx: ExtensionContext) => {
     if (!ctx.hasUI) return;
@@ -71,11 +91,36 @@ export default function (pi: ExtensionAPI) {
           return activeContext.isIdle() && !activeContext.hasPendingMessages();
         },
         commandRemap: config.commandRemap,
+        statusBar: {
+          enabled: config.statusBar.enabled,
+          preset: config.statusBar.preset,
+          getContext: () => activeContext,
+          getFooterData: () => activeFooterData,
+        },
       });
       return activeEditor;
     };
 
     ctx.ui.setEditorComponent(factory);
+    ctx.ui.setFooter(
+      (tui: any, _theme: any, footerData: ReadonlyFooterDataProvider) => {
+        activeFooterData = footerData;
+        const unsub = footerData.onBranchChange(() => tui.requestRender());
+
+        return {
+          dispose() {
+            unsub();
+            if (activeFooterData === footerData) {
+              activeFooterData = null;
+            }
+          },
+          invalidate() {},
+          render(): string[] {
+            return [];
+          },
+        };
+      }
+    );
     setTimeout(() => {
       warmPreviewHighlighter(config.filePicker.previewHighlightMode);
     }, 0);
@@ -83,6 +128,25 @@ export default function (pi: ExtensionAPI) {
 
   pi.on("session_start", (_event, ctx) => {
     attachEditor(ctx);
+  });
+
+  pi.on("tool_result", (event) => {
+    if (event.toolName === "write" || event.toolName === "edit") {
+      invalidateGitStatus();
+    }
+
+    if (event.toolName === "bash" && event.input?.command) {
+      const command = String(event.input.command);
+      if (mightChangeGitBranch(command)) {
+        invalidateGitState();
+      }
+    }
+  });
+
+  pi.on("user_bash", (event) => {
+    if (mightChangeGitBranch(event.command)) {
+      invalidateGitState();
+    }
   });
 
   // Provide alt+v raw clipboard paste (the only raw-paste feature you wanted)

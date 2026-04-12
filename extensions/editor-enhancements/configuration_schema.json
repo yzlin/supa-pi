@@ -19,6 +19,9 @@
     },
     "filePicker": {
       "$ref": "#/$defs/filePickerConfig"
+    },
+    "statusBar": {
+      "$ref": "#/$defs/statusBarConfig"
     }
   },
   "$defs": {
@@ -61,6 +64,23 @@
           "enum": ["native", "builtin"],
           "default": "native",
           "description": "How the preview pane highlights source code. 'native' uses the local syntect addon with builtin fallback; 'builtin' always uses Pi's JS highlighter."
+        }
+      }
+    },
+    "statusBarConfig": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Render a powerline-style status bar in the editor's top border."
+        },
+        "preset": {
+          "type": "string",
+          "enum": ["default", "minimal", "compact", "full", "nerd", "ascii"],
+          "default": "default",
+          "description": "Status bar layout preset."
         }
       }
     }

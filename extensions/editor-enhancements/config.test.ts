@@ -20,6 +20,10 @@ describe("editor enhancements config", () => {
           tabCompletionMode: "segment",
           previewHighlightMode: "builtin",
         },
+        statusBar: {
+          enabled: false,
+          preset: "minimal",
+        },
       },
       {
         doubleEscapeCommand: "project-command",
@@ -29,6 +33,9 @@ describe("editor enhancements config", () => {
         filePicker: {
           skipHidden: false,
           skipPatterns: ["project"],
+        },
+        statusBar: {
+          preset: "compact",
         },
       }
     );
@@ -47,6 +54,10 @@ describe("editor enhancements config", () => {
         skipPatterns: ["project"],
         tabCompletionMode: "segment",
         previewHighlightMode: "builtin",
+      },
+      statusBar: {
+        enabled: false,
+        preset: "compact",
       },
     });
   });
@@ -69,6 +80,10 @@ describe("editor enhancements config", () => {
         tree: "anycopy",
       },
       filePicker: DEFAULT_FILE_PICKER_CONFIG,
+      statusBar: {
+        enabled: true,
+        preset: "default",
+      },
     });
   });
 });

@@ -1,8 +1,10 @@
 import * as Clipboard from "@mariozechner/clipboard";
 import {
   CustomEditor,
+  type ExtensionContext,
   type ExtensionUIContext,
   type KeybindingsManager,
+  type ReadonlyFooterDataProvider,
 } from "@mariozechner/pi-coding-agent";
 import {
   type AutocompleteItem,
@@ -17,11 +19,19 @@ import {
   getShellCompletions,
   type ShellInfo,
 } from "./shell-completions.js";
+import { renderStatusBarLine } from "./status-bar.js";
+import type { StatusBarPreset } from "./status-bar-types.js";
 
 type EnhancedEditorOptions = {
   doubleEscapeCommand: string | null;
   canTriggerDoubleEscapeCommand: () => boolean;
   commandRemap: Record<string, string>;
+  statusBar: {
+    enabled: boolean;
+    preset: StatusBarPreset;
+    getContext: () => ExtensionContext | null;
+    getFooterData: () => ReadonlyFooterDataProvider | null;
+  };
 };
 
 type AutocompleteSuggestionResult = {
@@ -220,6 +230,7 @@ function wrapProviderWithShellAndAtFiltering(
 
 export class EnhancedEditor extends CustomEditor {
   private readonly tuiInstance: TUI;
+  private readonly sessionStartTime = Date.now();
   private openingPicker = false;
   private wrappedAutocompleteProvider = false;
   private lastEscapeTime = 0;
@@ -369,5 +380,29 @@ export class EnhancedEditor extends CustomEditor {
 
     const before = line[cursor.col - 1];
     return before === " " || before === "\t" || before === undefined;
+  }
+
+  render(width: number): string[] {
+    const lines = super.render(width);
+    if (!this.options.statusBar.enabled || width < 10 || lines.length === 0) {
+      return lines;
+    }
+
+    const ctx = this.options.statusBar.getContext();
+    if (!ctx) {
+      return lines;
+    }
+
+    return [
+      renderStatusBarLine({
+        width,
+        ctx,
+        footerData: this.options.statusBar.getFooterData(),
+        preset: this.options.statusBar.preset,
+        sessionStartTime: this.sessionStartTime,
+        theme: this.ui.theme,
+      }),
+      ...lines,
+    ];
   }
 }

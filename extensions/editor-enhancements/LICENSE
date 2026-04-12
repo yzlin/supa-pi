@@ -1,5 +1,12 @@
 Incorporates code from multiple upstream sources:
 
+0. Original editor-enhancements extension concept and initial implementation
+   from w-winter/dot314
+   (https://github.com/w-winter/dot314/tree/main/extensions/editor-enhancements)
+
+   Attribution/provenance notice retained for the upstream starting point used by
+   this local independently maintained variant.
+
 1. File picker and shell completions from laulauland/dotfiles
    (https://github.com/laulauland/dotfiles)
    No license specified in upstream repository.

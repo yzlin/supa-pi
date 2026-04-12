@@ -1,12 +1,26 @@
 import { describe, expect, it } from "bun:test";
 
+import type {
+  ExtensionContext,
+  ReadonlyFooterDataProvider,
+} from "@mariozechner/pi-coding-agent";
 import type { AutocompleteItem } from "@mariozechner/pi-tui";
 
 import { EnhancedEditor } from "./enhanced-editor";
 
-function createEditor(commandRemap: Record<string, string>) {
+function createEditor(
+  commandRemap: Record<string, string>,
+  options?: {
+    statusBarEnabled?: boolean;
+    statusBarContext?: ExtensionContext | null;
+    statusBarFooterData?: ReadonlyFooterDataProvider | null;
+  }
+) {
   const tui = {
     requestRender() {},
+    terminal: {
+      rows: 24,
+    },
   } as any;
 
   const theme = {
@@ -22,12 +36,23 @@ function createEditor(commandRemap: Record<string, string>) {
 
   const ui = {
     notify() {},
+    theme: {
+      fg(_color: string, text: string) {
+        return text;
+      },
+    },
   } as any;
 
   return new EnhancedEditor(tui, theme, keybindings, ui, {
     doubleEscapeCommand: null,
     canTriggerDoubleEscapeCommand: () => false,
     commandRemap,
+    statusBar: {
+      enabled: options?.statusBarEnabled ?? false,
+      preset: "default",
+      getContext: () => options?.statusBarContext ?? null,
+      getFooterData: () => options?.statusBarFooterData ?? null,
+    },
   });
 }
 
@@ -111,5 +136,62 @@ describe("EnhancedEditor command remap", () => {
     });
 
     expect(receivedOptions).toEqual({ signal, force: true });
+  });
+
+  it("keeps the original top border below the status bar", () => {
+    const statusBarContext = {
+      model: {
+        id: "test-model",
+        name: "test-model",
+        reasoning: false,
+        contextWindow: 200000,
+      },
+      modelRegistry: {},
+      sessionManager: {
+        getBranch() {
+          return [];
+        },
+        getSessionId() {
+          return "session-12345678";
+        },
+      },
+      getContextUsage() {
+        return {
+          tokens: 25000,
+          contextWindow: 200000,
+          percent: 12.5,
+        };
+      },
+    } as unknown as ExtensionContext;
+
+    const statusBarFooterData = {
+      getGitBranch() {
+        return "main";
+      },
+      getExtensionStatuses() {
+        return new Map();
+      },
+      getAvailableProviderCount() {
+        return 0;
+      },
+      onBranchChange() {
+        return () => {};
+      },
+    } satisfies ReadonlyFooterDataProvider;
+
+    const editor = createEditor(
+      {},
+      {
+        statusBarEnabled: true,
+        statusBarContext,
+        statusBarFooterData,
+      }
+    );
+
+    const width = 40;
+    const lines = editor.render(width);
+
+    expect(lines[0]).toContain("test-model");
+    expect(lines[1]).toBe("─".repeat(width));
   });
 });
