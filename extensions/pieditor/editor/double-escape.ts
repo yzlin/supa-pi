@@ -9,6 +9,7 @@ export function matchesInterrupt(
   const matches = keybindingsManager.matches.bind(
     keybindingsManager
   ) as unknown as (data: string, key: string) => boolean;
+
   return matches(data, "app.interrupt") || matches(data, "interrupt");
 }
 

@@ -58,7 +58,7 @@ export function isAtCompletionContext(
 ): boolean {
   const line = lines[cursorLine] ?? "";
   const beforeCursor = line.slice(0, cursorCol);
-  return Boolean(beforeCursor.match(/(?:^|[\s])@[^\s]*$/));
+  return /(?:^|[\s])@[^\s]*$/.test(beforeCursor);
 }
 
 export function isBashMode(lines: string[]): boolean {
@@ -72,11 +72,15 @@ export function extractCompletionTextUpToCursor(
   cursorCol: number
 ): string {
   const textLines = lines.slice(0, cursorLine + 1);
-  if (textLines.length > 0) {
-    textLines[textLines.length - 1] = (
-      textLines[textLines.length - 1] ?? ""
-    ).slice(0, cursorCol);
+  const lastLineIndex = textLines.length - 1;
+
+  if (lastLineIndex >= 0) {
+    textLines[lastLineIndex] = (textLines[lastLineIndex] ?? "").slice(
+      0,
+      cursorCol
+    );
   }
+
   return textLines.join("\n");
 }
 

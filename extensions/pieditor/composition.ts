@@ -20,26 +20,20 @@ const GIT_BRANCH_PATTERNS = [
   /\bgit\s+stash\s+(pop|apply)/,
 ];
 
-function resolveDoubleEscapeCommand(
+function getDoubleEscapeCommandState(
   pi: ExtensionAPI,
-  ctx: ExtensionContext,
-  doubleEscapeCommand: string | null,
-  options: { warnIfMissing?: boolean } = {}
-): string | null {
-  if (!doubleEscapeCommand) return null;
-
-  const hasMatchingCommand = pi
-    .getCommands()
-    .some((command) => command.name === doubleEscapeCommand);
-
-  if (!hasMatchingCommand && options.warnIfMissing !== false) {
-    ctx.ui.notify(
-      `pieditor: '/${doubleEscapeCommand}' is not currently visible in slash commands; submitting it anyway`,
-      "warning"
-    );
+  doubleEscapeCommand: string | null
+): { command: string | null; isVisible: boolean } {
+  if (!doubleEscapeCommand) {
+    return { command: null, isVisible: false };
   }
 
-  return doubleEscapeCommand;
+  return {
+    command: doubleEscapeCommand,
+    isVisible: pi
+      .getCommands()
+      .some((command) => command.name === doubleEscapeCommand),
+  };
 }
 
 function mightChangeGitBranch(command: string): boolean {
@@ -67,23 +61,27 @@ export function createPieditorComposition(pi: ExtensionAPI) {
       let warnedMissingDoubleEscapeCommand = false;
 
       const getDoubleEscapeCommand = () => {
-        const resolved = resolveDoubleEscapeCommand(
+        const commandState = getDoubleEscapeCommandState(
           pi,
-          ctx,
-          config.doubleEscapeCommand,
-          { warnIfMissing: !warnedMissingDoubleEscapeCommand }
+          config.doubleEscapeCommand
         );
 
-        const hasMatchingCommand = config.doubleEscapeCommand
-          ? pi
-              .getCommands()
-              .some((command) => command.name === config.doubleEscapeCommand)
-          : false;
+        if (
+          commandState.command &&
+          !commandState.isVisible &&
+          !warnedMissingDoubleEscapeCommand
+        ) {
+          ctx.ui.notify(
+            `pieditor: '/${commandState.command}' is not currently visible in slash commands; submitting it anyway`,
+            "warning"
+          );
+        }
+
         warnedMissingDoubleEscapeCommand = Boolean(
-          config.doubleEscapeCommand && !hasMatchingCommand
+          commandState.command && !commandState.isVisible
         );
 
-        return resolved;
+        return commandState.command;
       };
 
       const factory = (tui: any, theme: any, keybindings: any) => {
