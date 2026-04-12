@@ -26,8 +26,8 @@ import {
 } from "@mariozechner/pi-coding-agent";
 import { Box, Markdown, Spacer, Text } from "@mariozechner/pi-tui";
 
-import { parseBtwArgs, resolveModelAndThinking } from "./helper";
 import { getProviderApiKeyForModel } from "../llm-auth";
+import { parseBtwArgs, resolveModelAndThinking } from "./helper";
 import {
   btwTaskPreview,
   formatToolCall,

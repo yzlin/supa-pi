@@ -38,7 +38,10 @@ export async function getModelAuthOrThrow(
   modelRegistry: ModelAuthRegistry,
   model: unknown
 ): Promise<{ apiKey?: string; headers?: Record<string, string> }> {
-  if ("getApiKeyAndHeaders" in modelRegistry && modelRegistry.getApiKeyAndHeaders) {
+  if (
+    "getApiKeyAndHeaders" in modelRegistry &&
+    modelRegistry.getApiKeyAndHeaders
+  ) {
     const auth = await modelRegistry.getApiKeyAndHeaders(model);
     if (auth.ok) {
       return {

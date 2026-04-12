@@ -31,7 +31,12 @@ describe("resolveModelAndThinking", () => {
   };
 
   it("returns the current model when no override is given", () => {
-    const result = resolveModelAndThinking(modelRegistry, currentModel, "medium", {});
+    const result = resolveModelAndThinking(
+      modelRegistry,
+      currentModel,
+      "medium",
+      {}
+    );
 
     expect(result.model).toBe(currentModel);
     expect(result.thinkingLevel).toBe("medium");

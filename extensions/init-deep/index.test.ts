@@ -3,8 +3,8 @@ import path from "node:path";
 
 import {
   buildInitDeepMessage,
-  default as initDeepExtension,
   getInitDeepArgumentCompletions,
+  default as initDeepExtension,
 } from "./index";
 
 function createHarness() {
@@ -133,7 +133,9 @@ describe("init-deep prompt builder", () => {
       "instruction: default hierarchical AGENTS.md generation for the target codebase"
     );
     expect(message).toContain("dry run: true");
-    expect(message).toContain("Use TaskCreate and TaskUpdate for phase tracking.");
+    expect(message).toContain(
+      "Use TaskCreate and TaskUpdate for phase tracking."
+    );
   });
 });
 

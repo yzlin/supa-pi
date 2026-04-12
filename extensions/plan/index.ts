@@ -38,9 +38,7 @@ function extractTextContent(content: MessageLike["content"]): string {
 
   return content
     .flatMap((part) =>
-      part?.type === "text" && typeof part.text === "string"
-        ? [part.text]
-        : []
+      part?.type === "text" && typeof part.text === "string" ? [part.text] : []
     )
     .join("\n")
     .trim();
@@ -73,8 +71,7 @@ function getLastTaskFromSession(ctx: ExtensionCommandContext): string {
 
 export default function planExtension(pi: ExtensionAPI): void {
   pi.registerCommand("plan", {
-    description:
-      "Investigate and plan in this session: /plan [what to build]",
+    description: "Investigate and plan in this session: /plan [what to build]",
     handler: async (args, ctx) => {
       const task = (args ?? "").trim() || getLastTaskFromSession(ctx);
       if (!task) {

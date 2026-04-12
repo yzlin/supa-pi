@@ -17,12 +17,12 @@
               ":BLANK_LINE:",
               ":PATH:",
               ":BLANK_LINE:",
-              "**",
-            ],
-          },
-        },
-      },
-    },
+              "**"
+            ]
+          }
+        }
+      }
+    }
   },
   "linter": {
     "includes": ["extensions", "!**/node_modules"],
@@ -31,7 +31,7 @@
       "recommended": true,
       "a11y": {
         "noSvgWithoutTitle": "off",
-        "useKeyWithClickEvents": "off",
+        "useKeyWithClickEvents": "off"
       },
       "style": {
         "noNonNullAssertion": "off",
@@ -50,63 +50,63 @@
         "useConsistentTypeDefinitions": {
           "level": "error",
           "options": {
-            "style": "interface",
+            "style": "interface"
           },
-          "fix": "safe",
+          "fix": "safe"
         },
         "useConsistentBuiltinInstantiation": {
           "level": "error",
-          "fix": "safe",
+          "fix": "safe"
         },
         "useBlockStatements": {
           "level": "error",
-          "fix": "safe",
-        },
+          "fix": "safe"
+        }
       },
       "correctness": {
         "noUnusedImports": {
           "level": "error",
-          "fix": "safe",
+          "fix": "safe"
         },
         "useExhaustiveDependencies": "off",
         "noUnusedFunctionParameters": {
           "level": "error",
-          "fix": "safe",
+          "fix": "safe"
         },
         "noUnusedVariables": {
           "level": "error",
-          "fix": "safe",
-        },
+          "fix": "safe"
+        }
       },
       "nursery": {
         "noShadow": "warn",
-        "noEqualsToNull": "off",
+        "noEqualsToNull": "off"
       },
       "suspicious": {
-        "noConsole": "off",
+        "noConsole": "off"
       },
       "complexity": {
         "noExcessiveCognitiveComplexity": "off",
         "noUselessFragments": {
           "level": "error",
-          "fix": "safe",
-        },
+          "fix": "safe"
+        }
       },
       "performance": {
         "noNamespaceImport": "info",
-        "noBarrelFile": "off",
-      },
-    },
+        "noBarrelFile": "off"
+      }
+    }
   },
   "formatter": {
     "enabled": true,
     "indentStyle": "space",
-    "indentWidth": 2,
+    "indentWidth": 2
   },
   "vcs": {
     "enabled": true,
     "clientKind": "git",
-    "useIgnoreFile": true,
+    "useIgnoreFile": true
   },
-  "extends": ["ultracite/biome/core"],
+  "extends": ["ultracite/biome/core"]
 }

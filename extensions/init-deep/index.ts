@@ -5,7 +5,7 @@ import { fileURLToPath } from "node:url";
 import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
 import type { AutocompleteItem } from "@mariozechner/pi-tui";
 
-import { parseInitDeepArgs, type InitDeepCommandInput } from "./parse";
+import { type InitDeepCommandInput, parseInitDeepArgs } from "./parse";
 
 const PROMPT = fs
   .readFileSync(

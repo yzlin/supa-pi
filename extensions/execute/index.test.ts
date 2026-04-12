@@ -1,7 +1,7 @@
 import { describe, expect, it } from "bun:test";
 
-import executeExtension from "./index";
 import { EXECUTE_PROMPT } from "./constants";
+import executeExtension from "./index";
 
 function createMockCtx(
   branchEntries: Array<{
@@ -33,14 +33,22 @@ function createMockCtx(
 }
 
 function createMockPiRuntime() {
-  const commands = new Map<string, { handler: (args: string, ctx: unknown) => Promise<void> | void }>();
+  const commands = new Map<
+    string,
+    { handler: (args: string, ctx: unknown) => Promise<void> | void }
+  >();
   const sentUserMessages: Array<{ content: string; options?: unknown }> = [];
 
   return {
     commands,
     sentUserMessages,
     pi: {
-      registerCommand(name: string, definition: { handler: (args: string, ctx: unknown) => Promise<void> | void }) {
+      registerCommand(
+        name: string,
+        definition: {
+          handler: (args: string, ctx: unknown) => Promise<void> | void;
+        }
+      ) {
         commands.set(name, definition);
       },
       sendUserMessage(content: string, options?: unknown) {
@@ -78,10 +86,10 @@ describe("execute command", () => {
     const handler = runtime.commands.get("execute")?.handler;
 
     expect(handler).toBeDefined();
-    await handler?.(
-      "implement @plan.md",
-      { ...ctx, isIdle: () => false } as never
-    );
+    await handler?.("implement @plan.md", {
+      ...ctx,
+      isIdle: () => false,
+    } as never);
 
     expect(runtime.sentUserMessages).toEqual([
       {

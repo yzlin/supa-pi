@@ -12,7 +12,9 @@ type MessageLike = {
 
 function buildExecuteCommandMessage(args: string): string {
   const plan = args.trim();
-  return plan ? `${EXECUTE_PROMPT}\n\n<plan>\n${plan}\n</plan>` : EXECUTE_PROMPT;
+  return plan
+    ? `${EXECUTE_PROMPT}\n\n<plan>\n${plan}\n</plan>`
+    : EXECUTE_PROMPT;
 }
 
 function extractTextContent(content: MessageLike["content"]): string {
@@ -26,9 +28,7 @@ function extractTextContent(content: MessageLike["content"]): string {
 
   return content
     .flatMap((part) =>
-      part?.type === "text" && typeof part.text === "string"
-        ? [part.text]
-        : []
+      part?.type === "text" && typeof part.text === "string" ? [part.text] : []
     )
     .join("\n")
     .trim();

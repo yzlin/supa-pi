@@ -59,9 +59,7 @@ export function resolveExitCode(
   stopReason: string | undefined,
   aborted: boolean
 ) {
-  return stopReason === "error" || stopReason === "aborted" || aborted
-    ? 1
-    : 0;
+  return stopReason === "error" || stopReason === "aborted" || aborted ? 1 : 0;
 }
 
 // ---------------------------------------------------------------------------
