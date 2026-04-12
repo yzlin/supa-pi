@@ -746,6 +746,43 @@ describe("om admin commands", () => {
     expect(command?.getArgumentCompletions?.("zzz")).toBeNull();
   });
 
+  it("defaults bare /om to status", async () => {
+    const persistedEnvelope = createOmStateEnvelope(
+      createSampleState({
+        observations: [
+          {
+            id: "obs-1",
+            kind: "fact",
+            summary: "Recent note.",
+            sourceEntryIds: ["entry-1"],
+            createdAt: "2026-04-04T00:00:00.000Z",
+          },
+        ],
+      }),
+      createOmBranchScope([{ id: "entry-1" }, { id: "om-state" }])
+    );
+    const harness = createOmHarness({
+      entries: [
+        createMessageEntry("entry-1", "user", "Start OM."),
+        {
+          id: "om-state",
+          type: "custom",
+          customType: OM_STATE_CUSTOM_TYPE,
+          data: persistedEnvelope,
+        },
+      ],
+      branchEntries: [
+        createMessageEntry("entry-1", "user", "Start OM."),
+        { id: "om-state", type: "custom", customType: OM_STATE_CUSTOM_TYPE },
+      ],
+    });
+
+    harness.sessionStart?.({}, harness.ctx);
+    await harness.commands.get("om")?.handler("", harness.ctx);
+
+    expect(harness.notifications.at(-1)?.message).toContain("observations=1");
+  });
+
   it("reports runtime counts and buffer load through /om status", async () => {
     const persistedEnvelope = createOmStateEnvelope(
       createSampleState({

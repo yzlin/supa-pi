@@ -1505,7 +1505,7 @@ export function createOmExtension(deps: OmExtensionDeps = {}) {
       description: "Manage observational memory diagnostics and admin actions",
       getArgumentCompletions: getOmArgumentCompletions,
       handler: async (args, ctx) => {
-        const [command = "help", ...rest] = args
+        const [command = "status", ...rest] = args
           .trim()
           .split(/\s+/)
           .filter(Boolean);
