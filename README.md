@@ -127,6 +127,12 @@ The setup script installs these Pi packages if they are not already present:
 
 - Extension registration lives in `package.json`
 - Formatting/linting is configured via `biome.jsonc`
+- Biome scripts:
+  - `bun run format`
+  - `bun run lint`
+  - `bun run lint:fix`
+  - `bun run check`
+  - `bun run check:write`
 - This repo uses Bun (`bun.lock` present)
 - Peer dependencies include:
   - `@mariozechner/pi-coding-agent`
