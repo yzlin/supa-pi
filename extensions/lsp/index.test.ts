@@ -210,8 +210,10 @@ describe("lsp command", () => {
       expect(harness.notifications).toEqual([]);
       expect(harness.renders).toHaveLength(1);
 
+      const firstLine = harness.renders[0]?.[0] ?? "";
       const render = harness.renders[0]?.join("\n") ?? "";
-      expect(render).toContain("Language Server Protocol");
+      expect(firstLine).toContain("Language Server Protocol");
+      expect(firstLine).toContain("╭");
       expect(render).toContain("configured 2");
       expect(render).toContain("lazy 2");
       expect(render).toContain("rust");

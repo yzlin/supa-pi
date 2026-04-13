@@ -30,6 +30,7 @@ import {
   scaffoldGlobalConfig,
   serversForExtension,
 } from "./config";
+import { fg, padVisibleText, paletteTheme } from "./theme.js";
 import { registerLspTool, type ServerManager } from "./tools";
 import type { ConfiguredServerConfig, ResolvedServerConfig } from "./types";
 
@@ -105,20 +106,43 @@ function buildLspHelpMessage(): string {
   ].join("\n");
 }
 
+function styleFrameBorder(text: string): string {
+  return fg(paletteTheme.border, text);
+}
+
+function styleFrameTitle(text: string): string {
+  return fg(paletteTheme.title, text);
+}
+
 function border(
   width: number,
   left: string,
   fill: string,
   right: string
 ): string {
-  return `${left}${fill.repeat(Math.max(0, width - 2))}${right}`;
+  return styleFrameBorder(
+    `${left}${fill.repeat(Math.max(0, width - 2))}${right}`
+  );
+}
+
+function titleBorder(width: number, titleText: string): string {
+  const innerWidth = Math.max(0, width - 2);
+  const clippedTitle = truncateToWidth(titleText, innerWidth);
+  const borderWidth = Math.max(0, innerWidth - visibleWidth(clippedTitle));
+  const leftWidth = Math.floor(borderWidth / 2);
+  const rightWidth = borderWidth - leftWidth;
+
+  return (
+    styleFrameBorder(`╭${"─".repeat(leftWidth)}`) +
+    styleFrameTitle(clippedTitle) +
+    styleFrameBorder(`${"─".repeat(rightWidth)}╮`)
+  );
 }
 
 function frameLine(content: string, width: number): string {
-  const innerWidth = Math.max(0, width - 4);
-  const clipped = truncateToWidth(content, innerWidth);
-  const padding = " ".repeat(Math.max(0, innerWidth - visibleWidth(clipped)));
-  return `│ ${clipped}${padding} │`;
+  const innerWidth = Math.max(0, width - 2);
+  const clipped = truncateToWidth(` ${content} `, innerWidth);
+  return `${styleFrameBorder("│")}${padVisibleText(clipped, innerWidth)}${styleFrameBorder("│")}`;
 }
 
 function centerText(content: string, width: number): string {
@@ -300,7 +324,7 @@ async function showLspTextView(
   }
 
   await ctx.ui.custom<void>(
-    (_tui, theme, _kb, done) => ({
+    (_tui, _theme, _kb, done) => ({
       invalidate() {},
       render(width: number) {
         const frameWidth = Math.max(TEXT_MODAL_MIN_WIDTH, width);
@@ -308,11 +332,7 @@ async function showLspTextView(
         const bodyLines = wrapLines(text.split("\n"), innerWidth);
 
         return [
-          border(frameWidth, "╭", "─", "╮"),
-          frameLine(
-            centerText(theme.bold(theme.fg("accent", "LSP")), innerWidth),
-            frameWidth
-          ),
+          titleBorder(frameWidth, " LSP "),
           border(frameWidth, "├", "─", "┤"),
           ...bodyLines.map((line) => frameLine(line, frameWidth)),
           border(frameWidth, "╰", "─", "╯"),
@@ -367,14 +387,7 @@ async function showLspStatusView(
         );
 
         return [
-          border(frameWidth, "╭", "─", "╮"),
-          frameLine(
-            centerText(
-              theme.bold(theme.fg("accent", "Language Server Protocol")),
-              innerWidth
-            ),
-            frameWidth
-          ),
+          titleBorder(frameWidth, " Language Server Protocol "),
           frameLine(
             centerText(
               theme.fg("dim", "Per-workspace routing · lazy server startup"),
