@@ -4,7 +4,6 @@ import type {
 } from "@mariozechner/pi-coding-agent";
 
 import {
-  DEFAULT_PI_RTK_CONFIG,
   getPiRtkConfigPath,
   resetPiRtkConfig,
   savePiRtkConfig,
@@ -76,7 +75,8 @@ function applyConfigChange(
 
 function buildHelpMessage(): string {
   return [
-    "Usage: /rtk <command>",
+    "Usage: /rtk [command]",
+    "(no command defaults to stats)",
     "show         Show config, runtime, and counters",
     "verify       Refresh RTK availability",
     "stats        Show rewrite stats",
@@ -148,7 +148,7 @@ export function registerRtkCommands(
     description: "Manage RTK rewrite settings and stats",
     getArgumentCompletions: getRtkArgumentCompletions,
     handler: async (args, ctx) => {
-      const [command = "help", ...rest] = args
+      const [command = "stats", ...rest] = args
         .trim()
         .split(/\s+/)
         .filter(Boolean);

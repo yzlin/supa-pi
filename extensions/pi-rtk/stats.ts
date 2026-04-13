@@ -7,7 +7,6 @@ import {
   wrapTextWithAnsi,
 } from "@mariozechner/pi-tui";
 
-import { formatTokens } from "../context/render-text";
 import type {
   PiRtkCommandMetrics,
   PiRtkConfig,
@@ -34,6 +33,42 @@ type ThemeLike = {
   fg(color: string, text: string): string;
   bold(text: string): string;
 };
+
+type FramePalette = {
+  border(text: string): string;
+  title(text: string): string;
+};
+
+const FRAME_BORDER_COLOR = "2";
+const FRAME_TITLE_COLOR = "2";
+
+function applyAnsiColor(code: string, text: string): string {
+  if (!code) {
+    return text;
+  }
+
+  return `\x1b[${code}m${text}\x1b[0m`;
+}
+
+function formatTokens(count: number | null): string {
+  if (count === null) {
+    return "unknown";
+  }
+
+  if (count < 1000) {
+    return `${count}`;
+  }
+
+  if (count < 10000) {
+    return `${(count / 1000).toFixed(1)}k`;
+  }
+
+  if (count < 1_000_000) {
+    return `${Math.round(count / 1000)}k`;
+  }
+
+  return `${(count / 1_000_000).toFixed(1)}M`;
+}
 
 function formatPercent(value: number): string {
   return `${value.toFixed(1)}%`;
@@ -366,20 +401,53 @@ function fitRenderedLinesToWidth(lines: string[], width: number): string[] {
   );
 }
 
-function frameLine(content: string, width: number): string {
+const FRAME_PALETTE: FramePalette = {
+  border(text: string): string {
+    return applyAnsiColor(FRAME_BORDER_COLOR, text);
+  },
+  title(text: string): string {
+    return applyAnsiColor(FRAME_TITLE_COLOR, text);
+  },
+};
+
+function frameLine(
+  content: string,
+  width: number,
+  framePalette: FramePalette
+): string {
   const innerWidth = Math.max(0, width - 4);
   const clipped = truncateToWidth(content, innerWidth);
   const padding = " ".repeat(Math.max(0, innerWidth - visibleWidth(clipped)));
-  return `│ ${clipped}${padding} │`;
+  return `${framePalette.border("│")} ${clipped}${padding} ${framePalette.border("│")}`;
 }
 
 function border(
   width: number,
   left: string,
   fill: string,
-  right: string
+  right: string,
+  framePalette: FramePalette
 ): string {
-  return `${left}${fill.repeat(Math.max(0, width - 2))}${right}`;
+  return framePalette.border(
+    `${left}${fill.repeat(Math.max(0, width - 2))}${right}`
+  );
+}
+
+function titledTopBorder(
+  width: number,
+  titleText: string,
+  framePalette: FramePalette
+): string {
+  const innerWidth = Math.max(0, width - 2);
+  const borderLen = Math.max(0, innerWidth - visibleWidth(titleText));
+  const leftBorder = Math.floor(borderLen / 2);
+  const rightBorder = borderLen - leftBorder;
+
+  return (
+    framePalette.border(`╭${"─".repeat(leftBorder)}`) +
+    framePalette.title(titleText) +
+    framePalette.border(`${"─".repeat(rightBorder)}╮`)
+  );
 }
 
 function buildStatusLine(
@@ -496,31 +564,34 @@ export async function showRtkStatsView(
           scroll = Math.min(scroll, maxScroll);
           const visibleBody = body.slice(scroll, scroll + bodyHeight);
           const lines = [
-            border(frameWidth, "╭", "─", "╮"),
-            frameLine(theme.bold(theme.fg("accent", "/rtk stats")), frameWidth),
+            titledTopBorder(frameWidth, " /rtk stats ", FRAME_PALETTE),
             frameLine(
               theme.fg("dim", "Session-only dashboard · estimated tokens"),
-              frameWidth
+              frameWidth,
+              FRAME_PALETTE
             ),
-            border(frameWidth, "├", "─", "┤"),
-            ...visibleBody.map((line) => frameLine(line, frameWidth)),
+            border(frameWidth, "├", "─", "┤", FRAME_PALETTE),
+            ...visibleBody.map((line) =>
+              frameLine(line, frameWidth, FRAME_PALETTE)
+            ),
           ];
 
-          while (lines.length < bodyHeight + 4) {
-            lines.push(frameLine("", frameWidth));
+          while (lines.length < bodyHeight + 3) {
+            lines.push(frameLine("", frameWidth, FRAME_PALETTE));
           }
 
-          lines.push(border(frameWidth, "├", "─", "┤"));
+          lines.push(border(frameWidth, "├", "─", "┤", FRAME_PALETTE));
           lines.push(
             frameLine(
               theme.fg(
                 "dim",
                 buildStatusLine(scroll, visibleBody.length, body.length)
               ),
-              frameWidth
+              frameWidth,
+              FRAME_PALETTE
             )
           );
-          lines.push(border(frameWidth, "╰", "─", "╯"));
+          lines.push(border(frameWidth, "╰", "─", "╯", FRAME_PALETTE));
           return lines;
         },
         handleInput(data: string) {

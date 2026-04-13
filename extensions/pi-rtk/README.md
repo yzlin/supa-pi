@@ -21,11 +21,11 @@ Default limits:
 - `grep` and `read` output are compacted from the head
 - compaction runs in `tool_result`, after the built-in tool finishes
 - non-text payloads (for example image reads) are left unchanged
-- `/rtk stats` opens a custom TUI dashboard instead of plain notify text
+- `/rtk` defaults to the stats dashboard; `/rtk stats` opens the same custom TUI view instead of plain notify text
 - stats are **session-only**; switching sessions or clearing stats resets the dashboard
 - token counts in `/rtk stats` are **estimated**, not exact
 
-## `/rtk stats`
+## `/rtk` / `/rtk stats`
 
 The dashboard includes:
 - overview totals for tracked commands

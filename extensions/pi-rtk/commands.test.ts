@@ -1,8 +1,21 @@
 import { describe, expect, it } from "bun:test";
 
+import type {
+  ExtensionAPI,
+  ExtensionCommandContext,
+} from "@mariozechner/pi-coding-agent";
+
 import { registerRtkCommands } from "./commands";
 import { DEFAULT_PI_RTK_CONFIG } from "./config";
 import type { PiRtkRuntime } from "./types";
+
+type RegisteredCommandOptions = Parameters<ExtensionAPI["registerCommand"]>[1];
+type HarnessCommandOptions = RegisteredCommandOptions & {
+  getArgumentCompletions: NonNullable<
+    RegisteredCommandOptions["getArgumentCompletions"]
+  >;
+  handler: NonNullable<RegisteredCommandOptions["handler"]>;
+};
 
 describe("pi-rtk commands", () => {
   function createRuntime(): PiRtkRuntime {
@@ -55,19 +68,23 @@ describe("pi-rtk commands", () => {
     };
   }
 
-  function registerHarness() {
-    let commandOptions: any;
+  function registerHarness(): HarnessCommandOptions {
+    let commandOptions: RegisteredCommandOptions | undefined;
 
     registerRtkCommands(
       {
-        registerCommand(_name, options) {
+        registerCommand(_name: string, options: RegisteredCommandOptions) {
           commandOptions = options;
         },
-      } as any,
+      } as ExtensionAPI,
       createRuntime()
     );
 
-    return commandOptions;
+    if (!commandOptions) {
+      throw new Error("RTK command was not registered");
+    }
+
+    return commandOptions as HarnessCommandOptions;
   }
 
   it("registers argument completions for /rtk", () => {
@@ -159,5 +176,24 @@ describe("pi-rtk commands", () => {
 
     expect(command.getArgumentCompletions("mode rewrite ")).toBeNull();
     expect(command.getArgumentCompletions("mode rewrite extra")).toBeNull();
+  });
+
+  it("defaults bare /rtk to the stats view", async () => {
+    const command = registerHarness();
+    let customCalls = 0;
+
+    const ctx = {
+      hasUI: true,
+      ui: {
+        custom: async () => {
+          customCalls += 1;
+        },
+        notify() {},
+      },
+    } as unknown as ExtensionCommandContext;
+
+    await command.handler("", ctx);
+
+    expect(customCalls).toBe(1);
   });
 });
