@@ -28,6 +28,7 @@ node ./scripts/build.mjs
 - Native file picker preview highlighting is powered by `bat` (https://github.com/sharkdp/bat) and `syntect` (https://github.com/trishume/syntect/).
 - Native preview syntax + theme resolution uses bat's embedded compiled assets via `bat::assets::HighlightingAssets::from_binary()`, instead of loading the vendored `.tmTheme` files directly.
 - Native preview colors use bat's built-in `Monokai Extended` for dark mode and `Monokai Extended Light` for light mode.
+- When native preview highlighting is active, picker preview gutter line numbers and the adjacent divider follow bat's gutter foreground/divider colors.
 - Output matches bat's built-in compiled assets for those theme names; user-local bat config/theme overrides are not applied here.
 - Native ANSI output is foreground-only, so the picker keeps its own pane background instead of painting bat-style token backgrounds behind text.
 - Windows is not wired in this first pass.

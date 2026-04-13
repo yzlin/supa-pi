@@ -31,6 +31,10 @@ interface ParsedPreviewLine {
   prefix: string;
 }
 
+// Matches bat's Monokai Extended gutterSettings foreground/divider colors.
+const BAT_LINE_NUMBER_RGB = [131, 148, 150] as const;
+const BAT_DIVIDER_RGB = [88, 110, 117] as const;
+
 function isParsedPreviewLine(
   line: ParsedPreviewLine | null
 ): line is ParsedPreviewLine {
@@ -82,9 +86,26 @@ function loadNativeBinding(): NativeHighlightBinding | null {
   return defaultLoadNativeBinding();
 }
 
+function foregroundRgb(
+  text: string,
+  [red, green, blue]: readonly [number, number, number]
+): string {
+  return `\x1b[38;2;${red};${green};${blue}m${text}\x1b[39m`;
+}
+
+function stylePreviewPrefix(prefix: string): string {
+  const match = prefix.match(/^(\s*\d+\s)(│\s)$/u);
+  if (!match) {
+    return prefix;
+  }
+
+  const [, lineNumberPart, dividerPart] = match;
+  return `${foregroundRgb(lineNumberPart, BAT_LINE_NUMBER_RGB)}${foregroundRgb(dividerPart, BAT_DIVIDER_RGB)}`;
+}
+
 function fallbackHighlightLines(
   parsedLines: ParsedPreviewLine[],
-  filePath?: string
+  filePath: string | undefined
 ): string[] {
   const language = filePath ? getLanguageFromPath(filePath) : undefined;
 
@@ -170,7 +191,8 @@ function highlightCodeLines(
     }
 
     return codeLines.map(
-      (line, index) => `${line.prefix}${highlightedLines[index] ?? line.code}`
+      (line, index) =>
+        `${stylePreviewPrefix(line.prefix)}${highlightedLines[index] ?? line.code}`
     );
   } catch {
     return fallbackToBuiltinHighlight();

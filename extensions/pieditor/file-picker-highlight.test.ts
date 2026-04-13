@@ -12,6 +12,13 @@ import {
 
 initTheme("dark");
 
+const BAT_LINE_NUMBER_COLOR = "\x1b[38;2;131;148;150m";
+const BAT_DIVIDER_COLOR = "\x1b[38;2;88;110;117m";
+
+function stripAnsi(text: string): string {
+  return text.replace(/\x1b\[[0-9;]*m/g, "");
+}
+
 afterEach(() => {
   setNativeHighlightBindingLoaderForTests(null);
 });
@@ -22,7 +29,9 @@ describe("file picker native preview highlighting", () => {
 
     const line = highlightPreviewLine(" 1 │ const answer = 42;", "example.ts");
 
-    expect(line.startsWith(" 1 │ ")).toBe(true);
+    expect(stripAnsi(line)).toBe(" 1 │ const answer = 42;");
+    expect(line).not.toContain(BAT_LINE_NUMBER_COLOR);
+    expect(line).not.toContain(BAT_DIVIDER_COLOR);
     expect(line).toContain("\x1b[");
   });
 
@@ -41,13 +50,18 @@ describe("file picker native preview highlighting", () => {
       },
     }));
 
-    expect(
-      highlightPreviewLines(
-        [" 1 │ const answer = 42;", " 2 │ return answer;"],
-        "example.ts",
-        "light"
-      )
-    ).toEqual([" 1 │ <ansi const>", " 2 │ <ansi return>"]);
+    const highlighted = highlightPreviewLines(
+      [" 1 │ const answer = 42;", " 2 │ return answer;"],
+      "example.ts",
+      "light"
+    );
+
+    expect(highlighted.map(stripAnsi)).toEqual([
+      " 1 │ <ansi const>",
+      " 2 │ <ansi return>",
+    ]);
+    expect(highlighted[0]).toContain(BAT_LINE_NUMBER_COLOR);
+    expect(highlighted[0]).toContain(BAT_DIVIDER_COLOR);
   });
 
   it("falls back when the native binding returns plain-text output", () => {
@@ -67,6 +81,8 @@ describe("file picker native preview highlighting", () => {
     );
 
     expect(highlighted).toHaveLength(2);
+    expect(highlighted[0]).not.toContain(BAT_LINE_NUMBER_COLOR);
+    expect(highlighted[0]).not.toContain(BAT_DIVIDER_COLOR);
     expect(highlighted[0]).toContain("\x1b[");
     expect(highlighted[1]).toContain("\x1b[");
   });
@@ -85,12 +101,16 @@ describe("file picker native preview highlighting", () => {
       },
     }));
 
-    expect(
-      highlightPreviewLines(
-        [" 1 │ ---", " 2 │ name: session-query", " 3 │ "],
-        "@skills/session-query/SKILL.md"
-      )
-    ).toEqual([" 1 │ <ansi frontmatter>", " 2 │ <ansi name>", " 3 │ "]);
+    const highlighted = highlightPreviewLines(
+      [" 1 │ ---", " 2 │ name: session-query", " 3 │ "],
+      "@skills/session-query/SKILL.md"
+    );
+
+    expect(highlighted.map(stripAnsi)).toEqual([
+      " 1 │ <ansi frontmatter>",
+      " 2 │ <ansi name>",
+      " 3 │ ",
+    ]);
   });
 
   it("uses Pi built-in highlighting when configured", () => {
@@ -107,7 +127,9 @@ describe("file picker native preview highlighting", () => {
       "builtin"
     );
 
-    expect(highlighted.startsWith(" 1 │ ")).toBe(true);
+    expect(stripAnsi(highlighted)).toBe(" 1 │ const answer = 42;");
+    expect(highlighted).not.toContain(BAT_LINE_NUMBER_COLOR);
+    expect(highlighted).not.toContain(BAT_DIVIDER_COLOR);
     expect(highlighted).toContain("\x1b[");
   });
 

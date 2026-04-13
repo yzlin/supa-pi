@@ -36,12 +36,11 @@ afterEach(() => {
 });
 
 describe("file picker preview rendering", () => {
-  it("syntax highlights only the code portion of numbered preview lines", () => {
+  it("preserves numbered preview text while syntax highlighting code lines", () => {
     const line = highlightPreviewLine(" 1 │ const answer = 42;", previewPath);
 
-    expect(line.startsWith(" 1 │ ")).toBe(true);
+    expect(stripAnsi(line)).toBe(" 1 │ const answer = 42;");
     expect(line).toContain("\x1b[");
-    expect(line.indexOf("\x1b[")).toBeGreaterThanOrEqual(" 1 │ ".length);
   });
 
   it("leaves non-code preview rows unchanged", () => {
