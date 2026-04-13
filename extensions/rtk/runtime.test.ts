@@ -1,11 +1,11 @@
 import { describe, expect, it } from "bun:test";
 
-import { DEFAULT_PI_RTK_CONFIG } from "./config";
-import { createPiRtkRuntime } from "./runtime";
+import { DEFAULT_RTK_CONFIG } from "./config";
+import { createRtkRuntime } from "./runtime";
 
-describe("pi-rtk runtime", () => {
+describe("rtk runtime", () => {
   it("resets session metrics without mutating config", () => {
-    const runtime = createPiRtkRuntime(DEFAULT_PI_RTK_CONFIG);
+    const runtime = createRtkRuntime(DEFAULT_RTK_CONFIG);
 
     runtime.metrics.recordRewriteAttempt();
     runtime.metrics.startCommand("1", "bash", "rtk ls", 0);
@@ -19,6 +19,6 @@ describe("pi-rtk runtime", () => {
 
     expect(runtime.metrics.snapshot().hasCommandData).toBeFalse();
     expect(runtime.metrics.snapshot().rewriteAttempts).toBe(0);
-    expect(runtime.getConfig()).toEqual(DEFAULT_PI_RTK_CONFIG);
+    expect(runtime.getConfig()).toEqual(DEFAULT_RTK_CONFIG);
   });
 });

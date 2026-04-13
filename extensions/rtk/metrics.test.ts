@@ -1,10 +1,10 @@
 import { describe, expect, it } from "bun:test";
 
-import { createPiRtkMetricsStore } from "./metrics";
+import { createRtkMetricsStore } from "./metrics";
 
-describe("pi-rtk metrics", () => {
+describe("rtk metrics", () => {
   it("starts with a zero-state summary", () => {
-    const metrics = createPiRtkMetricsStore().snapshot();
+    const metrics = createRtkMetricsStore().snapshot();
 
     expect(metrics.rewriteAttempts).toBe(0);
     expect(metrics.rewritesApplied).toBe(0);
@@ -32,7 +32,7 @@ describe("pi-rtk metrics", () => {
   });
 
   it("aggregates rewrite counters", () => {
-    const store = createPiRtkMetricsStore();
+    const store = createRtkMetricsStore();
 
     store.recordRewriteAttempt();
     store.recordRewriteAttempt();
@@ -55,7 +55,7 @@ describe("pi-rtk metrics", () => {
   });
 
   it("aggregates savings by tool, family, and raw command", () => {
-    const store = createPiRtkMetricsStore();
+    const store = createRtkMetricsStore();
 
     store.recordToolSavings("bash", 100, 40);
     store.recordToolSavings("bash", 50, 25);
@@ -117,7 +117,7 @@ describe("pi-rtk metrics", () => {
   });
 
   it("keeps raw command rows sorted by saved tokens", () => {
-    const store = createPiRtkMetricsStore();
+    const store = createRtkMetricsStore();
 
     store.startCommand("1", "bash", "high", 0);
     store.completeCommand("1", {
@@ -140,7 +140,7 @@ describe("pi-rtk metrics", () => {
   });
 
   it("normalizes user-bash command families", () => {
-    const store = createPiRtkMetricsStore();
+    const store = createRtkMetricsStore();
 
     store.startCommand("1", "user-bash", "rtk git status `main`", 0);
     store.completeCommand("1", {
@@ -153,7 +153,7 @@ describe("pi-rtk metrics", () => {
   });
 
   it("resets all counters and session rows", () => {
-    const store = createPiRtkMetricsStore();
+    const store = createRtkMetricsStore();
 
     store.recordRewriteAttempt();
     store.recordRewriteApplied();

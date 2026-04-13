@@ -1,13 +1,13 @@
 import { describe, expect, it } from "bun:test";
 
-import { DEFAULT_PI_RTK_CONFIG } from "./config";
-import { createPiRtkMetricsStore } from "./metrics";
+import { DEFAULT_RTK_CONFIG } from "./config";
+import { createRtkMetricsStore } from "./metrics";
 import { createRtkToolResultHandler } from "./output-compaction";
-import type { PiRtkConfig, PiRtkRuntime } from "./types";
+import type { RtkConfig, RtkRuntime } from "./types";
 
-function createRuntime(config?: PiRtkConfig): PiRtkRuntime {
-  const metrics = createPiRtkMetricsStore();
-  let currentConfig = structuredClone(config ?? DEFAULT_PI_RTK_CONFIG);
+function createRuntime(config?: RtkConfig): RtkRuntime {
+  const metrics = createRtkMetricsStore();
+  let currentConfig = structuredClone(config ?? DEFAULT_RTK_CONFIG);
 
   return {
     getConfig: () => structuredClone(currentConfig),
@@ -24,12 +24,12 @@ function createRuntime(config?: PiRtkConfig): PiRtkRuntime {
   };
 }
 
-describe("pi-rtk output compaction", () => {
+describe("rtk output compaction", () => {
   it("compacts bash output from the tail and records savings", async () => {
     const runtime = createRuntime({
-      ...DEFAULT_PI_RTK_CONFIG,
+      ...DEFAULT_RTK_CONFIG,
       outputCompaction: {
-        ...DEFAULT_PI_RTK_CONFIG.outputCompaction,
+        ...DEFAULT_RTK_CONFIG.outputCompaction,
         enabled: true,
         compactBash: true,
         maxLines: 2,
@@ -68,9 +68,9 @@ describe("pi-rtk output compaction", () => {
 
   it("compacts read output from the head", async () => {
     const runtime = createRuntime({
-      ...DEFAULT_PI_RTK_CONFIG,
+      ...DEFAULT_RTK_CONFIG,
       outputCompaction: {
-        ...DEFAULT_PI_RTK_CONFIG.outputCompaction,
+        ...DEFAULT_RTK_CONFIG.outputCompaction,
         enabled: true,
         compactRead: true,
         maxLines: 2,
@@ -96,9 +96,9 @@ describe("pi-rtk output compaction", () => {
 
   it("compacts grep output from the head", async () => {
     const runtime = createRuntime({
-      ...DEFAULT_PI_RTK_CONFIG,
+      ...DEFAULT_RTK_CONFIG,
       outputCompaction: {
-        ...DEFAULT_PI_RTK_CONFIG.outputCompaction,
+        ...DEFAULT_RTK_CONFIG.outputCompaction,
         enabled: true,
         compactGrep: true,
         maxLines: 2,
@@ -124,9 +124,9 @@ describe("pi-rtk output compaction", () => {
 
   it("skips compaction when the master switch is off", async () => {
     const runtime = createRuntime({
-      ...DEFAULT_PI_RTK_CONFIG,
+      ...DEFAULT_RTK_CONFIG,
       outputCompaction: {
-        ...DEFAULT_PI_RTK_CONFIG.outputCompaction,
+        ...DEFAULT_RTK_CONFIG.outputCompaction,
         enabled: false,
         compactGrep: true,
         maxLines: 2,
@@ -153,9 +153,9 @@ describe("pi-rtk output compaction", () => {
 
   it("skips compaction when the tool-specific flag is off", async () => {
     const runtime = createRuntime({
-      ...DEFAULT_PI_RTK_CONFIG,
+      ...DEFAULT_RTK_CONFIG,
       outputCompaction: {
-        ...DEFAULT_PI_RTK_CONFIG.outputCompaction,
+        ...DEFAULT_RTK_CONFIG.outputCompaction,
         enabled: true,
         compactGrep: false,
         maxLines: 2,
@@ -182,9 +182,9 @@ describe("pi-rtk output compaction", () => {
 
   it("tracks no-op compaction calls without saved chars", async () => {
     const runtime = createRuntime({
-      ...DEFAULT_PI_RTK_CONFIG,
+      ...DEFAULT_RTK_CONFIG,
       outputCompaction: {
-        ...DEFAULT_PI_RTK_CONFIG.outputCompaction,
+        ...DEFAULT_RTK_CONFIG.outputCompaction,
         enabled: true,
         compactRead: true,
         maxLines: 10,
@@ -214,9 +214,9 @@ describe("pi-rtk output compaction", () => {
 
   it("treats maxChars as characters rather than bytes", async () => {
     const runtime = createRuntime({
-      ...DEFAULT_PI_RTK_CONFIG,
+      ...DEFAULT_RTK_CONFIG,
       outputCompaction: {
-        ...DEFAULT_PI_RTK_CONFIG.outputCompaction,
+        ...DEFAULT_RTK_CONFIG.outputCompaction,
         enabled: true,
         compactRead: true,
         maxLines: 10,
@@ -242,9 +242,9 @@ describe("pi-rtk output compaction", () => {
 
   it("applies maxChars after maxLines", async () => {
     const runtime = createRuntime({
-      ...DEFAULT_PI_RTK_CONFIG,
+      ...DEFAULT_RTK_CONFIG,
       outputCompaction: {
-        ...DEFAULT_PI_RTK_CONFIG.outputCompaction,
+        ...DEFAULT_RTK_CONFIG.outputCompaction,
         enabled: true,
         compactRead: true,
         maxLines: 2,
@@ -270,9 +270,9 @@ describe("pi-rtk output compaction", () => {
 
   it("skips non-text read payloads", async () => {
     const runtime = createRuntime({
-      ...DEFAULT_PI_RTK_CONFIG,
+      ...DEFAULT_RTK_CONFIG,
       outputCompaction: {
-        ...DEFAULT_PI_RTK_CONFIG.outputCompaction,
+        ...DEFAULT_RTK_CONFIG.outputCompaction,
         enabled: true,
         compactRead: true,
         maxLines: 2,

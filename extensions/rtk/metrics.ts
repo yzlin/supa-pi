@@ -2,14 +2,14 @@ import type { AgentMessage } from "@mariozechner/pi-agent-core";
 import { estimateTokens } from "@mariozechner/pi-coding-agent";
 
 import type {
-  PiRtkCommandCompletionOptions,
-  PiRtkCommandMetrics,
-  PiRtkMetricsSnapshot,
-  PiRtkMetricsStore,
-  PiRtkStatsRow,
-  PiRtkToolName,
-  PiRtkToolSavings,
-  PiRtkTrackedToolName,
+  RtkCommandCompletionOptions,
+  RtkCommandMetrics,
+  RtkMetricsSnapshot,
+  RtkMetricsStore,
+  RtkStatsRow,
+  RtkToolName,
+  RtkToolSavings,
+  RtkTrackedToolName,
 } from "./types";
 
 const DEFAULT_TOOL_NAMES = ["bash", "grep", "read"] as const;
@@ -23,9 +23,9 @@ const COMPOUND_COMMAND_FAMILY_NAMES = [
   "python",
 ] as const;
 
-interface MutablePiRtkCommandMetrics {
+interface MutableRtkCommandMetrics {
   label: string;
-  toolName: PiRtkTrackedToolName;
+  toolName: RtkTrackedToolName;
   count: number;
   inputTokens: number;
   outputTokens: number;
@@ -35,11 +35,11 @@ interface MutablePiRtkCommandMetrics {
 
 interface MutablePendingCommand {
   label: string;
-  toolName: PiRtkTrackedToolName;
+  toolName: RtkTrackedToolName;
   startedAt: number;
 }
 
-interface MutablePiRtkStatsRow {
+interface MutableRtkStatsRow {
   label: string;
   count: number;
   inputTokens: number;
@@ -48,16 +48,16 @@ interface MutablePiRtkStatsRow {
   totalExecMs: number;
 }
 
-interface MutablePiRtkMetricsState {
+interface MutableRtkMetricsState {
   rewriteAttempts: number;
   rewritesApplied: number;
   rewriteFallbacks: number;
   userBashAttempts: number;
   userBashRewrites: number;
-  toolSavingsByName: Record<string, PiRtkToolSavings>;
+  toolSavingsByName: Record<string, RtkToolSavings>;
   totalOriginalChars: number;
   totalFinalChars: number;
-  commandMetricsByKey: Record<string, MutablePiRtkCommandMetrics>;
+  commandMetricsByKey: Record<string, MutableRtkCommandMetrics>;
   pendingCommands: Record<string, MutablePendingCommand>;
 }
 
@@ -78,7 +78,7 @@ function estimateTextTokens(text: string | undefined): number {
   return estimateTokens(createSyntheticUserMessage(trimmed));
 }
 
-function createEmptyToolSavings(): PiRtkToolSavings {
+function createEmptyToolSavings(): RtkToolSavings {
   return {
     calls: 0,
     originalChars: 0,
@@ -86,10 +86,10 @@ function createEmptyToolSavings(): PiRtkToolSavings {
   };
 }
 
-function createEmptyState(): MutablePiRtkMetricsState {
+function createEmptyState(): MutableRtkMetricsState {
   const toolSavingsByName = Object.create(null) as Record<
     string,
-    PiRtkToolSavings
+    RtkToolSavings
   >;
   for (const toolName of DEFAULT_TOOL_NAMES) {
     toolSavingsByName[toolName] = createEmptyToolSavings();
@@ -106,7 +106,7 @@ function createEmptyState(): MutablePiRtkMetricsState {
     totalFinalChars: 0,
     commandMetricsByKey: Object.create(null) as Record<
       string,
-      MutablePiRtkCommandMetrics
+      MutableRtkCommandMetrics
     >,
     pendingCommands: Object.create(null) as Record<
       string,
@@ -116,8 +116,8 @@ function createEmptyState(): MutablePiRtkMetricsState {
 }
 
 function cloneToolSavingsMap(
-  input: Record<string, PiRtkToolSavings>
-): Record<string, PiRtkToolSavings> {
+  input: Record<string, RtkToolSavings>
+): Record<string, RtkToolSavings> {
   return Object.fromEntries(
     Object.entries(input).map(([toolName, savings]) => [
       toolName,
@@ -126,7 +126,7 @@ function cloneToolSavingsMap(
   );
 }
 
-function createEmptyStatsRow(label: string): MutablePiRtkStatsRow {
+function createEmptyStatsRow(label: string): MutableRtkStatsRow {
   return {
     label,
     count: 0,
@@ -166,9 +166,9 @@ function toPrecisePercent(part: number, total: number): number {
 }
 
 function getOrCreateToolSavings(
-  state: MutablePiRtkMetricsState,
-  toolName: PiRtkToolName | string
-): PiRtkToolSavings {
+  state: MutableRtkMetricsState,
+  toolName: RtkToolName | string
+): RtkToolSavings {
   const existing = state.toolSavingsByName[toolName];
   if (existing) {
     return existing;
@@ -185,24 +185,24 @@ function normalizeCommandLabel(label: string): string {
 }
 
 function getCommandMetricsKey(
-  toolName: PiRtkTrackedToolName,
+  toolName: RtkTrackedToolName,
   label: string
 ): string {
   return `${toolName}:${label}`;
 }
 
 function getOrCreateCommandMetrics(
-  state: MutablePiRtkMetricsState,
-  toolName: PiRtkTrackedToolName,
+  state: MutableRtkMetricsState,
+  toolName: RtkTrackedToolName,
   label: string
-): MutablePiRtkCommandMetrics {
+): MutableRtkCommandMetrics {
   const key = getCommandMetricsKey(toolName, label);
   const existing = state.commandMetricsByKey[key];
   if (existing) {
     return existing;
   }
 
-  const created: MutablePiRtkCommandMetrics = {
+  const created: MutableRtkCommandMetrics = {
     label,
     toolName,
     count: 0,
@@ -217,11 +217,11 @@ function getOrCreateCommandMetrics(
 
 function compareStatsRows(
   left: Pick<
-    PiRtkStatsRow,
+    RtkStatsRow,
     "label" | "savedTokens" | "inputTokens" | "count" | "totalExecMs"
   >,
   right: Pick<
-    PiRtkStatsRow,
+    RtkStatsRow,
     "label" | "savedTokens" | "inputTokens" | "count" | "totalExecMs"
   >
 ): number {
@@ -234,7 +234,7 @@ function compareStatsRows(
   );
 }
 
-function toStatsRow(row: MutablePiRtkStatsRow): PiRtkStatsRow {
+function toStatsRow(row: MutableRtkStatsRow): RtkStatsRow {
   return {
     label: row.label,
     count: row.count,
@@ -249,8 +249,8 @@ function toStatsRow(row: MutablePiRtkStatsRow): PiRtkStatsRow {
 }
 
 function toCommandMetrics(
-  row: MutablePiRtkCommandMetrics
-): PiRtkCommandMetrics {
+  row: MutableRtkCommandMetrics
+): RtkCommandMetrics {
   return {
     ...toStatsRow(row),
     toolName: row.toolName,
@@ -262,7 +262,7 @@ function normalizeCommandFamilyToken(token: string): string {
 }
 
 function getCommandFamilyLabel(
-  toolName: PiRtkTrackedToolName,
+  toolName: RtkTrackedToolName,
   label: string
 ): string {
   if (toolName === "read" || toolName === "grep") {
@@ -294,13 +294,13 @@ function getCommandFamilyLabel(
   return first;
 }
 
-function aggregateStatsRows<T extends MutablePiRtkCommandMetrics>(
+function aggregateStatsRows<T extends MutableRtkCommandMetrics>(
   rows: T[],
   getLabel: (row: T) => string
-): PiRtkStatsRow[] {
+): RtkStatsRow[] {
   const aggregates = Object.create(null) as Record<
     string,
-    MutablePiRtkStatsRow
+    MutableRtkStatsRow
   >;
 
   for (const row of rows) {
@@ -318,7 +318,7 @@ function aggregateStatsRows<T extends MutablePiRtkCommandMetrics>(
   return Object.values(aggregates).map(toStatsRow).sort(compareStatsRows);
 }
 
-function createEmptySummary(): PiRtkMetricsSnapshot["summary"] {
+function createEmptySummary(): RtkMetricsSnapshot["summary"] {
   return {
     totalCommands: 0,
     totalInputTokens: 0,
@@ -331,8 +331,8 @@ function createEmptySummary(): PiRtkMetricsSnapshot["summary"] {
 }
 
 function buildSummary(
-  commands: PiRtkCommandMetrics[]
-): PiRtkMetricsSnapshot["summary"] {
+  commands: RtkCommandMetrics[]
+): RtkMetricsSnapshot["summary"] {
   const summary = commands.reduce((totals, command) => {
     totals.totalCommands += command.count;
     totals.totalInputTokens += command.inputTokens;
@@ -354,7 +354,7 @@ function buildSummary(
   return summary;
 }
 
-export function createPiRtkMetricsStore(): PiRtkMetricsStore {
+export function createRtkMetricsStore(): RtkMetricsStore {
   let state = createEmptyState();
 
   return {
@@ -398,7 +398,7 @@ export function createPiRtkMetricsStore(): PiRtkMetricsStore {
       };
     },
 
-    completeCommand(commandId, options: PiRtkCommandCompletionOptions = {}) {
+    completeCommand(commandId, options: RtkCommandCompletionOptions = {}) {
       const pending = state.pendingCommands[commandId];
       if (!pending) {
         return;
@@ -427,7 +427,7 @@ export function createPiRtkMetricsStore(): PiRtkMetricsStore {
       state = createEmptyState();
     },
 
-    snapshot(): PiRtkMetricsSnapshot {
+    snapshot(): RtkMetricsSnapshot {
       const totalSavedChars = Math.max(
         0,
         state.totalOriginalChars - state.totalFinalChars

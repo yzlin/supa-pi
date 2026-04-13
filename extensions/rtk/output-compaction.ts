@@ -8,7 +8,7 @@ import {
   type ToolResultEventResult,
 } from "@mariozechner/pi-coding-agent";
 
-import type { PiRtkConfig, PiRtkRuntime, PiRtkToolName } from "./types";
+import type { RtkConfig, RtkRuntime, RtkToolName } from "./types";
 
 function isTextOnlyContent(
   content: ToolResultEvent["content"]
@@ -18,8 +18,8 @@ function isTextOnlyContent(
 
 function getTrackedToolName(
   toolName: string,
-  config: PiRtkConfig
-): PiRtkToolName | null {
+  config: RtkConfig
+): RtkToolName | null {
   const { outputCompaction } = config;
   if (!outputCompaction.enabled || !outputCompaction.trackSavings) {
     return null;
@@ -42,8 +42,8 @@ function getTrackedToolName(
 
 function getCompactionTarget(
   event: ToolResultEvent,
-  config: PiRtkConfig
-): PiRtkToolName | null {
+  config: RtkConfig
+): RtkToolName | null {
   if (
     isBashToolResult(event) ||
     isGrepToolResult(event) ||
@@ -84,9 +84,9 @@ function clampTail(text: string, maxChars: number): string {
 }
 
 function compactText(
-  toolName: PiRtkToolName,
+  toolName: RtkToolName,
   text: string,
-  config: PiRtkConfig
+  config: RtkConfig
 ): string {
   const { maxLines, maxChars } = config.outputCompaction;
   const lines = text.split("\n");
@@ -100,7 +100,7 @@ function compactText(
     : clampHead(lineLimited, maxChars);
 }
 
-export function createRtkToolExecutionStartHandler(runtime: PiRtkRuntime) {
+export function createRtkToolExecutionStartHandler(runtime: RtkRuntime) {
   return async (event: ToolExecutionStartEvent): Promise<void> => {
     const config = runtime.getConfig();
     const toolName = getTrackedToolName(event.toolName, config);
@@ -113,7 +113,7 @@ export function createRtkToolExecutionStartHandler(runtime: PiRtkRuntime) {
   };
 }
 
-export function createRtkToolResultHandler(runtime: PiRtkRuntime) {
+export function createRtkToolResultHandler(runtime: RtkRuntime) {
   return async (
     event: ToolResultEvent
   ): Promise<ToolResultEventResult | void> => {

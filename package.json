@@ -18,7 +18,7 @@
       "./extensions/context",
       "./extensions/btw",
       "./extensions/ast-grep",
-      "./extensions/pi-rtk",
+      "./extensions/rtk",
       "./extensions/init-deep",
       "./extensions/smart-docs",
       "./extensions/om",

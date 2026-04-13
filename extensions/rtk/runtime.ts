@@ -1,22 +1,22 @@
-import { DEFAULT_PI_RTK_CONFIG } from "./config";
-import { createPiRtkMetricsStore } from "./metrics";
+import { DEFAULT_RTK_CONFIG } from "./config";
+import { createRtkMetricsStore } from "./metrics";
 import { checkRtkAvailability } from "./rewrite";
-import type { PiRtkConfig, PiRtkRuntime, PiRtkRuntimeStatus } from "./types";
+import type { RtkConfig, RtkRuntime, RtkRuntimeStatus } from "./types";
 
-function cloneConfig(config: PiRtkConfig): PiRtkConfig {
+function cloneConfig(config: RtkConfig): RtkConfig {
   return structuredClone(config);
 }
 
-function cloneStatus(status: PiRtkRuntimeStatus): PiRtkRuntimeStatus {
+function cloneStatus(status: RtkRuntimeStatus): RtkRuntimeStatus {
   return { ...status };
 }
 
-export function createPiRtkRuntime(
-  initialConfig: PiRtkConfig = DEFAULT_PI_RTK_CONFIG
-): PiRtkRuntime {
+export function createRtkRuntime(
+  initialConfig: RtkConfig = DEFAULT_RTK_CONFIG
+): RtkRuntime {
   let config = cloneConfig(initialConfig);
-  let status: PiRtkRuntimeStatus = { rtkAvailable: false };
-  const metrics = createPiRtkMetricsStore();
+  let status: RtkRuntimeStatus = { rtkAvailable: false };
+  const metrics = createRtkMetricsStore();
 
   return {
     getConfig() {

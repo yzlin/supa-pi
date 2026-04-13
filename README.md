@@ -19,7 +19,7 @@ Documented extensions in this repo include:
 
 - **`extensions/lsp`** — unified `lsp` tool for diagnostics, definitions, references, hover, symbols, call hierarchy, and code actions
 - **`extensions/om`** — Observational Memory for branch-local memory restore, observer/reflector passes, and `/om` admin commands
-- **`extensions/pi-rtk`** — output compaction and `/rtk stats` dashboard for `bash`, `grep`, and `read`
+- **`extensions/rtk`** — output compaction and `/rtk stats` dashboard for `bash`, `grep`, and `read`
 - **`extensions/pieditor`** — editor UX improvements like `@` file picking, shell completions, raw paste, command remapping, and a locally maintained fork lineage from the original upstream extension
 - **`extensions/init-deep`** — deterministic `/init-deep` command flow for generating hierarchical `AGENTS.md`
 - **`extensions/smart-docs`** — deterministic `/smart-docs` command flow for codebase documentation generation

@@ -1,10 +1,10 @@
 import { describe, expect, it } from "bun:test";
 
-import { DEFAULT_PI_RTK_CONFIG } from "./config";
-import { createPiRtkRuntime } from "./runtime";
+import { DEFAULT_RTK_CONFIG } from "./config";
+import { createRtkRuntime } from "./runtime";
 import { createRtkUserBashHandler } from "./user-bash";
 
-describe("pi-rtk user bash", () => {
+describe("rtk user bash", () => {
   function createContext() {
     return {
       hasUI: true,
@@ -15,7 +15,7 @@ describe("pi-rtk user bash", () => {
   }
 
   it("preserves !!cmd bypass", () => {
-    const runtime = createPiRtkRuntime(DEFAULT_PI_RTK_CONFIG);
+    const runtime = createRtkRuntime(DEFAULT_RTK_CONFIG);
     const handler = createRtkUserBashHandler(runtime);
 
     expect(
@@ -32,8 +32,8 @@ describe("pi-rtk user bash", () => {
   });
 
   it("does nothing when disabled", () => {
-    const runtime = createPiRtkRuntime({
-      ...DEFAULT_PI_RTK_CONFIG,
+    const runtime = createRtkRuntime({
+      ...DEFAULT_RTK_CONFIG,
       enabled: false,
     });
     const handler = createRtkUserBashHandler(runtime);
@@ -52,7 +52,7 @@ describe("pi-rtk user bash", () => {
   });
 
   it("does nothing when RTK is unavailable and guarded", () => {
-    const runtime = createPiRtkRuntime(DEFAULT_PI_RTK_CONFIG);
+    const runtime = createRtkRuntime(DEFAULT_RTK_CONFIG);
     runtime.setStatus({
       rtkAvailable: false,
       lastCheckedAt: "now",
@@ -74,7 +74,7 @@ describe("pi-rtk user bash", () => {
   });
 
   it("rewrites !cmd before execution", async () => {
-    const runtime = createPiRtkRuntime(DEFAULT_PI_RTK_CONFIG);
+    const runtime = createRtkRuntime(DEFAULT_RTK_CONFIG);
     runtime.setStatus({
       rtkAvailable: true,
       lastCheckedAt: "now",
@@ -114,7 +114,7 @@ describe("pi-rtk user bash", () => {
   });
 
   it("falls back to the original command on rewrite failure", async () => {
-    const runtime = createPiRtkRuntime(DEFAULT_PI_RTK_CONFIG);
+    const runtime = createRtkRuntime(DEFAULT_RTK_CONFIG);
     runtime.setStatus({
       rtkAvailable: true,
       lastCheckedAt: "now",

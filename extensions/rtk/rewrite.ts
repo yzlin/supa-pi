@@ -2,12 +2,12 @@ import { spawnSync } from "node:child_process";
 import { isAbsolute } from "node:path";
 
 import type {
-  PiRtkConfig,
-  PiRtkRewriteResolution,
-  PiRtkRewriteResult,
-  PiRtkRunner,
-  PiRtkRunnerResult,
-  PiRtkRuntimeStatus,
+  RtkConfig,
+  RtkRewriteResolution,
+  RtkRewriteResult,
+  RtkRunner,
+  RtkRunnerResult,
+  RtkRuntimeStatus,
 } from "./types";
 
 export const DEFAULT_RTK_REWRITE_TIMEOUT_MS = 3_000;
@@ -16,7 +16,7 @@ export const DEFAULT_RTK_VERIFY_TIMEOUT_MS = 1_000;
 let cachedRtkBinaryPath: string | undefined;
 
 function formatCommandFailure(
-  result: PiRtkRunnerResult,
+  result: RtkRunnerResult,
   timeoutMs: number,
   fallback: string
 ): string {
@@ -32,11 +32,11 @@ function formatCommandFailure(
   return stderr || fallback;
 }
 
-export const defaultPiRtkRunner: PiRtkRunner = (
+export const defaultRtkRunner: RtkRunner = (
   file,
   args,
   timeoutMs
-): PiRtkRunnerResult => {
+): RtkRunnerResult => {
   const result = spawnSync(file, args, {
     encoding: "utf8",
     timeout: timeoutMs,
@@ -55,7 +55,7 @@ function resolveBinaryPathError(message: string): Error {
 }
 
 function defaultResolveRtkBinaryPath(
-  runner: PiRtkRunner,
+  runner: RtkRunner,
   timeoutMs: number
 ): string {
   if (cachedRtkBinaryPath) {
@@ -84,19 +84,19 @@ export function clearRtkBinaryPathCache(): void {
 }
 
 function resolveBinaryPath(
-  runner: PiRtkRunner,
+  runner: RtkRunner,
   timeoutMs: number,
-  customResolver?: (runner: PiRtkRunner, timeoutMs: number) => string
+  customResolver?: (runner: RtkRunner, timeoutMs: number) => string
 ): string {
   return (customResolver ?? defaultResolveRtkBinaryPath)(runner, timeoutMs);
 }
 
 export function checkRtkAvailability(options?: {
-  runner?: PiRtkRunner;
+  runner?: RtkRunner;
   timeoutMs?: number;
-  resolveBinaryPath?: (runner: PiRtkRunner, timeoutMs: number) => string;
-}): PiRtkRuntimeStatus {
-  const runner = options?.runner ?? defaultPiRtkRunner;
+  resolveBinaryPath?: (runner: RtkRunner, timeoutMs: number) => string;
+}): RtkRuntimeStatus {
+  const runner = options?.runner ?? defaultRtkRunner;
   const timeoutMs = options?.timeoutMs ?? DEFAULT_RTK_VERIFY_TIMEOUT_MS;
   const lastCheckedAt = new Date().toISOString();
 
@@ -136,12 +136,12 @@ export function checkRtkAvailability(options?: {
 export function rewriteCommandWithRtk(
   command: string,
   options?: {
-    runner?: PiRtkRunner;
+    runner?: RtkRunner;
     timeoutMs?: number;
-    resolveBinaryPath?: (runner: PiRtkRunner, timeoutMs: number) => string;
+    resolveBinaryPath?: (runner: RtkRunner, timeoutMs: number) => string;
   }
-): PiRtkRewriteResult {
-  const runner = options?.runner ?? defaultPiRtkRunner;
+): RtkRewriteResult {
+  const runner = options?.runner ?? defaultRtkRunner;
   const timeoutMs = options?.timeoutMs ?? DEFAULT_RTK_REWRITE_TIMEOUT_MS;
   const binaryPath = resolveBinaryPath(
     runner,
@@ -170,12 +170,12 @@ export function rewriteCommandWithRtk(
 export function resolveRtkCommand(
   command: string,
   options: {
-    config: PiRtkConfig;
-    status: PiRtkRuntimeStatus;
-    refreshStatus?: () => PiRtkRuntimeStatus;
+    config: RtkConfig;
+    status: RtkRuntimeStatus;
+    refreshStatus?: () => RtkRuntimeStatus;
     rewrite?: typeof rewriteCommandWithRtk;
   }
-): PiRtkRewriteResolution {
+): RtkRewriteResolution {
   if (!options.config.enabled) {
     return {
       status: "disabled",

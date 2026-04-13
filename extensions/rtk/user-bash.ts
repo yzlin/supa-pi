@@ -10,7 +10,7 @@ import {
 } from "@mariozechner/pi-coding-agent";
 
 import { resolveRtkCommand } from "./rewrite";
-import type { PiRtkRuntime } from "./types";
+import type { RtkRuntime } from "./types";
 
 function killChild(child: ReturnType<typeof spawn>): void {
   const pid = child.pid;
@@ -111,7 +111,7 @@ export function createLocalBashOperations(): BashOperations {
 }
 
 export function createRtkUserBashHandler(
-  runtime: PiRtkRuntime,
+  runtime: RtkRuntime,
   deps?: {
     createLocalOperations?: () => BashOperations;
     resolveCommand?: typeof resolveRtkCommand;

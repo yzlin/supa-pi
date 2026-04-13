@@ -4,12 +4,12 @@ import type {
 } from "@mariozechner/pi-coding-agent";
 
 import {
-  getPiRtkConfigPath,
-  resetPiRtkConfig,
-  savePiRtkConfig,
+  getRtkConfigPath,
+  resetRtkConfig,
+  saveRtkConfig,
 } from "./config";
 import { showRtkStatsView } from "./stats";
-import type { PiRtkConfig, PiRtkRuntime } from "./types";
+import type { RtkConfig, RtkRuntime } from "./types";
 
 const RTK_SUBCOMMANDS = [
   { value: "show", description: "Show config, runtime, and counters" },
@@ -34,7 +34,7 @@ function formatBoolean(value: boolean): string {
 
 function buildShowMessage(
   ctx: ExtensionCommandContext,
-  runtime: PiRtkRuntime
+  runtime: RtkRuntime
 ): string {
   const config = runtime.getConfig();
   const status = runtime.getStatus();
@@ -42,7 +42,7 @@ function buildShowMessage(
 
   return [
     "RTK",
-    `config: ${getPiRtkConfigPath(ctx.cwd)}`,
+    `config: ${getRtkConfigPath(ctx.cwd)}`,
     `enabled: ${formatBoolean(config.enabled)}`,
     `mode: ${config.mode}`,
     `guardWhenRtkMissing: ${formatBoolean(config.guardWhenRtkMissing)}`,
@@ -65,10 +65,10 @@ function buildShowMessage(
 
 function applyConfigChange(
   ctx: ExtensionCommandContext,
-  runtime: PiRtkRuntime,
-  nextConfig: PiRtkConfig
-): PiRtkConfig {
-  const saved = savePiRtkConfig(ctx.cwd, nextConfig);
+  runtime: RtkRuntime,
+  nextConfig: RtkConfig
+): RtkConfig {
+  const saved = saveRtkConfig(ctx.cwd, nextConfig);
   runtime.setConfig(saved);
   return saved;
 }
@@ -142,7 +142,7 @@ function getRtkArgumentCompletions(argumentPrefix: string) {
 
 export function registerRtkCommands(
   pi: ExtensionAPI,
-  runtime: PiRtkRuntime
+  runtime: RtkRuntime
 ): void {
   pi.registerCommand("rtk", {
     description: "Manage RTK rewrite settings and stats",
@@ -186,7 +186,7 @@ export function registerRtkCommands(
         }
 
         case "reset": {
-          const nextConfig = resetPiRtkConfig(ctx.cwd);
+          const nextConfig = resetRtkConfig(ctx.cwd);
           runtime.setConfig(nextConfig);
           runtime.metrics.reset();
           runtime.refreshRtkStatus();

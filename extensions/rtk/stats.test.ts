@@ -1,19 +1,19 @@
 import { describe, expect, it } from "bun:test";
 
-import { DEFAULT_PI_RTK_CONFIG } from "./config";
-import { createPiRtkMetricsStore } from "./metrics";
+import { DEFAULT_RTK_CONFIG } from "./config";
+import { createRtkMetricsStore } from "./metrics";
 import { renderProgressBar, renderRtkStats } from "./stats";
 
 function stripAnsi(text: string): string {
   return text.replace(/\u001B\[[0-9;]*m/g, "");
 }
 
-describe("pi-rtk stats", () => {
+describe("rtk stats", () => {
   it("renders a friendly no-data state", () => {
     const output = stripAnsi(
       renderRtkStats(
-        createPiRtkMetricsStore().snapshot(),
-        DEFAULT_PI_RTK_CONFIG,
+        createRtkMetricsStore().snapshot(),
+        DEFAULT_RTK_CONFIG,
         120
       )
     );
@@ -29,7 +29,7 @@ describe("pi-rtk stats", () => {
   });
 
   it("renders summary, tool rows, family rows, and raw commands", () => {
-    const store = createPiRtkMetricsStore();
+    const store = createRtkMetricsStore();
     store.recordRewriteAttempt();
     store.recordRewriteAttempt();
     store.recordRewriteApplied();
@@ -59,7 +59,7 @@ describe("pi-rtk stats", () => {
     });
 
     const output = stripAnsi(
-      renderRtkStats(store.snapshot(), DEFAULT_PI_RTK_CONFIG, 132)
+      renderRtkStats(store.snapshot(), DEFAULT_RTK_CONFIG, 132)
     );
 
     expect(output).toContain("Total commands:");
@@ -82,7 +82,7 @@ describe("pi-rtk stats", () => {
   });
 
   it("shows hidden row count when raw commands exceed the table limit", () => {
-    const store = createPiRtkMetricsStore();
+    const store = createRtkMetricsStore();
 
     for (let index = 0; index < 11; index += 1) {
       const id = String(index + 1);
@@ -95,7 +95,7 @@ describe("pi-rtk stats", () => {
     }
 
     const output = stripAnsi(
-      renderRtkStats(store.snapshot(), DEFAULT_PI_RTK_CONFIG, 132)
+      renderRtkStats(store.snapshot(), DEFAULT_RTK_CONFIG, 132)
     );
 
     expect(output).toContain("+ 1 more raw command row(s)");
@@ -103,11 +103,11 @@ describe("pi-rtk stats", () => {
 
   it("renders off-state warnings", () => {
     const output = stripAnsi(
-      renderRtkStats(createPiRtkMetricsStore().snapshot(), {
-        ...DEFAULT_PI_RTK_CONFIG,
+      renderRtkStats(createRtkMetricsStore().snapshot(), {
+        ...DEFAULT_RTK_CONFIG,
         enabled: false,
         outputCompaction: {
-          ...DEFAULT_PI_RTK_CONFIG.outputCompaction,
+          ...DEFAULT_RTK_CONFIG.outputCompaction,
           enabled: false,
           compactBash: false,
           compactGrep: false,
@@ -126,7 +126,7 @@ describe("pi-rtk stats", () => {
   });
 
   it("keeps impact inline on narrower widths", () => {
-    const store = createPiRtkMetricsStore();
+    const store = createRtkMetricsStore();
     store.startCommand("1", "bash", "rtk find src -name '*.ts'", 0);
     store.completeCommand("1", {
       inputText: "x ".repeat(800),
@@ -135,7 +135,7 @@ describe("pi-rtk stats", () => {
     });
 
     const output = stripAnsi(
-      renderRtkStats(store.snapshot(), DEFAULT_PI_RTK_CONFIG, 88)
+      renderRtkStats(store.snapshot(), DEFAULT_RTK_CONFIG, 88)
     );
     const familyLine = output
       .split("\n")

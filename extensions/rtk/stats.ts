@@ -8,10 +8,10 @@ import {
 } from "@mariozechner/pi-tui";
 
 import type {
-  PiRtkCommandMetrics,
-  PiRtkConfig,
-  PiRtkMetricsSnapshot,
-  PiRtkStatsRow,
+  RtkCommandMetrics,
+  RtkConfig,
+  RtkMetricsSnapshot,
+  RtkStatsRow,
 } from "./types";
 
 const BAR_WIDTH = 20;
@@ -164,20 +164,20 @@ function truncatePlain(text: string, width: number): string {
 }
 
 function formatCommandLabel(
-  command: PiRtkCommandMetrics,
+  command: RtkCommandMetrics,
   width: number
 ): string {
   const prefix = command.toolName === "user-bash" ? "! " : "";
   return truncatePlain(`${prefix}${command.label}`, width);
 }
 
-function formatStatsRowLabel(row: PiRtkStatsRow, width: number): string {
+function formatStatsRowLabel(row: RtkStatsRow, width: number): string {
   return truncatePlain(row.label, width);
 }
 
 function buildStatusNotes(
-  metrics: PiRtkMetricsSnapshot,
-  config: PiRtkConfig
+  metrics: RtkMetricsSnapshot,
+  config: RtkConfig
 ): string[] {
   const notes: string[] = [];
 
@@ -205,8 +205,8 @@ function buildStatusNotes(
 }
 
 function buildSummaryLines(
-  metrics: PiRtkMetricsSnapshot,
-  config: PiRtkConfig
+  metrics: RtkMetricsSnapshot,
+  config: RtkConfig
 ): string[] {
   const summary = metrics.summary;
   const statusNotes = buildStatusNotes(metrics, config);
@@ -230,7 +230,7 @@ function buildSummaryLines(
   ];
 }
 
-function buildRankedTableLines<T extends PiRtkStatsRow>(options: {
+function buildRankedTableLines<T extends RtkStatsRow>(options: {
   title: string;
   labelHeader: string;
   rows: T[];
@@ -309,7 +309,7 @@ function buildRankedTableLines<T extends PiRtkStatsRow>(options: {
 }
 
 function buildToolLines(
-  metrics: PiRtkMetricsSnapshot,
+  metrics: RtkMetricsSnapshot,
   width: number,
   theme?: ThemeLike
 ): string[] {
@@ -327,7 +327,7 @@ function buildToolLines(
 }
 
 function buildCommandFamilyLines(
-  metrics: PiRtkMetricsSnapshot,
+  metrics: RtkMetricsSnapshot,
   width: number,
   theme?: ThemeLike
 ): string[] {
@@ -345,7 +345,7 @@ function buildCommandFamilyLines(
 }
 
 function buildRawCommandLines(
-  metrics: PiRtkMetricsSnapshot,
+  metrics: RtkMetricsSnapshot,
   width: number,
   theme?: ThemeLike
 ): string[] {
@@ -363,8 +363,8 @@ function buildRawCommandLines(
 }
 
 function buildBodyLines(
-  metrics: PiRtkMetricsSnapshot,
-  config: PiRtkConfig,
+  metrics: RtkMetricsSnapshot,
+  config: RtkConfig,
   width: number,
   theme?: ThemeLike
 ): string[] {
@@ -382,8 +382,8 @@ function buildBodyLines(
 }
 
 export function renderRtkStats(
-  metrics: PiRtkMetricsSnapshot,
-  config: PiRtkConfig,
+  metrics: RtkMetricsSnapshot,
+  config: RtkConfig,
   width = 120
 ): string {
   return buildBodyLines(
@@ -504,8 +504,8 @@ function decorateLines(lines: string[], theme: ThemeLike): string[] {
 
 export async function showRtkStatsView(
   ctx: ExtensionCommandContext,
-  metrics: PiRtkMetricsSnapshot,
-  config: PiRtkConfig
+  metrics: RtkMetricsSnapshot,
+  config: RtkConfig
 ): Promise<void> {
   if (!ctx.hasUI) {
     process.stdout.write(`${renderRtkStats(metrics, config)}\n`);

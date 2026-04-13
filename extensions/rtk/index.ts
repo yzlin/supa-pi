@@ -4,21 +4,21 @@ import {
 } from "@mariozechner/pi-coding-agent";
 
 import { registerRtkCommands } from "./commands";
-import { loadPiRtkConfig } from "./config";
+import { loadRtkConfig } from "./config";
 import {
   createRtkToolExecutionStartHandler,
   createRtkToolResultHandler,
 } from "./output-compaction";
 import { clearRtkBinaryPathCache, resolveRtkCommand } from "./rewrite";
-import { createPiRtkRuntime } from "./runtime";
+import { createRtkRuntime } from "./runtime";
 import { createRtkUserBashHandler } from "./user-bash";
 
 function loadRuntimeState(
   cwd: string,
-  runtime: ReturnType<typeof createPiRtkRuntime>
+  runtime: ReturnType<typeof createRtkRuntime>
 ): void {
   clearRtkBinaryPathCache();
-  runtime.setConfig(loadPiRtkConfig(cwd));
+  runtime.setConfig(loadRtkConfig(cwd));
   runtime.resetSessionState();
   runtime.refreshRtkStatus();
 }
@@ -26,7 +26,7 @@ function loadRuntimeState(
 function registerSessionHandler(
   pi: ExtensionAPI,
   eventName: "session_start" | "session_switch",
-  runtime: ReturnType<typeof createPiRtkRuntime>,
+  runtime: ReturnType<typeof createRtkRuntime>,
   updateBashTool: (cwd: string) => void
 ): void {
   pi.on(eventName, async (_event, ctx) => {
@@ -35,8 +35,8 @@ function registerSessionHandler(
   });
 }
 
-export default function piRtkExtension(pi: ExtensionAPI): void {
-  const runtime = createPiRtkRuntime(loadPiRtkConfig(process.cwd()));
+export default function rtkExtension(pi: ExtensionAPI): void {
+  const runtime = createRtkRuntime(loadRtkConfig(process.cwd()));
   let bashTool = createBashTool(process.cwd());
 
   registerSessionHandler(pi, "session_start", runtime, (cwd) => {

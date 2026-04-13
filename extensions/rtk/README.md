@@ -1,4 +1,4 @@
-# pi-rtk
+# rtk
 
 Local pi extension for RTK command rewrite + output compaction.
 

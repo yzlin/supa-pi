@@ -1,7 +1,7 @@
-export type PiRtkMode = "rewrite" | "suggest";
-export type PiRtkToolName = "bash" | "grep" | "read";
-export type PiRtkTrackedToolName = PiRtkToolName | "user-bash";
-export type PiRtkRewriteStatus =
+export type RtkMode = "rewrite" | "suggest";
+export type RtkToolName = "bash" | "grep" | "read";
+export type RtkTrackedToolName = RtkToolName | "user-bash";
+export type RtkRewriteStatus =
   | "disabled"
   | "suggest"
   | "guarded"
@@ -9,7 +9,7 @@ export type PiRtkRewriteStatus =
   | "unchanged"
   | "fallback";
 
-export interface PiRtkOutputCompactionConfig {
+export interface RtkOutputCompactionConfig {
   enabled: boolean;
   compactBash: boolean;
   compactGrep: boolean;
@@ -20,27 +20,27 @@ export interface PiRtkOutputCompactionConfig {
   trackSavings: boolean;
 }
 
-export interface PiRtkConfig {
+export interface RtkConfig {
   enabled: boolean;
-  mode: PiRtkMode;
+  mode: RtkMode;
   guardWhenRtkMissing: boolean;
   showRewriteNotifications: boolean;
-  outputCompaction: PiRtkOutputCompactionConfig;
+  outputCompaction: RtkOutputCompactionConfig;
 }
 
-export interface PiRtkRuntimeStatus {
+export interface RtkRuntimeStatus {
   rtkAvailable: boolean;
   lastCheckedAt?: string;
   lastError?: string;
 }
 
-export interface PiRtkToolSavings {
+export interface RtkToolSavings {
   calls: number;
   originalChars: number;
   finalChars: number;
 }
 
-export interface PiRtkStatsRow {
+export interface RtkStatsRow {
   label: string;
   count: number;
   inputTokens: number;
@@ -51,11 +51,11 @@ export interface PiRtkStatsRow {
   avgExecMs: number;
 }
 
-export interface PiRtkCommandMetrics extends PiRtkStatsRow {
-  toolName: PiRtkTrackedToolName;
+export interface RtkCommandMetrics extends RtkStatsRow {
+  toolName: RtkTrackedToolName;
 }
 
-export interface PiRtkMetricsSummary {
+export interface RtkMetricsSummary {
   totalCommands: number;
   totalInputTokens: number;
   totalOutputTokens: number;
@@ -65,13 +65,13 @@ export interface PiRtkMetricsSummary {
   avgExecMs: number;
 }
 
-export interface PiRtkMetricsSnapshot {
+export interface RtkMetricsSnapshot {
   rewriteAttempts: number;
   rewritesApplied: number;
   rewriteFallbacks: number;
   userBashAttempts: number;
   userBashRewrites: number;
-  toolSavingsByName: Record<string, PiRtkToolSavings>;
+  toolSavingsByName: Record<string, RtkToolSavings>;
   totalOriginalChars: number;
   totalFinalChars: number;
   totalSavedChars: number;
@@ -79,14 +79,14 @@ export interface PiRtkMetricsSnapshot {
   rewriteRatePercent: number;
   fallbackRatePercent: number;
   userBashRewriteRatePercent: number;
-  summary: PiRtkMetricsSummary;
-  tools: PiRtkStatsRow[];
-  commandFamilies: PiRtkStatsRow[];
-  commands: PiRtkCommandMetrics[];
+  summary: RtkMetricsSummary;
+  tools: RtkStatsRow[];
+  commandFamilies: RtkStatsRow[];
+  commands: RtkCommandMetrics[];
   hasCommandData: boolean;
 }
 
-export interface PiRtkCommandCompletionOptions {
+export interface RtkCommandCompletionOptions {
   label?: string;
   inputText?: string;
   outputText?: string;
@@ -94,62 +94,62 @@ export interface PiRtkCommandCompletionOptions {
   execMs?: number;
 }
 
-export interface PiRtkMetricsStore {
+export interface RtkMetricsStore {
   recordRewriteAttempt(): void;
   recordRewriteApplied(): void;
   recordRewriteFallback(): void;
   recordUserBashAttempt(): void;
   recordUserBashRewrite(): void;
   recordToolSavings(
-    toolName: PiRtkToolName | string,
+    toolName: RtkToolName | string,
     originalChars: number,
     finalChars: number
   ): void;
   startCommand(
     commandId: string,
-    toolName: PiRtkTrackedToolName,
+    toolName: RtkTrackedToolName,
     label: string,
     startedAt?: number
   ): void;
   completeCommand(
     commandId: string,
-    options?: PiRtkCommandCompletionOptions
+    options?: RtkCommandCompletionOptions
   ): void;
   reset(): void;
-  snapshot(): PiRtkMetricsSnapshot;
+  snapshot(): RtkMetricsSnapshot;
 }
 
-export interface PiRtkRunnerResult {
+export interface RtkRunnerResult {
   stdout: string;
   stderr: string;
   exitCode: number | null;
   error?: string;
 }
 
-export type PiRtkRunner = (
+export type RtkRunner = (
   file: string,
   args: string[],
   timeoutMs: number
-) => PiRtkRunnerResult;
+) => RtkRunnerResult;
 
-export interface PiRtkRewriteResult {
+export interface RtkRewriteResult {
   rewritten: string;
   changed: boolean;
 }
 
-export interface PiRtkRewriteResolution {
-  status: PiRtkRewriteStatus;
+export interface RtkRewriteResolution {
+  status: RtkRewriteStatus;
   command: string;
   changed: boolean;
   reason?: string;
 }
 
-export interface PiRtkRuntime {
-  getConfig(): PiRtkConfig;
-  setConfig(config: PiRtkConfig): void;
-  getStatus(): PiRtkRuntimeStatus;
-  setStatus(status: PiRtkRuntimeStatus): void;
-  refreshRtkStatus(): PiRtkRuntimeStatus;
+export interface RtkRuntime {
+  getConfig(): RtkConfig;
+  setConfig(config: RtkConfig): void;
+  getStatus(): RtkRuntimeStatus;
+  setStatus(status: RtkRuntimeStatus): void;
+  refreshRtkStatus(): RtkRuntimeStatus;
   resetSessionState(): void;
-  metrics: PiRtkMetricsStore;
+  metrics: RtkMetricsStore;
 }

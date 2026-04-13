@@ -1,19 +1,19 @@
 import { afterEach, describe, expect, it } from "bun:test";
 
-import { DEFAULT_PI_RTK_CONFIG } from "./config";
+import { DEFAULT_RTK_CONFIG } from "./config";
 import {
   checkRtkAvailability,
   clearRtkBinaryPathCache,
   resolveRtkCommand,
   rewriteCommandWithRtk,
 } from "./rewrite";
-import type { PiRtkRunner } from "./types";
+import type { RtkRunner } from "./types";
 
-function createRunner(result: ReturnType<PiRtkRunner>): PiRtkRunner {
+function createRunner(result: ReturnType<RtkRunner>): RtkRunner {
   return () => result;
 }
 
-describe("pi-rtk rewrite", () => {
+describe("rtk rewrite", () => {
   afterEach(() => {
     clearRtkBinaryPathCache();
   });
@@ -93,7 +93,7 @@ describe("pi-rtk rewrite", () => {
   it("does not mutate commands in suggest mode", () => {
     const result = resolveRtkCommand("ls", {
       config: {
-        ...DEFAULT_PI_RTK_CONFIG,
+        ...DEFAULT_RTK_CONFIG,
         mode: "suggest",
       },
       status: {

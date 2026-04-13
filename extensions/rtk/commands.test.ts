@@ -6,8 +6,8 @@ import type {
 } from "@mariozechner/pi-coding-agent";
 
 import { registerRtkCommands } from "./commands";
-import { DEFAULT_PI_RTK_CONFIG } from "./config";
-import type { PiRtkRuntime } from "./types";
+import { DEFAULT_RTK_CONFIG } from "./config";
+import type { RtkRuntime } from "./types";
 
 type RegisteredCommandOptions = Parameters<ExtensionAPI["registerCommand"]>[1];
 type HarnessCommandOptions = RegisteredCommandOptions & {
@@ -17,10 +17,10 @@ type HarnessCommandOptions = RegisteredCommandOptions & {
   handler: NonNullable<RegisteredCommandOptions["handler"]>;
 };
 
-describe("pi-rtk commands", () => {
-  function createRuntime(): PiRtkRuntime {
+describe("rtk commands", () => {
+  function createRuntime(): RtkRuntime {
     return {
-      getConfig: () => DEFAULT_PI_RTK_CONFIG,
+      getConfig: () => DEFAULT_RTK_CONFIG,
       setConfig() {},
       getStatus: () => ({ rtkAvailable: true, lastCheckedAt: "now" }),
       setStatus() {},
