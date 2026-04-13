@@ -216,6 +216,19 @@ function frameLine(content: string, width: number): string {
   return `│ ${clipped}${padding} │`;
 }
 
+function styleFrameLine(line: string, theme: ThemeLike): string {
+  if (/^[╭╮╰╯├┤─]+$/u.test(line)) {
+    return theme.fg("dim", line);
+  }
+
+  if (!line.startsWith("│ ") || !line.endsWith(" │")) {
+    return line;
+  }
+
+  const content = line.slice(1, -1);
+  return `${theme.fg("dim", "│")}${content}${theme.fg("dim", "│")}`;
+}
+
 function centerText(content: string, width: number): string {
   const clipped = truncateToWidth(content, width);
   const remaining = Math.max(0, width - visibleWidth(clipped));
@@ -1112,7 +1125,7 @@ export async function showOmStatusView(
               frameWidth
             ),
             border(frameWidth, "╰", "─", "╯"),
-          ];
+          ].map((line) => styleFrameLine(line, theme));
         },
         handleInput(data: string) {
           if (

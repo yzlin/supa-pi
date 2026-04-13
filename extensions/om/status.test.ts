@@ -68,7 +68,14 @@ function createSnapshot(
   };
 }
 
-async function renderInteractiveSnapshot(snapshot: OmStatusSnapshot) {
+async function renderInteractiveSnapshot(
+  snapshot: OmStatusSnapshot,
+  theme: typeof TEST_THEME = TEST_THEME
+): Promise<{
+  renders: string[][];
+  component: OmStatusComponent;
+  rerender(width?: number): string;
+}> {
   const renders: string[][] = [];
   let component: OmStatusComponent | null = null;
 
@@ -78,16 +85,17 @@ async function renderInteractiveSnapshot(snapshot: OmStatusSnapshot) {
       ui: {
         notify() {},
         async custom(factory: any) {
-          component = factory(
+          const nextComponent = factory(
             {
               requestRender() {},
             },
-            TEST_THEME,
+            theme,
             {},
             () => {}
-          );
+          ) as OmStatusComponent;
 
-          renders.push(component.render(80));
+          component = nextComponent;
+          renders.push(nextComponent.render(80));
         },
       },
     } as any,
@@ -95,12 +103,17 @@ async function renderInteractiveSnapshot(snapshot: OmStatusSnapshot) {
   );
 
   expect(component).not.toBeNull();
+  if (!component) {
+    throw new Error("Expected OM status component to render");
+  }
+
+  const renderedComponent: OmStatusComponent = component;
 
   return {
     renders,
-    component: component as NonNullable<typeof component>,
+    component: renderedComponent,
     rerender(width = 80) {
-      const next = component?.render(width) ?? [];
+      const next = renderedComponent.render(width);
       renders.push(next);
       return next.join("\n");
     },
@@ -245,6 +258,24 @@ describe("om status view", () => {
     expect(rendered).toContain("Recent activity");
     expect(rendered).toContain("OM observer applied: +1 observation, +1 fact.");
     expect(rendered).toContain("←→/tab tabs");
+  });
+
+  it("styles the OM frame like the pieditor file picker", async () => {
+    const styledTheme: typeof TEST_THEME = {
+      fg(color: string, text: string) {
+        return `<${color}:${text}>`;
+      },
+      bold(text: string) {
+        return text;
+      },
+    };
+
+    const view = await renderInteractiveSnapshot(createSnapshot(), styledTheme);
+    const rendered = view.renders[0]?.join("\n") ?? "";
+
+    expect(rendered).toContain("<dim:╭");
+    expect(rendered).toContain("<dim:│>");
+    expect(rendered).toContain("Observational Memory Status");
   });
 
   it("navigates across OM entity tabs and shows selected content", async () => {
