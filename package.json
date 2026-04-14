@@ -13,6 +13,7 @@
       "./extensions/execute",
       "./extensions/research",
       "./extensions/simplify",
+      "./extensions/review.ts",
       "./extensions/session-query.ts",
       "./extensions/handoff.ts",
       "./extensions/context",

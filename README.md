@@ -22,6 +22,7 @@ Documented extensions in this repo include:
 - **`extensions/rtk`** — output compaction and `/rtk stats` dashboard for `bash`, `grep`, and `read`
 - **`extensions/pieditor`** — editor UX improvements like `@` file picking, shell completions, raw paste, command remapping, and a locally maintained fork lineage from the original upstream extension
 - **`extensions/init-deep`** — deterministic `/init-deep` command flow for generating hierarchical `AGENTS.md`
+- **`extensions/review.ts`** — interactive `/review` and `/end-review` workflow with reviewer-agent orchestration and branch-return summaries; adapted in part from `@earendil-works/pi-review`
 - **`extensions/smart-docs`** — deterministic `/smart-docs` command flow for codebase documentation generation
 
 The configured extension set also includes workflow and utility modules such as:
@@ -33,6 +34,7 @@ The configured extension set also includes workflow and utility modules such as:
 - `execute`
 - `research`
 - `simplify`
+- `review.ts`
 - `session-query`
 - `handoff`
 - `context`
