@@ -116,7 +116,7 @@ The setup script installs these Pi packages if they are not already present:
 - `pi-web-access`
 - `glimpseui`
 - `pi-skill-palette`
-- `claude-agent-sdk-pi`
+- `pi-claude-bridge`
 - `pi-anycopy`
 - `pi-tool-display`
 - `pi-promptsmith`
