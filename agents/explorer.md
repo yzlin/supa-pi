@@ -1,7 +1,7 @@
 ---
 description: "Fast codebase exploration agent (read-only)"
 tools: read, bash, grep, find, ls
-model: gpt-5.4-mini
+model: openai-codex/gpt-5.4-mini
 ---
 
 # CRITICAL: READ-ONLY MODE - NO FILE MODIFICATIONS

@@ -1,7 +1,8 @@
 ---
 description:  Security vulnerability detection and remediation specialist. Use after writing code that handles user input, authentication, API endpoints, or sensitive data.
 tools: read, grep, find, ls, bash
-model: claude-sonnet-4-6
+model: openai-codex/gpt-5.4
+thinking: high
 ---
 
 # Security Reviewer

@@ -1,7 +1,8 @@
 ---
 description: PostgreSQL database specialist for query optimization, schema design, security, and performance. Incorporates Supabase best practices.
 tools: read, grep, find, ls, bash
-model: claude-sonnet-4-6
+model: openai-codex/gpt-5.4
+thinking: high
 ---
 
 # Database Reviewer
