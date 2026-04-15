@@ -251,6 +251,23 @@ mod tests {
     }
 
     #[test]
+    fn matches_bat_highlighting_for_javascript_files() {
+        let code = "const answer = 42;\nexport default answer;\n";
+        let result = highlight_preview(HighlightPreviewInput {
+            code: code.to_string(),
+            filePath: Some("example.js".to_string()),
+            themeMode: Some("dark".to_string()),
+        });
+
+        assert!(matches!(
+            result.language.as_deref(),
+            Some(language) if language.contains("JavaScript")
+        ));
+        assert!(!result.usedPlaintext);
+        assert_eq!(result.lines, expected_bat_lines(code, "example.js", "dark"));
+    }
+
+    #[test]
     fn uses_bat_compiled_theme_names() {
         let assets = HighlightingAssets::from_binary();
 
