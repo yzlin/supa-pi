@@ -39,15 +39,15 @@ type FramePalette = {
   title(text: string): string;
 };
 
-const FRAME_BORDER_COLOR = "2";
-const FRAME_TITLE_COLOR = "2";
-
-function applyAnsiColor(code: string, text: string): string {
-  if (!code) {
-    return text;
-  }
-
-  return `\x1b[${code}m${text}\x1b[0m`;
+function getThemeFramePalette(theme: Pick<ThemeLike, "fg">): FramePalette {
+  return {
+    border(text: string): string {
+      return theme.fg("border", text);
+    },
+    title(text: string): string {
+      return theme.fg("border", text);
+    },
+  };
 }
 
 function formatTokens(count: number | null): string {
@@ -401,15 +401,6 @@ function fitRenderedLinesToWidth(lines: string[], width: number): string[] {
   );
 }
 
-const FRAME_PALETTE: FramePalette = {
-  border(text: string): string {
-    return applyAnsiColor(FRAME_BORDER_COLOR, text);
-  },
-  title(text: string): string {
-    return applyAnsiColor(FRAME_TITLE_COLOR, text);
-  },
-};
-
 function frameLine(
   content: string,
   width: number,
@@ -518,6 +509,7 @@ export async function showRtkStatsView(
       let cachedWidth = -1;
       let cachedBody: string[] = [];
       let lastInnerWidth = 80;
+      const framePalette = getThemeFramePalette(theme);
 
       const refresh = () => {
         cachedWidth = -1;
@@ -564,23 +556,23 @@ export async function showRtkStatsView(
           scroll = Math.min(scroll, maxScroll);
           const visibleBody = body.slice(scroll, scroll + bodyHeight);
           const lines = [
-            titledTopBorder(frameWidth, " /rtk stats ", FRAME_PALETTE),
+            titledTopBorder(frameWidth, " /rtk stats ", framePalette),
             frameLine(
               theme.fg("dim", "Session-only dashboard · estimated tokens"),
               frameWidth,
-              FRAME_PALETTE
+              framePalette
             ),
-            border(frameWidth, "├", "─", "┤", FRAME_PALETTE),
+            border(frameWidth, "├", "─", "┤", framePalette),
             ...visibleBody.map((line) =>
-              frameLine(line, frameWidth, FRAME_PALETTE)
+              frameLine(line, frameWidth, framePalette)
             ),
           ];
 
           while (lines.length < bodyHeight + 3) {
-            lines.push(frameLine("", frameWidth, FRAME_PALETTE));
+            lines.push(frameLine("", frameWidth, framePalette));
           }
 
-          lines.push(border(frameWidth, "├", "─", "┤", FRAME_PALETTE));
+          lines.push(border(frameWidth, "├", "─", "┤", framePalette));
           lines.push(
             frameLine(
               theme.fg(
@@ -588,10 +580,10 @@ export async function showRtkStatsView(
                 buildStatusLine(scroll, visibleBody.length, body.length)
               ),
               frameWidth,
-              FRAME_PALETTE
+              framePalette
             )
           );
-          lines.push(border(frameWidth, "╰", "─", "╯", FRAME_PALETTE));
+          lines.push(border(frameWidth, "╰", "─", "╯", framePalette));
           return lines;
         },
         handleInput(data: string) {

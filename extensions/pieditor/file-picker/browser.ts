@@ -74,7 +74,8 @@ export class FileBrowserComponent {
     private readonly runtime: FilePickerRuntime = getSharedFilePickerRuntime(),
     previewThemeMode: "dark" | "light" = "dark",
     previewHighlightMode: PreviewHighlightMode = runtime.config
-      .previewHighlightMode
+      .previewHighlightMode,
+    private readonly frameColor?: (text: string) => string
   ) {
     this.done = done;
     this.previewThemeMode = previewThemeMode;
@@ -616,8 +617,8 @@ export class FileBrowserComponent {
     const lines: string[] = [];
 
     const t = paletteTheme;
-    const border = (s: string) => fg(t.border, s);
-    const title = (s: string) => fg(t.title, s);
+    const border = this.frameColor ?? ((s: string) => fg(t.border, s));
+    const title = this.frameColor ?? ((s: string) => fg(t.title, s));
     const selected = (s: string) => fg(t.selected, s);
     const selectedText = (s: string) => fg(t.selectedText, s);
     const directory = (s: string) => fg(t.directory, s);
@@ -813,8 +814,8 @@ export class FileBrowserComponent {
     const lines: string[] = [];
 
     const t = paletteTheme;
-    const border = (s: string) => fg(t.border, s);
-    const title = (s: string) => fg(t.title, s);
+    const border = this.frameColor ?? ((s: string) => fg(t.border, s));
+    const title = this.frameColor ?? ((s: string) => fg(t.title, s));
     const directory = (s: string) => fg(t.directory, s);
     const checked = (s: string) => fg(t.checked, s);
     const hint = (s: string) => fg(t.hint, s);

@@ -30,7 +30,8 @@ export async function openFilePicker(
         done,
         runtime,
         inferPreviewThemeMode(theme),
-        runtime.config.previewHighlightMode
+        runtime.config.previewHighlightMode,
+        (text) => theme.fg("border", text)
       ),
     {
       overlay: true,

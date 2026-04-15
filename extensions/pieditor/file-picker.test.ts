@@ -83,4 +83,24 @@ describe("file picker folder rendering", () => {
     expect(rendered).toContain("No files selected");
     expect(rendered).toContain("space queue file");
   });
+
+  it("uses the Pi theme border color for the modal frame when provided", () => {
+    const root = createTempDir();
+    writeFileSync(join(root, "alpha.txt"), "alpha", "utf8");
+    process.chdir(root);
+
+    const browser = new FileBrowserComponent(
+      () => {},
+      undefined,
+      "dark",
+      undefined,
+      (text) => `<border:${text}>`
+    );
+
+    const rendered = browser.render(120).join("\n");
+
+    expect(rendered).toContain("<border:╭");
+    expect(rendered).toContain("<border:│>");
+    expect(rendered).toContain("<border: Files >");
+  });
 });

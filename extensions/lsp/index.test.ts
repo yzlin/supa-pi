@@ -39,7 +39,10 @@ function withTempHome<T>(
     });
 }
 
-function createHarness(cwd: string, options?: { customUI?: boolean }) {
+function createHarness(
+  cwd: string,
+  options?: { customUI?: boolean; theme?: typeof TEST_THEME }
+) {
   const commands = new Map<
     string,
     {
@@ -80,7 +83,7 @@ function createHarness(cwd: string, options?: { customUI?: boolean }) {
                 {
                   requestRender() {},
                 },
-                TEST_THEME,
+                options?.theme ?? TEST_THEME,
                 {},
                 () => {}
               );
@@ -220,6 +223,43 @@ describe("lsp command", () => {
       expect(render).toContain("typescript");
       expect(render).toContain("command typescript-language-server --stdio");
       expect(render).toContain("enter/esc/q close");
+    });
+  });
+
+  it("uses the Pi theme border color for the status frame", async () => {
+    await withTempHome(async ({ homeDir, cwd }) => {
+      mkdirSync(join(homeDir, ".pi", "agent"), { recursive: true });
+      writeFileSync(
+        join(homeDir, ".pi", "agent", "lsp.json"),
+        JSON.stringify({
+          lsp: {
+            rust: {
+              command: ["rust-analyzer"],
+              extensions: [".rs"],
+            },
+          },
+        }),
+        "utf8"
+      );
+
+      const harness = createHarness(cwd, {
+        customUI: true,
+        theme: {
+          fg(color: string, text: string) {
+            return `<${color}:${text}>`;
+          },
+          bold(text: string) {
+            return text;
+          },
+        },
+      });
+
+      await harness.command?.handler("status", harness.ctx as never);
+
+      const render = harness.renders[0]?.join("\n") ?? "";
+      expect(render).toContain("<border:╭");
+      expect(render).toContain("<border:│>");
+      expect(render).toContain("<border: Language Server Protocol >");
     });
   });
 

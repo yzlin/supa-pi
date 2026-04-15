@@ -196,4 +196,42 @@ describe("rtk commands", () => {
 
     expect(customCalls).toBe(1);
   });
+
+  it("uses the Pi theme border color for the stats frame", async () => {
+    const command = registerHarness();
+    let rendered = "";
+
+    const ctx = {
+      hasUI: true,
+      ui: {
+        custom: async (factory: any) => {
+          const component = factory(
+            {
+              requestRender() {},
+              terminal: { rows: 24 },
+            },
+            {
+              fg(color: string, text: string) {
+                return `<${color}:${text}>`;
+              },
+              bold(text: string) {
+                return text;
+              },
+            },
+            {},
+            () => {}
+          );
+
+          rendered = component.render(80).join("\n");
+        },
+        notify() {},
+      },
+    } as unknown as ExtensionCommandContext;
+
+    await command.handler("stats", ctx);
+
+    expect(rendered).toContain("<border:╭");
+    expect(rendered).toContain("<border:│>");
+    expect(rendered).toContain("<border: /rtk stats >");
+  });
 });

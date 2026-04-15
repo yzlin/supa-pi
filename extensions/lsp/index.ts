@@ -79,11 +79,41 @@ const TEXT_MODAL_MIN_WIDTH = 36;
 const STATUS_MODAL_MIN_WIDTH = 56;
 const STATUS_MODAL_HELP = "enter/esc/q close";
 
-type LspThemeTone = "accent" | "success" | "warning" | "dim" | "toolTitle";
+type LspThemeTone =
+  | "accent"
+  | "success"
+  | "warning"
+  | "dim"
+  | "toolTitle";
 
-interface ThemeLike {
-  fg(color: LspThemeTone, text: string): string;
+type ThemeLike = {
+  fg(color: string, text: string): string;
   bold(text: string): string;
+};
+
+type FramePalette = {
+  border(text: string): string;
+  title(text: string): string;
+};
+
+const DEFAULT_FRAME_PALETTE: FramePalette = {
+  border(text: string): string {
+    return fg(paletteTheme.border, text);
+  },
+  title(text: string): string {
+    return fg(paletteTheme.title, text);
+  },
+};
+
+function getThemeFramePalette(theme: Pick<ThemeLike, "fg">): FramePalette {
+  return {
+    border(text: string): string {
+      return theme.fg("border", text);
+    },
+    title(text: string): string {
+      return theme.fg("border", text);
+    },
+  };
 }
 
 interface LspStatusServerView {
@@ -106,26 +136,23 @@ function buildLspHelpMessage(): string {
   ].join("\n");
 }
 
-function styleFrameBorder(text: string): string {
-  return fg(paletteTheme.border, text);
-}
-
-function styleFrameTitle(text: string): string {
-  return fg(paletteTheme.title, text);
-}
-
 function border(
   width: number,
   left: string,
   fill: string,
-  right: string
+  right: string,
+  framePalette: FramePalette = DEFAULT_FRAME_PALETTE
 ): string {
-  return styleFrameBorder(
+  return framePalette.border(
     `${left}${fill.repeat(Math.max(0, width - 2))}${right}`
   );
 }
 
-function titleBorder(width: number, titleText: string): string {
+function titleBorder(
+  width: number,
+  titleText: string,
+  framePalette: FramePalette = DEFAULT_FRAME_PALETTE
+): string {
   const innerWidth = Math.max(0, width - 2);
   const clippedTitle = truncateToWidth(titleText, innerWidth);
   const borderWidth = Math.max(0, innerWidth - visibleWidth(clippedTitle));
@@ -133,16 +160,20 @@ function titleBorder(width: number, titleText: string): string {
   const rightWidth = borderWidth - leftWidth;
 
   return (
-    styleFrameBorder(`╭${"─".repeat(leftWidth)}`) +
-    styleFrameTitle(clippedTitle) +
-    styleFrameBorder(`${"─".repeat(rightWidth)}╮`)
+    framePalette.border(`╭${"─".repeat(leftWidth)}`) +
+    framePalette.title(clippedTitle) +
+    framePalette.border(`${"─".repeat(rightWidth)}╮`)
   );
 }
 
-function frameLine(content: string, width: number): string {
+function frameLine(
+  content: string,
+  width: number,
+  framePalette: FramePalette = DEFAULT_FRAME_PALETTE
+): string {
   const innerWidth = Math.max(0, width - 2);
   const clipped = truncateToWidth(` ${content} `, innerWidth);
-  return `${styleFrameBorder("│")}${padVisibleText(clipped, innerWidth)}${styleFrameBorder("│")}`;
+  return `${framePalette.border("│")}${padVisibleText(clipped, innerWidth)}${framePalette.border("│")}`;
 }
 
 function centerText(content: string, width: number): string {
@@ -324,26 +355,32 @@ async function showLspTextView(
   }
 
   await ctx.ui.custom<void>(
-    (_tui, _theme, _kb, done) => ({
-      invalidate() {},
-      render(width: number) {
-        const frameWidth = Math.max(TEXT_MODAL_MIN_WIDTH, width);
-        const innerWidth = Math.max(8, frameWidth - 4);
-        const bodyLines = wrapLines(text.split("\n"), innerWidth);
+    (_tui, theme, _kb, done) => {
+      const framePalette = getThemeFramePalette(theme);
 
-        return [
-          titleBorder(frameWidth, " LSP "),
-          border(frameWidth, "├", "─", "┤"),
-          ...bodyLines.map((line) => frameLine(line, frameWidth)),
-          border(frameWidth, "╰", "─", "╯"),
-        ];
-      },
-      handleInput(data: string) {
-        if (shouldCloseOverlay(data)) {
-          done(undefined);
-        }
-      },
-    }),
+      return {
+        invalidate() {},
+        render(width: number) {
+          const frameWidth = Math.max(TEXT_MODAL_MIN_WIDTH, width);
+          const innerWidth = Math.max(8, frameWidth - 4);
+          const bodyLines = wrapLines(text.split("\n"), innerWidth);
+
+          return [
+            titleBorder(frameWidth, " LSP ", framePalette),
+            border(frameWidth, "├", "─", "┤", framePalette),
+            ...bodyLines.map((line) =>
+              frameLine(line, frameWidth, framePalette)
+            ),
+            border(frameWidth, "╰", "─", "╯", framePalette),
+          ];
+        },
+        handleInput(data: string) {
+          if (shouldCloseOverlay(data)) {
+            done(undefined);
+          }
+        },
+      };
+    },
     {
       overlay: true,
       overlayOptions: {
@@ -371,48 +408,60 @@ async function showLspStatusView(
   const servers = buildLspStatusServers(cfg, clients);
 
   await ctx.ui.custom<void>(
-    (_tui, theme, _kb, done) => ({
-      invalidate() {},
-      render(width: number) {
-        const frameWidth = Math.max(STATUS_MODAL_MIN_WIDTH, width);
-        const innerWidth = Math.max(8, frameWidth - 4);
-        const summaryLine = buildStatusSummaryLine(
-          theme,
-          servers,
-          cfg.errors.length
-        );
-        const wrappedBody = wrapLines(
-          buildStatusBodyLines(theme, cfg, servers),
-          innerWidth
-        );
+    (_tui, theme, _kb, done) => {
+      const framePalette = getThemeFramePalette(theme);
 
-        return [
-          titleBorder(frameWidth, " Language Server Protocol "),
-          frameLine(
-            centerText(
-              theme.fg("dim", "Per-workspace routing · lazy server startup"),
-              innerWidth
+      return {
+        invalidate() {},
+        render(width: number) {
+          const frameWidth = Math.max(STATUS_MODAL_MIN_WIDTH, width);
+          const innerWidth = Math.max(8, frameWidth - 4);
+          const summaryLine = buildStatusSummaryLine(
+            theme,
+            servers,
+            cfg.errors.length
+          );
+          const wrappedBody = wrapLines(
+            buildStatusBodyLines(theme, cfg, servers),
+            innerWidth
+          );
+
+          return [
+            titleBorder(
+              frameWidth,
+              " Language Server Protocol ",
+              framePalette
             ),
-            frameWidth
-          ),
-          border(frameWidth, "├", "─", "┤"),
-          frameLine(summaryLine, frameWidth),
-          border(frameWidth, "├", "─", "┤"),
-          ...wrappedBody.map((line) => frameLine(line, frameWidth)),
-          border(frameWidth, "├", "─", "┤"),
-          frameLine(
-            centerText(theme.fg("dim", STATUS_MODAL_HELP), innerWidth),
-            frameWidth
-          ),
-          border(frameWidth, "╰", "─", "╯"),
-        ];
-      },
-      handleInput(data: string) {
-        if (shouldCloseOverlay(data)) {
-          done(undefined);
-        }
-      },
-    }),
+            frameLine(
+              centerText(
+                theme.fg("dim", "Per-workspace routing · lazy server startup"),
+                innerWidth
+              ),
+              frameWidth,
+              framePalette
+            ),
+            border(frameWidth, "├", "─", "┤", framePalette),
+            frameLine(summaryLine, frameWidth, framePalette),
+            border(frameWidth, "├", "─", "┤", framePalette),
+            ...wrappedBody.map((line) =>
+              frameLine(line, frameWidth, framePalette)
+            ),
+            border(frameWidth, "├", "─", "┤", framePalette),
+            frameLine(
+              centerText(theme.fg("dim", STATUS_MODAL_HELP), innerWidth),
+              frameWidth,
+              framePalette
+            ),
+            border(frameWidth, "╰", "─", "╯", framePalette),
+          ];
+        },
+        handleInput(data: string) {
+          if (shouldCloseOverlay(data)) {
+            done(undefined);
+          }
+        },
+      };
+    },
     {
       overlay: true,
       overlayOptions: {
