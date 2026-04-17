@@ -74,6 +74,18 @@ function createMockPiRuntime() {
 }
 
 describe("plan command", () => {
+  it("includes sequencing instructions to generate the plan before asking for approval", () => {
+    expect(PROMPT).toContain(
+      "Always generate and present a concrete first-pass plan before asking for approval."
+    );
+    expect(PROMPT).toContain(
+      "Never ask whether you should start planning or ask for approval to create the plan itself."
+    );
+    expect(PROMPT).toContain(
+      "Use the `questionnaire` tool to ask for confirmation `[yes / no / modify]` on the plan only after the full plan output has been shown."
+    );
+  });
+
   it("sends the planner prompt immediately when idle", async () => {
     const runtime = createMockPiRuntime();
     const { ctx, notifications } = createMockCtx();
