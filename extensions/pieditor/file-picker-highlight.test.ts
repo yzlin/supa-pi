@@ -24,14 +24,14 @@ afterEach(() => {
 });
 
 describe("file picker native preview highlighting", () => {
-  it("falls back to Pi highlighting when no native binding is available", () => {
+  it("keeps gutter colors when falling back to Pi highlighting", () => {
     setNativeHighlightBindingLoaderForTests(() => null);
 
     const line = highlightPreviewLine(" 1 │ const answer = 42;", "example.ts");
 
     expect(stripAnsi(line)).toBe(" 1 │ const answer = 42;");
-    expect(line).not.toContain(BAT_LINE_NUMBER_COLOR);
-    expect(line).not.toContain(BAT_DIVIDER_COLOR);
+    expect(line).toContain(BAT_LINE_NUMBER_COLOR);
+    expect(line).toContain(BAT_DIVIDER_COLOR);
     expect(line).toContain("\x1b[");
   });
 
@@ -64,7 +64,7 @@ describe("file picker native preview highlighting", () => {
     expect(highlighted[0]).toContain(BAT_DIVIDER_COLOR);
   });
 
-  it("falls back when the native binding returns plain-text output", () => {
+  it("keeps gutter colors when the native binding falls back to plain text", () => {
     setNativeHighlightBindingLoaderForTests(() => ({
       highlightPreview() {
         return {
@@ -81,8 +81,8 @@ describe("file picker native preview highlighting", () => {
     );
 
     expect(highlighted).toHaveLength(2);
-    expect(highlighted[0]).not.toContain(BAT_LINE_NUMBER_COLOR);
-    expect(highlighted[0]).not.toContain(BAT_DIVIDER_COLOR);
+    expect(highlighted[0]).toContain(BAT_LINE_NUMBER_COLOR);
+    expect(highlighted[0]).toContain(BAT_DIVIDER_COLOR);
     expect(highlighted[0]).toContain("\x1b[");
     expect(highlighted[1]).toContain("\x1b[");
   });
@@ -113,7 +113,7 @@ describe("file picker native preview highlighting", () => {
     ]);
   });
 
-  it("uses Pi built-in highlighting when configured", () => {
+  it("uses Pi built-in highlighting with colored gutter when configured", () => {
     setNativeHighlightBindingLoaderForTests(() => ({
       highlightPreview() {
         throw new Error("native highlighter should be bypassed");
@@ -128,9 +128,22 @@ describe("file picker native preview highlighting", () => {
     );
 
     expect(stripAnsi(highlighted)).toBe(" 1 │ const answer = 42;");
-    expect(highlighted).not.toContain(BAT_LINE_NUMBER_COLOR);
-    expect(highlighted).not.toContain(BAT_DIVIDER_COLOR);
+    expect(highlighted).toContain(BAT_LINE_NUMBER_COLOR);
+    expect(highlighted).toContain(BAT_DIVIDER_COLOR);
     expect(highlighted).toContain("\x1b[");
+  });
+
+  it("keeps gutter colors for unrecognized file types", () => {
+    setNativeHighlightBindingLoaderForTests(() => null);
+
+    const highlighted = highlightPreviewLine(
+      " 1 │ just some text",
+      "notes.unknownext"
+    );
+
+    expect(stripAnsi(highlighted)).toBe(" 1 │ just some text");
+    expect(highlighted).toContain(BAT_LINE_NUMBER_COLOR);
+    expect(highlighted).toContain(BAT_DIVIDER_COLOR);
   });
 
   it("leaves non-code rows unchanged", () => {

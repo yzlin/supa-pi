@@ -27,7 +27,6 @@ interface NativeHighlightBinding {
 
 interface ParsedPreviewLine {
   code: string;
-  original: string;
   prefix: string;
 }
 
@@ -52,7 +51,6 @@ function parsePreviewLine(line: string): ParsedPreviewLine | null {
   const [, prefix, code] = match;
   return {
     code,
-    original: line,
     prefix,
   };
 }
@@ -109,12 +107,14 @@ function fallbackHighlightLines(
 ): string[] {
   const language = filePath ? getLanguageFromPath(filePath) : undefined;
 
-  return parsedLines.map(({ code, prefix, original }) => {
+  return parsedLines.map(({ code, prefix }) => {
+    const styledPrefix = stylePreviewPrefix(prefix);
+
     try {
       const [highlighted = code] = highlightCode(code, language);
-      return `${prefix}${highlighted}`;
+      return `${styledPrefix}${highlighted}`;
     } catch {
-      return original;
+      return `${styledPrefix}${code}`;
     }
   });
 }
@@ -147,7 +147,7 @@ export function highlightPreviewLines(
     }
 
     const highlightedLine =
-      highlightedCodeLines[codeIndex] ?? parsedLine.original;
+      highlightedCodeLines[codeIndex] ?? lines[lineIndex] ?? "";
     codeIndex += 1;
     return highlightedLine;
   });

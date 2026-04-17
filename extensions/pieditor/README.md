@@ -181,7 +181,7 @@ Current scope:
 - preview highlighting is powered by `bat` (https://github.com/sharkdp/bat) and `syntect` (https://github.com/trishume/syntect/)
 - syntax + theme resolution comes from bat's embedded compiled assets, not direct loading of the vendored `.tmTheme` files
 - native preview colors use bat's built-in `Monokai Extended` for dark mode and `Monokai Extended Light` for light mode
-- when native preview highlighting is active, preview gutter line numbers and the adjacent divider follow bat's gutter foreground/divider colors
+- preview gutter line numbers and the adjacent divider follow bat's gutter foreground/divider colors even when syntax highlighting falls back or the file type is unrecognized
 - output matches bat's built-in compiled assets for those theme names; user-local bat config/theme overrides are not applied here
 
 ## Maintainer docs
