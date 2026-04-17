@@ -4,6 +4,7 @@ import type {
 } from "@mariozechner/pi-coding-agent";
 
 import { EXECUTE_COMMAND_NAME, EXECUTE_PROMPT } from "./constants";
+import { registerExecuteCheckpointTool } from "./tools";
 
 type MessageLike = {
   role?: string;
@@ -60,6 +61,8 @@ function getLastPlanFromSession(ctx: ExtensionCommandContext): string {
 }
 
 export default function executeExtension(pi: ExtensionAPI): void {
+  registerExecuteCheckpointTool(pi);
+
   pi.registerCommand(EXECUTE_COMMAND_NAME, {
     description:
       "Execute a plan via main-session task orchestration: /execute [plan]",
