@@ -7,7 +7,6 @@ PI_PACKAGES=(
   "npm:@tintinweb/pi-subagents"
   "npm:pi-mcp-adapter"
   "npm:pi-rewind"
-  "npm:pi-web-access"
   "npm:glimpseui"
   "npm:pi-skill-palette"
   "npm:pi-claude-bridge"
