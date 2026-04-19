@@ -74,7 +74,7 @@ function createMockPiRuntime() {
 }
 
 describe("plan command", () => {
-  it("includes sequencing instructions to generate the plan before asking for approval", () => {
+  it("forbids questionnaire approval in the initial /plan response", () => {
     expect(PROMPT).toContain(
       "Always generate and present a concrete first-pass plan before asking for approval."
     );
@@ -82,7 +82,13 @@ describe("plan command", () => {
       "Never ask whether you should start planning or ask for approval to create the plan itself."
     );
     expect(PROMPT).toContain(
-      "Use the `questionnaire` tool to ask for confirmation `[yes / no / modify]` on the plan only after the full plan output has been shown."
+      "In the initial `/plan` response, do not call `questionnaire` or any other tool after drafting the plan."
+    );
+    expect(PROMPT).toContain(
+      "End the initial `/plan` response with a plain-text request for the user to reply `yes`, `no`, or `modify`."
+    );
+    expect(PROMPT).toContain(
+      "Do not call `questionnaire` in that same turn."
     );
   });
 
