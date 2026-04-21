@@ -63,6 +63,10 @@ See `package.json` for the full registration list.
 - `refactor-cleaner`
 - `executor`
 
+## Included skills
+
+`skills/` includes locally curated skills authored in this repo plus selected imports from Vercel agent-skills at commit `ce3e64e468f8fa09a2d075d102771838061fdac0`. Current imported-and-curated snapshots include `composition-patterns`, `react-best-practices`, `react-native-skills`, and `react-view-transitions`.
+
 ## Included rules
 
 `rules/` provides shared guidance for:
