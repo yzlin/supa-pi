@@ -74,21 +74,29 @@ function createMockPiRuntime() {
 }
 
 describe("plan command", () => {
-  it("forbids questionnaire approval in the initial /plan response", () => {
+  it("requires questionnaire clarification before the final /plan output when specs are unknown", () => {
     expect(PROMPT).toContain(
-      "Always generate and present a concrete first-pass plan before asking for approval."
+      "Resolve any material unknowns or spec gaps with the `questionnaire` tool before presenting the final plan."
     );
     expect(PROMPT).toContain(
-      "Never ask whether you should start planning or ask for approval to create the plan itself."
+      "Keep using `questionnaire` until the plan is clear enough that additional questions would not materially change it."
+    );
+    expect(PROMPT).toContain("Do not ask for confirmation here.");
+  });
+
+  it("removes the yes/no/modify confirmation flow and uses reminders instead", () => {
+    expect(PROMPT).toContain(
+      "Do not append `WAITING FOR CONFIRMATION: Reply with yes, no, or modify.`."
     );
     expect(PROMPT).toContain(
-      "In the initial `/plan` response, do not call `questionnaire` or any other tool after drafting the plan."
+      "Do not ask for plan approval in plain text or via `questionnaire`."
     );
     expect(PROMPT).toContain(
-      "End the initial `/plan` response with a plain-text request for the user to reply `yes`, `no`, or `modify`."
+      "If any unanswered unknowns still matter for later implementation, show them as reminders in the final plan instead of asking for confirmation."
     );
+    expect(PROMPT).toContain("### Reminders");
     expect(PROMPT).toContain(
-      "Do not call `questionnaire` in that same turn."
+      "Never ask for `yes`, `no`, or `modify` confirmation after the plan."
     );
   });
 
