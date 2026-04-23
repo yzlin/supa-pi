@@ -22,7 +22,6 @@
       "./extensions/rtk",
       "./extensions/init-deep",
       "./extensions/smart-docs",
-      "./extensions/om",
       "./extensions/pieditor",
       "./extensions/lsp",
       "./extensions/web-access",
