@@ -173,15 +173,15 @@ export function buildStatusBarContext(
   const { usageStats, thinkingLevel } = collectUsageStats(ctx);
   const contextUsage = ctx.getContextUsage?.();
   const contextPercent = contextUsage?.percent ?? 0;
-  const contextWindow =
-    contextUsage?.contextWindow ?? ctx.model?.contextWindow ?? 0;
+  const model = ctx.model;
+  const contextWindow = contextUsage?.contextWindow ?? model?.contextWindow ?? 0;
   const providerBranch = footerData?.getGitBranch() ?? null;
-  const usingSubscription = ctx.model
-    ? ((ctx.modelRegistry as any)?.isUsingOAuth?.(ctx.model) ?? false)
+  const usingSubscription = model
+    ? ((ctx.modelRegistry as any)?.isUsingOAuth?.(model) ?? false)
     : false;
 
   return {
-    model: ctx.model,
+    model,
     thinkingLevel,
     sessionId: ctx.sessionManager?.getSessionId?.(),
     usageStats,

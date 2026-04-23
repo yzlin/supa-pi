@@ -68,6 +68,50 @@ function createEditor(
   });
 }
 
+function createStatusBarContext(): ExtensionContext {
+  return {
+    model: {
+      id: "test-model",
+      name: "test-model",
+      reasoning: false,
+      contextWindow: 200000,
+    },
+    modelRegistry: {},
+    sessionManager: {
+      getBranch() {
+        return [];
+      },
+      getSessionId() {
+        return "session-12345678";
+      },
+    },
+    getContextUsage() {
+      return {
+        tokens: 25000,
+        contextWindow: 200000,
+        percent: 12.5,
+      };
+    },
+  } as unknown as ExtensionContext;
+}
+
+function createStatusBarFooterData(): ReadonlyFooterDataProvider {
+  return {
+    getGitBranch() {
+      return "main";
+    },
+    getExtensionStatuses() {
+      return new Map();
+    },
+    getAvailableProviderCount() {
+      return 0;
+    },
+    onBranchChange() {
+      return () => {};
+    },
+  };
+}
+
 describe("EnhancedEditor command remap", () => {
   it("remaps slash commands on direct onSubmit invocation", () => {
     const editor = createEditor({ tree: "anycopy" });
@@ -210,59 +254,41 @@ describe("EnhancedEditor command remap", () => {
   });
 
   it("keeps the original top border below the status bar", () => {
-    const statusBarContext = {
-      model: {
-        id: "test-model",
-        name: "test-model",
-        reasoning: false,
-        contextWindow: 200000,
-      },
-      modelRegistry: {},
-      sessionManager: {
-        getBranch() {
-          return [];
-        },
-        getSessionId() {
-          return "session-12345678";
-        },
-      },
-      getContextUsage() {
-        return {
-          tokens: 25000,
-          contextWindow: 200000,
-          percent: 12.5,
-        };
-      },
-    } as unknown as ExtensionContext;
-
-    const statusBarFooterData = {
-      getGitBranch() {
-        return "main";
-      },
-      getExtensionStatuses() {
-        return new Map();
-      },
-      getAvailableProviderCount() {
-        return 0;
-      },
-      onBranchChange() {
-        return () => {};
-      },
-    } satisfies ReadonlyFooterDataProvider;
-
-    const editor = createEditor(
-      {},
-      {
-        statusBarEnabled: true,
-        statusBarContext,
-        statusBarFooterData,
-      }
-    );
+    const editor = createEditor({}, {
+      statusBarEnabled: true,
+      statusBarContext: createStatusBarContext(),
+      statusBarFooterData: createStatusBarFooterData(),
+    });
 
     const width = 40;
     const lines = editor.render(width);
 
     expect(lines[0]).toContain("test-model");
     expect(lines[1]).toBe("─".repeat(width));
+  });
+
+  it("skips the status bar once the context is detached", () => {
+    const options = {
+      statusBarEnabled: true,
+      statusBarContext: createStatusBarContext(),
+      statusBarFooterData: createStatusBarFooterData(),
+    };
+
+    const editor = createEditor({}, options);
+    options.statusBarContext = null;
+
+    const width = 40;
+    const lines = editor.render(width);
+    const detachedEditor = createEditor(
+      {},
+      {
+        statusBarEnabled: true,
+        statusBarContext: null,
+        statusBarFooterData: options.statusBarFooterData,
+      }
+    );
+
+    expect(lines).toEqual(detachedEditor.render(width));
+    expect(lines.join("\n")).not.toContain("test-model");
   });
 });

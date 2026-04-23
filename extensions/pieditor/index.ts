@@ -28,6 +28,10 @@ export default function (pi: ExtensionAPI) {
     composition.attachEditor(ctx);
   });
 
+  pi.on("session_shutdown", () => {
+    composition.detachEditor();
+  });
+
   pi.on("tool_result", (event) => {
     composition.handleToolResult(event);
   });

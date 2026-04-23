@@ -136,6 +136,12 @@ export function createPieditorComposition(pi: ExtensionAPI) {
       }, 0);
     },
 
+    detachEditor(): void {
+      runtime.activeContext = null;
+      runtime.activeEditor = null;
+      runtime.activeFooterData = null;
+    },
+
     handleToolResult(event: {
       toolName: string;
       input?: { command?: unknown };
