@@ -32,6 +32,7 @@ lifting state, and composing internals.
 ### Implementation Patterns (MEDIUM)
 
 - `patterns-children-over-render-props.md` - Prefer children over renderX props
+- `patterns-compose-providers.md` - Compose multiple providers with a provider utility
 - `patterns-explicit-variants.md` - Create explicit component variants
 
 ## Core Principles

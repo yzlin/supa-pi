@@ -30,6 +30,7 @@ Composition patterns for building flexible, maintainable React components. Avoid
 3. [Implementation Patterns](#3-implementation-patterns) — **MEDIUM**
    - 3.1 [Create Explicit Component Variants](#31-create-explicit-component-variants)
    - 3.2 [Prefer Composing Children Over Render Props](#32-prefer-composing-children-over-render-props)
+   - 3.3 [Compose Multiple Providers with a Provider Utility](#33-compose-multiple-providers-with-a-provider-utility)
 4. [React 19 APIs](#4-react-19-apis) — **MEDIUM**
    - 4.1 [React 19 API Changes](#41-react-19-api-changes)
 
@@ -996,6 +997,72 @@ return (
 Use render props when the parent needs to provide data or state to the child.
 
 Use children when composing static structure.
+
+### 3.3 Compose Multiple Providers with a Provider Utility
+
+**Impact: MEDIUM (flattens provider setup and keeps app roots readable)**
+
+When a route, app root, or feature needs multiple context providers, avoid
+manually nesting providers in JSX. Deep provider pyramids are hard to scan and
+make provider ordering changes noisy. Keep the provider stack in an array and
+compose it with a small utility.
+
+If the utility does not already exist, add it at `lib/provider.tsx`.
+
+**Incorrect: nested providers**
+
+```tsx
+function Providers({ children }: React.PropsWithChildren) {
+  return (
+    <ProviderA>
+      <ProviderB>
+        <ProviderC>{children}</ProviderC>
+      </ProviderB>
+    </ProviderA>
+  )
+}
+```
+
+**Correct: provider utility**
+
+```tsx
+export interface ProviderProps {
+  children: React.ReactNode
+}
+
+export interface ComposeProvidersProps {
+  providers: React.ComponentType<ProviderProps>[]
+  children: React.ReactNode
+}
+
+export function ComposeProviders({
+  providers,
+  children,
+}: ComposeProvidersProps) {
+  return providers.reduceRight(
+    (acc, Provider) => (
+      // biome-ignore lint/correctness/useJsxKeyInIterable: no need to add keys here since it's not a list
+      <Provider>{acc}</Provider>
+    ),
+    children,
+  )
+}
+```
+
+**Correct: feature usage**
+
+```tsx
+const providers = [ProviderA, ProviderB, ProviderC]
+
+function Providers({ children }: React.PropsWithChildren) {
+  return <ComposeProviders providers={providers}>{children}</ComposeProviders>
+}
+```
+
+Provider order still matters. The first provider in the array becomes the
+outermost provider. Keep the array near the root or feature boundary that owns
+that stack, and only use this pattern for providers that share the same simple
+`children` props shape.
 
 ---
 

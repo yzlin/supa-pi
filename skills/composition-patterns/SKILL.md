@@ -65,6 +65,8 @@ Reference these guidelines when:
   boolean modes
 - `patterns-children-over-render-props` - Use children for composition instead
   of renderX props
+- `patterns-compose-providers` - Compose multiple providers with a provider
+  utility
 
 ### 4. React 19 APIs (MEDIUM)
 
