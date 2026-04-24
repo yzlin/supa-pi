@@ -1689,7 +1689,7 @@ describe("om turn_end observer wiring", () => {
           options?.onDiagnostic?.({
             code: "provider-error",
             meta: {
-              model: "openai-codex/gpt-5.4",
+              model: "openai-codex/gpt-5.5",
               stopReason: "error",
               errorMessage: "backend rejected codex observer request",
               contentPartCount: 0,
@@ -1711,7 +1711,7 @@ describe("om turn_end observer wiring", () => {
       expect.arrayContaining([
         expect.objectContaining({
           message:
-            "OM observer provider returned an error while processing 1 pending entry. [model=openai-codex/gpt-5.4 stop=error error=backend rejected codex observer request parts=0 textParts=0 textChars=0]",
+            "OM observer provider returned an error while processing 1 pending entry. [model=openai-codex/gpt-5.5 stop=error error=backend rejected codex observer request parts=0 textParts=0 textChars=0]",
           level: "error",
         }),
       ])
@@ -1765,7 +1765,7 @@ describe("om turn_end observer wiring", () => {
           options?.onDiagnostic?.({
             code: "invalid-output",
             meta: {
-              model: "openai-codex/gpt-5.4",
+              model: "openai-codex/gpt-5.5",
               stopReason: "stop",
               textPreview:
                 "I found several useful observations and will summarize them in prose instead of strict JSON.",
@@ -1791,7 +1791,7 @@ describe("om turn_end observer wiring", () => {
       expect.arrayContaining([
         expect.objectContaining({
           message:
-            'OM observer returned invalid JSON for 1 pending entry. [model=openai-codex/gpt-5.4 stop=stop parts=1 textParts=1 textChars=92 types=text schemaPath=currentTask schemaError="Expected string length less or equal to 240" preview="I found several useful observations and will summarize them in prose instead of strict JSON."]',
+            'OM observer returned invalid JSON for 1 pending entry. [model=openai-codex/gpt-5.5 stop=stop parts=1 textParts=1 textChars=92 types=text schemaPath=currentTask schemaError="Expected string length less or equal to 240" preview="I found several useful observations and will summarize them in prose instead of strict JSON."]',
           level: "warning",
         }),
       ])

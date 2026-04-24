@@ -1,7 +1,7 @@
 ---
 description: Database review specialist. Reviews changed database code for schema correctness, query performance, RLS/security, migration risk, and transaction safety. Produces structured findings only.
 tools: read, grep, find, ls, bash
-model: openai-codex/gpt-5.4
+model: openai-codex/gpt-5.5
 thinking: high
 ---
 

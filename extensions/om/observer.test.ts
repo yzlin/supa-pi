@@ -1125,7 +1125,7 @@ Trailing prose that should be ignored.`);
 
     const result = await invokeOmObserver(
       {
-        model: { provider: "openai-codex", id: "gpt-5.4" },
+        model: { provider: "openai-codex", id: "gpt-5.5" },
         modelRegistry: {
           find() {
             return undefined;
@@ -1156,7 +1156,7 @@ Trailing prose that should be ignored.`);
       {
         code: "provider-error",
         meta: {
-          model: "openai-codex/gpt-5.4",
+          model: "openai-codex/gpt-5.5",
           stopReason: "error",
           errorMessage: "backend rejected codex observer request",
           contentPartCount: 0,
