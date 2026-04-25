@@ -2,6 +2,8 @@ import { execSync } from "node:child_process";
 import * as fs from "node:fs";
 import * as path from "node:path";
 
+import ignore from "ignore";
+
 import { globToRegex } from "./filter.js";
 import type { FileEntry } from "./types.js";
 
@@ -28,6 +30,52 @@ function shouldSkipPattern(name: string, skipPatterns: string[]): boolean {
   });
 }
 
+function toGitPath(value: string): string {
+  return value.split(path.sep).join("/");
+}
+
+function shouldSkipRelativePath(
+  relativePath: string,
+  skipHidden: boolean,
+  skipPatterns: string[]
+): boolean {
+  const segments = toGitPath(relativePath).split("/").filter(Boolean);
+  return segments.some(
+    (segment) =>
+      (skipHidden && segment.startsWith(".")) ||
+      shouldSkipPattern(segment, skipPatterns)
+  );
+}
+
+function loadIgnoreFile(filePath: string): string[] {
+  if (!fs.existsSync(filePath)) return [];
+  return fs.readFileSync(filePath, "utf-8").split(/\r?\n/);
+}
+
+function resolveDirentDirectoryStatus(
+  fullPath: string,
+  item: fs.Dirent
+): boolean | null {
+  if (!item.isSymbolicLink()) {
+    return item.isDirectory();
+  }
+
+  try {
+    return fs.statSync(fullPath).isDirectory();
+  } catch {
+    return null;
+  }
+}
+
+function createGitIgnoreFilter(
+  cwdRoot: string
+): (relativePath: string) => boolean {
+  const matcher = ignore();
+  matcher.add(loadIgnoreFile(path.join(cwdRoot, ".gitignore")));
+  matcher.add(loadIgnoreFile(path.join(cwdRoot, ".git", "info", "exclude")));
+  return (relativePath: string) => !matcher.ignores(toGitPath(relativePath));
+}
+
 export function listDirectoryWithGit(
   dirPath: string,
   cwdRoot: string,
@@ -48,14 +96,9 @@ export function listDirectoryWithGit(
       const fullPath = path.join(dirPath, item.name);
       const relativePath = relDir ? path.join(relDir, item.name) : item.name;
 
-      let isDirectory = item.isDirectory();
-      if (item.isSymbolicLink()) {
-        try {
-          const stats = fs.statSync(fullPath);
-          isDirectory = stats.isDirectory();
-        } catch {
-          continue;
-        }
+      const isDirectory = resolveDirentDirectoryStatus(fullPath, item);
+      if (isDirectory === null) {
+        continue;
       }
 
       if (gitFiles !== null) {
@@ -98,8 +141,21 @@ export function listAllFiles(
   cwdRoot: string,
   results: FileEntry[],
   skipHidden: boolean,
-  skipPatterns: string[]
+  skipPatterns: string[],
+  ancestorRealPaths: Set<string> = new Set()
 ): FileEntry[] {
+  let realDirPath: string;
+  try {
+    realDirPath = fs.realpathSync(dirPath);
+  } catch {
+    return results;
+  }
+
+  if (ancestorRealPaths.has(realDirPath)) return results;
+
+  const nextAncestorRealPaths = new Set(ancestorRealPaths);
+  nextAncestorRealPaths.add(realDirPath);
+
   try {
     const items = fs.readdirSync(dirPath, { withFileTypes: true });
 
@@ -110,14 +166,9 @@ export function listAllFiles(
       const fullPath = path.join(dirPath, item.name);
       const relativePath = path.relative(cwdRoot, fullPath);
 
-      let isDirectory = item.isDirectory();
-      if (item.isSymbolicLink()) {
-        try {
-          const stats = fs.statSync(fullPath);
-          isDirectory = stats.isDirectory();
-        } catch {
-          continue;
-        }
+      const isDirectory = resolveDirentDirectoryStatus(fullPath, item);
+      if (isDirectory === null) {
+        continue;
       }
 
       results.push({
@@ -127,7 +178,14 @@ export function listAllFiles(
       });
 
       if (isDirectory) {
-        listAllFiles(fullPath, cwdRoot, results, skipHidden, skipPatterns);
+        listAllFiles(
+          fullPath,
+          cwdRoot,
+          results,
+          skipHidden,
+          skipPatterns,
+          nextAncestorRealPaths
+        );
       }
     }
   } catch {
@@ -150,8 +208,23 @@ export function isGitRepo(cwdRoot: string): boolean {
   }
 }
 
-export function listGitFiles(cwdRoot: string): FileEntry[] {
-  const entries: FileEntry[] = [];
+function isSymbolicDirectory(fullPath: string): boolean {
+  try {
+    return (
+      fs.lstatSync(fullPath).isSymbolicLink() &&
+      fs.statSync(fullPath).isDirectory()
+    );
+  } catch {
+    return false;
+  }
+}
+
+export function listGitFiles(
+  cwdRoot: string,
+  skipHidden = false,
+  skipPatterns: string[] = []
+): FileEntry[] {
+  const entriesByPath = new Map<string, FileEntry>();
 
   try {
     const output = execSync(
@@ -165,8 +238,14 @@ export function listGitFiles(cwdRoot: string): FileEntry[] {
     );
 
     const files = output.trim().split("\n").filter(Boolean);
+    const shouldIncludeGitPath = createGitIgnoreFilter(cwdRoot);
+    const symlinkDirectories: string[] = [];
 
     for (const relativePath of files) {
+      if (shouldSkipRelativePath(relativePath, skipHidden, skipPatterns)) {
+        continue;
+      }
+
       const fullPath = path.join(cwdRoot, relativePath);
       const name = path.basename(relativePath);
 
@@ -178,15 +257,42 @@ export function listGitFiles(cwdRoot: string): FileEntry[] {
         continue;
       }
 
-      entries.push({
+      entriesByPath.set(relativePath, {
         name,
         isDirectory,
         relativePath,
       });
+
+      if (isDirectory && isSymbolicDirectory(fullPath)) {
+        symlinkDirectories.push(fullPath);
+      }
+    }
+
+    for (const symlinkDirectory of symlinkDirectories) {
+      const linkedEntries = listAllFiles(
+        symlinkDirectory,
+        cwdRoot,
+        [],
+        skipHidden,
+        skipPatterns
+      );
+      for (const entry of linkedEntries) {
+        if (
+          shouldSkipRelativePath(
+            entry.relativePath,
+            skipHidden,
+            skipPatterns
+          ) ||
+          !shouldIncludeGitPath(entry.relativePath)
+        ) {
+          continue;
+        }
+        entriesByPath.set(entry.relativePath, entry);
+      }
     }
 
     const dirs = new Set<string>();
-    for (const entry of entries) {
+    for (const entry of entriesByPath.values()) {
       let dir = path.dirname(entry.relativePath);
       while (dir && dir !== ".") {
         dirs.add(dir);
@@ -195,7 +301,8 @@ export function listGitFiles(cwdRoot: string): FileEntry[] {
     }
 
     for (const dir of dirs) {
-      entries.push({
+      if (entriesByPath.has(dir)) continue;
+      entriesByPath.set(dir, {
         name: path.basename(dir),
         isDirectory: true,
         relativePath: dir,
@@ -205,5 +312,5 @@ export function listGitFiles(cwdRoot: string): FileEntry[] {
     // Fall back to empty
   }
 
-  return entries;
+  return Array.from(entriesByPath.values());
 }

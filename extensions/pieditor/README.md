@@ -33,6 +33,7 @@ Notable interactions:
 - In the file picker, `enter` inserts the highlighted item plus any queued selections, while `esc` at the root inserts only queued selections
 - The picker opens as a near-full-height overlay, keeps the Files panel at a fixed height, and renders an internal preview pane below it that fills the remaining height for the highlighted file or directory
 - File previews in the preview pane can use either the picker-local syntect native addon (`previewHighlightMode: "native"`) or Pi's built-in syntax highlighting (`previewHighlightMode: "builtin"`)
+- The file picker's search includes files inside symlinked directories, including when `respectGitignore` is enabled for a git repo
 - The file picker's search box uses Pi's shared `Input` editing behavior for word/home/end cursor movement and related text editing shortcuts
 - Press `alt+v` to paste clipboard text raw into the editor
 - Optionally configure `doubleEscapeCommand` in `~/.pi/agent/pieditor.json` or `.pi/pieditor.json` to invoke an extension command on double-escape when the editor is empty and Pi is idle

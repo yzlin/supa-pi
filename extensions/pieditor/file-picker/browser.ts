@@ -144,7 +144,11 @@ export class FileBrowserComponent {
     const skipHidden = this.getOption("skipHidden")?.enabled ?? true;
 
     if (this.inGitRepo && respectGitignore) {
-      const gitEntries = listGitFiles(this.cwdRoot);
+      const gitEntries = listGitFiles(
+        this.cwdRoot,
+        skipHidden,
+        this.runtime.config.skipPatterns
+      );
       this.gitFiles = new Set(gitEntries.map((e) => e.relativePath));
       this.allFilesRecursive = gitEntries;
     } else {
