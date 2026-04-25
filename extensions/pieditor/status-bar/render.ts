@@ -174,7 +174,8 @@ export function buildStatusBarContext(
   const contextUsage = ctx.getContextUsage?.();
   const contextPercent = contextUsage?.percent ?? 0;
   const model = ctx.model;
-  const contextWindow = contextUsage?.contextWindow ?? model?.contextWindow ?? 0;
+  const contextWindow =
+    contextUsage?.contextWindow ?? model?.contextWindow ?? 0;
   const providerBranch = footerData?.getGitBranch() ?? null;
   const usingSubscription = model
     ? ((ctx.modelRegistry as any)?.isUsingOAuth?.(model) ?? false)

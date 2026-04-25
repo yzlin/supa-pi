@@ -248,9 +248,7 @@ function toStatsRow(row: MutableRtkStatsRow): RtkStatsRow {
   };
 }
 
-function toCommandMetrics(
-  row: MutableRtkCommandMetrics
-): RtkCommandMetrics {
+function toCommandMetrics(row: MutableRtkCommandMetrics): RtkCommandMetrics {
   return {
     ...toStatsRow(row),
     toolName: row.toolName,
@@ -298,10 +296,7 @@ function aggregateStatsRows<T extends MutableRtkCommandMetrics>(
   rows: T[],
   getLabel: (row: T) => string
 ): RtkStatsRow[] {
-  const aggregates = Object.create(null) as Record<
-    string,
-    MutableRtkStatsRow
-  >;
+  const aggregates = Object.create(null) as Record<string, MutableRtkStatsRow>;
 
   for (const row of rows) {
     const label = getLabel(row);

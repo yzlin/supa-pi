@@ -254,11 +254,14 @@ describe("EnhancedEditor command remap", () => {
   });
 
   it("keeps the original top border below the status bar", () => {
-    const editor = createEditor({}, {
-      statusBarEnabled: true,
-      statusBarContext: createStatusBarContext(),
-      statusBarFooterData: createStatusBarFooterData(),
-    });
+    const editor = createEditor(
+      {},
+      {
+        statusBarEnabled: true,
+        statusBarContext: createStatusBarContext(),
+        statusBarFooterData: createStatusBarFooterData(),
+      }
+    );
 
     const width = 40;
     const lines = editor.render(width);

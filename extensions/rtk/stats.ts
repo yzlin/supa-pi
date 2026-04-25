@@ -163,10 +163,7 @@ function truncatePlain(text: string, width: number): string {
   return truncateToWidth(text.replace(/\s+/g, " ").trim(), width);
 }
 
-function formatCommandLabel(
-  command: RtkCommandMetrics,
-  width: number
-): string {
+function formatCommandLabel(command: RtkCommandMetrics, width: number): string {
   const prefix = command.toolName === "user-bash" ? "! " : "";
   return truncatePlain(`${prefix}${command.label}`, width);
 }

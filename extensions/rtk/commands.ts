@@ -3,11 +3,7 @@ import type {
   ExtensionCommandContext,
 } from "@mariozechner/pi-coding-agent";
 
-import {
-  getRtkConfigPath,
-  resetRtkConfig,
-  saveRtkConfig,
-} from "./config";
+import { getRtkConfigPath, resetRtkConfig, saveRtkConfig } from "./config";
 import { showRtkStatsView } from "./stats";
 import type { RtkConfig, RtkRuntime } from "./types";
 

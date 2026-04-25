@@ -1,14 +1,15 @@
 /**
  * PDF Content Extractor
- * 
+ *
  * Extracts text from PDF files and saves to markdown.
  * Uses unpdf (pdfjs-dist wrapper) for text extraction.
  */
 
-import { getDocumentProxy } from "unpdf";
-import { writeFile, mkdir } from "node:fs/promises";
-import { join, basename } from "node:path";
+import { mkdir, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
+import { basename, join } from "node:path";
+
+import { getDocumentProxy } from "unpdf";
 
 export interface PDFExtractResult {
   title: string;
@@ -46,13 +47,16 @@ export async function extractPDFToMarkdown(
 
   const pdf = await getDocumentProxy(new Uint8Array(buffer));
   const metadata = await pdf.getMetadata();
-  const metadataInfo = metadata.info && typeof metadata.info === "object"
-    ? metadata.info as Record<string, unknown>
-    : null;
+  const metadataInfo =
+    metadata.info && typeof metadata.info === "object"
+      ? (metadata.info as Record<string, unknown>)
+      : null;
 
   // Extract title from metadata or URL
-  const metaTitle = typeof metadataInfo?.Title === "string" ? metadataInfo.Title : undefined;
-  const metaAuthor = typeof metadataInfo?.Author === "string" ? metadataInfo.Author : undefined;
+  const metaTitle =
+    typeof metadataInfo?.Title === "string" ? metadataInfo.Title : undefined;
+  const metaAuthor =
+    typeof metadataInfo?.Author === "string" ? metadataInfo.Author : undefined;
   const urlTitle = extractTitleFromURL(url);
   const title = metaTitle?.trim() || urlTitle;
 
@@ -73,7 +77,7 @@ export async function extractPDFToMarkdown(
       .join(" ")
       .replace(/\s+/g, " ")
       .trim();
-    
+
     if (pageText) {
       pages.push({ pageNum: i, text: pageText });
     }
@@ -81,12 +85,14 @@ export async function extractPDFToMarkdown(
 
   // Build markdown content
   const lines: string[] = [];
-  
+
   // Header with metadata
   lines.push(`# ${title}`);
   lines.push("");
   lines.push(`> Source: ${url}`);
-  lines.push(`> Pages: ${pdf.numPages}${truncated ? ` (extracted first ${pagesToExtract})` : ""}`);
+  lines.push(
+    `> Pages: ${pdf.numPages}${truncated ? ` (extracted first ${pagesToExtract})` : ""}`
+  );
   if (metaAuthor) {
     lines.push(`> Author: ${metaAuthor}`);
   }
@@ -108,7 +114,9 @@ export async function extractPDFToMarkdown(
     lines.push("");
     lines.push("---");
     lines.push("");
-    lines.push(`*[Truncated: Only first ${pagesToExtract} of ${pdf.numPages} pages extracted]*`);
+    lines.push(
+      `*[Truncated: Only first ${pagesToExtract} of ${pdf.numPages} pages extracted]*`
+    );
   }
 
   const content = lines.join("\n");
@@ -138,10 +146,10 @@ function extractTitleFromURL(url: string): string {
   try {
     const urlObj = new URL(url);
     const pathname = urlObj.pathname;
-    
+
     // Get filename without extension
     let filename = basename(pathname, ".pdf");
-    
+
     // Handle arxiv URLs: /pdf/1706.03762 → "arxiv-1706.03762"
     if (urlObj.hostname.includes("arxiv.org")) {
       const match = pathname.match(/\/(?:pdf|abs)\/(\d+\.\d+)/);
@@ -149,13 +157,10 @@ function extractTitleFromURL(url: string): string {
         filename = `arxiv-${match[1]}`;
       }
     }
-    
+
     // Clean up filename
-    filename = filename
-      .replace(/[_-]+/g, " ")
-      .replace(/\s+/g, " ")
-      .trim();
-    
+    filename = filename.replace(/[_-]+/g, " ").replace(/\s+/g, " ").trim();
+
     return filename || "document";
   } catch {
     return "document";
@@ -166,14 +171,15 @@ function extractTitleFromURL(url: string): string {
  * Sanitize string for use as filename
  */
 function sanitizeFilename(name: string): string {
-  return name
-    .toLowerCase()
-    .replace(/[^a-z0-9\s-]/g, "")
-    .replace(/\s+/g, "-")
-    .replace(/-+/g, "-")
-    .slice(0, 100)
-    .replace(/^-|-$/g, "")
-    || "document";
+  return (
+    name
+      .toLowerCase()
+      .replace(/[^a-z0-9\s-]/g, "")
+      .replace(/\s+/g, "-")
+      .replace(/-+/g, "-")
+      .slice(0, 100)
+      .replace(/^-|-$/g, "") || "document"
+  );
 }
 
 /**

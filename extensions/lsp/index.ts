@@ -79,12 +79,7 @@ const TEXT_MODAL_MIN_WIDTH = 36;
 const STATUS_MODAL_MIN_WIDTH = 56;
 const STATUS_MODAL_HELP = "enter/esc/q close";
 
-type LspThemeTone =
-  | "accent"
-  | "success"
-  | "warning"
-  | "dim"
-  | "toolTitle";
+type LspThemeTone = "accent" | "success" | "warning" | "dim" | "toolTitle";
 
 type ThemeLike = {
   fg(color: string, text: string): string;
@@ -427,11 +422,7 @@ async function showLspStatusView(
           );
 
           return [
-            titleBorder(
-              frameWidth,
-              " Language Server Protocol ",
-              framePalette
-            ),
+            titleBorder(frameWidth, " Language Server Protocol ", framePalette),
             frameLine(
               centerText(
                 theme.fg("dim", "Per-workspace routing · lazy server startup"),
