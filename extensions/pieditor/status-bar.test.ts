@@ -1,10 +1,16 @@
 import { describe, expect, it } from "bun:test";
 
 import type {
+  ExtensionAPI,
   ExtensionContext,
   ReadonlyFooterDataProvider,
 } from "@mariozechner/pi-coding-agent";
 
+import {
+  CAVEMAN_MODE_CUSTOM_TYPE,
+  CAVEMAN_MODE_STATUS_TEXT,
+  registerCavemanMode,
+} from "./caveman-mode";
 import { renderStatusBarLine } from "./status-bar";
 
 describe("status bar", () => {
@@ -462,6 +468,96 @@ describe("status bar", () => {
         process.env.POWERLINE_NERD_FONTS = originalNerdFonts;
       }
     }
+  });
+
+  it("renders active caveman mode as a dedicated status segment", () => {
+    const handlers = new Map<string, (...args: unknown[]) => unknown>();
+    registerCavemanMode({
+      on(eventName: string, handler: (...args: unknown[]) => unknown) {
+        handlers.set(eventName, handler);
+      },
+      registerCommand() {},
+      appendEntry() {},
+    } as unknown as ExtensionAPI);
+
+    const ctx = {
+      hasUI: true,
+      ui: {
+        setStatus() {},
+      },
+      model: {
+        id: "test-model",
+        name: "test-model",
+        reasoning: false,
+        contextWindow: 200000,
+      },
+      modelRegistry: {},
+      sessionManager: {
+        getEntries() {
+          return [
+            {
+              type: "custom",
+              customType: CAVEMAN_MODE_CUSTOM_TYPE,
+              data: { enabled: true },
+            },
+          ];
+        },
+        getBranch() {
+          return [];
+        },
+        getSessionId() {
+          return "session-12345678";
+        },
+      },
+      getContextUsage() {
+        return {
+          tokens: 25000,
+          contextWindow: 200000,
+          percent: 12.5,
+        };
+      },
+    } as unknown as ExtensionContext;
+
+    const sessionStart = handlers.get("session_start");
+    if (!sessionStart) {
+      throw new Error("session_start handler was not registered");
+    }
+    sessionStart({ type: "session_start" }, ctx);
+
+    const footerData = {
+      getGitBranch() {
+        return "main";
+      },
+      getExtensionStatuses() {
+        return new Map();
+      },
+      getAvailableProviderCount() {
+        return 0;
+      },
+      onBranchChange() {
+        return () => {};
+      },
+    } satisfies ReadonlyFooterDataProvider;
+
+    const theme = {
+      fg(_color: string, text: string) {
+        return text;
+      },
+    } as any;
+
+    const line = renderStatusBarLine({
+      width: 120,
+      ctx,
+      footerData,
+      config: {
+        enabled: true,
+        preset: "default",
+      },
+      sessionStartTime: Date.now(),
+      theme,
+    });
+
+    expect(line).toContain(CAVEMAN_MODE_STATUS_TEXT);
   });
 
   it("right-aligns right-only configured segments", () => {

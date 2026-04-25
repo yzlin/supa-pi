@@ -37,6 +37,7 @@ export const STATUS_BAR_PRESETS: Record<
       "pi",
       "model",
       "thinking",
+      "caveman",
       "path",
       "git",
       "context_pct",
@@ -58,7 +59,7 @@ export const STATUS_BAR_PRESETS: Record<
     },
   },
   minimal: {
-    leftSegments: ["path", "git"],
+    leftSegments: ["caveman", "path", "git"],
     rightSegments: ["context_pct"],
     separator: "slash",
     colors: MINIMAL_COLORS,
@@ -73,7 +74,7 @@ export const STATUS_BAR_PRESETS: Record<
     },
   },
   compact: {
-    leftSegments: ["model", "git"],
+    leftSegments: ["model", "caveman", "git"],
     rightSegments: ["cost", "context_pct", "extension_statuses"],
     separator: "powerline-thin",
     colors: DEFAULT_COLORS,
@@ -88,7 +89,15 @@ export const STATUS_BAR_PRESETS: Record<
     },
   },
   full: {
-    leftSegments: ["pi", "hostname", "model", "thinking", "path", "git"],
+    leftSegments: [
+      "pi",
+      "hostname",
+      "model",
+      "thinking",
+      "caveman",
+      "path",
+      "git",
+    ],
     rightSegments: [
       "token_in",
       "token_out",
@@ -119,6 +128,7 @@ export const STATUS_BAR_PRESETS: Record<
       "hostname",
       "model",
       "thinking",
+      "caveman",
       "path",
       "git",
       "session",
@@ -150,7 +160,7 @@ export const STATUS_BAR_PRESETS: Record<
     },
   },
   ascii: {
-    leftSegments: ["model", "path", "git"],
+    leftSegments: ["model", "caveman", "path", "git"],
     rightSegments: ["token_total", "cost", "context_pct", "extension_statuses"],
     separator: "ascii",
     colors: MINIMAL_COLORS,

@@ -69,6 +69,7 @@
     },
     "statusBarSegmentId": {
       "type": "string",
+      "description": "Status bar segment id. Include 'caveman' in custom segment arrays to show the active /caveman indicator.",
       "enum": [
         "pi",
         "model",
@@ -87,6 +88,7 @@
         "cache_read",
         "cache_write",
         "thinking",
+        "caveman",
         "extension_statuses"
       ]
     },
@@ -198,7 +200,7 @@
         "leftSegments": {
           "type": "array",
           "default": [],
-          "description": "Optional ordered list of segment ids to render on the left side of the status bar. When omitted, the preset default is used.",
+          "description": "Optional ordered list of segment ids to render on the left side of the status bar. When omitted, the preset default is used. Include 'caveman' to show the active /caveman indicator in custom layouts.",
           "items": {
             "$ref": "#/$defs/statusBarSegmentId"
           }
@@ -206,7 +208,7 @@
         "rightSegments": {
           "type": "array",
           "default": [],
-          "description": "Optional ordered list of segment ids to render on the right side of the status bar. When omitted, the preset default is used.",
+          "description": "Optional ordered list of segment ids to render on the right side of the status bar. When omitted, the preset default is used. Include 'caveman' to show the active /caveman indicator in custom layouts.",
           "items": {
             "$ref": "#/$defs/statusBarSegmentId"
           }

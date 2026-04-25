@@ -21,10 +21,11 @@ This extension currently provides:
 - `alt+v` raw clipboard paste that bypasses Pi's large-paste markers
 - optional remapping of the editor's empty-editor double-escape gesture to an extension command such as `/anycopy`
 - configurable command remapping (e.g. make `/tree` execute `/anycopy` instead)
+- `/caveman` mode toggle that persists per session, injects a caveman-style response instruction while active, and shows `🪨 caveman` when `statusBar.enabled` is true and the `caveman` segment is visible
 
 ## Usage
 
-This extension does not add a primary top-level slash command of its own. Its behavior is integrated directly into the editor.
+This extension mostly integrates directly into the editor, with one runtime toggle command.
 
 Notable interactions:
 - Type `@` at token start to open the file picker
@@ -36,6 +37,7 @@ Notable interactions:
 - The file picker's search includes files inside symlinked directories, including when `respectGitignore` is enabled for a git repo
 - The file picker's search box uses Pi's shared `Input` editing behavior for word/home/end cursor movement and related text editing shortcuts
 - Press `alt+v` to paste clipboard text raw into the editor
+- Use `/caveman`, `/caveman on`, `/caveman off`, or `/caveman status` to toggle or inspect caveman mode. State persists as `pieditor:caveman-mode` and restores on session start. Built-in presets show the active `🪨 caveman` indicator; custom segment lists must include `caveman`.
 - Optionally configure `doubleEscapeCommand` in `~/.pi/agent/pieditor.json` or `.pi/pieditor.json` to invoke an extension command on double-escape when the editor is empty and Pi is idle
 - Optionally configure `commandRemap` in `~/.pi/agent/pieditor.json` or `.pi/pieditor.json` to redirect slash commands at submit time (e.g. typing `/tree` executes `/anycopy` instead)
 
@@ -98,7 +100,7 @@ Then add the rest of your config fields:
     - `time.format`: `12h` or `24h`
     - `time.showSeconds`: boolean
   - icon mode: Nerd Font icons are on by default; set `POWERLINE_NERD_FONTS=0` before launching Pi to force ASCII fallbacks
-  - supported segment ids: `pi`, `model`, `path`, `git`, `token_in`, `token_out`, `token_total`, `cost`, `context_pct`, `context_total`, `time_spent`, `time`, `session`, `hostname`, `cache_read`, `cache_write`, `thinking`, `extension_statuses`
+  - supported segment ids: `pi`, `model`, `path`, `git`, `token_in`, `token_out`, `token_total`, `cost`, `context_pct`, `context_total`, `time_spent`, `time`, `session`, `hostname`, `cache_read`, `cache_write`, `thinking`, `caveman`, `extension_statuses`
 
 ```json
 {
@@ -118,7 +120,7 @@ Then add the rest of your config fields:
   "statusBar": {
     "enabled": true,
     "preset": "default",
-    "leftSegments": ["pi", "model", "path", "git"],
+    "leftSegments": ["pi", "model", "caveman", "path", "git"],
     "rightSegments": ["context_pct", "extension_statuses"],
     "separator": " | ",
     "colors": {

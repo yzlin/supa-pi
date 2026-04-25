@@ -39,6 +39,7 @@ export const STATUS_BAR_SEGMENT_IDS = [
   "cache_read",
   "cache_write",
   "thinking",
+  "caveman",
   "extension_statuses",
 ] as const;
 

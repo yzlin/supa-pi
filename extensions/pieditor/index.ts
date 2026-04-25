@@ -19,9 +19,12 @@
 
 import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
 
+import { registerCavemanMode } from "./caveman-mode.js";
 import { createPieditorComposition } from "./composition.js";
 
-export default function (pi: ExtensionAPI) {
+export default function (pi: ExtensionAPI): void {
+  registerCavemanMode(pi);
+
   const composition = createPieditorComposition(pi);
 
   pi.on("session_start", (_event, ctx) => {

@@ -3,6 +3,10 @@ import { basename } from "node:path";
 
 import { visibleWidth } from "@mariozechner/pi-tui";
 
+import {
+  CAVEMAN_MODE_STATUS_TEXT,
+  isCavemanModeEnabled,
+} from "../caveman-mode.js";
 import { getIcons, getThinkingText, SEP_DOT } from "./icons.js";
 import { applyColor, fg, rainbow } from "./theme.js";
 import type {
@@ -186,6 +190,17 @@ const thinkingSegment: StatusBarSegment = {
       return { content: rainbow(content), visible: true };
     }
     return { content: color(ctx, "thinking", content), visible: true };
+  },
+};
+
+const cavemanSegment: StatusBarSegment = {
+  id: "caveman",
+  render(ctx) {
+    if (!isCavemanModeEnabled()) return { content: "", visible: false };
+    return {
+      content: color(ctx, "thinking", CAVEMAN_MODE_STATUS_TEXT),
+      visible: true,
+    };
   },
 };
 
@@ -438,6 +453,7 @@ const SEGMENTS: Record<StatusBarSegmentId, StatusBarSegment> = {
   cache_read: cacheReadSegment,
   cache_write: cacheWriteSegment,
   thinking: thinkingSegment,
+  caveman: cavemanSegment,
   extension_statuses: extensionStatusesSegment,
 };
 
