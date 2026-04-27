@@ -65,7 +65,7 @@ See `package.json` for the full registration list.
 
 ## Included skills
 
-`skills/` includes locally curated skills authored in this repo plus selected imports from Vercel agent-skills at commit `ce3e64e468f8fa09a2d075d102771838061fdac0`. Current imported-and-curated snapshots include `composition-patterns`, `react-best-practices`, `react-native-skills`, and `react-view-transitions`.
+`skills/` includes locally curated skills authored in this repo plus selected imports from Vercel agent-skills at commit `ce3e64e468f8fa09a2d075d102771838061fdac0`. Current imported-and-curated snapshots include `composition-patterns`, `react-best-practices`, `react-native-skills`, and `react-view-transitions`. Local workflow skills include `grill-me` for natural-language adversarial design review triggers like "grill me" or "stress-test this plan".
 
 ## Included rules
 
