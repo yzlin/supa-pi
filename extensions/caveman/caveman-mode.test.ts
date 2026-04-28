@@ -1,11 +1,18 @@
-import { describe, expect, it } from "bun:test";
+import { afterEach, beforeEach, describe, expect, it, mock } from "bun:test";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
 
 import type {
   ExtensionAPI,
   ExtensionCommandContext,
 } from "@mariozechner/pi-coding-agent";
 
-import {
+let currentHomeDir = "";
+mock.module("node:os", () => ({
+  homedir: () => currentHomeDir,
+}));
+
+const {
   CAVEMAN_MODE_CUSTOM_TYPE,
   CAVEMAN_MODE_PROMPT,
   CAVEMAN_MODE_STATUS_KEY,
@@ -13,7 +20,7 @@ import {
   isCavemanModeEnabled,
   LEGACY_CAVEMAN_MODE_CUSTOM_TYPE,
   registerCavemanMode,
-} from "./caveman-mode";
+} = await import("./caveman-mode");
 
 type RegisteredCommandOptions = Parameters<ExtensionAPI["registerCommand"]>[1];
 type ExtensionEventHandler = (...args: unknown[]) => unknown;
@@ -27,16 +34,66 @@ interface SessionEntryLike {
   data?: unknown;
 }
 
-function createContext(entries: readonly SessionEntryLike[] = []): {
+interface StatusUpdate {
+  key: string;
+  text: string | undefined;
+}
+
+interface NotificationUpdate {
+  message: string;
+  type: string | undefined;
+}
+
+let testRootDir = "";
+let testHomeDir = "";
+let testProjectDir = "";
+const originalCwd = process.cwd();
+
+beforeEach(() => {
+  testRootDir = mkdtempSync(join("/tmp", "supa-pi-caveman-"));
+  testHomeDir = join(testRootDir, "home");
+  testProjectDir = join(testRootDir, "project");
+  mkdirSync(testHomeDir, { recursive: true });
+  mkdirSync(testProjectDir, { recursive: true });
+  currentHomeDir = testHomeDir;
+  process.chdir(testProjectDir);
+});
+
+afterEach(() => {
+  process.chdir(originalCwd);
+  currentHomeDir = "";
+  rmSync(testRootDir, { force: true, recursive: true });
+});
+
+function writeConfig(configDir: string, data: unknown): void {
+  mkdirSync(configDir, { recursive: true });
+  writeFileSync(
+    join(configDir, "caveman.json"),
+    typeof data === "string" ? data : JSON.stringify(data)
+  );
+}
+
+function writeGlobalConfig(data: unknown): void {
+  writeConfig(join(testHomeDir, ".pi", "agent"), data);
+}
+
+function writeProjectConfig(projectDir: string, data: unknown): void {
+  writeConfig(join(projectDir, ".pi"), data);
+}
+
+function createContext(
+  entries: readonly SessionEntryLike[] = [],
+  options: { cwd?: string } = {}
+): {
   ctx: ExtensionCommandContext;
-  statuses: Array<{ key: string; text: string | undefined }>;
-  notifications: Array<{ message: string; type: string | undefined }>;
+  statuses: StatusUpdate[];
+  notifications: NotificationUpdate[];
 } {
-  const statuses: Array<{ key: string; text: string | undefined }> = [];
-  const notifications: Array<{ message: string; type: string | undefined }> =
-    [];
+  const statuses: StatusUpdate[] = [];
+  const notifications: NotificationUpdate[] = [];
 
   const ctx = {
+    cwd: options.cwd ?? testProjectDir,
     hasUI: true,
     ui: {
       setStatus(key: string, text: string | undefined) {
@@ -183,6 +240,130 @@ describe("caveman mode", () => {
     expect(isCavemanModeEnabled()).toBe(true);
     expect(statuses).toEqual([
       { key: CAVEMAN_MODE_STATUS_KEY, text: CAVEMAN_MODE_STATUS_TEXT },
+    ]);
+  });
+
+  it("uses global config as the default state", () => {
+    writeGlobalConfig({ enabled: true });
+    const { handlers, appendedEntries } = setupHarness();
+    const { ctx, statuses } = createContext();
+
+    getHandler(handlers, "session_start")({ type: "session_start" }, ctx);
+
+    expect(appendedEntries).toEqual([]);
+    expect(isCavemanModeEnabled()).toBe(true);
+    expect(statuses).toEqual([
+      { key: CAVEMAN_MODE_STATUS_KEY, text: CAVEMAN_MODE_STATUS_TEXT },
+    ]);
+  });
+
+  it("lets project config override global config", () => {
+    writeGlobalConfig({ enabled: true });
+    writeProjectConfig(testProjectDir, { enabled: false });
+    const { handlers } = setupHarness();
+    const { ctx, statuses } = createContext();
+
+    getHandler(handlers, "session_start")({ type: "session_start" }, ctx);
+
+    expect(isCavemanModeEnabled()).toBe(false);
+    expect(statuses).toEqual([
+      { key: CAVEMAN_MODE_STATUS_KEY, text: undefined },
+    ]);
+  });
+
+  it("lets latest session state override config, including legacy entries", () => {
+    writeGlobalConfig({ enabled: true });
+    const { handlers, appendedEntries } = setupHarness();
+    const { ctx, statuses } = createContext([
+      {
+        type: "custom",
+        customType: CAVEMAN_MODE_CUSTOM_TYPE,
+        data: { enabled: true },
+      },
+      {
+        type: "custom",
+        customType: LEGACY_CAVEMAN_MODE_CUSTOM_TYPE,
+        data: { enabled: false },
+      },
+    ]);
+
+    getHandler(handlers, "session_start")({ type: "session_start" }, ctx);
+
+    expect(appendedEntries).toEqual([]);
+    expect(isCavemanModeEnabled()).toBe(false);
+    expect(statuses).toEqual([
+      { key: CAVEMAN_MODE_STATUS_KEY, text: undefined },
+    ]);
+  });
+
+  it("recomputes config-derived state on session_switch", () => {
+    writeProjectConfig(testProjectDir, { enabled: true });
+    const otherProjectDir = join(testRootDir, "other-project");
+    mkdirSync(otherProjectDir, { recursive: true });
+    writeProjectConfig(otherProjectDir, { enabled: false });
+    const { handlers, appendedEntries } = setupHarness();
+    const sessionStart = getHandler(handlers, "session_start");
+    const sessionSwitch = getHandler(handlers, "session_switch");
+    const { ctx: firstCtx, statuses: firstStatuses } = createContext();
+    const { ctx: secondCtx, statuses: secondStatuses } = createContext([], {
+      cwd: otherProjectDir,
+    });
+
+    sessionStart({ type: "session_start" }, firstCtx);
+    sessionSwitch({ type: "session_switch" }, secondCtx);
+
+    expect(appendedEntries).toEqual([]);
+    expect(firstStatuses).toEqual([
+      { key: CAVEMAN_MODE_STATUS_KEY, text: CAVEMAN_MODE_STATUS_TEXT },
+    ]);
+    expect(secondStatuses).toEqual([
+      { key: CAVEMAN_MODE_STATUS_KEY, text: undefined },
+    ]);
+    expect(isCavemanModeEnabled()).toBe(false);
+  });
+
+  it("falls back from malformed project config to global config", () => {
+    writeGlobalConfig({ enabled: true });
+    writeProjectConfig(testProjectDir, "{");
+    const { handlers } = setupHarness();
+    const { ctx, statuses } = createContext();
+
+    getHandler(handlers, "session_start")({ type: "session_start" }, ctx);
+
+    expect(isCavemanModeEnabled()).toBe(true);
+    expect(statuses).toEqual([
+      { key: CAVEMAN_MODE_STATUS_KEY, text: CAVEMAN_MODE_STATUS_TEXT },
+    ]);
+  });
+
+  it("falls back to disabled when config shape is invalid", () => {
+    writeGlobalConfig({ enabled: "yes" });
+    const { handlers } = setupHarness();
+    const { ctx, statuses } = createContext();
+
+    getHandler(handlers, "session_start")({ type: "session_start" }, ctx);
+
+    expect(isCavemanModeEnabled()).toBe(false);
+    expect(statuses).toEqual([
+      { key: CAVEMAN_MODE_STATUS_KEY, text: undefined },
+    ]);
+  });
+
+  it("keeps /caveman status boolean-only for config-derived state", async () => {
+    writeGlobalConfig({ enabled: true });
+    const { command, handlers, appendedEntries } = setupHarness();
+    const { ctx, statuses, notifications } = createContext();
+
+    getHandler(handlers, "session_start")({ type: "session_start" }, ctx);
+    await command.handler("status", ctx);
+
+    expect(appendedEntries).toEqual([]);
+    expect(statuses).toEqual([
+      { key: CAVEMAN_MODE_STATUS_KEY, text: CAVEMAN_MODE_STATUS_TEXT },
+      { key: CAVEMAN_MODE_STATUS_KEY, text: CAVEMAN_MODE_STATUS_TEXT },
+    ]);
+    expect(notifications).toEqual([
+      { message: "Caveman mode enabled", type: "info" },
     ]);
   });
 

@@ -1,3 +1,7 @@
+import { readFileSync } from "node:fs";
+import { homedir } from "node:os";
+import { join } from "node:path";
+
 import type {
   BeforeAgentStartEvent,
   ExtensionAPI,
@@ -95,6 +99,43 @@ function getLatestCavemanModeState(
   return null;
 }
 
+function getGlobalCavemanConfigPath(homeDir = homedir()): string {
+  return join(homeDir, ".pi", "agent", "caveman.json");
+}
+
+function getProjectCavemanConfigPath(cwd = process.cwd()): string {
+  return join(cwd, ".pi", "caveman.json");
+}
+
+function loadCavemanConfigFile(configPath: string): CavemanModeState | null {
+  try {
+    return parseCavemanModeState(JSON.parse(readFileSync(configPath, "utf8")));
+  } catch {
+    return null;
+  }
+}
+
+function getConfigCavemanModeState(
+  cwd = process.cwd(),
+  homeDir = homedir()
+): CavemanModeState | null {
+  return (
+    loadCavemanConfigFile(getProjectCavemanConfigPath(cwd)) ??
+    loadCavemanConfigFile(getGlobalCavemanConfigPath(homeDir))
+  );
+}
+
+function resolveCavemanModeState(
+  entries: readonly SessionEntryLike[],
+  cwd = process.cwd(),
+  homeDir = homedir()
+): CavemanModeState {
+  return (
+    getLatestCavemanModeState(entries) ??
+    getConfigCavemanModeState(cwd, homeDir) ?? { enabled: false }
+  );
+}
+
 function refreshCavemanStatus(ctx: ExtensionContext): void {
   if (!ctx.hasUI) {
     return;
@@ -118,7 +159,7 @@ function notifyCavemanModeStatus(
 }
 
 export function registerCavemanMode(pi: ExtensionAPI): void {
-  cavemanModeEnabled = false;
+  cavemanModeEnabled = resolveCavemanModeState([]).enabled;
 
   function setEnabled(
     ctx: ExtensionContext,
@@ -136,11 +177,20 @@ export function registerCavemanMode(pi: ExtensionAPI): void {
     refreshCavemanStatus(ctx);
   }
 
-  pi.on("session_start", (_event, ctx) => {
-    const state = getLatestCavemanModeState(
-      ctx.sessionManager.getEntries() as readonly SessionEntryLike[]
+  function refreshRuntimeState(ctx: ExtensionContext): void {
+    const state = resolveCavemanModeState(
+      ctx.sessionManager.getEntries() as readonly SessionEntryLike[],
+      ctx.cwd
     );
-    setEnabled(ctx, state?.enabled ?? false, false);
+    setEnabled(ctx, state.enabled, false);
+  }
+
+  pi.on("session_start", (_event, ctx) => {
+    refreshRuntimeState(ctx);
+  });
+
+  pi.on("session_switch", (_event, ctx) => {
+    refreshRuntimeState(ctx);
   });
 
   pi.on("before_agent_start", (event: BeforeAgentStartEvent) => {
