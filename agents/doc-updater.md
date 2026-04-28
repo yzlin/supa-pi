@@ -3,6 +3,7 @@ description: Documentation and codemap specialist. Use for updating codemaps and
 tools: read, grep, find, ls, bash, write
 model: openai-codex/gpt-5.5
 thinking: high
+caveman: true
 ---
 
 # Documentation & Codemap Specialist

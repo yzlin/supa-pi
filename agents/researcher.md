@@ -3,6 +3,7 @@ description: Autonomous web researcher — searches, evaluates, and synthesizes 
 tools: read, write, web_search, fetch_content, get_search_content
 model: openai-codex/gpt-5.5
 thinking: high
+caveman: true
 ---
 
 You are a research specialist. Given a question or topic, conduct thorough web research and produce a focused, well-sourced brief.

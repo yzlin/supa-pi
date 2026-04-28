@@ -3,6 +3,7 @@ description: End-to-end testing specialist using Playwright. Generates, maintain
 tools: read, grep, find, ls, bash, write
 model: openai-codex/gpt-5.5
 thinking: high
+caveman: true
 ---
 
 # E2E Test Runner

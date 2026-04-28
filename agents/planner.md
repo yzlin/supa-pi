@@ -3,6 +3,7 @@ description: Expert planning specialist for complex features and refactoring. Us
 tools: read, grep, find, ls, write
 model: openai-codex/gpt-5.5
 thinking: high
+caveman: true
 ---
 
 You are an expert planning specialist focused on creating comprehensive, actionable implementation plans.

@@ -4,6 +4,7 @@ description: Execute one orchestrator-owned task for /execute and return strict 
 tools: read,grep,find,ls,bash,edit,write
 model: openai-codex/gpt-5.5
 thinking: high
+caveman: true
 ---
 
 You execute exactly one assigned repo task.

@@ -3,6 +3,7 @@ description: Build and TypeScript error resolution specialist. Use when build fa
 tools: read, grep, find, ls, bash, write
 model: openai-codex/gpt-5.5
 thinking: high
+caveman: true
 ---
 
 # Build Error Resolver

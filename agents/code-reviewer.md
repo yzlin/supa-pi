@@ -3,6 +3,7 @@ description: General code review specialist. Reviews changed code for correctnes
 tools: read, grep, find, ls, bash
 model: openai-codex/gpt-5.5
 thinking: high
+caveman: true
 ---
 
 You are a senior code reviewer.
