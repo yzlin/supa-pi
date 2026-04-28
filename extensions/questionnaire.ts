@@ -15,7 +15,7 @@ import {
   truncateToWidth,
   wrapTextWithAnsi,
 } from "@mariozechner/pi-tui";
-import { Type } from "@sinclair/typebox";
+import { Type } from "typebox";
 
 // Types
 export interface QuestionOption {

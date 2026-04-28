@@ -1,5 +1,5 @@
-import { Type } from "@sinclair/typebox";
-import { Value } from "@sinclair/typebox/value";
+import { Type } from "typebox";
+import { Value } from "typebox/value";
 
 import type {
   OmObservationBufferEnvelopeV1,
@@ -250,18 +250,71 @@ function formatTypeBoxErrorPath(path: string): string {
     }, "");
 }
 
+type TypeBoxValidationError = {
+  path?: string;
+  instancePath?: string;
+  message?: string;
+  keyword?: string;
+  params?: {
+    limit?: number;
+  };
+};
+
+function normalizeTypeBoxErrorMessage(error: TypeBoxValidationError): string {
+  if (error.keyword === "anyOf") {
+    return "Expected union value";
+  }
+
+  if (
+    error.keyword === "maxLength" &&
+    typeof error.params?.limit === "number"
+  ) {
+    return `Expected string length less or equal to ${error.params.limit}`;
+  }
+
+  return error.message ?? "Invalid value";
+}
+
+function selectTypeBoxValidationError(
+  errors: TypeBoxValidationError[]
+): TypeBoxValidationError | null {
+  const firstError = errors[0];
+
+  if (!firstError) {
+    return null;
+  }
+
+  if (firstError.keyword !== "const") {
+    return firstError;
+  }
+
+  const firstPath = firstError.instancePath ?? firstError.path;
+
+  return (
+    errors.find(
+      (error) =>
+        error.keyword === "anyOf" &&
+        (error.instancePath ?? error.path) === firstPath
+    ) ?? firstError
+  );
+}
+
 export function getOmObserverResultValidationError(value: unknown): {
   path: string;
   message: string;
 } | null {
-  for (const error of Value.Errors(OmObserverResultSchema, value)) {
-    return {
-      path: formatTypeBoxErrorPath(error.path),
-      message: error.message,
-    };
+  const error = selectTypeBoxValidationError(
+    Array.from(Value.Errors(OmObserverResultSchema, value))
+  );
+
+  if (!error) {
+    return null;
   }
 
-  return null;
+  return {
+    path: formatTypeBoxErrorPath(error.path ?? error.instancePath ?? ""),
+    message: normalizeTypeBoxErrorMessage(error),
+  };
 }
 
 export function isOmReflectorResult(

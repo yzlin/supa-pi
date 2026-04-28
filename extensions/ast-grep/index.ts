@@ -12,8 +12,8 @@ import {
   type TruncationResult,
   truncateHead,
 } from "@mariozechner/pi-coding-agent";
-import { Type } from "@sinclair/typebox";
 import { globSync } from "glob";
+import { Type } from "typebox";
 
 const baseDir = dirname(fileURLToPath(import.meta.url));
 const prompt = readFileSync(join(baseDir, "prompt.md"), "utf8").trim();

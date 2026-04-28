@@ -145,7 +145,7 @@ The setup script installs these Pi packages if they are not already present:
   - `@mariozechner/pi-coding-agent`
   - `@mariozechner/pi-ai`
   - `@mariozechner/pi-tui`
-  - `@sinclair/typebox`
+  - `typebox` (`^1.1.34`)
 
 ## When to use this repo
 

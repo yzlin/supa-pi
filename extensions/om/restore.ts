@@ -1,4 +1,4 @@
-import { Value } from "@sinclair/typebox/value";
+import { Value } from "typebox/value";
 
 import { createOmBranchScope, diffOmBranchEntriesSince } from "./branch";
 import { createOmConfigSnapshot, DEFAULT_OM_CONFIG_SNAPSHOT } from "./config";

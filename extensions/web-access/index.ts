@@ -16,7 +16,7 @@ import type {
   ExtensionContext,
 } from "@mariozechner/pi-coding-agent";
 import { Box, Text, truncateToWidth } from "@mariozechner/pi-tui";
-import { Type } from "@sinclair/typebox";
+import { Type } from "typebox";
 
 import { type ActivityEntry, activityMonitor } from "./activity.js";
 import { executeCodeSearch } from "./code-search.js";

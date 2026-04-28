@@ -1,5 +1,5 @@
 import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
-import { Type } from "@sinclair/typebox";
+import { Type } from "typebox";
 
 import { loadExecuteCheckpoint, saveExecuteCheckpoint } from "./checkpoint";
 
