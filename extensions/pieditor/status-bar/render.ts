@@ -181,6 +181,13 @@ export function buildStatusBarContext(
     ? ((ctx.modelRegistry as any)?.isUsingOAuth?.(model) ?? false)
     : false;
 
+  const hasDedicatedCavemanSegment =
+    presetDef.leftSegments.includes("caveman") ||
+    presetDef.rightSegments.includes("caveman");
+  const dedicatedExtensionStatusKeys = new Set(
+    hasDedicatedCavemanSegment ? ["caveman"] : []
+  );
+
   return {
     model,
     thinkingLevel,
@@ -192,6 +199,7 @@ export function buildStatusBarContext(
     sessionStartTime,
     git: getGitStatus(providerBranch),
     extensionStatuses: footerData?.getExtensionStatuses() ?? new Map(),
+    dedicatedExtensionStatusKeys,
     options: presetDef.segmentOptions ?? {},
     theme,
     colors,

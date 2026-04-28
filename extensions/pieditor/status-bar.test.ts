@@ -1,17 +1,13 @@
 import { describe, expect, it } from "bun:test";
 
 import type {
-  ExtensionAPI,
   ExtensionContext,
   ReadonlyFooterDataProvider,
 } from "@mariozechner/pi-coding-agent";
 
-import {
-  CAVEMAN_MODE_CUSTOM_TYPE,
-  CAVEMAN_MODE_STATUS_TEXT,
-  registerCavemanMode,
-} from "./caveman-mode";
 import { renderStatusBarLine } from "./status-bar";
+
+const CAVEMAN_STATUS_TEXT = "🪨 caveman";
 
 describe("status bar", () => {
   it("renders model, git branch, and context for the compact preset", () => {
@@ -470,21 +466,8 @@ describe("status bar", () => {
     }
   });
 
-  it("renders active caveman mode as a dedicated status segment", () => {
-    const handlers = new Map<string, (...args: unknown[]) => unknown>();
-    registerCavemanMode({
-      on(eventName: string, handler: (...args: unknown[]) => unknown) {
-        handlers.set(eventName, handler);
-      },
-      registerCommand() {},
-      appendEntry() {},
-    } as unknown as ExtensionAPI);
-
+  it("renders active caveman status as a dedicated status segment", () => {
     const ctx = {
-      hasUI: true,
-      ui: {
-        setStatus() {},
-      },
       model: {
         id: "test-model",
         name: "test-model",
@@ -493,15 +476,6 @@ describe("status bar", () => {
       },
       modelRegistry: {},
       sessionManager: {
-        getEntries() {
-          return [
-            {
-              type: "custom",
-              customType: CAVEMAN_MODE_CUSTOM_TYPE,
-              data: { enabled: true },
-            },
-          ];
-        },
         getBranch() {
           return [];
         },
@@ -518,18 +492,12 @@ describe("status bar", () => {
       },
     } as unknown as ExtensionContext;
 
-    const sessionStart = handlers.get("session_start");
-    if (!sessionStart) {
-      throw new Error("session_start handler was not registered");
-    }
-    sessionStart({ type: "session_start" }, ctx);
-
     const footerData = {
       getGitBranch() {
         return "main";
       },
       getExtensionStatuses() {
-        return new Map();
+        return new Map([["caveman", CAVEMAN_STATUS_TEXT]]);
       },
       getAvailableProviderCount() {
         return 0;
@@ -557,7 +525,73 @@ describe("status bar", () => {
       theme,
     });
 
-    expect(line).toContain(CAVEMAN_MODE_STATUS_TEXT);
+    const occurrences = line.split(CAVEMAN_STATUS_TEXT).length - 1;
+    expect(line).toContain(CAVEMAN_STATUS_TEXT);
+    expect(occurrences).toBe(1);
+  });
+
+  it("renders caveman through extension statuses when dedicated segment is omitted", () => {
+    const ctx = {
+      model: {
+        id: "test-model",
+        name: "test-model",
+        reasoning: false,
+        contextWindow: 200000,
+      },
+      modelRegistry: {},
+      sessionManager: {
+        getBranch() {
+          return [];
+        },
+        getSessionId() {
+          return "session-12345678";
+        },
+      },
+      getContextUsage() {
+        return {
+          tokens: 25000,
+          contextWindow: 200000,
+          percent: 12.5,
+        };
+      },
+    } as unknown as ExtensionContext;
+
+    const footerData = {
+      getGitBranch() {
+        return "main";
+      },
+      getExtensionStatuses() {
+        return new Map([["caveman", CAVEMAN_STATUS_TEXT]]);
+      },
+      getAvailableProviderCount() {
+        return 0;
+      },
+      onBranchChange() {
+        return () => {};
+      },
+    } satisfies ReadonlyFooterDataProvider;
+
+    const theme = {
+      fg(_color: string, text: string) {
+        return text;
+      },
+    } as any;
+
+    const line = renderStatusBarLine({
+      width: 120,
+      ctx,
+      footerData,
+      config: {
+        enabled: true,
+        preset: "default",
+        leftSegments: ["model", "path"],
+        rightSegments: ["extension_statuses"],
+      },
+      sessionStartTime: Date.now(),
+      theme,
+    });
+
+    expect(line).toContain(CAVEMAN_STATUS_TEXT);
   });
 
   it("right-aligns right-only configured segments", () => {

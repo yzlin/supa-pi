@@ -63,6 +63,8 @@ Owns:
 - git status helpers
 - icon/theme helpers
 
+The dedicated `caveman` segment is an integration point for the standalone `extensions/caveman` extension. It reads the generic extension status key `caveman` from footer data instead of importing caveman state directly.
+
 ### `shell/*`
 Shell completion providers and shell detection.
 

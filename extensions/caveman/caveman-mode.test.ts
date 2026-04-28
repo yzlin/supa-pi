@@ -3,14 +3,15 @@ import { describe, expect, it } from "bun:test";
 import type {
   ExtensionAPI,
   ExtensionCommandContext,
-  ExtensionContext,
 } from "@mariozechner/pi-coding-agent";
 
 import {
   CAVEMAN_MODE_CUSTOM_TYPE,
   CAVEMAN_MODE_PROMPT,
   CAVEMAN_MODE_STATUS_KEY,
+  CAVEMAN_MODE_STATUS_TEXT,
   isCavemanModeEnabled,
+  LEGACY_CAVEMAN_MODE_CUSTOM_TYPE,
   registerCavemanMode,
 } from "./caveman-mode";
 
@@ -101,7 +102,7 @@ function getHandler(
   return handler;
 }
 
-describe("pieditor caveman mode", () => {
+describe("caveman mode", () => {
   it("handles on, off, status, and toggle commands", async () => {
     const { command, appendedEntries } = setupHarness();
     const { ctx, statuses, notifications } = createContext();
@@ -120,11 +121,11 @@ describe("pieditor caveman mode", () => {
       { customType: CAVEMAN_MODE_CUSTOM_TYPE, data: { enabled: false } },
     ]);
     expect(statuses).toEqual([
+      { key: CAVEMAN_MODE_STATUS_KEY, text: CAVEMAN_MODE_STATUS_TEXT },
+      { key: CAVEMAN_MODE_STATUS_KEY, text: CAVEMAN_MODE_STATUS_TEXT },
       { key: CAVEMAN_MODE_STATUS_KEY, text: undefined },
       { key: CAVEMAN_MODE_STATUS_KEY, text: undefined },
-      { key: CAVEMAN_MODE_STATUS_KEY, text: undefined },
-      { key: CAVEMAN_MODE_STATUS_KEY, text: undefined },
-      { key: CAVEMAN_MODE_STATUS_KEY, text: undefined },
+      { key: CAVEMAN_MODE_STATUS_KEY, text: CAVEMAN_MODE_STATUS_TEXT },
       { key: CAVEMAN_MODE_STATUS_KEY, text: undefined },
     ]);
     expect(notifications).toEqual([
@@ -163,7 +164,25 @@ describe("pieditor caveman mode", () => {
     expect(appendedEntries).toEqual([]);
     expect(isCavemanModeEnabled()).toBe(true);
     expect(statuses).toEqual([
-      { key: CAVEMAN_MODE_STATUS_KEY, text: undefined },
+      { key: CAVEMAN_MODE_STATUS_KEY, text: CAVEMAN_MODE_STATUS_TEXT },
+    ]);
+  });
+
+  it("restores legacy pieditor session state", () => {
+    const { handlers } = setupHarness();
+    const { ctx, statuses } = createContext([
+      {
+        type: "custom",
+        customType: LEGACY_CAVEMAN_MODE_CUSTOM_TYPE,
+        data: { enabled: true },
+      },
+    ]);
+
+    getHandler(handlers, "session_start")({ type: "session_start" }, ctx);
+
+    expect(isCavemanModeEnabled()).toBe(true);
+    expect(statuses).toEqual([
+      { key: CAVEMAN_MODE_STATUS_KEY, text: CAVEMAN_MODE_STATUS_TEXT },
     ]);
   });
 
@@ -206,10 +225,7 @@ describe("pieditor caveman mode", () => {
       },
     ]);
 
-    getHandler(handlers, "session_start")(
-      { type: "session_start" },
-      ctx as ExtensionContext
-    );
+    getHandler(handlers, "session_start")({ type: "session_start" }, ctx);
 
     expect(statuses).toEqual([
       { key: CAVEMAN_MODE_STATUS_KEY, text: undefined },

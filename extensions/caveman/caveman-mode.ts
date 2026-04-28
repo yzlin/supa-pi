@@ -5,8 +5,9 @@ import type {
   ExtensionContext,
 } from "@mariozechner/pi-coding-agent";
 
-export const CAVEMAN_MODE_CUSTOM_TYPE = "pieditor:caveman-mode";
-export const CAVEMAN_MODE_STATUS_KEY = "pieditor-caveman";
+export const CAVEMAN_MODE_CUSTOM_TYPE = "caveman:mode";
+export const LEGACY_CAVEMAN_MODE_CUSTOM_TYPE = "pieditor:caveman-mode";
+export const CAVEMAN_MODE_STATUS_KEY = "caveman";
 export const CAVEMAN_MODE_STATUS_TEXT = "🪨 caveman";
 
 export const CAVEMAN_MODE_PROMPT = `CAVEMAN MODE ACTIVE:
@@ -66,19 +67,28 @@ function parseCavemanModeState(data: unknown): CavemanModeState | null {
   return { enabled: state.enabled };
 }
 
+function isCavemanModeEntry(
+  entry: SessionEntryLike | undefined
+): entry is SessionEntryLike {
+  return (
+    entry?.type === "custom" &&
+    (entry.customType === CAVEMAN_MODE_CUSTOM_TYPE ||
+      entry.customType === LEGACY_CAVEMAN_MODE_CUSTOM_TYPE)
+  );
+}
+
 function getLatestCavemanModeState(
   entries: readonly SessionEntryLike[]
 ): CavemanModeState | null {
   for (let i = entries.length - 1; i >= 0; i--) {
     const entry = entries[i];
-    if (
-      entry?.type === "custom" &&
-      entry.customType === CAVEMAN_MODE_CUSTOM_TYPE
-    ) {
-      const state = parseCavemanModeState(entry.data);
-      if (state) {
-        return state;
-      }
+    if (!isCavemanModeEntry(entry)) {
+      continue;
+    }
+
+    const state = parseCavemanModeState(entry.data);
+    if (state) {
+      return state;
     }
   }
 
@@ -90,7 +100,10 @@ function refreshCavemanStatus(ctx: ExtensionContext): void {
     return;
   }
 
-  ctx.ui.setStatus(CAVEMAN_MODE_STATUS_KEY, undefined);
+  ctx.ui.setStatus(
+    CAVEMAN_MODE_STATUS_KEY,
+    cavemanModeEnabled ? CAVEMAN_MODE_STATUS_TEXT : undefined
+  );
 }
 
 function describeCavemanModeStatus(enabled: boolean): string {
@@ -107,11 +120,11 @@ function notifyCavemanModeStatus(
 export function registerCavemanMode(pi: ExtensionAPI): void {
   cavemanModeEnabled = false;
 
-  const setEnabled = (
+  function setEnabled(
     ctx: ExtensionContext,
     nextEnabled: boolean,
     persist: boolean
-  ): void => {
+  ): void {
     cavemanModeEnabled = nextEnabled;
 
     if (persist) {
@@ -121,7 +134,7 @@ export function registerCavemanMode(pi: ExtensionAPI): void {
     }
 
     refreshCavemanStatus(ctx);
-  };
+  }
 
   pi.on("session_start", (_event, ctx) => {
     const state = getLatestCavemanModeState(
@@ -141,7 +154,7 @@ export function registerCavemanMode(pi: ExtensionAPI): void {
   });
 
   pi.registerCommand("caveman", {
-    description: "Toggle pieditor caveman mode: /caveman [on|off|status]",
+    description: "Toggle caveman mode: /caveman [on|off|status]",
     getArgumentCompletions(argumentPrefix) {
       const prefix = argumentPrefix.trim().toLowerCase();
       return CAVEMAN_MODE_COMPLETIONS.filter((completion) =>

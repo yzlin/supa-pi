@@ -3,10 +3,6 @@ import { basename } from "node:path";
 
 import { visibleWidth } from "@mariozechner/pi-tui";
 
-import {
-  CAVEMAN_MODE_STATUS_TEXT,
-  isCavemanModeEnabled,
-} from "../caveman-mode.js";
 import { getIcons, getThinkingText, SEP_DOT } from "./icons.js";
 import { applyColor, fg, rainbow } from "./theme.js";
 import type {
@@ -193,12 +189,18 @@ const thinkingSegment: StatusBarSegment = {
   },
 };
 
+const CAVEMAN_EXTENSION_STATUS_KEY = "caveman";
+
 const cavemanSegment: StatusBarSegment = {
   id: "caveman",
   render(ctx) {
-    if (!isCavemanModeEnabled()) return { content: "", visible: false };
+    const status = ctx.extensionStatuses.get(CAVEMAN_EXTENSION_STATUS_KEY);
+    if (!status || visibleWidth(status) <= 0) {
+      return { content: "", visible: false };
+    }
+
     return {
-      content: color(ctx, "thinking", CAVEMAN_MODE_STATUS_TEXT),
+      content: color(ctx, "thinking", status),
       visible: true,
     };
   },
@@ -409,22 +411,38 @@ const cacheWriteSegment: StatusBarSegment = {
   },
 };
 
+function shouldRenderExtensionStatus(
+  ctx: StatusBarContext,
+  key: string,
+  value: string
+): boolean {
+  if (ctx.dedicatedExtensionStatusKeys.has(key)) {
+    return false;
+  }
+
+  if (!value || value.trimStart().startsWith("[")) {
+    return false;
+  }
+
+  return visibleWidth(value) > 0;
+}
+
+function stripExtensionStatusSuffix(value: string): string {
+  return value.replace(/(\x1b\[[0-9;]*m|\s|·|[|])+$/, "");
+}
+
 const extensionStatusesSegment: StatusBarSegment = {
   id: "extension_statuses",
   render(ctx) {
     if (!ctx.extensionStatuses.size) return { content: "", visible: false };
 
     const parts: string[] = [];
-    for (const value of ctx.extensionStatuses.values()) {
-      if (
-        !value ||
-        value.trimStart().startsWith("[") ||
-        visibleWidth(value) <= 0
-      ) {
+    for (const [key, value] of ctx.extensionStatuses.entries()) {
+      if (!shouldRenderExtensionStatus(ctx, key, value)) {
         continue;
       }
 
-      const stripped = value.replace(/(\x1b\[[0-9;]*m|\s|·|[|])+$/, "");
+      const stripped = stripExtensionStatusSuffix(value);
       if (visibleWidth(stripped) > 0) {
         parts.push(stripped);
       }

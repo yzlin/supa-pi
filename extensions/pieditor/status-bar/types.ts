@@ -130,6 +130,7 @@ export interface StatusBarContext {
   sessionStartTime: number;
   git: GitStatus;
   extensionStatuses: ReadonlyMap<string, string>;
+  dedicatedExtensionStatusKeys: ReadonlySet<string>;
   options: StatusBarSegmentOptions;
   theme: Theme;
   colors: ColorScheme;
