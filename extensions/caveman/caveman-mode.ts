@@ -4,6 +4,7 @@ import { join } from "node:path";
 
 import type {
   BeforeAgentStartEvent,
+  EventBus,
   ExtensionAPI,
   ExtensionCommandContext,
   ExtensionContext,
@@ -13,6 +14,9 @@ export const CAVEMAN_MODE_CUSTOM_TYPE = "caveman:mode";
 export const LEGACY_CAVEMAN_MODE_CUSTOM_TYPE = "pieditor:caveman-mode";
 export const CAVEMAN_MODE_STATUS_KEY = "caveman";
 export const CAVEMAN_MODE_STATUS_TEXT = "🪨 caveman";
+export const CAVEMAN_RPC_VERSION = 1;
+export const CAVEMAN_RPC_CAPABILITIES_CHANNEL = "caveman:rpc:capabilities";
+export const CAVEMAN_RPC_APPLY_CHANNEL = "caveman:rpc:apply";
 
 export const CAVEMAN_MODE_PROMPT = `CAVEMAN MODE ACTIVE:
 - Answer user in short caveman-style phrases.
@@ -22,6 +26,20 @@ export const CAVEMAN_MODE_PROMPT = `CAVEMAN MODE ACTIVE:
 interface CavemanModeState {
   enabled: boolean;
 }
+
+interface CavemanRpcCapabilitiesData {
+  version: 1;
+  supportsApply: true;
+}
+
+interface CavemanRpcApplyData {
+  version: 1;
+  systemPrompt: string;
+}
+
+type CavemanRpcResponse<T> =
+  | { success: true; data: T }
+  | { success: false; error: string };
 
 let cavemanModeEnabled = false;
 
@@ -57,6 +75,42 @@ const CAVEMAN_MODE_COMPLETIONS = [
     description: "Toggle caveman mode",
   },
 ];
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object";
+}
+
+function isNonEmptyString(value: unknown): value is string {
+  return typeof value === "string" && value.trim().length > 0;
+}
+
+function stripCavemanPrompt(systemPrompt: string): string {
+  if (!systemPrompt.includes(CAVEMAN_MODE_PROMPT)) {
+    return systemPrompt;
+  }
+
+  return systemPrompt
+    .split(CAVEMAN_MODE_PROMPT)
+    .join("")
+    .replace(/[ \t]+\n/g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
+export function applyCavemanPrompt(
+  systemPrompt: string,
+  enabled: boolean
+): string {
+  const strippedPrompt = stripCavemanPrompt(systemPrompt);
+
+  if (!enabled) {
+    return strippedPrompt;
+  }
+
+  return strippedPrompt
+    ? `${strippedPrompt}\n\n${CAVEMAN_MODE_PROMPT}`
+    : CAVEMAN_MODE_PROMPT;
+}
 
 function parseCavemanModeState(data: unknown): CavemanModeState | null {
   if (!data || typeof data !== "object") {
@@ -158,8 +212,102 @@ function notifyCavemanModeStatus(
   ctx.ui.notify(describeCavemanModeStatus(enabled), "info");
 }
 
+function createCavemanCapabilitiesResponse(): CavemanRpcResponse<CavemanRpcCapabilitiesData> {
+  return {
+    success: true,
+    data: { version: CAVEMAN_RPC_VERSION, supportsApply: true },
+  };
+}
+
+function applyCavemanRpcRequest(
+  payload: unknown
+): CavemanRpcResponse<CavemanRpcApplyData> {
+  if (!isRecord(payload)) {
+    return { success: false, error: "Expected object payload" };
+  }
+
+  if (!isNonEmptyString(payload.requestId)) {
+    return { success: false, error: "Expected non-empty requestId" };
+  }
+
+  if (payload.version !== CAVEMAN_RPC_VERSION) {
+    return { success: false, error: "Unsupported caveman RPC version" };
+  }
+
+  if (typeof payload.enabled !== "boolean") {
+    return { success: false, error: "Expected enabled boolean" };
+  }
+
+  if (typeof payload.systemPrompt !== "string") {
+    return { success: false, error: "Expected systemPrompt string" };
+  }
+
+  return {
+    success: true,
+    data: {
+      version: CAVEMAN_RPC_VERSION,
+      systemPrompt: applyCavemanPrompt(payload.systemPrompt, payload.enabled),
+    },
+  };
+}
+
+function publishRpcResponse<T>(
+  events: EventBus,
+  channel: string,
+  payload: unknown,
+  response: CavemanRpcResponse<T>
+): void {
+  if (!isRecord(payload)) {
+    return;
+  }
+
+  if (typeof payload.respond === "function") {
+    payload.respond(response);
+    return;
+  }
+
+  if (isNonEmptyString(payload.replyTo)) {
+    events.emit(payload.replyTo, response);
+    return;
+  }
+
+  if (isNonEmptyString(payload.requestId)) {
+    events.emit(`${channel}:response:${payload.requestId}`, response);
+    return;
+  }
+
+  events.emit(`${channel}:response`, response);
+}
+
+function registerCavemanRpc(pi: ExtensionAPI): void {
+  const handleCapabilities = (
+    payload: unknown
+  ): CavemanRpcResponse<CavemanRpcCapabilitiesData> => {
+    const response = createCavemanCapabilitiesResponse();
+    publishRpcResponse(
+      pi.events,
+      CAVEMAN_RPC_CAPABILITIES_CHANNEL,
+      payload,
+      response
+    );
+    return response;
+  };
+
+  const handleApply = (
+    payload: unknown
+  ): CavemanRpcResponse<CavemanRpcApplyData> => {
+    const response = applyCavemanRpcRequest(payload);
+    publishRpcResponse(pi.events, CAVEMAN_RPC_APPLY_CHANNEL, payload, response);
+    return response;
+  };
+
+  pi.events.on(CAVEMAN_RPC_CAPABILITIES_CHANNEL, handleCapabilities);
+  pi.events.on(CAVEMAN_RPC_APPLY_CHANNEL, handleApply);
+}
+
 export function registerCavemanMode(pi: ExtensionAPI): void {
   cavemanModeEnabled = resolveCavemanModeState([]).enabled;
+  registerCavemanRpc(pi);
 
   function setEnabled(
     ctx: ExtensionContext,
@@ -198,9 +346,13 @@ export function registerCavemanMode(pi: ExtensionAPI): void {
       return undefined;
     }
 
-    return {
-      systemPrompt: `${event.systemPrompt}\n\n${CAVEMAN_MODE_PROMPT}`,
-    };
+    const systemPrompt = applyCavemanPrompt(event.systemPrompt, true);
+
+    if (systemPrompt === event.systemPrompt) {
+      return undefined;
+    }
+
+    return { systemPrompt };
   });
 
   pi.registerCommand("caveman", {

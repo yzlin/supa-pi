@@ -3,6 +3,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
 import type {
+  EventBus,
   ExtensionAPI,
   ExtensionCommandContext,
 } from "@mariozechner/pi-coding-agent";
@@ -17,6 +18,8 @@ const {
   CAVEMAN_MODE_PROMPT,
   CAVEMAN_MODE_STATUS_KEY,
   CAVEMAN_MODE_STATUS_TEXT,
+  CAVEMAN_RPC_APPLY_CHANNEL,
+  CAVEMAN_RPC_CAPABILITIES_CHANNEL,
   isCavemanModeEnabled,
   LEGACY_CAVEMAN_MODE_CUSTOM_TYPE,
   registerCavemanMode,
@@ -115,14 +118,29 @@ function createContext(
 
 function setupHarness(): {
   handlers: Map<string, ExtensionEventHandler>;
+  eventHandlers: Map<string, ExtensionEventHandler>;
   command: HarnessCommandOptions;
   appendedEntries: Array<{ customType: string; data: unknown }>;
 } {
   const handlers = new Map<string, ExtensionEventHandler>();
+  const eventHandlers = new Map<string, ExtensionEventHandler>();
   const appendedEntries: Array<{ customType: string; data: unknown }> = [];
   let command: RegisteredCommandOptions | undefined;
 
+  const events = {
+    emit() {
+      /* noop */
+    },
+    on(channel: string, handler: ExtensionEventHandler) {
+      eventHandlers.set(channel, handler);
+      return () => {
+        eventHandlers.delete(channel);
+      };
+    },
+  } as EventBus;
+
   registerCavemanMode({
+    events,
     on(eventName: string, handler: ExtensionEventHandler) {
       handlers.set(eventName, handler);
     },
@@ -142,6 +160,7 @@ function setupHarness(): {
 
   return {
     handlers,
+    eventHandlers,
     command: command as HarnessCommandOptions,
     appendedEntries,
   };
@@ -375,8 +394,14 @@ describe("caveman mode", () => {
       prompt: "hi",
       systemPrompt: "base",
     });
+    const inactiveWithExistingPromptResult = beforeAgentStart({
+      type: "before_agent_start",
+      prompt: "hi",
+      systemPrompt: `base\n\n${CAVEMAN_MODE_PROMPT}`,
+    });
 
     expect(inactiveResult).toBeUndefined();
+    expect(inactiveWithExistingPromptResult).toBeUndefined();
 
     const { ctx } = createContext([
       {
@@ -411,5 +436,70 @@ describe("caveman mode", () => {
     expect(statuses).toEqual([
       { key: CAVEMAN_MODE_STATUS_KEY, text: undefined },
     ]);
+  });
+
+  it("returns RPC capabilities", () => {
+    const { eventHandlers } = setupHarness();
+    const capabilities = getHandler(
+      eventHandlers,
+      CAVEMAN_RPC_CAPABILITIES_CHANNEL
+    );
+
+    expect(capabilities({ requestId: "capabilities-1" })).toEqual({
+      success: true,
+      data: { version: 1, supportsApply: true },
+    });
+  });
+
+  it("applies caveman instructions through RPC when enabled", () => {
+    const { eventHandlers } = setupHarness();
+    const apply = getHandler(eventHandlers, CAVEMAN_RPC_APPLY_CHANNEL);
+
+    expect(
+      apply({
+        requestId: "apply-1",
+        version: 1,
+        enabled: true,
+        systemPrompt: "base",
+      })
+    ).toEqual({
+      success: true,
+      data: { version: 1, systemPrompt: `base\n\n${CAVEMAN_MODE_PROMPT}` },
+    });
+  });
+
+  it("removes caveman instructions through RPC when disabled", () => {
+    const { eventHandlers } = setupHarness();
+    const apply = getHandler(eventHandlers, CAVEMAN_RPC_APPLY_CHANNEL);
+
+    expect(
+      apply({
+        requestId: "apply-2",
+        version: 1,
+        enabled: false,
+        systemPrompt: `base\n\n${CAVEMAN_MODE_PROMPT}`,
+      })
+    ).toEqual({
+      success: true,
+      data: { version: 1, systemPrompt: "base" },
+    });
+  });
+
+  it("keeps caveman RPC apply idempotent", () => {
+    const { eventHandlers } = setupHarness();
+    const apply = getHandler(eventHandlers, CAVEMAN_RPC_APPLY_CHANNEL);
+    const duplicatePrompt = `base\n\n${CAVEMAN_MODE_PROMPT}\n\n${CAVEMAN_MODE_PROMPT}`;
+
+    expect(
+      apply({
+        requestId: "apply-3",
+        version: 1,
+        enabled: true,
+        systemPrompt: duplicatePrompt,
+      })
+    ).toEqual({
+      success: true,
+      data: { version: 1, systemPrompt: `base\n\n${CAVEMAN_MODE_PROMPT}` },
+    });
   });
 });

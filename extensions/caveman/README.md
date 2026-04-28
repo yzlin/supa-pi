@@ -48,6 +48,24 @@ Editor schema help ships at `extensions/caveman/configuration_schema.json`. It i
 }
 ```
 
+### Event-bus RPC v1
+
+Caveman owns the canonical prompt text and exposes prompt transformation over Pi's shared event bus.
+
+- Capabilities channel: `caveman:rpc:capabilities`
+  - Response: `{ "success": true, "data": { "version": 1, "supportsApply": true } }`
+- Apply channel: `caveman:rpc:apply`
+  - Request: `{ "requestId": "...", "version": 1, "enabled": true, "systemPrompt": "..." }`
+  - Success response: `{ "success": true, "data": { "version": 1, "systemPrompt": "..." } }`
+  - Error response: `{ "success": false, "error": "..." }`
+
+Replies go to `replyTo` when provided. Otherwise, requests with `requestId` emit to `<channel>:response:<requestId>`, falling back to `<channel>:response`.
+
+Prompt behavior:
+
+- `enabled: true` strips inherited canonical caveman text, then appends it exactly once.
+- `enabled: false` strips inherited canonical caveman text.
+
 ### Runtime behavior
 
 When active, caveman appends a system-prompt instruction before agent start and publishes generic extension status key `caveman` with value `🪨 caveman`. Status UIs can display the active mode through Pi's generic extension status channel. `pieditor` also has a dedicated `caveman` status-bar segment that reads the same status key when this extension is loaded.
