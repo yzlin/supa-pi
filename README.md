@@ -68,6 +68,10 @@ See `package.json` for the full registration list.
 
 `skills/` includes locally curated skills authored in this repo plus selected imports from Vercel agent-skills at commit `ce3e64e468f8fa09a2d075d102771838061fdac0`. Current imported-and-curated snapshots include `composition-patterns`, `react-best-practices`, `react-native-skills`, and `react-view-transitions`. Local workflow skills include `grill-me` for natural-language adversarial design review triggers like "grill me" or "stress-test this plan".
 
+## Included prompts
+
+`prompts/to-prd.md` is adapted from Matt Pocock's `to-prd` skill: https://github.com/mattpocock/skills/blob/main/skills/engineering/to-prd/SKILL.md
+
 ## Included rules
 
 `rules/` provides shared guidance for:
