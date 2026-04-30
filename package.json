@@ -18,6 +18,7 @@
       "./extensions/session-query.ts",
       "./extensions/handoff.ts",
       "./extensions/context",
+      "./extensions/context-docs",
       "./extensions/btw",
       "./extensions/ast-grep",
       "./extensions/rtk",

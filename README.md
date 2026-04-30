@@ -23,6 +23,7 @@ Documented extensions in this repo include:
 - **`extensions/caveman`** — standalone `/caveman` mode with per-session persistence and generic extension status
 - **`extensions/pieditor`** — editor UX improvements like `@` file picking, shell completions, raw paste, command remapping, and a locally maintained fork lineage from the original upstream extension
 - **`extensions/init-deep`** — deterministic `/init-deep` command flow for generating hierarchical `AGENTS.md`
+- **`extensions/context-docs`** — deterministic `/context-setup`, `/context-note`, `/adr`, `/context-review`, and `/context-grill` workflows for durable project context docs
 - **`extensions/review.ts`** — interactive current-session `/review` workflow with `/review-summary` and `/review-fix` follow-ups plus reviewer-agent orchestration; adapted in part from `@earendil-works/pi-review`
 - **`extensions/smart-docs`** — deterministic `/smart-docs` command flow for codebase documentation generation
 
@@ -66,11 +67,13 @@ See `package.json` for the full registration list.
 
 ## Included skills
 
-`skills/` includes locally curated skills authored in this repo plus selected imports from Vercel agent-skills at commit `ce3e64e468f8fa09a2d075d102771838061fdac0`. Current imported-and-curated snapshots include `composition-patterns`, `react-best-practices`, `react-native-skills`, and `react-view-transitions`. Local workflow skills include `grill-me` for natural-language adversarial design review triggers like "grill me" or "stress-test this plan".
+`skills/` includes locally curated skills authored in this repo plus selected imports from Vercel agent-skills at commit `ce3e64e468f8fa09a2d075d102771838061fdac0`. Current imported-and-curated snapshots include `composition-patterns`, `react-best-practices`, `react-native-skills`, and `react-view-transitions`. Local workflow skills include `grill-me` for natural-language adversarial design review triggers like "grill me" or "stress-test this plan", and `context-docs` for durable `CONTEXT.md`, `CONTEXT-MAP.md`, ADR, `/context-review`, and `/context-grill` workflows.
 
 ## Included prompts
 
 `prompts/to-prd.md` is adapted from Matt Pocock's `to-prd` skill: https://github.com/mattpocock/skills/blob/main/skills/engineering/to-prd/SKILL.md
+
+`extensions/context-docs/prompt.md` is bundled with the context-docs extension and documents the Matt-compatible `CONTEXT.md`/`CONTEXT-MAP.md` scaffold, ADR shape, `/context-review` extraction rules, and `/context-grill` behavior.
 
 ## Included rules
 
