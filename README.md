@@ -32,7 +32,6 @@ The configured extension set also includes workflow and utility modules such as:
 - `questionnaire`
 - `core-prompt`
 - `rules`
-- `plan`
 - `execute`
 - `research`
 - `simplify`
@@ -160,7 +159,7 @@ Use this repo if you want a Pi setup with:
 
 - stronger orchestration defaults
 - local workflow extensions
-- built-in research/planning/review helpers
+- built-in research/PRD/review helpers
 - custom skills and rules for multiple languages
 - improved editor and memory ergonomics
 

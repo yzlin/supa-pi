@@ -10,7 +10,6 @@
       "./extensions/caveman",
       "./extensions/core-prompt",
       "./extensions/rules",
-      "./extensions/plan",
       "./extensions/execute",
       "./extensions/research",
       "./extensions/simplify",
