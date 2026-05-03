@@ -1,9 +1,22 @@
 import { describe, expect, it } from "bun:test";
-import * as fs from "node:fs";
-import * as os from "node:os";
-import * as path from "node:path";
+import {
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
+import { tmpdir } from "node:os";
+import { dirname, join } from "node:path";
 
-import { loadConfig, resolveRuntimeConfig } from "./config";
+import {
+  hasProjectFixedEditorEnabledOverride,
+  loadConfig,
+  resolveRuntimeConfig,
+  saveGlobalFixedEditorEnabled,
+} from "./config";
+import { DEFAULT_FIXED_EDITOR_CONFIG } from "./config/fixed-editor";
 import { DEFAULT_FILE_PICKER_CONFIG } from "./file-picker-config";
 
 describe("pieditor config", () => {
@@ -38,6 +51,12 @@ describe("pieditor config", () => {
             git: { showUntracked: true },
           },
         },
+        fixedEditor: {
+          enabled: true,
+          mouseScroll: true,
+          scrollUpShortcuts: ["super+up"],
+          scrollDownShortcuts: ["super+down"],
+        },
       },
       {
         doubleEscapeCommand: "project-command",
@@ -61,6 +80,11 @@ describe("pieditor config", () => {
             path: { maxLength: 12 },
             model: { showThinkingLevel: true },
           },
+        },
+        fixedEditor: {
+          mouseScroll: false,
+          scrollUpShortcuts: "ctrl+shift+up",
+          scrollDownShortcuts: ["ctrl+shift+down", "super+down"],
         },
       }
     );
@@ -98,6 +122,12 @@ describe("pieditor config", () => {
           model: { showThinkingLevel: true },
         },
       },
+      fixedEditor: {
+        enabled: true,
+        mouseScroll: false,
+        scrollUpShortcuts: ["ctrl+shift+up"],
+        scrollDownShortcuts: ["ctrl+shift+down", "super+down"],
+      },
     });
   });
 
@@ -123,6 +153,7 @@ describe("pieditor config", () => {
         enabled: true,
         preset: "default",
       },
+      fixedEditor: DEFAULT_FIXED_EDITOR_CONFIG,
     });
   });
 
@@ -205,15 +236,146 @@ describe("pieditor config", () => {
     });
   });
 
-  it("preserves an empty literal separator from file config", () => {
-    const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "pieditor-"));
-    const homeDir = path.join(tempRoot, "home");
-    const cwd = path.join(tempRoot, "project");
+  it("loads fixed editor defaults and normalized project overrides", () => {
+    const tempRoot = mkdtempSync(join(tmpdir(), "pieditor-"));
+    const homeDir = join(tempRoot, "home");
+    const cwd = join(tempRoot, "project");
 
-    fs.mkdirSync(path.join(homeDir, ".pi", "agent"), { recursive: true });
-    fs.mkdirSync(path.join(cwd, ".pi"), { recursive: true });
-    fs.writeFileSync(
-      path.join(cwd, ".pi", "pieditor.json"),
+    mkdirSync(join(cwd, ".pi"), { recursive: true });
+    writeFileSync(
+      join(cwd, ".pi", "pieditor.json"),
+      JSON.stringify({
+        fixedEditor: {
+          enabled: true,
+          mouseScroll: false,
+          scrollUpShortcuts: [" ctrl+shift+up ", ""],
+          scrollDownShortcuts: "super+down",
+        },
+      })
+    );
+
+    try {
+      const config = loadConfig({ homeDir, cwd });
+      expect(config.fixedEditor).toEqual({
+        enabled: true,
+        mouseScroll: false,
+        scrollUpShortcuts: ["ctrl+shift+up"],
+        scrollDownShortcuts: ["super+down"],
+      });
+    } finally {
+      rmSync(tempRoot, { recursive: true, force: true });
+    }
+  });
+
+  it("saves global fixed editor enabled without overwriting other config", () => {
+    const tempRoot = mkdtempSync(join(tmpdir(), "pieditor-"));
+    const homeDir = join(tempRoot, "home");
+    const cwd = join(tempRoot, "project");
+    const globalConfigPath = join(homeDir, ".pi", "agent", "pieditor.json");
+
+    mkdirSync(dirname(globalConfigPath), { recursive: true });
+    writeFileSync(
+      globalConfigPath,
+      JSON.stringify({
+        commandRemap: { tree: "anycopy" },
+        fixedEditor: { mouseScroll: false },
+      })
+    );
+
+    try {
+      const result = saveGlobalFixedEditorEnabled(true, { homeDir, cwd });
+      const saved = JSON.parse(readFileSync(globalConfigPath, "utf-8"));
+
+      expect(result.ok).toBe(true);
+      expect(saved).toEqual({
+        commandRemap: { tree: "anycopy" },
+        fixedEditor: { mouseScroll: false, enabled: true },
+      });
+      expect(
+        readdirSync(dirname(globalConfigPath)).filter((entry) =>
+          entry.endsWith(".tmp")
+        )
+      ).toEqual([]);
+    } finally {
+      rmSync(tempRoot, { recursive: true, force: true });
+    }
+  });
+
+  it("returns project-layered config after saving global fixed editor state", () => {
+    const tempRoot = mkdtempSync(join(tmpdir(), "pieditor-"));
+    const homeDir = join(tempRoot, "home");
+    const cwd = join(tempRoot, "project");
+    const projectConfigPath = join(cwd, ".pi", "pieditor.json");
+
+    mkdirSync(dirname(projectConfigPath), { recursive: true });
+    writeFileSync(
+      projectConfigPath,
+      JSON.stringify({ fixedEditor: { enabled: false, mouseScroll: false } })
+    );
+
+    try {
+      const result = saveGlobalFixedEditorEnabled(true, { homeDir, cwd });
+
+      expect(result.ok).toBe(true);
+      if (!result.ok) {
+        return;
+      }
+
+      expect(result.config.fixedEditor).toEqual({
+        ...DEFAULT_FIXED_EDITOR_CONFIG,
+        enabled: false,
+        mouseScroll: false,
+      });
+      expect(hasProjectFixedEditorEnabledOverride({ cwd })).toBe(true);
+    } finally {
+      rmSync(tempRoot, { recursive: true, force: true });
+    }
+  });
+
+  it("refuses to save fixed editor state over invalid global JSON", () => {
+    const tempRoot = mkdtempSync(join(tmpdir(), "pieditor-"));
+    const homeDir = join(tempRoot, "home");
+    const cwd = join(tempRoot, "project");
+    const globalConfigPath = join(homeDir, ".pi", "agent", "pieditor.json");
+
+    mkdirSync(dirname(globalConfigPath), { recursive: true });
+    writeFileSync(globalConfigPath, "{not-json", "utf-8");
+
+    try {
+      const result = saveGlobalFixedEditorEnabled(true, { homeDir, cwd });
+      expect(result.ok).toBe(false);
+      expect(readFileSync(globalConfigPath, "utf-8")).toBe("{not-json");
+    } finally {
+      rmSync(tempRoot, { recursive: true, force: true });
+    }
+  });
+
+  it("detects project fixed editor enabled overrides", () => {
+    const tempRoot = mkdtempSync(join(tmpdir(), "pieditor-"));
+    const cwd = join(tempRoot, "project");
+
+    mkdirSync(join(cwd, ".pi"), { recursive: true });
+    writeFileSync(
+      join(cwd, ".pi", "pieditor.json"),
+      JSON.stringify({ fixedEditor: { enabled: false } })
+    );
+
+    try {
+      expect(hasProjectFixedEditorEnabledOverride({ cwd })).toBe(true);
+    } finally {
+      rmSync(tempRoot, { recursive: true, force: true });
+    }
+  });
+
+  it("preserves an empty literal separator from file config", () => {
+    const tempRoot = mkdtempSync(join(tmpdir(), "pieditor-"));
+    const homeDir = join(tempRoot, "home");
+    const cwd = join(tempRoot, "project");
+
+    mkdirSync(join(homeDir, ".pi", "agent"), { recursive: true });
+    mkdirSync(join(cwd, ".pi"), { recursive: true });
+    writeFileSync(
+      join(cwd, ".pi", "pieditor.json"),
       JSON.stringify({
         statusBar: {
           separator: "",
@@ -225,7 +387,7 @@ describe("pieditor config", () => {
       const config = loadConfig({ homeDir, cwd });
       expect(config.statusBar.separator).toBe("");
     } finally {
-      fs.rmSync(tempRoot, { recursive: true, force: true });
+      rmSync(tempRoot, { recursive: true, force: true });
     }
   });
 });

@@ -22,6 +22,10 @@
     },
     "statusBar": {
       "$ref": "#/$defs/statusBarConfig"
+    },
+    "fixedEditor": {
+      "$ref": "#/$defs/fixedEditorConfig",
+      "description": "Optional fixed editor config. Disabled by default; opt in globally or per project."
     }
   },
   "$defs": {
@@ -168,18 +172,42 @@
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "pi": { "$ref": "#/$defs/statusBarColorValue" },
-        "model": { "$ref": "#/$defs/statusBarColorValue" },
-        "path": { "$ref": "#/$defs/statusBarColorValue" },
-        "gitDirty": { "$ref": "#/$defs/statusBarColorValue" },
-        "gitClean": { "$ref": "#/$defs/statusBarColorValue" },
-        "thinking": { "$ref": "#/$defs/statusBarColorValue" },
-        "context": { "$ref": "#/$defs/statusBarColorValue" },
-        "contextWarn": { "$ref": "#/$defs/statusBarColorValue" },
-        "contextError": { "$ref": "#/$defs/statusBarColorValue" },
-        "cost": { "$ref": "#/$defs/statusBarColorValue" },
-        "tokens": { "$ref": "#/$defs/statusBarColorValue" },
-        "separator": { "$ref": "#/$defs/statusBarColorValue" }
+        "pi": {
+          "$ref": "#/$defs/statusBarColorValue"
+        },
+        "model": {
+          "$ref": "#/$defs/statusBarColorValue"
+        },
+        "path": {
+          "$ref": "#/$defs/statusBarColorValue"
+        },
+        "gitDirty": {
+          "$ref": "#/$defs/statusBarColorValue"
+        },
+        "gitClean": {
+          "$ref": "#/$defs/statusBarColorValue"
+        },
+        "thinking": {
+          "$ref": "#/$defs/statusBarColorValue"
+        },
+        "context": {
+          "$ref": "#/$defs/statusBarColorValue"
+        },
+        "contextWarn": {
+          "$ref": "#/$defs/statusBarColorValue"
+        },
+        "contextError": {
+          "$ref": "#/$defs/statusBarColorValue"
+        },
+        "cost": {
+          "$ref": "#/$defs/statusBarColorValue"
+        },
+        "tokens": {
+          "$ref": "#/$defs/statusBarColorValue"
+        },
+        "separator": {
+          "$ref": "#/$defs/statusBarColorValue"
+        }
       }
     },
     "statusBarConfig": {
@@ -221,6 +249,50 @@
         },
         "segmentOptions": {
           "$ref": "#/$defs/statusBarSegmentOptions"
+        }
+      }
+    },
+    "fixedEditorShortcutList": {
+      "oneOf": [
+        {
+          "type": "string",
+          "minLength": 1
+        },
+        {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "minItems": 1
+        }
+      ],
+      "description": "Keyboard shortcut or shortcuts accepted by Pi key matching, e.g. super+up or ctrl+shift+up."
+    },
+    "fixedEditorConfig": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Fixed editor mode config for pieditor. Do not enable with pi-powerline-footer's fixed editor mode because both own terminal split composition.",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "default": false,
+          "description": "Opt in to fixed editor mode. Runtime command /pieditor fixed-editor [on|off|toggle|status] changes the live runtime and saves this value globally; project .pi/pieditor.json overrides still win on the next load."
+        },
+        "mouseScroll": {
+          "type": "boolean",
+          "default": true,
+          "description": "Allow mouse wheel scrolling in fixed editor mode when enabled."
+        },
+        "scrollUpShortcuts": {
+          "$ref": "#/$defs/fixedEditorShortcutList",
+          "default": ["super+up"],
+          "description": "Shortcut or shortcuts that scroll the fixed editor viewport up."
+        },
+        "scrollDownShortcuts": {
+          "$ref": "#/$defs/fixedEditorShortcutList",
+          "default": ["super+down"],
+          "description": "Shortcut or shortcuts that scroll the fixed editor viewport down."
         }
       }
     }

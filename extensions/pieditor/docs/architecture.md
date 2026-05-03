@@ -18,6 +18,7 @@ Current feature areas:
 - raw clipboard paste via `alt+v`
 - optional double-escape command trigger
 - slash-command remapping at submit time
+- opt-in fixed editor runtime/config command surface
 
 ## Ownership boundaries
 
@@ -36,6 +37,7 @@ Owns:
 - footer hookup
 - preview highlighter warmup
 - git invalidation triggers from tool/user bash events
+- fixed editor compositor lifecycle when `fixedEditor.enabled` is true
 
 ### `editor/*`
 Editor behavior only.
@@ -53,6 +55,15 @@ Owns:
 - converting selections into `@path` refs
 
 `file-picker/runtime.ts` creates the picker runtime explicitly. This preserves current effective behavior while avoiding import-time config/state initialization.
+
+### `fixed-editor/*`
+
+Fixed editor rendering/compositor helpers only.
+Owns:
+- fixed editor cluster rendering primitives
+- terminal split compositor primitives
+
+Runtime lifecycle installation is owned by `composition.ts` when that integration is enabled.
 
 ### `status-bar/*`
 Status bar rendering.
@@ -96,7 +107,10 @@ Merge order:
 Notes:
 - `commandRemap` merges by key
 - file-picker config merges by field; `skipPatterns` is replaced by the last layer that sets it
+- fixed-editor config merges by field; shortcut arrays are replaced by the last layer that sets them
 - status-bar config merges by field; colors and nested segment options merge by semantic key / nested field
+
+Fixed editor is opt-in: `fixedEditor.enabled` defaults to `false`. `/pieditor fixed-editor [on|off|toggle|status]` updates the live runtime and persists only the global `fixedEditor.enabled` value. If project `.pi/pieditor.json` defines `fixedEditor.enabled`, it still wins on the next load; the command warns after saving global state and `status` reports the active project override.
 
 ## Native preview fallback
 
@@ -112,3 +126,12 @@ Native highlighting is picker-preview-only. It does not change the rest of the e
 
 `pieditor` intentionally owns `setEditorComponent()`.
 Do not enable other extensions that also replace the editor component at the same time unless they are merged into `pieditor` first.
+
+Fixed editor mode also owns terminal split composition. Do not enable it alongside `pi-powerline-footer`'s fixed editor mode; both install fixed editor compositors and will conflict.
+
+## Manual validation notes
+
+- Boot with default config and confirm fixed editor mode is off
+- Use `/pieditor fixed-editor on|off|toggle|status` and confirm live runtime state plus global config persistence
+- Verify mouse wheel and configured shortcut scrolling while fixed editor mode is enabled
+- Add a project `fixedEditor.enabled` override and confirm it wins over global config on reload

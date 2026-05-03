@@ -1,6 +1,13 @@
-import * as fs from "node:fs";
-import * as os from "node:os";
-import * as path from "node:path";
+import { randomBytes } from "node:crypto";
+import {
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  renameSync,
+  writeFileSync,
+} from "node:fs";
+import { homedir } from "node:os";
+import { dirname, join } from "node:path";
 
 import type {
   PickerConfig,
@@ -19,8 +26,16 @@ import {
   mergeFilePickerConfigs,
   normalizeFilePickerConfig,
 } from "./file-picker.js";
+import {
+  type FixedEditorConfig,
+  type FixedEditorRuntimeConfig,
+  mergeFixedEditorConfigs,
+  normalizeFixedEditorConfig,
+} from "./fixed-editor.js";
 
-export type StatusBarConfig = {
+export * from "./fixed-editor.js";
+
+export interface StatusBarConfig {
   enabled?: boolean;
   preset?: StatusBarPreset;
   leftSegments?: StatusBarSegmentId[];
@@ -28,9 +43,9 @@ export type StatusBarConfig = {
   separator?: string;
   colors?: ColorScheme;
   segmentOptions?: StatusBarSegmentOptions;
-};
+}
 
-export type StatusBarRuntimeConfig = {
+export interface StatusBarRuntimeConfig {
   enabled: boolean;
   preset: StatusBarPreset;
   leftSegments?: StatusBarSegmentId[];
@@ -38,33 +53,36 @@ export type StatusBarRuntimeConfig = {
   separator?: string;
   colors?: ColorScheme;
   segmentOptions?: StatusBarSegmentOptions;
-};
+}
 
-export type EditorEnhancementsConfig = {
+export interface EditorEnhancementsConfig {
   doubleEscapeCommand?: string | null;
   commandRemap?: Record<string, string>;
   filePicker?: PickerConfig;
   statusBar?: StatusBarConfig;
-};
+  fixedEditor?: FixedEditorConfig;
+}
 
-export type EditorEnhancementsRuntimeConfig = {
+export interface EditorEnhancementsRuntimeConfig {
   doubleEscapeCommand: string | null;
   commandRemap: Record<string, string>;
   filePicker: PickerRuntimeConfig;
   statusBar: StatusBarRuntimeConfig;
-};
+  fixedEditor: FixedEditorRuntimeConfig;
+}
 
-type EditorEnhancementsConfigLayer = {
+interface EditorEnhancementsConfigLayer {
   doubleEscapeCommand?: string | null;
   commandRemap?: Record<string, string>;
   filePicker?: Partial<PickerRuntimeConfig>;
   statusBar?: Partial<StatusBarRuntimeConfig>;
-};
+  fixedEditor?: Partial<FixedEditorRuntimeConfig>;
+}
 
-type LoadConfigOptions = {
+interface LoadConfigOptions {
   homeDir?: string;
   cwd?: string;
-};
+}
 
 const DEFAULT_CONFIG: EditorEnhancementsRuntimeConfig = {
   doubleEscapeCommand: null,
@@ -74,20 +92,27 @@ const DEFAULT_CONFIG: EditorEnhancementsRuntimeConfig = {
     enabled: true,
     preset: "default",
   },
+  fixedEditor: mergeFixedEditorConfigs(),
 };
 
 export function normalizeCommandName(value: unknown): string | null {
-  if (typeof value !== "string") return null;
+  if (typeof value !== "string") {
+    return null;
+  }
 
   const trimmed = value.trim();
-  if (!trimmed) return null;
+  if (!trimmed) {
+    return null;
+  }
 
   const normalized = trimmed.startsWith("/") ? trimmed.slice(1) : trimmed;
   return normalized || null;
 }
 
 export function normalizeCommandRemap(value: unknown): Record<string, string> {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return {};
+  }
 
   const result: Record<string, string> = {};
   for (const [from, to] of Object.entries(value as Record<string, unknown>)) {
@@ -274,35 +299,35 @@ function normalizeStatusBarConfig(
     next.preset = preset;
   }
 
-  if (Object.prototype.hasOwnProperty.call(raw, "leftSegments")) {
+  if (Object.hasOwn(raw, "leftSegments")) {
     const leftSegments = normalizeStatusBarSegments(raw.leftSegments);
     if (leftSegments) {
       next.leftSegments = leftSegments;
     }
   }
 
-  if (Object.prototype.hasOwnProperty.call(raw, "rightSegments")) {
+  if (Object.hasOwn(raw, "rightSegments")) {
     const rightSegments = normalizeStatusBarSegments(raw.rightSegments);
     if (rightSegments) {
       next.rightSegments = rightSegments;
     }
   }
 
-  if (Object.prototype.hasOwnProperty.call(raw, "separator")) {
+  if (Object.hasOwn(raw, "separator")) {
     const separator = normalizeStatusBarSeparator(raw.separator);
     if (separator !== null) {
       next.separator = separator;
     }
   }
 
-  if (Object.prototype.hasOwnProperty.call(raw, "colors")) {
+  if (Object.hasOwn(raw, "colors")) {
     const colors = normalizeStatusBarColors(raw.colors);
     if (colors) {
       next.colors = colors;
     }
   }
 
-  if (Object.prototype.hasOwnProperty.call(raw, "segmentOptions")) {
+  if (Object.hasOwn(raw, "segmentOptions")) {
     const segmentOptions = normalizeStatusBarSegmentOptions(raw.segmentOptions);
     if (segmentOptions) {
       next.segmentOptions = segmentOptions;
@@ -315,32 +340,36 @@ function normalizeStatusBarConfig(
 function loadConfigFile(
   configPath: string
 ): EditorEnhancementsConfigLayer | null {
-  if (!fs.existsSync(configPath)) {
+  if (!existsSync(configPath)) {
     return null;
   }
 
   try {
     const parsed = JSON.parse(
-      fs.readFileSync(configPath, "utf-8")
+      readFileSync(configPath, "utf-8")
     ) as EditorEnhancementsConfig;
     const next: EditorEnhancementsConfigLayer = {};
 
-    if (Object.prototype.hasOwnProperty.call(parsed, "doubleEscapeCommand")) {
+    if (Object.hasOwn(parsed, "doubleEscapeCommand")) {
       next.doubleEscapeCommand = normalizeCommandName(
         parsed.doubleEscapeCommand
       );
     }
 
-    if (Object.prototype.hasOwnProperty.call(parsed, "commandRemap")) {
+    if (Object.hasOwn(parsed, "commandRemap")) {
       next.commandRemap = normalizeCommandRemap(parsed.commandRemap);
     }
 
-    if (Object.prototype.hasOwnProperty.call(parsed, "filePicker")) {
+    if (Object.hasOwn(parsed, "filePicker")) {
       next.filePicker = normalizeFilePickerConfig(parsed.filePicker);
     }
 
-    if (Object.prototype.hasOwnProperty.call(parsed, "statusBar")) {
+    if (Object.hasOwn(parsed, "statusBar")) {
       next.statusBar = normalizeStatusBarConfig(parsed.statusBar);
+    }
+
+    if (Object.hasOwn(parsed, "fixedEditor")) {
+      next.fixedEditor = normalizeFixedEditorConfig(parsed.fixedEditor);
     }
 
     return next;
@@ -395,18 +424,123 @@ export function resolveRuntimeConfig(
         projectConfig?.statusBar?.segmentOptions
       ),
     },
+    fixedEditor: mergeFixedEditorConfigs(
+      DEFAULT_CONFIG.fixedEditor,
+      globalConfig?.fixedEditor,
+      projectConfig?.fixedEditor
+    ),
   };
+}
+
+function getHomeDir(): string {
+  return process.env.HOME ?? homedir();
+}
+
+export function getGlobalPieditorConfigPath(homeDir = getHomeDir()): string {
+  return join(homeDir, ".pi", "agent", "pieditor.json");
+}
+
+export function getProjectPieditorConfigPath(cwd = process.cwd()): string {
+  return join(cwd, ".pi", "pieditor.json");
+}
+
+type PersistFixedEditorEnabledResult =
+  | { ok: true; configPath: string; config: EditorEnhancementsRuntimeConfig }
+  | { ok: false; configPath: string; error: string };
+
+function isPlainConfigObject(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function readConfigObjectForPersistence(
+  configPath: string
+): { ok: true; value: Record<string, unknown> } | { ok: false; error: string } {
+  if (!existsSync(configPath)) {
+    return { ok: true, value: {} };
+  }
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(readFileSync(configPath, "utf-8"));
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return { ok: false, error: `Invalid JSON in ${configPath}: ${message}` };
+  }
+
+  if (!isPlainConfigObject(parsed)) {
+    return { ok: false, error: `${configPath} must contain a JSON object` };
+  }
+
+  return { ok: true, value: parsed };
+}
+
+function writeConfigObjectAtomically(
+  configPath: string,
+  value: Record<string, unknown>
+): void {
+  const tempPath = `${configPath}.${randomBytes(8).toString("hex")}.tmp`;
+  mkdirSync(dirname(configPath), { recursive: true });
+  writeFileSync(tempPath, `${JSON.stringify(value, null, 2)}\n`, "utf-8");
+  renameSync(tempPath, configPath);
+}
+
+export function saveGlobalFixedEditorEnabled(
+  enabled: boolean,
+  options: Pick<LoadConfigOptions, "homeDir" | "cwd"> = {}
+): PersistFixedEditorEnabledResult {
+  const homeDir = options.homeDir ?? getHomeDir();
+  const cwd = options.cwd ?? process.cwd();
+  const configPath = getGlobalPieditorConfigPath(homeDir);
+  const current = readConfigObjectForPersistence(configPath);
+
+  if (!current.ok) {
+    return { ok: false, configPath, error: current.error };
+  }
+
+  const fixedEditor = isPlainConfigObject(current.value.fixedEditor)
+    ? current.value.fixedEditor
+    : {};
+  const next = {
+    ...current.value,
+    fixedEditor: {
+      ...fixedEditor,
+      enabled,
+    },
+  };
+
+  try {
+    writeConfigObjectAtomically(configPath, next);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return { ok: false, configPath, error: message };
+  }
+
+  return { ok: true, configPath, config: loadConfig({ homeDir, cwd }) };
+}
+
+export function hasProjectFixedEditorEnabledOverride(
+  options: Pick<LoadConfigOptions, "cwd"> = {}
+): boolean {
+  const configPath = getProjectPieditorConfigPath(options.cwd ?? process.cwd());
+  const current = readConfigObjectForPersistence(configPath);
+
+  if (!current.ok) {
+    return false;
+  }
+
+  return (
+    isPlainConfigObject(current.value.fixedEditor) &&
+    Object.hasOwn(current.value.fixedEditor, "enabled")
+  );
 }
 
 export function loadConfig(
   options: LoadConfigOptions = {}
 ): EditorEnhancementsRuntimeConfig {
-  const homeDir = options.homeDir ?? os.homedir();
+  const homeDir = options.homeDir ?? getHomeDir();
   const cwd = options.cwd ?? process.cwd();
-  const globalConfig = loadConfigFile(
-    path.join(homeDir, ".pi", "agent", "pieditor.json")
-  );
-  const projectConfig = loadConfigFile(path.join(cwd, ".pi", "pieditor.json"));
+  const globalConfig = loadConfigFile(getGlobalPieditorConfigPath(homeDir));
+  const projectConfig = loadConfigFile(getProjectPieditorConfigPath(cwd));
 
   return resolveRuntimeConfig(globalConfig, projectConfig);
 }

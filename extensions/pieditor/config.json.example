@@ -11,6 +11,12 @@
     "skipPatterns": ["node_modules"],
     "tabCompletionMode": "bestMatch"
   },
+  "fixedEditor": {
+    "enabled": false,
+    "mouseScroll": true,
+    "scrollUpShortcuts": ["super+up"],
+    "scrollDownShortcuts": ["super+down"]
+  },
   "statusBar": {
     "enabled": true,
     "preset": "default",

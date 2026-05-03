@@ -25,7 +25,7 @@ This extension currently provides:
 
 ## Usage
 
-This extension mostly integrates directly into the editor, with one runtime toggle command.
+This extension mostly integrates directly into the editor, with one runtime toggle command surface.
 
 Notable interactions:
 - Type `@` at token start to open the file picker
@@ -40,6 +40,7 @@ Notable interactions:
 - If the standalone `extensions/caveman` extension is loaded, built-in presets show the active `🪨 caveman` indicator through the dedicated `caveman` segment; custom segment lists must include `caveman` or `extension_statuses` to show it.
 - Optionally configure `doubleEscapeCommand` in `~/.pi/agent/pieditor.json` or `.pi/pieditor.json` to invoke an extension command on double-escape when the editor is empty and Pi is idle
 - Optionally configure `commandRemap` in `~/.pi/agent/pieditor.json` or `.pi/pieditor.json` to redirect slash commands at submit time (e.g. typing `/tree` executes `/anycopy` instead)
+- Use `/pieditor fixed-editor [on|off|toggle|status]` to toggle fixed editor mode for the live runtime and persist the global `fixedEditor.enabled` setting; project `.pi/pieditor.json` overrides still win on the next load
 
 ## Configuration
 
@@ -72,6 +73,12 @@ Then add the rest of your config fields:
   - keys and values are normalized (leading `/` stripped, whitespace trimmed)
   - works for all command types: built-in (`/tree`, `/model`), extension, skill, and template commands
   - arguments and subcommand syntax (everything after the command name) are preserved
+- `fixedEditor`: nested fixed editor config; disabled by default and only active after explicit opt-in
+  - `enabled`: default `false`; opt in to fixed editor mode
+  - `mouseScroll`: default `true`; allow mouse wheel scrolling in fixed editor mode
+  - `scrollUpShortcuts`: default `["super+up"]`; shortcut or shortcuts for scrolling the fixed editor viewport up
+  - `scrollDownShortcuts`: default `["super+down"]`; shortcut or shortcuts for scrolling the fixed editor viewport down
+  - `/pieditor fixed-editor [on|off|toggle|status]` updates the live runtime and saves `enabled` in the global config; if project `.pi/pieditor.json` sets `fixedEditor.enabled`, that project override wins after the next load and `status` marks it as active
 - `filePicker`: nested file picker config
   - `respectGitignore`: default `true`
   - `skipHidden`: default `true`
@@ -109,6 +116,12 @@ Then add the rest of your config fields:
   "commandRemap": {
     "tree": "anycopy",
     "resume": "switch-session"
+  },
+  "fixedEditor": {
+    "enabled": false,
+    "mouseScroll": true,
+    "scrollUpShortcuts": ["super+up"],
+    "scrollDownShortcuts": ["super+down"]
   },
   "filePicker": {
     "respectGitignore": true,
@@ -149,12 +162,12 @@ Status bar presets are borrowed from `pi-powerline-footer`, but this extension p
 
 Set `doubleEscapeCommand` to `null` to disable the remapping and keep Pi's native double-escape behavior. Set `commandRemap` to `{}` (or omit it) to disable command remapping.
 
-Runtime merge order for file picker config is:
+Runtime merge order for pieditor config is:
 1. built-in defaults
 2. global `~/.pi/agent/pieditor.json`
 3. project `.pi/pieditor.json`
 
-`commandRemap` maps are merged by key. `filePicker` values are merged by field, with later layers winning; `skipPatterns` comes from the last layer that sets it. `statusBar` values are merged by field the same way; `leftSegments` and `rightSegments` are each replaced by the last layer that sets them, `separator` takes the last configured literal string, `colors` merge by semantic key, and `segmentOptions` merge per nested field.
+`commandRemap` maps are merged by key. `fixedEditor`, `filePicker`, and `statusBar` values are merged by field, with later layers winning; `fixedEditor` shortcut arrays and `filePicker.skipPatterns` come from the last layer that sets them. `statusBar.leftSegments` and `statusBar.rightSegments` are each replaced by the last layer that sets them, `separator` takes the last configured literal string, `colors` merge by semantic key, and `segmentOptions` merge per nested field.
 
 Config layout:
 
@@ -198,3 +211,11 @@ Current scope:
 - If the configured command is not a registered extension command, the extension warns and falls back to native behavior
 - Command remapping intercepts at the editor submission layer via `onSubmit`, so it applies uniformly to all submit paths (Enter, double-escape gesture, etc.) and works with any command type — built-in, extension, skill, or template. If a remap target doesn't exist as a registered command, pi treats it as a regular prompt
 - Because this extension owns `setEditorComponent()`, disable standalone editor-replacement extensions such as `shell-completions/`, `file-picker.ts`, and `raw-paste.ts` to avoid conflicts
+- Fixed editor mode conflicts with `pi-powerline-footer`'s fixed editor mode; enable only one fixed editor compositor at a time
+
+## Manual validation notes
+
+- Start Pi without `fixedEditor.enabled` and confirm the native editor remains unchanged
+- Run `/pieditor fixed-editor on`, `/pieditor fixed-editor off`, `/pieditor fixed-editor toggle`, and `/pieditor fixed-editor status`; confirm notifications, live behavior, and global `~/.pi/agent/pieditor.json` persistence
+- With fixed editor enabled, confirm mouse wheel scrolling follows `mouseScroll` and configured scroll shortcuts move the fixed editor viewport
+- Add project `.pi/pieditor.json` with `fixedEditor.enabled` set opposite the global value, restart/reload Pi, and confirm the project value wins; `status` should report the project override

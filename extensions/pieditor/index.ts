@@ -19,10 +19,12 @@
 
 import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
 
+import { registerPieditorCommands } from "./commands.js";
 import { createPieditorComposition } from "./composition.js";
 
 export default function (pi: ExtensionAPI): void {
   const composition = createPieditorComposition(pi);
+  registerPieditorCommands(pi, composition);
 
   pi.on("session_start", (_event, ctx) => {
     composition.attachEditor(ctx);

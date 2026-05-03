@@ -1,19 +1,39 @@
-import type {
-  ExtensionAPI,
-  ExtensionContext,
-  ReadonlyFooterDataProvider,
+import {
+  copyToClipboard,
+  type ExtensionAPI,
+  type ExtensionContext,
+  type KeybindingsManager,
+  type ReadonlyFooterDataProvider,
+  type Theme,
 } from "@mariozechner/pi-coding-agent";
+import type { EditorTheme, TUI } from "@mariozechner/pi-tui";
 
-import { loadConfig } from "./config.js";
+import { type FixedEditorRuntimeConfig, loadConfig } from "./config.js";
 import { EnhancedEditor } from "./enhanced-editor.js";
 import { warmPreviewHighlighter } from "./file-picker-highlight.js";
+import { renderFixedEditorCluster } from "./fixed-editor/cluster.js";
+import { TerminalSplitCompositor } from "./fixed-editor/terminal-split.js";
 import { invalidateGitBranch, invalidateGitStatus } from "./status-bar-git.js";
 
-type PieditorRuntime = {
+type FixedEditorConfigListener = (config: FixedEditorRuntimeConfig) => void;
+
+type CopySelection = (text: string) => Promise<void> | void;
+
+interface PieditorCompositionOptions {
+  copySelection?: CopySelection;
+}
+
+interface PieditorRuntime {
   activeContext: ExtensionContext | null;
   activeEditor: EnhancedEditor | null;
+  activeEditorTui: TUI | null;
   activeFooterData: ReadonlyFooterDataProvider | null;
-};
+  activeFooterTui: TUI | null;
+  fixedEditorCompositor: TerminalSplitCompositor | null;
+  fixedEditorConfig: FixedEditorRuntimeConfig;
+  fixedEditorConfigListeners: Set<FixedEditorConfigListener>;
+  fixedEditorInstallFailed: boolean;
+}
 
 const GIT_BRANCH_PATTERNS = [
   /\bgit\s+(checkout|switch|branch\s+-[dDmM]|merge|rebase|pull|reset|worktree)/,
@@ -45,19 +65,146 @@ function invalidateGitState(): void {
   invalidateGitBranch();
 }
 
-export function createPieditorComposition(pi: ExtensionAPI) {
+export function createPieditorComposition(
+  pi: ExtensionAPI,
+  options: PieditorCompositionOptions = {}
+) {
+  const initialConfig = loadConfig();
   const runtime: PieditorRuntime = {
     activeContext: null,
     activeEditor: null,
+    activeEditorTui: null,
     activeFooterData: null,
+    activeFooterTui: null,
+    fixedEditorCompositor: null,
+    fixedEditorConfig: initialConfig.fixedEditor,
+    fixedEditorConfigListeners: new Set(),
+    fixedEditorInstallFailed: false,
   };
+
+  function emitFixedEditorConfigChanged(): void {
+    const config = runtime.fixedEditorConfig;
+    for (const listener of runtime.fixedEditorConfigListeners) {
+      listener(config);
+    }
+  }
+
+  function notifyFixedEditorInstallFailed(): void {
+    runtime.activeContext?.ui.notify(
+      "pieditor fixed-editor could not attach; using the normal editor",
+      "warning"
+    );
+  }
+
+  function disposeFixedEditorCompositor(): void {
+    runtime.fixedEditorCompositor?.dispose({
+      resetExtendedKeyboardModes: true,
+    });
+    runtime.fixedEditorCompositor = null;
+  }
+
+  function getShowHardwareCursor(): boolean {
+    return runtime.activeEditorTui?.getShowHardwareCursor() ?? false;
+  }
+
+  function copyFixedEditorSelection(text: string): void {
+    const copy = options.copySelection ?? copyToClipboard;
+    const copyPromise = Promise.resolve(copy(text));
+    copyPromise.catch((error: unknown) => {
+      const message = error instanceof Error ? error.message : String(error);
+      runtime.activeContext?.ui.notify(
+        `pieditor fixed-editor copy failed: ${message}`,
+        "warning"
+      );
+    });
+  }
+
+  function installFixedEditorCompositor(): void {
+    if (!runtime.fixedEditorConfig.enabled) {
+      disposeFixedEditorCompositor();
+      runtime.fixedEditorInstallFailed = false;
+      return;
+    }
+
+    if (runtime.fixedEditorCompositor || runtime.fixedEditorInstallFailed) {
+      return;
+    }
+
+    const editor = runtime.activeEditor;
+    const tui = runtime.activeEditorTui;
+    const footerTui = runtime.activeFooterTui;
+    const terminal = tui?.terminal;
+    if (!(editor && tui && footerTui && terminal)) {
+      return;
+    }
+
+    let compositor: TerminalSplitCompositor | null = null;
+    try {
+      compositor = new TerminalSplitCompositor({
+        tui,
+        terminal,
+        mouseScroll: runtime.fixedEditorConfig.mouseScroll,
+        scrollUpShortcuts: runtime.fixedEditorConfig.scrollUpShortcuts,
+        scrollDownShortcuts: runtime.fixedEditorConfig.scrollDownShortcuts,
+        onCopySelection: copyFixedEditorSelection,
+        getShowHardwareCursor,
+        renderCluster: (width, terminalRows) =>
+          renderFixedEditorCluster({
+            width,
+            terminalRows,
+            editorLines:
+              runtime.fixedEditorCompositor?.renderHidden(editor, width) ??
+              editor.render(width),
+          }),
+      });
+
+      if (!compositor.install()) {
+        runtime.fixedEditorInstallFailed = true;
+        notifyFixedEditorInstallFailed();
+        return;
+      }
+
+      compositor.hideRenderable(editor);
+      runtime.fixedEditorCompositor = compositor;
+      tui.requestRender();
+    } catch {
+      compositor?.dispose({ resetExtendedKeyboardModes: true });
+      runtime.fixedEditorInstallFailed = true;
+      notifyFixedEditorInstallFailed();
+    }
+  }
+
+  function hasFixedEditorRefs(): boolean {
+    return Boolean(
+      runtime.activeEditor &&
+        runtime.activeEditorTui &&
+        runtime.activeFooterTui &&
+        runtime.activeEditorTui.terminal
+    );
+  }
+
+  function reconcileFixedEditorCompositor(): void {
+    if (!(runtime.fixedEditorConfig.enabled && hasFixedEditorRefs())) {
+      disposeFixedEditorCompositor();
+      runtime.activeEditorTui?.requestRender();
+      runtime.fixedEditorInstallFailed = false;
+      return;
+    }
+
+    installFixedEditorCompositor();
+  }
 
   return {
     attachEditor(ctx: ExtensionContext): void {
-      if (!ctx.hasUI) return;
+      if (!ctx.hasUI) {
+        return;
+      }
 
       runtime.activeContext = ctx;
       const config = loadConfig();
+      runtime.fixedEditorConfig = config.fixedEditor;
+      runtime.fixedEditorInstallFailed = false;
+      emitFixedEditorConfigChanged();
       let warnedMissingDoubleEscapeCommand = false;
 
       const getDoubleEscapeCommand = () => {
@@ -84,7 +231,12 @@ export function createPieditorComposition(pi: ExtensionAPI) {
         return commandState.command;
       };
 
-      const factory = (tui: any, theme: any, keybindings: any) => {
+      const factory = (
+        tui: TUI,
+        theme: EditorTheme,
+        keybindings: KeybindingsManager
+      ) => {
+        runtime.activeEditorTui = tui;
         runtime.activeEditor = new EnhancedEditor(
           tui,
           theme,
@@ -93,7 +245,9 @@ export function createPieditorComposition(pi: ExtensionAPI) {
           {
             getDoubleEscapeCommand,
             canTriggerDoubleEscapeCommand: () => {
-              if (!runtime.activeContext) return false;
+              if (!runtime.activeContext) {
+                return false;
+              }
               return (
                 runtime.activeContext.isIdle() &&
                 !runtime.activeContext.hasPendingMessages()
@@ -107,13 +261,16 @@ export function createPieditorComposition(pi: ExtensionAPI) {
             },
           }
         );
+        reconcileFixedEditorCompositor();
         return runtime.activeEditor;
       };
 
       ctx.ui.setEditorComponent(factory);
       ctx.ui.setFooter(
-        (tui: any, _theme: any, footerData: ReadonlyFooterDataProvider) => {
+        (tui: TUI, _theme: Theme, footerData: ReadonlyFooterDataProvider) => {
+          runtime.activeFooterTui = tui;
           runtime.activeFooterData = footerData;
+          reconcileFixedEditorCompositor();
           const unsub = footerData.onBranchChange(() => tui.requestRender());
 
           return {
@@ -122,8 +279,14 @@ export function createPieditorComposition(pi: ExtensionAPI) {
               if (runtime.activeFooterData === footerData) {
                 runtime.activeFooterData = null;
               }
+              if (runtime.activeFooterTui === tui) {
+                runtime.activeFooterTui = null;
+              }
+              reconcileFixedEditorCompositor();
             },
-            invalidate() {},
+            invalidate() {
+              // Footer data is pulled during EnhancedEditor.render().
+            },
             render(): string[] {
               return [];
             },
@@ -137,9 +300,13 @@ export function createPieditorComposition(pi: ExtensionAPI) {
     },
 
     detachEditor(): void {
+      disposeFixedEditorCompositor();
       runtime.activeContext = null;
       runtime.activeEditor = null;
+      runtime.activeEditorTui = null;
       runtime.activeFooterData = null;
+      runtime.activeFooterTui = null;
+      runtime.fixedEditorInstallFailed = false;
     },
 
     handleToolResult(event: {
@@ -164,8 +331,31 @@ export function createPieditorComposition(pi: ExtensionAPI) {
       }
     },
 
+    getFixedEditorConfig(): FixedEditorRuntimeConfig {
+      return runtime.fixedEditorConfig;
+    },
+
+    setFixedEditorEnabled(enabled: boolean): void {
+      runtime.fixedEditorConfig = {
+        ...runtime.fixedEditorConfig,
+        enabled,
+      };
+      runtime.fixedEditorInstallFailed = false;
+      reconcileFixedEditorCompositor();
+      emitFixedEditorConfigChanged();
+    },
+
+    onFixedEditorConfigChange(listener: FixedEditorConfigListener): () => void {
+      runtime.fixedEditorConfigListeners.add(listener);
+      return () => {
+        runtime.fixedEditorConfigListeners.delete(listener);
+      };
+    },
+
     async pasteClipboardRaw(ctx: ExtensionContext): Promise<void> {
-      if (!ctx.hasUI) return;
+      if (!ctx.hasUI) {
+        return;
+      }
       if (!runtime.activeEditor) {
         ctx.ui.notify("Editor not ready", "warning");
         return;
