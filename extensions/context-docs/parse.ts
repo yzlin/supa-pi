@@ -72,6 +72,7 @@ const ADR_STATUSES = new Set([
 ]);
 const REVIEW_SCOPES = new Set(["current", "all"]);
 const GRILL_DEPTHS = new Set(["light", "standard", "deep"]);
+const WHITESPACE_PATTERN = /\s/;
 
 function tokenizeArgs(
   rawArgs: string
@@ -80,11 +81,16 @@ function tokenizeArgs(
   let index = 0;
 
   while (index < rawArgs.length) {
-    while (index < rawArgs.length && /\s/.test(rawArgs[index] ?? "")) {
+    while (
+      index < rawArgs.length &&
+      WHITESPACE_PATTERN.test(rawArgs[index] ?? "")
+    ) {
       index += 1;
     }
 
-    if (index >= rawArgs.length) break;
+    if (index >= rawArgs.length) {
+      break;
+    }
 
     const start = index;
     let value = "";
@@ -114,7 +120,9 @@ function tokenizeArgs(
         continue;
       }
 
-      if (/\s/.test(char)) break;
+      if (WHITESPACE_PATTERN.test(char)) {
+        break;
+      }
 
       if (char === '"' || char === "'") {
         quote = char;
@@ -247,6 +255,10 @@ function requiresInstruction(command: ContextDocsCommand): boolean {
   return command === "context-note" || command === "adr";
 }
 
+function isMissingNextValue(token: string | undefined): boolean {
+  return token === undefined || token.startsWith("--");
+}
+
 export function parseContextDocsArgs(
   command: ContextDocsCommand,
   rawArgs: string,
@@ -296,7 +308,12 @@ export function parseContextDocsArgs(
     }
 
     if (VALUE_FLAGS.has(flag)) {
-      const value = inlineValue ?? beforeTokens[index + 1]?.value;
+      const nextValue = beforeTokens[index + 1]?.value;
+      if (inlineValue === null && isMissingNextValue(nextValue)) {
+        return { ok: false, error: `${flag} requires a value.` };
+      }
+
+      const value = inlineValue ?? nextValue;
       if (!value) {
         return { ok: false, error: `${flag} requires a value.` };
       }

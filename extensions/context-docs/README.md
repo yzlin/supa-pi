@@ -35,3 +35,5 @@ Natural-language prefixes are intercepted only for clear forms and require confi
 - `Take note that ...`
 - `Remember that ...`
 - `Record that ...`
+
+Managed block helpers fail fast on malformed marker pairs instead of appending duplicate managed sections.

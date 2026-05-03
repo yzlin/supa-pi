@@ -1,5 +1,9 @@
 # AGENTS.md
 
+## General
+
+- always do `bun format` & `bun check`
+
 ## Extension Boundaries
 
 - Extensions under `extensions/` are isolated.

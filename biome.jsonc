@@ -24,8 +24,10 @@
       }
     }
   },
+  "files": {
+    "includes": ["extensions/**/*.ts"]
+  },
   "linter": {
-    "includes": ["extensions", "!**/node_modules"],
     "enabled": true,
     "rules": {
       "recommended": true,

@@ -1,10 +1,11 @@
-export type MarkedBlockAction = "append" | "noop" | "replace";
+export type MarkedBlockAction = "append" | "error" | "noop" | "replace";
 
 export interface MarkedBlockPlan {
   action: MarkedBlockAction;
   content: string;
   startMarker: string;
   endMarker: string;
+  error?: string;
 }
 
 export function buildContextDocsBlockMarkers(name: string): {
@@ -14,6 +15,21 @@ export function buildContextDocsBlockMarkers(name: string): {
   return {
     startMarker: `<!-- context-docs:start ${name} -->`,
     endMarker: `<!-- context-docs:end ${name} -->`,
+  };
+}
+
+function buildMalformedBlockPlan(
+  content: string,
+  startMarker: string,
+  endMarker: string,
+  error: string
+): MarkedBlockPlan {
+  return {
+    action: "error",
+    content,
+    startMarker,
+    endMarker,
+    error,
   };
 }
 
@@ -27,8 +43,37 @@ export function planMarkedBlockUpdate(
   const nextBlock = `${startMarker}\n${normalizedBody}\n${endMarker}`;
   const start = existingContent.indexOf(startMarker);
   const end = existingContent.indexOf(endMarker);
+  const hasStart = start >= 0;
+  const hasEnd = end >= 0;
 
-  if (start >= 0 && end >= start) {
+  if (hasStart && !hasEnd) {
+    return buildMalformedBlockPlan(
+      existingContent,
+      startMarker,
+      endMarker,
+      `Malformed managed block: missing end marker for ${name}.`
+    );
+  }
+
+  if (!hasStart && hasEnd) {
+    return buildMalformedBlockPlan(
+      existingContent,
+      startMarker,
+      endMarker,
+      `Malformed managed block: missing start marker for ${name}.`
+    );
+  }
+
+  if (hasStart && hasEnd && end < start) {
+    return buildMalformedBlockPlan(
+      existingContent,
+      startMarker,
+      endMarker,
+      `Malformed managed block: end marker appears before start marker for ${name}.`
+    );
+  }
+
+  if (hasStart) {
     const endExclusive = end + endMarker.length;
     const currentBlock = existingContent.slice(start, endExclusive);
 

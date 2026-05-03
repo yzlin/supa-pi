@@ -57,9 +57,9 @@ function createHarness(confirmResult = true) {
       notify(message: string, level: string) {
         notifications.push({ message, level });
       },
-      async confirm(title: string, message: string) {
+      confirm(title: string, message: string) {
         confirms.push({ title, message });
-        return confirmResult;
+        return Promise.resolve(confirmResult);
       },
     },
   };
@@ -85,7 +85,9 @@ describe("context-docs parsing", () => {
     );
 
     expect(parsed.ok).toBe(true);
-    if (!parsed.ok) return;
+    if (!parsed.ok) {
+      return;
+    }
 
     expect(parsed.value).toMatchObject({
       command: "adr",
@@ -142,6 +144,26 @@ describe("context-docs parsing", () => {
     } finally {
       fs.rmSync(parent, { force: true, recursive: true });
     }
+  });
+
+  it("rejects separator and flag-looking tokens as missing flag values", () => {
+    expect(
+      parseContextDocsArgs("adr", "--title -- Decide", process.cwd())
+    ).toEqual({
+      ok: false,
+      error: "--title requires a value.",
+    });
+
+    expect(
+      parseContextDocsArgs(
+        "adr",
+        "--title --status accepted -- Decide",
+        process.cwd()
+      )
+    ).toEqual({
+      ok: false,
+      error: "--title requires a value.",
+    });
   });
 });
 
@@ -596,6 +618,34 @@ describe("context-docs helper modules", () => {
     expect(replaced.content).not.toContain("- Leaf: branch tip");
   });
 
+  it("fails marked block updates when markers are malformed", () => {
+    const missingEnd = planMarkedBlockUpdate(
+      "# Docs\n<!-- context-docs:start glossary -->\n- stale\n",
+      "glossary",
+      "- Leaf: branch tip"
+    );
+    expect(missingEnd).toEqual(
+      expect.objectContaining({
+        action: "error",
+        content: "# Docs\n<!-- context-docs:start glossary -->\n- stale\n",
+        error: "Malformed managed block: missing end marker for glossary.",
+      })
+    );
+
+    const misordered = planMarkedBlockUpdate(
+      "# Docs\n<!-- context-docs:end glossary -->\n<!-- context-docs:start glossary -->\n",
+      "glossary",
+      "- Leaf: branch tip"
+    );
+    expect(misordered).toEqual(
+      expect.objectContaining({
+        action: "error",
+        error:
+          "Malformed managed block: end marker appears before start marker for glossary.",
+      })
+    );
+  });
+
   it("refuses secret-bearing prompt evidence", () => {
     expect(
       detectSecret("OPENAI_API_KEY=sk-abcdefghijklmnopqrstuvwxyz")
@@ -671,7 +721,9 @@ describe("context-docs prompt", () => {
     );
 
     expect(parsed.ok).toBe(true);
-    if (!parsed.ok) return;
+    if (!parsed.ok) {
+      return;
+    }
 
     expect(buildContextDocsMessage(parsed.value)).toContain(
       "Do not create, modify, schedule, or manage pi-tasks."
@@ -686,7 +738,9 @@ describe("context-docs prompt", () => {
     );
 
     expect(parsed.ok).toBe(true);
-    if (!parsed.ok) return;
+    if (!parsed.ok) {
+      return;
+    }
 
     const message = buildContextDocsMessage(parsed.value);
 
@@ -703,7 +757,9 @@ describe("context-docs prompt", () => {
     );
 
     expect(parsed.ok).toBe(true);
-    if (!parsed.ok) return;
+    if (!parsed.ok) {
+      return;
+    }
 
     const message = buildContextDocsMessage(parsed.value);
 
@@ -729,7 +785,9 @@ describe("context-docs prompt", () => {
     );
 
     expect(parsed.ok).toBe(true);
-    if (!parsed.ok) return;
+    if (!parsed.ok) {
+      return;
+    }
 
     const message = buildContextDocsMessage(parsed.value);
 
