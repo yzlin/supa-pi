@@ -12,7 +12,7 @@
       "./extensions/rules",
       "./extensions/execute",
       "./extensions/research",
-      "./extensions/simplify",
+      "./extensions/code-improvement",
       "./extensions/review.ts",
       "./extensions/session-query.ts",
       "./extensions/handoff.ts",

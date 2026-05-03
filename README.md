@@ -24,6 +24,7 @@ Documented extensions in this repo include:
 - **`extensions/pieditor`** — editor UX improvements like `@` file picking, shell completions, raw paste, command remapping, and a locally maintained fork lineage from the original upstream extension
 - **`extensions/init-deep`** — deterministic `/init-deep` command flow for generating hierarchical `AGENTS.md`
 - **`extensions/context-docs`** — deterministic `/context-setup`, `/context-note`, `/adr`, `/context-review`, and `/context-grill` workflows for durable project context docs
+- **`extensions/code-improvement`** — `/simplify` code-simplifier delegation plus `/improve-codebase-architecture` read-only architecture review workflow
 - **`extensions/review.ts`** — interactive current-session `/review` workflow with `/review-summary` and `/review-fix` follow-ups plus reviewer-agent orchestration; adapted in part from `@earendil-works/pi-review`
 - **`extensions/smart-docs`** — deterministic `/smart-docs` command flow for codebase documentation generation
 
@@ -34,7 +35,7 @@ The configured extension set also includes workflow and utility modules such as:
 - `rules`
 - `execute`
 - `research`
-- `simplify`
+- `code-improvement`
 - `review.ts`
 - `session-query`
 - `handoff`
@@ -73,6 +74,8 @@ See `package.json` for the full registration list.
 `prompts/to-prd.md` is adapted from Matt Pocock's `to-prd` skill: https://github.com/mattpocock/skills/blob/main/skills/engineering/to-prd/SKILL.md
 
 `extensions/context-docs/prompt.md` is bundled with the context-docs extension and documents the Matt-compatible `CONTEXT.md`/`CONTEXT-MAP.md` scaffold, ADR shape, `/context-review` extraction rules, and `/context-grill` behavior.
+
+`extensions/code-improvement/IMPROVE-CODEBASE-ARCHITECTURE.md` plus its uppercase support docs (`LANGUAGE.md`, `DEEPENING.md`, and `INTERFACE-DESIGN.md`) adapt Matt Pocock's `improve-codebase-architecture` workflow, licensed under the MIT License, from https://github.com/mattpocock/skills/blob/main/skills/engineering/improve-codebase-architecture/SKILL.md
 
 ## Included rules
 
