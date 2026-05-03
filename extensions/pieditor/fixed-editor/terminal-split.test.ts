@@ -317,6 +317,43 @@ describe("terminal split compositor", () => {
     expect(tui.compositeLineAt?.("a\tb", "c\td", 0, 4, 10)).toBe("a   b");
   });
 
+  it("preserves the fixed-editor root scroll window behind overlays", () => {
+    const terminal = new MockTerminal(5);
+    const tui = createTui();
+    const rootLines = [
+      "root-1",
+      "root-2",
+      "root-3",
+      "root-4",
+      "root-5",
+      "root-6",
+    ];
+    const clusterLines = ["status", "editor"];
+    tui.render = () =>
+      tui.overlayVisible ? [...rootLines, ...clusterLines] : rootLines;
+    const compositor = new TerminalSplitCompositor({
+      tui,
+      terminal,
+      renderCluster: () => ({ lines: clusterLines, cursor: null }),
+    });
+
+    expect(compositor.install()).toBe(true);
+    compositor.hideRenderable({ render: () => clusterLines });
+
+    expect(tui.render?.(20)).toEqual(["root-4", "root-5", "root-6"]);
+    expect(tui.listeners[0]?.("\u001b[1;9A")).toEqual({ consume: true });
+    expect(tui.render?.(20)).toEqual(["root-1", "root-2", "root-3"]);
+
+    tui.overlayVisible = true;
+
+    expect(tui.render?.(20)).toEqual([
+      "root-1",
+      "root-2",
+      "root-3",
+      ...clusterLines,
+    ]);
+  });
+
   it("consumes configured keyboard and mouse scroll input", () => {
     const { compositor, tui } = createCompositor({
       rootLines: ["root-1", "root-2", "root-3", "root-4", "root-5", "root-6"],

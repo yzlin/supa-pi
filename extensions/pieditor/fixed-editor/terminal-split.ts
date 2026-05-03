@@ -1054,41 +1054,68 @@ export class TerminalSplitCompositor {
       return this.originalRender?.(width) ?? [];
     }
 
-    if (this.hasVisibleOverlay()) {
-      return this.originalRender(width).map((line) =>
-        sanitizeOverlayBaseLine(line, Math.max(1, width))
-      );
-    }
-
     this.renderingScrollableRoot = true;
     try {
-      const rawRows = this.getRawRows();
       const renderWidth = Math.max(1, width);
+      if (this.hasVisibleOverlay()) {
+        return this.renderOverlayRoot(renderWidth);
+      }
+
+      const rawRows = this.getRawRows();
       const cluster = this.getCluster(renderWidth, rawRows, true);
       const scrollableRows = Math.max(1, rawRows - cluster.lines.length);
       const lines = this.originalRender(renderWidth);
-      this.rootLines = lines;
-      if (
-        this.scrollOffset > 0 &&
-        this.lastRootLineCount > 0 &&
-        lines.length > this.lastRootLineCount
-      ) {
-        this.scrollOffset += lines.length - this.lastRootLineCount;
-      }
-      this.lastRootLineCount = lines.length;
-      this.maxScrollOffset = Math.max(0, lines.length - scrollableRows);
-      this.scrollOffset = Math.max(
-        0,
-        Math.min(this.scrollOffset, this.maxScrollOffset)
-      );
-
-      const start = this.updateVisibleRootWindow(scrollableRows);
+      const start = this.updateRootScrollState(lines, scrollableRows);
       return this.visibleRootLines.map((line, index) =>
         this.renderSelectionHighlight(line, start + index, "root")
       );
     } finally {
       this.renderingScrollableRoot = false;
     }
+  }
+
+  private renderOverlayRoot(width: number): string[] {
+    const rawRows = this.getRawRows();
+    const cluster = this.getCluster(width, rawRows, true);
+    const reservedRows =
+      this.patchedRenders.length > 0 ? cluster.lines.length : 0;
+    const lines = this.originalRender(width);
+    if (reservedRows === 0) {
+      return lines.map((line) => sanitizeOverlayBaseLine(line, width));
+    }
+
+    const scrollableRows = Math.max(1, rawRows - reservedRows);
+    const tailCount = Math.min(reservedRows, lines.length);
+    const tailStart = lines.length - tailCount;
+    const rootLines = lines.slice(0, tailStart);
+    const tailLines = lines.slice(tailStart);
+
+    this.updateRootScrollState(rootLines, scrollableRows);
+    return [...this.visibleRootLines, ...tailLines].map((line) =>
+      sanitizeOverlayBaseLine(line, width)
+    );
+  }
+
+  private updateRootScrollState(
+    rootLines: string[],
+    scrollableRows: number
+  ): number {
+    this.rootLines = rootLines;
+    if (
+      this.scrollOffset > 0 &&
+      this.lastRootLineCount > 0 &&
+      rootLines.length > this.lastRootLineCount
+    ) {
+      this.scrollOffset += rootLines.length - this.lastRootLineCount;
+    }
+    this.lastRootLineCount = rootLines.length;
+    this.maxScrollOffset = Math.max(0, rootLines.length - scrollableRows);
+    this.scrollOffset = Math.max(
+      0,
+      Math.min(this.scrollOffset, this.maxScrollOffset)
+    );
+
+    return this.updateVisibleRootWindow(scrollableRows);
   }
 
   private handleInput(
