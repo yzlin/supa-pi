@@ -12,7 +12,7 @@ import {
   visibleWidth,
 } from "@mariozechner/pi-tui";
 
-import type { FixedEditorClusterRender } from "./cluster.js";
+import type { FixedEditorClusterRender, FixedEditorCursor } from "./cluster.js";
 
 export interface TerminalLike {
   columns: number;
@@ -76,6 +76,14 @@ interface RenderPassCluster {
   width: number;
   terminalRows: number;
   cluster: FixedEditorClusterRender;
+}
+
+interface PaintedCluster {
+  width: number;
+  terminalRows: number;
+  showHardwareCursor: boolean;
+  lines: string[];
+  cursor: FixedEditorCursor | null;
 }
 
 type CompositeLineAt = (
@@ -174,6 +182,17 @@ const ANSI_SGR_SEQUENCE_PATTERN = new RegExp(`^${ESC_PATTERN}\\[[0-9;]*m$`);
 const ESCAPE_SEQUENCE_PATTERN = new RegExp(`${ESC_PATTERN}[ -/]*[@-~]`, "g");
 const SGR_PLACEHOLDER_PATTERN = /\u{e000}SGR:(\d+)\u{e000}/gu;
 const noopWrite = () => undefined;
+
+function sameCursor(
+  left: FixedEditorCursor | null,
+  right: FixedEditorCursor | null
+): boolean {
+  if (left === null || right === null) {
+    return left === right;
+  }
+
+  return left.row === right.row && left.col === right.col;
+}
 
 export function beginSynchronizedOutput(): string {
   return "\x1b[?2026h";
@@ -556,14 +575,80 @@ export function buildFixedClusterPaint(
     buffer += sanitizeLine(cluster.lines[i] ?? "", width);
   }
 
+  buffer += buildFixedClusterCursorPaint(
+    cluster,
+    terminalRows,
+    showHardwareCursor
+  );
+
+  return buffer;
+}
+
+function buildFixedClusterCursorPaint(
+  cluster: FixedEditorClusterRender,
+  terminalRows: number,
+  showHardwareCursor: boolean
+): string {
   if (cluster.cursor && showHardwareCursor) {
-    buffer += moveCursor(
+    const startRow = Math.max(1, terminalRows - cluster.lines.length + 1);
+    return `${moveCursor(
       startRow + cluster.cursor.row,
       Math.max(1, cluster.cursor.col + 1)
+    )}${showCursor()}`;
+  }
+
+  return hideCursor();
+}
+
+function snapshotPaintedCluster(
+  cluster: FixedEditorClusterRender,
+  terminalRows: number,
+  width: number,
+  showHardwareCursor: boolean
+): PaintedCluster {
+  return {
+    width,
+    terminalRows,
+    showHardwareCursor,
+    lines: cluster.lines.map((line) => sanitizeLine(line ?? "", width)),
+    cursor: cluster.cursor ? { ...cluster.cursor } : null,
+  };
+}
+
+function shouldFullPaintFixedCluster(
+  previous: PaintedCluster,
+  next: PaintedCluster
+): boolean {
+  return (
+    previous.width !== next.width ||
+    previous.terminalRows !== next.terminalRows ||
+    previous.showHardwareCursor !== next.showHardwareCursor ||
+    previous.lines.length !== next.lines.length
+  );
+}
+
+function buildFixedClusterChangedLinePaint(
+  previous: PaintedCluster,
+  next: PaintedCluster
+): string {
+  const startRow = Math.max(1, next.terminalRows - next.lines.length + 1);
+  let buffer = "";
+
+  for (let i = 0; i < next.lines.length; i++) {
+    if (previous.lines[i] === next.lines[i]) {
+      continue;
+    }
+    buffer += moveCursor(startRow + i, 1);
+    buffer += clearLine();
+    buffer += next.lines[i];
+  }
+
+  if (buffer || !sameCursor(previous.cursor, next.cursor)) {
+    buffer += buildFixedClusterCursorPaint(
+      { lines: next.lines, cursor: next.cursor },
+      next.terminalRows,
+      next.showHardwareCursor
     );
-    buffer += showCursor();
-  } else {
-    buffer += hideCursor();
   }
 
   return buffer;
@@ -597,6 +682,8 @@ export class TerminalSplitCompositor {
   private writing = false;
   private renderPassActive = false;
   private renderPassCluster: RenderPassCluster | null = null;
+  private cachedCluster: RenderPassCluster | null = null;
+  private lastPaintedCluster: PaintedCluster | null = null;
   private renderingCluster = false;
   private renderingScrollableRoot = false;
   private checkingOverlay = false;
@@ -735,7 +822,8 @@ export class TerminalSplitCompositor {
     }
     const originalRender = target.render.bind(target);
     this.patchedRenders.push({ target, originalRender });
-    target.render = () => [];
+    target.render = (width: number) =>
+      this.hasVisibleOverlay() ? originalRender(width) : [];
   }
 
   renderHidden(target: PatchedRenderable, width: number): string[] {
@@ -815,16 +903,51 @@ export class TerminalSplitCompositor {
       return;
     }
 
+    const paint = this.buildFixedClusterRepaint(cluster, rawRows, width);
+    if (!paint) {
+      return;
+    }
+
     this.originalWrite(
-      beginSynchronizedOutput() +
-        buildFixedClusterPaint(
-          this.decorateCluster(cluster),
-          rawRows,
-          width,
-          this.getShowHardwareCursor()
-        ) +
-        endSynchronizedOutput()
+      beginSynchronizedOutput() + paint + endSynchronizedOutput()
     );
+  }
+
+  private buildFixedClusterRepaint(
+    cluster: FixedEditorClusterRender,
+    terminalRows: number,
+    width: number
+  ): string {
+    const decoratedCluster = this.decorateCluster(cluster);
+    const showHardwareCursor = this.getShowHardwareCursor();
+    const nextPaintedCluster = snapshotPaintedCluster(
+      decoratedCluster,
+      terminalRows,
+      width,
+      showHardwareCursor
+    );
+
+    const previousPaintedCluster = this.lastPaintedCluster;
+    let paint: string;
+    if (
+      !previousPaintedCluster ||
+      shouldFullPaintFixedCluster(previousPaintedCluster, nextPaintedCluster)
+    ) {
+      paint = buildFixedClusterPaint(
+        decoratedCluster,
+        terminalRows,
+        width,
+        showHardwareCursor
+      );
+    } else {
+      paint = buildFixedClusterChangedLinePaint(
+        previousPaintedCluster,
+        nextPaintedCluster
+      );
+    }
+
+    this.lastPaintedCluster = nextPaintedCluster;
+    return paint;
   }
 
   dispose(options: DisposeOptions = {}): void {
@@ -941,7 +1064,7 @@ export class TerminalSplitCompositor {
     try {
       const rawRows = this.getRawRows();
       const renderWidth = Math.max(1, width);
-      const cluster = this.getCluster(renderWidth, rawRows);
+      const cluster = this.getCluster(renderWidth, rawRows, true);
       const scrollableRows = Math.max(1, rawRows - cluster.lines.length);
       const lines = this.originalRender(renderWidth);
       this.rootLines = lines;
@@ -1532,12 +1655,8 @@ export class TerminalSplitCompositor {
         setScrollRegion(1, scrollBottom) +
         moveCursor(screenRow, 1) +
         data +
-        buildFixedClusterPaint(
-          this.decorateCluster(cluster),
-          rawRows,
-          width,
-          this.getShowHardwareCursor()
-        ) +
+        resetScrollRegion() +
+        this.buildFixedClusterRepaint(cluster, rawRows, width) +
         endSynchronizedOutput();
 
       this.originalWrite(buffer);
@@ -1548,9 +1667,11 @@ export class TerminalSplitCompositor {
 
   private getCluster(
     width: number,
-    terminalRows: number
+    terminalRows: number,
+    forceRefresh = false
   ): FixedEditorClusterRender {
     if (
+      !forceRefresh &&
       this.renderPassActive &&
       this.renderPassCluster?.width === width &&
       this.renderPassCluster.terminalRows === terminalRows
@@ -1558,12 +1679,22 @@ export class TerminalSplitCompositor {
       return this.renderPassCluster.cluster;
     }
 
+    if (
+      !(forceRefresh || this.renderPassActive) &&
+      this.cachedCluster?.width === width &&
+      this.cachedCluster.terminalRows === terminalRows
+    ) {
+      return this.cachedCluster.cluster;
+    }
+
     const cluster = this.withClusterRender(() =>
       this.renderCluster(width, terminalRows)
     );
+    const cachedCluster = { width, terminalRows, cluster };
     this.visibleClusterLines = cluster.lines;
+    this.cachedCluster = cachedCluster;
     if (this.renderPassActive) {
-      this.renderPassCluster = { width, terminalRows, cluster };
+      this.renderPassCluster = cachedCluster;
     }
     return cluster;
   }
@@ -1600,16 +1731,22 @@ export class TerminalSplitCompositor {
 
     this.checkingOverlay = true;
     try {
+      let hasVisibleOverlay = false;
       if (typeof this.tui.hasOverlay === "function" && this.tui.hasOverlay()) {
-        return true;
+        hasVisibleOverlay = true;
       }
 
-      const overlayStack = Reflect.get(this.tui, "overlayStack");
-      if (!Array.isArray(overlayStack)) {
-        return false;
+      if (!hasVisibleOverlay) {
+        const overlayStack = Reflect.get(this.tui, "overlayStack");
+        hasVisibleOverlay =
+          Array.isArray(overlayStack) &&
+          overlayStack.some((entry) => entry && entry.hidden !== true);
       }
 
-      return overlayStack.some((entry) => entry && entry.hidden !== true);
+      if (hasVisibleOverlay) {
+        this.lastPaintedCluster = null;
+      }
+      return hasVisibleOverlay;
     } finally {
       this.checkingOverlay = false;
     }

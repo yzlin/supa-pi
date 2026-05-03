@@ -6,10 +6,10 @@ import {
   type KeybindingsManager,
   type ReadonlyFooterDataProvider,
 } from "@mariozechner/pi-coding-agent";
-import {
-  type AutocompleteProvider,
-  type EditorTheme,
-  type TUI,
+import type {
+  AutocompleteProvider,
+  EditorTheme,
+  TUI,
 } from "@mariozechner/pi-tui";
 
 import type { StatusBarRuntimeConfig } from "../config/index.js";
@@ -24,7 +24,21 @@ import {
   shouldHandleConfiguredDoubleEscape,
 } from "./double-escape.js";
 
-type EnhancedEditorOptions = {
+export interface FixedEditorParts {
+  statusLines?: string[];
+  editorLines: string[];
+}
+
+interface EditorRenderCache {
+  width: number;
+  terminalRows: number;
+  text: string;
+  cursorLine: number;
+  cursorCol: number;
+  lines: string[];
+}
+
+interface EnhancedEditorOptions {
   getDoubleEscapeCommand: () => string | null;
   canTriggerDoubleEscapeCommand: () => boolean;
   commandRemap: Record<string, string>;
@@ -33,7 +47,7 @@ type EnhancedEditorOptions = {
     getContext: () => ExtensionContext | null;
     getFooterData: () => ReadonlyFooterDataProvider | null;
   };
-};
+}
 
 export class EnhancedEditor extends CustomEditor {
   private readonly tuiInstance: TUI;
@@ -44,6 +58,7 @@ export class EnhancedEditor extends CustomEditor {
   private submitHandler?: (text: string) => void;
 
   private shell: ShellInfo;
+  private editorRenderCache: EditorRenderCache | null = null;
 
   constructor(
     tui: TUI,
@@ -176,31 +191,81 @@ export class EnhancedEditor extends CustomEditor {
     return before === " " || before === "\t" || before === undefined;
   }
 
+  renderFixedEditorParts(width: number): FixedEditorParts {
+    const editorLines = this.renderEditorLines(width);
+    const statusLine = this.renderStatusLine(width, editorLines);
+    return {
+      statusLines: statusLine === null ? undefined : [statusLine],
+      editorLines,
+    };
+  }
+
   render(width: number): string[] {
+    const parts = this.renderFixedEditorParts(width);
+    return [...(parts.statusLines ?? []), ...parts.editorLines];
+  }
+
+  private renderEditorLines(width: number): string[] {
+    const cursor = this.getCursor();
+    const text = this.getText();
+    const terminalRows = this.getTerminalRows();
+    const cache = this.editorRenderCache;
+    if (
+      cache &&
+      cache.width === width &&
+      cache.terminalRows === terminalRows &&
+      cache.text === text &&
+      cache.cursorLine === cursor.line &&
+      cache.cursorCol === cursor.col &&
+      !this.isShowingAutocomplete()
+    ) {
+      return cache.lines;
+    }
+
     const lines = super.render(width);
+    this.editorRenderCache = this.isShowingAutocomplete()
+      ? null
+      : {
+          width,
+          terminalRows,
+          text,
+          cursorLine: cursor.line,
+          cursorCol: cursor.col,
+          lines,
+        };
+    return lines;
+  }
+
+  private getTerminalRows(): number {
+    const terminal = Reflect.get(this.tuiInstance, "terminal");
+    const rows = terminal ? Reflect.get(terminal, "rows") : undefined;
+    return typeof rows === "number" && Number.isFinite(rows) ? rows : 0;
+  }
+
+  private renderStatusLine(
+    width: number,
+    editorLines: string[]
+  ): string | null {
     if (
       !this.options.statusBar.config.enabled ||
       width < 10 ||
-      lines.length === 0
+      editorLines.length === 0
     ) {
-      return lines;
+      return null;
     }
 
     const ctx = this.options.statusBar.getContext();
     if (!ctx) {
-      return lines;
+      return null;
     }
 
-    return [
-      renderStatusBarLine({
-        width,
-        ctx,
-        footerData: this.options.statusBar.getFooterData(),
-        config: this.options.statusBar.config,
-        sessionStartTime: this.sessionStartTime,
-        theme: this.ui.theme,
-      }),
-      ...lines,
-    ];
+    return renderStatusBarLine({
+      width,
+      ctx,
+      footerData: this.options.statusBar.getFooterData(),
+      config: this.options.statusBar.config,
+      sessionStartTime: this.sessionStartTime,
+      theme: this.ui.theme,
+    });
   }
 }

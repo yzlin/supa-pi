@@ -4,6 +4,7 @@ import type {
   ExtensionContext,
   ReadonlyFooterDataProvider,
 } from "@mariozechner/pi-coding-agent";
+import { CustomEditor } from "@mariozechner/pi-coding-agent";
 import type { AutocompleteItem } from "@mariozechner/pi-tui";
 
 import { matchesInterrupt } from "./editor/double-escape";
@@ -95,14 +96,14 @@ function createStatusBarContext(): ExtensionContext {
   } as unknown as ExtensionContext;
 }
 
-function createStatusBarFooterData(): ReadonlyFooterDataProvider {
+function createStatusBarFooterData(
+  getExtensionStatuses: () => ReadonlyMap<string, string> = () => new Map()
+): ReadonlyFooterDataProvider {
   return {
     getGitBranch() {
       return "main";
     },
-    getExtensionStatuses() {
-      return new Map();
-    },
+    getExtensionStatuses,
     getAvailableProviderCount() {
       return 0;
     },
@@ -268,6 +269,78 @@ describe("EnhancedEditor command remap", () => {
 
     expect(lines[0]).toContain("test-model");
     expect(lines[1]).toBe("─".repeat(width));
+  });
+
+  it("updates fixed editor status without rerendering base editor lines", () => {
+    let widgetStatus = "widget-a";
+    let baseRenderCount = 0;
+    const originalRender = CustomEditor.prototype.render;
+    CustomEditor.prototype.render = function renderWithCount(width: number) {
+      baseRenderCount += 1;
+      return originalRender.call(this, width);
+    };
+
+    try {
+      const editor = createEditor(
+        {},
+        {
+          statusBarEnabled: true,
+          statusBarContext: createStatusBarContext(),
+          statusBarFooterData: createStatusBarFooterData(
+            () => new Map([["custom", widgetStatus]])
+          ),
+        }
+      );
+      const width = 140;
+
+      const first = editor.renderFixedEditorParts(width);
+      widgetStatus = "widget-b";
+      const second = editor.renderFixedEditorParts(width);
+
+      expect(baseRenderCount).toBe(1);
+      expect(first.statusLines?.[0]).toContain("widget-a");
+      expect(second.statusLines?.[0]).toContain("widget-b");
+      expect(second.editorLines).toEqual(first.editorLines);
+    } finally {
+      CustomEditor.prototype.render = originalRender;
+    }
+  });
+
+  it("rerenders fixed editor lines when terminal height changes", () => {
+    let baseRenderCount = 0;
+    const originalRender = CustomEditor.prototype.render;
+    CustomEditor.prototype.render = function renderWithCount(width: number) {
+      baseRenderCount += 1;
+      return originalRender.call(this, width);
+    };
+
+    try {
+      const editor = createEditor({});
+      const tui = Reflect.get(editor, "tuiInstance") as {
+        terminal: { rows: number };
+      };
+      const width = 40;
+
+      editor.renderFixedEditorParts(width);
+      tui.terminal.rows = 12;
+      editor.renderFixedEditorParts(width);
+
+      expect(baseRenderCount).toBe(2);
+    } finally {
+      CustomEditor.prototype.render = originalRender;
+    }
+  });
+
+  it("rerenders fixed editor lines when editor text changes", () => {
+    const editor = createEditor({});
+    const width = 40;
+
+    const first = editor.renderFixedEditorParts(width);
+    editor.setText("changed text");
+    const second = editor.renderFixedEditorParts(width);
+
+    expect(second.editorLines).not.toEqual(first.editorLines);
+    expect(second.editorLines.join("\n")).toContain("changed text");
   });
 
   it("skips the status bar once the context is detached", () => {

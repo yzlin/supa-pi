@@ -77,6 +77,10 @@ function createCompositor(
     mouseScroll?: boolean;
     hasHardwareCursor?: boolean;
     onCopySelection?: (text: string) => void;
+    renderCluster?: (
+      width: number,
+      terminalRows: number
+    ) => FixedEditorClusterRender;
   } = {}
 ): {
   compositor: TerminalSplitCompositor;
@@ -95,7 +99,7 @@ function createCompositor(
     mouseScroll: options.mouseScroll,
     onCopySelection: options.onCopySelection,
     getShowHardwareCursor: () => options.hasHardwareCursor ?? false,
-    renderCluster: () => cluster,
+    renderCluster: options.renderCluster ?? (() => cluster),
   });
 
   return { compositor, terminal, tui };
@@ -159,6 +163,44 @@ describe("terminal split compositor", () => {
     expect(terminal.writes).toEqual(["after-dispose"]);
   });
 
+  it("fully repaints fixed cluster after an overlay closes", () => {
+    const { compositor, terminal, tui } = createCompositor({
+      renderCluster: () => ({
+        lines: ["status", "editor-a", "editor-b"],
+        cursor: null,
+      }),
+    });
+    expect(compositor.install()).toBe(true);
+    terminal.writes.splice(0);
+
+    tui.doRender?.();
+    expect(terminal.writes[0]).toContain("editor-a");
+
+    tui.overlayVisible = true;
+    expect(tui.render?.(20)).toEqual([]);
+
+    tui.overlayVisible = false;
+    terminal.writes.splice(0);
+    tui.doRender?.();
+
+    expect(terminal.writes[0]).toContain("status");
+    expect(terminal.writes[0]).toContain("editor-a");
+    expect(terminal.writes[0]).toContain("editor-b");
+  });
+
+  it("lets hidden renderables render normally while an overlay is visible", () => {
+    const { compositor, tui } = createCompositor();
+    const renderable = { render: (_width: number) => ["editor"] };
+
+    expect(compositor.install()).toBe(true);
+    compositor.hideRenderable(renderable);
+    expect(renderable.render(20)).toEqual([]);
+
+    tui.overlayVisible = true;
+    expect(renderable.render(20)).toEqual(["editor"]);
+    expect(compositor.renderHidden(renderable, 20)).toEqual(["editor"]);
+  });
+
   it("wraps terminal writes and repaints the fixed cluster", () => {
     const { compositor, terminal, tui } = createCompositor({
       cluster: { lines: ["status", "editor"], cursor: { row: 1, col: 3 } },
@@ -179,13 +221,82 @@ describe("terminal split compositor", () => {
 
     terminal.writes.splice(0);
     tui.doRender?.();
-    expect(terminal.writes).toHaveLength(1);
-    expect(terminal.writes[0]).toContain("status");
-    expect(terminal.writes[0]).toContain("editor");
+    expect(terminal.writes).toHaveLength(0);
 
-    terminal.writes.splice(0);
     compositor.requestRepaint();
-    expect(terminal.writes[0]).toContain("status");
+    expect(terminal.writes).toHaveLength(0);
+  });
+
+  it("repaints only changed fixed cluster lines", () => {
+    let statusLine = "status-a";
+    const { compositor, terminal, tui } = createCompositor({
+      renderCluster: () => ({
+        lines: [statusLine, "editor-a", "editor-b"],
+        cursor: null,
+      }),
+    });
+    expect(compositor.install()).toBe(true);
+    terminal.writes.splice(0);
+
+    tui.doRender?.();
+    expect(terminal.writes[0]).toContain("status-a");
+    expect(terminal.writes[0]).toContain("editor-a");
+    expect(terminal.writes[0]).toContain("editor-b");
+
+    statusLine = "status-b";
+    terminal.writes.splice(0);
+    tui.doRender?.();
+
+    expect(terminal.writes[0]).toContain("status-b");
+    expect(terminal.writes[0]).not.toContain("editor-a");
+    expect(terminal.writes[0]).not.toContain("editor-b");
+  });
+
+  it("restores the hardware cursor after partial fixed cluster repaint", () => {
+    let statusLine = "status-a";
+    const { compositor, terminal, tui } = createCompositor({
+      hasHardwareCursor: true,
+      renderCluster: () => ({
+        lines: [statusLine, "editor-a", "editor-b"],
+        cursor: { row: 2, col: 4 },
+      }),
+    });
+    expect(compositor.install()).toBe(true);
+    terminal.writes.splice(0);
+
+    tui.doRender?.();
+    statusLine = "status-b";
+    terminal.writes.splice(0);
+    tui.doRender?.();
+
+    expect(terminal.writes[0]).toContain("status-b");
+    expect(terminal.writes[0]).toContain(moveCursor(6, 5));
+    expect(terminal.writes[0]).toContain("\x1b[?25h");
+  });
+
+  it("reuses the cached fixed cluster for unrelated terminal writes", () => {
+    let renderClusterCount = 0;
+    const { compositor, terminal, tui } = createCompositor({
+      renderCluster: () => {
+        renderClusterCount += 1;
+        return { lines: ["status", "editor"], cursor: null };
+      },
+    });
+    expect(compositor.install()).toBe(true);
+    terminal.writes.splice(0);
+
+    tui.doRender?.();
+    expect(renderClusterCount).toBe(1);
+
+    terminal.write("first payload");
+    terminal.write("second payload");
+
+    expect(renderClusterCount).toBe(1);
+    expect(terminal.writes).toHaveLength(3);
+    expect(terminal.writes[1]).toContain("first payload");
+    expect(terminal.writes[1]).toContain(resetScrollRegion());
+    expect(terminal.writes[2]).toContain("second payload");
+    expect(terminal.writes[2]).toContain(resetScrollRegion());
   });
 
   it("leaves writes and input alone while an overlay is visible", () => {

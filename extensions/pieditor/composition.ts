@@ -148,14 +148,14 @@ export function createPieditorComposition(
         scrollDownShortcuts: runtime.fixedEditorConfig.scrollDownShortcuts,
         onCopySelection: copyFixedEditorSelection,
         getShowHardwareCursor,
-        renderCluster: (width, terminalRows) =>
-          renderFixedEditorCluster({
+        renderCluster: (width, terminalRows) => {
+          const parts = editor.renderFixedEditorParts(width);
+          return renderFixedEditorCluster({
             width,
             terminalRows,
-            editorLines:
-              runtime.fixedEditorCompositor?.renderHidden(editor, width) ??
-              editor.render(width),
-          }),
+            ...parts,
+          });
+        },
       });
 
       if (!compositor.install()) {
