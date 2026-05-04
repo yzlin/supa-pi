@@ -4,6 +4,9 @@
   "description": "Ethan's pi coding agent harness",
   "readme": "README.md",
   "type": "module",
+  "bin": {
+    "docs-list": "./scripts/docs-list.ts"
+  },
   "pi": {
     "extensions": [
       "./extensions/questionnaire.ts",

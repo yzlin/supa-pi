@@ -142,6 +142,7 @@ The setup script installs these Pi packages if they are not already present:
 ## Development notes
 
 - Extension registration lives in `package.json`
+- Installing this package globally exposes `docs-list`, which runs `scripts/docs-list.ts` against the current working directory's `docs/` folder.
 - Formatting/linting is configured via `biome.jsonc`
 - Biome scripts:
   - `bun run format`
