@@ -9,7 +9,6 @@
 ## Architecture decisions
 
 - `docs/adr/` — proposed, accepted, superseded, deprecated, or rejected tradeoff decisions.
-- `docs/adr/2026-05-03-code-improvement-extension.md` — read before implementing or changing the planned `code-improvement` Extension, `/simplify`, or `/improve-codebase-architecture`.
 
 ## Context notes
 
@@ -18,7 +17,11 @@
 
 ## Major extension docs
 
+- `extensions/caveman/README.md` — read before changing `/caveman`, caveman-mode persistence, or generic extension status behavior.
+- `extensions/code-improvement/SIMPLIFY.md` — read before changing `/simplify` behavior or code-simplifier delegation.
+- `extensions/code-improvement/IMPROVE-CODEBASE-ARCHITECTURE.md` — read before changing `/improve-codebase-architecture` architecture review behavior.
 - `extensions/context-docs/README.md` — read before changing `/context-setup`, `/context-note`, `/adr`, `/context-review`, or `/context-grill` behavior.
+- `extensions/init-deep/README.md` — read before changing `/init-deep` AGENTS.md generation behavior.
 - `extensions/lsp/README.md` — read before changing the LSP tool or `/lsp` command behavior.
 - `extensions/pieditor/README.md` — read before changing editor UX features such as file picking, shell completions, raw paste, command remapping, or status bar behavior.
 - `extensions/rtk/README.md` — read before changing output compaction or `/rtk` behavior.
