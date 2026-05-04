@@ -128,6 +128,10 @@ const CONTEXT_MENU_MOUSE_REPORTING_PAUSE_MS = 1200;
 const CONTEXT_MENU_SELECTION_RESTORE_WINDOW_MS = 5000;
 const CONTEXT_MENU_CLIPBOARD_RESTORE_INTERVAL_MS = 100;
 const DOUBLE_CLICK_MS = 500;
+const ROOT_SCROLLBAR_WIDTH = 1;
+const ROOT_SCROLLBAR_GLYPH = "█";
+const ROOT_SCROLLBAR_TRACK = `\x1b[2;90m${ROOT_SCROLLBAR_GLYPH}\x1b[0m`;
+const ROOT_SCROLLBAR_THUMB = `\x1b[97m${ROOT_SCROLLBAR_GLYPH}\x1b[0m`;
 const DEFAULT_SCROLL_UP_SHORTCUTS = ["super+up"] as const;
 const DEFAULT_SCROLL_DOWN_SHORTCUTS = ["super+down"] as const;
 const ESC_PATTERN = "\\x1b";
@@ -554,6 +558,86 @@ function sanitizeOverlayBaseLine(line: string, width: number): string {
 
 function normalizeOverlayCompositionLine(line: string): string {
   return line.includes("\t") ? line.replace(/\t/g, "   ") : line;
+}
+
+export interface RootScrollbarState {
+  totalLines: number;
+  viewportRows: number;
+  scrollOffset: number;
+}
+
+export interface RootScrollbarThumb {
+  start: number;
+  size: number;
+}
+
+function nonNegativeInteger(value: number): number {
+  return Number.isFinite(value) ? Math.max(0, Math.trunc(value)) : 0;
+}
+
+export function calculateRootScrollbarThumb(
+  state: RootScrollbarState
+): RootScrollbarThumb | null {
+  const totalLines = nonNegativeInteger(state.totalLines);
+  const viewportRows = Math.max(1, nonNegativeInteger(state.viewportRows));
+  if (totalLines <= viewportRows) {
+    return null;
+  }
+
+  const maxScrollOffset = totalLines - viewportRows;
+  const scrollOffset = Math.max(
+    0,
+    Math.min(nonNegativeInteger(state.scrollOffset), maxScrollOffset)
+  );
+  const size = Math.max(
+    1,
+    Math.min(
+      viewportRows,
+      Math.floor((viewportRows * viewportRows) / totalLines)
+    )
+  );
+  const travel = viewportRows - size;
+  const start = Math.round(
+    ((maxScrollOffset - scrollOffset) / maxScrollOffset) * travel
+  );
+
+  return { start, size };
+}
+
+function rootScrollbarContentWidth(width: number): number {
+  return Math.max(1, Math.trunc(width) - ROOT_SCROLLBAR_WIDTH);
+}
+
+function fitRootLineToContentWidth(line: string, contentWidth: number): string {
+  if (contentWidth <= 0) {
+    return "";
+  }
+
+  const fitted =
+    visibleWidth(line) > contentWidth
+      ? truncateToWidth(line, contentWidth, "", true)
+      : line;
+  return `${fitted}${" ".repeat(
+    Math.max(0, contentWidth - visibleWidth(fitted))
+  )}`;
+}
+
+export function decorateRootScrollbar(
+  lines: readonly string[],
+  state: RootScrollbarState,
+  width: number
+): string[] {
+  const renderWidth = Math.max(1, Math.trunc(width));
+  const contentWidth = Math.max(0, renderWidth - ROOT_SCROLLBAR_WIDTH);
+  const thumb = calculateRootScrollbarThumb(state);
+
+  return lines.map((line, index) => {
+    const scrollbar =
+      thumb && index >= thumb.start && index < thumb.start + thumb.size
+        ? ROOT_SCROLLBAR_THUMB
+        : ROOT_SCROLLBAR_TRACK;
+    return `${fitRootLineToContentWidth(line, contentWidth)}${scrollbar}`;
+  });
 }
 
 export function buildFixedClusterPaint(
@@ -1064,10 +1148,19 @@ export class TerminalSplitCompositor {
       const rawRows = this.getRawRows();
       const cluster = this.getCluster(renderWidth, rawRows, true);
       const scrollableRows = Math.max(1, rawRows - cluster.lines.length);
-      const lines = this.originalRender(renderWidth);
+      const lines = this.originalRender(rootScrollbarContentWidth(renderWidth));
       const start = this.updateRootScrollState(lines, scrollableRows);
-      return this.visibleRootLines.map((line, index) =>
+      const highlightedLines = this.visibleRootLines.map((line, index) =>
         this.renderSelectionHighlight(line, start + index, "root")
+      );
+      return decorateRootScrollbar(
+        highlightedLines,
+        {
+          totalLines: this.rootLines.length,
+          viewportRows: scrollableRows,
+          scrollOffset: this.scrollOffset,
+        },
+        renderWidth
       );
     } finally {
       this.renderingScrollableRoot = false;

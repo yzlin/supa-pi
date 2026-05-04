@@ -3,6 +3,7 @@ import { describe, expect, it } from "bun:test";
 import type { FixedEditorClusterRender } from "./cluster";
 import {
   buildFixedClusterPaint,
+  calculateRootScrollbarThumb,
   moveCursor,
   resetScrollRegion,
   setScrollRegion,
@@ -67,6 +68,24 @@ function createTui(rootLines: string[] = []): MockTui {
     },
   };
   return tui;
+}
+
+const ROOT_SCROLLBAR_TRACK = "\x1b[2;90m█\x1b[0m";
+const ROOT_SCROLLBAR_THUMB = "\x1b[97m█\x1b[0m";
+const ROOT_SCROLLBAR_PATTERN = new RegExp(
+  ` *${String.raw`\x1b`}\\[(?:2;90|97)m█${String.raw`\x1b`}\\[0m$`
+);
+
+function rootContent(lines: string[] | undefined): string[] {
+  return (lines ?? []).map((line) => line.replace(ROOT_SCROLLBAR_PATTERN, ""));
+}
+
+function scrollbarColumn(lines: string[] | undefined): string[] {
+  return (lines ?? []).map((line) =>
+    line.endsWith(ROOT_SCROLLBAR_THUMB)
+      ? ROOT_SCROLLBAR_THUMB
+      : ROOT_SCROLLBAR_TRACK
+  );
 }
 
 function createCompositor(
@@ -139,6 +158,181 @@ describe("terminal split compositor", () => {
     expect(paint).not.toContain("\u001b[2J");
   });
 
+  it("calculates root scrollbar thumb positions", () => {
+    expect(
+      calculateRootScrollbarThumb({
+        totalLines: 2,
+        viewportRows: 4,
+        scrollOffset: 0,
+      })
+    ).toBeNull();
+    expect(
+      calculateRootScrollbarThumb({
+        totalLines: 6,
+        viewportRows: 3,
+        scrollOffset: 0,
+      })
+    ).toEqual({ start: 2, size: 1 });
+    expect(
+      calculateRootScrollbarThumb({
+        totalLines: 6,
+        viewportRows: 3,
+        scrollOffset: 3,
+      })
+    ).toEqual({ start: 0, size: 1 });
+  });
+
+  it("reserves a root scrollbar column when content does not overflow", () => {
+    const { compositor, tui } = createCompositor({
+      rootLines: ["short", "tail"],
+      terminalRows: 6,
+    });
+    expect(compositor.install()).toBe(true);
+
+    const lines = tui.render?.(20);
+
+    expect(rootContent(lines)).toEqual(["short", "tail", "", ""]);
+    expect(scrollbarColumn(lines)).toEqual([
+      ROOT_SCROLLBAR_TRACK,
+      ROOT_SCROLLBAR_TRACK,
+      ROOT_SCROLLBAR_TRACK,
+      ROOT_SCROLLBAR_TRACK,
+    ]);
+    expect(lines?.every((line) => line.endsWith(ROOT_SCROLLBAR_TRACK))).toBe(
+      true
+    );
+  });
+
+  it("renders the root scrollbar thumb at the bottom", () => {
+    const { compositor, tui } = createCompositor({
+      rootLines: ["root-1", "root-2", "root-3", "root-4", "root-5", "root-6"],
+      terminalRows: 5,
+    });
+    expect(compositor.install()).toBe(true);
+
+    const lines = tui.render?.(20);
+
+    expect(rootContent(lines)).toEqual(["root-4", "root-5", "root-6"]);
+    expect(scrollbarColumn(lines)).toEqual([
+      ROOT_SCROLLBAR_TRACK,
+      ROOT_SCROLLBAR_TRACK,
+      ROOT_SCROLLBAR_THUMB,
+    ]);
+  });
+
+  it("renders the root scrollbar thumb when scrolled up", () => {
+    const { compositor, tui } = createCompositor({
+      rootLines: ["root-1", "root-2", "root-3", "root-4", "root-5", "root-6"],
+      terminalRows: 5,
+    });
+    expect(compositor.install()).toBe(true);
+    tui.render?.(20);
+
+    expect(tui.listeners[0]?.("\u001b[1;9A")).toEqual({ consume: true });
+    const lines = tui.render?.(20);
+
+    expect(rootContent(lines)).toEqual(["root-1", "root-2", "root-3"]);
+    expect(scrollbarColumn(lines)).toEqual([
+      ROOT_SCROLLBAR_THUMB,
+      ROOT_SCROLLBAR_TRACK,
+      ROOT_SCROLLBAR_TRACK,
+    ]);
+  });
+
+  it("preserves manual root scroll when new content arrives", () => {
+    const rootLines = [
+      "root-1",
+      "root-2",
+      "root-3",
+      "root-4",
+      "root-5",
+      "root-6",
+    ];
+    const { compositor, tui } = createCompositor({
+      rootLines,
+      terminalRows: 5,
+    });
+    expect(compositor.install()).toBe(true);
+    expect(rootContent(tui.render?.(20))).toEqual([
+      "root-4",
+      "root-5",
+      "root-6",
+    ]);
+    expect(tui.listeners[0]?.("\u001b[1;9A")).toEqual({ consume: true });
+    expect(rootContent(tui.render?.(20))).toEqual([
+      "root-1",
+      "root-2",
+      "root-3",
+    ]);
+
+    rootLines.push("root-7", "root-8");
+
+    expect(rootContent(tui.render?.(20))).toEqual([
+      "root-1",
+      "root-2",
+      "root-3",
+    ]);
+    expect(scrollbarColumn(tui.render?.(20))).toEqual([
+      ROOT_SCROLLBAR_THUMB,
+      ROOT_SCROLLBAR_TRACK,
+      ROOT_SCROLLBAR_TRACK,
+    ]);
+  });
+
+  it("jumps to root bottom once and follows new content until manual scroll", () => {
+    const rootLines = [
+      "root-1",
+      "root-2",
+      "root-3",
+      "root-4",
+      "root-5",
+      "root-6",
+    ];
+    const { compositor, tui } = createCompositor({
+      rootLines,
+      terminalRows: 5,
+    });
+    expect(compositor.install()).toBe(true);
+    expect(rootContent(tui.render?.(20))).toEqual([
+      "root-4",
+      "root-5",
+      "root-6",
+    ]);
+    expect(tui.listeners[0]?.("\u001b[1;9A")).toEqual({ consume: true });
+    expect(rootContent(tui.render?.(20))).toEqual([
+      "root-1",
+      "root-2",
+      "root-3",
+    ]);
+
+    expect(compositor.jumpToRootBottom()).toBe(true);
+    expect(rootContent(tui.render?.(20))).toEqual([
+      "root-4",
+      "root-5",
+      "root-6",
+    ]);
+
+    rootLines.push("root-7", "root-8");
+    expect(rootContent(tui.render?.(20))).toEqual([
+      "root-6",
+      "root-7",
+      "root-8",
+    ]);
+
+    expect(tui.listeners[0]?.("\u001b[1;9A")).toEqual({ consume: true });
+    expect(rootContent(tui.render?.(20))).toEqual([
+      "root-1",
+      "root-2",
+      "root-3",
+    ]);
+    rootLines.push("root-9");
+    expect(rootContent(tui.render?.(20))).toEqual([
+      "root-1",
+      "root-2",
+      "root-3",
+    ]);
+  });
+
   it("patches renderables and restores them on dispose", () => {
     const { compositor, terminal, tui } = createCompositor({
       rootLines: ["root-a", "root-b", "root-c", "root-d"],
@@ -147,7 +341,12 @@ describe("terminal split compositor", () => {
 
     expect(compositor.install()).toBe(true);
     expect(terminal.rows).toBe(4);
-    expect(tui.render?.(20)).toEqual(["root-a", "root-b", "root-c", "root-d"]);
+    expect(rootContent(tui.render?.(20))).toEqual([
+      "root-a",
+      "root-b",
+      "root-c",
+      "root-d",
+    ]);
 
     compositor.hideRenderable(renderable);
     expect(renderable.render(20)).toEqual([]);
@@ -314,6 +513,7 @@ describe("terminal split compositor", () => {
     expect(terminal.writes).toEqual(["raw-write"]);
     expect(tui.listeners[0]?.("\u001b[1;9A")).toBeUndefined();
     expect(tui.render?.(20)).toEqual(["plain", "linked"]);
+    expect((tui.render?.(20) ?? []).join("\n")).not.toContain("█");
     expect(tui.compositeLineAt?.("a\tb", "c\td", 0, 4, 10)).toBe("a   b");
   });
 
@@ -340,9 +540,17 @@ describe("terminal split compositor", () => {
     expect(compositor.install()).toBe(true);
     compositor.hideRenderable({ render: () => clusterLines });
 
-    expect(tui.render?.(20)).toEqual(["root-4", "root-5", "root-6"]);
+    expect(rootContent(tui.render?.(20))).toEqual([
+      "root-4",
+      "root-5",
+      "root-6",
+    ]);
     expect(tui.listeners[0]?.("\u001b[1;9A")).toEqual({ consume: true });
-    expect(tui.render?.(20)).toEqual(["root-1", "root-2", "root-3"]);
+    expect(rootContent(tui.render?.(20))).toEqual([
+      "root-1",
+      "root-2",
+      "root-3",
+    ]);
 
     tui.overlayVisible = true;
 
@@ -352,6 +560,7 @@ describe("terminal split compositor", () => {
       "root-3",
       ...clusterLines,
     ]);
+    expect((tui.render?.(20) ?? []).join("\n")).not.toContain("█");
   });
 
   it("consumes configured keyboard and mouse scroll input", () => {
@@ -361,16 +570,42 @@ describe("terminal split compositor", () => {
     });
     expect(compositor.install()).toBe(true);
 
-    expect(tui.render?.(20)).toEqual(["root-4", "root-5", "root-6"]);
+    expect(rootContent(tui.render?.(20))).toEqual([
+      "root-4",
+      "root-5",
+      "root-6",
+    ]);
+    expect(scrollbarColumn(tui.render?.(20))).toEqual([
+      ROOT_SCROLLBAR_TRACK,
+      ROOT_SCROLLBAR_TRACK,
+      ROOT_SCROLLBAR_THUMB,
+    ]);
     expect(tui.listeners[0]?.("\u001b[1;9A")).toEqual({ consume: true });
     expect(tui.requestRenderCount).toBe(1);
-    expect(tui.render?.(20)).toEqual(["root-1", "root-2", "root-3"]);
+    expect(rootContent(tui.render?.(20))).toEqual([
+      "root-1",
+      "root-2",
+      "root-3",
+    ]);
+    expect(scrollbarColumn(tui.render?.(20))).toEqual([
+      ROOT_SCROLLBAR_THUMB,
+      ROOT_SCROLLBAR_TRACK,
+      ROOT_SCROLLBAR_TRACK,
+    ]);
 
     expect(tui.listeners[0]?.("\u001b[1;9B")).toEqual({ consume: true });
-    expect(tui.render?.(20)).toEqual(["root-4", "root-5", "root-6"]);
+    expect(rootContent(tui.render?.(20))).toEqual([
+      "root-4",
+      "root-5",
+      "root-6",
+    ]);
 
     expect(tui.listeners[0]?.("\u001b[<64;1;1M")).toEqual({ consume: true });
-    expect(tui.render?.(20)).toEqual(["root-1", "root-2", "root-3"]);
+    expect(rootContent(tui.render?.(20))).toEqual([
+      "root-1",
+      "root-2",
+      "root-3",
+    ]);
   });
 
   it("copies selected text through the configured copy callback", () => {

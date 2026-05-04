@@ -2,6 +2,7 @@ import {
   copyToClipboard,
   type ExtensionAPI,
   type ExtensionContext,
+  type InputEvent,
   type KeybindingsManager,
   type ReadonlyFooterDataProvider,
   type Theme,
@@ -328,6 +329,21 @@ export function createPieditorComposition(
     handleUserBash(command: string): void {
       if (mightChangeGitBranch(command)) {
         invalidateGitState();
+      }
+    },
+
+    handleMessageStart(event: { message?: { role?: unknown } }): void {
+      if (event.message?.role === "user") {
+        runtime.fixedEditorCompositor?.jumpToRootBottom();
+      }
+    },
+
+    handleInput(
+      event: Pick<InputEvent, "source">,
+      ctx: ExtensionContext
+    ): void {
+      if (event.source === "interactive" && !ctx.isIdle()) {
+        runtime.fixedEditorCompositor?.jumpToRootBottom();
       }
     },
 

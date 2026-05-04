@@ -27,8 +27,10 @@ type FooterFactory = NonNullable<
 
 interface HarnessOptions {
   fixedEditorEnabled: boolean;
+  terminalRows?: number;
   terminalWrite?: (data: string) => void;
   copySelection?: (text: string) => void;
+  rootLines?: string[];
 }
 
 interface MockTui {
@@ -43,6 +45,9 @@ interface MockTui {
   addInputListener: (
     listener: (data: string) => { consume?: boolean; data?: string } | undefined
   ) => () => void;
+  listeners: Array<
+    (data: string) => { consume?: boolean; data?: string } | undefined
+  >;
   requestRender: () => void;
   getShowHardwareCursor: () => boolean;
   hasOverlay: () => boolean;
@@ -79,7 +84,7 @@ function writePieditorConfig(
   );
 }
 
-function createMockTui(terminalWrite?: (data: string) => void): MockTui {
+function createMockTui(options: HarnessOptions): MockTui {
   const listeners: Array<
     (data: string) => { consume?: boolean; data?: string } | undefined
   > = [];
@@ -87,11 +92,11 @@ function createMockTui(terminalWrite?: (data: string) => void): MockTui {
   return {
     terminal: {
       columns: 80,
-      rows: 24,
+      rows: options.terminalRows ?? 24,
       kittyProtocolActive: false,
-      write: terminalWrite,
+      write: options.terminalWrite,
     },
-    render: () => ["chat"],
+    render: () => options.rootLines ?? ["chat"],
     doRender() {
       // The compositor patches this method during install.
     },
@@ -104,6 +109,7 @@ function createMockTui(terminalWrite?: (data: string) => void): MockTui {
         }
       };
     },
+    listeners,
     requestRender() {
       this.requestRenderCount += 1;
     },
@@ -112,6 +118,14 @@ function createMockTui(terminalWrite?: (data: string) => void): MockTui {
     compositeLineAt: (baseLine) => baseLine,
     requestRenderCount: 0,
   };
+}
+
+const ROOT_SCROLLBAR_PATTERN = new RegExp(
+  ` *${String.raw`\x1b`}\\[(?:2;90|97)m█${String.raw`\x1b`}\\[0m$`
+);
+
+function rootContent(lines: string[] | undefined): string[] {
+  return (lines ?? []).map((line) => line.replace(ROOT_SCROLLBAR_PATTERN, ""));
 }
 
 function createFooterData(): ReadonlyFooterDataProvider {
@@ -167,7 +181,7 @@ function createHarness(options: HarnessOptions) {
     throw new Error("pieditor did not register editor and footer factories");
   }
 
-  const tui = createMockTui(options.terminalWrite);
+  const tui = createMockTui(options);
   const theme = {
     borderColor: (value: string) => value,
     selectList: {},
@@ -259,5 +273,60 @@ describe("pieditor fixed editor composition", () => {
         "pieditor fixed-editor could not attach; using the normal editor",
       level: "warning",
     });
+  });
+
+  it("jumps fixed-editor root to bottom when a user message starts", () => {
+    const harness = createHarness({
+      fixedEditorEnabled: true,
+      rootLines: ["root-1", "root-2", "root-3", "root-4", "root-5", "root-6"],
+      terminalRows: 5,
+      terminalWrite: () => undefined,
+    });
+    harness.createEditor();
+    harness.createFooter();
+
+    expect(rootContent(harness.tui.render(80))).toEqual(["root-5", "root-6"]);
+    expect(harness.tui.listeners[0]?.("\u001b[1;9A")).toEqual({
+      consume: true,
+    });
+    expect(rootContent(harness.tui.render(80))).toEqual(["root-1", "root-2"]);
+
+    harness.composition.handleMessageStart({ message: { role: "assistant" } });
+    expect(rootContent(harness.tui.render(80))).toEqual(["root-1", "root-2"]);
+
+    harness.composition.handleMessageStart({ message: { role: "user" } });
+    expect(rootContent(harness.tui.render(80))).toEqual(["root-5", "root-6"]);
+  });
+
+  it("jumps fixed-editor root to bottom for busy interactive input", () => {
+    const harness = createHarness({
+      fixedEditorEnabled: true,
+      rootLines: ["root-1", "root-2", "root-3", "root-4", "root-5", "root-6"],
+      terminalRows: 5,
+      terminalWrite: () => undefined,
+    });
+    harness.createEditor();
+    harness.createFooter();
+    harness.tui.render(80);
+
+    expect(harness.tui.listeners[0]?.("\u001b[1;9A")).toEqual({
+      consume: true,
+    });
+    expect(rootContent(harness.tui.render(80))).toEqual(["root-1", "root-2"]);
+
+    harness.composition.handleInput({ source: "extension" }, {
+      isIdle: () => false,
+    } as ExtensionContext);
+    expect(rootContent(harness.tui.render(80))).toEqual(["root-1", "root-2"]);
+
+    harness.composition.handleInput({ source: "interactive" }, {
+      isIdle: () => true,
+    } as ExtensionContext);
+    expect(rootContent(harness.tui.render(80))).toEqual(["root-1", "root-2"]);
+
+    harness.composition.handleInput({ source: "interactive" }, {
+      isIdle: () => false,
+    } as ExtensionContext);
+    expect(rootContent(harness.tui.render(80))).toEqual(["root-5", "root-6"]);
   });
 });

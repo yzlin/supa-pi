@@ -41,6 +41,8 @@ Notable interactions:
 - Optionally configure `doubleEscapeCommand` in `~/.pi/agent/pieditor.json` or `.pi/pieditor.json` to invoke an extension command on double-escape when the editor is empty and Pi is idle
 - Optionally configure `commandRemap` in `~/.pi/agent/pieditor.json` or `.pi/pieditor.json` to redirect slash commands at submit time (e.g. typing `/tree` executes `/anycopy` instead)
 - Use `/pieditor fixed-editor [on|off|toggle|status]` to toggle fixed editor mode for the live runtime and persist the global `fixedEditor.enabled` setting; project `.pi/pieditor.json` overrides still win on the next load
+- Fixed editor mode reserves the root scrollback viewport's rightmost column for a visual-only scrollbar: dim gray `█` track, bright white `█` thumb; it has no configuration and stays out of overlay rendering
+- When a user message starts or a follow-up queue update arrives, fixed editor mode jumps the root scrollback back to the bottom; manual root scrollback remains available between sends
 
 ## Configuration
 

@@ -62,8 +62,9 @@ Fixed editor rendering/compositor helpers only.
 Owns:
 - fixed editor cluster rendering primitives
 - terminal split compositor primitives
+- root scrollback visual scrollbar decoration: one rightmost-column gutter, dim gray `█` track, bright white `█` thumb
 
-Runtime lifecycle installation is owned by `composition.ts` when that integration is enabled.
+Runtime lifecycle installation and send-triggered root scrollback bottom jumps are owned by `composition.ts` when that integration is enabled.
 
 ### `status-bar/*`
 Status bar rendering.
@@ -90,6 +91,10 @@ Shell completion providers and shell detection.
   - invalidate git branch/state after branch-changing `bash` commands
 - `user_bash`
   - invalidate git branch/state after branch-changing commands
+- `message_start`
+  - jump fixed-editor root scrollback to bottom when a user message starts
+- `input`
+  - jump fixed-editor root scrollback to bottom for busy interactive input before Pi queues the follow-up
 - `alt+v`
   - paste raw clipboard text into the editor
 
@@ -134,4 +139,5 @@ Fixed editor mode also owns terminal split composition. Do not enable it alongsi
 - Boot with default config and confirm fixed editor mode is off
 - Use `/pieditor fixed-editor on|off|toggle|status` and confirm live runtime state plus global config persistence
 - Verify mouse wheel and configured shortcut scrolling while fixed editor mode is enabled
+- Confirm fixed editor root scrollback shows the one-column visual scrollbar and returns to bottom on user-message start or follow-up queue update
 - Add a project `fixedEditor.enabled` override and confirm it wins over global config on reload

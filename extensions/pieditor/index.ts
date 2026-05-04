@@ -42,6 +42,15 @@ export default function (pi: ExtensionAPI): void {
     composition.handleUserBash(event.command);
   });
 
+  pi.on("message_start", (event) => {
+    composition.handleMessageStart(event);
+  });
+
+  pi.on("input", (event, ctx) => {
+    composition.handleInput(event, ctx);
+    return { action: "continue" };
+  });
+
   // Provide alt+v raw clipboard paste (the only raw-paste feature you wanted)
   pi.registerShortcut("alt+v", {
     description:
