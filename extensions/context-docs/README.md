@@ -12,7 +12,7 @@ The extension is registered in `package.json -> pi.extensions` as `./extensions/
 
 ## Bundled workflow docs
 
-The command prompt is bundled in `extensions/context-docs/prompt.md`. The matching skill documentation is bundled at `skills/context-docs/SKILL.md`.
+The shared command prompt is bundled in `extensions/context-docs/prompt.md`. Command-specific guidance is appended by `extensions/context-docs/index.ts` so each slash command receives only the workflow details it needs. The matching skill documentation is bundled at `skills/context-docs/SKILL.md`.
 
 The workflow targets Matt-compatible context files by default:
 

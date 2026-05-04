@@ -15,12 +15,179 @@ import {
 } from "./parse";
 import { detectSecret } from "./secrets";
 
-const PROMPT = fs
+const SHARED_PROMPT = fs
   .readFileSync(
     path.join(path.dirname(fileURLToPath(import.meta.url)), "prompt.md"),
     "utf8"
   )
   .trim();
+
+const COMMAND_PROMPTS: Record<ContextDocsCommand, string> = {
+  "context-setup": `## /context-setup guidance
+
+Create or refresh the target project's context-doc scaffold.
+
+If \`CONTEXT.md\` exists, update it in place. If absent, create a concise file with these sections:
+
+\`\`\`markdown
+# CONTEXT
+
+## Product purpose
+
+## Domain model
+
+## Domain glossary
+
+## Product constraints
+
+## Open questions
+
+## Context map
+
+See \`CONTEXT-MAP.md\`.
+\`\`\`
+
+If \`CONTEXT-MAP.md\` exists, update it in place. If absent, create a concise file with these sections:
+
+\`\`\`markdown
+# CONTEXT-MAP
+
+## Read first
+
+- \`CONTEXT.md\` — domain/product overview, glossary, constraints, and open questions.
+
+## Architecture decisions
+
+- \`docs/adr/\` — accepted, proposed, superseded, deprecated, rejected tradeoff decisions.
+
+## Context notes
+
+- \`docs/context/\` — longer durable notes that should not live in chat only.
+
+## Maintenance rules
+
+- List cross-cutting docs in \`CONTEXT-MAP.md\` with plain-language guidance for when agents should read them.
+- Keep entries stable, source-grounded, and small.
+\`\`\`
+
+Keep setup focused on scaffold and map boundaries. Do not include detailed operating instructions for other context-docs commands unless the user asks.`,
+  "context-note": `## /context-note guidance
+
+Record durable context only. Good notes include:
+
+- domain vocabulary that future agents must use correctly
+- product or implementation conventions that affect implementation choices
+- agent conventions, written to the managed \`AGENTS.md\`, not \`CONTEXT.md\`
+- real module boundaries or ownership, reflected in \`CONTEXT-MAP.md\`
+- workflow rules specific to this target root
+- resolved implementation details likely to matter later
+- unresolved questions with clear owner or next trigger
+
+Reject or challenge notes that are only:
+
+- transient progress updates
+- generic advice not specific to the project
+- raw logs without a durable takeaway
+- secrets or sensitive data
+- task-management instructions
+
+Prefer appending domain/product language to \`CONTEXT.md\`, agent conventions to the managed \`AGENTS.md\`, or longer notes to a targeted file under \`docs/context/\`. Update \`CONTEXT-MAP.md\` only for real durable-context boundaries or new cross-cutting files.`,
+  adr: `## /adr guidance
+
+Create or update an Architecture Decision Record for a tradeoff decision under \`docs/adr/\` unless the target already has an ADR convention.
+
+Use stable lowercase hyphenated filenames. If the target has no numbering convention, prefer:
+
+\`\`\`text
+docs/adr/YYYY-MM-DD-short-title.md
+\`\`\`
+
+Use this ADR shape:
+
+\`\`\`markdown
+# ADR: <title>
+
+- Status: proposed | accepted | superseded | deprecated | rejected
+- Date: YYYY-MM-DD
+- Deciders: unknown unless provided
+- Supersedes: none unless known
+- Superseded by: none unless known
+
+## Context
+
+## Decision
+
+## Consequences
+
+## Alternatives considered
+\`\`\`
+
+Rules:
+
+- Capture the tradeoff decision and rationale, not a generic essay.
+- Mark unknowns explicitly instead of inventing facts.
+- If a decision replaces an older ADR, update both records when safe.
+- If rationale is missing, ask one focused question before writing an accepted ADR.
+- Default status is \`proposed\` unless the command or evidence says otherwise.`,
+  "context-review": `## /context-review extraction rules
+
+Read, at minimum when present:
+
+- \`CONTEXT.md\`
+- \`CONTEXT-MAP.md\`
+- \`AGENTS.md\`
+- docs referenced by \`CONTEXT-MAP.md\`
+- ADRs in \`docs/adr/\`
+- relevant README files for the requested scope
+
+Extract only durable, source-grounded context:
+
+- product purpose and constraints
+- real architecture boundaries and ownership
+- domain terms and definitions
+- accepted or proposed tradeoff decisions with rationale
+- conventions that change future implementation behavior, routed to \`AGENTS.md\` when they are agent conventions
+- integration contracts and external dependencies
+- stale, contradictory, or missing docs
+- open questions that block accurate documentation
+
+Do not extract:
+
+- secrets, credentials, keys, tokens, or raw private data
+- pi-task creation, status, scheduling, or progress data
+- temporary debugging output without a durable lesson
+- unverified claims from memory
+- code snippets that will become stale unless necessary
+
+Behavior:
+
+- With \`--dry-run\`, report findings and proposed edits only.
+- With \`--scope current\`, prefer the current context-doc set and directly referenced docs.
+- With \`--scope all\`, also scan broader repo docs that may contradict or supplement context.
+- Report contradictions before editing them.
+- When editing, make the smallest doc changes that preserve existing structure.`,
+  "context-grill": `## /context-grill behavior
+
+Clarify missing context before docs are written.
+
+- Ask exactly one high-leverage question at a time.
+- Include your recommended answer before asking for the user's answer.
+- If code or docs can answer the question, inspect them instead of asking.
+- Focus on goals, boundaries, assumptions, failure modes, tradeoffs, tests, security, migration, and ownership.
+- Stop when the missing context is clear enough to document safely.
+- End with a short summary of captured decisions, remaining open questions, and suggested doc updates.
+- Do not write docs during the grill unless the user explicitly asks.
+
+Depth:
+
+- \`light\`: ask only the highest-risk missing question.
+- \`standard\`: cover major assumptions and tradeoffs.
+- \`deep\`: continue until architecture, risks, tests, and migration implications are explicit.`,
+};
+
+function getContextDocsWorkflowPrompt(command: ContextDocsCommand): string {
+  return [SHARED_PROMPT, COMMAND_PROMPTS[command]].join("\n\n");
+}
 
 const COMMANDS: Array<{
   name: ContextDocsCommand;
@@ -336,8 +503,7 @@ function formatOptions(options: ContextDocsCommandInput["options"]): string {
 export function buildContextDocsMessage(
   input: ContextDocsCommandInput
 ): string {
-  const instruction =
-    input.instruction ?? DEFAULT_INSTRUCTIONS[input.command] ?? "run workflow";
+  const instruction = input.instruction ?? DEFAULT_INSTRUCTIONS[input.command];
 
   return [
     "Run the context-docs workflow.",
@@ -358,7 +524,7 @@ export function buildContextDocsMessage(
     "- Prefer small, durable Markdown docs over chat-only context.",
     "- Ask focused questions only when missing information materially changes the result.",
     "",
-    PROMPT,
+    getContextDocsWorkflowPrompt(input.command),
   ].join("\n");
 }
 

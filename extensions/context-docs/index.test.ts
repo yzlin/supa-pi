@@ -16,7 +16,7 @@ import {
   reachesContextMapThreshold,
   shouldInjectContextDocsReminder,
 } from "./index";
-import { parseContextDocsArgs } from "./parse";
+import { type ContextDocsCommand, parseContextDocsArgs } from "./parse";
 
 function createHarness(confirmResult = true) {
   const commands = new Map<
@@ -713,87 +713,79 @@ describe("context-docs helper modules", () => {
 });
 
 describe("context-docs prompt", () => {
-  it("includes pi-task guardrail in normalized handoff", () => {
-    const parsed = parseContextDocsArgs(
-      "context-setup",
-      "-- Refresh docs",
-      process.cwd()
-    );
+  function buildPromptMessage(
+    command: ContextDocsCommand,
+    args: string
+  ): string {
+    const parsed = parseContextDocsArgs(command, args, process.cwd());
 
     expect(parsed.ok).toBe(true);
     if (!parsed.ok) {
-      return;
+      throw new Error(parsed.error);
     }
 
-    expect(buildContextDocsMessage(parsed.value)).toContain(
+    return buildContextDocsMessage(parsed.value);
+  }
+
+  it("includes pi-task guardrail in normalized handoff", () => {
+    const message = buildPromptMessage("context-setup", "-- Refresh docs");
+
+    expect(message).toContain(
       "Do not create, modify, schedule, or manage pi-tasks."
     );
   });
 
   it("includes Matt-compatible context scaffold guidance", () => {
-    const parsed = parseContextDocsArgs(
-      "context-setup",
-      "-- Refresh docs",
-      process.cwd()
-    );
+    const message = buildPromptMessage("context-setup", "-- Refresh docs");
 
-    expect(parsed.ok).toBe(true);
-    if (!parsed.ok) {
-      return;
-    }
-
-    const message = buildContextDocsMessage(parsed.value);
-
-    expect(message).toContain("Matt-compatible scaffold");
+    expect(message).toContain("/context-setup guidance");
     expect(message).toContain("CONTEXT.md");
     expect(message).toContain("CONTEXT-MAP.md");
+    expect(message).not.toContain("/context-review extraction rules");
+    expect(message).not.toContain("/context-grill behavior");
   });
 
   it("states strict context-doc scope boundaries", () => {
-    const parsed = parseContextDocsArgs(
-      "context-setup",
-      "-- Refresh docs",
-      process.cwd()
-    );
-
-    expect(parsed.ok).toBe(true);
-    if (!parsed.ok) {
-      return;
-    }
-
-    const message = buildContextDocsMessage(parsed.value);
+    const message = buildPromptMessage("context-setup", "-- Refresh docs");
 
     expect(message).toContain(
       "`CONTEXT.md`: the human-readable domain/product context entrypoint."
     );
     expect(message).toContain(
+      "`CONTEXT-MAP.md`: the map of real durable-context boundaries"
+    );
+    expect(message).toContain(
+      "Keep setup focused on scaffold and map boundaries."
+    );
+    expect(message).not.toContain(
       "agent conventions, written to the managed `AGENTS.md`, not `CONTEXT.md`"
     );
-    expect(message).toContain(
-      "Architecture Decision Record for a tradeoff decision"
-    );
-    expect(message).toContain(
+    expect(message).not.toContain(
       "Update `CONTEXT-MAP.md` only for real durable-context boundaries"
     );
   });
 
-  it("includes review extraction and grill behavior rules", () => {
-    const parsed = parseContextDocsArgs(
+  it("includes only review extraction rules for context-review", () => {
+    const message = buildPromptMessage(
       "context-review",
-      "--scope all -- Find stale context",
-      process.cwd()
+      "--scope all -- Find stale context"
     );
-
-    expect(parsed.ok).toBe(true);
-    if (!parsed.ok) {
-      return;
-    }
-
-    const message = buildContextDocsMessage(parsed.value);
 
     expect(message).toContain("/context-review extraction rules");
     expect(message).toContain("Do not extract:");
+    expect(message).not.toContain("/context-grill behavior");
+    expect(message).not.toContain("Ask exactly one high-leverage question");
+  });
+
+  it("includes only grill behavior rules for context-grill", () => {
+    const message = buildPromptMessage(
+      "context-grill",
+      "--depth deep -- Clarify auth context"
+    );
+
     expect(message).toContain("/context-grill behavior");
     expect(message).toContain("Ask exactly one high-leverage question");
+    expect(message).not.toContain("/context-review extraction rules");
+    expect(message).not.toContain("Do not extract:");
   });
 });
