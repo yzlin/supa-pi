@@ -1,6 +1,8 @@
 import { buildOmCompactionPayload, buildOmHeader } from "./prompts";
 import type { OmStateV1 } from "./types";
 
+const TOP_LEVEL_REGEX_1 = /\n\n## Observational Memory[\s\S]*$/u;
+
 export const OM_HEADER_CUSTOM_TYPE = "om-header";
 
 interface OmContextMessageLike {
@@ -82,8 +84,7 @@ export function injectOmHeaderMessage<TMessage extends OmContextMessageLike>(
 ): Array<TMessage | ReturnType<typeof createOmHeaderContextMessage>> {
   const headerMessage = createOmHeaderContextMessage(state);
   if (
-    !headerMessage ||
-    !shouldInjectOmHeader(messages, headerMessage.content)
+    !(headerMessage && shouldInjectOmHeader(messages, headerMessage.content))
   ) {
     return [...messages];
   }
@@ -106,7 +107,7 @@ export function mergeOmCompactionSummary(
   }
 
   const summaryWithoutOm = normalizedSummary
-    .replace(/\n\n## Observational Memory[\s\S]*$/u, "")
+    .replace(TOP_LEVEL_REGEX_1, "")
     .trimEnd();
 
   return `${summaryWithoutOm}\n\n${payload}`.trim();

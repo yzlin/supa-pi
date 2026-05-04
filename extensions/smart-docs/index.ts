@@ -7,6 +7,9 @@ import type { AutocompleteItem } from "@mariozechner/pi-tui";
 
 import { parseSmartDocsArgs, type SmartDocsCommandInput } from "./parse";
 
+const TOP_LEVEL_REGEX_1 = /\s$/;
+const TOP_LEVEL_REGEX_2 = /\s+/;
+
 const PROMPT = fs
   .readFileSync(
     path.join(path.dirname(fileURLToPath(import.meta.url)), "prompt.md"),
@@ -49,22 +52,22 @@ const FLAG_COMPLETIONS: AutocompleteItem[] = [
 
 const VALUE_FLAGS = new Set(["--out", "--deep-dive"]);
 
-type CompletionState = {
+interface CompletionState {
   currentToken: string;
   precedingTokens: string[];
   hasInstructionSeparator: boolean;
   expectedValueFor: "--out" | "--deep-dive" | null;
   usedFlags: Set<string>;
   targetToken: string | null;
-};
+}
 
 function splitCompletionTokens(argumentPrefix: string): {
   currentToken: string;
   precedingTokens: string[];
 } {
-  const hasTrailingSpace = /\s$/.test(argumentPrefix);
+  const hasTrailingSpace = TOP_LEVEL_REGEX_1.test(argumentPrefix);
   const trimmed = argumentPrefix.trimStart();
-  const tokens = trimmed.length > 0 ? trimmed.split(/\s+/) : [];
+  const tokens = trimmed.length > 0 ? trimmed.split(TOP_LEVEL_REGEX_2) : [];
 
   if (hasTrailingSpace) {
     return { currentToken: "", precedingTokens: tokens };
@@ -108,14 +111,14 @@ function analyzeCompletionState(argumentPrefix: string): CompletionState {
     }
   }
 
-  if (!expectedValueFor && targetToken === null) {
-    if (
-      currentToken.length > 0 &&
-      !currentToken.startsWith("--") &&
-      currentToken !== "--"
-    ) {
-      targetToken = currentToken;
-    }
+  if (
+    !expectedValueFor &&
+    targetToken === null &&
+    currentToken.length > 0 &&
+    !currentToken.startsWith("--") &&
+    currentToken !== "--"
+  ) {
+    targetToken = currentToken;
   }
 
   return {
@@ -130,7 +133,9 @@ function analyzeCompletionState(argumentPrefix: string): CompletionState {
 
 function getAvailableFlags(usedFlags: Set<string>): AutocompleteItem[] {
   return FLAG_COMPLETIONS.filter((item) => {
-    if (item.label === "--") return true;
+    if (item.label === "--") {
+      return true;
+    }
     return !usedFlags.has(item.label);
   });
 }
@@ -161,17 +166,15 @@ function resolvePathSearch(
   const endsWithSlash = normalizedToken.endsWith("/");
   const lastSlashIndex = normalizedToken.lastIndexOf("/");
 
-  const valuePrefix = endsWithSlash
-    ? normalizedToken
-    : lastSlashIndex >= 0
-      ? normalizedToken.slice(0, lastSlashIndex + 1)
-      : "";
-
-  const namePrefix = endsWithSlash
-    ? ""
-    : lastSlashIndex >= 0
-      ? normalizedToken.slice(lastSlashIndex + 1)
-      : normalizedToken;
+  let valuePrefix = "";
+  let namePrefix = normalizedToken;
+  if (endsWithSlash) {
+    valuePrefix = normalizedToken;
+    namePrefix = "";
+  } else if (lastSlashIndex >= 0) {
+    valuePrefix = normalizedToken.slice(0, lastSlashIndex + 1);
+    namePrefix = normalizedToken.slice(lastSlashIndex + 1);
+  }
 
   const baseDir = valuePrefix.length > 0 ? valuePrefix : ".";
   const searchDir = path.resolve(cwd, baseDir);
@@ -295,7 +298,7 @@ export default function smartDocsExtension(pi: ExtensionAPI): void {
     getArgumentCompletions(argumentPrefix) {
       return getSmartDocsArgumentCompletions(argumentPrefix, process.cwd());
     },
-    handler: async (args, ctx) => {
+    handler: (args, ctx) => {
       const parsed = parseSmartDocsArgs(args ?? "", process.cwd());
       if (!parsed.ok) {
         ctx.ui.notify(parsed.error, "warning");

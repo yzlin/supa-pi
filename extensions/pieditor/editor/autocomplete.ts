@@ -9,6 +9,8 @@ import {
   type ShellInfo,
 } from "../shell/index.js";
 
+const TOP_LEVEL_REGEX_1 = /(?:^|[\s])@[^\s]*$/;
+
 type AutocompleteSuggestionResult = {
   items: AutocompleteItem[];
   prefix: string;
@@ -16,12 +18,12 @@ type AutocompleteSuggestionResult = {
 
 type Awaitable<T> = T | Promise<T>;
 
-type AutocompleteRequestOptions = {
+interface AutocompleteRequestOptions {
   signal: AbortSignal;
   force?: boolean;
-};
+}
 
-type CompatibleAutocompleteProvider = {
+interface CompatibleAutocompleteProvider {
   getSuggestions: (
     lines: string[],
     cursorLine: number,
@@ -49,7 +51,7 @@ type CompatibleAutocompleteProvider = {
     cursorLine: number,
     cursorCol: number
   ) => boolean;
-};
+}
 
 export function isAtCompletionContext(
   lines: string[],
@@ -58,7 +60,7 @@ export function isAtCompletionContext(
 ): boolean {
   const line = lines[cursorLine] ?? "";
   const beforeCursor = line.slice(0, cursorCol);
-  return /(?:^|[\s])@[^\s]*$/.test(beforeCursor);
+  return TOP_LEVEL_REGEX_1.test(beforeCursor);
 }
 
 export function isBashMode(lines: string[]): boolean {

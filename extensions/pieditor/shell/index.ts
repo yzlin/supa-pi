@@ -12,12 +12,18 @@ import { getFishCompletions } from "./fish.js";
 import type { CompletionResult, ShellInfo, ShellType } from "./types.js";
 import { getZshCompletions } from "./zsh.js";
 
+const TOP_LEVEL_REGEX_1 = /\s+/;
+
 export type { CompletionResult, ShellInfo, ShellType } from "./types.js";
 
 function detectShellType(shellPath: string): ShellType {
   const name = path.basename(shellPath);
-  if (name === "fish" || name.startsWith("fish")) return "fish";
-  if (name === "zsh" || name.startsWith("zsh")) return "zsh";
+  if (name === "fish" || name.startsWith("fish")) {
+    return "fish";
+  }
+  if (name === "zsh" || name.startsWith("zsh")) {
+    return "zsh";
+  }
   return "bash";
 }
 
@@ -111,8 +117,8 @@ function extractCompletionContext(text: string): {
   }
 
   // Last word is the prefix
-  const words = trimmed.split(/\s+/);
-  const prefix = words[words.length - 1] || "";
+  const words = trimmed.split(TOP_LEVEL_REGEX_1);
+  const prefix = words.at(-1) || "";
 
   return { commandLine: trimmed, prefix };
 }
@@ -148,7 +154,9 @@ export function getShellCompletions(
           cwd,
           fallbackBashPath
         );
-        if (bashResult) return bashResult;
+        if (bashResult) {
+          return bashResult;
+        }
       }
       return getZshCompletions(commandLine, cwd, shell.path);
     }

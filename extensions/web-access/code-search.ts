@@ -2,7 +2,7 @@ import { activityMonitor } from "./activity.js";
 import { callExaMcp } from "./exa.js";
 
 function maxTokensToContextMaxCharacters(maxTokens: number): number {
-  return Math.max(3000, Math.min(Math.round(maxTokens * 4), 50000));
+  return Math.max(3000, Math.min(Math.round(maxTokens * 4), 50_000));
 }
 
 export async function executeCodeSearch(

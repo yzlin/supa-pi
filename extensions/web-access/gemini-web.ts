@@ -4,6 +4,16 @@ import { basename, join } from "node:path";
 
 import { type CookieMap, getGoogleCookies } from "./chrome-cookies.js";
 
+const TOP_LEVEL_REGEX_1 = /^http:\/\/googleusercontent\.com\/card_content\/\d+/;
+const TOP_LEVEL_REGEX_2 = /"email"\s*:\s*"([^"]+)"/;
+const TOP_LEVEL_REGEX_3 = /"displayEmail"\s*:\s*"([^"]+)"/;
+const TOP_LEVEL_REGEX_4 = /"identifier"\s*:\s*"([^"]+)"/;
+const TOP_LEVEL_REGEX_5 = /"defaultEmail"\s*:\s*"([^"]+)"/;
+const TOP_LEVEL_REGEX_6 = /"gaiaIdentifier"\s*:\s*"([^"]+)"/;
+const TOP_LEVEL_REGEX_7 = /^\)\]\}'\s*/;
+const TOP_LEVEL_REGEX_8 = /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/i;
+const TOP_LEVEL_REGEX_9 = /^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i;
+
 const GEMINI_APP_URL = "https://gemini.google.com/app";
 const GEMINI_STREAM_GENERATE_URL =
   "https://gemini.google.com/_/BardChatUi/data/assistant.lamda.BardFrontendService/StreamGenerate";
@@ -40,7 +50,9 @@ export interface GeminiWebOptions {
 }
 
 function loadConfig(): GeminiWebConfig {
-  if (cachedConfig) return cachedConfig;
+  if (cachedConfig) {
+    return cachedConfig;
+  }
   if (!existsSync(CONFIG_PATH)) {
     cachedConfig = {};
     return cachedConfig;
@@ -62,7 +74,9 @@ function loadConfig(): GeminiWebConfig {
 }
 
 function normalizeChromeProfile(value: unknown): string | undefined {
-  if (typeof value !== "string") return undefined;
+  if (typeof value !== "string") {
+    return undefined;
+  }
   const normalized = value.trim();
   return normalized.length > 0 ? normalized : undefined;
 }
@@ -79,7 +93,9 @@ export async function isGeminiWebAvailable(
       normalizeChromeProfile(chromeProfile) ?? getChromeProfileFromConfig(),
     requiredCookies: REQUIRED_COOKIES,
   });
-  if (!result) return null;
+  if (!result) {
+    return null;
+  }
   return result.cookies;
 }
 
@@ -87,25 +103,31 @@ export async function getActiveGoogleEmail(
   cookies: CookieMap
 ): Promise<string | null> {
   const cookieHeader = buildCookieHeader(cookies);
-  if (!cookieHeader) return null;
+  if (!cookieHeader) {
+    return null;
+  }
 
   try {
     const html = await fetchWithCookieRedirects(
       GEMINI_APP_URL,
       cookieHeader,
       10,
-      AbortSignal.timeout(10000)
+      AbortSignal.timeout(10_000)
     );
     const email = extractEmailFromGeminiHtml(html);
-    if (email) return email;
-  } catch {}
+    if (email) {
+      return email;
+    }
+  } catch {
+    /* noop */
+  }
 
   try {
     const response = await fetchWithCookieRedirects(
       GOOGLE_LIST_ACCOUNTS_URL,
       cookieHeader,
       10,
-      AbortSignal.timeout(10000)
+      AbortSignal.timeout(10_000)
     );
     return extractEmailFromListAccounts(response);
   } catch {
@@ -122,7 +144,7 @@ export async function queryWithCookies(
     options.model && MODEL_HEADERS[options.model]
       ? options.model
       : "gemini-2.5-flash";
-  const timeoutMs = options.timeoutMs ?? 120000;
+  const timeoutMs = options.timeoutMs ?? 120_000;
 
   let fullPrompt = prompt;
   if (options.youtubeUrl) {
@@ -147,14 +169,21 @@ export async function queryWithCookies(
       timeoutMs,
       options.signal
     );
-    if (fallback.errorMessage) throw new Error(fallback.errorMessage);
-    if (!fallback.text)
+    if (fallback.errorMessage) {
+      throw new Error(fallback.errorMessage);
+    }
+    if (!fallback.text) {
       throw new Error("Gemini Web returned empty response (fallback model)");
+    }
     return fallback.text;
   }
 
-  if (result.errorMessage) throw new Error(result.errorMessage);
-  if (!result.text) throw new Error("Gemini Web returned empty response");
+  if (result.errorMessage) {
+    throw new Error(result.errorMessage);
+  }
+  if (!result.text) {
+    throw new Error("Gemini Web returned empty response");
+  }
   return result.text;
 }
 
@@ -217,7 +246,9 @@ async function runGeminiWebOnce(
     try {
       const json = JSON.parse(trimJsonEnvelope(rawText));
       errorCode = extractErrorCode(json);
-    } catch {}
+    } catch {
+      /* noop */
+    }
     return {
       text: "",
       errorCode,
@@ -239,7 +270,9 @@ async function fetchAccessToken(
 
   for (const key of ["SNlM0e", "thykhd"]) {
     const match = html.match(new RegExp(`"${key}":"(.*?)"`));
-    if (match?.[1]) return match[1];
+    if (match?.[1]) {
+      return match[1];
+    }
   }
 
   throw new Error(
@@ -274,24 +307,26 @@ async function fetchWithCookieRedirects(
 
 function extractEmailFromGeminiHtml(html: string): string | null {
   const patterns = [
-    /"email"\s*:\s*"([^"]+)"/,
-    /"displayEmail"\s*:\s*"([^"]+)"/,
-    /"identifier"\s*:\s*"([^"]+)"/,
-    /"defaultEmail"\s*:\s*"([^"]+)"/,
-    /"gaiaIdentifier"\s*:\s*"([^"]+)"/,
+    TOP_LEVEL_REGEX_2,
+    TOP_LEVEL_REGEX_3,
+    TOP_LEVEL_REGEX_4,
+    TOP_LEVEL_REGEX_5,
+    TOP_LEVEL_REGEX_6,
   ];
 
   for (const pattern of patterns) {
     const match = html.match(pattern);
     const email = normalizeEmail(match?.[1]);
-    if (email) return email;
+    if (email) {
+      return email;
+    }
   }
 
   return findFirstEmail(html);
 }
 
 function extractEmailFromListAccounts(text: string): string | null {
-  const trimmed = text.replace(/^\)\]\}'\s*/, "");
+  const trimmed = text.replace(TOP_LEVEL_REGEX_7, "");
   try {
     return findEmailInValue(JSON.parse(trimmed)) ?? findFirstEmail(trimmed);
   } catch {
@@ -300,18 +335,24 @@ function extractEmailFromListAccounts(text: string): string | null {
 }
 
 function findEmailInValue(value: unknown): string | null {
-  if (typeof value === "string") return normalizeEmail(value);
+  if (typeof value === "string") {
+    return normalizeEmail(value);
+  }
   if (Array.isArray(value)) {
     for (const item of value) {
       const email = findEmailInValue(item);
-      if (email) return email;
+      if (email) {
+        return email;
+      }
     }
     return null;
   }
   if (value && typeof value === "object") {
     for (const item of Object.values(value as Record<string, unknown>)) {
       const email = findEmailInValue(item);
-      if (email) return email;
+      if (email) {
+        return email;
+      }
     }
   }
   return null;
@@ -319,16 +360,16 @@ function findEmailInValue(value: unknown): string | null {
 
 function findFirstEmail(text: string): string | null {
   const normalized = decodeEmailEscapes(text);
-  const match = normalized.match(/\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/i);
+  const match = normalized.match(TOP_LEVEL_REGEX_8);
   return match?.[0] ?? null;
 }
 
 function normalizeEmail(value: string | undefined): string | null {
-  if (!value) return null;
+  if (!value) {
+    return null;
+  }
   const normalized = decodeEmailEscapes(value.trim());
-  return /^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i.test(normalized)
-    ? normalized
-    : null;
+  return TOP_LEVEL_REGEX_9.test(normalized) ? normalized : null;
 }
 
 function decodeEmailEscapes(value: string): string {
@@ -348,7 +389,7 @@ async function uploadFile(
 ): Promise<{ id: string; name: string }> {
   const data = readFileSync(filePath);
   const fileName = basename(filePath);
-  const boundary = "----FormBoundary" + Math.random().toString(36).slice(2);
+  const boundary = `----FormBoundary${Math.random().toString(36).slice(2)}`;
   const header = `--${boundary}\r\nContent-Disposition: form-data; name="file"; filename="${fileName}"\r\nContent-Type: application/octet-stream\r\n\r\n`;
   const footer = `\r\n--${boundary}--\r\n`;
 
@@ -410,8 +451,12 @@ function buildCookieHeader(cookieMap: CookieMap): string {
 function getNestedValue(value: unknown, pathParts: number[]): unknown {
   let current: unknown = value;
   for (const part of pathParts) {
-    if (current == null) return undefined;
-    if (!Array.isArray(current)) return undefined;
+    if (current == null) {
+      return undefined;
+    }
+    if (!Array.isArray(current)) {
+      return undefined;
+    }
     current = (current as unknown[])[part];
   }
   return current;
@@ -442,9 +487,11 @@ function parseStreamGenerateResponse(rawText: string): GeminiWebResult {
   const parts = Array.isArray(responseJson) ? responseJson : [];
   let body: unknown = null;
 
-  for (let i = 0; i < parts.length; i++) {
-    const partBody = getNestedValue(parts[i], [2]);
-    if (!partBody || typeof partBody !== "string") continue;
+  for (const part of parts) {
+    const partBody = getNestedValue(part, [2]);
+    if (!partBody || typeof partBody !== "string") {
+      continue;
+    }
     try {
       const parsed = JSON.parse(partBody);
       const candidateList = getNestedValue(parsed, [4]);
@@ -452,7 +499,9 @@ function parseStreamGenerateResponse(rawText: string): GeminiWebResult {
         body = parsed;
         break;
       }
-    } catch {}
+    } catch {
+      /* noop */
+    }
   }
 
   const candidateList = getNestedValue(body, [4]);
@@ -462,9 +511,11 @@ function parseStreamGenerateResponse(rawText: string): GeminiWebResult {
   const textRaw = getNestedValue(firstCandidate, [1, 0]) as string | undefined;
 
   let text = textRaw ?? "";
-  if (/^http:\/\/googleusercontent\.com\/card_content\/\d+/.test(text)) {
+  if (TOP_LEVEL_REGEX_1.test(text)) {
     const alt = getNestedValue(firstCandidate, [22, 0]) as string | undefined;
-    if (alt) text = alt;
+    if (alt) {
+      text = alt;
+    }
   }
 
   return { text, errorCode };

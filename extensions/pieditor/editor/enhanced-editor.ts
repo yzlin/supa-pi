@@ -57,19 +57,25 @@ export class EnhancedEditor extends CustomEditor {
   private lastEscapeTime = 0;
   private submitHandler?: (text: string) => void;
 
-  private shell: ShellInfo;
+  private readonly shell: ShellInfo;
+  private readonly ui: ExtensionUIContext;
+  private readonly options: EnhancedEditorOptions;
+  private readonly keybindingsManager: KeybindingsManager;
   private editorRenderCache: EditorRenderCache | null = null;
 
   constructor(
     tui: TUI,
     theme: EditorTheme,
     keybindings: KeybindingsManager,
-    private ui: ExtensionUIContext,
-    private options: EnhancedEditorOptions,
-    private keybindingsManager: KeybindingsManager = keybindings
+    ui: ExtensionUIContext,
+    options: EnhancedEditorOptions,
+    keybindingsManager: KeybindingsManager = keybindings
   ) {
     super(tui, theme, keybindings);
     this.tuiInstance = tui;
+    this.ui = ui;
+    this.options = options;
+    this.keybindingsManager = keybindingsManager;
     this.shell = findCompletionShell();
 
     this.installOnSubmitInterceptor();
@@ -104,8 +110,10 @@ export class EnhancedEditor extends CustomEditor {
 
   async openFilePickerAtCursor(): Promise<void> {
     const refs = await openFilePicker(this.ui);
-    if (!refs) return;
-    this.insertTextAtCursor(refs + " ");
+    if (!refs) {
+      return;
+    }
+    this.insertTextAtCursor(`${refs} `);
     this.tuiInstance.requestRender();
   }
 
@@ -117,7 +125,9 @@ export class EnhancedEditor extends CustomEditor {
       text = undefined;
     }
 
-    if (!text) return;
+    if (!text) {
+      return;
+    }
 
     // Normalize line endings
     const normalized = text.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
@@ -128,7 +138,9 @@ export class EnhancedEditor extends CustomEditor {
   }
 
   handleInput(data: string): void {
-    if (this.openingPicker) return;
+    if (this.openingPicker) {
+      return;
+    }
 
     const doubleEscapeCommand = this.options.getDoubleEscapeCommand();
     if (
@@ -176,7 +188,9 @@ export class EnhancedEditor extends CustomEditor {
       return;
     }
 
-    if (!command || !this.onSubmit) return;
+    if (!(command && this.onSubmit)) {
+      return;
+    }
 
     this.onSubmit(`/${command}`);
   }
@@ -185,7 +199,9 @@ export class EnhancedEditor extends CustomEditor {
     const cursor = this.getCursor();
     const line = this.getLines()[cursor.line] ?? "";
 
-    if (cursor.col === 0) return true;
+    if (cursor.col === 0) {
+      return true;
+    }
 
     const before = line[cursor.col - 1];
     return before === " " || before === "\t" || before === undefined;

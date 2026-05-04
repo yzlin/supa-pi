@@ -4,8 +4,11 @@ import { DEFAULT_RTK_CONFIG } from "./config";
 import { createRtkMetricsStore } from "./metrics";
 import { renderProgressBar, renderRtkStats } from "./stats";
 
+const ANSI_ESCAPE_PATTERN_SOURCE = String.raw`\u001B\[[0-9;]*m`;
+const ANSI_ESCAPE_PATTERN = new RegExp(ANSI_ESCAPE_PATTERN_SOURCE, "g");
+
 function stripAnsi(text: string): string {
-  return text.replace(/\u001B\[[0-9;]*m/g, "");
+  return text.replace(ANSI_ESCAPE_PATTERN, "");
 }
 
 describe("rtk stats", () => {

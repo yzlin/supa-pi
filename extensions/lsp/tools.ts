@@ -29,10 +29,12 @@ import {
   QUERY_OPERATIONS,
 } from "./types";
 
+const TOP_LEVEL_REGEX_1 = /^@/;
+
 // ── Helpers ─────────────────────────────────────────────────────────────────
 
 function cleanPath(path: string): string {
-  return path.replace(/^@/, "");
+  return path.replace(TOP_LEVEL_REGEX_1, "");
 }
 
 function toZeroIndexed(oneIndexed: number): number {
@@ -47,16 +49,21 @@ function validateParams(
   query?: string
 ): string | null {
   if (POSITION_OPERATIONS.includes(operation)) {
-    if (!filePath) return `Operation '${operation}' requires filePath`;
-    if (line === undefined) return `Operation '${operation}' requires line`;
-    if (character === undefined)
+    if (!filePath) {
+      return `Operation '${operation}' requires filePath`;
+    }
+    if (line === undefined) {
+      return `Operation '${operation}' requires line`;
+    }
+    if (character === undefined) {
       return `Operation '${operation}' requires character`;
+    }
   }
-  if (FILE_ONLY_OPERATIONS.includes(operation)) {
-    if (!filePath) return `Operation '${operation}' requires filePath`;
+  if (FILE_ONLY_OPERATIONS.includes(operation) && !filePath) {
+    return `Operation '${operation}' requires filePath`;
   }
-  if (QUERY_OPERATIONS.includes(operation)) {
-    if (!query) return `Operation '${operation}' requires query`;
+  if (QUERY_OPERATIONS.includes(operation) && !query) {
+    return `Operation '${operation}' requires query`;
   }
   return null;
 }
@@ -161,7 +168,9 @@ export function registerLspTool(pi: ExtensionAPI, mgr: ServerManager) {
         character,
         query
       );
-      if (validationError) throw new Error(validationError);
+      if (validationError) {
+        throw new Error(validationError);
+      }
 
       // ── diagnostics (aggregate from all matching servers) ──
       if (operation === "diagnostics") {
@@ -343,8 +352,9 @@ async function executeWorkspaceSymbol(
   rootPath: string
 ) {
   const client = mgr.anyClient();
-  if (!client)
+  if (!client) {
     throw new Error("No LSP server available for workspace symbol search.");
+  }
 
   const symbols = await client.workspaceSymbol(query);
   return ok(formatWorkspaceSymbols(symbols, query, rootPath));

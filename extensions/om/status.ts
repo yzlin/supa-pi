@@ -26,6 +26,8 @@ import {
   OM_STATE_CUSTOM_TYPE,
 } from "./version";
 
+const TOP_LEVEL_REGEX_1 = /^[╭╮╰╯├┤─]+$/u;
+
 const OVERLAY_MIN_WIDTH = 76;
 const OVERLAY_MAX_WIDTH = 96;
 const TEXT_FALLBACK_WIDTH = 56;
@@ -41,10 +43,10 @@ const PLAIN_THEME: ThemeLike = {
   bold: (text) => text,
 };
 
-type ThemeLike = {
+interface ThemeLike {
   fg(color: string, text: string): string;
   bold(text: string): string;
-};
+}
 
 type OmStatusEntityTabKey =
   | "facts"
@@ -217,11 +219,11 @@ function frameLine(content: string, width: number): string {
 }
 
 function styleFrameLine(line: string, theme: ThemeLike): string {
-  if (/^[╭╮╰╯├┤─]+$/u.test(line)) {
+  if (TOP_LEVEL_REGEX_1.test(line)) {
     return theme.fg("dim", line);
   }
 
-  if (!line.startsWith("│ ") || !line.endsWith(" │")) {
+  if (!(line.startsWith("│ ") && line.endsWith(" │"))) {
     return line;
   }
 
@@ -1064,7 +1066,9 @@ export async function showOmStatusView(
       };
 
       return {
-        invalidate() {},
+        invalidate() {
+          /* noop */
+        },
         render(width: number) {
           if (width < TEXT_FALLBACK_WIDTH) {
             return [truncateToWidth(formatOmStatusSummary(snapshot), width)];

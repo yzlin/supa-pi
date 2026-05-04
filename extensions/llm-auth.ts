@@ -1,17 +1,17 @@
-type ModelLike = {
+interface ModelLike {
   provider: string;
-};
+}
 
-type ModelAuthSuccess = {
+interface ModelAuthSuccess {
   ok: true;
   apiKey?: string;
   headers?: Record<string, string>;
-};
+}
 
-type ModelAuthFailure = {
+interface ModelAuthFailure {
   ok: false;
   error: string;
-};
+}
 
 type ModelAuthRegistry =
   | {
@@ -29,10 +29,10 @@ type ModelAuthRegistry =
       getApiKeyForProvider?(provider: string): Promise<string | undefined>;
     };
 
-type ProviderAuthRegistry = {
+interface ProviderAuthRegistry {
   getApiKeyForProvider?(provider: string): Promise<string | undefined>;
   getApiKey?(model: unknown): Promise<string | undefined>;
-};
+}
 
 export async function getModelAuthOrThrow(
   modelRegistry: ModelAuthRegistry,
@@ -60,7 +60,7 @@ export async function getModelAuthOrThrow(
   };
 }
 
-export async function getProviderApiKeyForModel(
+export function getProviderApiKeyForModel(
   modelRegistry: ProviderAuthRegistry,
   model: ModelLike
 ): Promise<string | undefined> {

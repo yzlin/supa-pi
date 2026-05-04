@@ -15,8 +15,11 @@ initTheme("dark");
 const BAT_LINE_NUMBER_COLOR = "\x1b[38;2;131;148;150m";
 const BAT_DIVIDER_COLOR = "\x1b[38;2;88;110;117m";
 
+const ANSI_ESCAPE_PATTERN_SOURCE = String.raw`\u001B\[[0-9;]*m`;
+const ANSI_ESCAPE_PATTERN = new RegExp(ANSI_ESCAPE_PATTERN_SOURCE, "g");
+
 function stripAnsi(text: string): string {
-  return text.replace(/\x1b\[[0-9;]*m/g, "");
+  return text.replace(ANSI_ESCAPE_PATTERN, "");
 }
 
 afterEach(() => {

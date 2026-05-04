@@ -1,3 +1,4 @@
+"use strict";
 const { existsSync } = require("node:fs");
 const { join } = require("node:path");
 
@@ -18,7 +19,9 @@ let loadError = null;
 
 function resolveBindingName() {
   const platformBindings = bindingNames[process.platform];
-  if (!platformBindings) return null;
+  if (!platformBindings) {
+    return null;
+  }
   return platformBindings[process.arch] ?? null;
 }
 

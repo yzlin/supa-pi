@@ -21,6 +21,9 @@ import {
   OM_STATE_VERSION,
 } from "./version";
 
+const TOP_LEVEL_REGEX_1 = /[?#]/;
+const TOP_LEVEL_REGEX_2 = /[\\/]/;
+
 interface OmMessageLike {
   role?: string;
   content?: unknown;
@@ -56,8 +59,8 @@ function normalizeAttachmentLabel(value: unknown): string {
     return "";
   }
 
-  const withoutQuery = label.split(/[?#]/, 1)[0] ?? label;
-  const segments = withoutQuery.split(/[\\/]/).filter(Boolean);
+  const withoutQuery = label.split(TOP_LEVEL_REGEX_1, 1)[0] ?? label;
+  const segments = withoutQuery.split(TOP_LEVEL_REGEX_2).filter(Boolean);
 
   return segments.at(-1) ?? withoutQuery;
 }
@@ -161,7 +164,7 @@ function serializeObserverEntry<TEntry extends OmObserverEntryLike>(
   const role = normalizeText(message.role);
   const text = extractMessageText(message);
 
-  if (!role || !text) {
+  if (!(role && text)) {
     return null;
   }
 

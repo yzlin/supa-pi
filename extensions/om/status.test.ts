@@ -13,10 +13,10 @@ const TEST_THEME = {
   bold: (text: string) => text,
 };
 
-type OmStatusComponent = {
+interface OmStatusComponent {
   render(width: number): string[];
   handleInput(data: string): void;
-};
+}
 
 function createSnapshot(
   overrides: Partial<OmStatusSnapshot> = {}
@@ -83,15 +83,21 @@ async function renderInteractiveSnapshot(
     {
       hasUI: true,
       ui: {
-        notify() {},
-        async custom(factory: any) {
+        notify() {
+          /* noop */
+        },
+        custom(factory: any) {
           const nextComponent = factory(
             {
-              requestRender() {},
+              requestRender() {
+                /* noop */
+              },
             },
             theme,
             {},
-            () => {}
+            () => {
+              /* noop */
+            }
           ) as OmStatusComponent;
 
           component = nextComponent;
@@ -385,7 +391,7 @@ describe("om status view", () => {
           createdAt: "2026-04-05T00:00:03.000Z",
           level: "warning",
           message:
-            'OM observer returned invalid JSON for 1 pending entry. [model=openai-codex/gpt-5.5 stop=stop parts=1 textParts=1 textChars=92 types=text preview="{\"observations\":[{\"kind\":\"fact\",\"summary\":\"A very long structured response preview that should wrap across multiple lines in the overlay.\"}]}" ]',
+            'OM observer returned invalid JSON for 1 pending entry. [model=openai-codex/gpt-5.5 stop=stop parts=1 textParts=1 textChars=92 types=text preview="{"observations":[{"kind":"fact","summary":"A very long structured response preview that should wrap across multiple lines in the overlay."}]}" ]',
         },
       ],
     });

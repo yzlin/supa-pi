@@ -20,7 +20,7 @@ export default function researchExtension(pi: ExtensionAPI): void {
   pi.registerCommand("research", {
     description:
       "Run research through pi-tasks with the researcher agent: /research <topic>",
-    handler: async (args, ctx) => {
+    handler: (args, ctx) => {
       const topic = (args ?? "").trim();
       if (!topic) {
         ctx.ui.notify("Usage: /research <topic>", "warning");

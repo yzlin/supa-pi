@@ -9,7 +9,9 @@ describe("rtk user bash", () => {
     return {
       hasUI: true,
       ui: {
-        notify() {},
+        notify() {
+          /* noop */
+        },
       },
     } as any;
   }
@@ -83,7 +85,7 @@ describe("rtk user bash", () => {
     let executedCommand = "";
     const handler = createRtkUserBashHandler(runtime, {
       createLocalOperations: () => ({
-        async exec(command) {
+        exec(command) {
           executedCommand = command;
           return { exitCode: 0 };
         },
@@ -106,7 +108,9 @@ describe("rtk user bash", () => {
     );
 
     await result?.operations?.exec("ls", process.cwd(), {
-      onData() {},
+      onData() {
+        /* noop */
+      },
     } as any);
 
     expect(executedCommand).toBe("exa");
@@ -123,7 +127,7 @@ describe("rtk user bash", () => {
     let executedCommand = "";
     const handler = createRtkUserBashHandler(runtime, {
       createLocalOperations: () => ({
-        async exec(command) {
+        exec(command) {
           executedCommand = command;
           return { exitCode: 0 };
         },
@@ -146,7 +150,9 @@ describe("rtk user bash", () => {
     );
 
     await result?.operations?.exec("ls", process.cwd(), {
-      onData() {},
+      onData() {
+        /* noop */
+      },
     } as any);
 
     expect(executedCommand).toBe("ls");

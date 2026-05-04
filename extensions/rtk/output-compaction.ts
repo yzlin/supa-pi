@@ -21,7 +21,7 @@ function getTrackedToolName(
   config: RtkConfig
 ): RtkToolName | null {
   const { outputCompaction } = config;
-  if (!outputCompaction.enabled || !outputCompaction.trackSavings) {
+  if (!(outputCompaction.enabled && outputCompaction.trackSavings)) {
     return null;
   }
 
@@ -101,11 +101,11 @@ function compactText(
 }
 
 export function createRtkToolExecutionStartHandler(runtime: RtkRuntime) {
-  return async (event: ToolExecutionStartEvent): Promise<void> => {
+  return (event: ToolExecutionStartEvent): Promise<void> => {
     const config = runtime.getConfig();
     const toolName = getTrackedToolName(event.toolName, config);
     const label = getExecutionLabel(event);
-    if (!toolName || !label) {
+    if (!(toolName && label)) {
       return;
     }
 
@@ -114,9 +114,9 @@ export function createRtkToolExecutionStartHandler(runtime: RtkRuntime) {
 }
 
 export function createRtkToolResultHandler(runtime: RtkRuntime) {
-  return async (
+  return (
     event: ToolResultEvent
-  ): Promise<ToolResultEventResult | void> => {
+  ): Promise<ToolResultEventResult | undefined> => {
     const config = runtime.getConfig();
     const toolName = getCompactionTarget(event, config);
     if (!toolName) {

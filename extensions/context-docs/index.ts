@@ -15,6 +15,23 @@ import {
 } from "./parse";
 import { detectSecret } from "./secrets";
 
+const TRAILING_WHITESPACE_PATTERN = /\s$/;
+const WHITESPACE_PATTERN = /\s+/;
+const COMMAND_INTENT_PATTERNS: [RegExp, ContextDocsCommand][] = [
+  [/^context\s+setup\s*:\s*(\S[\s\S]*)$/i, "context-setup"],
+  [/^context\s+note\s*:\s*(\S[\s\S]*)$/i, "context-note"],
+  [/^take\s+note\s+that\s+(\S[\s\S]*)$/i, "context-note"],
+  [/^remember\s+that\s+(\S[\s\S]*)$/i, "context-note"],
+  [/^record\s+that\s+(\S[\s\S]*)$/i, "context-note"],
+  [/^adr\s*:\s*(\S[\s\S]*)$/i, "adr"],
+  [/^context\s+review\s*:\s*(\S[\s\S]*)$/i, "context-review"],
+  [/^context\s+grill\s*:\s*(\S[\s\S]*)$/i, "context-grill"],
+];
+const CONTEXT_DOCS_WORK_PATTERN =
+  /\b(context[- ]?docs?|context[- ]setup|context[- ]note|context[- ]review|context[- ]grill|adr|CONTEXT\.md|CONTEXT-MAP\.md)\b/i;
+const PROJECT_WORK_PATTERN =
+  /\b(implement|implementation|plan|planning|review|debug|debugging|fix|build|refactor|test|context[- ]?docs?|context[- ]setup|context[- ]note|context[- ]review|context[- ]grill|adr|CONTEXT\.md|CONTEXT-MAP\.md)\b/i;
+
 const SHARED_PROMPT = fs
   .readFileSync(
     path.join(path.dirname(fileURLToPath(import.meta.url)), "prompt.md"),
@@ -303,10 +320,10 @@ const DEFAULT_INSTRUCTIONS: Record<ContextDocsCommand, string> = {
   "context-grill": "ask focused questions until project context is clear",
 };
 
-type NaturalLanguageMatch = {
+interface NaturalLanguageMatch {
   command: ContextDocsCommand;
   instruction: string;
-};
+}
 
 const CONTEXT_DOCS_REMINDER =
   "Context-docs: keep durable docs scoped; CONTEXT.md domain/product only; AGENTS.md agent conventions; ADRs tradeoff decisions; CONTEXT-MAP real boundaries; no pi-tasks.";
@@ -316,9 +333,9 @@ function splitCompletionTokens(argumentPrefix: string): {
   currentToken: string;
   precedingTokens: string[];
 } {
-  const hasTrailingSpace = /\s$/.test(argumentPrefix);
+  const hasTrailingSpace = TRAILING_WHITESPACE_PATTERN.test(argumentPrefix);
   const trimmed = argumentPrefix.trimStart();
-  const tokens = trimmed.length > 0 ? trimmed.split(/\s+/) : [];
+  const tokens = trimmed.length > 0 ? trimmed.split(WHITESPACE_PATTERN) : [];
 
   if (hasTrailingSpace) {
     return { currentToken: "", precedingTokens: tokens };
@@ -346,17 +363,15 @@ function resolvePathSearch(
   const endsWithSlash = normalizedToken.endsWith("/");
   const lastSlashIndex = normalizedToken.lastIndexOf("/");
 
-  const valuePrefix = endsWithSlash
-    ? normalizedToken
-    : lastSlashIndex >= 0
-      ? normalizedToken.slice(0, lastSlashIndex + 1)
-      : "";
-
-  const namePrefix = endsWithSlash
-    ? ""
-    : lastSlashIndex >= 0
-      ? normalizedToken.slice(lastSlashIndex + 1)
-      : normalizedToken;
+  let valuePrefix = "";
+  let namePrefix = normalizedToken;
+  if (endsWithSlash) {
+    valuePrefix = normalizedToken;
+    namePrefix = "";
+  } else if (lastSlashIndex >= 0) {
+    valuePrefix = normalizedToken.slice(0, lastSlashIndex + 1);
+    namePrefix = normalizedToken.slice(lastSlashIndex + 1);
+  }
 
   const baseDir = valuePrefix.length > 0 ? valuePrefix : ".";
   const searchDir = path.resolve(cwd, baseDir);
@@ -406,7 +421,9 @@ function getUsedFlags(tokens: string[]): Set<string> {
   const usedFlags = new Set<string>();
 
   for (const token of tokens) {
-    if (!token.startsWith("--") || token === "--") continue;
+    if (!token.startsWith("--") || token === "--") {
+      continue;
+    }
     const flag = token.includes("=")
       ? token.slice(0, token.indexOf("="))
       : token;
@@ -438,7 +455,9 @@ function getAvailableFlags(
   usedFlags: Set<string>
 ): AutocompleteItem[] {
   return FLAG_COMPLETIONS[command].filter((item) => {
-    if (item.label === "--") return true;
+    if (item.label === "--") {
+      return true;
+    }
     return !usedFlags.has(item.label);
   });
 }
@@ -457,7 +476,9 @@ export function getContextDocsArgumentCompletions(
   const expectedValueFlag = getExpectedValueFlag(precedingTokens);
   if (expectedValueFlag) {
     const values = VALUE_COMPLETIONS[expectedValueFlag] ?? null;
-    if (!values) return null;
+    if (!values) {
+      return null;
+    }
     const matches = values.filter((item) =>
       item.value.startsWith(currentToken)
     );
@@ -481,7 +502,9 @@ export function getContextDocsArgumentCompletions(
     return nonEmptyCompletions(flagItems);
   }
 
-  if (hasTarget) return null;
+  if (hasTarget) {
+    return null;
+  }
 
   const pathItems = completeDirectories(currentToken, cwd) ?? [];
   const flagItems =
@@ -531,20 +554,11 @@ export function buildContextDocsMessage(
 export function matchNaturalLanguageInput(
   text: string
 ): NaturalLanguageMatch | null {
-  if (text.trimStart().startsWith("/")) return null;
+  if (text.trimStart().startsWith("/")) {
+    return null;
+  }
 
-  const patterns: Array<[RegExp, ContextDocsCommand]> = [
-    [/^context\s+setup\s*:\s*(\S[\s\S]*)$/i, "context-setup"],
-    [/^context\s+note\s*:\s*(\S[\s\S]*)$/i, "context-note"],
-    [/^take\s+note\s+that\s+(\S[\s\S]*)$/i, "context-note"],
-    [/^remember\s+that\s+(\S[\s\S]*)$/i, "context-note"],
-    [/^record\s+that\s+(\S[\s\S]*)$/i, "context-note"],
-    [/^adr\s*:\s*(\S[\s\S]*)$/i, "adr"],
-    [/^context\s+review\s*:\s*(\S[\s\S]*)$/i, "context-review"],
-    [/^context\s+grill\s*:\s*(\S[\s\S]*)$/i, "context-grill"],
-  ];
-
-  for (const [pattern, command] of patterns) {
+  for (const [pattern, command] of COMMAND_INTENT_PATTERNS) {
     const match = text.match(pattern);
     if (match?.[1]) {
       return { command, instruction: match[1].trim() };
@@ -561,15 +575,11 @@ function hasContextDocs(targetRoot: string): boolean {
 }
 
 function promptLooksLikeContextDocsWork(prompt: string): boolean {
-  return /\b(context[- ]?docs?|context[- ]setup|context[- ]note|context[- ]review|context[- ]grill|adr|CONTEXT\.md|CONTEXT-MAP\.md)\b/i.test(
-    prompt
-  );
+  return CONTEXT_DOCS_WORK_PATTERN.test(prompt);
 }
 
 function promptLooksLikeProjectWork(prompt: string): boolean {
-  return /\b(implement|implementation|plan|planning|review|debug|debugging|fix|build|refactor|test|context[- ]?docs?|context[- ]setup|context[- ]note|context[- ]review|context[- ]grill|adr|CONTEXT\.md|CONTEXT-MAP\.md)\b/i.test(
-    prompt
-  );
+  return PROJECT_WORK_PATTERN.test(prompt);
 }
 
 export function shouldInjectContextDocsReminder(
@@ -598,7 +608,9 @@ function buildNaturalLanguageInput(
 ): ContextDocsCommandInput | null {
   const parsed = parseContextDocsArgs(command, NATURAL_LANGUAGE_ARGS, cwd);
 
-  if (!parsed.ok) return null;
+  if (!parsed.ok) {
+    return null;
+  }
 
   return {
     ...parsed.value,
@@ -610,7 +622,7 @@ function notifySecretRefusal(ctx: ExtensionContext, reason: string): void {
   ctx.ui.notify(`Refusing context-docs prompt: possible ${reason}.`, "warning");
 }
 
-async function dispatchContextDocsCommand(
+function dispatchContextDocsCommand(
   command: ContextDocsCommand,
   args: string,
   ctx: ExtensionContext,

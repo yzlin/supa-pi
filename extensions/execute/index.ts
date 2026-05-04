@@ -6,10 +6,10 @@ import type {
 import { EXECUTE_COMMAND_NAME, EXECUTE_PROMPT } from "./constants";
 import { registerExecuteCheckpointTool } from "./tools";
 
-type MessageLike = {
+interface MessageLike {
   role?: string;
   content?: string | Array<{ type?: string; text?: string }>;
-};
+}
 
 function buildExecuteCommandMessage(args: string): string {
   const plan = args.trim();
@@ -66,7 +66,7 @@ export default function executeExtension(pi: ExtensionAPI): void {
   pi.registerCommand(EXECUTE_COMMAND_NAME, {
     description:
       "Execute a plan via main-session task orchestration: /execute [plan]",
-    handler: async (args, ctx) => {
+    handler: (args, ctx) => {
       const task = (args ?? "").trim() || getLastPlanFromSession(ctx);
       if (!task) {
         ctx.ui.notify(

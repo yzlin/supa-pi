@@ -21,6 +21,8 @@ import {
   trimErrorText,
 } from "./utils.js";
 
+const TOP_LEVEL_REGEX_1 = /\r?\n/;
+
 const CONFIG_PATH = join(homedir(), ".pi", "web-search.json");
 
 const YOUTUBE_PROMPT = `Extract the complete content of this YouTube video. Include:
@@ -45,7 +47,9 @@ interface YouTubeConfig {
 }
 
 function normalizePreferredModel(value: unknown, fallback: string): string {
-  if (typeof value !== "string") return fallback;
+  if (typeof value !== "string") {
+    return fallback;
+  }
   const normalized = value.trim();
   return normalized.length > 0 ? normalized : fallback;
 }
@@ -61,7 +65,9 @@ const defaults: YouTubeConfig = {
 let cachedConfig: YouTubeConfig | null = null;
 
 function loadYouTubeConfig(): YouTubeConfig {
-  if (cachedConfig) return cachedConfig;
+  if (cachedConfig) {
+    return cachedConfig;
+  }
   if (!existsSync(CONFIG_PATH)) {
     cachedConfig = { ...defaults };
     return cachedConfig;
@@ -98,10 +104,14 @@ export function isYouTubeURL(url: string): {
     if (parsed.pathname === "/playlist") {
       return { isYouTube: false, videoId: null };
     }
-  } catch {}
+  } catch {
+    /* noop */
+  }
 
   const match = url.match(YOUTUBE_REGEX);
-  if (!match) return { isYouTube: false, videoId: null };
+  if (!match) {
+    return { isYouTube: false, videoId: null };
+  }
   return { isYouTube: true, videoId: match[1] };
 }
 
@@ -147,7 +157,9 @@ export async function extractYouTube(
     result.url = url;
     if (videoId) {
       const thumb = await fetchYouTubeThumbnail(videoId);
-      if (thumb) result.thumbnail = thumb;
+      if (thumb) {
+        result.thumbnail = thumb;
+      }
     }
     activityMonitor.logComplete(activityId, 200);
     return result;
@@ -162,28 +174,38 @@ export async function extractYouTube(
   return null;
 }
 
-type StreamInfo = { streamUrl: string; duration: number | null };
+interface StreamInfo {
+  streamUrl: string;
+  duration: number | null;
+}
 type StreamResult = StreamInfo | { error: string };
 
 function mapYtDlpError(err: unknown): string {
   const { code, stderr, message } = readExecError(err);
-  if (code === "ENOENT")
+  if (code === "ENOENT") {
     return "yt-dlp is not installed. Install with: brew install yt-dlp";
-  if (isTimeoutError(err)) return "yt-dlp timed out fetching video info";
+  }
+  if (isTimeoutError(err)) {
+    return "yt-dlp timed out fetching video info";
+  }
   const lower = stderr.toLowerCase();
-  if (lower.includes("private")) return "Video is private or unavailable";
-  if (lower.includes("sign in"))
+  if (lower.includes("private")) {
+    return "Video is private or unavailable";
+  }
+  if (lower.includes("sign in")) {
     return "Video is age-restricted and requires authentication";
-  if (lower.includes("not available"))
+  }
+  if (lower.includes("not available")) {
     return "Video is unavailable in your region or has been removed";
-  if (lower.includes("live")) return "Cannot extract frames from a live stream";
+  }
+  if (lower.includes("live")) {
+    return "Cannot extract frames from a live stream";
+  }
   const snippet = trimErrorText(stderr || message);
   return snippet ? `yt-dlp failed: ${snippet}` : "yt-dlp failed";
 }
 
-export async function getYouTubeStreamInfo(
-  videoId: string
-): Promise<StreamResult> {
+export function getYouTubeStreamInfo(videoId: string): Promise<StreamResult> {
   try {
     const output = execFileSync(
       "yt-dlp",
@@ -193,16 +215,18 @@ export async function getYouTubeStreamInfo(
         "-g",
         `https://www.youtube.com/watch?v=${videoId}`,
       ],
-      { timeout: 15000, encoding: "utf-8", stdio: ["pipe", "pipe", "pipe"] }
+      { timeout: 15_000, encoding: "utf-8", stdio: ["pipe", "pipe", "pipe"] }
     ).trim();
-    const lines = output.split(/\r?\n/);
+    const lines = output.split(TOP_LEVEL_REGEX_1);
     const rawDuration = lines[0]?.trim();
     const streamUrl = lines[1]?.trim();
-    if (!streamUrl) return { error: "yt-dlp failed: missing stream URL" };
+    if (!streamUrl) {
+      return { error: "yt-dlp failed: missing stream URL" };
+    }
     const parsedDuration =
       rawDuration && rawDuration !== "NA"
         ? Number.parseFloat(rawDuration)
-        : NaN;
+        : Number.NaN;
     const duration = Number.isFinite(parsedDuration) ? parsedDuration : null;
     return { streamUrl, duration };
   } catch (err) {
@@ -210,7 +234,7 @@ export async function getYouTubeStreamInfo(
   }
 }
 
-async function extractFrameFromStream(
+function extractFrameFromStream(
   streamUrl: string,
   seconds: number
 ): Promise<FrameResult> {
@@ -232,11 +256,13 @@ async function extractFrameFromStream(
       ],
       {
         maxBuffer: 5 * 1024 * 1024,
-        timeout: 30000,
+        timeout: 30_000,
         stdio: ["pipe", "pipe", "pipe"],
       }
     );
-    if (buffer.length === 0) return { error: "ffmpeg failed: empty output" };
+    if (buffer.length === 0) {
+      return { error: "ffmpeg failed: empty output" };
+    }
     return { data: buffer.toString("base64"), mimeType: "image/jpeg" };
   } catch (err) {
     return { error: mapFfmpegError(err) };
@@ -249,7 +275,9 @@ export async function extractYouTubeFrame(
   streamInfo?: StreamInfo
 ): Promise<FrameResult> {
   const info = streamInfo ?? (await getYouTubeStreamInfo(videoId));
-  if ("error" in info) return info;
+  if ("error" in info) {
+    return info;
+  }
   return extractFrameFromStream(info.streamUrl, seconds);
 }
 
@@ -263,11 +291,15 @@ export async function extractYouTubeFrames(
   error: string | null;
 }> {
   const info = streamInfo ?? (await getYouTubeStreamInfo(videoId));
-  if ("error" in info) return { frames: [], duration: null, error: info.error };
+  if ("error" in info) {
+    return { frames: [], duration: null, error: info.error };
+  }
   const results = await Promise.all(
     timestamps.map(async (t) => {
       const frame = await extractFrameFromStream(info.streamUrl, t);
-      if ("error" in frame) return { error: frame.error };
+      if ("error" in frame) {
+        return { error: frame.error };
+      }
       return { ...frame, timestamp: formatSeconds(t) };
     })
   );
@@ -290,9 +322,13 @@ export async function fetchYouTubeThumbnail(
         signal: AbortSignal.timeout(5000),
       }
     );
-    if (!res.ok) return null;
+    if (!res.ok) {
+      return null;
+    }
     const buffer = Buffer.from(await res.arrayBuffer());
-    if (buffer.length === 0) return null;
+    if (buffer.length === 0) {
+      return null;
+    }
     return { data: buffer.toString("base64"), mimeType: "image/jpeg" };
   } catch {
     return null;
@@ -307,15 +343,19 @@ async function tryGeminiWeb(
 ): Promise<ExtractedContent | null> {
   try {
     const cookies = await isGeminiWebAvailable();
-    if (!cookies) return null;
+    if (!cookies) {
+      return null;
+    }
 
-    if (signal?.aborted) return null;
+    if (signal?.aborted) {
+      return null;
+    }
 
     const text = await queryWithCookies(prompt, cookies, {
       youtubeUrl: url,
       model,
       signal,
-      timeoutMs: 120000,
+      timeoutMs: 120_000,
     });
 
     return {
@@ -325,7 +365,9 @@ async function tryGeminiWeb(
       error: null,
     };
   } catch (err) {
-    if (shouldRethrow(err)) throw err;
+    if (shouldRethrow(err)) {
+      throw err;
+    }
     return null;
   }
 }
@@ -337,14 +379,18 @@ async function tryGeminiApi(
   signal?: AbortSignal
 ): Promise<ExtractedContent | null> {
   try {
-    if (!isGeminiApiAvailable()) return null;
+    if (!isGeminiApiAvailable()) {
+      return null;
+    }
 
-    if (signal?.aborted) return null;
+    if (signal?.aborted) {
+      return null;
+    }
 
     const text = await queryGeminiApiWithVideo(prompt, url, {
       model,
       signal,
-      timeoutMs: 120000,
+      timeoutMs: 120_000,
     });
 
     return {
@@ -354,7 +400,9 @@ async function tryGeminiApi(
       error: null,
     };
   } catch (err) {
-    if (shouldRethrow(err)) throw err;
+    if (shouldRethrow(err)) {
+      throw err;
+    }
     return null;
   }
 }
@@ -365,7 +413,9 @@ async function tryPerplexity(
   signal?: AbortSignal
 ): Promise<ExtractedContent | null> {
   try {
-    if (signal?.aborted) return null;
+    if (signal?.aborted) {
+      return null;
+    }
 
     const perplexityQuery =
       prompt === YOUTUBE_PROMPT
@@ -374,11 +424,13 @@ async function tryPerplexity(
 
     const { answer } = await searchWithPerplexity(perplexityQuery, { signal });
 
-    if (!answer) return null;
+    if (!answer) {
+      return null;
+    }
 
     const content =
       `# Video Summary (via Perplexity)\n\n${answer}\n\n` +
-      `*Full video understanding requires Gemini access. Set GEMINI_API_KEY or sign into Google in Chrome.*`;
+      "*Full video understanding requires Gemini access. Set GEMINI_API_KEY or sign into Google in Chrome.*";
 
     return {
       url,
@@ -387,7 +439,9 @@ async function tryPerplexity(
       error: null,
     };
   } catch (err) {
-    if (shouldRethrow(err)) throw err;
+    if (shouldRethrow(err)) {
+      throw err;
+    }
     return null;
   }
 }

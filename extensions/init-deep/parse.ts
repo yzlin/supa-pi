@@ -1,6 +1,9 @@
 import fs from "node:fs";
 import path from "node:path";
 
+const TOP_LEVEL_REGEX_1 = /\s/;
+const TOP_LEVEL_REGEX_2 = /^\d+$/;
+
 export interface InitDeepCommandInput {
   targetRoot: string;
   targetLabel: string;
@@ -27,11 +30,16 @@ function tokenizeArgs(
   let index = 0;
 
   while (index < rawArgs.length) {
-    while (index < rawArgs.length && /\s/.test(rawArgs[index] ?? "")) {
+    while (
+      index < rawArgs.length &&
+      TOP_LEVEL_REGEX_1.test(rawArgs[index] ?? "")
+    ) {
       index += 1;
     }
 
-    if (index >= rawArgs.length) break;
+    if (index >= rawArgs.length) {
+      break;
+    }
 
     const start = index;
     let value = "";
@@ -61,7 +69,9 @@ function tokenizeArgs(
         continue;
       }
 
-      if (/\s/.test(char)) break;
+      if (TOP_LEVEL_REGEX_1.test(char)) {
+        break;
+      }
 
       if (char === '"' || char === "'") {
         quote = char;
@@ -117,7 +127,7 @@ function parsePositiveInteger(
   value: string,
   flagName: string
 ): { ok: true; value: number } | { ok: false; error: string } {
-  if (!/^\d+$/.test(value)) {
+  if (!TOP_LEVEL_REGEX_2.test(value)) {
     return {
       ok: false,
       error: `Invalid ${flagName} value: ${value}. Use a positive integer.`,

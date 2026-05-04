@@ -25,7 +25,9 @@ export function normalizeTabCompletionMode(value: unknown): TabCompletionMode {
 }
 
 function normalizeSkipPatterns(value: unknown): string[] | undefined {
-  if (!Array.isArray(value)) return undefined;
+  if (!Array.isArray(value)) {
+    return undefined;
+  }
 
   const skipPatterns = value
     .filter((pattern): pattern is string => typeof pattern === "string")
@@ -68,20 +70,20 @@ export function normalizeFilePickerConfig(
     next.allowFolderSelection = parsed.allowFolderSelection;
   }
 
-  if (Object.prototype.hasOwnProperty.call(parsed, "skipPatterns")) {
+  if (Object.hasOwn(parsed, "skipPatterns")) {
     const skipPatterns = normalizeSkipPatterns(parsed.skipPatterns);
     if (skipPatterns) {
       next.skipPatterns = skipPatterns;
     }
   }
 
-  if (Object.prototype.hasOwnProperty.call(parsed, "tabCompletionMode")) {
+  if (Object.hasOwn(parsed, "tabCompletionMode")) {
     next.tabCompletionMode = normalizeTabCompletionMode(
       parsed.tabCompletionMode
     );
   }
 
-  if (Object.prototype.hasOwnProperty.call(parsed, "previewHighlightMode")) {
+  if (Object.hasOwn(parsed, "previewHighlightMode")) {
     next.previewHighlightMode = normalizePreviewHighlightMode(
       parsed.previewHighlightMode
     );
@@ -99,7 +101,9 @@ export function mergeFilePickerConfigs(
   };
 
   for (const config of configs) {
-    if (!config) continue;
+    if (!config) {
+      continue;
+    }
 
     merged = {
       ...merged,

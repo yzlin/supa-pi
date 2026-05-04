@@ -19,7 +19,9 @@ export async function extractWithUrlContext(
   signal?: AbortSignal
 ): Promise<ExtractedContent | null> {
   const apiKey = getApiKey();
-  if (!apiKey) return null;
+  if (!apiKey) {
+    return null;
+  }
 
   const activityId = activityMonitor.logStart({
     type: "api",
@@ -40,7 +42,7 @@ export async function extractWithUrlContext(
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
         signal: AbortSignal.any([
-          AbortSignal.timeout(60000),
+          AbortSignal.timeout(60_000),
           ...(signal ? [signal] : []),
         ]),
       }
@@ -71,12 +73,16 @@ export async function extractWithUrlContext(
         .filter(Boolean)
         .join("\n") ?? "";
 
-    if (!content || content.length < 50) return null;
+    if (!content || content.length < 50) {
+      return null;
+    }
 
     const title = extractTitleFromContent(content, url);
     return { url, title, content, error: null };
   } catch (err) {
-    if (shouldRethrow(err)) throw err;
+    if (shouldRethrow(err)) {
+      throw err;
+    }
     const message = err instanceof Error ? err.message : String(err);
     if (message.toLowerCase().includes("abort")) {
       activityMonitor.logComplete(activityId, 0);
@@ -92,7 +98,9 @@ export async function extractWithGeminiWeb(
   signal?: AbortSignal
 ): Promise<ExtractedContent | null> {
   const cookies = await isGeminiWebAvailable();
-  if (!cookies) return null;
+  if (!cookies) {
+    return null;
+  }
 
   const activityId = activityMonitor.logStart({
     type: "api",
@@ -103,17 +111,21 @@ export async function extractWithGeminiWeb(
     const text = await queryWithCookies(EXTRACTION_PROMPT + url, cookies, {
       model: "gemini-3-flash-preview",
       signal,
-      timeoutMs: 60000,
+      timeoutMs: 60_000,
     });
 
     activityMonitor.logComplete(activityId, 200);
 
-    if (!text || text.length < 50) return null;
+    if (!text || text.length < 50) {
+      return null;
+    }
 
     const title = extractTitleFromContent(text, url);
     return { url, title, content: text, error: null };
   } catch (err) {
-    if (shouldRethrow(err)) throw err;
+    if (shouldRethrow(err)) {
+      throw err;
+    }
     const message = err instanceof Error ? err.message : String(err);
     if (message.toLowerCase().includes("abort")) {
       activityMonitor.logComplete(activityId, 0);

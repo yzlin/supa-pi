@@ -19,10 +19,18 @@ export function mergeStatusBarSegmentOptions(
 
   const merged: StatusBarSegmentOptions = {};
 
-  if (model) merged.model = model;
-  if (path) merged.path = path;
-  if (git) merged.git = git;
-  if (time) merged.time = time;
+  if (model) {
+    merged.model = model;
+  }
+  if (path) {
+    merged.path = path;
+  }
+  if (git) {
+    merged.git = git;
+  }
+  if (time) {
+    merged.time = time;
+  }
 
   return Object.keys(merged).length > 0 ? merged : undefined;
 }

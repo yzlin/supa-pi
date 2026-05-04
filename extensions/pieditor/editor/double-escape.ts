@@ -6,11 +6,14 @@ export function matchesInterrupt(
   keybindingsManager: KeybindingsManager,
   data: string
 ): boolean {
-  const matches = keybindingsManager.matches.bind(
+  const matchesKeybinding = keybindingsManager.matches.bind(
     keybindingsManager
-  ) as unknown as (data: string, key: string) => boolean;
+  ) as unknown as (input: string, key: string) => boolean;
 
-  return matches(data, "app.interrupt") || matches(data, "interrupt");
+  return (
+    matchesKeybinding(data, "app.interrupt") ||
+    matchesKeybinding(data, "interrupt")
+  );
 }
 
 export function shouldHandleConfiguredDoubleEscape(options: {

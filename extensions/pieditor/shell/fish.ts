@@ -14,6 +14,8 @@ import type { AutocompleteItem } from "@mariozechner/pi-tui";
 
 import type { CompletionResult, ShellCompletionProvider } from "./types.js";
 
+const TOP_LEVEL_REGEX_1 = /\s+/;
+
 /**
  * Get completions using fish's native `complete -C` command.
  * Fish completions are excellent and cover most tools automatically.
@@ -27,8 +29,8 @@ export function getFishCompletions(
   const trimmed = commandLine.trimStart();
   let prefix = "";
   if (!trimmed.endsWith(" ")) {
-    const words = trimmed.split(/\s+/);
-    prefix = words[words.length - 1] || "";
+    const words = trimmed.split(TOP_LEVEL_REGEX_1);
+    prefix = words.at(-1) || "";
   }
 
   try {

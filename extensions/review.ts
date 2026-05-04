@@ -54,6 +54,21 @@ import {
   Text,
 } from "@mariozechner/pi-tui";
 
+const GITHUB_PULL_REQUEST_URL_PATTERN =
+  /github\.com\/[^/]+\/[^/]+\/pull\/(\d+)/;
+const WHITESPACE_PATTERN = /\s+/;
+const SECURITY_PATH_PATTERNS = [
+  /(^|\/)(auth|permissions?|middleware|webhooks?|api|server)\//i,
+  /(^|\/)(cookies?|headers?|redirects?)\b/i,
+  /(^|\/)\.env/i,
+  /(^|\/)(config|security)\//i,
+];
+const DATABASE_PATH_PATTERNS = [
+  /(^|\/)(db|database|migrations?|schema|sql|supabase)\//i,
+  /\.sql$/i,
+];
+const WHITESPACE_CHARACTER_PATTERN = /\s/;
+
 type ReviewerAgent =
   | "code-reviewer"
   | "security-reviewer"
@@ -69,7 +84,7 @@ const ALL_REVIEWERS: ReviewerAgent[] = [
 const DEFAULT_REVIEWERS: ReviewerAgent[] = ["code-reviewer"];
 
 // State persisted across sessions for review configuration.
-let reviewCustomInstructions: string | undefined = undefined;
+let reviewCustomInstructions: string | undefined;
 let reviewSelectedAgents: ReviewerAgent[] = DEFAULT_REVIEWERS;
 let reviewReviewerSelectionMode: ReviewerSelectionMode = "auto";
 
@@ -79,11 +94,11 @@ const GH_SETUP_INSTRUCTIONS =
 const PR_CHECKOUT_BLOCKED_BY_PENDING_CHANGES_MESSAGE =
   "Cannot checkout PR: you have uncommitted changes. Please commit or stash them first.";
 
-type ReviewSettingsState = {
+interface ReviewSettingsState {
   customInstructions?: string;
   selectedReviewers?: ReviewerAgent[];
   reviewerSelectionMode?: ReviewerSelectionMode;
-};
+}
 
 function isReviewerAgent(value: string): value is ReviewerAgent {
   return ALL_REVIEWERS.includes(value as ReviewerAgent);
@@ -398,7 +413,9 @@ async function getLocalBranches(pi: ExtensionAPI): Promise<string[]> {
     "branch",
     "--format=%(refname:short)",
   ]);
-  if (code !== 0) return [];
+  if (code !== 0) {
+    return [];
+  }
   return stdout
     .trim()
     .split("\n")
@@ -410,15 +427,17 @@ async function getLocalBranches(pi: ExtensionAPI): Promise<string[]> {
  */
 async function getRecentCommits(
   pi: ExtensionAPI,
-  limit: number = 10
+  limit = 10
 ): Promise<Array<{ sha: string; title: string }>> {
   const { stdout, code } = await pi.exec("git", [
     "log",
-    `--oneline`,
-    `-n`,
+    "--oneline",
+    "-n",
     `${limit}`,
   ]);
-  if (code !== 0) return [];
+  if (code !== 0) {
+    return [];
+  }
 
   return stdout
     .trim()
@@ -445,7 +464,9 @@ async function hasUncommittedChanges(pi: ExtensionAPI): Promise<boolean> {
 async function hasPendingChanges(pi: ExtensionAPI): Promise<boolean> {
   // Check for staged or unstaged changes to tracked files
   const { stdout, code } = await pi.exec("git", ["status", "--porcelain"]);
-  if (code !== 0) return false;
+  if (code !== 0) {
+    return false;
+  }
 
   // Filter out untracked files (lines starting with ??)
   const lines = stdout
@@ -463,17 +484,17 @@ function parsePrReference(ref: string): number | null {
   const trimmed = ref.trim();
 
   // Try as a number first
-  const num = parseInt(trimmed, 10);
-  if (!isNaN(num) && num > 0) {
+  const num = Number.parseInt(trimmed, 10);
+  if (!Number.isNaN(num) && num > 0) {
     return num;
   }
 
   // Try to extract from GitHub URL
   // Formats: https://github.com/owner/repo/pull/123
   //          github.com/owner/repo/pull/123
-  const urlMatch = trimmed.match(/github\.com\/[^/]+\/[^/]+\/pull\/(\d+)/);
+  const urlMatch = trimmed.match(GITHUB_PULL_REQUEST_URL_PATTERN);
   if (urlMatch) {
-    return parseInt(urlMatch[1], 10);
+    return Number.parseInt(urlMatch[1], 10);
   }
 
   return null;
@@ -494,7 +515,9 @@ async function getPrInfo(
     "baseRefName,title,headRefName",
   ]);
 
-  if (code !== 0) return null;
+  if (code !== 0) {
+    return null;
+  }
 
   try {
     const data = JSON.parse(stdout);
@@ -558,8 +581,12 @@ async function getDefaultBranch(pi: ExtensionAPI): Promise<string> {
 
   // Fall back to checking if main or master exists
   const branches = await getLocalBranches(pi);
-  if (branches.includes("main")) return "main";
-  if (branches.includes("master")) return "master";
+  if (branches.includes("main")) {
+    return "main";
+  }
+  if (branches.includes("master")) {
+    return "master";
+  }
 
   return "main"; // Default fallback
 }
@@ -635,7 +662,7 @@ function getUserFacingHint(target: ReviewTarget): string {
     case "pullRequest": {
       const shortTitle =
         target.title.length > 30
-          ? target.title.slice(0, 27) + "..."
+          ? `${target.title.slice(0, 27)}...`
           : target.title;
       return `PR #${target.prNumber}: ${shortTitle}`;
     }
@@ -706,10 +733,10 @@ function setReviewCustomInstructions(
   persistReviewSettings(pi);
 }
 
-type SessionMessageLike = {
+interface SessionMessageLike {
   role?: string;
   content?: string | Array<{ type?: string; text?: string }>;
-};
+}
 
 function extractTextContent(content: SessionMessageLike["content"]): string {
   if (typeof content === "string") {
@@ -1057,7 +1084,9 @@ export default function reviewExtension(pi: ExtensionAPI) {
         }
       );
 
-      if (!result) return null;
+      if (!result) {
+        return null;
+      }
 
       if (result === TOGGLE_CUSTOM_INSTRUCTIONS_VALUE) {
         if (reviewCustomInstructions) {
@@ -1088,25 +1117,33 @@ export default function reviewExtension(pi: ExtensionAPI) {
 
         case "baseBranch": {
           const target = await showBranchSelector(ctx);
-          if (target) return target;
+          if (target) {
+            return target;
+          }
           break;
         }
 
         case "commit": {
           const target = await showCommitSelector(ctx);
-          if (target) return target;
+          if (target) {
+            return target;
+          }
           break;
         }
 
         case "folder": {
           const target = await showFolderInput(ctx);
-          if (target) return target;
+          if (target) {
+            return target;
+          }
           break;
         }
 
         case "pullRequest": {
           const target = await showPrInput(ctx);
-          if (target) return target;
+          if (target) {
+            return target;
+          }
           break;
         }
 
@@ -1143,8 +1180,12 @@ export default function reviewExtension(pi: ExtensionAPI) {
 
     // Sort branches with default branch first
     const sortedBranches = candidateBranches.sort((a, b) => {
-      if (a === defaultBranch) return -1;
-      if (b === defaultBranch) return 1;
+      if (a === defaultBranch) {
+        return -1;
+      }
+      if (b === defaultBranch) {
+        return 1;
+      }
       return a.localeCompare(b);
     });
 
@@ -1251,7 +1292,9 @@ export default function reviewExtension(pi: ExtensionAPI) {
       }
     );
 
-    if (!result) return null;
+    if (!result) {
+      return null;
+    }
     return { type: "baseBranch", branch: result };
   }
 
@@ -1378,13 +1421,15 @@ export default function reviewExtension(pi: ExtensionAPI) {
       }
     );
 
-    if (!result) return null;
+    if (!result) {
+      return null;
+    }
     return { type: "commit", sha: result.sha, title: result.title };
   }
 
   function parseReviewPaths(value: string): string[] {
     return value
-      .split(/\s+/)
+      .split(WHITESPACE_PATTERN)
       .map((item) => item.trim())
       .filter((item) => item.length > 0);
   }
@@ -1407,19 +1452,24 @@ export default function reviewExtension(pi: ExtensionAPI) {
         const pathPortion =
           trimmed.length > 3 ? trimmed.slice(3).trim() : trimmed;
         const renameParts = pathPortion.split(" -> ");
-        return renameParts[renameParts.length - 1]?.trim() || pathPortion;
+        return renameParts.at(-1)?.trim() || pathPortion;
       })
       .filter(Boolean);
   }
 
-  function matchesAnyPattern(value: string, patterns: RegExp[]): boolean {
+  function matchesAnyPattern(
+    value: string,
+    patterns: readonly RegExp[]
+  ): boolean {
     return patterns.some((pattern) => pattern.test(value));
   }
 
   async function getChangedPaths(target: ReviewTarget): Promise<string[]> {
     const run = async (args: string[]) => {
       const { stdout, code } = await pi.exec("git", args);
-      if (code !== 0) return [];
+      if (code !== 0) {
+        return [];
+      }
       return stdout
         .trim()
         .split("\n")
@@ -1461,23 +1511,11 @@ export default function reviewExtension(pi: ExtensionAPI) {
     const paths = await getChangedPaths(target);
     const reviewers = new Set<ReviewerAgent>(["code-reviewer"]);
 
-    const securityPatterns = [
-      /(^|\/)(auth|permissions?|middleware|webhooks?|api|server)\//i,
-      /(^|\/)(cookies?|headers?|redirects?)\b/i,
-      /(^|\/)\.env/i,
-      /(^|\/)(config|security)\//i,
-    ];
-
-    const databasePatterns = [
-      /(^|\/)(db|database|migrations?|schema|sql|supabase)\//i,
-      /\.sql$/i,
-    ];
-
-    for (const path of paths) {
-      if (matchesAnyPattern(path, securityPatterns)) {
+    for (const changedPath of paths) {
+      if (matchesAnyPattern(changedPath, SECURITY_PATH_PATTERNS)) {
         reviewers.add("security-reviewer");
       }
-      if (matchesAnyPattern(path, databasePatterns)) {
+      if (matchesAnyPattern(changedPath, DATABASE_PATH_PATTERNS)) {
         reviewers.add("database-reviewer");
       }
     }
@@ -1517,7 +1555,9 @@ export default function reviewExtension(pi: ExtensionAPI) {
       "Custom",
     ]);
 
-    if (!choice) return null;
+    if (!choice) {
+      return null;
+    }
 
     if (choice.startsWith("Auto")) {
       return { reviewers: autoReviewers, selectionMode: "auto" };
@@ -1542,7 +1582,9 @@ export default function reviewExtension(pi: ExtensionAPI) {
       "Enter reviewers (comma-separated): code-reviewer, security-reviewer, database-reviewer",
       reviewSelectedAgents.join(", ")
     );
-    if (!customReviewers?.trim()) return null;
+    if (!customReviewers?.trim()) {
+      return null;
+    }
 
     const customParsedReviewers = parseReviewerList(customReviewers);
     if (!customParsedReviewers.length) {
@@ -1567,9 +1609,13 @@ export default function reviewExtension(pi: ExtensionAPI) {
       "."
     );
 
-    if (!result?.trim()) return null;
+    if (!result?.trim()) {
+      return null;
+    }
     const paths = parseReviewPaths(result);
-    if (paths.length === 0) return null;
+    if (paths.length === 0) {
+      return null;
+    }
 
     return { type: "folder", paths };
   }
@@ -1592,7 +1638,9 @@ export default function reviewExtension(pi: ExtensionAPI) {
       ""
     );
 
-    if (!prRef?.trim()) return null;
+    if (!prRef?.trim()) {
+      return null;
+    }
 
     return await resolvePullRequestTarget(ctx, prRef, {
       skipInitialPendingChangesCheck: true,
@@ -1642,13 +1690,13 @@ export default function reviewExtension(pi: ExtensionAPI) {
    * Parse command arguments for direct invocation
    * Returns the target or a special marker for PR that needs async handling
    */
-  type ParsedReviewArgs = {
+  interface ParsedReviewArgs {
     target: ReviewTarget | { type: "pr"; ref: string } | null;
     extraInstruction?: string;
     reviewers?: ReviewerAgent[];
     useAutoReviewers?: boolean;
     error?: string;
-  };
+  }
 
   function tokenizeArgs(value: string): string[] {
     const tokens: string[] = [];
@@ -1677,7 +1725,7 @@ export default function reviewExtension(pi: ExtensionAPI) {
         continue;
       }
 
-      if (/\s/.test(char)) {
+      if (WHITESPACE_CHARACTER_PATTERN.test(char)) {
         if (current.length > 0) {
           tokens.push(current);
           current = "";
@@ -1696,7 +1744,9 @@ export default function reviewExtension(pi: ExtensionAPI) {
   }
 
   function parseArgs(args: string | undefined): ParsedReviewArgs {
-    if (!args?.trim()) return { target: null };
+    if (!args?.trim()) {
+      return { target: null };
+    }
 
     const rawParts = tokenizeArgs(args.trim());
     const parts: string[] = [];
@@ -1778,13 +1828,14 @@ export default function reviewExtension(pi: ExtensionAPI) {
 
       case "branch": {
         const branch = parts[1];
-        if (!branch)
+        if (!branch) {
           return {
             target: null,
             extraInstruction,
             reviewers,
             useAutoReviewers,
           };
+        }
         return {
           target: { type: "baseBranch", branch },
           extraInstruction,
@@ -1795,13 +1846,14 @@ export default function reviewExtension(pi: ExtensionAPI) {
 
       case "commit": {
         const sha = parts[1];
-        if (!sha)
+        if (!sha) {
           return {
             target: null,
             extraInstruction,
             reviewers,
             useAutoReviewers,
           };
+        }
         const title = parts.slice(2).join(" ") || undefined;
         return {
           target: { type: "commit", sha, title },
@@ -1813,13 +1865,14 @@ export default function reviewExtension(pi: ExtensionAPI) {
 
       case "folder": {
         const paths = parseReviewPaths(parts.slice(1).join(" "));
-        if (paths.length === 0)
+        if (paths.length === 0) {
           return {
             target: null,
             extraInstruction,
             reviewers,
             useAutoReviewers,
           };
+        }
         return {
           target: { type: "folder", paths },
           extraInstruction,
@@ -1830,13 +1883,14 @@ export default function reviewExtension(pi: ExtensionAPI) {
 
       case "pr": {
         const ref = parts[1];
-        if (!ref)
+        if (!ref) {
           return {
             target: null,
             extraInstruction,
             reviewers,
             useAutoReviewers,
           };
+        }
         return {
           target: { type: "pr", ref },
           extraInstruction,
@@ -1950,7 +2004,7 @@ export default function reviewExtension(pi: ExtensionAPI) {
   pi.registerCommand("review-summary", {
     description:
       "Summarize the latest review report in this session: /review-summary [extra instruction]",
-    handler: async (args, ctx) => {
+    handler: (args, ctx) => {
       const reviewReport =
         getLatestReviewReport(ctx, { excludeSummary: true }) ||
         getLatestReviewReport(ctx);
@@ -1975,7 +2029,7 @@ export default function reviewExtension(pi: ExtensionAPI) {
   pi.registerCommand("review-fix", {
     description:
       "Implement findings from the latest review report in this session: /review-fix [extra instruction]",
-    handler: async (args, ctx) => {
+    handler: (args, ctx) => {
       const reviewReport =
         getLatestReviewReport(ctx, { preferSummary: true }) ||
         getLatestReviewReport(ctx);

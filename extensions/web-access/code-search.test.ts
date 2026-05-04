@@ -10,7 +10,7 @@ afterEach(() => {
 
 test("code_search uses web_search_exa instead of deprecated get_code_context_exa", async () => {
   let requestBody: any;
-  globalThis.fetch = async (_input, init) => {
+  globalThis.fetch = (_input, init) => {
     requestBody = JSON.parse(String(init?.body));
     const payload = JSON.stringify({
       result: {

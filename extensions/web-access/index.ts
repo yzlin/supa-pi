@@ -55,6 +55,10 @@ import {
 } from "./summary-review.js";
 import { formatSeconds } from "./utils.js";
 
+const TOP_LEVEL_REGEX_1 = /^https?:\/\//;
+const TOP_LEVEL_REGEX_2 = /^\[([a-z0-9]+)\]/;
+const TOP_LEVEL_REGEX_3 = /\/.*$/;
+
 const WEB_SEARCH_CONFIG_PATH = join(homedir(), ".pi", "web-search.json");
 
 interface WebSearchConfig {
@@ -83,7 +87,9 @@ interface CuratorBootstrap {
 }
 
 function loadConfig(): WebSearchConfig {
-  if (!existsSync(WEB_SEARCH_CONFIG_PATH)) return {};
+  if (!existsSync(WEB_SEARCH_CONFIG_PATH)) {
+    return {};
+  }
   const raw = readFileSync(WEB_SEARCH_CONFIG_PATH, "utf-8");
   try {
     return JSON.parse(raw) as WebSearchConfig;
@@ -107,8 +113,10 @@ function saveConfig(updates: Partial<WebSearchConfig>): void {
 
   Object.assign(config, updates);
   const dir = join(homedir(), ".pi");
-  if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
-  writeFileSync(WEB_SEARCH_CONFIG_PATH, JSON.stringify(config, null, 2) + "\n");
+  if (!existsSync(dir)) {
+    mkdirSync(dir, { recursive: true });
+  }
+  writeFileSync(WEB_SEARCH_CONFIG_PATH, `${JSON.stringify(config, null, 2)}\n`);
 }
 
 const DEFAULT_SHORTCUTS = { curate: "ctrl+shift+s", activity: "ctrl+shift+w" };
@@ -126,8 +134,12 @@ function loadConfigForExtensionInit(): WebSearchConfig {
 }
 
 function normalizeProviderInput(value: unknown): SearchProvider | undefined {
-  if (value === undefined) return undefined;
-  if (typeof value !== "string") return "auto";
+  if (value === undefined) {
+    return undefined;
+  }
+  if (typeof value !== "string") {
+    return "auto";
+  }
   const normalized = value.trim().toLowerCase();
   if (
     normalized === "auto" ||
@@ -141,25 +153,44 @@ function normalizeProviderInput(value: unknown): SearchProvider | undefined {
 }
 
 function normalizeCuratorTimeoutSeconds(value: unknown): number | undefined {
-  if (typeof value !== "number" || !Number.isFinite(value)) return undefined;
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    return undefined;
+  }
   const normalized = Math.floor(value);
-  if (normalized < 1) return undefined;
+  if (normalized < 1) {
+    return undefined;
+  }
   return Math.min(normalized, MAX_CURATOR_TIMEOUT_SECONDS);
 }
 
 function resolveWorkflow(input: unknown, hasUI: boolean): WebSearchWorkflow {
-  if (!hasUI) return "none";
-  if (typeof input === "string" && input.trim().toLowerCase() === "none")
+  if (!hasUI) {
     return "none";
+  }
+  if (typeof input === "string" && input.trim().toLowerCase() === "none") {
+    return "none";
+  }
   return "summary-review";
+}
+
+function queryListFromSingleValue(query: unknown): unknown[] {
+  return query === undefined ? [] : [query];
+}
+
+function estimateTokensFromText(text: string): number {
+  return text.length > 0 ? Math.max(1, Math.ceil(text.length / 4)) : 0;
 }
 
 function normalizeQueryList(queryList: unknown[]): string[] {
   const normalized: string[] = [];
   for (const query of queryList) {
-    if (typeof query !== "string") continue;
+    if (typeof query !== "string") {
+      continue;
+    }
     const trimmed = query.trim();
-    if (trimmed.length > 0) normalized.push(trimmed);
+    if (trimmed.length > 0) {
+      normalized.push(trimmed);
+    }
   }
   return normalized;
 }
@@ -201,21 +232,33 @@ function resolveProvider(
     "auto";
 
   if (provider === "auto") {
-    if (available.exa) return "exa";
-    if (available.perplexity) return "perplexity";
-    if (available.gemini) return "gemini";
+    if (available.exa) {
+      return "exa";
+    }
+    if (available.perplexity) {
+      return "perplexity";
+    }
+    if (available.gemini) {
+      return "gemini";
+    }
     return "exa";
   }
   if (provider === "exa" && !available.exa) {
-    if (available.perplexity) return "perplexity";
+    if (available.perplexity) {
+      return "perplexity";
+    }
     return available.gemini ? "gemini" : "exa";
   }
   if (provider === "perplexity" && !available.perplexity) {
-    if (available.exa) return "exa";
+    if (available.exa) {
+      return "exa";
+    }
     return available.gemini ? "gemini" : "perplexity";
   }
   if (provider === "gemini" && !available.gemini) {
-    if (available.exa) return "exa";
+    if (available.exa) {
+      return "exa";
+    }
     return available.perplexity ? "perplexity" : "gemini";
   }
   return provider;
@@ -263,7 +306,7 @@ function cancelPendingCurate(reason: "user" | "stale" = "stale"): void {
   pendingCurate?.cancel(reason);
 }
 
-const MAX_INLINE_CONTENT = 30000; // Content returned directly to agent
+const MAX_INLINE_CONTENT = 30_000; // Content returned directly to agent
 
 function stripThumbnails(results: ExtractedContent[]): ExtractedContent[] {
   return results.map(({ thumbnail, frames, ...rest }) => rest);
@@ -284,7 +327,9 @@ function duplicateQuerySet(results: QueryResultData[]): Set<string> {
   }
   const duplicates = new Set<string>();
   for (const [query, count] of counts) {
-    if (count > 1) duplicates.add(query);
+    if (count > 1) {
+      duplicates.add(query);
+    }
   }
   return duplicates;
 }
@@ -303,7 +348,9 @@ function hasFullInlineCoverage(
   urls: string[],
   inlineContent: ExtractedContent[] | undefined
 ): boolean {
-  if (!inlineContent || inlineContent.length === 0) return false;
+  if (!inlineContent || inlineContent.length === 0) {
+    return false;
+  }
   const coveredUrls = new Set(inlineContent.map((c) => c.url));
   return urls.every((url) => coveredUrls.has(url));
 }
@@ -331,7 +378,9 @@ function closeCurator(): void {
   glimpseWin = null;
   try {
     win?.close();
-  } catch {}
+  } catch {
+    /* noop */
+  }
   cancelPendingCurate();
   if (activeCurator) {
     activeCurator.close();
@@ -341,12 +390,14 @@ function closeCurator(): void {
 
 async function openInBrowser(pi: ExtensionAPI, url: string): Promise<void> {
   const plat = platform();
-  const result =
-    plat === "darwin"
-      ? await pi.exec("open", [url])
-      : plat === "win32"
-        ? await pi.exec("cmd", ["/c", "start", "", url])
-        : await pi.exec("xdg-open", [url]);
+  let result: Awaited<ReturnType<ExtensionAPI["exec"]>>;
+  if (plat === "darwin") {
+    result = await pi.exec("open", [url]);
+  } else if (plat === "win32") {
+    result = await pi.exec("cmd", ["/c", "start", "", url]);
+  } else {
+    result = await pi.exec("xdg-open", [url]);
+  }
   if (result.code !== 0) {
     throw new Error(
       result.stderr || `Failed to open browser (exit code ${result.code})`
@@ -382,7 +433,9 @@ function findGlimpseMjs(): string | null {
       encoding: "utf-8",
     }).trim();
     const entry = join(globalRoot, "glimpseui", "src", "glimpse.mjs");
-    if (existsSync(entry)) return entry;
+    if (existsSync(entry)) {
+      return entry;
+    }
   } catch {
     // npm may be unavailable.
   }
@@ -390,13 +443,17 @@ function findGlimpseMjs(): string | null {
 }
 
 async function getGlimpseOpen() {
-  if (glimpseOpen !== undefined) return glimpseOpen;
+  if (glimpseOpen !== undefined) {
+    return glimpseOpen;
+  }
   const resolved = findGlimpseMjs();
   if (resolved) {
     try {
       glimpseOpen = (await import(resolved)).open;
       return glimpseOpen;
-    } catch {}
+    } catch {
+      /* noop */
+    }
   }
   glimpseOpen = null;
   return glimpseOpen;
@@ -428,9 +485,13 @@ function openInGlimpse(
     }
   });
   win.on("message", (data) => {
-    if (!data || typeof data !== "object") return;
+    if (!data || typeof data !== "object") {
+      return;
+    }
     const msg = data as Record<string, unknown>;
-    if (msg.type !== "resize" || typeof msg.height !== "number") return;
+    if (msg.type !== "resize" || typeof msg.height !== "number") {
+      return;
+    }
     const clamped = Math.max(400, Math.min(Math.round(msg.height), maxHeight));
     win._write({ type: "resize", width: 800, height: clamped });
   });
@@ -451,13 +512,13 @@ function updateWidget(ctx: ExtensionContext): void {
   const entries = activityMonitor.getEntries();
   const lines: string[] = [];
 
-  lines.push(theme.fg("accent", "─── Web Search Activity " + "─".repeat(36)));
+  lines.push(theme.fg("accent", `─── Web Search Activity ${"─".repeat(36)}`));
 
   if (entries.length === 0) {
     lines.push(theme.fg("muted", "  No activity yet"));
   } else {
     for (const e of entries) {
-      lines.push("  " + formatEntryLine(e, theme));
+      lines.push(`  ${formatEntryLine(e, theme)}`);
     }
   }
 
@@ -484,7 +545,11 @@ function formatEntryLine(
   const target =
     entry.type === "api"
       ? `"${truncateToWidth(entry.query || "", 28, "")}"`
-      : truncateToWidth(entry.url?.replace(/^https?:\/\//, "") || "", 30, "");
+      : truncateToWidth(
+          entry.url?.replace(TOP_LEVEL_REGEX_1, "") || "",
+          30,
+          ""
+        );
 
   const duration = entry.endTime
     ? `${((entry.endTime - entry.startTime) / 1000).toFixed(1)}s`
@@ -536,13 +601,17 @@ export default function (pi: ExtensionAPI) {
     initConfig.shortcuts?.activity || DEFAULT_SHORTCUTS.activity;
 
   function startBackgroundFetch(urls: string[]): string | null {
-    if (urls.length === 0) return null;
+    if (urls.length === 0) {
+      return null;
+    }
     const fetchId = generateId();
     const controller = new AbortController();
     pendingFetches.set(fetchId, controller);
     fetchAllContent(urls, controller.signal)
       .then((fetched) => {
-        if (!sessionActive || !pendingFetches.has(fetchId)) return;
+        if (!(sessionActive && pendingFetches.has(fetchId))) {
+          return;
+        }
         const data: StoredSearchData = {
           id: fetchId,
           type: "fetch",
@@ -562,7 +631,9 @@ export default function (pi: ExtensionAPI) {
         );
       })
       .catch((err) => {
-        if (!sessionActive || !pendingFetches.has(fetchId)) return;
+        if (!(sessionActive && pendingFetches.has(fetchId))) {
+          return;
+        }
         const message = err instanceof Error ? err.message : String(err);
         const isAbort =
           (err instanceof Error && err.name === "AbortError") ||
@@ -637,9 +708,7 @@ export default function (pi: ExtensionAPI) {
       tokenEstimate:
         Number.isFinite(meta.tokenEstimate) && meta.tokenEstimate >= 0
           ? meta.tokenEstimate
-          : normalizedText.length > 0
-            ? Math.max(1, Math.ceil(normalizedText.length / 4))
-            : 0,
+          : estimateTokensFromText(normalizedText),
       fallbackUsed: meta.fallbackUsed === true,
       fallbackReason: meta.fallbackReason,
       edited: meta.edited === true,
@@ -668,10 +737,13 @@ export default function (pi: ExtensionAPI) {
   }> {
     for (const { provider, id } of candidates) {
       const model = getModel(provider, id);
-      if (!model) continue;
+      if (!model) {
+        continue;
+      }
       const auth = await ctx.modelRegistry.getApiKeyAndHeaders(model);
-      if (auth.ok && auth.apiKey)
+      if (auth.ok && auth.apiKey) {
         return { model, apiKey: auth.apiKey, headers: auth.headers };
+      }
     }
     throw new Error(
       `No model available: ${candidates.map((c) => `${c.provider}/${c.id}`).join(", ")}`
@@ -706,19 +778,25 @@ export default function (pi: ExtensionAPI) {
       },
       { apiKey, headers, signal }
     );
-    if (response.stopReason === "aborted") throw new Error("Aborted");
+    if (response.stopReason === "aborted") {
+      throw new Error("Aborted");
+    }
     const contentParts = Array.isArray(response.content)
       ? response.content
       : [];
     const text = contentParts
       .map((p) => {
-        if (!p || typeof p !== "object") return "";
+        if (!p || typeof p !== "object") {
+          return "";
+        }
         const part = p as Record<string, unknown>;
         return typeof part.text === "string" ? part.text : "";
       })
       .join("")
       .trim();
-    if (!text) throw new Error("Rewrite returned empty response");
+    if (!text) {
+      throw new Error("Rewrite returned empty response");
+    }
     return text;
   }
 
@@ -733,7 +811,9 @@ export default function (pi: ExtensionAPI) {
     const selectedResults: QueryResultData[] = [];
     for (const qi of selectedQueryIndices) {
       const result = resultsByIndex.get(qi);
-      if (result) selectedResults.push(result);
+      if (result) {
+        selectedResults.push(result);
+      }
     }
     if (selectedResults.length === 0) {
       throw new Error("No selected results available for summary generation");
@@ -750,7 +830,9 @@ export default function (pi: ExtensionAPI) {
       const isEmptyResponse =
         err instanceof Error &&
         err.message.includes("Summary model returned empty response");
-      if (!isEmptyResponse) throw err;
+      if (!isEmptyResponse) {
+        throw err;
+      }
       const deterministic = buildDeterministicSummary(selectedResults);
       return {
         summary: deterministic.summary,
@@ -762,7 +844,7 @@ export default function (pi: ExtensionAPI) {
     }
   }
 
-  async function loadSummaryModelChoices(
+  function loadSummaryModelChoices(
     summaryContext: SummaryGenerationContext
   ): Promise<{
     summaryModels: Array<{ value: string; label: string }>;
@@ -774,7 +856,9 @@ export default function (pi: ExtensionAPI) {
 
     const addModel = (provider: string, id: string) => {
       const value = `${provider}/${id}`;
-      if (seen.has(value)) return;
+      if (seen.has(value)) {
+        return;
+      }
       seen.add(value);
       summaryModels.push({ value, label: value });
     };
@@ -877,9 +961,13 @@ export default function (pi: ExtensionAPI) {
             ? formatQueryHeader(query, provider, duplicateQueries)
             : `## Query: "${query}"\n\n`;
         }
-        if (error) output += `Error: ${error}\n\n`;
-        else if (results.length === 0) output += "No results found.\n\n";
-        else output += formatSearchSummary(results, answer) + "\n\n";
+        if (error) {
+          output += `Error: ${error}\n\n`;
+        } else if (results.length === 0) {
+          output += "No results found.\n\n";
+        } else {
+          output += `${formatSearchSummary(results, answer)}\n\n`;
+        }
       }
     }
 
@@ -961,7 +1049,9 @@ export default function (pi: ExtensionAPI) {
       if (r) {
         filteredResults.push(r);
         for (const res of r.results) {
-          if (!filteredUrls.includes(res.url)) filteredUrls.push(res.url);
+          if (!filteredUrls.includes(res.url)) {
+            filteredUrls.push(res.url);
+          }
         }
       }
     }
@@ -975,7 +1065,9 @@ export default function (pi: ExtensionAPI) {
     const urls: string[] = [];
     for (const result of results) {
       for (const source of result.results) {
-        if (!urls.includes(source.url)) urls.push(source.url);
+        if (!urls.includes(source.url)) {
+          urls.push(source.url);
+        }
       }
     }
     return { results, urls };
@@ -1012,8 +1104,9 @@ export default function (pi: ExtensionAPI) {
             model,
             feedback
           ) {
-            if (pendingCurate !== pc)
+            if (pendingCurate !== pc) {
               throw new Error("Curator session is no longer active.");
+            }
             pc.onUpdate?.({
               content: [{ type: "text", text: "Generating summary draft..." }],
               details: { phase: "generating-summary", progress: 0.9 },
@@ -1026,8 +1119,9 @@ export default function (pi: ExtensionAPI) {
               model,
               feedback
             );
-            if (pendingCurate !== pc)
+            if (pendingCurate !== pc) {
               throw new Error("Curator session is no longer active.");
+            }
             pc.onUpdate?.({
               content: [
                 {
@@ -1040,7 +1134,9 @@ export default function (pi: ExtensionAPI) {
             return draft;
           },
           onSubmit(payload) {
-            if (pendingCurate !== pc) return;
+            if (pendingCurate !== pc) {
+              return;
+            }
             searchAbort.abort();
             const filtered =
               payload.selectedQueryIndices.length > 0
@@ -1075,7 +1171,9 @@ export default function (pi: ExtensionAPI) {
             closeCurator();
           },
           onCancel(reason) {
-            if (pendingCurate !== pc) return;
+            if (pendingCurate !== pc) {
+              return;
+            }
             searchAbort.abort();
             if (reason === "timeout") {
               const resolvedSummary = resolveSummaryForSubmit(
@@ -1111,9 +1209,13 @@ export default function (pi: ExtensionAPI) {
             closeCurator();
           },
           onProviderChange(provider) {
-            if (pendingCurate !== pc) return;
+            if (pendingCurate !== pc) {
+              return;
+            }
             const normalized = normalizeProviderInput(provider);
-            if (!normalized || normalized === "auto") return;
+            if (!normalized || normalized === "auto") {
+              return;
+            }
             pc.defaultProvider = normalized;
             try {
               saveConfig({ provider: normalized });
@@ -1123,8 +1225,9 @@ export default function (pi: ExtensionAPI) {
             }
           },
           async onAddSearch(query, queryIndex, provider) {
-            if (pendingCurate !== pc)
+            if (pendingCurate !== pc) {
               throw new Error("Curator session is no longer active.");
+            }
             const normalizedProvider = normalizeProviderInput(provider);
             const requestedProvider =
               !normalizedProvider || normalizedProvider === "auto"
@@ -1144,8 +1247,9 @@ export default function (pi: ExtensionAPI) {
                 includeContent: pc.includeContent,
                 signal: addSearchSignal,
               });
-              if (pendingCurate !== pc)
+              if (pendingCurate !== pc) {
                 throw new Error("Curator session is no longer active.");
+              }
               pc.searchResults.set(queryIndex, {
                 query,
                 answer,
@@ -1153,7 +1257,9 @@ export default function (pi: ExtensionAPI) {
                 error: null,
                 provider: actualProvider,
               });
-              if (inlineContent) pc.allInlineContent.push(...inlineContent);
+              if (inlineContent) {
+                pc.allInlineContent.push(...inlineContent);
+              }
               return {
                 answer,
                 results: results.map((r) => ({
@@ -1177,9 +1283,10 @@ export default function (pi: ExtensionAPI) {
               throw err;
             }
           },
-          async onRewriteQuery(query, rewriteSignal) {
-            if (pendingCurate !== pc)
+          onRewriteQuery(query, rewriteSignal) {
+            if (pendingCurate !== pc) {
               throw new Error("Curator session is no longer active.");
+            }
             return rewriteSearchQuery(query, pc.summaryContext, rewriteSignal);
           },
         }
@@ -1207,7 +1314,9 @@ export default function (pi: ExtensionAPI) {
           });
         }
       }
-      if (searchesComplete) handle.searchesDone();
+      if (searchesComplete) {
+        handle.searchesDone();
+      }
 
       pc.onUpdate?.({
         content: [
@@ -1251,8 +1360,10 @@ export default function (pi: ExtensionAPI) {
 
   pi.registerShortcut(curateKey, {
     description: "Review search results",
-    handler: async (ctx) => {
-      if (!pendingCurate) return;
+    handler: (ctx) => {
+      if (!pendingCurate) {
+        return;
+      }
 
       if (pendingCurate.phase === "searching") {
         pendingCurate.browserPromise = openCuratorBrowser(pendingCurate, false);
@@ -1267,7 +1378,7 @@ export default function (pi: ExtensionAPI) {
 
   pi.registerShortcut(activityKey, {
     description: "Toggle web search activity",
-    handler: async (ctx) => {
+    handler: (ctx) => {
       widgetVisible = !widgetVisible;
       if (widgetVisible) {
         widgetUnsubscribe = activityMonitor.onUpdate(() => updateWidget(ctx));
@@ -1347,9 +1458,7 @@ export default function (pi: ExtensionAPI) {
     async execute(_toolCallId, params, signal, onUpdate, ctx) {
       const rawQueryList: unknown[] = Array.isArray(params.queries)
         ? params.queries
-        : params.query !== undefined
-          ? [params.query]
-          : [];
+        : queryListFromSingleValue(params.query);
       const queryList = normalizeQueryList(rawQueryList);
       const configWorkflow = loadConfigForExtensionInit().workflow;
       const workflow = resolveWorkflow(
@@ -1385,7 +1494,9 @@ export default function (pi: ExtensionAPI) {
       if (shouldCurate) {
         closeCurator();
 
-        let resolvePromise: (value: unknown) => void = () => {};
+        let resolvePromise: (value: unknown) => void = () => {
+          /* noop */
+        };
         const promise = new Promise<unknown>((resolve) => {
           resolvePromise = resolve;
         });
@@ -1430,14 +1541,22 @@ export default function (pi: ExtensionAPI) {
           onUpdate: onUpdate as PendingCurate["onUpdate"],
           signal,
           abortSearches: () => {
-            if (!searchAbort.signal.aborted) searchAbort.abort();
+            if (!searchAbort.signal.aborted) {
+              searchAbort.abort();
+            }
           },
-          finish: () => {},
-          cancel: () => {},
+          finish: () => {
+            /* noop */
+          },
+          cancel: () => {
+            /* noop */
+          },
         };
 
         const finish = (value: unknown) => {
-          if (cancelled) return;
+          if (cancelled) {
+            return;
+          }
           cancelled = true;
           pc.abortSearches();
           signal?.removeEventListener("abort", onAbort);
@@ -1446,7 +1565,9 @@ export default function (pi: ExtensionAPI) {
         };
 
         const cancel = (reason: "user" | "stale" = "stale") => {
-          if (cancelled) return;
+          if (cancelled) {
+            return;
+          }
           finish(buildCurationCancelledReturn(reason));
         };
 
@@ -1459,7 +1580,9 @@ export default function (pi: ExtensionAPI) {
         pc.browserPromise = openCuratorBrowser(pc, false);
 
         for (let qi = 0; qi < queryList.length; qi++) {
-          if (signal?.aborted || cancelled || searchAbort.signal.aborted) break;
+          if (signal?.aborted || cancelled || searchAbort.signal.aborted) {
+            break;
+          }
           onUpdate?.({
             content: [
               {
@@ -1486,8 +1609,9 @@ export default function (pi: ExtensionAPI) {
                 signal: searchSignal,
               }
             );
-            if (signal?.aborted || cancelled || searchAbort.signal.aborted)
+            if (signal?.aborted || cancelled || searchAbort.signal.aborted) {
               break;
+            }
             searchResults.set(qi, {
               query: queryList[qi],
               answer,
@@ -1495,7 +1619,9 @@ export default function (pi: ExtensionAPI) {
               error: null,
               provider,
             });
-            if (inlineContent) allInlineContent.push(...inlineContent);
+            if (inlineContent) {
+              allInlineContent.push(...inlineContent);
+            }
             if (activeCurator) {
               activeCurator.pushResult(qi, {
                 answer,
@@ -1508,8 +1634,9 @@ export default function (pi: ExtensionAPI) {
               });
             }
           } catch (err) {
-            if (signal?.aborted || cancelled || searchAbort.signal.aborted)
+            if (signal?.aborted || cancelled || searchAbort.signal.aborted) {
               break;
+            }
             const message = err instanceof Error ? err.message : String(err);
             searchResults.set(qi, {
               query: queryList[qi],
@@ -1589,7 +1716,9 @@ export default function (pi: ExtensionAPI) {
               allUrls.push(r.url);
             }
           }
-          if (inlineContent) allInlineContent.push(...inlineContent);
+          if (inlineContent) {
+            allInlineContent.push(...inlineContent);
+          }
         } catch (err) {
           const message = err instanceof Error ? err.message : String(err);
           const requestedProvider =
@@ -1620,9 +1749,7 @@ export default function (pi: ExtensionAPI) {
       const input = args as { query?: unknown; queries?: unknown };
       const rawQueryList: unknown[] = Array.isArray(input.queries)
         ? input.queries
-        : input.query !== undefined
-          ? [input.query]
-          : [];
+        : queryListFromSingleValue(input.query);
       const queryList = normalizeQueryList(rawQueryList);
       if (queryList.length === 0) {
         return new Text(
@@ -1634,7 +1761,7 @@ export default function (pi: ExtensionAPI) {
       }
       if (queryList.length === 1) {
         const q = queryList[0];
-        const display = q.length > 60 ? q.slice(0, 57) + "..." : q;
+        const display = q.length > 60 ? `${q.slice(0, 57)}...` : q;
         return new Text(
           theme.fg("toolTitle", theme.bold("search ")) +
             theme.fg("accent", `"${display}"`),
@@ -1647,7 +1774,7 @@ export default function (pi: ExtensionAPI) {
           theme.fg("accent", `${queryList.length} queries`),
       ];
       for (const q of queryList.slice(0, 5)) {
-        const display = q.length > 50 ? q.slice(0, 47) + "..." : q;
+        const display = q.length > 50 ? `${q.slice(0, 47)}...` : q;
         lines.push(theme.fg("muted", `  "${display}"`));
       }
       if (queryList.length > 5) {
@@ -1657,13 +1784,13 @@ export default function (pi: ExtensionAPI) {
     },
 
     renderResult(result, { expanded, isPartial }, theme) {
-      type QueryDetail = {
+      interface QueryDetail {
         query: string;
         provider: string | null;
         answer: string | null;
         sources: Array<{ title: string; url: string }>;
         error: string | null;
-      };
+      }
       const details = result.details as {
         queryCount?: number;
         successfulQueries?: number;
@@ -1706,7 +1833,7 @@ export default function (pi: ExtensionAPI) {
             "\u2591".repeat(10 - Math.floor(progress * 10));
           const query = details?.currentQuery || "";
           const display =
-            query.length > 40 ? query.slice(0, 37) + "..." : query;
+            query.length > 40 ? `${query.slice(0, 37)}...` : query;
           return new Text(theme.fg("accent", `[${bar}] ${display}`), 0, 0);
         }
         const progress = details?.progress ?? 0;
@@ -1755,7 +1882,7 @@ export default function (pi: ExtensionAPI) {
         lines.push(
           theme.fg(
             "accent",
-            `── Summary (${details.summary.workflow}) ` + "─".repeat(32)
+            `── Summary (${details.summary.workflow}) ${"─".repeat(32)}`
           )
         );
         lines.push("");
@@ -1775,7 +1902,7 @@ export default function (pi: ExtensionAPI) {
         if (details.summary.fallbackReason) {
           metaParts.push(`reason=${details.summary.fallbackReason}`);
         }
-        lines.push(theme.fg("dim", "  " + metaParts.join(" · ")));
+        lines.push(theme.fg("dim", `  ${metaParts.join(" · ")}`));
       }
 
       const queryDetails = details?.curatedQueries;
@@ -1794,7 +1921,7 @@ export default function (pi: ExtensionAPI) {
         for (const cq of queryDetails) {
           lines.push("");
           const dq =
-            cq.query.length > 65 ? cq.query.slice(0, 62) + "..." : cq.query;
+            cq.query.length > 65 ? `${cq.query.slice(0, 62)}...` : cq.query;
           const providerLabel = cq.provider ? ` (${cq.provider})` : "";
           lines.push(theme.fg("accent", `  "${dq}"${providerLabel}`));
 
@@ -1811,10 +1938,10 @@ export default function (pi: ExtensionAPI) {
             lines.push("");
             for (const s of cq.sources) {
               const domain = s.url
-                .replace(/^https?:\/\//, "")
-                .replace(/\/.*$/, "");
+                .replace(TOP_LEVEL_REGEX_1, "")
+                .replace(TOP_LEVEL_REGEX_3, "");
               const title =
-                s.title.length > 50 ? s.title.slice(0, 47) + "..." : s.title;
+                s.title.length > 50 ? `${s.title.slice(0, 47)}...` : s.title;
               lines.push(
                 theme.fg("muted", `  \u25b8 ${title}`) +
                   theme.fg("dim", ` \u00b7 ${domain}`)
@@ -1828,7 +1955,7 @@ export default function (pi: ExtensionAPI) {
           result.content.find((c) => c.type === "text")?.text || "";
         const preview =
           textContent.length > 500
-            ? textContent.slice(0, 500) + "..."
+            ? `${textContent.slice(0, 500)}...`
             : textContent;
         for (const line of preview.split("\n")) {
           lines.push(theme.fg("dim", line));
@@ -1846,8 +1973,8 @@ export default function (pi: ExtensionAPI) {
         } else {
           lines.push(theme.fg("muted", "Fetching:"));
           for (const u of details.fetchUrls.slice(0, 5)) {
-            const display = u.length > 60 ? u.slice(0, 57) + "..." : u;
-            lines.push(theme.fg("dim", "  " + display));
+            const display = u.length > 60 ? `${u.slice(0, 57)}...` : u;
+            lines.push(theme.fg("dim", `  ${display}`));
           }
           if (details.fetchUrls.length > 5) {
             lines.push(
@@ -1868,14 +1995,14 @@ export default function (pi: ExtensionAPI) {
         if (summaryPreview) {
           const preview =
             summaryPreview.length > 120
-              ? summaryPreview.slice(0, 117) + "..."
+              ? `${summaryPreview.slice(0, 117)}...`
               : summaryPreview;
           box.addChild(new Text(theme.fg("dim", preview), 0, 0));
           collapsedLines++;
         } else if (details?.curatedQueries?.length) {
           for (const cq of details.curatedQueries.slice(0, 3)) {
             const dq =
-              cq.query.length > 55 ? cq.query.slice(0, 52) + "..." : cq.query;
+              cq.query.length > 55 ? `${cq.query.slice(0, 52)}...` : cq.query;
             const srcCount = cq.sources?.length ?? 0;
             const suffix = cq.error
               ? theme.fg("error", " (error)")
@@ -1917,7 +2044,7 @@ export default function (pi: ExtensionAPI) {
           if (fallbackLine) {
             const preview =
               fallbackLine.length > 120
-                ? fallbackLine.slice(0, 117) + "..."
+                ? `${fallbackLine.slice(0, 117)}...`
                 : fallbackLine;
             box.addChild(new Text(theme.fg("dim", preview), 0, 0));
             collapsedLines++;
@@ -1958,24 +2085,23 @@ export default function (pi: ExtensionAPI) {
       maxTokens: Type.Optional(
         Type.Integer({
           minimum: 1000,
-          maximum: 50000,
+          maximum: 50_000,
           description:
             "Maximum tokens of code/documentation context to return (default: 5000)",
         })
       ),
     }),
 
-    async execute(toolCallId, params, signal) {
+    execute(toolCallId, params, signal) {
       return executeCodeSearch(toolCallId, params, signal);
     },
 
     renderCall(args, theme) {
       const { query } = args as { query?: string };
-      const display = !query
-        ? "(no query)"
-        : query.length > 70
-          ? query.slice(0, 67) + "..."
-          : query;
+      let display = "(no query)";
+      if (query) {
+        display = query.length > 70 ? `${query.slice(0, 67)}...` : query;
+      }
       return new Text(
         theme.fg("toolTitle", theme.bold("code_search ")) +
           theme.fg("accent", display),
@@ -1997,15 +2123,17 @@ export default function (pi: ExtensionAPI) {
       const summary =
         theme.fg("success", "code context returned") +
         theme.fg("muted", ` (${details?.maxTokens ?? 5000} tokens max)`);
-      if (!expanded) return new Text(summary, 0, 0);
+      if (!expanded) {
+        return new Text(summary, 0, 0);
+      }
 
       const textContent =
         result.content.find((c) => c.type === "text")?.text || "";
       const preview =
         textContent.length > 500
-          ? textContent.slice(0, 500) + "..."
+          ? `${textContent.slice(0, 500)}...`
           : textContent;
-      return new Text(summary + "\n" + theme.fg("dim", preview), 0, 0);
+      return new Text(`${summary}\n${theme.fg("dim", preview)}`, 0, 0);
     },
   });
 
@@ -2217,7 +2345,7 @@ export default function (pi: ExtensionAPI) {
       const lines: string[] = [];
       if (urlList.length === 1) {
         const display =
-          urlList[0].length > 60 ? urlList[0].slice(0, 57) + "..." : urlList[0];
+          urlList[0].length > 60 ? `${urlList[0].slice(0, 57)}...` : urlList[0];
         lines.push(
           theme.fg("toolTitle", theme.bold("fetch ")) +
             theme.fg("accent", display)
@@ -2228,8 +2356,8 @@ export default function (pi: ExtensionAPI) {
             theme.fg("accent", `${urlList.length} URLs`)
         );
         for (const u of urlList.slice(0, 5)) {
-          const display = u.length > 60 ? u.slice(0, 57) + "..." : u;
-          lines.push(theme.fg("muted", "  " + display));
+          const display = u.length > 60 ? `${u.slice(0, 57)}...` : u;
+          lines.push(theme.fg("muted", `  ${display}`));
         }
         if (urlList.length > 5) {
           lines.push(theme.fg("muted", `  ... and ${urlList.length - 5} more`));
@@ -2247,7 +2375,7 @@ export default function (pi: ExtensionAPI) {
       }
       if (prompt) {
         const display =
-          prompt.length > 250 ? prompt.slice(0, 247) + "..." : prompt;
+          prompt.length > 250 ? `${prompt.slice(0, 247)}...` : prompt;
         lines.push(
           theme.fg("dim", "  prompt: ") + theme.fg("muted", `"${display}"`)
         );
@@ -2296,12 +2424,12 @@ export default function (pi: ExtensionAPI) {
       if (details?.urlCount === 1) {
         const title = details?.title || "Untitled";
         const imgCount = details?.imageCount ?? (details?.hasImage ? 1 : 0);
-        const imageBadge =
-          imgCount > 1
-            ? theme.fg("accent", ` [${imgCount} images]`)
-            : imgCount === 1
-              ? theme.fg("accent", " [image]")
-              : "";
+        let imageBadge = "";
+        if (imgCount > 1) {
+          imageBadge = theme.fg("accent", ` [${imgCount} images]`);
+        } else if (imgCount === 1) {
+          imageBadge = theme.fg("accent", " [image]");
+        }
         let statusLine =
           theme.fg("success", title) +
           theme.fg("muted", ` (${details?.totalChars ?? 0} chars)`) +
@@ -2320,15 +2448,15 @@ export default function (pi: ExtensionAPI) {
         if (!expanded) {
           const brief =
             textContent.length > 200
-              ? textContent.slice(0, 200) + "..."
+              ? `${textContent.slice(0, 200)}...`
               : textContent;
-          return new Text(statusLine + "\n" + theme.fg("dim", brief), 0, 0);
+          return new Text(`${statusLine}\n${theme.fg("dim", brief)}`, 0, 0);
         }
         const lines = [statusLine];
         if (details?.prompt) {
           const display =
             details.prompt.length > 250
-              ? details.prompt.slice(0, 247) + "..."
+              ? `${details.prompt.slice(0, 247)}...`
               : details.prompt;
           lines.push(theme.fg("dim", `  prompt: "${display}"`));
         }
@@ -2340,7 +2468,7 @@ export default function (pi: ExtensionAPI) {
         }
         const preview =
           textContent.length > 500
-            ? textContent.slice(0, 500) + "..."
+            ? `${textContent.slice(0, 500)}...`
             : textContent;
         lines.push(theme.fg("dim", preview));
         return new Text(lines.join("\n"), 0, 0);
@@ -2359,9 +2487,9 @@ export default function (pi: ExtensionAPI) {
         result.content.find((c) => c.type === "text")?.text || "";
       const preview =
         textContent.length > 500
-          ? textContent.slice(0, 500) + "..."
+          ? `${textContent.slice(0, 500)}...`
           : textContent;
-      return new Text(statusLine + "\n" + theme.fg("dim", preview), 0, 0);
+      return new Text(`${statusLine}\n${theme.fg("dim", preview)}`, 0, 0);
     },
   });
 
@@ -2390,7 +2518,7 @@ export default function (pi: ExtensionAPI) {
       ),
     }),
 
-    async execute(_toolCallId, params) {
+    execute(_toolCallId, params) {
       const data = getResult(params.responseId);
       if (!data) {
         return {
@@ -2423,20 +2551,7 @@ export default function (pi: ExtensionAPI) {
               details: { error: "Query not found" },
             };
           }
-        } else if (params.queryIndex !== undefined) {
-          queryData = data.queries[params.queryIndex];
-          if (!queryData) {
-            return {
-              content: [
-                {
-                  type: "text",
-                  text: `Index ${params.queryIndex} out of range (0-${data.queries.length - 1})`,
-                },
-              ],
-              details: { error: "Index out of range" },
-            };
-          }
-        } else {
+        } else if (params.queryIndex === undefined) {
           const available = data.queries
             .map((q, i) => `${i}: "${q.query}"`)
             .join(", ");
@@ -2449,6 +2564,19 @@ export default function (pi: ExtensionAPI) {
             ],
             details: { error: "No query specified" },
           };
+        } else {
+          queryData = data.queries[params.queryIndex];
+          if (!queryData) {
+            return {
+              content: [
+                {
+                  type: "text",
+                  text: `Index ${params.queryIndex} out of range (0-${data.queries.length - 1})`,
+                },
+              ],
+              details: { error: "Index out of range" },
+            };
+          }
         }
 
         if (queryData.error) {
@@ -2489,20 +2617,7 @@ export default function (pi: ExtensionAPI) {
               details: { error: "URL not found" },
             };
           }
-        } else if (params.urlIndex !== undefined) {
-          urlData = data.urls[params.urlIndex];
-          if (!urlData) {
-            return {
-              content: [
-                {
-                  type: "text",
-                  text: `Index ${params.urlIndex} out of range (0-${data.urls.length - 1})`,
-                },
-              ],
-              details: { error: "Index out of range" },
-            };
-          }
-        } else {
+        } else if (params.urlIndex === undefined) {
           const available = data.urls
             .map((u, i) => `${i}: ${u.url}`)
             .join("\n  ");
@@ -2515,6 +2630,19 @@ export default function (pi: ExtensionAPI) {
             ],
             details: { error: "No URL specified" },
           };
+        } else {
+          urlData = data.urls[params.urlIndex];
+          if (!urlData) {
+            return {
+              content: [
+                {
+                  type: "text",
+                  text: `Index ${params.urlIndex} out of range (0-${data.urls.length - 1})`,
+                },
+              ],
+              details: { error: "Index out of range" },
+            };
+          }
         }
 
         if (urlData.error) {
@@ -2556,10 +2684,15 @@ export default function (pi: ExtensionAPI) {
         urlIndex?: number;
       };
       let target = "";
-      if (query) target = `query="${query}"`;
-      else if (queryIndex !== undefined) target = `queryIndex=${queryIndex}`;
-      else if (url) target = url.length > 30 ? url.slice(0, 27) + "..." : url;
-      else if (urlIndex !== undefined) target = `urlIndex=${urlIndex}`;
+      if (query) {
+        target = `query="${query}"`;
+      } else if (queryIndex !== undefined) {
+        target = `queryIndex=${queryIndex}`;
+      } else if (url) {
+        target = url.length > 30 ? `${url.slice(0, 27)}...` : url;
+      } else if (urlIndex !== undefined) {
+        target = `urlIndex=${urlIndex}`;
+      }
       return new Text(
         theme.fg("toolTitle", theme.bold("get_content ")) +
           theme.fg("accent", target || responseId.slice(0, 8)),
@@ -2601,9 +2734,9 @@ export default function (pi: ExtensionAPI) {
         result.content.find((c) => c.type === "text")?.text || "";
       const preview =
         textContent.length > 500
-          ? textContent.slice(0, 500) + "..."
+          ? `${textContent.slice(0, 500)}...`
           : textContent;
-      return new Text(statusLine + "\n" + theme.fg("dim", preview), 0, 0);
+      return new Text(`${statusLine}\n${theme.fg("dim", preview)}`, 0, 0);
     },
   });
 
@@ -2667,7 +2800,7 @@ export default function (pi: ExtensionAPI) {
             defaultSummaryModel: summaryModelChoices.defaultSummaryModel,
           },
           {
-            async onSummarize(
+            onSummarize(
               selectedQueryIndices,
               summarizeSignal,
               model,
@@ -2686,7 +2819,9 @@ export default function (pi: ExtensionAPI) {
               );
             },
             onSubmit(payload) {
-              if (commandHandle && activeCurator !== commandHandle) return;
+              if (commandHandle && activeCurator !== commandHandle) {
+                return;
+              }
               aborted = true;
               searchAbort.abort();
               const filtered =
@@ -2717,7 +2852,9 @@ export default function (pi: ExtensionAPI) {
               closeCurator();
             },
             onCancel(reason) {
-              if (commandHandle && activeCurator !== commandHandle) return;
+              if (commandHandle && activeCurator !== commandHandle) {
+                return;
+              }
               aborted = true;
               searchAbort.abort();
               if (reason === "timeout") {
@@ -2747,9 +2884,13 @@ export default function (pi: ExtensionAPI) {
               closeCurator();
             },
             onProviderChange(provider) {
-              if (commandHandle && activeCurator !== commandHandle) return;
+              if (commandHandle && activeCurator !== commandHandle) {
+                return;
+              }
               const normalized = normalizeProviderInput(provider);
-              if (!normalized || normalized === "auto") return;
+              if (!normalized || normalized === "auto") {
+                return;
+              }
               currentProvider = normalized;
               try {
                 saveConfig({ provider: normalized });
@@ -2811,7 +2952,7 @@ export default function (pi: ExtensionAPI) {
                 throw err;
               }
             },
-            async onRewriteQuery(query, rewriteSignal) {
+            onRewriteQuery(query, rewriteSignal) {
               if (commandHandle && activeCurator !== commandHandle) {
                 throw new Error("Curator session is no longer active.");
               }
@@ -2846,7 +2987,9 @@ export default function (pi: ExtensionAPI) {
         if (queries.length > 0) {
           (async () => {
             for (let qi = 0; qi < queries.length; qi++) {
-              if (aborted || activeCurator !== handle) break;
+              if (aborted || activeCurator !== handle) {
+                break;
+              }
               const requestedProvider = currentProvider;
               try {
                 const { answer, results, provider } = await search(
@@ -2856,7 +2999,9 @@ export default function (pi: ExtensionAPI) {
                     signal: searchAbort.signal,
                   }
                 );
-                if (aborted || activeCurator !== handle) break;
+                if (aborted || activeCurator !== handle) {
+                  break;
+                }
                 handle.pushResult(qi, {
                   answer,
                   results: results.map((r) => ({
@@ -2874,7 +3019,9 @@ export default function (pi: ExtensionAPI) {
                   provider,
                 });
               } catch (err) {
-                if (aborted || activeCurator !== handle) break;
+                if (aborted || activeCurator !== handle) {
+                  break;
+                }
                 const message =
                   err instanceof Error ? err.message : String(err);
                 handle.pushError(qi, message, requestedProvider);
@@ -2887,10 +3034,12 @@ export default function (pi: ExtensionAPI) {
                 });
               }
             }
-            if (!aborted && activeCurator === handle) handle.searchesDone();
+            if (!aborted && activeCurator === handle) {
+              handle.searchesDone();
+            }
           })();
-        } else {
-          if (activeCurator === handle) handle.searchesDone();
+        } else if (activeCurator === handle) {
+          handle.searchesDone();
         }
       } catch (err) {
         closeCurator();
@@ -2902,7 +3051,7 @@ export default function (pi: ExtensionAPI) {
 
   pi.registerCommand("curator", {
     description: "Toggle or configure the search curator workflow",
-    handler: async (args, ctx) => {
+    handler: (args, ctx) => {
       const arg = args.trim().toLowerCase();
 
       let newWorkflow: WebSearchWorkflow;
@@ -3000,7 +3149,7 @@ export default function (pi: ExtensionAPI) {
       }
 
       const options = results.map((r) => {
-        const age = Math.floor((Date.now() - r.timestamp) / 60000);
+        const age = Math.floor((Date.now() - r.timestamp) / 60_000);
         const ageStr =
           age < 60 ? `${age}m ago` : `${Math.floor(age / 60)}h ago`;
         if (r.type === "search" && r.queries) {
@@ -3014,13 +3163,19 @@ export default function (pi: ExtensionAPI) {
       });
 
       const choice = await ctx.ui.select("Stored Search Results", options);
-      if (!choice) return;
+      if (!choice) {
+        return;
+      }
 
-      const match = choice.match(/^\[([a-z0-9]+)\]/);
-      if (!match) return;
+      const match = choice.match(TOP_LEVEL_REGEX_2);
+      if (!match) {
+        return;
+      }
 
       const selected = results.find((r) => r.id.startsWith(match[1]));
-      if (!selected) return;
+      if (!selected) {
+        return;
+      }
 
       const actions = ["View details", "Delete"];
       const action = await ctx.ui.select(
@@ -3032,7 +3187,7 @@ export default function (pi: ExtensionAPI) {
         deleteResult(selected.id);
         ctx.ui.notify(`Deleted ${selected.id.slice(0, 6)}`, "info");
       } else if (action === "View details") {
-        let info = `ID: ${selected.id}\nType: ${selected.type}\nAge: ${Math.floor((Date.now() - selected.timestamp) / 60000)}m\n\n`;
+        let info = `ID: ${selected.id}\nType: ${selected.type}\nAge: ${Math.floor((Date.now() - selected.timestamp) / 60_000)}m\n\n`;
         if (selected.type === "search" && selected.queries) {
           info += "Queries:\n";
           const queries = selected.queries.slice(0, 10);
@@ -3048,7 +3203,7 @@ export default function (pi: ExtensionAPI) {
           const urls = selected.urls.slice(0, 10);
           for (const u of urls) {
             const urlDisplay =
-              u.url.length > 50 ? u.url.slice(0, 47) + "..." : u.url;
+              u.url.length > 50 ? `${u.url.slice(0, 47)}...` : u.url;
             info += `- ${urlDisplay} (${u.error || `${u.content.length} chars`})\n`;
           }
           if (selected.urls.length > 10) {

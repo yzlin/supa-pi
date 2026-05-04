@@ -50,7 +50,9 @@ function loadTheme(): PaletteTheme {
 }
 
 export function fg(code: string, text: string): string {
-  if (!code) return text;
+  if (!code) {
+    return text;
+  }
   return `\x1b[${code}m${text}\x1b[0m`;
 }
 

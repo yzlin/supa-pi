@@ -21,21 +21,45 @@ describe("rtk commands", () => {
   function createRuntime(): RtkRuntime {
     return {
       getConfig: () => DEFAULT_RTK_CONFIG,
-      setConfig() {},
+      setConfig() {
+        /* noop */
+      },
       getStatus: () => ({ rtkAvailable: true, lastCheckedAt: "now" }),
-      setStatus() {},
+      setStatus() {
+        /* noop */
+      },
       refreshRtkStatus: () => ({ rtkAvailable: true, lastCheckedAt: "now" }),
-      resetSessionState() {},
+      resetSessionState() {
+        /* noop */
+      },
       metrics: {
-        recordRewriteAttempt() {},
-        recordRewriteApplied() {},
-        recordRewriteFallback() {},
-        recordUserBashAttempt() {},
-        recordUserBashRewrite() {},
-        recordToolSavings() {},
-        startCommand() {},
-        completeCommand() {},
-        reset() {},
+        recordRewriteAttempt() {
+          /* noop */
+        },
+        recordRewriteApplied() {
+          /* noop */
+        },
+        recordRewriteFallback() {
+          /* noop */
+        },
+        recordUserBashAttempt() {
+          /* noop */
+        },
+        recordUserBashRewrite() {
+          /* noop */
+        },
+        recordToolSavings() {
+          /* noop */
+        },
+        startCommand() {
+          /* noop */
+        },
+        completeCommand() {
+          /* noop */
+        },
+        reset() {
+          /* noop */
+        },
         snapshot: () => ({
           rewriteAttempts: 0,
           rewritesApplied: 0,
@@ -185,10 +209,12 @@ describe("rtk commands", () => {
     const ctx = {
       hasUI: true,
       ui: {
-        custom: async () => {
+        custom: () => {
           customCalls += 1;
         },
-        notify() {},
+        notify() {
+          /* noop */
+        },
       },
     } as unknown as ExtensionCommandContext;
 
@@ -204,10 +230,12 @@ describe("rtk commands", () => {
     const ctx = {
       hasUI: true,
       ui: {
-        custom: async (factory: any) => {
+        custom: (factory: any) => {
           const component = factory(
             {
-              requestRender() {},
+              requestRender() {
+                /* noop */
+              },
               terminal: { rows: 24 },
             },
             {
@@ -219,12 +247,16 @@ describe("rtk commands", () => {
               },
             },
             {},
-            () => {}
+            () => {
+              /* noop */
+            }
           );
 
           rendered = component.render(80).join("\n");
         },
-        notify() {},
+        notify() {
+          /* noop */
+        },
       },
     } as unknown as ExtensionCommandContext;
 

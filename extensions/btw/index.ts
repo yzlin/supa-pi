@@ -61,14 +61,17 @@ export default function (pi: ExtensionAPI) {
   pi.on("turn_end", () => {
     // Resolve all pending widget removal promises - the steered custom
     // messages render at turn boundary, so widgets can now be removed.
-    for (const [, resolve] of pendingWidgetRemovals) resolve();
+    for (const [, resolve] of pendingWidgetRemovals) {
+      resolve();
+    }
     pendingWidgetRemovals.clear();
   });
 
   // --- Filter btw messages out of LLM context (user-facing only) ---
   pi.on("context", (event) => {
     const filtered = event.messages.filter(
-      (m: any) => !(m.role === "custom" && m.customType === BTW_MESSAGE_TYPE)
+      (m: unknown) =>
+        !(m.role === "custom" && m.customType === BTW_MESSAGE_TYPE)
     );
     if (filtered.length !== event.messages.length) {
       return { messages: filtered };
@@ -78,7 +81,7 @@ export default function (pi: ExtensionAPI) {
   // --- Shared rendering logic for btw results ---
   function renderBtwResult(
     r: SingleResult,
-    theme: any
+    theme: unknown
   ): InstanceType<typeof Box> {
     const icon =
       r.exitCode === 0 ? theme.fg("success", "✓") : theme.fg("error", "✗");
@@ -123,7 +126,9 @@ export default function (pi: ExtensionAPI) {
 
     // Usage
     const usageStr = formatUsage(r.usage, r.model);
-    if (usageStr) box.addChild(new Text(theme.fg("dim", usageStr), 0, 0));
+    if (usageStr) {
+      box.addChild(new Text(theme.fg("dim", usageStr), 0, 0));
+    }
 
     return box;
   }
@@ -133,7 +138,9 @@ export default function (pi: ExtensionAPI) {
     BTW_MESSAGE_TYPE,
     (message, _opts, theme) => {
       const details = message.details;
-      if (!details?.result) return undefined;
+      if (!details?.result) {
+        return undefined;
+      }
       return renderBtwResult(details.result, theme);
     }
   );
@@ -142,7 +149,7 @@ export default function (pi: ExtensionAPI) {
   pi.registerCommand("btw", {
     description:
       "Run a single-shot subagent in the background (-model <provider/id>)",
-    handler: async (args, ctx) => {
+    handler: (args, ctx) => {
       const { model: modelOpt, task } = parseBtwArgs(args);
       if (!task) {
         ctx.ui.notify("Usage: /btw [-model <provider/id>] <prompt>", "error");
@@ -176,7 +183,7 @@ export default function (pi: ExtensionAPI) {
       }
 
       // Build tools
-      const tools: AgentTool<any>[] = [
+      const tools: AgentTool<unknown>[] = [
         createReadTool(ctx.cwd),
         createBashTool(ctx.cwd),
         createEditTool(ctx.cwd),
@@ -184,7 +191,7 @@ export default function (pi: ExtensionAPI) {
       ];
 
       const systemPrompt = ctx.getSystemPrompt();
-      const apiKeyResolver = async (_provider: string) => {
+      const apiKeyResolver = (_provider: string) => {
         return getProviderApiKeyForModel(ctx.modelRegistry, targetModel!);
       };
 

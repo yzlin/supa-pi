@@ -48,13 +48,25 @@ export function clearResults(): void {
 }
 
 function isValidStoredData(data: unknown): data is StoredSearchData {
-  if (!data || typeof data !== "object") return false;
+  if (!data || typeof data !== "object") {
+    return false;
+  }
   const d = data as Record<string, unknown>;
-  if (typeof d.id !== "string" || !d.id) return false;
-  if (d.type !== "search" && d.type !== "fetch") return false;
-  if (typeof d.timestamp !== "number") return false;
-  if (d.type === "search" && !Array.isArray(d.queries)) return false;
-  if (d.type === "fetch" && !Array.isArray(d.urls)) return false;
+  if (typeof d.id !== "string" || !d.id) {
+    return false;
+  }
+  if (d.type !== "search" && d.type !== "fetch") {
+    return false;
+  }
+  if (typeof d.timestamp !== "number") {
+    return false;
+  }
+  if (d.type === "search" && !Array.isArray(d.queries)) {
+    return false;
+  }
+  if (d.type === "fetch" && !Array.isArray(d.urls)) {
+    return false;
+  }
   return true;
 }
 

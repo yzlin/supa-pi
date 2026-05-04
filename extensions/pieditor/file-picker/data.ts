@@ -7,6 +7,8 @@ import ignore from "ignore";
 import { globToRegex } from "./filter.js";
 import type { FileEntry } from "./types.js";
 
+const TOP_LEVEL_REGEX_1 = /\r?\n/;
+
 export function getCwdRoot(): string {
   return process.cwd();
 }
@@ -48,8 +50,10 @@ function shouldSkipRelativePath(
 }
 
 function loadIgnoreFile(filePath: string): string[] {
-  if (!fs.existsSync(filePath)) return [];
-  return fs.readFileSync(filePath, "utf-8").split(/\r?\n/);
+  if (!fs.existsSync(filePath)) {
+    return [];
+  }
+  return fs.readFileSync(filePath, "utf-8").split(TOP_LEVEL_REGEX_1);
 }
 
 function resolveDirentDirectoryStatus(
@@ -90,8 +94,12 @@ export function listDirectoryWithGit(
     const relDir = path.relative(cwdRoot, dirPath);
 
     for (const item of items) {
-      if (skipHidden && item.name.startsWith(".")) continue;
-      if (shouldSkipPattern(item.name, skipPatterns)) continue;
+      if (skipHidden && item.name.startsWith(".")) {
+        continue;
+      }
+      if (shouldSkipPattern(item.name, skipPatterns)) {
+        continue;
+      }
 
       const fullPath = path.join(dirPath, item.name);
       const relativePath = relDir ? path.join(relDir, item.name) : item.name;
@@ -111,7 +119,9 @@ export function listDirectoryWithGit(
               break;
             }
           }
-          if (!hasGitFiles) continue;
+          if (!hasGitFiles) {
+            continue;
+          }
         } else if (!gitFiles.has(relativePath)) {
           continue;
         }
@@ -125,8 +135,12 @@ export function listDirectoryWithGit(
     }
 
     entries.sort((a, b) => {
-      if (a.isDirectory && !b.isDirectory) return -1;
-      if (!a.isDirectory && b.isDirectory) return 1;
+      if (a.isDirectory && !b.isDirectory) {
+        return -1;
+      }
+      if (!a.isDirectory && b.isDirectory) {
+        return 1;
+      }
       return a.name.localeCompare(b.name);
     });
   } catch {
@@ -151,7 +165,9 @@ export function listAllFiles(
     return results;
   }
 
-  if (ancestorRealPaths.has(realDirPath)) return results;
+  if (ancestorRealPaths.has(realDirPath)) {
+    return results;
+  }
 
   const nextAncestorRealPaths = new Set(ancestorRealPaths);
   nextAncestorRealPaths.add(realDirPath);
@@ -160,8 +176,12 @@ export function listAllFiles(
     const items = fs.readdirSync(dirPath, { withFileTypes: true });
 
     for (const item of items) {
-      if (skipHidden && item.name.startsWith(".")) continue;
-      if (shouldSkipPattern(item.name, skipPatterns)) continue;
+      if (skipHidden && item.name.startsWith(".")) {
+        continue;
+      }
+      if (shouldSkipPattern(item.name, skipPatterns)) {
+        continue;
+      }
 
       const fullPath = path.join(dirPath, item.name);
       const relativePath = path.relative(cwdRoot, fullPath);
@@ -301,7 +321,9 @@ export function listGitFiles(
     }
 
     for (const dir of dirs) {
-      if (entriesByPath.has(dir)) continue;
+      if (entriesByPath.has(dir)) {
+        continue;
+      }
       entriesByPath.set(dir, {
         name: path.basename(dir),
         isDirectory: true,

@@ -2,13 +2,13 @@ import { describe, expect, it } from "bun:test";
 
 import reviewExtension from "./review";
 
-type SessionEntry = {
+interface SessionEntry {
   type: string;
   message?: {
     role: string;
     content: string | Array<{ type?: string; text?: string }>;
   };
-};
+}
 
 const RAW_REVIEW_REPORT = `## Verdict
 - needs attention
@@ -88,8 +88,12 @@ function createMockPiRuntime() {
       ) {
         commands.set(name, definition);
       },
-      on() {},
-      appendEntry() {},
+      on() {
+        /* noop */
+      },
+      appendEntry() {
+        /* noop */
+      },
       sendUserMessage(content: string, options?: unknown) {
         sentUserMessages.push({ content, options });
       },

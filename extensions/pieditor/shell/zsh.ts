@@ -22,6 +22,8 @@ import type { AutocompleteItem } from "@mariozechner/pi-tui";
 
 import type { CompletionResult } from "./types.js";
 
+const TOP_LEVEL_REGEX_1 = /\s+/;
+
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const CAPTURE_SCRIPT = path.join(__dirname, "scripts", "zsh-capture.zsh");
 
@@ -45,11 +47,15 @@ function parseOutput(output: string): AutocompleteItem[] {
       value = line.trim();
     }
 
-    if (!value || seen.has(value)) continue;
+    if (!value || seen.has(value)) {
+      continue;
+    }
     seen.add(value);
 
     // Skip internal refs
-    if (value.startsWith("refs/jj/keep/")) continue;
+    if (value.startsWith("refs/jj/keep/")) {
+      continue;
+    }
 
     items.push({ value, label: value, description });
   }
@@ -75,8 +81,8 @@ export function getZshCompletions(
   const trimmed = commandLine.trimStart();
   let prefix = "";
   if (!trimmed.endsWith(" ")) {
-    const words = trimmed.split(/\s+/);
-    prefix = words[words.length - 1] || "";
+    const words = trimmed.split(TOP_LEVEL_REGEX_1);
+    prefix = words.at(-1) || "";
   }
 
   try {

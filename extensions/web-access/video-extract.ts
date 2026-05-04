@@ -57,7 +57,9 @@ interface VideoConfig {
 }
 
 function normalizePreferredModel(value: unknown, fallback: string): string {
-  if (typeof value !== "string") return fallback;
+  if (typeof value !== "string") {
+    return fallback;
+  }
   const normalized = value.trim();
   return normalized.length > 0 ? normalized : fallback;
 }
@@ -67,7 +69,9 @@ function normalizeEnabled(value: unknown, fallback: boolean): boolean {
 }
 
 function normalizeMaxSizeMB(value: unknown, fallback: number): number {
-  if (typeof value !== "number" || !Number.isFinite(value)) return fallback;
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    return fallback;
+  }
   return value > 0 ? value : fallback;
 }
 
@@ -80,7 +84,9 @@ const VIDEO_CONFIG_DEFAULTS: VideoConfig = {
 let cachedVideoConfig: VideoConfig | null = null;
 
 function loadVideoConfig(): VideoConfig {
-  if (cachedVideoConfig) return cachedVideoConfig;
+  if (cachedVideoConfig) {
+    return cachedVideoConfig;
+  }
   if (!existsSync(CONFIG_PATH)) {
     cachedVideoConfig = { ...VIDEO_CONFIG_DEFAULTS };
     return cachedVideoConfig;
@@ -117,14 +123,18 @@ function loadVideoConfig(): VideoConfig {
 
 export function isVideoFile(input: string): VideoFileInfo | null {
   const config = loadVideoConfig();
-  if (!config.enabled) return null;
+  if (!config.enabled) {
+    return null;
+  }
 
   const isFilePath =
     input.startsWith("/") ||
     input.startsWith("./") ||
     input.startsWith("../") ||
     input.startsWith("file://");
-  if (!isFilePath) return null;
+  if (!isFilePath) {
+    return null;
+  }
 
   let filePath = input;
   if (input.startsWith("file://")) {
@@ -137,10 +147,14 @@ export function isVideoFile(input: string): VideoFileInfo | null {
 
   const ext = extname(filePath).toLowerCase();
   const mimeType = VIDEO_EXTENSIONS[ext];
-  if (!mimeType) return null;
+  if (!mimeType) {
+    return null;
+  }
 
   const absolutePath = resolveFilePath(filePath);
-  if (!absolutePath) return null;
+  if (!absolutePath) {
+    return null;
+  }
 
   let stat: ReturnType<typeof statSync>;
   try {
@@ -148,21 +162,29 @@ export function isVideoFile(input: string): VideoFileInfo | null {
   } catch {
     return null;
   }
-  if (!stat.isFile()) return null;
+  if (!stat.isFile()) {
+    return null;
+  }
 
   const maxBytes = config.maxSizeMB * 1024 * 1024;
-  if (stat.size > maxBytes) return null;
+  if (stat.size > maxBytes) {
+    return null;
+  }
 
   return { absolutePath, mimeType, sizeBytes: stat.size };
 }
 
 function resolveFilePath(filePath: string): string | null {
   const absolutePath = resolve(filePath);
-  if (existsSync(absolutePath)) return absolutePath;
+  if (existsSync(absolutePath)) {
+    return absolutePath;
+  }
 
   const dir = dirname(absolutePath);
   const base = basename(absolutePath);
-  if (!existsSync(dir)) return null;
+  if (!existsSync(dir)) {
+    return null;
+  }
 
   try {
     const normalizedBase = normalizeSpaces(base);
@@ -217,15 +239,16 @@ export async function extractVideo(
 
 function mapFfprobeError(err: unknown): string {
   const { code, stderr, message } = readExecError(err);
-  if (code === "ENOENT")
+  if (code === "ENOENT") {
     return "ffprobe is not installed. Install ffmpeg which includes ffprobe";
+  }
   const snippet = trimErrorText(stderr || message);
   return snippet ? `ffprobe failed: ${snippet}` : "ffprobe failed";
 }
 
-export async function extractVideoFrame(
+export function extractVideoFrame(
   filePath: string,
-  seconds: number = 1
+  seconds = 1
 ): Promise<FrameResult> {
   try {
     const buffer = execFileSync(
@@ -245,18 +268,20 @@ export async function extractVideoFrame(
       ],
       {
         maxBuffer: 5 * 1024 * 1024,
-        timeout: 10000,
+        timeout: 10_000,
         stdio: ["pipe", "pipe", "pipe"],
       }
     );
-    if (buffer.length === 0) return { error: "ffmpeg failed: empty output" };
+    if (buffer.length === 0) {
+      return { error: "ffmpeg failed: empty output" };
+    }
     return { data: buffer.toString("base64"), mimeType: "image/jpeg" };
   } catch (err) {
     return { error: mapFfmpegError(err) };
   }
 }
 
-export async function getLocalVideoDuration(
+export function getLocalVideoDuration(
   filePath: string
 ): Promise<number | { error: string }> {
   try {
@@ -271,11 +296,12 @@ export async function getLocalVideoDuration(
         "csv=p=0",
         filePath,
       ],
-      { timeout: 10000, encoding: "utf-8", stdio: ["pipe", "pipe", "pipe"] }
+      { timeout: 10_000, encoding: "utf-8", stdio: ["pipe", "pipe", "pipe"] }
     ).trim();
     const duration = Number.parseFloat(output);
-    if (!Number.isFinite(duration))
+    if (!Number.isFinite(duration)) {
       return { error: "ffprobe failed: invalid duration output" };
+    }
     return duration;
   } catch (err) {
     return { error: mapFfprobeError(err) };
@@ -290,14 +316,18 @@ async function tryVideoGeminiWeb(
 ): Promise<ExtractedContent | null> {
   try {
     const cookies = await isGeminiWebAvailable();
-    if (!cookies) return null;
-    if (signal?.aborted) return null;
+    if (!cookies) {
+      return null;
+    }
+    if (signal?.aborted) {
+      return null;
+    }
 
     const text = await queryWithCookies(prompt, cookies, {
       files: [info.absolutePath],
       model,
       signal,
-      timeoutMs: 180000,
+      timeoutMs: 180_000,
     });
 
     return {
@@ -307,7 +337,9 @@ async function tryVideoGeminiWeb(
       error: null,
     };
   } catch (err) {
-    if (shouldRethrow(err)) throw err;
+    if (shouldRethrow(err)) {
+      throw err;
+    }
     return null;
   }
 }
@@ -319,21 +351,25 @@ async function tryVideoGeminiApi(
   signal?: AbortSignal
 ): Promise<ExtractedContent | null> {
   const apiKey = getApiKey();
-  if (!apiKey) return null;
-  if (signal?.aborted) return null;
+  if (!apiKey) {
+    return null;
+  }
+  if (signal?.aborted) {
+    return null;
+  }
 
   let fileName: string | null = null;
   try {
     const uploaded = await uploadToFilesApi(info, apiKey, signal);
     fileName = uploaded.name;
 
-    await pollFileState(fileName, apiKey, signal, 120000);
+    await pollFileState(fileName, apiKey, signal, 120_000);
 
     const text = await queryGeminiApiWithVideo(prompt, uploaded.uri, {
       model,
       mimeType: info.mimeType,
       signal,
-      timeoutMs: 120000,
+      timeoutMs: 120_000,
     });
 
     return {
@@ -343,10 +379,14 @@ async function tryVideoGeminiApi(
       error: null,
     };
   } catch (err) {
-    if (shouldRethrow(err)) throw err;
+    if (shouldRethrow(err)) {
+      throw err;
+    }
     return null;
   } finally {
-    if (fileName) deleteGeminiFile(fileName, apiKey);
+    if (fileName) {
+      deleteGeminiFile(fileName, apiKey);
+    }
   }
 }
 
@@ -379,7 +419,9 @@ async function uploadToFilesApi(
   }
 
   const uploadUrl = initRes.headers.get("x-goog-upload-url");
-  if (!uploadUrl) throw new Error("No upload URL in response headers");
+  if (!uploadUrl) {
+    throw new Error("No upload URL in response headers");
+  }
 
   const fileData = await readFile(info.absolutePath);
   const uploadRes = await fetch(uploadUrl, {
@@ -410,21 +452,29 @@ async function pollFileState(
   fileName: string,
   apiKey: string,
   signal?: AbortSignal,
-  timeoutMs: number = 120000
+  timeoutMs = 120_000
 ): Promise<void> {
   const deadline = Date.now() + timeoutMs;
 
   while (Date.now() < deadline) {
-    if (signal?.aborted) throw new Error("Aborted");
+    if (signal?.aborted) {
+      throw new Error("Aborted");
+    }
 
     const res = await fetch(`${API_BASE}/${fileName}?key=${apiKey}`, {
       signal,
     });
-    if (!res.ok) throw new Error(`File state check failed: ${res.status}`);
+    if (!res.ok) {
+      throw new Error(`File state check failed: ${res.status}`);
+    }
 
     const data = (await res.json()) as { state: string };
-    if (data.state === "ACTIVE") return;
-    if (data.state === "FAILED") throw new Error("File processing failed");
+    if (data.state === "ACTIVE") {
+      return;
+    }
+    if (data.state === "FAILED") {
+      throw new Error("File processing failed");
+    }
 
     await new Promise((r) => setTimeout(r, 5000));
   }

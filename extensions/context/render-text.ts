@@ -15,7 +15,7 @@ function formatTokens(count: number | null): string {
     return `${count}`;
   }
 
-  if (count < 10000) {
+  if (count < 10_000) {
     return `${(count / 1000).toFixed(1)}k`;
   }
 
@@ -51,19 +51,22 @@ function renderOffender(artifact: ContextArtifact): string {
 
 export function renderContextText(snapshot: ContextSnapshot): string {
   const header = `${snapshot.modelLabel} · ${formatTokens(snapshot.displayUsedTokens)}/${formatTokens(snapshot.contextWindow)} tokens`;
+  const exactTotalLines: string[] = [];
+  if (snapshot.exactTotalTokens === null) {
+    exactTotalLines.push(
+      `Exact total: unknown (${formatPercent(snapshot.estimatedPercent)} estimated)`
+    );
+  } else if (snapshot.exactTotalTokens < snapshot.displayUsedTokens) {
+    exactTotalLines.push(
+      `Exact total: ${formatTokens(snapshot.exactTotalTokens)} (${formatPercent(snapshot.exactPercent)})`
+    );
+  }
+
   const lines = [
     "/context",
     header,
     `(${formatPercent(snapshot.displayUsedPercent)})`,
-    ...(snapshot.exactTotalTokens === null
-      ? [
-          `Exact total: unknown (${formatPercent(snapshot.estimatedPercent)} estimated)`,
-        ]
-      : snapshot.exactTotalTokens < snapshot.displayUsedTokens
-        ? [
-            `Exact total: ${formatTokens(snapshot.exactTotalTokens)} (${formatPercent(snapshot.exactPercent)})`,
-          ]
-        : []),
+    ...exactTotalLines,
     "Estimated usage by category",
     ...snapshot.displayCategories
       .filter(

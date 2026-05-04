@@ -8,27 +8,27 @@ import {
 } from "node:fs";
 import { dirname, join } from "node:path";
 
-export type ExecuteCheckpointTask = {
+export interface ExecuteCheckpointTask {
   id: string;
   subject: string;
   status: string;
   blockedBy?: string[];
-};
+}
 
-export type ExecuteCheckpoint = {
+export interface ExecuteCheckpoint {
   planId: string;
   status: string;
   createdAt: string;
   updatedAt: string;
   normalizedSummary: string;
   tasks: ExecuteCheckpointTask[];
-};
+}
 
-export type ExecuteCheckpointInput = {
+export interface ExecuteCheckpointInput {
   status: string;
   normalizedSummary: string;
   tasks: ExecuteCheckpointTask[];
-};
+}
 
 export type ExecuteCheckpointLoadResult =
   | {
@@ -41,13 +41,13 @@ export type ExecuteCheckpointLoadResult =
       checkpoint: ExecuteCheckpoint;
     };
 
-export type ExecuteCheckpointSaveResult = {
+export interface ExecuteCheckpointSaveResult {
   path: string;
   created: boolean;
   status: string;
   taskCount: number;
   checkpoint: ExecuteCheckpoint;
-};
+}
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;

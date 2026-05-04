@@ -84,8 +84,12 @@ export async function scaffoldGlobalConfig(cwd: string): Promise<boolean> {
   const globalPath = globalConfigPath();
   const projectPath = projectConfigPath(cwd);
 
-  if (await fileExists(globalPath)) return false;
-  if (await fileExists(projectPath)) return false;
+  if (await fileExists(globalPath)) {
+    return false;
+  }
+  if (await fileExists(projectPath)) {
+    return false;
+  }
 
   await mkdir(dirname(globalPath), { recursive: true });
   await writeFile(globalPath, STARTER_CONFIG, "utf8");
@@ -113,7 +117,7 @@ function commandAvailableVia(
   cwd: string
 ): CommandAvailability {
   try {
-    execSync(`which ${command}`, { stdio: "pipe", timeout: 5_000 });
+    execSync(`which ${command}`, { stdio: "pipe", timeout: 5000 });
     return "global";
   } catch {
     // not global
@@ -136,9 +140,15 @@ function normalizeServerConfig(
   name: string,
   config: LspServerUserConfig
 ): ConfiguredServerConfig | null {
-  if (config.disabled) return null;
-  if (!config.command || config.command.length === 0) return null;
-  if (!config.extensions || config.extensions.length === 0) return null;
+  if (config.disabled) {
+    return null;
+  }
+  if (!config.command || config.command.length === 0) {
+    return null;
+  }
+  if (!config.extensions || config.extensions.length === 0) {
+    return null;
+  }
 
   return {
     name,
@@ -168,7 +178,9 @@ export function resolveConfiguredServer(
     availabilityCache.set(cacheKey, via);
   }
 
-  if (!via) return null;
+  if (!via) {
+    return null;
+  }
 
   const command = via === "npx" ? "npx" : rawCommand;
   const args = via === "npx" ? ["--yes", rawCommand, ...rawArgs] : rawArgs;

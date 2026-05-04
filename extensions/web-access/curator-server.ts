@@ -3,7 +3,7 @@ import http, { type IncomingMessage, type ServerResponse } from "node:http";
 import { generateCuratorPage } from "./curator-page.js";
 import type { SummaryMeta } from "./summary-review.js";
 
-const STALE_THRESHOLD_MS = 30000;
+const STALE_THRESHOLD_MS = 30_000;
 const WATCHDOG_INTERVAL_MS = 5000;
 const MAX_BODY_SIZE = 64 * 1024;
 
@@ -145,37 +145,48 @@ function normalizeSelectedIndices(
 }
 
 function normalizeSummaryMeta(value: unknown): SummaryMeta | null {
-  if (!value || typeof value !== "object") return null;
+  if (!value || typeof value !== "object") {
+    return null;
+  }
   const meta = value as Record<string, unknown>;
 
   const model = meta.model;
-  if (model !== null && typeof model !== "string") return null;
+  if (model !== null && typeof model !== "string") {
+    return null;
+  }
 
   const durationMs = meta.durationMs;
   if (
     typeof durationMs !== "number" ||
     !Number.isFinite(durationMs) ||
     durationMs < 0
-  )
+  ) {
     return null;
+  }
 
   const tokenEstimate = meta.tokenEstimate;
   if (
     typeof tokenEstimate !== "number" ||
     !Number.isFinite(tokenEstimate) ||
     tokenEstimate < 0
-  )
+  ) {
     return null;
+  }
 
   const fallbackUsed = meta.fallbackUsed;
-  if (typeof fallbackUsed !== "boolean") return null;
+  if (typeof fallbackUsed !== "boolean") {
+    return null;
+  }
 
   const fallbackReason = meta.fallbackReason;
-  if (fallbackReason !== undefined && typeof fallbackReason !== "string")
+  if (fallbackReason !== undefined && typeof fallbackReason !== "string") {
     return null;
+  }
 
   const edited = meta.edited;
-  if (edited !== undefined && typeof edited !== "boolean") return null;
+  if (edited !== undefined && typeof edited !== "boolean") {
+    return null;
+  }
 
   return {
     model,
@@ -214,13 +225,17 @@ export function startCuratorServer(
   let sseKeepalive: NodeJS.Timeout | null = null;
 
   const abortInFlightSummarize = (): void => {
-    if (!summarizeAbortController) return;
+    if (!summarizeAbortController) {
+      return;
+    }
     summarizeAbortController.abort();
     summarizeAbortController = null;
   };
 
   const markCompleted = (): boolean => {
-    if (completed) return false;
+    if (completed) {
+      return false;
+    }
     completed = true;
     state = "COMPLETED";
     if (watchdog) {
@@ -235,7 +250,9 @@ export function startCuratorServer(
     if (sseResponse) {
       try {
         sseResponse.end();
-      } catch {}
+      } catch {
+        /* noop */
+      }
       sseResponse = null;
     }
     return true;
@@ -259,9 +276,15 @@ export function startCuratorServer(
   }
 
   function isAvailableProvider(provider: string): boolean {
-    if (provider === "perplexity") return availableProviders.perplexity;
-    if (provider === "exa") return availableProviders.exa;
-    if (provider === "gemini") return availableProviders.gemini;
+    if (provider === "perplexity") {
+      return availableProviders.perplexity;
+    }
+    if (provider === "exa") {
+      return availableProviders.exa;
+    }
+    if (provider === "gemini") {
+      return availableProviders.gemini;
+    }
     return false;
   }
 
@@ -272,7 +295,9 @@ export function startCuratorServer(
       try {
         res.write(payload);
         return;
-      } catch {}
+      } catch {
+        /* noop */
+      }
     }
     sseBuffer.push(payload);
   }
@@ -325,7 +350,9 @@ export function startCuratorServer(
         if (sseResponse) {
           try {
             sseResponse.end();
-          } catch {}
+          } catch {
+            /* noop */
+          }
         }
         res.writeHead(200, {
           "Content-Type": "text/event-stream",
@@ -334,7 +361,9 @@ export function startCuratorServer(
           "X-Accel-Buffering": "no",
         });
         res.flushHeaders();
-        if (res.socket) res.socket.setNoDelay(true);
+        if (res.socket) {
+          res.socket.setNoDelay(true);
+        }
         sseResponse = res;
         if (sseBuffer.length > 0) {
           const pending = sseBuffer.splice(0, sseBuffer.length);
@@ -348,24 +377,34 @@ export function startCuratorServer(
             }
           }
         }
-        if (sseKeepalive) clearInterval(sseKeepalive);
+        if (sseKeepalive) {
+          clearInterval(sseKeepalive);
+        }
         sseKeepalive = setInterval(() => {
           if (sseResponse) {
             try {
               sseResponse.write(":keepalive\n\n");
-            } catch {}
+            } catch {
+              /* noop */
+            }
           }
-        }, 15000);
+        }, 15_000);
         req.on("close", () => {
-          if (sseResponse === res) sseResponse = null;
+          if (sseResponse === res) {
+            sseResponse = null;
+          }
         });
         return;
       }
 
       if (method === "POST" && url.pathname === "/heartbeat") {
         const body = await parseBodyOrSend(req, res);
-        if (!body) return;
-        if (!validateToken(body, res)) return;
+        if (!body) {
+          return;
+        }
+        if (!validateToken(body, res)) {
+          return;
+        }
         touchHeartbeat();
         sendJson(res, 200, { ok: true });
         return;
@@ -373,8 +412,12 @@ export function startCuratorServer(
 
       if (method === "POST" && url.pathname === "/provider") {
         const body = await parseBodyOrSend(req, res);
-        if (!body) return;
-        if (!validateToken(body, res)) return;
+        if (!body) {
+          return;
+        }
+        if (!validateToken(body, res)) {
+          return;
+        }
         const { provider } = body as { provider?: string };
         if (typeof provider !== "string" || provider.length === 0) {
           sendJson(res, 400, { ok: false, error: "Invalid provider" });
@@ -394,8 +437,12 @@ export function startCuratorServer(
 
       if (method === "POST" && url.pathname === "/search") {
         const body = await parseBodyOrSend(req, res);
-        if (!body) return;
-        if (!validateToken(body, res)) return;
+        if (!body) {
+          return;
+        }
+        if (!validateToken(body, res)) {
+          return;
+        }
         if (state === "COMPLETED") {
           sendJson(res, 409, { ok: false, error: "Session closed" });
           return;
@@ -453,8 +500,12 @@ export function startCuratorServer(
 
       if (method === "POST" && url.pathname === "/summarize") {
         const body = await parseBodyOrSend(req, res);
-        if (!body) return;
-        if (!validateToken(body, res)) return;
+        if (!body) {
+          return;
+        }
+        if (!validateToken(body, res)) {
+          return;
+        }
         if (state === "COMPLETED") {
           sendJson(res, 409, { ok: false, error: "Session closed" });
           return;
@@ -528,8 +579,12 @@ export function startCuratorServer(
 
       if (method === "POST" && url.pathname === "/rewrite") {
         const body = await parseBodyOrSend(req, res);
-        if (!body) return;
-        if (!validateToken(body, res)) return;
+        if (!body) {
+          return;
+        }
+        if (!validateToken(body, res)) {
+          return;
+        }
         if (state === "COMPLETED") {
           sendJson(res, 409, { ok: false, error: "Session closed" });
           return;
@@ -558,8 +613,12 @@ export function startCuratorServer(
 
       if (method === "POST" && url.pathname === "/submit") {
         const body = await parseBodyOrSend(req, res);
-        if (!body) return;
-        if (!validateToken(body, res)) return;
+        if (!body) {
+          return;
+        }
+        if (!validateToken(body, res)) {
+          return;
+        }
 
         const parsed = normalizeSelectedIndices(
           (body as { selected?: unknown }).selected,
@@ -622,8 +681,12 @@ export function startCuratorServer(
 
       if (method === "POST" && url.pathname === "/cancel") {
         const body = await parseBodyOrSend(req, res);
-        if (!body) return;
-        if (!validateToken(body, res)) return;
+        if (!body) {
+          return;
+        }
+        if (!validateToken(body, res)) {
+          return;
+        }
         if (!markCompleted()) {
           sendJson(res, 200, { ok: true });
           return;
@@ -659,9 +722,15 @@ export function startCuratorServer(
       const url = `http://localhost:${addr.port}/?session=${sessionToken}`;
 
       watchdog = setInterval(() => {
-        if (completed || !browserConnected) return;
-        if (Date.now() - lastHeartbeatAt <= STALE_THRESHOLD_MS) return;
-        if (!markCompleted()) return;
+        if (completed || !browserConnected) {
+          return;
+        }
+        if (Date.now() - lastHeartbeatAt <= STALE_THRESHOLD_MS) {
+          return;
+        }
+        if (!markCompleted()) {
+          return;
+        }
         setImmediate(() => callbacks.onCancel("stale"));
       }, WATCHDOG_INTERVAL_MS);
 
@@ -672,13 +741,17 @@ export function startCuratorServer(
           const wasOpen = markCompleted();
           try {
             server.close();
-          } catch {}
+          } catch {
+            /* noop */
+          }
           if (wasOpen) {
             setImmediate(() => callbacks.onCancel("stale"));
           }
         },
         pushResult: (queryIndex, data) => {
-          if (completed) return;
+          if (completed) {
+            return;
+          }
           sendSSE("result", {
             queryIndex,
             query: queries[queryIndex] ?? "",
@@ -686,7 +759,9 @@ export function startCuratorServer(
           });
         },
         pushError: (queryIndex, error, provider) => {
-          if (completed) return;
+          if (completed) {
+            return;
+          }
           sendSSE("search-error", {
             queryIndex,
             query: queries[queryIndex] ?? "",
@@ -695,7 +770,9 @@ export function startCuratorServer(
           });
         },
         searchesDone: () => {
-          if (completed) return;
+          if (completed) {
+            return;
+          }
           sendSSE("done", {});
           state = "RESULT_SELECTION";
         },

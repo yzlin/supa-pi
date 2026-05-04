@@ -4,7 +4,7 @@ import * as path from "node:path";
 import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
 
 export default function corePromptExtension(pi: ExtensionAPI) {
-  pi.on("before_agent_start", async (event) => {
+  pi.on("before_agent_start", (event) => {
     const promptPath = path.join(
       path.dirname(new URL(import.meta.url).pathname),
       "prompt.md"
@@ -12,7 +12,7 @@ export default function corePromptExtension(pi: ExtensionAPI) {
     const prompt = fs.readFileSync(promptPath, "utf8").trim();
 
     return {
-      systemPrompt: event.systemPrompt + "\n\n" + prompt,
+      systemPrompt: `${event.systemPrompt}\n\n${prompt}`,
     };
   });
 }

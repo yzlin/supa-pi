@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
 
-import { type AssistantMessage } from "@mariozechner/pi-ai";
+import type { AssistantMessage } from "@mariozechner/pi-ai";
 
 import {
   buildOmCompactionPrompt,
@@ -96,7 +96,7 @@ describe("om compaction helper", () => {
           find() {
             return undefined;
           },
-          async getApiKeyAndHeaders() {
+          getApiKeyAndHeaders() {
             return { ok: true as const, apiKey: "key" };
           },
         },
@@ -125,7 +125,7 @@ describe("om compaction helper", () => {
         find() {
           return undefined;
         },
-        async getApiKeyAndHeaders() {
+        getApiKeyAndHeaders() {
           return { ok: true as const, apiKey: "key" };
         },
       },
@@ -141,7 +141,7 @@ describe("om compaction helper", () => {
         tokensBefore: 42,
       },
       {
-        completeFn: async (_model, completionContext) => {
+        completeFn: (_model, completionContext) => {
           capturedSystemPrompts.push(completionContext.systemPrompt ?? "");
           return createAssistantResponse(
             "## Goal\nShip OM\n\n## Progress\nObserver and reflector helpers landed."

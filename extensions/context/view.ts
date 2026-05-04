@@ -70,15 +70,16 @@ function allocateCounts(
     used += item.base;
   }
 
-  weighted
-    .sort(
-      (a, b) =>
-        b.remainder - a.remainder || order.indexOf(a.key) - order.indexOf(b.key)
-    )
-    .slice(0, Math.max(0, totalCells - used))
-    .forEach((item) => {
-      counts[item.key] += 1;
-    });
+  const weightedRemainders = weighted.sort(
+    (a, b) =>
+      b.remainder - a.remainder || order.indexOf(a.key) - order.indexOf(b.key)
+  );
+  for (const item of weightedRemainders.slice(
+    0,
+    Math.max(0, totalCells - used)
+  )) {
+    counts[item.key] += 1;
+  }
 
   return counts;
 }
@@ -129,7 +130,7 @@ function buildBarCells(
   return cells.slice(0, BAR_CELLS);
 }
 
-function renderGrid(snapshot: ContextSnapshot, theme: any): string[] {
+function renderGrid(snapshot: ContextSnapshot, theme: unknown): string[] {
   const cells = buildBarCells(snapshot);
   const lines: string[] = [];
 
@@ -145,7 +146,7 @@ function renderGrid(snapshot: ContextSnapshot, theme: any): string[] {
 
 function renderCategoryLine(
   category: ContextDisplayCategory,
-  theme: any
+  theme: unknown
 ): string {
   const style = CATEGORY_STYLE[category.key];
   return `${theme.fg(style.color, style.symbol)} ${theme.bold(category.label)}: ${formatTokens(
@@ -153,7 +154,7 @@ function renderCategoryLine(
   )} tokens (${formatPercent(category.percent)})`;
 }
 
-function renderRightPanel(snapshot: ContextSnapshot, theme: any): string[] {
+function renderRightPanel(snapshot: ContextSnapshot, theme: unknown): string[] {
   const lines = [
     theme.fg(
       "muted",
@@ -222,7 +223,7 @@ function renderRightPanel(snapshot: ContextSnapshot, theme: any): string[] {
 
 function renderGridLayout(
   snapshot: ContextSnapshot,
-  theme: any,
+  theme: unknown,
   width: number
 ): string[] {
   const left = renderGrid(snapshot, theme);
@@ -262,7 +263,9 @@ export async function showContextView(
   }
 
   await ctx.ui.custom<void>((_tui, theme, _kb, done) => ({
-    invalidate() {},
+    invalidate() {
+      /* noop */
+    },
     render(width: number) {
       if (width < TEXT_FALLBACK_WIDTH) {
         return renderContextText(snapshot)

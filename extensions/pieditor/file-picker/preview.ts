@@ -28,9 +28,12 @@ function toDisplayPath(value: string): string {
 }
 
 function formatByteSize(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024)
+  if (bytes < 1024) {
+    return `${bytes} B`;
+  }
+  if (bytes < 1024 * 1024) {
     return `${(bytes / 1024).toFixed(bytes < 10 * 1024 ? 1 : 0)} KB`;
+  }
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
@@ -43,13 +46,21 @@ function normalizePreviewLine(line: string): string {
 }
 
 function isBinaryBuffer(buffer: Buffer): boolean {
-  if (buffer.length === 0) return false;
-  if (buffer.includes(0)) return true;
+  if (buffer.length === 0) {
+    return false;
+  }
+  if (buffer.includes(0)) {
+    return true;
+  }
 
   let suspiciousBytes = 0;
   for (const byte of buffer) {
-    if (byte === 9 || byte === 10 || byte === 13) continue;
-    if (byte < 32 || byte === 127) suspiciousBytes += 1;
+    if (byte === 9 || byte === 10 || byte === 13) {
+      continue;
+    }
+    if (byte < 32 || byte === 127) {
+      suspiciousBytes += 1;
+    }
   }
 
   return suspiciousBytes / buffer.length > 0.2;
@@ -78,7 +89,9 @@ function resolvePreviewTitle(
   isDirectory: boolean
 ): string {
   const displayPath = toDisplayPath(relativePath);
-  if (displayPath === ".") return "./";
+  if (displayPath === ".") {
+    return "./";
+  }
   return isDirectory && !displayPath.endsWith("/")
     ? `${displayPath}/`
     : displayPath;
@@ -97,8 +110,12 @@ function buildDirectoryPreview(
         isDirectory: item.isDirectory(),
       }))
       .sort((left, right) => {
-        if (left.isDirectory && !right.isDirectory) return -1;
-        if (!left.isDirectory && right.isDirectory) return 1;
+        if (left.isDirectory && !right.isDirectory) {
+          return -1;
+        }
+        if (!left.isDirectory && right.isDirectory) {
+          return 1;
+        }
         return left.label.localeCompare(right.label);
       });
 

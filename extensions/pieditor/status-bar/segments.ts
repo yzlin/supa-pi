@@ -13,6 +13,9 @@ import type {
   StatusBarSegmentId,
 } from "./types.js";
 
+const TRAILING_STATUS_DECORATION_PATTERN_SOURCE = String.raw`(\u001B\[[0-9;]*m|\s|·|\|)+$`;
+const TOP_LEVEL_REGEX_1 = new RegExp(TRAILING_STATUS_DECORATION_PATTERN_SOURCE);
+
 function color(
   ctx: StatusBarContext,
   semantic: SemanticColor,
@@ -26,11 +29,19 @@ function withIcon(icon: string, text: string): string {
 }
 
 function formatTokens(n: number): string {
-  if (n < 1000) return n.toString();
-  if (n < 10000) return `${(n / 1000).toFixed(1)}k`;
-  if (n < 1000000) return `${Math.round(n / 1000)}k`;
-  if (n < 10000000) return `${(n / 1000000).toFixed(1)}M`;
-  return `${Math.round(n / 1000000)}M`;
+  if (n < 1000) {
+    return n.toString();
+  }
+  if (n < 10_000) {
+    return `${(n / 1000).toFixed(1)}k`;
+  }
+  if (n < 1_000_000) {
+    return `${Math.round(n / 1000)}k`;
+  }
+  if (n < 10_000_000) {
+    return `${(n / 1_000_000).toFixed(1)}M`;
+  }
+  return `${Math.round(n / 1_000_000)}M`;
 }
 
 function formatDuration(ms: number): string {
@@ -38,8 +49,12 @@ function formatDuration(ms: number): string {
   const minutes = Math.floor(seconds / 60);
   const hours = Math.floor(minutes / 60);
 
-  if (hours > 0) return `${hours}h${minutes % 60}m`;
-  if (minutes > 0) return `${minutes}m${seconds % 60}s`;
+  if (hours > 0) {
+    return `${hours}h${minutes % 60}m`;
+  }
+  if (minutes > 0) {
+    return `${minutes}m${seconds % 60}s`;
+  }
   return `${seconds}s`;
 }
 
@@ -47,7 +62,9 @@ const piSegment: StatusBarSegment = {
   id: "pi",
   render(ctx) {
     const icons = getIcons();
-    if (!icons.pi) return { content: "", visible: false };
+    if (!icons.pi) {
+      return { content: "", visible: false };
+    }
     return { content: color(ctx, "pi", `${icons.pi} `), visible: true };
   },
 };
@@ -123,7 +140,9 @@ const gitSegment: StatusBarSegment = {
     const hasChanges = staged > 0 || unstaged > 0 || untracked > 0;
     const gitStatus = hasChanges ? { staged, unstaged, untracked } : null;
 
-    if (!branch && !gitStatus) return { content: "", visible: false };
+    if (!(branch || gitStatus)) {
+      return { content: "", visible: false };
+    }
 
     const showBranch = opts.showBranch !== false;
     const branchColor: SemanticColor = hasChanges ? "gitDirty" : "gitClean";
@@ -210,7 +229,9 @@ const tokenInSegment: StatusBarSegment = {
   id: "token_in",
   render(ctx) {
     const icons = getIcons();
-    if (!ctx.usageStats.input) return { content: "", visible: false };
+    if (!ctx.usageStats.input) {
+      return { content: "", visible: false };
+    }
     return {
       content: color(
         ctx,
@@ -226,7 +247,9 @@ const tokenOutSegment: StatusBarSegment = {
   id: "token_out",
   render(ctx) {
     const icons = getIcons();
-    if (!ctx.usageStats.output) return { content: "", visible: false };
+    if (!ctx.usageStats.output) {
+      return { content: "", visible: false };
+    }
     return {
       content: color(
         ctx,
@@ -247,7 +270,9 @@ const tokenTotalSegment: StatusBarSegment = {
       ctx.usageStats.output +
       ctx.usageStats.cacheRead +
       ctx.usageStats.cacheWrite;
-    if (!total) return { content: "", visible: false };
+    if (!total) {
+      return { content: "", visible: false };
+    }
     return {
       content: color(
         ctx,
@@ -263,7 +288,7 @@ const costSegment: StatusBarSegment = {
   id: "cost",
   render(ctx) {
     const { cost } = ctx.usageStats;
-    if (!cost && !ctx.usingSubscription) {
+    if (!(cost || ctx.usingSubscription)) {
       return { content: "", visible: false };
     }
 
@@ -276,7 +301,9 @@ const contextPctSegment: StatusBarSegment = {
   id: "context_pct",
   render(ctx) {
     const icons = getIcons();
-    if (!ctx.contextWindow) return { content: "", visible: false };
+    if (!ctx.contextWindow) {
+      return { content: "", visible: false };
+    }
     const text = `${ctx.contextPercent.toFixed(1)}%/${formatTokens(ctx.contextWindow)}`;
 
     if (ctx.contextPercent > 90) {
@@ -303,7 +330,9 @@ const contextTotalSegment: StatusBarSegment = {
   id: "context_total",
   render(ctx) {
     const icons = getIcons();
-    if (!ctx.contextWindow) return { content: "", visible: false };
+    if (!ctx.contextWindow) {
+      return { content: "", visible: false };
+    }
     return {
       content: color(
         ctx,
@@ -320,7 +349,9 @@ const timeSpentSegment: StatusBarSegment = {
   render(ctx) {
     const icons = getIcons();
     const elapsed = Date.now() - ctx.sessionStartTime;
-    if (elapsed < 1000) return { content: "", visible: false };
+    if (elapsed < 1000) {
+      return { content: "", visible: false };
+    }
     return {
       content: withIcon(icons.time, formatDuration(elapsed)),
       visible: true,
@@ -379,7 +410,9 @@ const cacheReadSegment: StatusBarSegment = {
   id: "cache_read",
   render(ctx) {
     const icons = getIcons();
-    if (!ctx.usageStats.cacheRead) return { content: "", visible: false };
+    if (!ctx.usageStats.cacheRead) {
+      return { content: "", visible: false };
+    }
     return {
       content: color(
         ctx,
@@ -397,7 +430,9 @@ const cacheWriteSegment: StatusBarSegment = {
   id: "cache_write",
   render(ctx) {
     const icons = getIcons();
-    if (!ctx.usageStats.cacheWrite) return { content: "", visible: false };
+    if (!ctx.usageStats.cacheWrite) {
+      return { content: "", visible: false };
+    }
     return {
       content: color(
         ctx,
@@ -428,13 +463,15 @@ function shouldRenderExtensionStatus(
 }
 
 function stripExtensionStatusSuffix(value: string): string {
-  return value.replace(/(\x1b\[[0-9;]*m|\s|·|[|])+$/, "");
+  return value.replace(TOP_LEVEL_REGEX_1, "");
 }
 
 const extensionStatusesSegment: StatusBarSegment = {
   id: "extension_statuses",
   render(ctx) {
-    if (!ctx.extensionStatuses.size) return { content: "", visible: false };
+    if (!ctx.extensionStatuses.size) {
+      return { content: "", visible: false };
+    }
 
     const parts: string[] = [];
     for (const [key, value] of ctx.extensionStatuses.entries()) {
@@ -448,7 +485,9 @@ const extensionStatusesSegment: StatusBarSegment = {
       }
     }
 
-    if (!parts.length) return { content: "", visible: false };
+    if (!parts.length) {
+      return { content: "", visible: false };
+    }
     return { content: parts.join(` ${SEP_DOT} `), visible: true };
   },
 };

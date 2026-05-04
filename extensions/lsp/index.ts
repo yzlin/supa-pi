@@ -34,6 +34,8 @@ import { fg, padVisibleText, paletteTheme } from "./theme.js";
 import { registerLspTool, type ServerManager } from "./tools";
 import type { ConfiguredServerConfig, ResolvedServerConfig } from "./types";
 
+const TOP_LEVEL_REGEX_1 = /\s+/;
+
 const LSP_SUBCOMMANDS = [
   {
     value: "status",
@@ -81,15 +83,15 @@ const STATUS_MODAL_HELP = "enter/esc/q close";
 
 type LspThemeTone = "accent" | "success" | "warning" | "dim" | "toolTitle";
 
-type ThemeLike = {
+interface ThemeLike {
   fg(color: string, text: string): string;
   bold(text: string): string;
-};
+}
 
-type FramePalette = {
+interface FramePalette {
   border(text: string): string;
   title(text: string): string;
-};
+}
 
 const DEFAULT_FRAME_PALETTE: FramePalette = {
   border(text: string): string {
@@ -354,7 +356,9 @@ async function showLspTextView(
       const framePalette = getThemeFramePalette(theme);
 
       return {
-        invalidate() {},
+        invalidate() {
+          /* noop */
+        },
         render(width: number) {
           const frameWidth = Math.max(TEXT_MODAL_MIN_WIDTH, width);
           const innerWidth = Math.max(8, frameWidth - 4);
@@ -407,7 +411,9 @@ async function showLspStatusView(
       const framePalette = getThemeFramePalette(theme);
 
       return {
-        invalidate() {},
+        invalidate() {
+          /* noop */
+        },
         render(width: number) {
           const frameWidth = Math.max(STATUS_MODAL_MIN_WIDTH, width);
           const innerWidth = Math.max(8, frameWidth - 4);
@@ -485,7 +491,9 @@ export default function lspExtension(pi: ExtensionAPI) {
   }
 
   function resolveMatchingServers(filePath: string): ResolvedServerConfig[] {
-    if (!config) return [];
+    if (!config) {
+      return [];
+    }
     return serversForExtension(config.servers, filePath)
       .map((serverConfig) => resolveServer(serverConfig))
       .filter((server): server is ResolvedServerConfig => server !== null);
@@ -493,7 +501,9 @@ export default function lspExtension(pi: ExtensionAPI) {
 
   function getOrCreateClient(serverConfig: ResolvedServerConfig): LspClient {
     const existing = clients.get(serverConfig.name);
-    if (existing) return existing;
+    if (existing) {
+      return existing;
+    }
 
     const client = new LspClient(serverConfig, rootPath);
     clients.set(serverConfig.name, client);
@@ -502,7 +512,9 @@ export default function lspExtension(pi: ExtensionAPI) {
 
   async function shutdownAll(): Promise<void> {
     const shutdowns = [...clients.values()].map((c) =>
-      c.shutdown().catch(() => {})
+      c.shutdown().catch(() => {
+        /* noop */
+      })
     );
     await Promise.all(shutdowns);
     clients.clear();
@@ -546,7 +558,9 @@ export default function lspExtension(pi: ExtensionAPI) {
 
   const serverManager: ServerManager = {
     clientsForFile(filePath: string): LspClient[] {
-      if (!config) return [];
+      if (!config) {
+        return [];
+      }
       return resolveMatchingServers(filePath).map((s) => getOrCreateClient(s));
     },
 
@@ -554,13 +568,19 @@ export default function lspExtension(pi: ExtensionAPI) {
       filePath: string,
       capability: string
     ): LspClient | null {
-      if (!config) return null;
+      if (!config) {
+        return null;
+      }
       const matching = resolveMatchingServers(filePath);
       for (const serverConfig of matching) {
         const client = getOrCreateClient(serverConfig);
         // If not yet initialized, return it (capability check happens after init)
-        if (!client.isInitialized) return client;
-        if (client.hasCapability(capability)) return client;
+        if (!client.isInitialized) {
+          return client;
+        }
+        if (client.hasCapability(capability)) {
+          return client;
+        }
       }
       return null;
     },
@@ -568,13 +588,17 @@ export default function lspExtension(pi: ExtensionAPI) {
     anyClient(): LspClient | null {
       // Return first initialized client, or first available
       for (const client of clients.values()) {
-        if (client.isInitialized) return client;
+        if (client.isInitialized) {
+          return client;
+        }
       }
       // Try to create one from the first resolvable configured server
       if (config) {
         for (const serverConfig of config.servers) {
           const resolved = resolveServer(serverConfig);
-          if (resolved) return getOrCreateClient(resolved);
+          if (resolved) {
+            return getOrCreateClient(resolved);
+          }
         }
       }
       return null;
@@ -610,8 +634,10 @@ export default function lspExtension(pi: ExtensionAPI) {
     config = null;
   });
 
-  pi.on("tool_execution_end", async (event, ctx) => {
-    if (event.toolName !== "lsp") return;
+  pi.on("tool_execution_end", (event, ctx) => {
+    if (event.toolName !== "lsp") {
+      return;
+    }
     refreshStatus(ctx.ui, config);
   });
 
@@ -621,7 +647,10 @@ export default function lspExtension(pi: ExtensionAPI) {
     description: "Manage LSP server status and lifecycle",
     getArgumentCompletions: getLspArgumentCompletions,
     handler: async (args, ctx) => {
-      const [subcommand = "status"] = args.trim().split(/\s+/).filter(Boolean);
+      const [subcommand = "status"] = args
+        .trim()
+        .split(TOP_LEVEL_REGEX_1)
+        .filter(Boolean);
 
       switch (subcommand) {
         case "status": {

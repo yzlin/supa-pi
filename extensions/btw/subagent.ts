@@ -49,7 +49,7 @@ export interface SingleResult {
 
 export type DisplayItem =
   | { type: "text"; text: string }
-  | { type: "toolCall"; name: string; args: Record<string, any> };
+  | { type: "toolCall"; name: string; args: Record<string, unknown> };
 
 export function appendFinalOutput(currentOutput: string, nextOutput: string) {
   return currentOutput ? `${currentOutput}\n${nextOutput}` : nextOutput;
@@ -79,22 +79,44 @@ export function emptyUsage(): UsageStats {
 }
 
 export function formatTokens(n: number): string {
-  if (n < 1000) return n.toString();
-  if (n < 10000) return `${(n / 1000).toFixed(1)}k`;
-  if (n < 1_000_000) return `${Math.round(n / 1000)}k`;
+  if (n < 1000) {
+    return n.toString();
+  }
+  if (n < 10_000) {
+    return `${(n / 1000).toFixed(1)}k`;
+  }
+  if (n < 1_000_000) {
+    return `${Math.round(n / 1000)}k`;
+  }
   return `${(n / 1_000_000).toFixed(1)}M`;
 }
 
 export function formatUsage(u: UsageStats, model?: string): string {
   const parts: string[] = [];
-  if (u.turns) parts.push(`${u.turns} turn${u.turns > 1 ? "s" : ""}`);
-  if (u.input) parts.push(`↑${formatTokens(u.input)}`);
-  if (u.output) parts.push(`↓${formatTokens(u.output)}`);
-  if (u.cacheRead) parts.push(`R${formatTokens(u.cacheRead)}`);
-  if (u.cacheWrite) parts.push(`W${formatTokens(u.cacheWrite)}`);
-  if (u.cost) parts.push(`$${u.cost.toFixed(4)}`);
-  if (u.contextTokens > 0) parts.push(`ctx:${formatTokens(u.contextTokens)}`);
-  if (model) parts.push(model);
+  if (u.turns) {
+    parts.push(`${u.turns} turn${u.turns > 1 ? "s" : ""}`);
+  }
+  if (u.input) {
+    parts.push(`↑${formatTokens(u.input)}`);
+  }
+  if (u.output) {
+    parts.push(`↓${formatTokens(u.output)}`);
+  }
+  if (u.cacheRead) {
+    parts.push(`R${formatTokens(u.cacheRead)}`);
+  }
+  if (u.cacheWrite) {
+    parts.push(`W${formatTokens(u.cacheWrite)}`);
+  }
+  if (u.cost) {
+    parts.push(`$${u.cost.toFixed(4)}`);
+  }
+  if (u.contextTokens > 0) {
+    parts.push(`ctx:${formatTokens(u.contextTokens)}`);
+  }
+  if (model) {
+    parts.push(model);
+  }
   return parts.join(" ");
 }
 
@@ -110,7 +132,7 @@ export function shortenPath(p: string): string {
 export function formatToolCall(
   toolName: string,
   args: Record<string, unknown>,
-  fg: (color: any, text: string) => string
+  fg: (color: unknown, text: string) => string
 ): string {
   switch (toolName) {
     case "bash": {
@@ -128,7 +150,7 @@ export function formatToolCall(
       let text = fg("accent", filePath);
       if (offset !== undefined || limit !== undefined) {
         const startLine = offset ?? 1;
-        const endLine = limit !== undefined ? startLine + limit - 1 : "";
+        const endLine = limit === undefined ? "" : startLine + limit - 1;
         text += fg("warning", `:${startLine}${endLine ? `-${endLine}` : ""}`);
       }
       return fg("muted", "read ") + text;
@@ -138,7 +160,9 @@ export function formatToolCall(
       const content = (args.content || "") as string;
       const lines = content.split("\n").length;
       let text = fg("muted", "write ") + fg("accent", shortenPath(rawPath));
-      if (lines > 1) text += fg("dim", ` (${lines} lines)`);
+      if (lines > 1) {
+        text += fg("dim", ` (${lines} lines)`);
+      }
       return text;
     }
     case "edit": {
@@ -197,8 +221,9 @@ export function renderProgressPlainLines(
       const textLines = item.text.split("\n").filter((l) => l.trim());
       const preview = textLines.slice(0, 3).join("\n  ");
       lines.push(`  ${preview}`);
-      if (textLines.length > 3)
+      if (textLines.length > 3) {
         lines.push(`  ... +${textLines.length - 3} lines`);
+      }
     } else {
       switch (item.name) {
         case "bash": {
@@ -237,8 +262,8 @@ export function renderProgressPlainLines(
 export async function runSubagent(
   systemPrompt: string,
   task: string,
-  tools: AgentTool<any>[],
-  model: any,
+  tools: AgentTool<unknown>[],
+  model: unknown,
   thinkingLevel: string,
   apiKeyResolver: (provider: string) => Promise<string | undefined>,
   signal: AbortSignal | undefined,
@@ -281,18 +306,20 @@ export async function runSubagent(
     model,
     convertToLlm: (msgs: AgentMessage[]) => convertToLlm(msgs),
     getApiKey: apiKeyResolver,
-    reasoning: thinkingLevel !== "off" ? (thinkingLevel as any) : undefined,
+    reasoning: thinkingLevel === "off" ? undefined : (thinkingLevel as unknown),
   };
 
   try {
     const stream = agentLoop([subagentPrompt], context, config, signal);
 
     for await (const event of stream) {
-      if (signal?.aborted) break;
+      if (signal?.aborted) {
+        break;
+      }
 
       switch (event.type) {
         case "message_end": {
-          const msg = event.message as any;
+          const msg = event.message as unknown;
           if (msg.role === "assistant") {
             result.usage.turns++;
             const usage = msg.usage;
@@ -304,9 +331,15 @@ export async function runSubagent(
               result.usage.cost += usage.cost?.total || 0;
               result.usage.contextTokens = usage.totalTokens || 0;
             }
-            if (msg.model) result.model = msg.model;
-            if (msg.stopReason) result.stopReason = msg.stopReason;
-            if (msg.errorMessage) result.errorMessage = msg.errorMessage;
+            if (msg.model) {
+              result.model = msg.model;
+            }
+            if (msg.stopReason) {
+              result.stopReason = msg.stopReason;
+            }
+            if (msg.errorMessage) {
+              result.errorMessage = msg.errorMessage;
+            }
 
             for (const part of msg.content) {
               if (part.type === "text") {

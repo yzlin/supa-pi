@@ -24,8 +24,11 @@ function createTempDir(): string {
   return dir;
 }
 
+const ANSI_ESCAPE_PATTERN_SOURCE = String.raw`\u001B\[[0-9;]*m`;
+const ANSI_ESCAPE_PATTERN = new RegExp(ANSI_ESCAPE_PATTERN_SOURCE, "g");
+
 function stripAnsi(text: string): string {
-  return text.replace(/\x1b\[[0-9;]*m/g, "");
+  return text.replace(ANSI_ESCAPE_PATTERN, "");
 }
 
 afterEach(() => {
@@ -70,7 +73,9 @@ describe("file picker folder rendering", () => {
     writeFileSync(join(root, "alpha.txt"), "alpha", "utf8");
     process.chdir(root);
 
-    const browser = new FileBrowserComponent(() => {});
+    const browser = new FileBrowserComponent(() => {
+      /* noop */
+    });
     browser.handleInput("\u001b[Z");
     browser.handleInput("\u001b[B");
     browser.handleInput(" ");
@@ -90,7 +95,9 @@ describe("file picker folder rendering", () => {
     process.chdir(root);
 
     const browser = new FileBrowserComponent(
-      () => {},
+      () => {
+        /* noop */
+      },
       undefined,
       "dark",
       undefined,

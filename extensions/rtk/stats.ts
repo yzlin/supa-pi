@@ -14,6 +14,9 @@ import type {
   RtkStatsRow,
 } from "./types";
 
+const TOP_LEVEL_REGEX_1 = /\.0$/;
+const TOP_LEVEL_REGEX_2 = /0$/;
+
 const BAR_WIDTH = 20;
 const SUMMARY_LABEL_WIDTH = 18;
 const TEXT_FALLBACK_WIDTH = 72;
@@ -29,15 +32,15 @@ const CHROME_ROWS = 8;
 const HELP =
   "↑↓/j/k scroll · pgup/pgdn or ctrl+b/ctrl+f faster · home/end · esc/q/enter close";
 
-type ThemeLike = {
+interface ThemeLike {
   fg(color: string, text: string): string;
   bold(text: string): string;
-};
+}
 
-type FramePalette = {
+interface FramePalette {
   border(text: string): string;
   title(text: string): string;
-};
+}
 
 function getThemeFramePalette(theme: Pick<ThemeLike, "fg">): FramePalette {
   return {
@@ -59,7 +62,7 @@ function formatTokens(count: number | null): string {
     return `${count}`;
   }
 
-  if (count < 10000) {
+  if (count < 10_000) {
     return `${(count / 1000).toFixed(1)}k`;
   }
 
@@ -77,15 +80,15 @@ function formatPercent(value: number): string {
 function formatDuration(ms: number): string {
   if (ms >= 60_000) {
     const minutes = Math.floor(ms / 60_000);
-    const seconds = Math.floor((ms % 60_000) / 1_000);
+    const seconds = Math.floor((ms % 60_000) / 1000);
     return `${minutes}m${seconds}s`;
   }
 
-  if (ms >= 1_000) {
-    const seconds = ms / 1_000;
+  if (ms >= 1000) {
+    const seconds = ms / 1000;
     return seconds >= 10
-      ? `${seconds.toFixed(1).replace(/\.0$/, "")}s`
-      : `${seconds.toFixed(2).replace(/0$/, "").replace(/\.0$/, "")}s`;
+      ? `${seconds.toFixed(1).replace(TOP_LEVEL_REGEX_1, "")}s`
+      : `${seconds.toFixed(2).replace(TOP_LEVEL_REGEX_2, "").replace(TOP_LEVEL_REGEX_1, "")}s`;
   }
 
   return `${Math.round(ms)}ms`;
@@ -110,7 +113,7 @@ function applyThemeColor(
   color: string,
   text: string
 ): string {
-  if (!theme || !text) {
+  if (!(theme && text)) {
     return text;
   }
 

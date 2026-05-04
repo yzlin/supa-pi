@@ -17,7 +17,7 @@
  * Credits: This extension was originally developed by @pasky. Modified and enhanced by @yzlin.
  */
 
-import { AgentMessage } from "@mariozechner/pi-agent-core";
+import type { AgentMessage } from "@mariozechner/pi-agent-core";
 import { complete, type Message } from "@mariozechner/pi-ai";
 import type {
   ExtensionAPI,
@@ -33,6 +33,8 @@ import {
 import { Type } from "typebox";
 
 import { getModelAuthOrThrow } from "./llm-auth";
+
+const TOP_LEVEL_REGEX_1 = /(?:^|\s)-model\s+(\S+)/;
 
 const CONTEXT_SUMMARY_SYSTEM_PROMPT = `You are a context transfer assistant. Given a conversation history and the user's goal for a new thread, generate a focused prompt that:
 
@@ -63,7 +65,7 @@ Files involved:
  * @returns The generated summary text, or null if aborted.
  */
 async function generateContextSummary(
-  model: any,
+  model: unknown,
   apiKey: string | undefined,
   headers: Record<string, string> | undefined,
   messages: AgentMessage[],
@@ -99,9 +101,9 @@ async function generateContextSummary(
     .join("\n");
 }
 
-type HandoffOptions = {
+interface HandoffOptions {
   model?: string;
-};
+}
 
 /**
  * Apply -model options after a session switch.
@@ -112,7 +114,9 @@ async function applyHandoffOptions(
   ctx: ExtensionContext,
   options?: HandoffOptions
 ): Promise<void> {
-  if (!options) return;
+  if (!options) {
+    return;
+  }
 
   if (options.model) {
     // Parse "provider/modelId" format
@@ -123,18 +127,14 @@ async function applyHandoffOptions(
       const model = ctx.modelRegistry.find(provider, modelId);
       if (model) {
         await pi.setModel(model);
-      } else {
-        if (ctx.hasUI) {
-          ctx.ui.notify(`Handoff: unknown model ${options.model}`, "warning");
-        }
+      } else if (ctx.hasUI) {
+        ctx.ui.notify(`Handoff: unknown model ${options.model}`, "warning");
       }
-    } else {
-      if (ctx.hasUI) {
-        ctx.ui.notify(
-          `Handoff: invalid model format "${options.model}", expected provider/modelId`,
-          "warning"
-        );
-      }
+    } else if (ctx.hasUI) {
+      ctx.ui.notify(
+        `Handoff: invalid model format "${options.model}", expected provider/modelId`,
+        "warning"
+      );
     }
   }
 }
@@ -146,7 +146,7 @@ async function performHandoff(
   pi: ExtensionAPI,
   ctx: ExtensionContext,
   goal: string,
-  pendingHandoff: {
+  _pendingHandoff: {
     prompt: string;
     parentSession: string | undefined;
     options?: HandoffOptions;
@@ -188,7 +188,7 @@ async function performHandoff(
     const loader = new BorderedLoader(
       tui,
       theme,
-      `Generating handoff prompt...`
+      "Generating handoff prompt..."
     );
     loader.onAbort = () => done(null);
 
@@ -235,7 +235,9 @@ async function performHandoff(
     const newSessionResult = await cmdCtx.newSession({
       parentSession: currentSessionFile,
     });
-    if (newSessionResult.cancelled) return;
+    if (newSessionResult.cancelled) {
+      return;
+    }
     await applyHandoffOptions(pi, ctx, options);
     pi.sendUserMessage(finalPrompt);
   } else {
@@ -320,7 +322,9 @@ export default function (pi: ExtensionAPI) {
   // - The agent is idle (isStreaming = false)
   // - We can safely switch sessions and start a new prompt
   pi.on("agent_end", (_event, ctx) => {
-    if (!pendingHandoff) return;
+    if (!pendingHandoff) {
+      return;
+    }
 
     const { prompt, parentSession, options } = pendingHandoff;
     pendingHandoff = null;
@@ -331,7 +335,7 @@ export default function (pi: ExtensionAPI) {
 
     // Low-level session switch: creates new session file, resets entries.
     // This does NOT clear agent.state.messages (we handle that via context event).
-    (ctx.sessionManager as any).newSession({ parentSession });
+    (ctx.sessionManager as unknown).newSession({ parentSession });
 
     // Defer sendUserMessage to the next macrotask to ensure the old agent
     // loop's _runLoop cleanup has fully completed (isStreaming reset,
@@ -356,10 +360,14 @@ export default function (pi: ExtensionAPI) {
   // - The session file only contains new-session entries (correct for
   //   token/cost display and session persistence)
   pi.on("context", (event) => {
-    if (handoffTimestamp == null) return;
+    if (handoffTimestamp == null) {
+      return;
+    }
     const ts = handoffTimestamp;
 
-    const newMessages = event.messages.filter((m: any) => m.timestamp >= ts);
+    const newMessages = event.messages.filter(
+      (m: unknown) => m.timestamp >= ts
+    );
     if (newMessages.length > 0) {
       return { messages: newMessages };
     }
@@ -383,7 +391,7 @@ export default function (pi: ExtensionAPI) {
       const options: HandoffOptions = {};
       let remaining = args;
 
-      const modelMatch = remaining.match(/(?:^|\s)-model\s+(\S+)/);
+      const modelMatch = remaining.match(TOP_LEVEL_REGEX_1);
       if (modelMatch) {
         options.model = modelMatch[1];
         remaining = remaining.replace(modelMatch[0], " ");
@@ -435,7 +443,9 @@ export default function (pi: ExtensionAPI) {
 
     async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
       const options: HandoffOptions = {};
-      if (params.model) options.model = params.model;
+      if (params.model) {
+        options.model = params.model;
+      }
       const hasOptions = !!options.model;
       const error = await performHandoff(
         pi,

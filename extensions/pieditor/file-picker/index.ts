@@ -10,15 +10,16 @@
 import type { ExtensionUIContext } from "@mariozechner/pi-coding-agent";
 
 import { FileBrowserComponent } from "./browser.js";
-import { highlightPreviewLine } from "./highlight.js";
 import {
   type FilePickerRuntime,
   getSharedFilePickerRuntime,
 } from "./runtime.js";
-import { inferPreviewThemeMode, truncateVisibleText } from "./theme.js";
+import { inferPreviewThemeMode } from "./theme.js";
 import type { FileBrowserAction } from "./types.js";
 
-export { FileBrowserComponent, highlightPreviewLine, truncateVisibleText };
+export { FileBrowserComponent } from "./browser.js";
+export { highlightPreviewLine } from "./highlight.js";
+export { truncateVisibleText } from "./theme.js";
 
 export async function openFilePicker(
   ui: ExtensionUIContext,
@@ -45,9 +46,13 @@ export async function openFilePicker(
     }
   );
 
-  if (!result || result.action === "cancel") return "";
+  if (!result || result.action === "cancel") {
+    return "";
+  }
   const paths = result.paths ?? [];
-  if (paths.length === 0) return "";
+  if (paths.length === 0) {
+    return "";
+  }
 
   const refs = paths
     .map((path) => `@${path.path}${path.isDirectory ? "/" : ""}`)

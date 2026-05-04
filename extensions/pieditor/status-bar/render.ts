@@ -24,7 +24,7 @@ function renderSegmentWithWidth(
   ctx: StatusBarContext
 ): { content: string; width: number; visible: boolean } {
   const rendered = renderStatusBarSegment(segId, ctx);
-  if (!rendered.visible || !rendered.content) {
+  if (!(rendered.visible && rendered.content)) {
     return { content: "", width: 0, visible: false };
   }
 
@@ -41,16 +41,24 @@ function buildContentFromParts(
   theme: Theme,
   colors: ColorScheme
 ): string {
-  if (!parts.length) return "";
+  if (!parts.length) {
+    return "";
+  }
   const coloredSeparator = fg(theme, "separator", presetDef.separator, colors);
   return ` ${parts.join(coloredSeparator)} `;
 }
 
 function fitToWidth(content: string, width: number): string {
-  if (width <= 0) return "";
+  if (width <= 0) {
+    return "";
+  }
   const actualWidth = visibleWidth(content);
-  if (actualWidth === width) return content;
-  if (actualWidth > width) return truncateToWidth(content, width);
+  if (actualWidth === width) {
+    return content;
+  }
+  if (actualWidth > width) {
+    return truncateToWidth(content, width);
+  }
   return content + " ".repeat(width - actualWidth);
 }
 
@@ -82,7 +90,7 @@ function computeTopContent(
     };
   };
 
-  if (!leftSegments.length && !rightSegments.length) {
+  if (!(leftSegments.length || rightSegments.length)) {
     return "";
   }
 
@@ -107,7 +115,7 @@ function computeTopContent(
     break;
   }
 
-  if (!leftSide.content && !rightSide.content) {
+  if (!(leftSide.content || rightSide.content)) {
     return "";
   }
 
@@ -178,7 +186,7 @@ export function buildStatusBarContext(
     contextUsage?.contextWindow ?? model?.contextWindow ?? 0;
   const providerBranch = footerData?.getGitBranch() ?? null;
   const usingSubscription = model
-    ? ((ctx.modelRegistry as any)?.isUsingOAuth?.(model) ?? false)
+    ? ((ctx.modelRegistry as unknown)?.isUsingOAuth?.(model) ?? false)
     : false;
 
   const hasDedicatedCavemanSegment =

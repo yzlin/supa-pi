@@ -5,6 +5,8 @@ import { join } from "node:path";
 import { activityMonitor } from "./activity.js";
 import type { ExtractedContent } from "./extract.js";
 
+const TOP_LEVEL_REGEX_1 = /^[a-zA-Z0-9][a-zA-Z0-9-_.]*\.[a-zA-Z]{2,}$/;
+
 const PERPLEXITY_API_URL = "https://api.perplexity.ai/chat/completions";
 const CONFIG_PATH = join(homedir(), ".pi", "web-search.json");
 
@@ -41,7 +43,9 @@ interface WebSearchConfig {
 let cachedConfig: WebSearchConfig | null = null;
 
 function loadConfig(): WebSearchConfig {
-  if (cachedConfig) return cachedConfig;
+  if (cachedConfig) {
+    return cachedConfig;
+  }
   if (!existsSync(CONFIG_PATH)) {
     cachedConfig = {};
     return cachedConfig;
@@ -58,7 +62,9 @@ function loadConfig(): WebSearchConfig {
 }
 
 function normalizeApiKey(value: unknown): string | null {
-  if (typeof value !== "string") return null;
+  if (typeof value !== "string") {
+    return null;
+  }
   const normalized = value.trim();
   return normalized.length > 0 ? normalized : null;
 }
@@ -98,7 +104,7 @@ function checkRateLimit(): void {
 function validateDomainFilter(domains: string[]): string[] {
   return domains.filter((d) => {
     const domain = d.startsWith("-") ? d.slice(1) : d;
-    return /^[a-zA-Z0-9][a-zA-Z0-9-_.]*\.[a-zA-Z]{2,}$/.test(domain);
+    return TOP_LEVEL_REGEX_1.test(domain);
   });
 }
 

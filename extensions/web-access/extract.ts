@@ -27,7 +27,10 @@ import {
   isYouTubeURL,
 } from "./youtube-extract.js";
 
-const DEFAULT_TIMEOUT_MS = 30000;
+const TOP_LEVEL_REGEX_1 = /<body[^>]*>([\s\S]*?)<\/body>/i;
+const TOP_LEVEL_REGEX_2 = /^#{1,2}\s+(.+)/m;
+
+const DEFAULT_TIMEOUT_MS = 30_000;
 const CONCURRENT_LIMIT = 3;
 
 const NON_RECOVERABLE_ERRORS = [
@@ -65,7 +68,10 @@ export interface VideoFrame {
   timestamp: string;
 }
 
-export type FrameData = { data: string; mimeType: string };
+export interface FrameData {
+  data: string;
+  mimeType: string;
+}
 export type FrameResult = FrameData | { error: string };
 
 export interface ExtractedContent {
@@ -88,7 +94,7 @@ export interface ExtractOptions {
 }
 
 const JINA_READER_BASE = "https://r.jina.ai/";
-const JINA_TIMEOUT_MS = 30000;
+const JINA_TIMEOUT_MS = 30_000;
 
 async function extractWithJinaReader(
   url: string,
@@ -154,12 +160,19 @@ async function extractWithJinaReader(
 
 function parseTimestamp(ts: string): number | null {
   const num = Number(ts);
-  if (!isNaN(num) && num >= 0) return Math.floor(num);
+  if (!Number.isNaN(num) && num >= 0) {
+    return Math.floor(num);
+  }
   const parts = ts.split(":").map(Number);
-  if (parts.some((p) => isNaN(p) || p < 0)) return null;
-  if (parts.length === 3)
+  if (parts.some((p) => Number.isNaN(p) || p < 0)) {
+    return null;
+  }
+  if (parts.length === 3) {
     return Math.floor(parts[0] * 3600 + parts[1] * 60 + parts[2]);
-  if (parts.length === 2) return Math.floor(parts[0] * 60 + parts[1]);
+  }
+  if (parts.length === 2) {
+    return Math.floor(parts[0] * 60 + parts[1]);
+  }
   return null;
 }
 
@@ -172,11 +185,12 @@ function parseTimestampSpec(ts: string): TimestampSpec | null {
   if (dashIdx > 0) {
     const start = parseTimestamp(ts.slice(0, dashIdx));
     const end = parseTimestamp(ts.slice(dashIdx + 1));
-    if (start !== null && end !== null && end > start)
+    if (start !== null && end !== null && end > start) {
       return { type: "range", start, end };
+    }
   }
   const seconds = parseTimestamp(ts);
-  return seconds !== null ? { type: "single", seconds } : null;
+  return seconds === null ? null : { type: "single", seconds };
 }
 
 const DEFAULT_RANGE_FRAMES = 6;
@@ -187,7 +201,9 @@ function computeRangeTimestamps(
   end: number,
   maxFrames: number = DEFAULT_RANGE_FRAMES
 ): number[] {
-  if (maxFrames <= 1) return [start];
+  if (maxFrames <= 1) {
+    return [start];
+  }
   const duration = end - start;
   const idealInterval = duration / (maxFrames - 1);
   if (idealInterval < MIN_FRAME_INTERVAL) {
@@ -240,7 +256,9 @@ async function extractLocalFrames(
   const results = await Promise.all(
     timestamps.map(async (t) => {
       const frame = await extractVideoFrame(filePath, t);
-      if ("error" in frame) return { error: frame.error };
+      if ("error" in frame) {
+        return { error: frame.error };
+      }
       return { ...frame, timestamp: formatSeconds(t) };
     })
   );
@@ -555,7 +573,9 @@ export async function extractContent(
   if (localVideo.info) {
     try {
       const result = await extractVideo(localVideo.info, signal, options);
-      if (signal?.aborted) return abortedResult(url);
+      if (signal?.aborted) {
+        return abortedResult(url);
+      }
       return (
         result ?? {
           url,
@@ -566,7 +586,9 @@ export async function extractContent(
         }
       );
     } catch (err) {
-      if (isAbortError(err)) return abortedResult(url);
+      if (isAbortError(err)) {
+        return abortedResult(url);
+      }
       return { url, title: "", content: "", error: errorMessage(err) };
     }
   }
@@ -579,11 +601,17 @@ export async function extractContent(
 
   try {
     const ghResult = await extractGitHub(url, signal, options?.forceClone);
-    if (ghResult) return ghResult;
-    if (signal?.aborted) return abortedResult(url);
+    if (ghResult) {
+      return ghResult;
+    }
+    if (signal?.aborted) {
+      return abortedResult(url);
+    }
   } catch (err) {
     const message = errorMessage(err);
-    if (isAbortError(err)) return abortedResult(url);
+    if (isAbortError(err)) {
+      return abortedResult(url);
+    }
     if (isConfigParseError(err)) {
       return { url, title: "", content: "", error: message };
     }
@@ -604,11 +632,17 @@ export async function extractContent(
         options?.prompt,
         options?.model
       );
-      if (ytResult) return ytResult;
-      if (signal?.aborted) return abortedResult(url);
+      if (ytResult) {
+        return ytResult;
+      }
+      if (signal?.aborted) {
+        return abortedResult(url);
+      }
     } catch (err) {
       const message = errorMessage(err);
-      if (isAbortError(err)) return abortedResult(url);
+      if (isAbortError(err)) {
+        return abortedResult(url);
+      }
       if (isConfigParseError(err)) {
         return { url, title: "", content: "", error: message };
       }
@@ -622,22 +656,33 @@ export async function extractContent(
     };
   }
 
-  if (signal?.aborted) return abortedResult(url);
+  if (signal?.aborted) {
+    return abortedResult(url);
+  }
 
   const httpResult = await extractViaHttp(url, signal, options);
 
-  if (signal?.aborted) return abortedResult(url);
-  if (!httpResult.error) return httpResult;
+  if (signal?.aborted) {
+    return abortedResult(url);
+  }
+  if (!httpResult.error) {
+    return httpResult;
+  }
   if (
     NON_RECOVERABLE_ERRORS.some((prefix) =>
       httpResult.error!.startsWith(prefix)
     )
-  )
+  ) {
     return httpResult;
+  }
 
   const jinaResult = await extractWithJinaReader(url, signal);
-  if (jinaResult) return jinaResult;
-  if (signal?.aborted) return abortedResult(url);
+  if (jinaResult) {
+    return jinaResult;
+  }
+  if (signal?.aborted) {
+    return abortedResult(url);
+  }
 
   let geminiResult: ExtractedContent | null = null;
   try {
@@ -645,14 +690,20 @@ export async function extractContent(
       (await extractWithUrlContext(url, signal)) ??
       (await extractWithGeminiWeb(url, signal));
   } catch (err) {
-    if (isAbortError(err)) return abortedResult(url);
+    if (isAbortError(err)) {
+      return abortedResult(url);
+    }
     if (isConfigParseError(err)) {
       return { ...httpResult, error: errorMessage(err) };
     }
   }
 
-  if (geminiResult) return geminiResult;
-  if (signal?.aborted) return abortedResult(url);
+  if (geminiResult) {
+    return geminiResult;
+  }
+  if (signal?.aborted) {
+    return abortedResult(url);
+  }
 
   const guidance = [
     httpResult.error,
@@ -667,8 +718,10 @@ export async function extractContent(
 
 function isLikelyJSRendered(html: string): boolean {
   // Extract body content
-  const bodyMatch = html.match(/<body[^>]*>([\s\S]*?)<\/body>/i);
-  if (!bodyMatch) return false;
+  const bodyMatch = html.match(TOP_LEVEL_REGEX_1);
+  if (!bodyMatch) {
+    return false;
+  }
 
   const bodyHtml = bodyMatch[1];
 
@@ -734,7 +787,7 @@ async function extractViaHttp(
     const isPDFContent = isPDF(url, contentType);
     const maxResponseSize = isPDFContent ? 20 * 1024 * 1024 : 5 * 1024 * 1024;
     if (contentLengthHeader) {
-      const contentLength = parseInt(contentLengthHeader, 10);
+      const contentLength = Number.parseInt(contentLengthHeader, 10);
       if (contentLength > maxResponseSize) {
         activityMonitor.logComplete(activityId, response.status);
         return {
@@ -858,8 +911,10 @@ async function extractViaHttp(
 }
 
 export function extractHeadingTitle(text: string): string | null {
-  const match = text.match(/^#{1,2}\s+(.+)/m);
-  if (!match) return null;
+  const match = text.match(TOP_LEVEL_REGEX_2);
+  if (!match) {
+    return null;
+  }
   const cleaned = match[1].replace(/\*+/g, "").trim();
   return cleaned || null;
 }
@@ -870,7 +925,7 @@ function extractTextTitle(text: string, url: string): string {
   );
 }
 
-export async function fetchAllContent(
+export function fetchAllContent(
   urls: string[],
   signal?: AbortSignal,
   options?: ExtractOptions

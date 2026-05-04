@@ -44,6 +44,9 @@ import type {
   SelectedPath,
 } from "./types.js";
 
+const TOP_LEVEL_REGEX_1 = /[a-zA-Z0-9]/;
+const TOP_LEVEL_REGEX_2 = /[/_.-]/;
+
 export class FileBrowserComponent {
   private readonly previewThemeMode: "dark" | "light";
   private readonly previewHighlightMode: PreviewHighlightMode;
@@ -51,7 +54,7 @@ export class FileBrowserComponent {
   private readonly maxVisible = 10;
   private readonly overlayHeightRatio = 0.94;
   private readonly minPreviewPaneHeight = 11;
-  private cwdRoot: string;
+  private readonly cwdRoot: string;
   private currentDir: string;
   private allEntries: FileEntry[];
   private allFilesRecursive: FileEntry[];
@@ -60,24 +63,28 @@ export class FileBrowserComponent {
   private readonly searchInput: Input;
   private query = "";
   private isSearchMode = false;
-  private selectedPaths: Map<string, boolean>; // path -> isDirectory
+  private readonly selectedPaths: Map<string, boolean>; // path -> isDirectory
   private rootParentView = false;
-  private inGitRepo: boolean;
+  private readonly inGitRepo: boolean;
   private gitFiles: Set<string> | null = null;
   private focusOnOptions = false;
   private selectedOption = 0;
-  private options: BrowserOption[];
-  private done: (action: FileBrowserAction) => void;
+  private readonly options: BrowserOption[];
+  private readonly done: (action: FileBrowserAction) => void;
+  private readonly runtime: FilePickerRuntime;
+  private readonly frameColor?: (text: string) => string;
 
   constructor(
     done: (action: FileBrowserAction) => void,
-    private readonly runtime: FilePickerRuntime = getSharedFilePickerRuntime(),
+    runtime: FilePickerRuntime = getSharedFilePickerRuntime(),
     previewThemeMode: "dark" | "light" = "dark",
     previewHighlightMode: PreviewHighlightMode = runtime.config
       .previewHighlightMode,
-    private readonly frameColor?: (text: string) => string
+    frameColor?: (text: string) => string
   ) {
     this.done = done;
+    this.runtime = runtime;
+    this.frameColor = frameColor;
     this.previewThemeMode = previewThemeMode;
     this.previewHighlightMode = previewHighlightMode;
     this.cwdRoot = getCwdRoot();
@@ -200,7 +207,9 @@ export class FileBrowserComponent {
   }
 
   private navigateTo(dir: string): void {
-    if (!isWithinCwd(dir, this.cwdRoot)) return;
+    if (!isWithinCwd(dir, this.cwdRoot)) {
+      return;
+    }
 
     this.rootParentView = false;
     this.currentDir = dir;
@@ -212,7 +221,9 @@ export class FileBrowserComponent {
   }
 
   private goUp(): boolean {
-    if (this.rootParentView) return false;
+    if (this.rootParentView) {
+      return false;
+    }
 
     if (this.currentDir === this.cwdRoot) {
       this.rootParentView = true;
@@ -238,7 +249,9 @@ export class FileBrowserComponent {
       if (visibleOptions.length > 0) {
         this.focusOnOptions = !this.focusOnOptions;
         this.searchInput.focused = !this.focusOnOptions;
-        if (this.focusOnOptions) this.selectedOption = 0;
+        if (this.focusOnOptions) {
+          this.selectedOption = 0;
+        }
       }
       return;
     }
@@ -288,29 +301,27 @@ export class FileBrowserComponent {
       return;
     }
 
-    if (data === " " || matchesKey(data, "return")) {
-      if (currentOption) {
-        currentOption.enabled = !currentOption.enabled;
-        // Sync to global state
-        if (currentOption.id === "gitignore") {
-          this.runtime.state.respectGitignore = currentOption.enabled;
-        } else if (currentOption.id === "skipHidden") {
-          this.runtime.state.skipHidden = currentOption.enabled;
-        } else if (currentOption.id === "allowFolderSelection") {
-          this.runtime.state.allowFolderSelection = currentOption.enabled;
-          if (!currentOption.enabled) {
-            for (const [
-              selectedPath,
-              isDirectory,
-            ] of this.selectedPaths.entries()) {
-              if (isDirectory) {
-                this.selectedPaths.delete(selectedPath);
-              }
+    if ((data === " " || matchesKey(data, "return")) && currentOption) {
+      currentOption.enabled = !currentOption.enabled;
+      // Sync to global state
+      if (currentOption.id === "gitignore") {
+        this.runtime.state.respectGitignore = currentOption.enabled;
+      } else if (currentOption.id === "skipHidden") {
+        this.runtime.state.skipHidden = currentOption.enabled;
+      } else if (currentOption.id === "allowFolderSelection") {
+        this.runtime.state.allowFolderSelection = currentOption.enabled;
+        if (!currentOption.enabled) {
+          for (const [
+            selectedPath,
+            isDirectory,
+          ] of this.selectedPaths.entries()) {
+            if (isDirectory) {
+              this.selectedPaths.delete(selectedPath);
             }
           }
         }
-        this.rebuildFileLists();
       }
+      this.rebuildFileLists();
     }
   }
 
@@ -417,23 +428,31 @@ export class FileBrowserComponent {
   }
 
   private completeQueryToClosestMatch(): void {
-    if (!this.query.trim()) return;
+    if (!this.query.trim()) {
+      return;
+    }
 
     const match =
       this.runtime.config.tabCompletionMode === "bestMatch"
         ? this.findBestMatchCompletion(this.query)
         : this.findSegmentCompletionMatch(this.query);
-    if (!match) return;
+    if (!match) {
+      return;
+    }
 
     if (this.runtime.config.tabCompletionMode === "bestMatch") {
-      if (match.path === this.query) return;
+      if (match.path === this.query) {
+        return;
+      }
       this.setSearchQuery(match.path, "end");
       this.updateFilter(match.path);
       return;
     }
 
     const completedQuery = this.completeOneWordPart(this.query, match.path);
-    if (!completedQuery || completedQuery === this.query) return;
+    if (!completedQuery || completedQuery === this.query) {
+      return;
+    }
 
     this.setSearchQuery(completedQuery, "end");
     this.updateFilter();
@@ -489,7 +508,9 @@ export class FileBrowserComponent {
     entries: CompletionEntry[]
   ): CompletionEntry | null {
     const normalizedQuery = this.normalizeAlnum(query);
-    if (!normalizedQuery) return null;
+    if (!normalizedQuery) {
+      return null;
+    }
 
     const matches = entries
       .filter((entry) =>
@@ -504,7 +525,9 @@ export class FileBrowserComponent {
     entries: CompletionEntry[]
   ): CompletionEntry | null {
     const scopedQuery = resolveScopedFuzzyQuery(query);
-    if (!scopedQuery) return null;
+    if (!scopedQuery) {
+      return null;
+    }
 
     const matches = entries
       .map((entry) => ({
@@ -525,8 +548,12 @@ export class FileBrowserComponent {
     a: CompletionEntry,
     b: CompletionEntry
   ): number {
-    if (a.path.length !== b.path.length) return a.path.length - b.path.length;
-    if (a.isDirectory !== b.isDirectory) return a.isDirectory ? -1 : 1;
+    if (a.path.length !== b.path.length) {
+      return a.path.length - b.path.length;
+    }
+    if (a.isDirectory !== b.isDirectory) {
+      return a.isDirectory ? -1 : 1;
+    }
     return a.path.localeCompare(b.path);
   }
 
@@ -543,14 +570,18 @@ export class FileBrowserComponent {
       queryLower,
       completionLower
     );
-    if (longestCommonPrefix === 0) return query;
+    if (longestCommonPrefix === 0) {
+      return query;
+    }
 
     const end = this.nextWordPartBoundary(completionPath, longestCommonPrefix);
     return completionPath.slice(0, end);
   }
 
   private nextWordPartBoundary(text: string, start: number): number {
-    if (start >= text.length) return text.length;
+    if (start >= text.length) {
+      return text.length;
+    }
 
     let index = start;
     if (this.isAlphaNumeric(text[index])) {
@@ -576,11 +607,11 @@ export class FileBrowserComponent {
   }
 
   private isAlphaNumeric(char: string | undefined): boolean {
-    return char !== undefined && /[a-zA-Z0-9]/.test(char);
+    return char !== undefined && TOP_LEVEL_REGEX_1.test(char);
   }
 
   private isWordSeparator(char: string | undefined): boolean {
-    return char !== undefined && /[\/_.\-]/.test(char);
+    return char !== undefined && TOP_LEVEL_REGEX_2.test(char);
   }
 
   private normalizeAlnum(value: string): string {
@@ -646,9 +677,9 @@ export class FileBrowserComponent {
     const leftBorder = Math.floor(borderLen / 2);
     const rightBorder = borderLen - leftBorder;
     lines.push(
-      border("╭" + "─".repeat(leftBorder)) +
+      border(`╭${"─".repeat(leftBorder)}`) +
         title(titleText) +
-        border("─".repeat(rightBorder) + "╮")
+        border(`${"─".repeat(rightBorder)}╮`)
     );
 
     const searchPrompt = selected("❯ ");
@@ -670,11 +701,10 @@ export class FileBrowserComponent {
         const opt = visibleOptions[i];
         const isSelectedOpt = this.focusOnOptions && i === this.selectedOption;
         const checkbox = opt.enabled ? checked("☑") : hint("☐");
-        const label = isSelectedOpt
-          ? selected(opt.label)
-          : opt.enabled
-            ? opt.label
-            : hint(opt.label);
+        let label = opt.enabled ? opt.label : hint(opt.label);
+        if (isSelectedOpt) {
+          label = selected(opt.label);
+        }
         const prefix = isSelectedOpt ? selected("▸") : " ";
         optParts.push(`${prefix}${checkbox} ${label}`);
       }
@@ -832,9 +862,9 @@ export class FileBrowserComponent {
     const leftBorder = Math.floor(borderLen / 2);
     const rightBorder = borderLen - leftBorder;
     lines.push(
-      border("╭" + "─".repeat(leftBorder)) +
+      border(`╭${"─".repeat(leftBorder)}`) +
         title(titleText) +
-        border("─".repeat(rightBorder) + "╮")
+        border(`${"─".repeat(rightBorder)}╮`)
     );
 
     const renderedPreviewLines =
@@ -905,6 +935,10 @@ export class FileBrowserComponent {
       truncateToWidth(line, totalWidth, "")
     );
   }
-  invalidate(): void {}
-  dispose(): void {}
+  invalidate(): void {
+    /* noop */
+  }
+  dispose(): void {
+    /* noop */
+  }
 }

@@ -61,7 +61,7 @@ export function registerExecuteCheckpointTool(pi: ExtensionAPI): void {
       "Load or save /execute checkpoint state under .pi/execute/. Use this from the main-session orchestrator only for deterministic checkpoint persistence; it does not manage pi-tasks or orchestration decisions.",
     parameters: ExecuteCheckpointParams,
 
-    async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
+    execute(_toolCallId, params, _signal, _onUpdate, ctx) {
       const cwd = ctx.cwd ?? process.cwd();
 
       try {

@@ -79,8 +79,12 @@ describe("questionnaire auto-redirect", () => {
       on(eventName: string, handler: (...args: any[]) => any) {
         handlers.set(eventName, handler);
       },
-      registerCommand() {},
-      registerTool() {},
+      registerCommand() {
+        /* noop */
+      },
+      registerTool() {
+        /* noop */
+      },
       appendEntry(type: string, data: any) {
         appendEntryCalls.push({ type, data });
       },

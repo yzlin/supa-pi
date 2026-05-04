@@ -2,6 +2,8 @@ import type { Theme, ThemeColor } from "@mariozechner/pi-coding-agent";
 
 import type { ColorScheme, ColorValue, SemanticColor } from "./types.js";
 
+const TOP_LEVEL_REGEX_1 = /^#[0-9a-fA-F]{6}$/;
+
 const DEFAULT_COLORS: Required<ColorScheme> = {
   pi: "accent",
   model: "#d787af",
@@ -42,14 +44,14 @@ export function resolveColor(
 }
 
 function isHexColor(color: ColorValue): color is `#${string}` {
-  return /^#[0-9a-fA-F]{6}$/.test(color);
+  return TOP_LEVEL_REGEX_1.test(color);
 }
 
 function hexToAnsi(hex: string): string {
   const h = hex.replace("#", "");
-  const r = parseInt(h.slice(0, 2), 16);
-  const g = parseInt(h.slice(2, 4), 16);
-  const b = parseInt(h.slice(4, 6), 16);
+  const r = Number.parseInt(h.slice(0, 2), 16);
+  const g = Number.parseInt(h.slice(2, 4), 16);
+  const b = Number.parseInt(h.slice(4, 6), 16);
   return `\x1b[38;2;${r};${g};${b}m`;
 }
 
@@ -100,5 +102,5 @@ export function rainbow(text: string): string {
     result += `${hexToAnsi(RAINBOW_COLORS[colorIndex % RAINBOW_COLORS.length]!)}${char}`;
     colorIndex++;
   }
-  return result + "\x1b[0m";
+  return `${result}\x1b[0m`;
 }

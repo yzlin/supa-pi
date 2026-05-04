@@ -11,6 +11,8 @@ import { basename, join } from "node:path";
 
 import { getDocumentProxy } from "unpdf";
 
+const TOP_LEVEL_REGEX_1 = /\/(?:pdf|abs)\/(\d+\.\d+)/;
+
 export interface PDFExtractResult {
   title: string;
   pages: number;
@@ -122,7 +124,7 @@ export async function extractPDFToMarkdown(
   const content = lines.join("\n");
 
   // Generate output filename
-  const outputFilename = filename || sanitizeFilename(title) + ".md";
+  const outputFilename = filename || `${sanitizeFilename(title)}.md`;
   const outputPath = join(outputDir, outputFilename);
 
   // Ensure output directory exists
@@ -152,7 +154,7 @@ function extractTitleFromURL(url: string): string {
 
     // Handle arxiv URLs: /pdf/1706.03762 → "arxiv-1706.03762"
     if (urlObj.hostname.includes("arxiv.org")) {
-      const match = pathname.match(/\/(?:pdf|abs)\/(\d+\.\d+)/);
+      const match = pathname.match(TOP_LEVEL_REGEX_1);
       if (match) {
         filename = `arxiv-${match[1]}`;
       }

@@ -63,6 +63,9 @@ import {
   OM_STATE_VERSION,
 } from "./version";
 
+const TOP_LEVEL_REGEX_1 = /[^aeiou]y$/i;
+const TOP_LEVEL_REGEX_2 = /\s+/;
+
 export {
   createOmBranchScope,
   createOmStateEnvelope,
@@ -514,7 +517,7 @@ function pluralize(word: string, count: number): string {
     return `${count} ${word}`;
   }
 
-  if (/[^aeiou]y$/i.test(word)) {
+  if (TOP_LEVEL_REGEX_1.test(word)) {
     return `${count} ${word.slice(0, -1)}ies`;
   }
 
@@ -1143,40 +1146,56 @@ export function createOmExtension(deps: OmExtensionDeps = {}) {
       }
 
       let observerDiagnostic: OmObserverDiagnostic | null = null;
-      const observerResult = shouldActivateObservationBuffer
-        ? (
-            nextRuntimeState.pendingObservationBuffer as OmObservationBufferEnvelopeV1
-          ).buffer.result
-        : window.status === "ready"
-          ? await invokeObserverFn(invokeContext, baseState, window, {
-              onDiagnostic(diagnostic) {
-                observerDiagnostic = diagnostic;
-              },
-            })
-          : createEmptyOmObserverResult();
+      let observerResult: OmObserverResult;
+      if (shouldActivateObservationBuffer) {
+        observerResult = (
+          nextRuntimeState.pendingObservationBuffer as OmObservationBufferEnvelopeV1
+        ).buffer.result;
+      } else if (window.status === "ready") {
+        observerResult = await invokeObserverFn(
+          invokeContext,
+          baseState,
+          window,
+          {
+            onDiagnostic(diagnostic) {
+              observerDiagnostic = diagnostic;
+            },
+          }
+        );
+      } else {
+        observerResult = createEmptyOmObserverResult();
+      }
       const shouldRetryObserverWindow =
         !shouldActivateObservationBuffer &&
         window.status === "ready" &&
         isRetryableObserverDiagnostic(observerDiagnostic);
-      const observerApplied = shouldActivateObservationBuffer
-        ? applyOmObserverResult(
-            baseState,
-            createOmObservationActivationWindow(
-              nextRuntimeState.pendingObservationBuffer as OmObservationBufferEnvelopeV1,
-              window
-            ),
-            observerResult,
-            updatedAt
-          )
-        : shouldRetryObserverWindow
-          ? {
-              status: "noop" as const,
-              reason: "observer-failed" as const,
-              state: baseState,
-              envelope: createOmStateEnvelope(baseState, window.branchScope),
-              shouldPersist: false,
-            }
-          : applyOmObserverResult(baseState, window, observerResult, updatedAt);
+      let observerApplied: OmObserverApplyResult;
+      if (shouldActivateObservationBuffer) {
+        observerApplied = applyOmObserverResult(
+          baseState,
+          createOmObservationActivationWindow(
+            nextRuntimeState.pendingObservationBuffer as OmObservationBufferEnvelopeV1,
+            window
+          ),
+          observerResult,
+          updatedAt
+        );
+      } else if (shouldRetryObserverWindow) {
+        observerApplied = {
+          status: "noop" as const,
+          reason: "observer-failed" as const,
+          state: baseState,
+          envelope: createOmStateEnvelope(baseState, window.branchScope),
+          shouldPersist: false,
+        };
+      } else {
+        observerApplied = applyOmObserverResult(
+          baseState,
+          window,
+          observerResult,
+          updatedAt
+        );
+      }
 
       if (shouldActivateObservationBuffer) {
         nextRuntimeState = persistObservationBuffer(
@@ -1269,17 +1288,20 @@ export function createOmExtension(deps: OmExtensionDeps = {}) {
         recentEvents.push(createBufferSupersededEvent(updatedAt, "reflection"));
       }
 
-      const reflectorResult = shouldActivateReflectionBuffer
-        ? (
-            nextRuntimeState.pendingReflectionBuffer as OmReflectionBufferEnvelopeV1
-          ).buffer.result
-        : reflectorWindow.status === "ready"
-          ? await invokeReflectorFn(
-              invokeContext,
-              observerApplied.state,
-              reflectorWindow
-            )
-          : createEmptyOmReflectorResult();
+      let reflectorResult: OmReflectorResult;
+      if (shouldActivateReflectionBuffer) {
+        reflectorResult = (
+          nextRuntimeState.pendingReflectionBuffer as OmReflectionBufferEnvelopeV1
+        ).buffer.result;
+      } else if (reflectorWindow.status === "ready") {
+        reflectorResult = await invokeReflectorFn(
+          invokeContext,
+          observerApplied.state,
+          reflectorWindow
+        );
+      } else {
+        reflectorResult = createEmptyOmReflectorResult();
+      }
       const reflectorApplied = shouldActivateReflectionBuffer
         ? applyOmReflectorResult(
             observerApplied.state,
@@ -1370,7 +1392,7 @@ export function createOmExtension(deps: OmExtensionDeps = {}) {
       );
     };
 
-    const recallObservation = async (
+    const recallObservation = (
       args: string,
       ctx: OmCommandContext
     ): Promise<void> => {
@@ -1420,7 +1442,7 @@ export function createOmExtension(deps: OmExtensionDeps = {}) {
         helpLabel: "clear",
         description:
           "Clear persisted observational memory state for the current branch",
-        run: async (ctx: OmCommandContext, _args: string): Promise<void> => {
+        run: (ctx: OmCommandContext, _args: string): Promise<void> => {
           const clearedState = createEmptyOmState(now);
           persistRuntimeState(ctx, clearedState);
           ctx.ui.notify("Observational memory cleared.", "success");
@@ -1447,7 +1469,7 @@ export function createOmExtension(deps: OmExtensionDeps = {}) {
         value: "help",
         helpLabel: "help",
         description: "Show help",
-        run: async (ctx: OmCommandContext, _args: string): Promise<void> => {
+        run: (ctx: OmCommandContext, _args: string): Promise<void> => {
           ctx.ui.notify(buildOmHelpMessage(), "info");
         },
       },
@@ -1487,7 +1509,7 @@ export function createOmExtension(deps: OmExtensionDeps = {}) {
         return omSubcommands.map(toOmCompletionItem);
       }
 
-      const [subcommand = "", ...rest] = trimmedStart.split(/\s+/);
+      const [subcommand = "", ...rest] = trimmedStart.split(TOP_LEVEL_REGEX_2);
       if (subcommand === "recall" && rest.length > 0) {
         return null;
       }
@@ -1507,7 +1529,7 @@ export function createOmExtension(deps: OmExtensionDeps = {}) {
       handler: async (args, ctx) => {
         const [command = "status", ...rest] = args
           .trim()
-          .split(/\s+/)
+          .split(TOP_LEVEL_REGEX_2)
           .filter(Boolean);
         const commandContext = ctx as OmCommandContext;
         const subcommand = omSubcommands.find(({ value }) => value === command);

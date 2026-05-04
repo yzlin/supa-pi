@@ -10,8 +10,8 @@ import type {
   RtkRuntimeStatus,
 } from "./types";
 
-export const DEFAULT_RTK_REWRITE_TIMEOUT_MS = 3_000;
-export const DEFAULT_RTK_VERIFY_TIMEOUT_MS = 1_000;
+export const DEFAULT_RTK_REWRITE_TIMEOUT_MS = 3000;
+export const DEFAULT_RTK_VERIFY_TIMEOUT_MS = 1000;
 
 let cachedRtkBinaryPath: string | undefined;
 
@@ -71,7 +71,7 @@ function defaultResolveRtkBinaryPath(
   }
 
   const resolvedPath = result.stdout.trim();
-  if (!resolvedPath || !isAbsolute(resolvedPath)) {
+  if (!(resolvedPath && isAbsolute(resolvedPath))) {
     throw resolveBinaryPathError("Resolved RTK path is invalid");
   }
 
@@ -86,7 +86,7 @@ export function clearRtkBinaryPathCache(): void {
 function resolveBinaryPath(
   runner: RtkRunner,
   timeoutMs: number,
-  customResolver?: (runner: RtkRunner, timeoutMs: number) => string
+  customResolver?: (customRunner: RtkRunner, customTimeoutMs: number) => string
 ): string {
   return (customResolver ?? defaultResolveRtkBinaryPath)(runner, timeoutMs);
 }

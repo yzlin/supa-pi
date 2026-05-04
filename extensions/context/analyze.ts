@@ -7,6 +7,16 @@ import {
   type SessionEntry,
 } from "@mariozechner/pi-coding-agent";
 
+const AVAILABLE_SKILLS_BLOCK_PATTERN =
+  /<available_skills>[\s\S]*?<\/available_skills>/i;
+const AVAILABLE_TOOLS_BLOCK_PATTERN =
+  /Available tools:[\s\S]*?(?=\n(?:In addition to the tools above|Available agent types:|Guidelines:|Pi documentation|# Project Context|<identity>|<intent>|$))/i;
+const AVAILABLE_AGENTS_BLOCK_PATTERN =
+  /Available agent types:[\s\S]*?(?=\n(?:Guidelines:|MUST DO|MUST NOT DO|CONTEXT|#|<|$))/i;
+const AGENTS_MD_BLOCK_PATTERN =
+  /##\s+\/[^\n]+AGENTS\.md[\s\S]*?(?=\n##\s+\/|\n\nThe following skills provide|\n<available_skills>|\nCurrent date:|$)/;
+const RULES_BLOCK_PATTERN = /<rules>[\s\S]*?<\/rules>/i;
+
 export const CONTEXT_BUCKET_ORDER = [
   "instructions",
   "user_text",
@@ -248,7 +258,7 @@ function formatSuggestionTokens(count: number): string {
     return `${count} tokens`;
   }
 
-  if (count < 10000) {
+  if (count < 10_000) {
     return `${(count / 1000).toFixed(1)}k tokens`;
   }
 
@@ -302,35 +312,31 @@ function analyzeSystemPrompt(systemPrompt?: string): SystemPromptBreakdown {
 
   let remaining = prompt;
 
-  const skills = extractMatches(
-    remaining,
-    /<available_skills>[\s\S]*?<\/available_skills>/i,
-    1
-  );
+  const skills = extractMatches(remaining, AVAILABLE_SKILLS_BLOCK_PATTERN, 1);
   remaining = skills.remaining;
 
   const systemTools = extractMatches(
     remaining,
-    /Available tools:[\s\S]*?(?=\n(?:In addition to the tools above|Available agent types:|Guidelines:|Pi documentation|# Project Context|<identity>|<intent>|$))/i,
+    AVAILABLE_TOOLS_BLOCK_PATTERN,
     1
   );
   remaining = systemTools.remaining;
 
   const customAgents = extractMatches(
     remaining,
-    /Available agent types:[\s\S]*?(?=\n(?:Guidelines:|MUST DO|MUST NOT DO|CONTEXT|#|<|$))/i,
+    AVAILABLE_AGENTS_BLOCK_PATTERN,
     1
   );
   remaining = customAgents.remaining;
 
   const agentsFiles = extractMatches(
     remaining,
-    /##\s+\/[^\n]+AGENTS\.md[\s\S]*?(?=\n##\s+\/|\n\nThe following skills provide|\n<available_skills>|\nCurrent date:|$)/,
+    AGENTS_MD_BLOCK_PATTERN,
     Number.POSITIVE_INFINITY
   );
   remaining = agentsFiles.remaining;
 
-  const rules = extractMatches(remaining, /<rules>[\s\S]*?<\/rules>/i, 1);
+  const rules = extractMatches(remaining, RULES_BLOCK_PATTERN, 1);
   remaining = rules.remaining;
 
   const memoryText = [...agentsFiles.matches, ...rules.matches].join("\n\n");
@@ -402,7 +408,7 @@ export function analyzeMessages({
           "user_text",
           estimateTokens(message),
           currentTurn,
-          `user: ${clip(textFromBlocks(message.content as any))}`
+          `user: ${clip(textFromBlocks(message.content as unknown))}`
         );
         break;
       }
@@ -531,7 +537,7 @@ export function analyzeMessages({
   );
 
   const severitySource: ContextSeveritySource =
-    exactTotalTokens !== null ? "exact" : "estimate";
+    exactTotalTokens === null ? "estimate" : "exact";
   const severity = getSeverity(exactPercent ?? estimatedPercent);
 
   const displayBuckets: Record<ContextBucket, number> = {
@@ -565,22 +571,19 @@ export function analyzeMessages({
     rawBuckets.bash_output +
     rawBuckets.summaries_custom;
 
+  const categoryTokens = {
+    system_prompt: instructionBreakdown.system_prompt,
+    system_tools: instructionBreakdown.system_tools,
+    custom_agents: instructionBreakdown.custom_agents,
+    memory_files: instructionBreakdown.memory_files,
+    skills: instructionBreakdown.skills,
+    messages: messageTokens,
+    residual: residualTokens,
+  } satisfies Record<ContextDisplayCategory["key"], number | null>;
+
   const displayCategories: ContextDisplayCategory[] =
     CONTEXT_DISPLAY_CATEGORY_ORDER.map((key) => {
-      const tokens =
-        key === "system_prompt"
-          ? instructionBreakdown.system_prompt
-          : key === "system_tools"
-            ? instructionBreakdown.system_tools
-            : key === "custom_agents"
-              ? instructionBreakdown.custom_agents
-              : key === "memory_files"
-                ? instructionBreakdown.memory_files
-                : key === "skills"
-                  ? instructionBreakdown.skills
-                  : key === "messages"
-                    ? messageTokens
-                    : residualTokens;
+      const tokens = categoryTokens[key];
 
       return {
         key,

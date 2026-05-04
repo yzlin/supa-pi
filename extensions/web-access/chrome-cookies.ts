@@ -4,6 +4,8 @@ import { copyFileSync, existsSync, mkdtempSync, rmSync } from "node:fs";
 import { homedir, platform, tmpdir } from "node:os";
 import { join } from "node:path";
 
+const TOP_LEVEL_REGEX_1 = /^v\d\d$/;
+
 export type CookieMap = Record<string, string>;
 
 interface BrowserConfig {
@@ -72,13 +74,15 @@ export async function getGoogleCookies(options?: {
   requiredCookies?: string[];
 }): Promise<{ cookies: CookieMap; warnings: string[] } | null> {
   const currentPlatform = platform();
-  const configs =
-    currentPlatform === "darwin"
-      ? MACOS_BROWSER_CONFIGS
-      : currentPlatform === "linux"
-        ? LINUX_BROWSER_CONFIGS
-        : [];
-  if (configs.length === 0) return null;
+  let configs: typeof MACOS_BROWSER_CONFIGS = [];
+  if (currentPlatform === "darwin") {
+    configs = MACOS_BROWSER_CONFIGS;
+  } else if (currentPlatform === "linux") {
+    configs = LINUX_BROWSER_CONFIGS;
+  }
+  if (configs.length === 0) {
+    return null;
+  }
 
   const warnings: string[] = [];
   const profile = options?.profile ?? "Default";
@@ -86,7 +90,9 @@ export async function getGoogleCookies(options?: {
 
   for (const config of configs) {
     const cookiesPath = join(homedir(), config.baseDir, profile, "Cookies");
-    if (!existsSync(cookiesPath)) continue;
+    if (!existsSync(cookiesPath)) {
+      continue;
+    }
 
     const password = await readBrowserPassword(config, currentPlatform);
     if (!password) {
@@ -120,8 +126,12 @@ export async function getGoogleCookies(options?: {
       const cookies: CookieMap = {};
       for (const row of rows) {
         const name = row.name as string;
-        if (!ALL_COOKIE_NAMES.has(name)) continue;
-        if (cookies[name]) continue;
+        if (!ALL_COOKIE_NAMES.has(name)) {
+          continue;
+        }
+        if (cookies[name]) {
+          continue;
+        }
 
         let value =
           typeof row.value === "string" && row.value.length > 0
@@ -133,7 +143,9 @@ export async function getGoogleCookies(options?: {
             value = decryptCookieValue(encrypted, key, stripHash);
           }
         }
-        if (value) cookies[name] = value;
+        if (value) {
+          cookies[name] = value;
+        }
       }
 
       if (
@@ -158,13 +170,19 @@ function decryptCookieValue(
   stripHash: boolean
 ): string | null {
   const buf = Buffer.from(encrypted);
-  if (buf.length < 3) return null;
+  if (buf.length < 3) {
+    return null;
+  }
 
   const prefix = buf.subarray(0, 3).toString("utf8");
-  if (!/^v\d\d$/.test(prefix)) return null;
+  if (!TOP_LEVEL_REGEX_1.test(prefix)) {
+    return null;
+  }
 
   const ciphertext = buf.subarray(3);
-  if (!ciphertext.length) return "";
+  if (!ciphertext.length) {
+    return "";
+  }
 
   try {
     const iv = Buffer.alloc(16, 0x20);
@@ -179,7 +197,9 @@ function decryptCookieValue(
       stripHash && unpadded.length >= 32 ? unpadded.subarray(32) : unpadded;
     const decoded = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
     let i = 0;
-    while (i < decoded.length && decoded.charCodeAt(i) < 0x20) i++;
+    while (i < decoded.length && decoded.charCodeAt(i) < 0x20) {
+      i++;
+    }
     return decoded.slice(i);
   } catch {
     return null;
@@ -187,9 +207,13 @@ function decryptCookieValue(
 }
 
 function removePkcs7Padding(buf: Buffer): Buffer {
-  if (!buf.length) return buf;
-  const padding = buf[buf.length - 1];
-  if (!padding || padding > 16) return buf;
+  if (!buf.length) {
+    return buf;
+  }
+  const padding = buf.at(-1);
+  if (!padding || padding > 16) {
+    return buf;
+  }
   return buf.subarray(0, buf.length - padding);
 }
 
@@ -198,8 +222,9 @@ function readBrowserPassword(
   currentPlatform: ReturnType<typeof platform>
 ): Promise<string | null> {
   if (currentPlatform === "darwin") {
-    if (!config.keychainAccount || !config.keychainService)
+    if (!(config.keychainAccount && config.keychainService)) {
       return Promise.resolve(null);
+    }
     return readKeychainPassword(config.keychainAccount, config.keychainService);
   }
   if (currentPlatform === "linux") {
@@ -229,7 +254,9 @@ function readKeychainPassword(
 }
 
 function readLinuxPassword(secretToolApp: string | undefined): Promise<string> {
-  if (!secretToolApp) return Promise.resolve("peanuts");
+  if (!secretToolApp) {
+    return Promise.resolve("peanuts");
+  }
 
   return new Promise((resolve) => {
     execFile(
@@ -251,13 +278,17 @@ function readLinuxPassword(secretToolApp: string | undefined): Promise<string> {
 let sqliteModule: typeof import("node:sqlite") | null = null;
 
 async function importSqlite(): Promise<typeof import("node:sqlite") | null> {
-  if (sqliteModule) return sqliteModule;
+  if (sqliteModule) {
+    return sqliteModule;
+  }
   const orig = process.emitWarning.bind(process);
   process.emitWarning = ((warning: string | Error, ...args: unknown[]) => {
     const msg =
       typeof warning === "string" ? warning : (warning?.message ?? "");
-    if (msg.includes("SQLite is an experimental feature")) return;
-    return (orig as Function)(warning, ...args);
+    if (msg.includes("SQLite is an experimental feature")) {
+      return;
+    }
+    return (orig as (...warningArgs: unknown[]) => unknown)(warning, ...args);
   }) as typeof process.emitWarning;
   try {
     sqliteModule = await import("node:sqlite");
@@ -271,25 +302,39 @@ async function importSqlite(): Promise<typeof import("node:sqlite") | null> {
 
 function supportsReadBigInts(): boolean {
   const [major, minor] = process.versions.node.split(".").map(Number);
-  if (major > 24) return true;
-  if (major < 24) return false;
+  if (major > 24) {
+    return true;
+  }
+  if (major < 24) {
+    return false;
+  }
   return minor >= 4;
 }
 
 async function readMetaVersion(dbPath: string): Promise<number> {
   const sqlite = await importSqlite();
-  if (!sqlite) return 0;
+  if (!sqlite) {
+    return 0;
+  }
   const opts: Record<string, unknown> = { readOnly: true };
-  if (supportsReadBigInts()) opts.readBigInts = true;
+  if (supportsReadBigInts()) {
+    opts.readBigInts = true;
+  }
   const db = new sqlite.DatabaseSync(dbPath, opts);
   try {
     const rows = db
       .prepare("SELECT value FROM meta WHERE key = 'version'")
-      .all() as Array<Record<string, unknown>>;
+      .all() as Record<string, unknown>[];
     const val = rows[0]?.value;
-    if (typeof val === "number") return Math.floor(val);
-    if (typeof val === "bigint") return Number(val);
-    if (typeof val === "string") return parseInt(val, 10) || 0;
+    if (typeof val === "number") {
+      return Math.floor(val);
+    }
+    if (typeof val === "bigint") {
+      return Number(val);
+    }
+    if (typeof val === "string") {
+      return Number.parseInt(val, 10) || 0;
+    }
     return 0;
   } catch {
     return 0;
@@ -301,9 +346,11 @@ async function readMetaVersion(dbPath: string): Promise<number> {
 async function queryCookieRows(
   dbPath: string,
   hosts: string[]
-): Promise<Array<Record<string, unknown>> | null> {
+): Promise<Record<string, unknown>[] | null> {
   const sqlite = await importSqlite();
-  if (!sqlite) return null;
+  if (!sqlite) {
+    return null;
+  }
 
   const clauses: string[] = [];
   for (const host of hosts) {
@@ -317,14 +364,16 @@ async function queryCookieRows(
   const where = clauses.join(" OR ");
 
   const opts: Record<string, unknown> = { readOnly: true };
-  if (supportsReadBigInts()) opts.readBigInts = true;
+  if (supportsReadBigInts()) {
+    opts.readBigInts = true;
+  }
   const db = new sqlite.DatabaseSync(dbPath, opts);
   try {
     return db
       .prepare(
         `SELECT name, value, host_key, encrypted_value FROM cookies WHERE (${where}) ORDER BY expires_utc DESC`
       )
-      .all() as Array<Record<string, unknown>>;
+      .all() as Record<string, unknown>[];
   } catch {
     return null;
   } finally {
@@ -334,20 +383,28 @@ async function queryCookieRows(
 
 function expandHosts(host: string): string[] {
   const parts = host.split(".").filter(Boolean);
-  if (parts.length <= 1) return [host];
+  if (parts.length <= 1) {
+    return [host];
+  }
   const candidates = new Set<string>();
   candidates.add(host);
   for (let i = 1; i <= parts.length - 2; i++) {
     const c = parts.slice(i).join(".");
-    if (c) candidates.add(c);
+    if (c) {
+      candidates.add(c);
+    }
   }
   return Array.from(candidates);
 }
 
 function copySidecar(srcDb: string, targetDb: string, suffix: string): void {
   const sidecar = `${srcDb}${suffix}`;
-  if (!existsSync(sidecar)) return;
+  if (!existsSync(sidecar)) {
+    return;
+  }
   try {
     copyFileSync(sidecar, `${targetDb}${suffix}`);
-  } catch {}
+  } catch {
+    /* noop */
+  }
 }

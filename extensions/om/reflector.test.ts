@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
 
-import { type AssistantMessage } from "@mariozechner/pi-ai";
+import type { AssistantMessage } from "@mariozechner/pi-ai";
 
 import { DEFAULT_OM_CONFIG_SNAPSHOT, mergeOmConfigSnapshot } from "./config";
 import {
@@ -379,7 +379,7 @@ describe("om reflector helpers", () => {
           find() {
             return undefined;
           },
-          async getApiKeyAndHeaders() {
+          getApiKeyAndHeaders() {
             return { ok: true as const, apiKey: "key", headers: { a: "b" } };
           },
         },
@@ -387,7 +387,7 @@ describe("om reflector helpers", () => {
       state,
       window,
       {
-        completeFn: async (model, context, options) => {
+        completeFn: (model, context, options) => {
           completeCalls.push({
             model,
             systemPrompt: context.systemPrompt,
@@ -449,7 +449,7 @@ describe("om reflector helpers", () => {
           find() {
             return undefined;
           },
-          async getApiKeyAndHeaders() {
+          getApiKeyAndHeaders() {
             return { ok: false as const, error: "missing key" };
           },
         },
@@ -473,7 +473,7 @@ describe("om reflector helpers", () => {
         find() {
           return undefined;
         },
-        async getApiKeyAndHeaders() {
+        getApiKeyAndHeaders() {
           return { ok: true as const, apiKey: "key" };
         },
       },

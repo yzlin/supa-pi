@@ -181,7 +181,7 @@ describe("om shared contracts", () => {
     expect(DEFAULT_OM_CONFIG_SNAPSHOT).toMatchObject({
       model: null,
       observation: {
-        messageTokens: 12000,
+        messageTokens: 12_000,
         previousObserverTokens: 2000,
         bufferTokens: 0.2,
         bufferActivation: 0.8,
@@ -192,7 +192,7 @@ describe("om shared contracts", () => {
         bufferActivation: 0.5,
         blockAfter: 1.2,
       },
-      observationMessageTokens: 12000,
+      observationMessageTokens: 12_000,
       observationPreviousTokens: 2000,
       reflectionObservationTokens: 8000,
       headerMaxTokens: 800,

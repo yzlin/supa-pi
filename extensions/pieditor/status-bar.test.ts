@@ -16,7 +16,7 @@ describe("status bar", () => {
         id: "test-model",
         name: "test-model",
         reasoning: false,
-        contextWindow: 200000,
+        contextWindow: 200_000,
       },
       modelRegistry: {},
       sessionManager: {
@@ -29,8 +29,8 @@ describe("status bar", () => {
       },
       getContextUsage() {
         return {
-          tokens: 25000,
-          contextWindow: 200000,
+          tokens: 25_000,
+          contextWindow: 200_000,
           percent: 12.5,
         };
       },
@@ -47,7 +47,9 @@ describe("status bar", () => {
         return 0;
       },
       onBranchChange() {
-        return () => {};
+        return () => {
+          /* noop */
+        };
       },
     } satisfies ReadonlyFooterDataProvider;
 
@@ -80,7 +82,7 @@ describe("status bar", () => {
         id: "test-model",
         name: "test-model",
         reasoning: false,
-        contextWindow: 200000,
+        contextWindow: 200_000,
       },
       modelRegistry: {},
       sessionManager: {
@@ -93,8 +95,8 @@ describe("status bar", () => {
       },
       getContextUsage() {
         return {
-          tokens: 25000,
-          contextWindow: 200000,
+          tokens: 25_000,
+          contextWindow: 200_000,
           percent: 12.5,
         };
       },
@@ -111,7 +113,9 @@ describe("status bar", () => {
         return 0;
       },
       onBranchChange() {
-        return () => {};
+        return () => {
+          /* noop */
+        };
       },
     } satisfies ReadonlyFooterDataProvider;
 
@@ -156,7 +160,7 @@ describe("status bar", () => {
           id: "test-model",
           name: "test-model",
           reasoning: false,
-          contextWindow: 200000,
+          contextWindow: 200_000,
         },
         modelRegistry: {},
         sessionManager: {
@@ -169,8 +173,8 @@ describe("status bar", () => {
         },
         getContextUsage() {
           return {
-            tokens: 25000,
-            contextWindow: 200000,
+            tokens: 25_000,
+            contextWindow: 200_000,
             percent: 12.5,
           };
         },
@@ -187,7 +191,9 @@ describe("status bar", () => {
           return 0;
         },
         onBranchChange() {
-          return () => {};
+          return () => {
+            /* noop */
+          };
         },
       } satisfies ReadonlyFooterDataProvider;
 
@@ -219,7 +225,7 @@ describe("status bar", () => {
       expect(line).not.toContain("<muted:|>");
     } finally {
       if (originalNerdFonts === undefined) {
-        delete process.env.POWERLINE_NERD_FONTS;
+        process.env.POWERLINE_NERD_FONTS = undefined;
       } else {
         process.env.POWERLINE_NERD_FONTS = originalNerdFonts;
       }
@@ -236,7 +242,7 @@ describe("status bar", () => {
           id: "test-model",
           name: "test-model",
           reasoning: false,
-          contextWindow: 200000,
+          contextWindow: 200_000,
         },
         modelRegistry: {},
         sessionManager: {
@@ -249,8 +255,8 @@ describe("status bar", () => {
         },
         getContextUsage() {
           return {
-            tokens: 25000,
-            contextWindow: 200000,
+            tokens: 25_000,
+            contextWindow: 200_000,
             percent: 12.5,
           };
         },
@@ -267,7 +273,9 @@ describe("status bar", () => {
           return 0;
         },
         onBranchChange() {
-          return () => {};
+          return () => {
+            /* noop */
+          };
         },
       } satisfies ReadonlyFooterDataProvider;
 
@@ -300,7 +308,7 @@ describe("status bar", () => {
       expect(line).toContain("<muted: => >");
     } finally {
       if (originalNerdFonts === undefined) {
-        delete process.env.POWERLINE_NERD_FONTS;
+        process.env.POWERLINE_NERD_FONTS = undefined;
       } else {
         process.env.POWERLINE_NERD_FONTS = originalNerdFonts;
       }
@@ -317,7 +325,7 @@ describe("status bar", () => {
           id: "test-model",
           name: "test-model",
           reasoning: false,
-          contextWindow: 200000,
+          contextWindow: 200_000,
         },
         modelRegistry: {},
         sessionManager: {
@@ -330,8 +338,8 @@ describe("status bar", () => {
         },
         getContextUsage() {
           return {
-            tokens: 25000,
-            contextWindow: 200000,
+            tokens: 25_000,
+            contextWindow: 200_000,
             percent: 12.5,
           };
         },
@@ -348,7 +356,9 @@ describe("status bar", () => {
           return 0;
         },
         onBranchChange() {
-          return () => {};
+          return () => {
+            /* noop */
+          };
         },
       } satisfies ReadonlyFooterDataProvider;
 
@@ -375,7 +385,7 @@ describe("status bar", () => {
       expect(line).toContain("\u{f544} test-model");
     } finally {
       if (originalNerdFonts === undefined) {
-        delete process.env.POWERLINE_NERD_FONTS;
+        process.env.POWERLINE_NERD_FONTS = undefined;
       } else {
         process.env.POWERLINE_NERD_FONTS = originalNerdFonts;
       }
@@ -392,7 +402,7 @@ describe("status bar", () => {
           id: "test-model",
           name: "test-model",
           reasoning: true,
-          contextWindow: 200000,
+          contextWindow: 200_000,
         },
         modelRegistry: {},
         sessionManager: {
@@ -410,8 +420,8 @@ describe("status bar", () => {
         },
         getContextUsage() {
           return {
-            tokens: 25000,
-            contextWindow: 200000,
+            tokens: 25_000,
+            contextWindow: 200_000,
             percent: 12.5,
           };
         },
@@ -428,7 +438,9 @@ describe("status bar", () => {
           return 0;
         },
         onBranchChange() {
-          return () => {};
+          return () => {
+            /* noop */
+          };
         },
       } satisfies ReadonlyFooterDataProvider;
 
@@ -459,7 +471,7 @@ describe("status bar", () => {
       expect(line).toContain("[high]");
     } finally {
       if (originalNerdFonts === undefined) {
-        delete process.env.POWERLINE_NERD_FONTS;
+        process.env.POWERLINE_NERD_FONTS = undefined;
       } else {
         process.env.POWERLINE_NERD_FONTS = originalNerdFonts;
       }
@@ -472,7 +484,7 @@ describe("status bar", () => {
         id: "test-model",
         name: "test-model",
         reasoning: false,
-        contextWindow: 200000,
+        contextWindow: 200_000,
       },
       modelRegistry: {},
       sessionManager: {
@@ -485,8 +497,8 @@ describe("status bar", () => {
       },
       getContextUsage() {
         return {
-          tokens: 25000,
-          contextWindow: 200000,
+          tokens: 25_000,
+          contextWindow: 200_000,
           percent: 12.5,
         };
       },
@@ -503,7 +515,9 @@ describe("status bar", () => {
         return 0;
       },
       onBranchChange() {
-        return () => {};
+        return () => {
+          /* noop */
+        };
       },
     } satisfies ReadonlyFooterDataProvider;
 
@@ -536,7 +550,7 @@ describe("status bar", () => {
         id: "test-model",
         name: "test-model",
         reasoning: false,
-        contextWindow: 200000,
+        contextWindow: 200_000,
       },
       modelRegistry: {},
       sessionManager: {
@@ -549,8 +563,8 @@ describe("status bar", () => {
       },
       getContextUsage() {
         return {
-          tokens: 25000,
-          contextWindow: 200000,
+          tokens: 25_000,
+          contextWindow: 200_000,
           percent: 12.5,
         };
       },
@@ -567,7 +581,9 @@ describe("status bar", () => {
         return 0;
       },
       onBranchChange() {
-        return () => {};
+        return () => {
+          /* noop */
+        };
       },
     } satisfies ReadonlyFooterDataProvider;
 
@@ -600,7 +616,7 @@ describe("status bar", () => {
         id: "test-model",
         name: "test-model",
         reasoning: false,
-        contextWindow: 200000,
+        contextWindow: 200_000,
       },
       modelRegistry: {},
       sessionManager: {
@@ -613,8 +629,8 @@ describe("status bar", () => {
       },
       getContextUsage() {
         return {
-          tokens: 25000,
-          contextWindow: 200000,
+          tokens: 25_000,
+          contextWindow: 200_000,
           percent: 12.5,
         };
       },
@@ -631,7 +647,9 @@ describe("status bar", () => {
         return 0;
       },
       onBranchChange() {
-        return () => {};
+        return () => {
+          /* noop */
+        };
       },
     } satisfies ReadonlyFooterDataProvider;
 

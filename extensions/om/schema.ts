@@ -16,6 +16,8 @@ import {
   OM_THREAD_STATUSES,
 } from "./version";
 
+const TOP_LEVEL_REGEX_1 = /^\d+$/;
+
 const StringListSchema = Type.Array(Type.String(), {
   minItems: 0,
 });
@@ -240,7 +242,7 @@ function formatTypeBoxErrorPath(path: string): string {
     .reduce((formattedPath, segment) => {
       const decodedSegment = segment.replace(/~1/g, "/").replace(/~0/g, "~");
 
-      if (/^\d+$/.test(decodedSegment)) {
+      if (TOP_LEVEL_REGEX_1.test(decodedSegment)) {
         return `${formattedPath}[${decodedSegment}]`;
       }
 
@@ -250,7 +252,7 @@ function formatTypeBoxErrorPath(path: string): string {
     }, "");
 }
 
-type TypeBoxValidationError = {
+interface TypeBoxValidationError {
   path?: string;
   instancePath?: string;
   message?: string;
@@ -258,7 +260,7 @@ type TypeBoxValidationError = {
   params?: {
     limit?: number;
   };
-};
+}
 
 function normalizeTypeBoxErrorMessage(error: TypeBoxValidationError): string {
   if (error.keyword === "anyOf") {

@@ -12,6 +12,8 @@ import type {
   RtkTrackedToolName,
 } from "./types";
 
+const TOP_LEVEL_REGEX_1 = /\s+/;
+
 const DEFAULT_TOOL_NAMES = ["bash", "grep", "read"] as const;
 const COMPOUND_COMMAND_FAMILY_NAMES = [
   "git",
@@ -268,7 +270,7 @@ function getCommandFamilyLabel(
   }
 
   const tokens = label
-    .split(/\s+/)
+    .split(TOP_LEVEL_REGEX_1)
     .map(normalizeCommandFamilyToken)
     .filter(Boolean);
 

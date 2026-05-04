@@ -122,7 +122,7 @@ export function createRtkUserBashHandler(
   return function handleUserBash(
     event: UserBashEvent,
     ctx: ExtensionContext
-  ): UserBashEventResult | void {
+  ): UserBashEventResult | undefined {
     if (event.excludeFromContext) {
       return;
     }

@@ -1,10 +1,11 @@
+const TOP_LEVEL_REGEX_1 = /^-model\s+(\S+)(?:\s+|$)/;
 export interface ParsedBtwArgs {
   task: string;
   model?: string;
 }
 
 export interface ResolveModelResult {
-  model?: any;
+  model?: unknown;
   thinkingLevel: string;
   error?: string;
 }
@@ -15,7 +16,7 @@ export interface ResolveModelResult {
  */
 export function parseBtwArgs(args: string): ParsedBtwArgs {
   const trimmedArgs = args.trim();
-  const modelMatch = trimmedArgs.match(/^-model\s+(\S+)(?:\s+|$)/);
+  const modelMatch = trimmedArgs.match(TOP_LEVEL_REGEX_1);
 
   if (!modelMatch) {
     return { task: trimmedArgs };
@@ -32,8 +33,8 @@ export function parseBtwArgs(args: string): ParsedBtwArgs {
  * Returns an error when the requested model is invalid or unknown.
  */
 export function resolveModelAndThinking(
-  modelRegistry: { find: (provider: string, modelId: string) => any },
-  currentModel: any,
+  modelRegistry: { find: (provider: string, modelId: string) => unknown },
+  currentModel: unknown,
   currentThinkingLevel: string,
   params: { model?: string }
 ): ResolveModelResult {

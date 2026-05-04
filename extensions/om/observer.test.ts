@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
 
-import { type AssistantMessage } from "@mariozechner/pi-ai";
+import type { AssistantMessage } from "@mariozechner/pi-ai";
 
 import { createOmObservationBufferWindow } from "./buffer";
 import { DEFAULT_OM_CONFIG_SNAPSHOT } from "./config";
@@ -1040,7 +1040,7 @@ Trailing prose that should be ignored.`);
           find() {
             return undefined;
           },
-          async getApiKeyAndHeaders(model) {
+          getApiKeyAndHeaders(model) {
             expect(model).toEqual({ provider: "openai", id: "gpt-5-mini" });
             return {
               ok: true as const,
@@ -1053,7 +1053,7 @@ Trailing prose that should be ignored.`);
       state,
       window,
       {
-        async completeFn(model, completionContext, options) {
+        completeFn(model, completionContext, options) {
           expect(model).toEqual({ provider: "openai", id: "gpt-5-mini" });
           expect(completionContext.messages).toHaveLength(1);
           capturedSystemPrompt = completionContext.systemPrompt ?? "";
@@ -1092,7 +1092,7 @@ Trailing prose that should be ignored.`);
           find() {
             return undefined;
           },
-          async getApiKeyAndHeaders() {
+          getApiKeyAndHeaders() {
             return {
               ok: false as const,
               error: "Missing auth",
@@ -1106,7 +1106,7 @@ Trailing prose that should be ignored.`);
         onDiagnostic(diagnostic) {
           diagnostics.push(diagnostic.code);
         },
-        async completeFn() {
+        completeFn() {
           completionCalls += 1;
           return createAssistantResponse("{}");
         },
@@ -1130,7 +1130,7 @@ Trailing prose that should be ignored.`);
           find() {
             return undefined;
           },
-          async getApiKey() {
+          getApiKey() {
             return "observer-token";
           },
         },
@@ -1141,7 +1141,7 @@ Trailing prose that should be ignored.`);
         onDiagnostic(diagnostic) {
           diagnostics.push(diagnostic);
         },
-        async completeFn() {
+        completeFn() {
           return createAssistantResponse("", {
             content: [],
             stopReason: "error",
@@ -1177,7 +1177,7 @@ Trailing prose that should be ignored.`);
         find() {
           return undefined;
         },
-        async getApiKey() {
+        getApiKey() {
           return "observer-token";
         },
       },
@@ -1189,7 +1189,7 @@ Trailing prose that should be ignored.`);
       onDiagnostic(diagnostic) {
         invalidDiagnostics.push(diagnostic);
       },
-      async completeFn() {
+      completeFn() {
         return createAssistantResponse(
           "Not JSON. I found a fact and a thread but will explain them in prose."
         );
@@ -1199,7 +1199,7 @@ Trailing prose that should be ignored.`);
       onDiagnostic(diagnostic) {
         emptyDiagnostics.push(diagnostic);
       },
-      async completeFn() {
+      completeFn() {
         return createAssistantResponse("", {
           content: [{ type: "tool-call", name: "noop" }] as any,
           stopReason: "stop",
@@ -1251,7 +1251,7 @@ Trailing prose that should be ignored.`);
           find() {
             return undefined;
           },
-          async getApiKey() {
+          getApiKey() {
             return "observer-token";
           },
         },
@@ -1262,7 +1262,7 @@ Trailing prose that should be ignored.`);
         onDiagnostic(diagnostic) {
           diagnostics.push(diagnostic);
         },
-        async completeFn() {
+        completeFn() {
           return createAssistantResponse(
             JSON.stringify({
               observations: [],
@@ -1315,7 +1315,7 @@ Trailing prose that should be ignored.`);
           find() {
             return undefined;
           },
-          async getApiKey() {
+          getApiKey() {
             return "observer-token";
           },
         },
@@ -1326,7 +1326,7 @@ Trailing prose that should be ignored.`);
         onDiagnostic(diagnostic) {
           diagnostics.push(diagnostic.code);
         },
-        async completeFn() {
+        completeFn() {
           return createAssistantResponse(
             JSON.stringify(createEmptyOmObserverResult())
           );
@@ -1346,7 +1346,7 @@ Trailing prose that should be ignored.`);
       id: "gemini-2.5-flash",
       input: ["text"],
     } as const;
-    const findCalls: Array<[string, string]> = [];
+    const findCalls: [string, string][] = [];
     let usedModel:
       | {
           provider: string;
@@ -1364,7 +1364,7 @@ Trailing prose that should be ignored.`);
               ? fallbackModel
               : undefined;
           },
-          async getApiKey(model) {
+          getApiKey(model) {
             expect(model).toBe(fallbackModel);
             return "fallback-token";
           },
@@ -1373,7 +1373,7 @@ Trailing prose that should be ignored.`);
       state,
       window,
       {
-        async completeFn(model, _completionContext, options) {
+        completeFn(model, _completionContext, options) {
           usedModel = model;
           expect(options).toEqual({
             apiKey: "fallback-token",

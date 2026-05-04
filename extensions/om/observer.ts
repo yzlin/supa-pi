@@ -37,6 +37,10 @@ import {
   OM_STATE_CUSTOM_TYPE,
 } from "./version";
 
+const TOP_LEVEL_REGEX_1 = /```(?:json)?\s*([\s\S]*?)\s*```/i;
+const TOP_LEVEL_REGEX_2 = /[?#]/;
+const TOP_LEVEL_REGEX_3 = /[\\/]/;
+
 interface OmMessageLike {
   role?: string;
   content?: unknown;
@@ -64,11 +68,11 @@ interface OmObserverWindowOptions<TEntry extends { id: string }> {
   serializeEntry?: (entry: TEntry) => OmPromptTurn | null;
 }
 
-type OmObserverModel = {
+interface OmObserverModel {
   id: string;
   provider: string;
   input?: readonly string[];
-};
+}
 
 interface OmObserverModelRegistryLike {
   find(provider: string, modelId: string): OmObserverModel | undefined;
@@ -207,7 +211,7 @@ function normalizeText(value: unknown): string {
   return value.trim();
 }
 
-function stringifyUnknown(value: unknown): string {
+function _stringifyUnknown(value: unknown): string {
   const text = normalizeText(value);
   if (text.length > 0) {
     return text;
@@ -230,8 +234,8 @@ function normalizeAttachmentLabel(value: unknown): string {
     return "";
   }
 
-  const withoutQuery = label.split(/[?#]/, 1)[0] ?? label;
-  const segments = withoutQuery.split(/[\\/]/).filter(Boolean);
+  const withoutQuery = label.split(TOP_LEVEL_REGEX_2, 1)[0] ?? label;
+  const segments = withoutQuery.split(TOP_LEVEL_REGEX_3).filter(Boolean);
 
   return segments.at(-1) ?? withoutQuery;
 }
@@ -331,7 +335,7 @@ export function serializeOmObserverEntry<TEntry extends OmObserverEntryLike>(
   const role = normalizeText(message.role);
   const text = extractMessageText(message);
 
-  if (!role || !text) {
+  if (!(role && text)) {
     return null;
   }
 
@@ -500,15 +504,16 @@ export function createOmObserverPromptInput(
           )
       )
     : null;
-  const previousObservationBudget =
-    sharedPreviousObservationBudget === null
-      ? configuredPreviousObservationBudget
-      : configuredPreviousObservationBudget === false
+  let previousObservationBudget = configuredPreviousObservationBudget;
+  if (sharedPreviousObservationBudget !== null) {
+    previousObservationBudget =
+      configuredPreviousObservationBudget === false
         ? sharedPreviousObservationBudget
         : Math.min(
             configuredPreviousObservationBudget,
             sharedPreviousObservationBudget
           );
+  }
   const previousObservations =
     previousObservationBudget === false
       ? state.observations
@@ -559,7 +564,7 @@ function emitOmObserverDiagnostic(
 }
 
 function extractFencedJsonBlock(text: string): string | null {
-  const fenceMatch = text.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
+  const fenceMatch = text.match(TOP_LEVEL_REGEX_1);
 
   if (!fenceMatch) {
     return null;
@@ -723,7 +728,7 @@ function parseOmObserverResultPayload(text: unknown): {
         };
       }
     } catch {
-      continue;
+      /* noop */
     }
   }
 

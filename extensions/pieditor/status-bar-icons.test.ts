@@ -8,19 +8,19 @@ const originalTermProgram = process.env.TERM_PROGRAM;
 
 afterEach(() => {
   if (originalNerdFonts === undefined) {
-    delete process.env.POWERLINE_NERD_FONTS;
+    process.env.POWERLINE_NERD_FONTS = undefined;
   } else {
     process.env.POWERLINE_NERD_FONTS = originalNerdFonts;
   }
 
   if (originalGhosttyResourcesDir === undefined) {
-    delete process.env.GHOSTTY_RESOURCES_DIR;
+    process.env.GHOSTTY_RESOURCES_DIR = undefined;
   } else {
     process.env.GHOSTTY_RESOURCES_DIR = originalGhosttyResourcesDir;
   }
 
   if (originalTermProgram === undefined) {
-    delete process.env.TERM_PROGRAM;
+    process.env.TERM_PROGRAM = undefined;
   } else {
     process.env.TERM_PROGRAM = originalTermProgram;
   }
@@ -28,8 +28,8 @@ afterEach(() => {
 
 describe("status bar icons", () => {
   it("defaults to nerd fonts when not explicitly disabled", () => {
-    delete process.env.POWERLINE_NERD_FONTS;
-    delete process.env.GHOSTTY_RESOURCES_DIR;
+    process.env.POWERLINE_NERD_FONTS = undefined;
+    process.env.GHOSTTY_RESOURCES_DIR = undefined;
     process.env.TERM_PROGRAM = "unknown-terminal";
 
     expect(hasNerdFonts()).toBe(true);
@@ -38,7 +38,7 @@ describe("status bar icons", () => {
 
   it("falls back to ascii icons when explicitly disabled", () => {
     process.env.POWERLINE_NERD_FONTS = "0";
-    delete process.env.GHOSTTY_RESOURCES_DIR;
+    process.env.GHOSTTY_RESOURCES_DIR = undefined;
     process.env.TERM_PROGRAM = "ghostty";
 
     expect(hasNerdFonts()).toBe(false);

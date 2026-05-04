@@ -32,7 +32,9 @@ function getSearchConfig(): {
   searchProvider: SearchProvider;
   searchModel?: string;
 } {
-  if (cachedSearchConfig) return cachedSearchConfig;
+  if (cachedSearchConfig) {
+    return cachedSearchConfig;
+  }
   if (!existsSync(CONFIG_PATH)) {
     cachedSearchConfig = { searchProvider: "auto", searchModel: undefined };
     return cachedSearchConfig;
@@ -63,7 +65,9 @@ function getSearchConfig(): {
 }
 
 function normalizeSearchModel(value: unknown): string | undefined {
-  if (typeof value !== "string") return undefined;
+  if (typeof value !== "string") {
+    return undefined;
+  }
   const normalized = value.trim();
   return normalized.length > 0 ? normalized : undefined;
 }
@@ -101,17 +105,25 @@ async function searchWithGemini(
 
   try {
     const apiResult = await searchWithGeminiApi(query, options);
-    if (apiResult) return apiResult;
+    if (apiResult) {
+      return apiResult;
+    }
   } catch (err) {
-    if (isAbortError(err)) throw err;
+    if (isAbortError(err)) {
+      throw err;
+    }
     errors.push(`Gemini API: ${errorMessage(err)}`);
   }
 
   try {
     const webResult = await searchWithGeminiWeb(query, options);
-    if (webResult) return webResult;
+    if (webResult) {
+      return webResult;
+    }
   } catch (err) {
-    if (isAbortError(err)) throw err;
+    if (isAbortError(err)) {
+      throw err;
+    }
     errors.push(`Gemini Web: ${errorMessage(err)}`);
   }
 
@@ -136,7 +148,9 @@ export async function search(
 
   if (provider === "gemini") {
     const result = await searchWithGemini(query, options, true);
-    if (result) return { ...result, provider: "gemini" };
+    if (result) {
+      return { ...result, provider: "gemini" };
+    }
     throw new Error(
       "Gemini search unavailable. Either:\n" +
         "  1. Set GEMINI_API_KEY in ~/.pi/web-search.json\n" +
@@ -154,14 +168,20 @@ export async function search(
             "  Use provider: 'perplexity' or 'gemini', or upgrade at exa.ai/pricing"
         );
       }
-      if (result && "answer" in result) return { ...result, provider: "exa" };
+      if (result && "answer" in result) {
+        return { ...result, provider: "exa" };
+      }
       if (exaApiKeyConfigured) {
         throw new Error("Exa search returned no results.");
       }
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      if (message.toLowerCase().includes("abort")) throw err;
-      if (exaApiKeyConfigured) throw err;
+      if (message.toLowerCase().includes("abort")) {
+        throw err;
+      }
+      if (exaApiKeyConfigured) {
+        throw err;
+      }
       // No API key: allow provider fallback.
     }
   }
@@ -171,9 +191,13 @@ export async function search(
   if (provider !== "exa" && isExaAvailable()) {
     try {
       const result = await searchWithExa(query, options);
-      if (result && "answer" in result) return { ...result, provider: "exa" };
+      if (result && "answer" in result) {
+        return { ...result, provider: "exa" };
+      }
     } catch (err) {
-      if (isAbortError(err)) throw err;
+      if (isAbortError(err)) {
+        throw err;
+      }
       fallbackErrors.push(`Exa: ${errorMessage(err)}`);
     }
   }
@@ -183,16 +207,22 @@ export async function search(
       const result = await searchWithPerplexity(query, options);
       return { ...result, provider: "perplexity" };
     } catch (err) {
-      if (isAbortError(err)) throw err;
+      if (isAbortError(err)) {
+        throw err;
+      }
       fallbackErrors.push(`Perplexity: ${errorMessage(err)}`);
     }
   }
 
   try {
     const geminiResult = await searchWithGemini(query, options, false);
-    if (geminiResult) return { ...geminiResult, provider: "gemini" };
+    if (geminiResult) {
+      return { ...geminiResult, provider: "gemini" };
+    }
   } catch (err) {
-    if (isAbortError(err)) throw err;
+    if (isAbortError(err)) {
+      throw err;
+    }
     fallbackErrors.push(`Gemini: ${errorMessage(err)}`);
   }
 
@@ -216,7 +246,9 @@ async function searchWithGeminiApi(
   options: SearchOptions = {}
 ): Promise<SearchResponse | null> {
   const apiKey = getApiKey();
-  if (!apiKey) return null;
+  if (!apiKey) {
+    return null;
+  }
 
   const activityId = activityMonitor.logStart({ type: "api", query });
 
@@ -234,7 +266,7 @@ async function searchWithGeminiApi(
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
         signal: AbortSignal.any([
-          AbortSignal.timeout(60000),
+          AbortSignal.timeout(60_000),
           ...(options.signal ? [options.signal] : []),
         ]),
       }
@@ -262,7 +294,9 @@ async function searchWithGeminiApi(
       options.signal
     );
 
-    if (!answer && results.length === 0) return null;
+    if (!answer && results.length === 0) {
+      return null;
+    }
     return { answer, results };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
@@ -280,7 +314,9 @@ async function searchWithGeminiWeb(
   options: SearchOptions = {}
 ): Promise<SearchResponse | null> {
   const cookies = await isGeminiWebAvailable();
-  if (!cookies) return null;
+  if (!cookies) {
+    return null;
+  }
 
   const prompt = buildSearchPrompt(query, options);
   const activityId = activityMonitor.logStart({ type: "api", query });
@@ -289,7 +325,7 @@ async function searchWithGeminiWeb(
     const text = await queryWithCookies(prompt, cookies, {
       model: "gemini-3-flash-preview",
       signal: options.signal,
-      timeoutMs: 60000,
+      timeoutMs: 60_000,
     });
 
     activityMonitor.logComplete(activityId, 200);
@@ -325,10 +361,12 @@ function buildSearchPrompt(query: string, options: SearchOptions): string {
     const excludes = options.domainFilter
       .filter((d) => d.startsWith("-"))
       .map((d) => d.slice(1));
-    if (includes.length)
+    if (includes.length) {
       prompt += `\n\nOnly cite sources from: ${includes.join(", ")}`;
-    if (excludes.length)
+    }
+    if (excludes.length) {
       prompt += `\n\nDo not cite sources from: ${excludes.join(", ")}`;
+    }
   }
 
   return prompt;
@@ -340,7 +378,9 @@ function extractSourceUrls(markdown: string): SearchResult[] {
   const linkRegex = /\[([^\]]+)\]\((https?:\/\/[^)]+)\)/g;
   for (const match of markdown.matchAll(linkRegex)) {
     const url = match[2];
-    if (seen.has(url)) continue;
+    if (seen.has(url)) {
+      continue;
+    }
     seen.add(url);
     results.push({ title: match[1], url, snippet: "" });
   }
@@ -351,11 +391,15 @@ async function resolveGroundingChunks(
   chunks: GroundingChunk[] | undefined,
   signal?: AbortSignal
 ): Promise<SearchResult[]> {
-  if (!chunks?.length) return [];
+  if (!chunks?.length) {
+    return [];
+  }
 
   const results: SearchResult[] = [];
   for (const chunk of chunks) {
-    if (!chunk.web) continue;
+    if (!chunk.web) {
+      continue;
+    }
     const title = chunk.web.title || "";
     let url = chunk.web.uri || "";
 
@@ -363,10 +407,14 @@ async function resolveGroundingChunks(
       url.includes("vertexaisearch.cloud.google.com/grounding-api-redirect")
     ) {
       const resolved = await resolveRedirect(url, signal);
-      if (resolved) url = resolved;
+      if (resolved) {
+        url = resolved;
+      }
     }
 
-    if (url) results.push({ title, url, snippet: "" });
+    if (url) {
+      results.push({ title, url, snippet: "" });
+    }
   }
   return results;
 }

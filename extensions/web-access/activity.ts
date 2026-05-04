@@ -26,12 +26,12 @@ export interface RateLimitInfo {
 export class ActivityMonitor {
   private entries: ActivityEntry[] = [];
   private readonly maxEntries = 10;
-  private listeners = new Set<() => void>();
+  private readonly listeners = new Set<() => void>();
   private rateLimitInfo: RateLimitInfo = {
     used: 0,
     max: 10,
     oldestTimestamp: null,
-    windowMs: 60000,
+    windowMs: 60_000,
   };
   private nextId = 1;
 
@@ -95,7 +95,7 @@ export class ActivityMonitor {
       used: 0,
       max: 10,
       oldestTimestamp: null,
-      windowMs: 60000,
+      windowMs: 60_000,
     };
     this.notify();
   }
@@ -104,7 +104,9 @@ export class ActivityMonitor {
     for (const cb of this.listeners) {
       try {
         cb();
-      } catch {}
+      } catch {
+        /* noop */
+      }
     }
   }
 }

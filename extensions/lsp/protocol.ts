@@ -8,11 +8,13 @@ import { type ChildProcess, spawn } from "node:child_process";
 
 import type { JsonRpcMessage } from "./types";
 
-type PendingRequest = {
+const TOP_LEVEL_REGEX_1 = /Content-Length:\s*(\d+)/i;
+
+interface PendingRequest {
   resolve: (value: unknown) => void;
   reject: (error: Error) => void;
   timer: ReturnType<typeof setTimeout>;
-};
+}
 
 type NotificationHandler = (method: string, params: unknown) => void;
 type ServerRequestHandler = (
@@ -25,23 +27,36 @@ export class LspConnection {
   private process: ChildProcess | null = null;
   private buffer = Buffer.alloc(0);
   private nextId = 1;
-  private pending = new Map<number, PendingRequest>();
-  private onNotification: NotificationHandler = () => {};
-  private onServerRequest: ServerRequestHandler = () => {};
+  private readonly pending = new Map<number, PendingRequest>();
+  private onNotification: NotificationHandler = () => {
+    /* noop */
+  };
+  private onServerRequest: ServerRequestHandler = () => {
+    /* noop */
+  };
   private onExit: ((code: number | null) => void) | null = null;
   private onStderr: ((text: string) => void) | null = null;
   private disposed = false;
+  private readonly command: string;
+  private readonly args: string[];
+  private readonly options?: { cwd?: string; env?: Record<string, string> };
 
   constructor(
-    private command: string,
-    private args: string[],
-    private options?: { cwd?: string; env?: Record<string, string> }
-  ) {}
+    command: string,
+    args: string[],
+    options?: { cwd?: string; env?: Record<string, string> }
+  ) {
+    this.command = command;
+    this.args = args;
+    this.options = options;
+  }
 
   // ── Lifecycle ─────────────────────────────────────────────────────────
 
   spawn(): void {
-    if (this.process) return;
+    if (this.process) {
+      return;
+    }
 
     this.process = spawn(this.command, this.args, {
       stdio: ["pipe", "pipe", "pipe"],
@@ -69,7 +84,9 @@ export class LspConnection {
   }
 
   dispose(): void {
-    if (this.disposed) return;
+    if (this.disposed) {
+      return;
+    }
     this.disposed = true;
     this.rejectAllPending("Connection disposed");
 
@@ -111,7 +128,9 @@ export class LspConnection {
     params: unknown,
     timeoutMs = 30_000
   ): Promise<unknown> {
-    if (!this.alive) return Promise.reject(new Error("Connection not alive"));
+    if (!this.alive) {
+      return Promise.reject(new Error("Connection not alive"));
+    }
 
     const id = this.nextId++;
     return new Promise<unknown>((resolve, reject) => {
@@ -128,12 +147,16 @@ export class LspConnection {
   }
 
   sendNotification(method: string, params: unknown): void {
-    if (!this.alive) return;
+    if (!this.alive) {
+      return;
+    }
     this.writeMessage({ jsonrpc: "2.0", method, params });
   }
 
   sendResponse(id: number | string, result: unknown): void {
-    if (!this.alive) return;
+    if (!this.alive) {
+      return;
+    }
     this.writeMessage({
       jsonrpc: "2.0",
       id,
@@ -155,21 +178,25 @@ export class LspConnection {
 
     while (true) {
       const headerEnd = this.buffer.indexOf(HEADER_DELIMITER);
-      if (headerEnd === -1) break;
+      if (headerEnd === -1) {
+        break;
+      }
 
       const headerText = this.buffer.subarray(0, headerEnd).toString("ascii");
-      const match = headerText.match(/Content-Length:\s*(\d+)/i);
+      const match = headerText.match(TOP_LEVEL_REGEX_1);
       if (!match) {
         // Malformed header — skip past it
         this.buffer = this.buffer.subarray(headerEnd + HEADER_DELIMITER.length);
         continue;
       }
 
-      const contentLength = parseInt(match[1], 10);
+      const contentLength = Number.parseInt(match[1], 10);
       const bodyStart = headerEnd + HEADER_DELIMITER.length;
       const bodyEnd = bodyStart + contentLength;
 
-      if (this.buffer.length < bodyEnd) break; // Incomplete body
+      if (this.buffer.length < bodyEnd) {
+        break; // Incomplete body
+      }
 
       const body = this.buffer.subarray(bodyStart, bodyEnd).toString("utf8");
       this.buffer = this.buffer.subarray(bodyEnd);
@@ -207,12 +234,12 @@ export class LspConnection {
 
     // Notification or server-initiated request
     if (typeof msg.method === "string") {
-      if (msg.id !== undefined) {
-        // Server request — needs a response
-        this.onServerRequest(msg.id as number, msg.method, msg.params);
-      } else {
+      if (msg.id === undefined) {
         // Notification
         this.onNotification(msg.method, msg.params);
+      } else {
+        // Server request — needs a response
+        this.onServerRequest(msg.id as number, msg.method, msg.params);
       }
     }
   }

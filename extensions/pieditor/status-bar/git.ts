@@ -33,7 +33,9 @@ function parseGitStatusOutput(output: string): {
   let untracked = 0;
 
   for (const line of output.split("\n")) {
-    if (!line) continue;
+    if (!line) {
+      continue;
+    }
     const x = line[0];
     const y = line[1];
 
@@ -64,7 +66,9 @@ function runGit(args: string[], timeoutMs = 200): Promise<string | null> {
     let resolved = false;
 
     const finish = (result: string | null) => {
-      if (resolved) return;
+      if (resolved) {
+        return;
+      }
       resolved = true;
       clearTimeout(timeoutId);
       resolve(result);
@@ -91,8 +95,12 @@ function runGit(args: string[], timeoutMs = 200): Promise<string | null> {
 
 async function fetchGitBranch(): Promise<string | null> {
   const branch = await runGit(["branch", "--show-current"]);
-  if (branch === null) return null;
-  if (branch) return branch;
+  if (branch === null) {
+    return null;
+  }
+  if (branch) {
+    return branch;
+  }
 
   const sha = await runGit(["rev-parse", "--short", "HEAD"]);
   return sha ? `${sha} (detached)` : "detached";
@@ -104,7 +112,9 @@ async function fetchGitStatus(): Promise<{
   untracked: number;
 } | null> {
   const output = await runGit(["status", "--porcelain"], 500);
-  if (output === null) return null;
+  if (output === null) {
+    return null;
+  }
   return parseGitStatusOutput(output);
 }
 

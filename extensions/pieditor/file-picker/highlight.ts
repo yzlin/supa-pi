@@ -7,6 +7,9 @@ import {
 
 import type { PreviewHighlightMode } from "./types.js";
 
+const TOP_LEVEL_REGEX_1 = /^(\s*\d+\s│ )(.*)$/u;
+const TOP_LEVEL_REGEX_2 = /^(\s*\d+\s)(│\s)$/u;
+
 export interface NativeHighlightPreviewInput {
   code: string;
   filePath?: string | null;
@@ -45,8 +48,10 @@ let nativeBindingCache: NativeHighlightBinding | null | undefined;
 let nativeWarmupAttempted = false;
 
 function parsePreviewLine(line: string): ParsedPreviewLine | null {
-  const match = line.match(/^(\s*\d+\s│ )(.*)$/u);
-  if (!match) return null;
+  const match = line.match(TOP_LEVEL_REGEX_1);
+  if (!match) {
+    return null;
+  }
 
   const [, prefix, code] = match;
   return {
@@ -92,7 +97,7 @@ function foregroundRgb(
 }
 
 function stylePreviewPrefix(prefix: string): string {
-  const match = prefix.match(/^(\s*\d+\s)(│\s)$/u);
+  const match = prefix.match(TOP_LEVEL_REGEX_2);
   if (!match) {
     return prefix;
   }
@@ -125,7 +130,9 @@ export function highlightPreviewLines(
   themeMode: "dark" | "light" = "dark",
   highlightMode: PreviewHighlightMode = "native"
 ): string[] {
-  if (lines.length === 0) return lines;
+  if (lines.length === 0) {
+    return lines;
+  }
 
   const parsedLines = lines.map((line) => parsePreviewLine(line));
   const codeLines = parsedLines.filter(isParsedPreviewLine);
@@ -207,7 +214,7 @@ function normalizeNativePreviewLines(
     return highlightedLines;
   }
 
-  const lastCodeLine = codeLines[codeLines.length - 1];
+  const lastCodeLine = codeLines.at(-1);
   if (
     highlightedLines.length + 1 === codeLines.length &&
     lastCodeLine?.code === ""

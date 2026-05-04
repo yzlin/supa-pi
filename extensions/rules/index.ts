@@ -9,7 +9,7 @@ const USER_RULES_DIR = path.join(os.homedir(), ".pi", "agent", "rules");
 /**
  * Recursively find all .md files in a directory
  */
-function findMarkdownFiles(dir: string, basePath: string = ""): string[] {
+function findMarkdownFiles(dir: string, basePath = ""): string[] {
   const results: string[] = [];
 
   if (!fs.existsSync(dir)) {
@@ -38,7 +38,7 @@ export default function rulesExtension(pi: ExtensionAPI) {
   let projectRuleFiles: string[] = [];
 
   // Scan for rules on session start
-  pi.on("session_start", async (_event, ctx) => {
+  pi.on("session_start", (_event, ctx) => {
     userRuleFiles = findMarkdownFiles(USER_RULES_DIR);
 
     if (userRuleFiles.length > 0) {
@@ -60,7 +60,7 @@ export default function rulesExtension(pi: ExtensionAPI) {
   });
 
   // Append available rules to system prompt
-  pi.on("before_agent_start", async (event) => {
+  pi.on("before_agent_start", (event) => {
     if (userRuleFiles.length === 0 && projectRuleFiles.length === 0) {
       return;
     }

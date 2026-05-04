@@ -2,7 +2,7 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import * as url from "node:url";
 
-import { ExtensionAPI } from "@mariozechner/pi-coding-agent";
+import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
 
 const baseDir = path.dirname(url.fileURLToPath(import.meta.url));
 const skillsDir = path.join(baseDir, "..", "skills");

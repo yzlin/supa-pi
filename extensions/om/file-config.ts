@@ -41,7 +41,7 @@ export function loadOmConfig(
 ): OmConfigSnapshot {
   const [globalConfig, projectConfig] = loadOmConfigLayers(cwd, homeDir);
 
-  if (!globalConfig && !projectConfig) {
+  if (!(globalConfig || projectConfig)) {
     return createOmConfigSnapshot();
   }
 

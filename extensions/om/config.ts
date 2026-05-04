@@ -1,7 +1,7 @@
 import type { OmConfigInput, OmConfigSnapshot } from "./types";
 
 const DEFAULT_OBSERVATION_CONFIG = Object.freeze({
-  messageTokens: 12000,
+  messageTokens: 12_000,
   previousObserverTokens: 2000,
   bufferTokens: 0.2,
   bufferActivation: 0.8,
@@ -126,7 +126,7 @@ function resolveConfigValue(
   canonicalValue: unknown,
   legacyValue: unknown
 ): unknown {
-  return canonicalValue !== undefined ? canonicalValue : legacyValue;
+  return canonicalValue === undefined ? legacyValue : canonicalValue;
 }
 
 export function createOmConfigSnapshot(
@@ -260,19 +260,19 @@ export function mergeOmConfigSnapshot(
     observation: {
       ...baseSnapshot.observation,
       ...overrideObservation,
-      ...(overrideConfig.observationMessageTokens !== undefined
-        ? { messageTokens: overrideConfig.observationMessageTokens }
-        : {}),
-      ...(overrideConfig.observationPreviousTokens !== undefined
-        ? { previousObserverTokens: overrideConfig.observationPreviousTokens }
-        : {}),
+      ...(overrideConfig.observationMessageTokens === undefined
+        ? {}
+        : { messageTokens: overrideConfig.observationMessageTokens }),
+      ...(overrideConfig.observationPreviousTokens === undefined
+        ? {}
+        : { previousObserverTokens: overrideConfig.observationPreviousTokens }),
     },
     reflection: {
       ...baseSnapshot.reflection,
       ...overrideReflection,
-      ...(overrideConfig.reflectionObservationTokens !== undefined
-        ? { observationTokens: overrideConfig.reflectionObservationTokens }
-        : {}),
+      ...(overrideConfig.reflectionObservationTokens === undefined
+        ? {}
+        : { observationTokens: overrideConfig.reflectionObservationTokens }),
     },
   });
 }

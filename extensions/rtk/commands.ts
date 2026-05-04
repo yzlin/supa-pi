@@ -7,6 +7,9 @@ import { getRtkConfigPath, resetRtkConfig, saveRtkConfig } from "./config";
 import { showRtkStatsView } from "./stats";
 import type { RtkConfig, RtkRuntime } from "./types";
 
+const TOP_LEVEL_REGEX_1 = /\s$/;
+const TOP_LEVEL_REGEX_2 = /\s+/;
+
 const RTK_SUBCOMMANDS = [
   { value: "show", description: "Show config, runtime, and counters" },
   { value: "verify", description: "Refresh RTK availability" },
@@ -87,7 +90,7 @@ function buildHelpMessage(): string {
 }
 
 function getRtkArgumentCompletions(argumentPrefix: string) {
-  const hasTrailingSpace = /\s$/.test(argumentPrefix);
+  const hasTrailingSpace = TOP_LEVEL_REGEX_1.test(argumentPrefix);
   const trimmedStart = argumentPrefix.trimStart();
 
   if (trimmedStart.length === 0) {
@@ -100,7 +103,7 @@ function getRtkArgumentCompletions(argumentPrefix: string) {
 
   // Keep trailing-space state for nested completions; unlike the handler, we
   // cannot discard empty tokens here.
-  const parts = trimmedStart.split(/\s+/);
+  const parts = trimmedStart.split(TOP_LEVEL_REGEX_2);
   const subcommand = parts[0] ?? "";
   const nextToken = parts[1] ?? "";
   const hasExtraTokens = parts.length > 2;
@@ -146,7 +149,7 @@ export function registerRtkCommands(
     handler: async (args, ctx) => {
       const [command = "stats", ...rest] = args
         .trim()
-        .split(/\s+/)
+        .split(TOP_LEVEL_REGEX_2)
         .filter(Boolean);
 
       switch (command) {
@@ -225,8 +228,6 @@ export function registerRtkCommands(
           ctx.ui.notify(`RTK mode set to ${nextMode}`, "info");
           return;
         }
-
-        case "help":
         default: {
           if (command !== "help") {
             ctx.ui.notify(`Unknown /rtk command: ${command}`, "warning");

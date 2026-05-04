@@ -24,6 +24,8 @@ import { Type } from "typebox";
 
 import { getModelAuthOrThrow } from "./llm-auth";
 
+const TOP_LEVEL_REGEX_1 = /\*\*Query:\*\* (.+?)\n\n---\n\n([\s\S]+)/;
+
 const QUERY_SYSTEM_PROMPT = `You are a session context assistant. Given the conversation history from a pi coding session and a question, provide a concise answer based on the session contents.
 
 Focus on:
@@ -127,7 +129,7 @@ export default function (pi: ExtensionAPI) {
           entry.type === "model_change"
       );
       if (modelChanges.length > 0) {
-        const lastChange = modelChanges[modelChanges.length - 1]!;
+        const lastChange = modelChanges.at(-1)!;
         const sessionModel = ctx.modelRegistry.find(
           lastChange.provider,
           lastChange.modelId
@@ -200,7 +202,7 @@ export default function (pi: ExtensionAPI) {
       if (result.content && result.content[0].type === "text") {
         const text = result.content[0].text;
         // Parse: **Query:** question\n\n---\n\nanswer
-        const match = text.match(/\*\*Query:\*\* (.+?)\n\n---\n\n([\s\S]+)/);
+        const match = text.match(TOP_LEVEL_REGEX_1);
 
         if (match) {
           const [, query, answer] = match;
@@ -211,7 +213,7 @@ export default function (pi: ExtensionAPI) {
           // Render the answer as markdown
           container.addChild(
             new Markdown(answer.trim(), 0, 0, getMarkdownTheme(), {
-              color: (text: string) => theme.fg("toolOutput", text),
+              color: (segment: string) => theme.fg("toolOutput", segment),
             })
           );
         } else {

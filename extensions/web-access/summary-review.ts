@@ -8,6 +8,8 @@ import type { ExtensionContext } from "@mariozechner/pi-coding-agent";
 
 import type { QueryResultData } from "./storage.js";
 
+const TOP_LEVEL_REGEX_1 = /\bSources?\s*:/i;
+
 const PREFERRED_SUMMARY_MODELS = [
   { provider: "anthropic", id: "claude-haiku-4-5" },
   { provider: "openai-codex", id: "gpt-5.3-codex-spark" },
@@ -29,7 +31,9 @@ export type SummaryGenerationContext = Pick<
 
 function estimateTokens(text: string): number {
   const trimmed = text.trim();
-  if (trimmed.length === 0) return 0;
+  if (trimmed.length === 0) {
+    return 0;
+  }
   return Math.max(1, Math.ceil(trimmed.length / 4));
 }
 
@@ -101,11 +105,17 @@ export function buildSummaryPrompt(
 
 function buildDeterministicAnswerPreview(answer: string): string {
   let text = answer.replace(/\s+/g, " ").trim();
-  if (text.length === 0) return "";
+  if (text.length === 0) {
+    return "";
+  }
 
-  const sourceMarker = text.search(/\bSources?\s*:/i);
-  if (sourceMarker >= 0) text = text.slice(0, sourceMarker).trim();
-  if (text.length === 0) return "";
+  const sourceMarker = text.search(TOP_LEVEL_REGEX_1);
+  if (sourceMarker >= 0) {
+    text = text.slice(0, sourceMarker).trim();
+  }
+  if (text.length === 0) {
+    return "";
+  }
 
   return text.length > 240 ? `${text.slice(0, 237)}...` : text;
 }
@@ -218,7 +228,7 @@ async function resolveSummaryModel(
     }
     const selectedAuth =
       await ctx.modelRegistry.getApiKeyAndHeaders(selectedModel);
-    if (!selectedAuth.ok || !selectedAuth.apiKey) {
+    if (!(selectedAuth.ok && selectedAuth.apiKey)) {
       throw new Error(
         `No API key available for summary model ${normalizedOverride}`
       );
@@ -232,10 +242,13 @@ async function resolveSummaryModel(
 
   for (const { provider, id } of PREFERRED_SUMMARY_MODELS) {
     const model = getModel(provider, id);
-    if (!model) continue;
+    if (!model) {
+      continue;
+    }
     const auth = await ctx.modelRegistry.getApiKeyAndHeaders(model);
-    if (auth.ok && auth.apiKey)
+    if (auth.ok && auth.apiKey) {
       return { model, apiKey: auth.apiKey, headers: auth.headers };
+    }
   }
 
   throw new Error(
@@ -244,15 +257,23 @@ async function resolveSummaryModel(
 }
 
 function getTextFromContentPart(part: unknown): string {
-  if (!part || typeof part !== "object") return "";
+  if (!part || typeof part !== "object") {
+    return "";
+  }
   const value = part as Record<string, unknown>;
-  if (typeof value.text === "string") return value.text;
-  if (typeof value.refusal === "string") return value.refusal;
+  if (typeof value.text === "string") {
+    return value.text;
+  }
+  if (typeof value.refusal === "string") {
+    return value.refusal;
+  }
   return "";
 }
 
 function getContentPartType(part: unknown): string {
-  if (!part || typeof part !== "object") return "unknown";
+  if (!part || typeof part !== "object") {
+    return "unknown";
+  }
   const value = part as Record<string, unknown>;
   return typeof value.type === "string" ? value.type : "unknown";
 }
@@ -264,7 +285,7 @@ export async function generateSummaryDraft(
   modelOverride?: string,
   feedback?: string
 ): Promise<{ summary: string; meta: SummaryMeta }> {
-  if (!ctx || !ctx.modelRegistry) {
+  if (!ctx?.modelRegistry) {
     throw new Error("Summary generation context unavailable");
   }
 

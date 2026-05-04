@@ -292,15 +292,19 @@ export function buildContextContentSnapshot(
     source === "context_event_snapshot"
       ? cachedSnapshot.messages
       : sessionContext.messages;
+  let sourceNote =
+    "Source: reconstructed current session context (no cached context snapshot yet).";
+  if (source === "context_event_snapshot") {
+    sourceNote =
+      "Source: cached higher-fidelity context snapshot from the context event.";
+  } else if (cachedSnapshot) {
+    sourceNote =
+      "Source: reconstructed current session context (cached context snapshot was stale).";
+  }
 
   return {
     source,
-    sourceNote:
-      source === "context_event_snapshot"
-        ? "Source: cached higher-fidelity context snapshot from the context event."
-        : cachedSnapshot
-          ? "Source: reconstructed current session context (cached context snapshot was stale)."
-          : "Source: reconstructed current session context (no cached context snapshot yet).",
+    sourceNote,
     systemPrompt: ctx.getSystemPrompt() || "",
     modelLabel: resolveModelLabel(ctx, sessionContext.model),
     thinkingLevel: sessionContext.thinkingLevel,

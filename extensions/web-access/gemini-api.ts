@@ -13,7 +13,9 @@ interface GeminiApiConfig {
 let cachedConfig: GeminiApiConfig | null = null;
 
 function loadConfig(): GeminiApiConfig {
-  if (cachedConfig) return cachedConfig;
+  if (cachedConfig) {
+    return cachedConfig;
+  }
   if (!existsSync(CONFIG_PATH)) {
     cachedConfig = {};
     return cachedConfig;
@@ -38,7 +40,9 @@ function withTimeout(
 }
 
 function normalizeApiKey(value: unknown): string | null {
-  if (typeof value !== "string") return null;
+  if (typeof value !== "string") {
+    return null;
+  }
   const normalized = value.trim();
   return normalized.length > 0 ? normalized : null;
 }
@@ -67,14 +71,18 @@ export async function queryGeminiApiWithVideo(
   options: GeminiApiOptions = {}
 ): Promise<string> {
   const apiKey = getApiKey();
-  if (!apiKey) throw new Error("GEMINI_API_KEY not configured");
+  if (!apiKey) {
+    throw new Error("GEMINI_API_KEY not configured");
+  }
 
   const model = options.model ?? DEFAULT_MODEL;
-  const signal = withTimeout(options.signal, options.timeoutMs ?? 120000);
+  const signal = withTimeout(options.signal, options.timeoutMs ?? 120_000);
   const url = `${API_BASE}/models/${model}:generateContent?key=${apiKey}`;
 
   const fileData: Record<string, string> = { fileUri: videoUri };
-  if (options.mimeType) fileData.mimeType = options.mimeType;
+  if (options.mimeType) {
+    fileData.mimeType = options.mimeType;
+  }
 
   const body = {
     contents: [
@@ -104,7 +112,9 @@ export async function queryGeminiApiWithVideo(
     .filter(Boolean)
     .join("\n");
 
-  if (!text) throw new Error("Gemini API returned empty response");
+  if (!text) {
+    throw new Error("Gemini API returned empty response");
+  }
   return text;
 }
 

@@ -10,6 +10,8 @@ import type {
   ExtensionContext,
 } from "@mariozechner/pi-coding-agent";
 
+const TOP_LEVEL_REGEX_1 = /\s+/;
+
 export const CAVEMAN_MODE_CUSTOM_TYPE = "caveman:mode";
 export const LEGACY_CAVEMAN_MODE_CUSTOM_TYPE = "pieditor:caveman-mode";
 export const CAVEMAN_MODE_STATUS_KEY = "caveman";
@@ -363,8 +365,9 @@ export function registerCavemanMode(pi: ExtensionAPI): void {
         completion.value.startsWith(prefix)
       );
     },
-    handler: async (args: string, ctx: ExtensionCommandContext) => {
-      const command = args.trim().toLowerCase().split(/\s+/)[0] || "toggle";
+    handler: (args: string, ctx: ExtensionCommandContext) => {
+      const command =
+        args.trim().toLowerCase().split(TOP_LEVEL_REGEX_1)[0] || "toggle";
 
       switch (command) {
         case "on": {

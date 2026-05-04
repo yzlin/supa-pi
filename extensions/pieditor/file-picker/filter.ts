@@ -2,8 +2,24 @@ import * as path from "node:path";
 
 import type { FileEntry } from "./types.js";
 
+const TOP_LEVEL_REGEX_1 = /^\/+/;
+const TOP_LEVEL_REGEX_2 = /[*?[\]]/;
+const TOP_LEVEL_REGEX_3 = /\/$/;
+const REGEX_SPECIAL_CHARS = new Set([
+  ".",
+  "+",
+  "^",
+  "$",
+  "{",
+  "}",
+  "(",
+  ")",
+  "|",
+  "\\",
+]);
+
 export function isGlobPattern(query: string): boolean {
-  return /[*?[\]]/.test(query);
+  return TOP_LEVEL_REGEX_2.test(query);
 }
 
 export function globToRegex(pattern: string): RegExp {
@@ -17,7 +33,9 @@ export function globToRegex(pattern: string): RegExp {
       if (pattern[i + 1] === "*") {
         regex += ".*";
         i += 2;
-        if (pattern[i] === "/") i++;
+        if (pattern[i] === "/") {
+          i++;
+        }
       } else {
         regex += "[^/]*";
         i++;
@@ -27,15 +45,15 @@ export function globToRegex(pattern: string): RegExp {
       i++;
     } else if (char === "[") {
       const end = pattern.indexOf("]", i);
-      if (end !== -1) {
-        regex += pattern.slice(i, end + 1);
-        i = end + 1;
-      } else {
+      if (end === -1) {
         regex += "\\[";
         i++;
+      } else {
+        regex += pattern.slice(i, end + 1);
+        i = end + 1;
       }
-    } else if (".+^${}()|\\".includes(char)) {
-      regex += "\\" + char;
+    } else if (REGEX_SPECIAL_CHARS.has(char)) {
+      regex += `\\${char}`;
       i++;
     } else {
       regex += char;
@@ -76,7 +94,7 @@ function toDisplayPath(value: string): string {
 }
 
 export function stripLeadingSlash(value: string): string {
-  return value.replace(/^\/+/, "");
+  return value.replace(TOP_LEVEL_REGEX_1, "");
 }
 
 export function withQuerySlash(relativePath: string, query: string): string {
@@ -105,7 +123,7 @@ export function scoreScopedEntry(
   isDirectory: boolean
 ): number {
   const normalizedPath = stripLeadingSlash(toDisplayPath(filePath)).replace(
-    /\/$/,
+    TOP_LEVEL_REGEX_3,
     ""
   );
   const fileName = path.basename(normalizedPath);
@@ -114,17 +132,24 @@ export function scoreScopedEntry(
   const lowerQuery = query.toLowerCase();
 
   let score = 0;
-  if (lowerFileName === lowerQuery) score = 100;
-  else if (lowerFileName.startsWith(lowerQuery)) score = 80;
-  else if (lowerFileName.includes(lowerQuery)) score = 50;
-  else if (lowerPath.includes(lowerQuery)) score = 30;
+  if (lowerFileName === lowerQuery) {
+    score = 100;
+  } else if (lowerFileName.startsWith(lowerQuery)) {
+    score = 80;
+  } else if (lowerFileName.includes(lowerQuery)) {
+    score = 50;
+  } else if (lowerPath.includes(lowerQuery)) {
+    score = 30;
+  }
 
-  if (isDirectory && score > 0) score += 10;
+  if (isDirectory && score > 0) {
+    score += 10;
+  }
   return score;
 }
 
 function normalizeCompletionPath(value: string): string {
-  return stripLeadingSlash(toDisplayPath(value)).replace(/\/$/, "");
+  return stripLeadingSlash(toDisplayPath(value)).replace(TOP_LEVEL_REGEX_3, "");
 }
 
 function isPreferredEntry(entry: FileEntry, preferredPath: string): boolean {
@@ -140,10 +165,14 @@ function comparePreferredEntry(
   b: FileEntry,
   preferredPath?: string
 ): number {
-  if (!preferredPath) return 0;
+  if (!preferredPath) {
+    return 0;
+  }
   const aPreferred = isPreferredEntry(a, preferredPath);
   const bPreferred = isPreferredEntry(b, preferredPath);
-  if (aPreferred === bPreferred) return 0;
+  if (aPreferred === bPreferred) {
+    return 0;
+  }
   return aPreferred ? -1 : 1;
 }
 
@@ -152,7 +181,9 @@ export function filterEntries(
   query: string,
   preferredPath?: string
 ): FileEntry[] {
-  if (!query.trim()) return entries;
+  if (!query.trim()) {
+    return entries;
+  }
 
   if (isGlobPattern(query)) {
     const regex = globToRegex(query);
@@ -166,7 +197,9 @@ export function filterEntries(
     });
     return filtered.sort((a, b) => {
       const preferredComparison = comparePreferredEntry(a, b, preferredPath);
-      if (preferredComparison !== 0) return preferredComparison;
+      if (preferredComparison !== 0) {
+        return preferredComparison;
+      }
       return a.relativePath.localeCompare(b.relativePath);
     });
   }
@@ -196,8 +229,12 @@ export function filterEntries(
         b.entry,
         preferredPath
       );
-      if (preferredComparison !== 0) return preferredComparison;
-      if (b.score !== a.score) return b.score - a.score;
+      if (preferredComparison !== 0) {
+        return preferredComparison;
+      }
+      if (b.score !== a.score) {
+        return b.score - a.score;
+      }
       return a.entry.relativePath.localeCompare(b.entry.relativePath);
     });
 

@@ -15,6 +15,11 @@ import {
 import { globSync } from "glob";
 import { Type } from "typebox";
 
+const GLOB_MAGIC_PATTERN = /[*?[\]{}!]/;
+const PATH_LIST_SEPARATOR_PATTERN = /[\s,]+/;
+const LINE_BREAK_PATTERN = /\r?\n/;
+const SCANNED_FILE_COUNT_PATTERN = /scannedFileCount=(\d+)/;
+
 const baseDir = dirname(fileURLToPath(import.meta.url));
 const prompt = readFileSync(join(baseDir, "prompt.md"), "utf8").trim();
 const MAX_PATTERNS = 20;
@@ -45,14 +50,14 @@ const AstGrepParams = Type.Object({
     Type.String({
       description:
         "Optional path scope. Accepts a file, directory, glob pattern, or a comma/space-separated path list. Defaults to current directory.",
-      maxLength: 4_000,
+      maxLength: 4000,
     })
   ),
   glob: Type.Optional(
     Type.String({
       description:
         "Optional glob filter(s) relative to the scoped path. Passed to ast-grep as repeated --globs flags. Accepts one or more comma/space-separated globs.",
-      maxLength: 4_000,
+      maxLength: 4000,
     })
   ),
   sel: Type.Optional(
@@ -146,21 +151,27 @@ interface RunResult {
 }
 
 function hasGlobMagic(value: string): boolean {
-  return /[*?[\]{}!]/.test(value);
+  return GLOB_MAGIC_PATTERN.test(value);
 }
 
 function parseSpecList(spec?: string): string[] {
-  if (!spec) return [];
+  if (!spec) {
+    return [];
+  }
   const trimmed = spec.trim();
-  if (!trimmed) return [];
+  if (!trimmed) {
+    return [];
+  }
   return trimmed
-    .split(/[\s,]+/)
+    .split(PATH_LIST_SEPARATOR_PATTERN)
     .map((value) => value.trim())
     .filter(Boolean);
 }
 
 function resolveSearchPaths(spec: string | undefined, cwd: string): string[] {
-  if (!spec?.trim()) return ["."];
+  if (!spec?.trim()) {
+    return ["."];
+  }
 
   const trimmed = spec.trim();
   if (existsSync(resolve(cwd, trimmed))) {
@@ -264,14 +275,20 @@ function dedupeMatches(
 
   return Array.from(deduped.values()).sort((left, right) => {
     const fileCompare = left.file.localeCompare(right.file);
-    if (fileCompare !== 0) return fileCompare;
+    if (fileCompare !== 0) {
+      return fileCompare;
+    }
 
     const startCompare =
       left.range.byteOffset.start - right.range.byteOffset.start;
-    if (startCompare !== 0) return startCompare;
+    if (startCompare !== 0) {
+      return startCompare;
+    }
 
     const endCompare = left.range.byteOffset.end - right.range.byteOffset.end;
-    if (endCompare !== 0) return endCompare;
+    if (endCompare !== 0) {
+      return endCompare;
+    }
 
     return left.text.localeCompare(right.text);
   });
@@ -316,9 +333,9 @@ function formatMatches(
 ): string {
   const lines: string[] = [];
   const shownSuffix =
-    details.returnedMatches !== details.totalMatches
-      ? ` (showing ${details.returnedMatches} after offset/limit)`
-      : "";
+    details.returnedMatches === details.totalMatches
+      ? ""
+      : ` (showing ${details.returnedMatches} after offset/limit)`;
   const filesSearched =
     details.filesSearched == null ? "unknown" : String(details.filesSearched);
 
@@ -327,10 +344,18 @@ function formatMatches(
   );
   lines.push(`Patterns: ${details.pat.length}`);
 
-  if (details.path) lines.push(`Path: ${details.path}`);
-  if (details.glob) lines.push(`Glob: ${details.glob}`);
-  if (details.lang) lines.push(`Lang: ${details.lang}`);
-  if (details.sel) lines.push(`Selector: ${details.sel}`);
+  if (details.path) {
+    lines.push(`Path: ${details.path}`);
+  }
+  if (details.glob) {
+    lines.push(`Glob: ${details.glob}`);
+  }
+  if (details.lang) {
+    lines.push(`Lang: ${details.lang}`);
+  }
+  if (details.sel) {
+    lines.push(`Selector: ${details.sel}`);
+  }
   if (details.parseIssues.length > 0) {
     lines.push("");
     lines.push("Parse issues:");
@@ -396,11 +421,13 @@ function parseInspectSummary(stderr: string): {
   const diagnostics: string[] = [];
   let filesSearched: number | null = null;
 
-  for (const rawLine of stderr.split(/\r?\n/)) {
+  for (const rawLine of stderr.split(LINE_BREAK_PATTERN)) {
     const line = rawLine.trim();
-    if (!line) continue;
+    if (!line) {
+      continue;
+    }
 
-    const match = line.match(/scannedFileCount=(\d+)/);
+    const match = line.match(SCANNED_FILE_COUNT_PATTERN);
     if (match) {
       filesSearched = Number(match[1]);
       continue;
@@ -416,7 +443,7 @@ function parseInspectSummary(stderr: string): {
   return { filesSearched, diagnostics };
 }
 
-async function runPattern(
+function runPattern(
   pattern: string,
   params: {
     lang?: string;
@@ -452,7 +479,7 @@ async function runPattern(
 
   args.push(...params.searchPaths);
 
-  return new Promise((resolve, reject) => {
+  return new Promise((fulfill, reject) => {
     const child = spawn("ast-grep", args, {
       cwd: params.cwd,
       stdio: ["ignore", "pipe", "pipe"],
@@ -467,7 +494,7 @@ async function runPattern(
       if (!child.killed) {
         child.kill("SIGKILL");
       }
-    }, AST_GREP_TIMEOUT_MS + 1_000);
+    }, AST_GREP_TIMEOUT_MS + 1000);
     forceKillTimer.unref();
 
     const timeoutTimer = setTimeout(() => {
@@ -536,13 +563,13 @@ async function runPattern(
       }
 
       if (!stdout.trim()) {
-        resolve({ matches: [], filesSearched, diagnostics });
+        fulfill({ matches: [], filesSearched, diagnostics });
         return;
       }
 
       try {
         const matches = JSON.parse(stdout) as AstGrepRawMatch[];
-        resolve({ matches, filesSearched, diagnostics });
+        fulfill({ matches, filesSearched, diagnostics });
       } catch (error) {
         reject(
           new Error(
@@ -555,7 +582,7 @@ async function runPattern(
 }
 
 export default function astGrepExtension(pi: ExtensionAPI): void {
-  pi.on("before_agent_start", async (event) => {
+  pi.on("before_agent_start", (event) => {
     return {
       systemPrompt: `${event.systemPrompt}\n\n${prompt}`,
     };
@@ -722,8 +749,12 @@ export default function astGrepExtension(pi: ExtensionAPI): void {
           mergedMatches.map((match) => match.file)
         ).size;
         const filesSearched = runs.reduce<number | null>((current, run) => {
-          if (run.filesSearched == null) return current;
-          if (current == null) return run.filesSearched;
+          if (run.filesSearched == null) {
+            return current;
+          }
+          if (current == null) {
+            return run.filesSearched;
+          }
           return Math.max(current, run.filesSearched);
         }, null);
         const parseIssues = Array.from(

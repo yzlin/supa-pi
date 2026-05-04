@@ -1,3 +1,7 @@
+const TOP_LEVEL_REGEX_1 = /^\$L([0-9a-f]+)$/i;
+const TOP_LEVEL_REGEX_2 = /^\$[A-Z]/;
+const TOP_LEVEL_REGEX_3 = /<title[^>]*>([^<]+)<\/title>/;
+const TOP_LEVEL_REGEX_4 = /^[0-9a-f]+$/i;
 /**
  * RSC Content Extractor
  *
@@ -23,7 +27,7 @@ export function extractRSCContent(html: string): RSCExtractResult | null {
   for (const match of html.matchAll(scriptRegex)) {
     let content: string;
     try {
-      content = JSON.parse('"' + match[1] + '"');
+      content = JSON.parse(`"${match[1]}"`);
     } catch {
       continue;
     }
@@ -32,16 +36,24 @@ export function extractRSCContent(html: string): RSCExtractResult | null {
     // Lines are separated by \n, each line is one chunk
     // Chunk IDs are hex strings, typically 1-4 chars (supports up to 65535 chunks)
     for (const line of content.split("\n")) {
-      if (!line.trim()) continue;
+      if (!line.trim()) {
+        continue;
+      }
 
       const colonIdx = line.indexOf(":");
-      if (colonIdx <= 0 || colonIdx > 4) continue;
+      if (colonIdx <= 0 || colonIdx > 4) {
+        continue;
+      }
 
       const id = line.slice(0, colonIdx);
-      if (!/^[0-9a-f]+$/i.test(id)) continue;
+      if (!TOP_LEVEL_REGEX_4.test(id)) {
+        continue;
+      }
 
       const payload = line.slice(colonIdx + 1);
-      if (!payload) continue;
+      if (!payload) {
+        continue;
+      }
 
       const existing = chunkMap.get(id);
       if (!existing || payload.length > existing.length) {
@@ -50,20 +62,24 @@ export function extractRSCContent(html: string): RSCExtractResult | null {
     }
   }
 
-  if (chunkMap.size === 0) return null;
+  if (chunkMap.size === 0) {
+    return null;
+  }
 
   // Extract title
-  const titleMatch = html.match(/<title[^>]*>([^<]+)<\/title>/);
+  const titleMatch = html.match(TOP_LEVEL_REGEX_3);
   const title = titleMatch?.[1]?.split("|")[0]?.trim() || "";
 
   // Parse and cache parsed chunks
   const parsedCache = new Map<string, unknown>();
 
   function getParsedChunk(id: string): unknown | null {
-    if (parsedCache.has(id)) return parsedCache.get(id);
+    if (parsedCache.has(id)) {
+      return parsedCache.get(id);
+    }
 
     const chunk = chunkMap.get(id);
-    if (!chunk || !chunk.startsWith("[")) {
+    if (!chunk?.startsWith("[")) {
       parsedCache.set(id, null);
       return null;
     }
@@ -86,14 +102,18 @@ export function extractRSCContent(html: string): RSCExtractResult | null {
     node: Node,
     ctx = { inTable: false, inCode: false }
   ): string {
-    if (node === null || node === undefined) return "";
+    if (node === null || node === undefined) {
+      return "";
+    }
 
     if (typeof node === "string") {
       // Check if it's a reference like "$L30"
-      const refMatch = node.match(/^\$L([0-9a-f]+)$/i);
+      const refMatch = node.match(TOP_LEVEL_REGEX_1);
       if (refMatch) {
         const refId = refMatch[1];
-        if (visitedRefs.has(refId)) return ""; // Prevent cycles
+        if (visitedRefs.has(refId)) {
+          return ""; // Prevent cycles
+        }
         visitedRefs.add(refId);
         const refNode = getParsedChunk(refId);
         const result = refNode ? extractNode(refNode, ctx) : "";
@@ -103,15 +123,22 @@ export function extractRSCContent(html: string): RSCExtractResult | null {
       // Filter out RSC-specific artifacts, but preserve content inside code blocks
       if (
         !ctx.inCode &&
-        (node === "$undefined" || node === "$" || /^\$[A-Z]/.test(node))
-      )
+        (node === "$undefined" || node === "$" || TOP_LEVEL_REGEX_2.test(node))
+      ) {
         return "";
+      }
       return node.trim() ? node : "";
     }
 
-    if (typeof node === "number") return String(node);
-    if (typeof node === "boolean") return "";
-    if (!Array.isArray(node)) return "";
+    if (typeof node === "number") {
+      return String(node);
+    }
+    if (typeof node === "boolean") {
+      return "";
+    }
+    if (!Array.isArray(node)) {
+      return "";
+    }
 
     // RSC element: ["$", "tag", key, props]
     if (node[0] === "$" && typeof node[1] === "string") {
@@ -134,12 +161,16 @@ export function extractRSCContent(html: string): RSCExtractResult | null {
         "footer",
         "aside",
       ];
-      if (skipTags.includes(tag)) return "";
+      if (skipTags.includes(tag)) {
+        return "";
+      }
 
       // Component ref like $L25
       if (tag.startsWith("$L")) {
         const refId = tag.slice(2);
-        if (visitedRefs.has(refId)) return "";
+        if (visitedRefs.has(refId)) {
+          return "";
+        }
 
         // Check for heading components with baseId
         if (props.baseId && props.children) {
@@ -186,7 +217,7 @@ export function extractRSCContent(html: string): RSCExtractResult | null {
           const preContent = children
             ? extractNode(children as Node, { ...ctx, inCode: true })
             : "";
-          return "```\n" + preContent + "\n```\n\n";
+          return `\`\`\`\n${preContent}\n\`\`\`\n\n`;
         }
         case "strong":
         case "b":
@@ -198,11 +229,11 @@ export function extractRSCContent(html: string): RSCExtractResult | null {
           return `- ${content.trim()}\n`;
         case "ul":
         case "ol":
-          return content + "\n";
+          return `${content}\n`;
         case "blockquote":
           return `> ${content.trim()}\n\n`;
         case "table":
-          return extractTable(node as unknown[]) + "\n";
+          return `${extractTable(node as unknown[])}\n`;
         case "thead":
         case "tbody":
         case "tr":
@@ -235,21 +266,27 @@ export function extractRSCContent(html: string): RSCExtractResult | null {
     let headerRowCount = 0;
 
     function walkTable(node: unknown, isHeader = false): void {
-      if (node === null || node === undefined) return;
+      if (node === null || node === undefined) {
+        return;
+      }
 
       // Handle string refs
       if (typeof node === "string") {
-        const refMatch = node.match(/^\$L([0-9a-f]+)$/i);
+        const refMatch = node.match(TOP_LEVEL_REGEX_1);
         if (refMatch && !visitedRefs.has(refMatch[1])) {
           visitedRefs.add(refMatch[1]);
           const refNode = getParsedChunk(refMatch[1]);
-          if (refNode) walkTable(refNode, isHeader);
+          if (refNode) {
+            walkTable(refNode, isHeader);
+          }
           visitedRefs.delete(refMatch[1]);
         }
         return;
       }
 
-      if (!Array.isArray(node)) return;
+      if (!Array.isArray(node)) {
+        return;
+      }
 
       if (node[0] === "$") {
         const tag = node[1] as string;
@@ -261,43 +298,59 @@ export function extractRSCContent(html: string): RSCExtractResult | null {
           if (!visitedRefs.has(refId)) {
             visitedRefs.add(refId);
             const refNode = getParsedChunk(refId);
-            if (refNode) walkTable(refNode, isHeader);
+            if (refNode) {
+              walkTable(refNode, isHeader);
+            }
             visitedRefs.delete(refId);
           }
           return;
         }
 
-        if (tag === "thead") walkTable(nodeProps.children, true);
-        else if (tag === "tbody") walkTable(nodeProps.children, false);
-        else if (tag === "tr") {
+        if (tag === "thead") {
+          walkTable(nodeProps.children, true);
+        } else if (tag === "tbody") {
+          walkTable(nodeProps.children, false);
+        } else if (tag === "tr") {
           const cells: string[] = [];
           walkCells(nodeProps.children, cells);
           if (cells.length > 0) {
             rows.push(cells);
-            if (isHeader) headerRowCount++;
+            if (isHeader) {
+              headerRowCount++;
+            }
           }
-        } else walkTable(nodeProps.children, isHeader);
+        } else {
+          walkTable(nodeProps.children, isHeader);
+        }
       } else {
-        for (const child of node) walkTable(child, isHeader);
+        for (const child of node) {
+          walkTable(child, isHeader);
+        }
       }
     }
 
     function walkCells(node: unknown, cells: string[]): void {
-      if (node === null || node === undefined) return;
+      if (node === null || node === undefined) {
+        return;
+      }
 
       // Handle string refs
       if (typeof node === "string") {
-        const refMatch = node.match(/^\$L([0-9a-f]+)$/i);
+        const refMatch = node.match(TOP_LEVEL_REGEX_1);
         if (refMatch && !visitedRefs.has(refMatch[1])) {
           visitedRefs.add(refMatch[1]);
           const refNode = getParsedChunk(refMatch[1]);
-          if (refNode) walkCells(refNode, cells);
+          if (refNode) {
+            walkCells(refNode, cells);
+          }
           visitedRefs.delete(refMatch[1]);
         }
         return;
       }
 
-      if (!Array.isArray(node)) return;
+      if (!Array.isArray(node)) {
+        return;
+      }
 
       if (node[0] === "$" && (node[1] === "td" || node[1] === "th")) {
         const cellProps = (node[3] || {}) as Record<string, unknown>;
@@ -320,24 +373,30 @@ export function extractRSCContent(html: string): RSCExtractResult | null {
         if (!visitedRefs.has(refId)) {
           visitedRefs.add(refId);
           const refNode = getParsedChunk(refId);
-          if (refNode) walkCells(refNode, cells);
+          if (refNode) {
+            walkCells(refNode, cells);
+          }
           visitedRefs.delete(refId);
         }
       } else {
-        for (const child of node) walkCells(child, cells);
+        for (const child of node) {
+          walkCells(child, cells);
+        }
       }
     }
 
     walkTable(props.children);
-    if (rows.length === 0) return "";
+    if (rows.length === 0) {
+      return "";
+    }
 
     const colCount = Math.max(...rows.map((r) => r.length));
     let md = "";
     for (let i = 0; i < rows.length; i++) {
-      const row = rows[i].concat(Array(colCount - rows[i].length).fill(""));
-      md += "| " + row.join(" | ") + " |\n";
+      const row = rows[i].concat(new Array(colCount - rows[i].length).fill(""));
+      md += `| ${row.join(" | ")} |\n`;
       if (i === headerRowCount - 1 || (headerRowCount === 0 && i === 0)) {
-        md += "| " + Array(colCount).fill("---").join(" | ") + " |\n";
+        md += `| ${new Array(colCount).fill("---").join(" | ")} |\n`;
       }
     }
     return md;
@@ -358,9 +417,13 @@ export function extractRSCContent(html: string): RSCExtractResult | null {
   const contentParts: { order: number; text: string }[] = [];
 
   for (const [id] of chunkMap) {
-    if (id === "23") continue;
+    if (id === "23") {
+      continue;
+    }
     const parsed = getParsedChunk(id);
-    if (!parsed) continue;
+    if (!parsed) {
+      continue;
+    }
 
     visitedRefs.clear();
     const text = extractNode(parsed);
@@ -370,11 +433,13 @@ export function extractRSCContent(html: string): RSCExtractResult | null {
       !text.includes("page was not found") &&
       !text.includes("404")
     ) {
-      contentParts.push({ order: parseInt(id, 16), text: text.trim() });
+      contentParts.push({ order: Number.parseInt(id, 16), text: text.trim() });
     }
   }
 
-  if (contentParts.length === 0) return null;
+  if (contentParts.length === 0) {
+    return null;
+  }
 
   contentParts.sort((a, b) => a.order - b.order);
 

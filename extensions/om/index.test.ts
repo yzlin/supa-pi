@@ -99,15 +99,18 @@ function createOmHarness(
       customType?: string;
       data?: unknown;
     }>;
-    branchEntries?: Array<any>;
+    branchEntries?: any[];
   },
   deps: Parameters<typeof createOmExtension>[0] = {}
 ) {
-  const handlers = new Map<string, (event: unknown, ctx: any) => unknown>();
+  const eventHandlers = new Map<
+    string,
+    (omEvent: unknown, omCtx: unknown) => unknown
+  >();
   const commands = new Map<
     string,
     {
-      handler: (args: string, ctx: any) => unknown;
+      handler: (args: string, commandCtx: unknown) => unknown;
       getArgumentCompletions?: (argumentPrefix: string) => unknown;
     }
   >();
@@ -117,13 +120,18 @@ function createOmHarness(
   const notifications: Array<{ message: string; level?: string }> = [];
 
   createOmExtension(deps)({
-    on(eventName, handler) {
-      handlers.set(eventName, handler as (event: unknown, ctx: any) => unknown);
+    on(eventName, registeredHandler) {
+      eventHandlers.set(
+        eventName,
+        registeredHandler as (omEvent: unknown, omCtx: unknown) => unknown
+      );
     },
     registerCommand(name, definition) {
       commands.set(
         name,
-        definition as { handler: (args: string, ctx: any) => unknown }
+        definition as {
+          handler: (args: string, commandCtx: unknown) => unknown;
+        }
       );
     },
     appendEntry(customType, data) {
@@ -167,10 +175,10 @@ function createOmHarness(
     appendedEntries,
     commands,
     notifications,
-    context: handlers.get("context"),
-    sessionBeforeCompact: handlers.get("session_before_compact"),
-    sessionStart: handlers.get("session_start"),
-    turnEnd: handlers.get("turn_end"),
+    context: eventHandlers.get("context"),
+    sessionBeforeCompact: eventHandlers.get("session_before_compact"),
+    sessionStart: eventHandlers.get("session_start"),
+    turnEnd: eventHandlers.get("turn_end"),
     ctx,
   };
 }
@@ -294,8 +302,12 @@ describe("om session_start restore wiring", () => {
       on(eventName, handler) {
         handlers.set(eventName, handler);
       },
-      registerCommand() {},
-      appendEntry() {},
+      registerCommand() {
+        /* noop */
+      },
+      appendEntry() {
+        /* noop */
+      },
     } as never);
 
     const sessionStart = handlers.get("session_start");
@@ -409,7 +421,7 @@ describe("om session_start restore wiring", () => {
             messageTokens: 1,
           },
         },
-        invokeObserverFn: async (invokeContext) => {
+        invokeObserverFn: (invokeContext) => {
           usedModel = invokeContext.model;
           return createEmptyOmObserverResult();
         },
@@ -446,7 +458,7 @@ describe("om session_start restore wiring", () => {
             messageTokens: 1,
           },
         },
-        invokeObserverFn: async (invokeContext) => {
+        invokeObserverFn: (invokeContext) => {
           usedModel = invokeContext.model;
           return createEmptyOmObserverResult();
         },
@@ -480,7 +492,7 @@ describe("om session_start restore wiring", () => {
             messageTokens: 1,
           },
         },
-        invokeObserverFn: async (invokeContext) => {
+        invokeObserverFn: (invokeContext) => {
           usedModel = invokeContext.model;
           return createEmptyOmObserverResult();
         },
@@ -523,7 +535,7 @@ describe("om session_start restore wiring", () => {
             messageTokens: 1,
           },
         },
-        invokeObserverFn: async (invokeContext) => {
+        invokeObserverFn: (invokeContext) => {
           usedModel = invokeContext.model;
           return createEmptyOmObserverResult();
         },
@@ -1474,7 +1486,7 @@ describe("om turn_end observer wiring", () => {
         ],
       },
       {
-        invokeObserverFn: async () => {
+        invokeObserverFn: () => {
           observerCalls += 1;
           return createEmptyOmObserverResult();
         },
@@ -1537,7 +1549,7 @@ describe("om turn_end observer wiring", () => {
         ],
       },
       {
-        invokeObserverFn: async (_ctx, _state, window) => {
+        invokeObserverFn: (_ctx, _state, window) => {
           observerWindows.push({
             pendingEntryIds: [...window.pendingEntryIds],
             newTurnIds: window.newTurns.map((turn) => turn.id),
@@ -1617,7 +1629,7 @@ describe("om turn_end observer wiring", () => {
         ],
       },
       {
-        invokeObserverFn: async (_ctx, _state, _window, options) => {
+        invokeObserverFn: (_ctx, _state, _window, options) => {
           observerCalls += 1;
           options?.onDiagnostic?.({ code: "missing-model" });
           return createEmptyOmObserverResult();
@@ -1685,7 +1697,7 @@ describe("om turn_end observer wiring", () => {
         ],
       },
       {
-        invokeObserverFn: async (_ctx, _state, _window, options) => {
+        invokeObserverFn: (_ctx, _state, _window, options) => {
           options?.onDiagnostic?.({
             code: "provider-error",
             meta: {
@@ -1761,7 +1773,7 @@ describe("om turn_end observer wiring", () => {
         ],
       },
       {
-        invokeObserverFn: async (_ctx, _state, _window, options) => {
+        invokeObserverFn: (_ctx, _state, _window, options) => {
           options?.onDiagnostic?.({
             code: "invalid-output",
             meta: {
@@ -1841,7 +1853,7 @@ describe("om turn_end observer wiring", () => {
         ],
       },
       {
-        invokeObserverFn: async (_ctx, _state, _window, options) => {
+        invokeObserverFn: (_ctx, _state, _window, options) => {
           options?.onDiagnostic?.({
             code: "empty-output",
             meta: {
@@ -1938,7 +1950,7 @@ describe("om turn_end observer wiring", () => {
         ],
       },
       {
-        invokeObserverFn: async (_ctx, _state, _window, options) => {
+        invokeObserverFn: (_ctx, _state, _window, options) => {
           observerCalls += 1;
           options?.onDiagnostic?.({
             code: "empty-output",
@@ -2061,7 +2073,7 @@ describe("om turn_end observer wiring", () => {
         ],
       },
       {
-        invokeObserverFn: async (_ctx, _state, window) => {
+        invokeObserverFn: (_ctx, _state, window) => {
           observerCalls += 1;
           return {
             observations: [
@@ -2078,7 +2090,7 @@ describe("om turn_end observer wiring", () => {
             activeThreads: [],
           };
         },
-        invokeReflectorFn: async () => {
+        invokeReflectorFn: () => {
           reflectorCalls += 1;
           return {
             reflections: [
@@ -2163,11 +2175,7 @@ describe("om turn_end observer wiring", () => {
       }),
       createOmBranchScope([{ id: "entry-1" }, { id: "om-state" }])
     );
-    const invokeObserverFn = async (
-      _ctx: unknown,
-      _state: unknown,
-      window: any
-    ) => {
+    const invokeObserverFn = (_ctx: unknown, _state: unknown, window: any) => {
       observerCalls += 1;
       return {
         observations: [
@@ -2300,7 +2308,7 @@ describe("om turn_end observer wiring", () => {
         reflectionObservationTokens: reflectionThreshold,
       },
     });
-    const invokeReflectorFn = async () => {
+    const invokeReflectorFn = () => {
       reflectorCalls += 1;
       return {
         reflections: [
@@ -2473,7 +2481,7 @@ describe("om turn_end observer wiring", () => {
         ],
       },
       {
-        invokeObserverFn: async () => {
+        invokeObserverFn: () => {
           observerCalls += 1;
           return createEmptyOmObserverResult();
         },

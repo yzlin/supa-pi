@@ -115,7 +115,9 @@ const ASCII_SEPARATORS: SeparatorChars = {
 };
 
 export function hasNerdFonts(): boolean {
-  if (process.env.POWERLINE_NERD_FONTS === "0") return false;
+  if (process.env.POWERLINE_NERD_FONTS === "0") {
+    return false;
+  }
   return true;
 }
 

@@ -6,7 +6,7 @@ describe("getModelAuthOrThrow", () => {
   it("returns api key and headers from the registry", async () => {
     const auth = await getModelAuthOrThrow(
       {
-        async getApiKeyAndHeaders() {
+        getApiKeyAndHeaders() {
           return {
             ok: true as const,
             apiKey: "token",
@@ -31,7 +31,7 @@ describe("getModelAuthOrThrow", () => {
     await expect(
       getModelAuthOrThrow(
         {
-          async getApiKeyAndHeaders() {
+          getApiKeyAndHeaders() {
             return {
               ok: false as const,
               error: "Missing auth",
@@ -46,7 +46,7 @@ describe("getModelAuthOrThrow", () => {
   it("falls back to legacy model-level api key lookup", async () => {
     const auth = await getModelAuthOrThrow(
       {
-        async getApiKey() {
+        getApiKey() {
           return "legacy-token";
         },
       },
@@ -64,7 +64,7 @@ describe("getProviderApiKeyForModel", () => {
   it("looks up the key by provider", async () => {
     const apiKey = await getProviderApiKeyForModel(
       {
-        async getApiKeyForProvider(provider: string) {
+        getApiKeyForProvider(provider: string) {
           return provider === "anthropic" ? "oauth-token" : undefined;
         },
       },
@@ -78,7 +78,7 @@ describe("getProviderApiKeyForModel", () => {
     const model = { provider: "anthropic", id: "claude-haiku-4-5" };
     const apiKey = await getProviderApiKeyForModel(
       {
-        async getApiKey(input: unknown) {
+        getApiKey(input: unknown) {
           return input === model ? "legacy-oauth-token" : undefined;
         },
       },

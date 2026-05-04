@@ -87,17 +87,17 @@ interface DiagnosticWaiter {
 // ── Client ──────────────────────────────────────────────────────────────────
 
 export class LspClient {
-  private connection: LspConnection;
+  private readonly connection: LspConnection;
   private initialized = false;
   private initializePromise: Promise<void> | null = null;
-  private openDocs = new Map<string, OpenDocument>();
-  private diagnosticStore = new Map<string, Diagnostic[]>();
-  private diagnosticWaiters = new Map<string, DiagnosticWaiter[]>();
+  private readonly openDocs = new Map<string, OpenDocument>();
+  private readonly diagnosticStore = new Map<string, Diagnostic[]>();
+  private readonly diagnosticWaiters = new Map<string, DiagnosticWaiter[]>();
   private serverCapabilities: Record<string, unknown> = {};
-  private stderrLog: string[] = [];
+  private readonly stderrLog: string[] = [];
 
   readonly config: ResolvedServerConfig;
-  private rootPath: string;
+  private readonly rootPath: string;
 
   constructor(config: ResolvedServerConfig, rootPath: string) {
     this.config = config;
@@ -135,7 +135,9 @@ export class LspClient {
 
     conn.setStderrHandler((text) => {
       this.stderrLog.push(text);
-      if (this.stderrLog.length > 100) this.stderrLog.shift();
+      if (this.stderrLog.length > 100) {
+        this.stderrLog.shift();
+      }
     });
 
     conn.setExitHandler((_code) => {
@@ -146,9 +148,13 @@ export class LspClient {
     return conn;
   }
 
-  async ensureInitialized(): Promise<void> {
-    if (this.initialized) return;
-    if (this.initializePromise) return this.initializePromise;
+  ensureInitialized(): Promise<void> {
+    if (this.initialized) {
+      return;
+    }
+    if (this.initializePromise) {
+      return this.initializePromise;
+    }
     this.initializePromise = this.doInitialize();
     return this.initializePromise;
   }
@@ -207,11 +213,13 @@ export class LspClient {
   }
 
   async shutdown(): Promise<void> {
-    if (!this.connection.alive) return;
+    if (!this.connection.alive) {
+      return;
+    }
 
     try {
       if (this.initialized) {
-        await this.connection.sendRequest("shutdown", null, 5_000);
+        await this.connection.sendRequest("shutdown", null, 5000);
         this.connection.sendNotification("exit", null);
       }
     } catch {
@@ -271,10 +279,12 @@ export class LspClient {
     return uri;
   }
 
-  async closeDocument(filePath: string): Promise<void> {
+  closeDocument(filePath: string): Promise<void> {
     const uri = pathToUri(resolve(this.rootPath, filePath));
     const doc = this.openDocs.get(uri);
-    if (!doc) return;
+    if (!doc) {
+      return;
+    }
 
     this.connection.sendNotification("textDocument/didClose", {
       textDocument: { uri },
@@ -306,8 +316,12 @@ export class LspClient {
         const waiters = this.diagnosticWaiters.get(uri);
         if (waiters) {
           const idx = waiters.findIndex((w) => w.resolve === resolveWait);
-          if (idx !== -1) waiters.splice(idx, 1);
-          if (waiters.length === 0) this.diagnosticWaiters.delete(uri);
+          if (idx !== -1) {
+            waiters.splice(idx, 1);
+          }
+          if (waiters.length === 0) {
+            this.diagnosticWaiters.delete(uri);
+          }
         }
         resolveWait();
       }, timeoutMs);
@@ -397,7 +411,9 @@ export class LspClient {
         textDocument: { uri },
       }
     );
-    if (!Array.isArray(result)) return [];
+    if (!Array.isArray(result)) {
+      return [];
+    }
     return result as DocumentSymbol[] | SymbolInformation[];
   }
 
@@ -408,7 +424,9 @@ export class LspClient {
     const result = await this.connection.sendRequest("workspace/symbol", {
       query,
     });
-    if (!Array.isArray(result)) return [];
+    if (!Array.isArray(result)) {
+      return [];
+    }
     return result as SymbolInformation[];
   }
 
@@ -426,7 +444,9 @@ export class LspClient {
         position,
       }
     );
-    if (!Array.isArray(result)) return [];
+    if (!Array.isArray(result)) {
+      return [];
+    }
     return result as CallHierarchyItem[];
   }
 
@@ -437,7 +457,9 @@ export class LspClient {
       "callHierarchy/incomingCalls",
       { item }
     );
-    if (!Array.isArray(result)) return [];
+    if (!Array.isArray(result)) {
+      return [];
+    }
     return result as CallHierarchyIncomingCall[];
   }
 
@@ -448,7 +470,9 @@ export class LspClient {
       "callHierarchy/outgoingCalls",
       { item }
     );
-    if (!Array.isArray(result)) return [];
+    if (!Array.isArray(result)) {
+      return [];
+    }
     return result as CallHierarchyOutgoingCall[];
   }
 
@@ -468,7 +492,9 @@ export class LspClient {
         context,
       }
     );
-    if (!Array.isArray(result)) return [];
+    if (!Array.isArray(result)) {
+      return [];
+    }
     return result as CodeAction[];
   }
 }
@@ -476,8 +502,12 @@ export class LspClient {
 // ── Utilities ───────────────────────────────────────────────────────────────
 
 function normalizeLocations(result: unknown): Location[] {
-  if (!result) return [];
-  if (Array.isArray(result)) return result as Location[];
+  if (!result) {
+    return [];
+  }
+  if (Array.isArray(result)) {
+    return result as Location[];
+  }
   if (
     typeof result === "object" &&
     "uri" in (result as Record<string, unknown>)

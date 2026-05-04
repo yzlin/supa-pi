@@ -6,10 +6,10 @@ describe("analyzeMessages", () => {
   it("uses exact total when available and keeps residual explicit", () => {
     const snapshot = analyzeMessages({
       systemPrompt: "system prompt ".repeat(200),
-      contextWindow: 20000,
+      contextWindow: 20_000,
       contextUsage: {
         tokens: 6000,
-        contextWindow: 20000,
+        contextWindow: 20_000,
         percent: 30,
       },
       modelLabel: "claude-test",
@@ -59,10 +59,10 @@ describe("analyzeMessages", () => {
   it("flags unknown exact totals and uses estimated severity", () => {
     const snapshot = analyzeMessages({
       systemPrompt: "system prompt ".repeat(400),
-      contextWindow: 10000,
+      contextWindow: 10_000,
       contextUsage: {
         tokens: null,
-        contextWindow: 10000,
+        contextWindow: 10_000,
         percent: null,
       },
       messages: [
@@ -92,8 +92,9 @@ describe("analyzeMessages", () => {
 
   it("best-effort splits system prompt sections", () => {
     const snapshot = analyzeMessages({
-      contextWindow: 200000,
-      systemPrompt: `You are an assistant.\n\nAvailable tools:\n- read\n- bash\n\nAvailable agent types:\n- general-purpose\n- code-reviewer\n\n# Project Context\n\n## /tmp/AGENTS.md\nProject instructions\n\n<rules>rule block</rules>\n\n<available_skills>skill block</available_skills>`,
+      contextWindow: 200_000,
+      systemPrompt:
+        "You are an assistant.\n\nAvailable tools:\n- read\n- bash\n\nAvailable agent types:\n- general-purpose\n- code-reviewer\n\n# Project Context\n\n## /tmp/AGENTS.md\nProject instructions\n\n<rules>rule block</rules>\n\n<available_skills>skill block</available_skills>",
       messages: [],
     });
 
@@ -121,10 +122,10 @@ describe("analyzeMessages", () => {
   it("keeps estimated categories visible when exact total is lower", () => {
     const snapshot = analyzeMessages({
       systemPrompt: "system prompt ".repeat(300),
-      contextWindow: 200000,
+      contextWindow: 200_000,
       contextUsage: {
         tokens: 0,
-        contextWindow: 200000,
+        contextWindow: 200_000,
         percent: 0,
       },
       messages: [],

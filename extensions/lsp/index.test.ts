@@ -10,10 +10,10 @@ const TEST_THEME = {
   bold: (text: string) => text,
 };
 
-type LspOverlayComponent = {
+interface LspOverlayComponent {
   render(width: number): string[];
   handleInput(data: string): void;
-};
+}
 
 function withTempHome<T>(
   run: (paths: { homeDir: string; cwd: string }) => Promise<T> | T
@@ -31,7 +31,7 @@ function withTempHome<T>(
     .then(() => run({ homeDir, cwd }))
     .finally(() => {
       if (previousHome === undefined) {
-        delete process.env.HOME;
+        process.env.HOME = undefined;
       } else {
         process.env.HOME = previousHome;
       }
@@ -64,8 +64,12 @@ function createHarness(
     ) {
       commands.set(name, definition);
     },
-    registerTool() {},
-    on() {},
+    registerTool() {
+      /* noop */
+    },
+    on() {
+      /* noop */
+    },
   };
 
   const ctx = {
@@ -75,17 +79,23 @@ function createHarness(
       notify(message: string, level: string) {
         notifications.push({ message, level });
       },
-      setStatus() {},
+      setStatus() {
+        /* noop */
+      },
       ...(options?.customUI
         ? {
-            async custom(factory: any) {
+            custom(factory: any) {
               component = factory(
                 {
-                  requestRender() {},
+                  requestRender() {
+                    /* noop */
+                  },
                 },
                 options?.theme ?? TEST_THEME,
                 {},
-                () => {}
+                () => {
+                  /* noop */
+                }
               );
 
               renders.push(component?.render(80) ?? []);
@@ -113,7 +123,7 @@ function createHarness(
 
 describe("lsp command", () => {
   it("registers only the /lsp command with subcommand completions", async () => {
-    await withTempHome(async ({ cwd }) => {
+    await withTempHome(({ cwd }) => {
       const harness = createHarness(cwd);
 
       expect(harness.commands.has("lsp")).toBe(true);

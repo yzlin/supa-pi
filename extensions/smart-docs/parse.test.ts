@@ -10,7 +10,9 @@ describe("parseSmartDocsArgs", () => {
     const result = parseSmartDocsArgs("", cwd);
 
     expect(result.ok).toBe(true);
-    if (!result.ok) throw new Error("expected ok result");
+    if (!result.ok) {
+      throw new Error("expected ok result");
+    }
 
     expect(result.value).toEqual({
       targetRoot: cwd,
@@ -28,7 +30,9 @@ describe("parseSmartDocsArgs", () => {
     const result = parseSmartDocsArgs("./extensions", cwd);
 
     expect(result.ok).toBe(true);
-    if (!result.ok) throw new Error("expected ok result");
+    if (!result.ok) {
+      throw new Error("expected ok result");
+    }
 
     expect(result.value.targetRoot).toBe(path.resolve(cwd, "./extensions"));
     expect(result.value.targetLabel).toBe("./extensions");
@@ -44,7 +48,9 @@ describe("parseSmartDocsArgs", () => {
     );
 
     expect(result.ok).toBe(true);
-    if (!result.ok) throw new Error("expected ok result");
+    if (!result.ok) {
+      throw new Error("expected ok result");
+    }
 
     expect(result.value.targetLabel).toBe("./extensions");
     expect(result.value.instruction).toBe("focus on command architecture");
@@ -57,7 +63,9 @@ describe("parseSmartDocsArgs", () => {
     );
 
     expect(result.ok).toBe(true);
-    if (!result.ok) throw new Error("expected ok result");
+    if (!result.ok) {
+      throw new Error("expected ok result");
+    }
 
     expect(result.value.outputDir).toBe(
       path.resolve(cwd, "./extensions", "generated-docs")
@@ -112,7 +120,9 @@ describe("parseSmartDocsArgs", () => {
     );
 
     expect(result.ok).toBe(true);
-    if (!result.ok) throw new Error("expected ok result");
+    if (!result.ok) {
+      throw new Error("expected ok result");
+    }
 
     expect(result.value.targetLabel).toBe("./extensions");
     expect(result.value.instruction).toBe("architecture only");

@@ -19,11 +19,13 @@ import type {
   OmStateV1,
 } from "./types";
 
-type OmReflectorModel = {
+const TOP_LEVEL_REGEX_1 = /```(?:json)?\s*([\s\S]*?)\s*```/i;
+
+interface OmReflectorModel {
   id: string;
   provider: string;
   input?: readonly string[];
-};
+}
 
 interface OmReflectorModelRegistryLike {
   find(provider: string, modelId: string): OmReflectorModel | undefined;
@@ -100,7 +102,7 @@ function extractAssistantTextContent(message: AssistantMessage): string {
 }
 
 function extractFencedJsonBlock(text: string): string | null {
-  const fenceMatch = text.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
+  const fenceMatch = text.match(TOP_LEVEL_REGEX_1);
 
   if (!fenceMatch) {
     return null;

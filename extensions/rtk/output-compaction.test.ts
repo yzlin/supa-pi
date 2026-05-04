@@ -15,7 +15,9 @@ function createRuntime(config?: RtkConfig): RtkRuntime {
       currentConfig = structuredClone(nextConfig);
     },
     getStatus: () => ({ rtkAvailable: true }),
-    setStatus() {},
+    setStatus() {
+      /* noop */
+    },
     refreshRtkStatus: () => ({ rtkAvailable: true }),
     resetSessionState() {
       metrics.reset();
@@ -33,7 +35,7 @@ describe("rtk output compaction", () => {
         enabled: true,
         compactBash: true,
         maxLines: 2,
-        maxChars: 1_000,
+        maxChars: 1000,
         trackSavings: true,
       },
     });
@@ -74,7 +76,7 @@ describe("rtk output compaction", () => {
         enabled: true,
         compactRead: true,
         maxLines: 2,
-        maxChars: 1_000,
+        maxChars: 1000,
       },
     });
 
@@ -102,7 +104,7 @@ describe("rtk output compaction", () => {
         enabled: true,
         compactGrep: true,
         maxLines: 2,
-        maxChars: 1_000,
+        maxChars: 1000,
       },
     });
 
@@ -130,7 +132,7 @@ describe("rtk output compaction", () => {
         enabled: false,
         compactGrep: true,
         maxLines: 2,
-        maxChars: 1_000,
+        maxChars: 1000,
       },
     });
 
@@ -159,7 +161,7 @@ describe("rtk output compaction", () => {
         enabled: true,
         compactGrep: false,
         maxLines: 2,
-        maxChars: 1_000,
+        maxChars: 1000,
       },
     });
 
@@ -188,7 +190,7 @@ describe("rtk output compaction", () => {
         enabled: true,
         compactRead: true,
         maxLines: 10,
-        maxChars: 1_000,
+        maxChars: 1000,
         trackSavings: true,
       },
     });
@@ -276,7 +278,7 @@ describe("rtk output compaction", () => {
         enabled: true,
         compactRead: true,
         maxLines: 2,
-        maxChars: 1_000,
+        maxChars: 1000,
       },
     });
 

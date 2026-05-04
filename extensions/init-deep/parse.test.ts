@@ -10,7 +10,9 @@ describe("parseInitDeepArgs", () => {
     const result = parseInitDeepArgs("", cwd);
 
     expect(result.ok).toBe(true);
-    if (!result.ok) throw new Error("expected ok result");
+    if (!result.ok) {
+      throw new Error("expected ok result");
+    }
 
     expect(result.value).toEqual({
       targetRoot: cwd,
@@ -26,7 +28,9 @@ describe("parseInitDeepArgs", () => {
     const result = parseInitDeepArgs("./extensions", cwd);
 
     expect(result.ok).toBe(true);
-    if (!result.ok) throw new Error("expected ok result");
+    if (!result.ok) {
+      throw new Error("expected ok result");
+    }
 
     expect(result.value.targetRoot).toBe(path.resolve(cwd, "./extensions"));
     expect(result.value.targetLabel).toBe("./extensions");
@@ -39,7 +43,9 @@ describe("parseInitDeepArgs", () => {
     );
 
     expect(result.ok).toBe(true);
-    if (!result.ok) throw new Error("expected ok result");
+    if (!result.ok) {
+      throw new Error("expected ok result");
+    }
 
     expect(result.value.targetLabel).toBe("./extensions");
     expect(result.value.instruction).toBe(
@@ -54,7 +60,9 @@ describe("parseInitDeepArgs", () => {
     );
 
     expect(result.ok).toBe(true);
-    if (!result.ok) throw new Error("expected ok result");
+    if (!result.ok) {
+      throw new Error("expected ok result");
+    }
 
     expect(result.value.createNew).toBe(true);
     expect(result.value.maxDepth).toBe(5);
@@ -66,7 +74,9 @@ describe("parseInitDeepArgs", () => {
     const result = parseInitDeepArgs("--max-depth=4", cwd);
 
     expect(result.ok).toBe(true);
-    if (!result.ok) throw new Error("expected ok result");
+    if (!result.ok) {
+      throw new Error("expected ok result");
+    }
 
     expect(result.value.maxDepth).toBe(4);
   });
@@ -115,7 +125,9 @@ describe("parseInitDeepArgs", () => {
     );
 
     expect(result.ok).toBe(true);
-    if (!result.ok) throw new Error("expected ok result");
+    if (!result.ok) {
+      throw new Error("expected ok result");
+    }
 
     expect(result.value.targetLabel).toBe("./extensions");
     expect(result.value.instruction).toBe("focus on runtime boundaries");

@@ -16,6 +16,8 @@ import type { AutocompleteItem } from "@mariozechner/pi-tui";
 
 import type { CompletionResult, ShellCompletionProvider } from "./types.js";
 
+const TOP_LEVEL_REGEX_1 = /\s+/;
+
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const COMPLETE_SCRIPT = path.join(__dirname, "scripts", "bash-complete.bash");
 
@@ -83,8 +85,8 @@ export function getBashCompletions(
   const trimmed = commandLine.trimStart();
   let prefix = "";
   if (!trimmed.endsWith(" ")) {
-    const words = trimmed.split(/\s+/);
-    prefix = words[words.length - 1] || "";
+    const words = trimmed.split(TOP_LEVEL_REGEX_1);
+    prefix = words.at(-1) || "";
   }
 
   try {

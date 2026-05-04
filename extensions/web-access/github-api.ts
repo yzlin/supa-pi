@@ -9,8 +9,10 @@ const MAX_INLINE_FILE_CHARS = 100_000;
 let ghAvailable: boolean | null = null;
 let ghHintShown = false;
 
-export async function checkGhAvailable(): Promise<boolean> {
-  if (ghAvailable !== null) return ghAvailable;
+export function checkGhAvailable(): Promise<boolean> {
+  if (ghAvailable !== null) {
+    return ghAvailable;
+  }
 
   return new Promise((resolve) => {
     execFile("gh", ["--version"], { timeout: 5000 }, (err) => {
@@ -33,19 +35,21 @@ export async function checkRepoSize(
   owner: string,
   repo: string
 ): Promise<number | null> {
-  if (!(await checkGhAvailable())) return null;
+  if (!(await checkGhAvailable())) {
+    return null;
+  }
 
   return new Promise((resolve) => {
     execFile(
       "gh",
       ["api", `repos/${owner}/${repo}`, "--jq", ".size"],
-      { timeout: 10000 },
+      { timeout: 10_000 },
       (err, stdout) => {
         if (err) {
           resolve(null);
           return;
         }
-        const kb = parseInt(stdout.trim(), 10);
+        const kb = Number.parseInt(stdout.trim(), 10);
         resolve(Number.isNaN(kb) ? null : kb);
       }
     );
@@ -56,13 +60,15 @@ async function getDefaultBranch(
   owner: string,
   repo: string
 ): Promise<string | null> {
-  if (!(await checkGhAvailable())) return null;
+  if (!(await checkGhAvailable())) {
+    return null;
+  }
 
   return new Promise((resolve) => {
     execFile(
       "gh",
       ["api", `repos/${owner}/${repo}`, "--jq", ".default_branch"],
-      { timeout: 10000 },
+      { timeout: 10_000 },
       (err, stdout) => {
         if (err) {
           resolve(null);
@@ -80,7 +86,9 @@ async function fetchTreeViaApi(
   repo: string,
   ref: string
 ): Promise<string | null> {
-  if (!(await checkGhAvailable())) return null;
+  if (!(await checkGhAvailable())) {
+    return null;
+  }
 
   return new Promise((resolve) => {
     execFile(
@@ -91,7 +99,7 @@ async function fetchTreeViaApi(
         "--jq",
         ".tree[].path",
       ],
-      { timeout: 15000, maxBuffer: 5 * 1024 * 1024 },
+      { timeout: 15_000, maxBuffer: 5 * 1024 * 1024 },
       (err, stdout) => {
         if (err) {
           resolve(null);
@@ -106,7 +114,7 @@ async function fetchTreeViaApi(
         const display = paths.slice(0, MAX_TREE_ENTRIES).join("\n");
         resolve(
           truncated
-            ? display + `\n... (${paths.length} total entries)`
+            ? `${display}\n... (${paths.length} total entries)`
             : display
         );
       }
@@ -119,13 +127,15 @@ async function fetchReadmeViaApi(
   repo: string,
   ref: string
 ): Promise<string | null> {
-  if (!(await checkGhAvailable())) return null;
+  if (!(await checkGhAvailable())) {
+    return null;
+  }
 
   return new Promise((resolve) => {
     execFile(
       "gh",
       ["api", `repos/${owner}/${repo}/readme?ref=${ref}`, "--jq", ".content"],
-      { timeout: 10000 },
+      { timeout: 10_000 },
       (err, stdout) => {
         if (err) {
           resolve(null);
@@ -137,7 +147,7 @@ async function fetchReadmeViaApi(
           );
           resolve(
             decoded.length > 8192
-              ? decoded.slice(0, 8192) + "\n\n[README truncated at 8K chars]"
+              ? `${decoded.slice(0, 8192)}\n\n[README truncated at 8K chars]`
               : decoded
           );
         } catch {
@@ -154,7 +164,9 @@ async function fetchFileViaApi(
   path: string,
   ref: string
 ): Promise<string | null> {
-  if (!(await checkGhAvailable())) return null;
+  if (!(await checkGhAvailable())) {
+    return null;
+  }
 
   return new Promise((resolve) => {
     execFile(
@@ -165,7 +177,7 @@ async function fetchFileViaApi(
         "--jq",
         ".content",
       ],
-      { timeout: 10000, maxBuffer: 2 * 1024 * 1024 },
+      { timeout: 10_000, maxBuffer: 2 * 1024 * 1024 },
       (err, stdout) => {
         if (err) {
           resolve(null);
@@ -189,7 +201,9 @@ export async function fetchViaApi(
   sizeNote?: string
 ): Promise<ExtractedContent | null> {
   const ref = info.ref || (await getDefaultBranch(owner, repo));
-  if (!ref) return null;
+  if (!ref) {
+    return null;
+  }
 
   const lines: string[] = [];
   if (sizeNote) {
@@ -199,12 +213,14 @@ export async function fetchViaApi(
 
   if (info.type === "blob" && info.path) {
     const content = await fetchFileViaApi(owner, repo, info.path, ref);
-    if (!content) return null;
+    if (!content) {
+      return null;
+    }
 
     lines.push(`## ${info.path}`);
     if (content.length > MAX_INLINE_FILE_CHARS) {
       lines.push(content.slice(0, MAX_INLINE_FILE_CHARS));
-      lines.push(`\n[File truncated at 100K chars]`);
+      lines.push("\n[File truncated at 100K chars]");
     } else {
       lines.push(content);
     }
@@ -222,7 +238,9 @@ export async function fetchViaApi(
     fetchReadmeViaApi(owner, repo, ref),
   ]);
 
-  if (!tree && !readme) return null;
+  if (!(tree || readme)) {
+    return null;
+  }
 
   if (tree) {
     lines.push("## Structure");

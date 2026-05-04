@@ -31,7 +31,7 @@ function withTempHome<T>(
     .then(() => run({ homeDir, cwd }))
     .finally(() => {
       if (previousHome === undefined) {
-        delete process.env.HOME;
+        process.env.HOME = undefined;
       } else {
         process.env.HOME = previousHome;
       }

@@ -29,7 +29,7 @@ function registerSessionHandler(
   runtime: ReturnType<typeof createRtkRuntime>,
   updateBashTool: (cwd: string) => void
 ): void {
-  pi.on(eventName, async (_event, ctx) => {
+  pi.on(eventName, (_event, ctx) => {
     loadRuntimeState(ctx.cwd, runtime);
     updateBashTool(ctx.cwd);
   });
@@ -49,7 +49,7 @@ export default function rtkExtension(pi: ExtensionAPI): void {
 
   pi.registerTool({
     ...bashTool,
-    async execute(toolCallId, params, signal, onUpdate, ctx) {
+    execute(toolCallId, params, signal, onUpdate, ctx) {
       runtime.metrics.recordRewriteAttempt();
       const resolution = resolveRtkCommand(params.command, {
         config: runtime.getConfig(),

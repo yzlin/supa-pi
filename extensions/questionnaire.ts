@@ -17,6 +17,9 @@ import {
 } from "@mariozechner/pi-tui";
 import { Type } from "typebox";
 
+const TOP_LEVEL_REGEX_1 =
+  /\b(could you|can you|would you|do you want|would you prefer|do you prefer|which|what should|should i|any preference|please clarify|confirm)\b/i;
+
 // Types
 export interface QuestionOption {
   value: string;
@@ -79,9 +82,7 @@ function looksLikePlainTextClarification(text: string): boolean {
     return false;
   }
 
-  return /\b(could you|can you|would you|do you want|would you prefer|do you prefer|which|what should|should i|any preference|please clarify|confirm)\b/i.test(
-    text
-  );
+  return TOP_LEVEL_REGEX_1.test(text);
 }
 
 function hasAutoRedirectMessage(
@@ -188,14 +189,14 @@ export function getRenderOptions(question: {
 export default function questionnaire(pi: ExtensionAPI) {
   let lastInputSource: "interactive" | "rpc" | "extension" | null = null;
 
-  pi.on("input", async (event) => {
+  pi.on("input", (event) => {
     lastInputSource = event.source;
     return undefined;
   });
 
   pi.registerCommand("questionnaire-stats", {
     description: "Show questionnaire miss and redirect stats for this session",
-    handler: async (_args, ctx) => {
+    handler: (_args, ctx) => {
       const logs = getQuestionnaireMissLogs(ctx.sessionManager.getEntries());
       if (logs.length === 0) {
         ctx.ui.notify(
@@ -215,13 +216,22 @@ export default function questionnaire(pi: ExtensionAPI) {
       let redirectedAlready = 0;
 
       for (const log of logs) {
-        if (log.source === "interactive") sourceCounts.interactive++;
-        else if (log.source === "rpc") sourceCounts.rpc++;
-        else if (log.source === "extension") sourceCounts.extension++;
-        else sourceCounts.unknown++;
+        if (log.source === "interactive") {
+          sourceCounts.interactive++;
+        } else if (log.source === "rpc") {
+          sourceCounts.rpc++;
+        } else if (log.source === "extension") {
+          sourceCounts.extension++;
+        } else {
+          sourceCounts.unknown++;
+        }
 
-        if (log.autoRedirected) autoRedirected++;
-        if (log.redirectedAlready) redirectedAlready++;
+        if (log.autoRedirected) {
+          autoRedirected++;
+        }
+        if (log.redirectedAlready) {
+          redirectedAlready++;
+        }
       }
 
       const recent = logs
@@ -324,7 +334,9 @@ export default function questionnaire(pi: ExtensionAPI) {
 
           function currentOptions(): RenderOption[] {
             const q = currentQuestion();
-            if (!q) return [];
+            if (!q) {
+              return [];
+            }
             return getRenderOptions(q);
           }
 
@@ -364,7 +376,9 @@ export default function questionnaire(pi: ExtensionAPI) {
 
           // Editor submit callback
           editor.onSubmit = (value) => {
-            if (!inputQuestionId) return;
+            if (!inputQuestionId) {
+              return;
+            }
             const trimmed = value.trim() || "(no response)";
             saveAnswer(inputQuestionId, trimmed, trimmed, true);
             inputMode = false;
@@ -454,7 +468,9 @@ export default function questionnaire(pi: ExtensionAPI) {
           }
 
           function render(width: number): string[] {
-            if (cachedLines) return cachedLines;
+            if (cachedLines) {
+              return cachedLines;
+            }
 
             const lines: string[] = [];
             const q = currentQuestion();
@@ -551,8 +567,8 @@ export default function questionnaire(pi: ExtensionAPI) {
                 add(theme.fg("success", " Press Enter to submit"));
               } else {
                 const missing = questions
-                  .filter((q) => !answers.has(q.id))
-                  .map((q) => q.label)
+                  .filter((question) => !answers.has(question.id))
+                  .map((question) => question.label)
                   .join(", ");
                 add(theme.fg("warning", ` Unanswered: ${missing}`));
               }
@@ -611,7 +627,7 @@ export default function questionnaire(pi: ExtensionAPI) {
       const count = qs.length;
       const labels = qs.map((q) => q.label || q.id).join(", ");
       let text = theme.fg("toolTitle", theme.bold("questionnaire "));
-      text += theme.fg("muted", `${count} question${count !== 1 ? "s" : ""}`);
+      text += theme.fg("muted", `${count} question${count === 1 ? "" : "s"}`);
       if (labels) {
         text += theme.fg("dim", ` (${truncateToWidth(labels, 40)})`);
       }
@@ -638,7 +654,7 @@ export default function questionnaire(pi: ExtensionAPI) {
     },
   });
 
-  pi.on("before_agent_start", async (event, ctx) => {
+  pi.on("before_agent_start", (event, ctx) => {
     if (!ctx.hasUI) {
       return undefined;
     }
@@ -657,7 +673,7 @@ QUESTION-ASKING RULES:
     };
   });
 
-  pi.on("agent_end", async (event, ctx) => {
+  pi.on("agent_end", (event, ctx) => {
     if (!ctx.hasUI) {
       return;
     }

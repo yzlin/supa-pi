@@ -8,11 +8,11 @@ import { getModelAuthOrThrow } from "../llm-auth";
 import { mergeOmCompactionSummary } from "./prompt-integration";
 import type { OmStateV1 } from "./types";
 
-type OmCompactionModel = {
+interface OmCompactionModel {
   id: string;
   provider: string;
   input?: readonly string[];
-};
+}
 
 interface OmCompactionModelRegistryLike {
   find(provider: string, modelId: string): OmCompactionModel | undefined;
@@ -100,7 +100,7 @@ function extractAssistantTextContent(message: AssistantMessage): string {
 
 export function buildOmCompactionPrompt(
   input: OmCompactionInput,
-  state: OmStateV1
+  _state: OmStateV1
 ): string {
   return [
     "You are updating a running pi compaction summary.",

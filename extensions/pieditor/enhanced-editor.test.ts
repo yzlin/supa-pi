@@ -23,7 +23,9 @@ function createEditor(
   }
 ) {
   const tui = {
-    requestRender() {},
+    requestRender() {
+      /* noop */
+    },
     terminal: {
       rows: 24,
     },
@@ -43,7 +45,9 @@ function createEditor(
   } as any;
 
   const ui = {
-    notify() {},
+    notify() {
+      /* noop */
+    },
     theme: {
       fg(_color: string, text: string) {
         return text;
@@ -75,7 +79,7 @@ function createStatusBarContext(): ExtensionContext {
       id: "test-model",
       name: "test-model",
       reasoning: false,
-      contextWindow: 200000,
+      contextWindow: 200_000,
     },
     modelRegistry: {},
     sessionManager: {
@@ -88,8 +92,8 @@ function createStatusBarContext(): ExtensionContext {
     },
     getContextUsage() {
       return {
-        tokens: 25000,
-        contextWindow: 200000,
+        tokens: 25_000,
+        contextWindow: 200_000,
         percent: 12.5,
       };
     },
@@ -108,7 +112,9 @@ function createStatusBarFooterData(
       return 0;
     },
     onBranchChange() {
-      return () => {};
+      return () => {
+        /* noop */
+      };
     },
   };
 }

@@ -28,10 +28,14 @@ describe("file picker keybindings", () => {
     writeFileSync(join(root, "beta.txt"), "beta", "utf8");
     process.chdir(root);
 
-    const downBrowser = new FileBrowserComponent(() => {});
+    const downBrowser = new FileBrowserComponent(() => {
+      /* noop */
+    });
     downBrowser.handleInput("\u001b[B");
 
-    const ctrlNBrowser = new FileBrowserComponent(() => {});
+    const ctrlNBrowser = new FileBrowserComponent(() => {
+      /* noop */
+    });
     ctrlNBrowser.handleInput("\x0e");
 
     expect((downBrowser as any).selected).toBe(1);
@@ -44,10 +48,14 @@ describe("file picker keybindings", () => {
     writeFileSync(join(root, "beta.txt"), "beta", "utf8");
     process.chdir(root);
 
-    const upBrowser = new FileBrowserComponent(() => {});
+    const upBrowser = new FileBrowserComponent(() => {
+      /* noop */
+    });
     upBrowser.handleInput("\u001b[A");
 
-    const ctrlPBrowser = new FileBrowserComponent(() => {});
+    const ctrlPBrowser = new FileBrowserComponent(() => {
+      /* noop */
+    });
     ctrlPBrowser.handleInput("\x10");
 
     expect((upBrowser as any).selected).toBeGreaterThan(0);
@@ -59,11 +67,15 @@ describe("file picker keybindings", () => {
     writeFileSync(join(root, "alpha.txt"), "alpha", "utf8");
     process.chdir(root);
 
-    const downBrowser = new FileBrowserComponent(() => {});
+    const downBrowser = new FileBrowserComponent(() => {
+      /* noop */
+    });
     downBrowser.handleInput("\u001b[Z");
     downBrowser.handleInput("\u001b[B");
 
-    const ctrlNBrowser = new FileBrowserComponent(() => {});
+    const ctrlNBrowser = new FileBrowserComponent(() => {
+      /* noop */
+    });
     ctrlNBrowser.handleInput("\u001b[Z");
     ctrlNBrowser.handleInput("\x0e");
 
@@ -73,11 +85,15 @@ describe("file picker keybindings", () => {
       (downBrowser as any).selectedOption
     );
 
-    const upBrowser = new FileBrowserComponent(() => {});
+    const upBrowser = new FileBrowserComponent(() => {
+      /* noop */
+    });
     upBrowser.handleInput("\u001b[Z");
     upBrowser.handleInput("\u001b[A");
 
-    const ctrlPBrowser = new FileBrowserComponent(() => {});
+    const ctrlPBrowser = new FileBrowserComponent(() => {
+      /* noop */
+    });
     ctrlPBrowser.handleInput("\u001b[Z");
     ctrlPBrowser.handleInput("\x10");
 

@@ -76,7 +76,9 @@ function fmtRange(range: Range): string {
 
 function relativePath(uri: string, rootPath: string): string {
   let p = uriToPath(uri);
-  if (p.startsWith(rootPath + "/")) p = p.slice(rootPath.length + 1);
+  if (p.startsWith(`${rootPath}/`)) {
+    p = p.slice(rootPath.length + 1);
+  }
   return p;
 }
 
@@ -106,18 +108,24 @@ export function formatDiagnostics(
   }
 
   const summaryParts: string[] = [];
-  if (totalErrors > 0)
-    summaryParts.push(`${totalErrors} error${totalErrors !== 1 ? "s" : ""}`);
-  if (totalWarnings > 0)
+  if (totalErrors > 0) {
+    summaryParts.push(`${totalErrors} error${totalErrors === 1 ? "" : "s"}`);
+  }
+  if (totalWarnings > 0) {
     summaryParts.push(
-      `${totalWarnings} warning${totalWarnings !== 1 ? "s" : ""}`
+      `${totalWarnings} warning${totalWarnings === 1 ? "" : "s"}`
     );
-  if (totalOther > 0) summaryParts.push(`${totalOther} info/hint`);
+  }
+  if (totalOther > 0) {
+    summaryParts.push(`${totalOther} info/hint`);
+  }
 
   const lines = [`Diagnostics for ${filePath}: ${summaryParts.join(", ")}`];
 
   for (const group of groups) {
-    if (group.diagnostics.length === 0) continue;
+    if (group.diagnostics.length === 0) {
+      continue;
+    }
     lines.push("", `── ${group.source} ──`);
     for (let i = 0; i < group.diagnostics.length; i++) {
       const d = group.diagnostics[i];
@@ -127,8 +135,9 @@ export function formatDiagnostics(
       const code = d.code ? `(${d.code})` : "";
       lines.push(`${i + 1}. ${sev} ${loc} ${src}${code}`);
       lines.push(`   ${d.message}`);
-      if (d.codeDescription?.href)
+      if (d.codeDescription?.href) {
         lines.push(`   Docs: ${d.codeDescription.href}`);
+      }
     }
   }
 
@@ -143,8 +152,9 @@ export function formatHover(
   line: number,
   character: number
 ): string {
-  if (!hover)
+  if (!hover) {
     return `No hover information at ${filePath}:${line + 1}:${character + 1}`;
+  }
 
   const contents = hover.contents;
   let text: string;
@@ -178,15 +188,16 @@ export function formatLocations(
 ): string {
   const queryPos = `${filePath}:${line + 1}:${character + 1}`;
 
-  if (locations.length === 0)
+  if (locations.length === 0) {
     return `No ${kind} found for symbol at ${queryPos}`;
+  }
 
   const formatted = locations.map((loc, i) => {
     const p = relativePath(loc.uri, rootPath);
     return `${i + 1}. ${p}:${loc.range.start.line + 1}:${loc.range.start.character + 1}`;
   });
 
-  return `${kind} for symbol at ${queryPos} (${locations.length} result${locations.length !== 1 ? "s" : ""}):\n\n${formatted.join("\n")}`;
+  return `${kind} for symbol at ${queryPos} (${locations.length} result${locations.length === 1 ? "" : "s"}):\n\n${formatted.join("\n")}`;
 }
 
 // ── Document Symbols ────────────────────────────────────────────────────────
@@ -220,7 +231,9 @@ export function formatDocumentSymbols(
   filePath: string,
   rootPath: string
 ): string {
-  if (symbols.length === 0) return `No symbols found in ${filePath}`;
+  if (symbols.length === 0) {
+    return `No symbols found in ${filePath}`;
+  }
 
   if (symbols.length > 0 && isDocumentSymbol(symbols[0])) {
     const tree = formatDocSymbolTree(symbols as DocumentSymbol[], 0);
@@ -246,7 +259,9 @@ export function formatWorkspaceSymbols(
   query: string,
   rootPath: string
 ): string {
-  if (symbols.length === 0) return `No workspace symbols matching "${query}"`;
+  if (symbols.length === 0) {
+    return `No workspace symbols matching "${query}"`;
+  }
 
   const formatted = symbols.slice(0, 50).map((sym, i) => {
     const kind = symbolKindLabel(sym.kind);
@@ -280,7 +295,9 @@ export function formatCallHierarchy(
 ): string {
   const queryPos = `${filePath}:${line + 1}:${character + 1}`;
 
-  if (items.length === 0) return `No call hierarchy item at ${queryPos}`;
+  if (items.length === 0) {
+    return `No call hierarchy item at ${queryPos}`;
+  }
 
   const formatted = items.map(
     (item, i) => `${i + 1}. ${formatCallItem(item, rootPath)}`
@@ -293,7 +310,9 @@ export function formatIncomingCalls(
   target: CallHierarchyItem,
   rootPath: string
 ): string {
-  if (calls.length === 0) return `No incoming calls to ${target.name}`;
+  if (calls.length === 0) {
+    return `No incoming calls to ${target.name}`;
+  }
 
   const formatted = calls.map(
     (call, i) => `${i + 1}. ${formatCallItem(call.from, rootPath)}`
@@ -306,7 +325,9 @@ export function formatOutgoingCalls(
   source: CallHierarchyItem,
   rootPath: string
 ): string {
-  if (calls.length === 0) return `No outgoing calls from ${source.name}`;
+  if (calls.length === 0) {
+    return `No outgoing calls from ${source.name}`;
+  }
 
   const formatted = calls.map(
     (call, i) => `${i + 1}. ${formatCallItem(call.to, rootPath)}`
@@ -321,13 +342,18 @@ export function formatCodeActions(
   filePath: string,
   line: number
 ): string {
-  if (actions.length === 0)
+  if (actions.length === 0) {
     return `No code actions available at ${filePath}:${line + 1}`;
+  }
 
   const formatted = actions.map((action, i) => {
     const parts = [`${i + 1}. ${action.title}`];
-    if (action.kind) parts[0] += ` [${action.kind}]`;
-    if (action.isPreferred) parts[0] += " ★ preferred";
+    if (action.kind) {
+      parts[0] += ` [${action.kind}]`;
+    }
+    if (action.isPreferred) {
+      parts[0] += " ★ preferred";
+    }
 
     if (action.edit?.changes) {
       const files = Object.keys(action.edit.changes);
@@ -336,7 +362,7 @@ export function formatCodeActions(
         0
       );
       parts.push(
-        `   Changes: ${totalEdits} edit${totalEdits !== 1 ? "s" : ""} across ${files.length} file${files.length !== 1 ? "s" : ""}`
+        `   Changes: ${totalEdits} edit${totalEdits === 1 ? "" : "s"} across ${files.length} file${files.length === 1 ? "" : "s"}`
       );
     }
 
