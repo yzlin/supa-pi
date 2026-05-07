@@ -15,6 +15,7 @@
       "./extensions/rules",
       "./extensions/execute",
       "./extensions/research",
+      "./extensions/diagnose",
       "./extensions/code-improvement",
       "./extensions/review.ts",
       "./extensions/session-query.ts",
