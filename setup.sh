@@ -4,7 +4,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PI_AGENT_DIR="$HOME/.pi/agent"
 PI_PACKAGES=(
-  "npm:@tintinweb/pi-subagents"
+  "npm:@yzlin/pi-subagents"
   "npm:pi-mcp-adapter"
   "npm:pi-rewind"
   "npm:glimpseui"
