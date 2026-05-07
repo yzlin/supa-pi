@@ -1,11 +1,11 @@
-import type { AgentMessage } from "@mariozechner/pi-agent-core";
+import type { AgentMessage } from "@earendil-works/pi-agent-core";
 import {
   buildSessionContext,
   type ContextUsage,
   DEFAULT_COMPACTION_SETTINGS,
   estimateTokens,
   type SessionEntry,
-} from "@mariozechner/pi-coding-agent";
+} from "@earendil-works/pi-coding-agent";
 
 const AVAILABLE_SKILLS_BLOCK_PATTERN =
   /<available_skills>[\s\S]*?<\/available_skills>/i;

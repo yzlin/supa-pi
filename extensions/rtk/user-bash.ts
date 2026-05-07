@@ -7,7 +7,7 @@ import {
   getShellConfig,
   type UserBashEvent,
   type UserBashEventResult,
-} from "@mariozechner/pi-coding-agent";
+} from "@earendil-works/pi-coding-agent";
 
 import { resolveRtkCommand } from "./rewrite";
 import type { RtkRuntime } from "./types";

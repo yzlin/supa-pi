@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
 
-import { Key } from "@mariozechner/pi-tui";
+import { Key } from "@earendil-works/pi-tui";
 
 import {
   formatOmStatusSummary,

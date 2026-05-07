@@ -1,10 +1,10 @@
-import type { AgentMessage } from "@mariozechner/pi-agent-core";
-import type { ImageContent, TextContent } from "@mariozechner/pi-ai";
+import type { AgentMessage } from "@earendil-works/pi-agent-core";
+import type { ImageContent, TextContent } from "@earendil-works/pi-ai";
 import {
   buildSessionContext,
   type ExtensionCommandContext,
   type ExtensionContext,
-} from "@mariozechner/pi-coding-agent";
+} from "@earendil-works/pi-coding-agent";
 
 export type ContextContentSource =
   | "context_event_snapshot"

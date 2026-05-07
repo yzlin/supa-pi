@@ -1,10 +1,10 @@
-import type { AssistantMessage } from "@mariozechner/pi-ai";
+import type { AssistantMessage } from "@earendil-works/pi-ai";
 import type {
   ExtensionContext,
   ReadonlyFooterDataProvider,
   Theme,
-} from "@mariozechner/pi-coding-agent";
-import { truncateToWidth, visibleWidth } from "@mariozechner/pi-tui";
+} from "@earendil-works/pi-coding-agent";
+import { truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
 
 import type { StatusBarRuntimeConfig } from "../config/index.js";
 import { getGitStatus } from "./git.js";

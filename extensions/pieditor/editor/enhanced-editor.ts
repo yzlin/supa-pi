@@ -1,16 +1,16 @@
-import * as Clipboard from "@mariozechner/clipboard";
 import {
   CustomEditor,
   type ExtensionContext,
   type ExtensionUIContext,
   type KeybindingsManager,
   type ReadonlyFooterDataProvider,
-} from "@mariozechner/pi-coding-agent";
+} from "@earendil-works/pi-coding-agent";
 import type {
   AutocompleteProvider,
   EditorTheme,
   TUI,
-} from "@mariozechner/pi-tui";
+} from "@earendil-works/pi-tui";
+import * as Clipboard from "@mariozechner/clipboard";
 
 import type { StatusBarRuntimeConfig } from "../config/index.js";
 import { openFilePicker } from "../file-picker/index.js";

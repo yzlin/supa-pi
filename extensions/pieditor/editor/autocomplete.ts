@@ -1,7 +1,7 @@
 import type {
   AutocompleteItem,
   AutocompleteProvider,
-} from "@mariozechner/pi-tui";
+} from "@earendil-works/pi-tui";
 
 import {
   type CompletionResult,

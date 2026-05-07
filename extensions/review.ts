@@ -42,8 +42,8 @@ import type {
   ExtensionAPI,
   ExtensionCommandContext,
   ExtensionContext,
-} from "@mariozechner/pi-coding-agent";
-import { DynamicBorder } from "@mariozechner/pi-coding-agent";
+} from "@earendil-works/pi-coding-agent";
+import { DynamicBorder } from "@earendil-works/pi-coding-agent";
 import {
   Container,
   fuzzyFilter,
@@ -52,7 +52,7 @@ import {
   SelectList,
   Spacer,
   Text,
-} from "@mariozechner/pi-tui";
+} from "@earendil-works/pi-tui";
 
 const GITHUB_PULL_REQUEST_URL_PATTERN =
   /github\.com\/[^/]+\/[^/]+\/pull\/(\d+)/;

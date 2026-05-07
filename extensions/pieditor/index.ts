@@ -17,7 +17,7 @@
  * Disable other extensions that also call setEditorComponent (shell-completions/, file-picker.ts, raw-paste.ts)
  */
 
-import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
+import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 
 import { registerPieditorCommands } from "./commands.js";
 import { createPieditorComposition } from "./composition.js";

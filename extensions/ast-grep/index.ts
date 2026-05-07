@@ -11,7 +11,7 @@ import {
   formatSize,
   type TruncationResult,
   truncateHead,
-} from "@mariozechner/pi-coding-agent";
+} from "@earendil-works/pi-coding-agent";
 import { globSync } from "glob";
 import { Type } from "typebox";
 

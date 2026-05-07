@@ -3,7 +3,7 @@ import { describe, expect, it } from "bun:test";
 import type {
   ExtensionContext,
   ReadonlyFooterDataProvider,
-} from "@mariozechner/pi-coding-agent";
+} from "@earendil-works/pi-coding-agent";
 
 import { renderStatusBarLine } from "./status-bar";
 

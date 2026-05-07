@@ -9,7 +9,7 @@ import {
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 
-import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
+import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 
 import { registerPieditorCommands } from "./commands";
 import { DEFAULT_FIXED_EDITOR_CONFIG } from "./config/fixed-editor";

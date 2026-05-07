@@ -1,4 +1,4 @@
-import type { KeybindingsManager } from "@mariozechner/pi-coding-agent";
+import type { KeybindingsManager } from "@earendil-works/pi-coding-agent";
 
 export const DOUBLE_ESCAPE_WINDOW_MS = 500;
 

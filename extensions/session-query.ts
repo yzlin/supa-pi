@@ -10,16 +10,16 @@
  * Credits: This extension was originally developed by @pasky. Modified and enhanced by @yzlin.
  */
 
-import { complete, type Message } from "@mariozechner/pi-ai";
-import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
+import { complete, type Message } from "@earendil-works/pi-ai";
+import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import {
   convertToLlm,
   getMarkdownTheme,
   type SessionEntry,
   SessionManager,
   serializeConversation,
-} from "@mariozechner/pi-coding-agent";
-import { Container, Markdown, Spacer, Text } from "@mariozechner/pi-tui";
+} from "@earendil-works/pi-coding-agent";
+import { Container, Markdown, Spacer, Text } from "@earendil-works/pi-tui";
 import { Type } from "typebox";
 
 import { getModelAuthOrThrow } from "./llm-auth";

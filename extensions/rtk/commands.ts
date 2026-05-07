@@ -1,7 +1,7 @@
 import type {
   ExtensionAPI,
   ExtensionCommandContext,
-} from "@mariozechner/pi-coding-agent";
+} from "@earendil-works/pi-coding-agent";
 
 import { getRtkConfigPath, resetRtkConfig, saveRtkConfig } from "./config";
 import { showRtkStatsView } from "./stats";

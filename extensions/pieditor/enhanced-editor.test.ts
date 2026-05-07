@@ -3,9 +3,9 @@ import { describe, expect, it } from "bun:test";
 import type {
   ExtensionContext,
   ReadonlyFooterDataProvider,
-} from "@mariozechner/pi-coding-agent";
-import { CustomEditor } from "@mariozechner/pi-coding-agent";
-import type { AutocompleteItem } from "@mariozechner/pi-tui";
+} from "@earendil-works/pi-coding-agent";
+import { CustomEditor } from "@earendil-works/pi-coding-agent";
+import type { AutocompleteItem } from "@earendil-works/pi-tui";
 
 import { matchesInterrupt } from "./editor/double-escape";
 import { EnhancedEditor } from "./enhanced-editor";

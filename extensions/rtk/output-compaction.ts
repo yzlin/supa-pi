@@ -6,7 +6,7 @@ import {
   type ToolExecutionStartEvent,
   type ToolResultEvent,
   type ToolResultEventResult,
-} from "@mariozechner/pi-coding-agent";
+} from "@earendil-works/pi-coding-agent";
 
 import type { RtkConfig, RtkRuntime, RtkToolName } from "./types";
 

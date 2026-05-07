@@ -1,11 +1,11 @@
-import type { ExtensionCommandContext } from "@mariozechner/pi-coding-agent";
+import type { ExtensionCommandContext } from "@earendil-works/pi-coding-agent";
 import {
   Key,
   matchesKey,
   truncateToWidth,
   visibleWidth,
   wrapTextWithAnsi,
-} from "@mariozechner/pi-tui";
+} from "@earendil-works/pi-tui";
 
 import {
   CONTEXT_DISPLAY_CATEGORY_ORDER,

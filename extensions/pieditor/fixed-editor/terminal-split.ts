@@ -10,7 +10,7 @@ import {
   matchesKey,
   truncateToWidth,
   visibleWidth,
-} from "@mariozechner/pi-tui";
+} from "@earendil-works/pi-tui";
 
 import type { FixedEditorClusterRender, FixedEditorCursor } from "./cluster.js";
 

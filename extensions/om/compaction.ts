@@ -2,7 +2,7 @@ import {
   type AssistantMessage,
   complete,
   type UserMessage,
-} from "@mariozechner/pi-ai";
+} from "@earendil-works/pi-ai";
 
 import { getModelAuthOrThrow } from "../llm-auth";
 import { mergeOmCompactionSummary } from "./prompt-integration";

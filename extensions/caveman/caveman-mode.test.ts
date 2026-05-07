@@ -6,7 +6,7 @@ import type {
   EventBus,
   ExtensionAPI,
   ExtensionCommandContext,
-} from "@mariozechner/pi-coding-agent";
+} from "@earendil-works/pi-coding-agent";
 
 let currentHomeDir = "";
 mock.module("node:os", () => ({

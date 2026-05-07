@@ -10,8 +10,8 @@ import type {
   KeybindingsManager,
   ReadonlyFooterDataProvider,
   Theme,
-} from "@mariozechner/pi-coding-agent";
-import type { EditorTheme, TUI } from "@mariozechner/pi-tui";
+} from "@earendil-works/pi-coding-agent";
+import type { EditorTheme, TUI } from "@earendil-works/pi-tui";
 
 import { createPieditorComposition } from "./composition";
 

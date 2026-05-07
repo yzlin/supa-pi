@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
 
-import { visibleWidth } from "@mariozechner/pi-tui";
+import { visibleWidth } from "@earendil-works/pi-tui";
 
 import { CURSOR_MARKER, renderFixedEditorCluster } from "./cluster";
 

@@ -5,7 +5,7 @@ import {
   matchesKey,
   truncateToWidth,
   visibleWidth,
-} from "@mariozechner/pi-tui";
+} from "@earendil-works/pi-tui";
 
 import {
   getCwdRoot,

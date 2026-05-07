@@ -152,9 +152,9 @@ The setup script installs these Pi packages if they are not already present:
   - `bun run check:write`
 - This repo uses Bun (`bun.lock` present)
 - Peer dependencies include:
-  - `@mariozechner/pi-coding-agent`
-  - `@mariozechner/pi-ai`
-  - `@mariozechner/pi-tui`
+  - `@earendil-works/pi-coding-agent`
+  - `@earendil-works/pi-ai`
+  - `@earendil-works/pi-tui`
   - `typebox` (`^1.1.34`)
 
 ## When to use this repo

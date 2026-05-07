@@ -13,8 +13,11 @@
  * Credits: This extension was originally developed by @pasky. Modified and enhanced by @yzlin.
  */
 
-import type { AgentTool } from "@mariozechner/pi-agent-core";
-import type { ExtensionAPI, SessionEntry } from "@mariozechner/pi-coding-agent";
+import type { AgentTool } from "@earendil-works/pi-agent-core";
+import type {
+  ExtensionAPI,
+  SessionEntry,
+} from "@earendil-works/pi-coding-agent";
 import {
   convertToLlm,
   createBashTool,
@@ -23,8 +26,8 @@ import {
   createWriteTool,
   getMarkdownTheme,
   serializeConversation,
-} from "@mariozechner/pi-coding-agent";
-import { Box, Markdown, Spacer, Text } from "@mariozechner/pi-tui";
+} from "@earendil-works/pi-coding-agent";
+import { Box, Markdown, Spacer, Text } from "@earendil-works/pi-tui";
 
 import { getProviderApiKeyForModel } from "../llm-auth";
 import { parseBtwArgs, resolveModelAndThinking } from "./helper";

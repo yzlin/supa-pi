@@ -12,9 +12,9 @@ import type {
   AgentLoopConfig,
   AgentMessage,
   AgentTool,
-} from "@mariozechner/pi-agent-core";
-import { agentLoop } from "@mariozechner/pi-agent-core";
-import { convertToLlm } from "@mariozechner/pi-coding-agent";
+} from "@earendil-works/pi-agent-core";
+import { agentLoop } from "@earendil-works/pi-agent-core";
+import { convertToLlm } from "@earendil-works/pi-coding-agent";
 
 // ---------------------------------------------------------------------------
 // Constants

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "bun:test";
 
-import { SessionManager } from "@mariozechner/pi-coding-agent";
-import { visibleWidth } from "@mariozechner/pi-tui";
+import { SessionManager } from "@earendil-works/pi-coding-agent";
+import { visibleWidth } from "@earendil-works/pi-tui";
 
 import {
   buildContextContentSnapshot,

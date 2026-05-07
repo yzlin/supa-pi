@@ -2,7 +2,7 @@ import {
   convertToLlm,
   type ExtensionAPI,
   serializeConversation,
-} from "@mariozechner/pi-coding-agent";
+} from "@earendil-works/pi-coding-agent";
 
 import { createOmBranchScope, createOmStateEnvelope } from "./branch";
 import {

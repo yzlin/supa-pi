@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
 
-import type { AssistantMessage } from "@mariozechner/pi-ai";
+import type { AssistantMessage } from "@earendil-works/pi-ai";
 
 import { createOmObservationBufferWindow } from "./buffer";
 import { DEFAULT_OM_CONFIG_SNAPSHOT } from "./config";

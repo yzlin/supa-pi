@@ -1,7 +1,7 @@
 import { hostname as osHostname } from "node:os";
 import { basename } from "node:path";
 
-import { visibleWidth } from "@mariozechner/pi-tui";
+import { visibleWidth } from "@earendil-works/pi-tui";
 
 import { getIcons, getThinkingText, SEP_DOT } from "./icons.js";
 import { applyColor, fg, rainbow } from "./theme.js";

@@ -6,8 +6,8 @@ import {
   type KeybindingsManager,
   type ReadonlyFooterDataProvider,
   type Theme,
-} from "@mariozechner/pi-coding-agent";
-import type { EditorTheme, TUI } from "@mariozechner/pi-tui";
+} from "@earendil-works/pi-coding-agent";
+import type { EditorTheme, TUI } from "@earendil-works/pi-tui";
 
 import { type FixedEditorRuntimeConfig, loadConfig } from "./config.js";
 import { EnhancedEditor } from "./enhanced-editor.js";

@@ -18,7 +18,7 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 
-import type { AutocompleteItem } from "@mariozechner/pi-tui";
+import type { AutocompleteItem } from "@earendil-works/pi-tui";
 
 import type { CompletionResult } from "./types.js";
 

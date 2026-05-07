@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
 
-import type { AssistantMessage } from "@mariozechner/pi-ai";
+import type { AssistantMessage } from "@earendil-works/pi-ai";
 
 import {
   buildOmCompactionPrompt,

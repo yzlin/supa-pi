@@ -17,19 +17,19 @@
  * Credits: This extension was originally developed by @pasky. Modified and enhanced by @yzlin.
  */
 
-import type { AgentMessage } from "@mariozechner/pi-agent-core";
-import { complete, type Message } from "@mariozechner/pi-ai";
+import type { AgentMessage } from "@earendil-works/pi-agent-core";
+import { complete, type Message } from "@earendil-works/pi-ai";
 import type {
   ExtensionAPI,
   ExtensionCommandContext,
   ExtensionContext,
   SessionEntry,
-} from "@mariozechner/pi-coding-agent";
+} from "@earendil-works/pi-coding-agent";
 import {
   BorderedLoader,
   convertToLlm,
   serializeConversation,
-} from "@mariozechner/pi-coding-agent";
+} from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
 
 import { getModelAuthOrThrow } from "./llm-auth";

@@ -12,14 +12,14 @@
 import type {
   ExtensionAPI,
   ExtensionCommandContext,
-} from "@mariozechner/pi-coding-agent";
+} from "@earendil-works/pi-coding-agent";
 import {
   Key,
   matchesKey,
   truncateToWidth,
   visibleWidth,
   wrapTextWithAnsi,
-} from "@mariozechner/pi-tui";
+} from "@earendil-works/pi-tui";
 
 import { LspClient } from "./client";
 import {

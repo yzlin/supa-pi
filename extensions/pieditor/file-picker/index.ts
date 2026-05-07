@@ -7,7 +7,7 @@
  * Based on codemap extension by @kcosr
  */
 
-import type { ExtensionUIContext } from "@mariozechner/pi-coding-agent";
+import type { ExtensionUIContext } from "@earendil-works/pi-coding-agent";
 
 import { FileBrowserComponent } from "./browser.js";
 import {

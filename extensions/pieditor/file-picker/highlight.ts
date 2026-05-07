@@ -3,7 +3,7 @@ import { createRequire } from "node:module";
 import {
   getLanguageFromPath,
   highlightCode,
-} from "@mariozechner/pi-coding-agent";
+} from "@earendil-works/pi-coding-agent";
 
 import type { PreviewHighlightMode } from "./types.js";
 

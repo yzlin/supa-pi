@@ -5,7 +5,7 @@
  * Multiple questions: tab bar navigation between questions
  */
 
-import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
+import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import {
   Editor,
   type EditorTheme,
@@ -14,7 +14,7 @@ import {
   Text,
   truncateToWidth,
   wrapTextWithAnsi,
-} from "@mariozechner/pi-tui";
+} from "@earendil-works/pi-tui";
 import { Type } from "typebox";
 
 const TOP_LEVEL_REGEX_1 =
