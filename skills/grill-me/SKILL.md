@@ -12,7 +12,10 @@ Interview the user relentlessly about every aspect of their plan or design until
 - Walk down each branch of the design tree.
 - Resolve dependencies between decisions one by one.
 - Ask exactly one question at a time.
+- Use `questionnaire` for user answers when interactive UI is available.
 - For each question, provide your recommended answer before asking for the user's answer.
+- If a question was already asked in plain text, accept the user's answer and move on; do not ask the same question again with `questionnaire`.
+- Do not re-ask an answered question. Summarize the answer briefly, then continue to the next unresolved decision.
 - If a question can be answered by exploring the codebase, explore the codebase instead of asking.
 - Keep going until the plan is clear, risks are exposed, tradeoffs are explicit, and all major decisions have been resolved.
 
