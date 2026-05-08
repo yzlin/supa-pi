@@ -70,7 +70,7 @@ describe("extension registration compatibility", () => {
     expect(harness.tools.map((tool) => tool.name)).not.toContain("bash");
     expect(
       harness.tools
-        .filter((tool) => tool.renderShell === "self")
+        .filter((tool) => tool.renderShell === "default")
         .map((tool) => tool.name)
     ).toEqual(["edit", "write"]);
   });

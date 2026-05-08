@@ -210,7 +210,7 @@ export default function toolDisplayExtension(pi: ExtensionAPI): void {
   if (config.tools.edit.enabled) {
     pi.registerTool({
       ...editTool,
-      renderShell: "self",
+      renderShell: "default",
       execute(toolCallId, params, signal, onUpdate, ctx) {
         return editTool.execute(toolCallId, params, signal, onUpdate, ctx);
       },
@@ -226,7 +226,7 @@ export default function toolDisplayExtension(pi: ExtensionAPI): void {
   if (config.tools.write.enabled) {
     pi.registerTool({
       ...writeTool,
-      renderShell: "self",
+      renderShell: "default",
       async execute(toolCallId, params, signal, onUpdate, ctx) {
         const previous = capturePreviousWriteContent(cwd, params.path);
         const result = await writeTool.execute(

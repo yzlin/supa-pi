@@ -50,7 +50,7 @@ Commands:
 
 Tool-display v1 registers compact renderers for `read`, `grep`, `find`, `ls`, `edit`, and `write` when their config flags are enabled. `search.enabled` owns `grep`/`find`/`ls` together.
 
-`edit` renders the final applied diff from tool details. `write` captures previous file content before execution and renders a final diff after success. Final diffs use compact summaries by default, expand to unified diffs on narrow terminals, switch to split diffs on wide terminals, color additions/removals, and collapse expanded output to `diff.previewLines` when `diff.collapsed` is true. If previous content cannot be captured safely, `write` falls back to a capped compact summary instead of a diff; previous-content capture is limited to paths inside the workspace.
+`edit` renders the final applied diff from tool details. `write` captures previous file content before execution and renders a final diff after success. Final diffs use the standard tool block shell/background, compact summaries by default, expand to unified diffs on narrow terminals, switch to split diffs on wide terminals, color additions/removals, and collapse expanded output to `diff.previewLines` when `diff.collapsed` is true. If previous content cannot be captured safely, `write` falls back to a capped compact summary instead of a diff; previous-content capture is limited to paths inside the workspace.
 
 RTK remains the `bash` owner. Tool-display exports the shared compact bash renderer that RTK imports, but does not register `bash`.
 

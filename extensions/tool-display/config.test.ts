@@ -50,7 +50,15 @@ describe("tool-display config", () => {
           search: { mode: "loud", collapsed: "no" },
           bash: { rtkHints: false },
         },
-        diff: { enabled: false, previewLines: 120 },
+        diff: {
+          enabled: false,
+          collapsed: false,
+          previewLines: 120,
+          viewMode: "split",
+          splitMinWidth: 140,
+          wordWrap: false,
+          indicatorMode: "classic",
+        },
       })
     ).toEqual({
       tools: {
@@ -61,7 +69,15 @@ describe("tool-display config", () => {
         read: { mode: "expanded", collapsed: false, previewLines: 40 },
         bash: { rtkHints: false },
       },
-      diff: { enabled: false, previewLines: 120 },
+      diff: {
+        enabled: false,
+        collapsed: false,
+        previewLines: 120,
+        viewMode: "split",
+        splitMinWidth: 140,
+        wordWrap: false,
+        indicatorMode: "classic",
+      },
     });
   });
 
@@ -111,13 +127,17 @@ describe("tool-display config", () => {
       JSON.stringify({
         unrelated: true,
         tools: { search: { enabled: true } },
+        diff: { viewMode: "unified" },
       }),
       "utf8"
     );
 
     const result = saveProjectToolDisplayConfig(
       cwd,
-      { tools: { read: { enabled: false }, write: { enabled: true } } },
+      {
+        tools: { read: { enabled: false }, write: { enabled: true } },
+        diff: { indicatorMode: "none" },
+      },
       homeDir
     );
 
@@ -126,6 +146,10 @@ describe("tool-display config", () => {
       read: { enabled: false, fullSkillRead: true },
       search: { enabled: true },
       write: { enabled: true },
+    });
+    expect(loadToolDisplayConfig(cwd, homeDir).diff).toMatchObject({
+      viewMode: "unified",
+      indicatorMode: "none",
     });
   });
 });

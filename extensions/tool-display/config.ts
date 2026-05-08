@@ -11,6 +11,8 @@ import { dirname, join } from "node:path";
 
 export type ToolDisplayToolName = "read" | "search" | "edit" | "write";
 export type ToolDisplayOutputMode = "compact" | "expanded";
+export type ToolDisplayDiffIndicatorMode = "bars" | "classic" | "none";
+export type ToolDisplayDiffViewMode = "auto" | "split" | "unified";
 export type ToolDisplayPresetName = "compact" | "verbose" | "off";
 
 export interface ToolDisplayToolConfig {
@@ -35,6 +37,10 @@ export interface ToolDisplayDiffConfig {
   enabled: boolean;
   collapsed: boolean;
   previewLines: number;
+  viewMode: ToolDisplayDiffViewMode;
+  splitMinWidth: number;
+  wordWrap: boolean;
+  indicatorMode: ToolDisplayDiffIndicatorMode;
 }
 
 export interface ToolDisplayConfig {
@@ -105,6 +111,10 @@ export const DEFAULT_TOOL_DISPLAY_CONFIG: ToolDisplayConfig = {
     enabled: true,
     collapsed: true,
     previewLines: 80,
+    viewMode: "auto",
+    splitMinWidth: 120,
+    wordWrap: true,
+    indicatorMode: "bars",
   },
 };
 
@@ -130,6 +140,22 @@ function normalizeOutputMode(
   value: unknown
 ): ToolDisplayOutputMode | undefined {
   return value === "compact" || value === "expanded" ? value : undefined;
+}
+
+function normalizeDiffViewMode(
+  value: unknown
+): ToolDisplayDiffViewMode | undefined {
+  return value === "auto" || value === "split" || value === "unified"
+    ? value
+    : undefined;
+}
+
+function normalizeDiffIndicatorMode(
+  value: unknown
+): ToolDisplayDiffIndicatorMode | undefined {
+  return value === "bars" || value === "classic" || value === "none"
+    ? value
+    : undefined;
 }
 
 function compactConfigSection<T extends Record<string, unknown>>(
@@ -227,6 +253,10 @@ function normalizeDiffConfig(
   const enabled = normalizeBoolean(value.enabled);
   const collapsed = normalizeBoolean(value.collapsed);
   const previewLines = normalizePositiveInteger(value.previewLines);
+  const viewMode = normalizeDiffViewMode(value.viewMode);
+  const splitMinWidth = normalizePositiveInteger(value.splitMinWidth);
+  const wordWrap = normalizeBoolean(value.wordWrap);
+  const indicatorMode = normalizeDiffIndicatorMode(value.indicatorMode);
 
   if (enabled !== undefined) {
     next.enabled = enabled;
@@ -236,6 +266,18 @@ function normalizeDiffConfig(
   }
   if (previewLines !== undefined) {
     next.previewLines = previewLines;
+  }
+  if (viewMode !== undefined) {
+    next.viewMode = viewMode;
+  }
+  if (splitMinWidth !== undefined) {
+    next.splitMinWidth = splitMinWidth;
+  }
+  if (wordWrap !== undefined) {
+    next.wordWrap = wordWrap;
+  }
+  if (indicatorMode !== undefined) {
+    next.indicatorMode = indicatorMode;
   }
 
   return Object.keys(next).length > 0 ? next : undefined;
@@ -418,6 +460,9 @@ export function saveProjectToolDisplayConfig(
   const currentOutput = isPlainObject(current.value.output)
     ? current.value.output
     : {};
+  const currentDiff = isPlainObject(current.value.diff)
+    ? current.value.diff
+    : {};
   const next = {
     ...current.value,
     ...normalized,
@@ -429,6 +474,14 @@ export function saveProjectToolDisplayConfig(
       ...currentOutput,
       ...normalized.output,
     },
+    ...(Object.keys(currentDiff).length > 0 || normalized.diff !== undefined
+      ? {
+          diff: {
+            ...currentDiff,
+            ...normalized.diff,
+          },
+        }
+      : {}),
   };
 
   try {
@@ -502,7 +555,12 @@ export function getToolDisplayPresetConfig(
         rtkHints: true,
       },
     },
-    diff: { enabled: true, collapsed: false, previewLines: 160 },
+    diff: {
+      ...compact.diff,
+      enabled: true,
+      collapsed: false,
+      previewLines: 160,
+    },
   };
 }
 
