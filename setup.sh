@@ -77,7 +77,25 @@ link_file() {
   local target_path="$2"
   local label="$3"
 
-  if [ -L "$target_path" ] && [ "$(readlink "$target_path")" = "$source_path" ]; then
+  if [ ! -e "$source_path" ]; then
+    echo "Skipping $label — $source_path does not exist"
+    return
+  fi
+
+  local source_abs
+  source_abs="$(cd "$(dirname "$source_path")" && pwd)/$(basename "$source_path")"
+
+  mkdir -p "$(dirname "$target_path")"
+
+  local target_abs
+  target_abs="$(cd "$(dirname "$target_path")" && pwd)/$(basename "$target_path")"
+
+  if [ "$source_abs" = "$target_abs" ]; then
+    echo "$label already live at $target_path"
+    return
+  fi
+
+  if [ -L "$target_path" ] && [ "$(readlink "$target_path")" = "$source_abs" ]; then
     echo "$label already linked"
     return
   fi
@@ -87,7 +105,7 @@ link_file() {
     return
   fi
 
-  ln -s "$source_path" "$target_path"
+  ln -s "$source_abs" "$target_path"
   echo "Linked $label"
 }
 
@@ -101,17 +119,15 @@ link_dir_section() {
   echo ""
 }
 
-# Verify we're in the right place
-if [ "$SCRIPT_DIR" != "$PI_AGENT_DIR" ]; then
-  echo "⚠️  This repo should be cloned to ~/.pi/agent/"
-  echo "   Current location: $SCRIPT_DIR"
-  echo "   Expected: $PI_AGENT_DIR"
-  echo ""
-  echo "   Run: git clone git@github.com:yzlin/supa-pi $PI_AGENT_DIR"
-  exit 1
+mkdir -p "$PI_AGENT_DIR"
+
+if [ "$SCRIPT_DIR" = "$PI_AGENT_DIR" ]; then
+  echo "Setting up supa-pi at $PI_AGENT_DIR"
+else
+  echo "Setting up supa-pi from $SCRIPT_DIR"
+  echo "Live pi config: $PI_AGENT_DIR"
 fi
 
-echo "Setting up supa-pi at $PI_AGENT_DIR"
 echo ""
 
 # Create settings.json if it doesn't exist
@@ -151,6 +167,9 @@ for package in "${PI_PACKAGES[@]}"; do
   pi install "$package" 2>/dev/null || echo "  $package already installed"
 done
 
+echo ""
+
+link_file "$SCRIPT_DIR/keybindings.json" "$PI_AGENT_DIR/keybindings.json" "keybindings.json"
 echo ""
 
 link_dir_section "skills" "$SCRIPT_DIR/skills" "$PI_AGENT_DIR/skills"

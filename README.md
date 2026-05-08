@@ -101,26 +101,26 @@ Each language folder includes coding-style, patterns, security, and testing guid
 ├── skills/
 ├── themes/
 ├── docs/
+├── keybindings.json
 ├── package.json
 └── setup.sh
 ```
 
 ## Install
 
-This repo expects to live at `~/.pi/agent`.
+This repo can live anywhere. `setup.sh` links repo-managed files into `~/.pi/agent`.
 
 ```bash
-git clone git@github.com:yzlin/supa-pi ~/.pi/agent
-cd ~/.pi/agent
+git clone git@github.com:yzlin/supa-pi ~/dev/yzlin/supa-pi
+cd ~/dev/yzlin/supa-pi
 ./setup.sh
 ```
 
 `setup.sh` will:
 
-1. verify the repo is checked out at `~/.pi/agent`
-2. create `~/.pi/agent/settings.json` if missing
-3. install companion Pi packages with `pi install`
-4. symlink this repo's `skills/`, `agents/`, `prompts/`, and `rules/` into the live Pi agent directory
+1. create `~/.pi/agent` and `~/.pi/agent/settings.json` if missing
+2. install companion Pi packages with `pi install`
+3. symlink this repo's `keybindings.json`, `skills/`, `agents/`, `prompts/`, and `rules/` into the live Pi agent directory
 
 After setup, restart Pi to pick up the changes.
 
