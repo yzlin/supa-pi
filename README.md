@@ -27,6 +27,7 @@ Documented extensions in this repo include:
 - **`extensions/code-improvement`** — `/simplify` code-simplifier delegation plus `/improve-codebase-architecture` read-only architecture review workflow
 - **`extensions/review.ts`** — interactive current-session `/review` workflow with `/review-summary` and `/review-fix` follow-ups plus reviewer-agent orchestration; adapted in part from `@earendil-works/pi-review`
 - **`extensions/smart-docs`** — deterministic `/smart-docs` command flow for codebase documentation generation
+- **`extensions/read-patch.ts`** — `read` tool override that returns exact loaded skill files in full, ignores pagination for those skill reads, and marks results so RTK does not compact them
 
 The configured extension set also includes workflow and utility modules such as:
 
@@ -43,6 +44,7 @@ The configured extension set also includes workflow and utility modules such as:
 - `btw`
 - `ast-grep`
 - `skills`
+- `read-patch.ts`
 
 See `package.json` for the full registration list.
 

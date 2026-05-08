@@ -1,4 +1,5 @@
 import {
+  type ExtensionHandler,
   isBashToolResult,
   isGrepToolResult,
   isReadToolResult,
@@ -25,25 +26,35 @@ function getTrackedToolName(
     return null;
   }
 
-  if (toolName === "bash") {
-    return outputCompaction.compactBash ? "bash" : null;
+  switch (toolName) {
+    case "bash":
+      return outputCompaction.compactBash ? "bash" : null;
+    case "grep":
+      return outputCompaction.compactGrep ? "grep" : null;
+    case "read":
+      return outputCompaction.compactRead ? "read" : null;
+    default:
+      return null;
+  }
+}
+
+function isReadPatchFullSkillRead(details: unknown): boolean {
+  if (!(details && typeof details === "object")) {
+    return false;
   }
 
-  if (toolName === "grep") {
-    return outputCompaction.compactGrep ? "grep" : null;
-  }
-
-  if (toolName === "read") {
-    return outputCompaction.compactRead ? "read" : null;
-  }
-
-  return null;
+  const value = details as { readPatch?: { fullSkillRead?: unknown } };
+  return value.readPatch?.fullSkillRead === true;
 }
 
 function getCompactionTarget(
   event: ToolResultEvent,
   config: RtkConfig
 ): RtkToolName | null {
+  if (event.toolName === "read" && isReadPatchFullSkillRead(event.details)) {
+    return null;
+  }
+
   if (
     isBashToolResult(event) ||
     isGrepToolResult(event) ||
@@ -90,18 +101,18 @@ function compactText(
 ): string {
   const { maxLines, maxChars } = config.outputCompaction;
   const lines = text.split("\n");
-  const lineLimited =
-    toolName === "bash"
-      ? lines.slice(-maxLines).join("\n")
-      : lines.slice(0, maxLines).join("\n");
 
-  return toolName === "bash"
-    ? clampTail(lineLimited, maxChars)
-    : clampHead(lineLimited, maxChars);
+  if (toolName === "bash") {
+    return clampTail(lines.slice(-maxLines).join("\n"), maxChars);
+  }
+
+  return clampHead(lines.slice(0, maxLines).join("\n"), maxChars);
 }
 
-export function createRtkToolExecutionStartHandler(runtime: RtkRuntime) {
-  return (event: ToolExecutionStartEvent): Promise<void> => {
+export function createRtkToolExecutionStartHandler(
+  runtime: RtkRuntime
+): ExtensionHandler<ToolExecutionStartEvent> {
+  return (event) => {
     const config = runtime.getConfig();
     const toolName = getTrackedToolName(event.toolName, config);
     const label = getExecutionLabel(event);
@@ -113,10 +124,10 @@ export function createRtkToolExecutionStartHandler(runtime: RtkRuntime) {
   };
 }
 
-export function createRtkToolResultHandler(runtime: RtkRuntime) {
-  return (
-    event: ToolResultEvent
-  ): Promise<ToolResultEventResult | undefined> => {
+export function createRtkToolResultHandler(
+  runtime: RtkRuntime
+): ExtensionHandler<ToolResultEvent, ToolResultEventResult> {
+  return (event) => {
     const config = runtime.getConfig();
     const toolName = getCompactionTarget(event, config);
     if (!toolName) {

@@ -11,7 +11,6 @@ PI_PACKAGES=(
   "npm:pi-skill-palette"
   "npm:pi-claude-bridge"
   "npm:pi-anycopy"
-  "npm:pi-tool-display"
   "npm:pi-token-burden"
   "npm:@tintinweb/pi-tasks"
 )

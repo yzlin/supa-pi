@@ -96,6 +96,32 @@ describe("rtk output compaction", () => {
     });
   });
 
+  it("skips read-patch full skill reads", async () => {
+    const runtime = createRuntime({
+      ...DEFAULT_RTK_CONFIG,
+      outputCompaction: {
+        ...DEFAULT_RTK_CONFIG.outputCompaction,
+        enabled: true,
+        compactRead: true,
+        maxLines: 2,
+        maxChars: 1000,
+      },
+    });
+
+    const handler = createRtkToolResultHandler(runtime);
+    const result = await handler({
+      type: "tool_result",
+      toolCallId: "1",
+      toolName: "read",
+      input: { path: "SKILL.md" },
+      content: [{ type: "text", text: "1\n2\n3\n4" }],
+      details: { readPatch: { fullSkillRead: true } },
+      isError: false,
+    } as any);
+
+    expect(result).toBeUndefined();
+  });
+
   it("compacts grep output from the head", async () => {
     const runtime = createRuntime({
       ...DEFAULT_RTK_CONFIG,

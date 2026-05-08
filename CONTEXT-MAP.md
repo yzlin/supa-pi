@@ -24,6 +24,7 @@
 - `extensions/init-deep/README.md` — read before changing `/init-deep` AGENTS.md generation behavior.
 - `extensions/lsp/README.md` — read before changing the LSP tool or `/lsp` command behavior.
 - `extensions/pieditor/README.md` — read before changing editor UX features such as file picking, shell completions, raw paste, command remapping, or status bar behavior.
+- `extensions/read-patch/README.md` — read before changing skill-file `read` override behavior, read-patch metadata, or RTK full-skill-read compaction exemptions.
 - `extensions/rtk/README.md` — read before changing output compaction or `/rtk` behavior.
 - `extensions/smart-docs/README.md` — read before changing smart documentation generation workflows.
 - `extensions/web-access/README.md` — read before changing web search, browser curator, fetch, or search-provider behavior.

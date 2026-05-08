@@ -30,7 +30,8 @@
       "./extensions/pieditor",
       "./extensions/lsp",
       "./extensions/web-access",
-      "./extensions/skills.ts"
+      "./extensions/skills.ts",
+      "./extensions/read-patch.ts"
     ]
   },
   "dependencies": {
