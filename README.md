@@ -19,7 +19,7 @@ Documented extensions in this repo include:
 
 - **`extensions/lsp`** — unified `lsp` tool for diagnostics, definitions, references, hover, symbols, call hierarchy, and code actions
 - **`extensions/om`** — Observational Memory for branch-local memory restore, observer/reflector passes, and `/om` admin commands
-- **`extensions/rtk`** — output compaction and `/rtk stats` dashboard for `bash`, `grep`, and `read`
+- **`extensions/rtk`** — output compaction and `/rtk stats` dashboard; owns `bash` execution, rewrite, and stats
 - **`extensions/caveman`** — standalone `/caveman` mode with per-session persistence and generic extension status
 - **`extensions/pieditor`** — editor UX improvements like `@` file picking, shell completions, raw paste, command remapping, and a locally maintained fork lineage from the original upstream extension
 - **`extensions/init-deep`** — deterministic `/init-deep` command flow for generating hierarchical `AGENTS.md`
@@ -27,7 +27,7 @@ Documented extensions in this repo include:
 - **`extensions/code-improvement`** — `/simplify` code-simplifier delegation plus `/improve-codebase-architecture` read-only architecture review workflow
 - **`extensions/review.ts`** — interactive current-session `/review` workflow with `/review-summary` and `/review-fix` follow-ups plus reviewer-agent orchestration; adapted in part from `@earendil-works/pi-review`
 - **`extensions/smart-docs`** — deterministic `/smart-docs` command flow for codebase documentation generation
-- **`extensions/read-patch.ts`** — `read` tool override that returns exact loaded skill files in full, ignores pagination for those skill reads, and marks results so RTK does not compact them
+- **`extensions/tool-display`** — compact tool renderers and the `read` override that returns exact loaded skill files in full, ignores pagination for those skill reads, and marks results so RTK does not compact them
 
 The configured extension set also includes workflow and utility modules such as:
 
@@ -43,8 +43,8 @@ The configured extension set also includes workflow and utility modules such as:
 - `context`
 - `btw`
 - `ast-grep`
+- `tool-display`
 - `skills`
-- `read-patch.ts`
 
 See `package.json` for the full registration list.
 

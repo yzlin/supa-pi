@@ -20,6 +20,7 @@ Default limits:
 - `bash` output is compacted from the tail
 - `grep` and `read` output are compacted from the head
 - compaction runs in `tool_result`, after the built-in tool finishes
+- compacted results include `details.rtkCompaction` metadata when output text changes
 - non-text payloads (for example image reads) are left unchanged
 - `/rtk` defaults to the stats dashboard; `/rtk stats` opens the same custom TUI view instead of plain notify text
 - stats are **session-only**; switching sessions or clearing stats resets the dashboard

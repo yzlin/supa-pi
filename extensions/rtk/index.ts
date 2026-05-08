@@ -3,6 +3,11 @@ import {
   type ExtensionAPI,
 } from "@earendil-works/pi-coding-agent";
 
+import { loadToolDisplayConfig } from "../tool-display/config";
+import {
+  renderCompactBashCall,
+  renderCompactBashResult,
+} from "../tool-display/renderers";
 import { registerRtkCommands } from "./commands";
 import { loadRtkConfig } from "./config";
 import {
@@ -23,9 +28,13 @@ function loadRuntimeState(
   runtime.refreshRtkStatus();
 }
 
+const SESSION_EVENTS = ["session_start", "session_switch"] as const;
+
+type SessionEventName = (typeof SESSION_EVENTS)[number];
+
 function registerSessionHandler(
   pi: ExtensionAPI,
-  eventName: "session_start" | "session_switch",
+  eventName: SessionEventName,
   runtime: ReturnType<typeof createRtkRuntime>,
   updateBashTool: (cwd: string) => void
 ): void {
@@ -38,14 +47,14 @@ function registerSessionHandler(
 export default function rtkExtension(pi: ExtensionAPI): void {
   const runtime = createRtkRuntime(loadRtkConfig(process.cwd()));
   let bashTool = createBashTool(process.cwd());
+  let toolDisplayConfig = loadToolDisplayConfig(process.cwd());
 
-  registerSessionHandler(pi, "session_start", runtime, (cwd) => {
-    bashTool = createBashTool(cwd);
-  });
-
-  registerSessionHandler(pi, "session_switch", runtime, (cwd) => {
-    bashTool = createBashTool(cwd);
-  });
+  for (const eventName of SESSION_EVENTS) {
+    registerSessionHandler(pi, eventName, runtime, (cwd) => {
+      bashTool = createBashTool(cwd);
+      toolDisplayConfig = loadToolDisplayConfig(cwd);
+    });
+  }
 
   pi.registerTool({
     ...bashTool,
@@ -89,6 +98,17 @@ export default function rtkExtension(pi: ExtensionAPI): void {
         signal,
         onUpdate,
         ctx
+      );
+    },
+    renderCall(args, theme) {
+      return renderCompactBashCall(args, theme);
+    },
+    renderResult(result, renderContext, theme) {
+      return renderCompactBashResult(
+        result,
+        renderContext,
+        theme,
+        toolDisplayConfig.output.bash
       );
     },
   });

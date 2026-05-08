@@ -1,0 +1,40 @@
+{
+  "tools": {
+    "read": {
+      "enabled": true,
+      "fullSkillRead": true
+    },
+    "search": {
+      "enabled": true
+    },
+    "edit": {
+      "enabled": true
+    },
+    "write": {
+      "enabled": true
+    }
+  },
+  "output": {
+    "read": {
+      "mode": "compact",
+      "collapsed": true,
+      "previewLines": 20
+    },
+    "search": {
+      "mode": "compact",
+      "collapsed": true,
+      "previewLines": 20
+    },
+    "bash": {
+      "mode": "compact",
+      "collapsed": true,
+      "previewLines": 20,
+      "rtkHints": true
+    }
+  },
+  "diff": {
+    "enabled": true,
+    "collapsed": true,
+    "previewLines": 80
+  }
+}

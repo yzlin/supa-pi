@@ -38,20 +38,43 @@ function getTrackedToolName(
   }
 }
 
-function isReadPatchFullSkillRead(details: unknown): boolean {
+function isFullSkillRead(details: unknown): boolean {
   if (!(details && typeof details === "object")) {
     return false;
   }
 
-  const value = details as { readPatch?: { fullSkillRead?: unknown } };
-  return value.readPatch?.fullSkillRead === true;
+  const value = details as {
+    readPatch?: { fullSkillRead?: unknown };
+    toolDisplay?: { fullSkillRead?: unknown };
+  };
+  return (
+    value.readPatch?.fullSkillRead === true ||
+    value.toolDisplay?.fullSkillRead === true
+  );
+}
+
+interface RtkCompactionMetadata {
+  toolName: RtkToolName;
+  originalChars: number;
+  finalChars: number;
+  savedChars: number;
+}
+
+function mergeRtkCompactionDetails(
+  details: ToolResultEvent["details"],
+  metadata: RtkCompactionMetadata
+): ToolResultEvent["details"] {
+  return {
+    ...(details && typeof details === "object" ? details : {}),
+    rtkCompaction: metadata,
+  };
 }
 
 function getCompactionTarget(
   event: ToolResultEvent,
   config: RtkConfig
 ): RtkToolName | null {
-  if (event.toolName === "read" && isReadPatchFullSkillRead(event.details)) {
+  if (event.toolName === "read" && isFullSkillRead(event.details)) {
     return null;
   }
 
@@ -158,6 +181,12 @@ export function createRtkToolResultHandler(
 
     return {
       content: [{ type: "text", text: compactedText }],
+      details: mergeRtkCompactionDetails(event.details, {
+        toolName,
+        originalChars: originalText.length,
+        finalChars: compactedText.length,
+        savedChars: originalText.length - compactedText.length,
+      }),
     };
   };
 }

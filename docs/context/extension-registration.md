@@ -12,6 +12,16 @@ When documenting active capabilities, prefer `package.json` over directory prese
 
 Do not describe `extensions/om` as active runtime behavior unless package registration changes.
 
+`read-patch` is retired. Its skill-file full-read behavior now belongs to active `extensions/tool-display`; do not re-add `extensions/read-patch.ts` or `extensions/read-patch/` docs.
+
+## Tool ownership and registration order
+
+`extensions/tool-display` owns `read` and optional compact renderers for `grep`, `find`, `ls`, `edit`, and `write`.
+
+`extensions/rtk` owns `bash` execution, output rewrite, statistics, and compaction metadata. RTK may reuse tool-display bash rendering helpers, but tool-display must not register `bash`.
+
+Keep `./extensions/rtk` before `./extensions/tool-display` in `package.json -> pi.extensions` so ownership stays explicit and reviewable.
+
 ## Deployment model
 
 This repo can be developed from any checkout path. The live Pi config is still the `~/.pi/agent` environment described by setup docs.

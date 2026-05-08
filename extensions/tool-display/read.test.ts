@@ -4,15 +4,15 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import {
-  isReadPatchDetails,
+  isToolDisplayReadDetails,
   normalizeSkillFilePaths,
-  READ_PATCH_MAX_BYTES,
   readFullSkillText,
-  resolvePatchedSkillPath,
-} from "./read-patch";
+  resolveFullSkillReadPath,
+  TOOL_DISPLAY_READ_MAX_BYTES,
+} from "./read";
 
 async function withTempDir<T>(fn: (dir: string) => Promise<T>): Promise<T> {
-  const dir = await mkdtemp(join(tmpdir(), "read-patch-"));
+  const dir = await mkdtemp(join(tmpdir(), "tool-display-read-"));
   try {
     return await fn(dir);
   } finally {
@@ -20,7 +20,7 @@ async function withTempDir<T>(fn: (dir: string) => Promise<T>): Promise<T> {
   }
 }
 
-describe("read-patch", () => {
+describe("tool-display read", () => {
   it("normalizes loaded skill file paths using realpath", async () => {
     await withTempDir(async (dir) => {
       const skillPath = join(dir, "SKILL.md");
@@ -47,10 +47,10 @@ describe("read-patch", () => {
       ]);
 
       await expect(
-        resolvePatchedSkillPath(skillPath, dir, skillPaths)
+        resolveFullSkillReadPath(skillPath, dir, skillPaths)
       ).resolves.toBe(await realpath(skillPath));
       await expect(
-        resolvePatchedSkillPath("README.md", dir, skillPaths)
+        resolveFullSkillReadPath("README.md", dir, skillPaths)
       ).resolves.toBeNull();
     });
   });
@@ -67,23 +67,24 @@ describe("read-patch", () => {
 
       expect(result.content).toEqual("one\ntwo\nthree\n");
       expect(result.details).toMatchObject({
-        readPatch: {
+        toolDisplay: {
           fullSkillRead: true,
           ignoredOffset: 2,
           ignoredLimit: 1,
         },
       });
-      expect(isReadPatchDetails(result.details)).toBe(true);
+      expect(result.details).not.toHaveProperty("readPatch");
+      expect(isToolDisplayReadDetails(result.details)).toBe(true);
     });
   });
 
   it("fails instead of truncating when a skill exceeds the cap", async () => {
     await withTempDir(async (dir) => {
       const skillPath = join(dir, "SKILL.md");
-      await writeFile(skillPath, "x".repeat(READ_PATCH_MAX_BYTES + 1));
+      await writeFile(skillPath, "x".repeat(TOOL_DISPLAY_READ_MAX_BYTES + 1));
 
       await expect(readFullSkillText(skillPath, {})).rejects.toThrow(
-        "exceeds read-patch cap"
+        "exceeds tool-display read cap"
       );
     });
   });

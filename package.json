@@ -25,13 +25,13 @@
       "./extensions/btw",
       "./extensions/ast-grep",
       "./extensions/rtk",
+      "./extensions/tool-display",
       "./extensions/init-deep",
       "./extensions/smart-docs",
       "./extensions/pieditor",
       "./extensions/lsp",
       "./extensions/web-access",
-      "./extensions/skills.ts",
-      "./extensions/read-patch.ts"
+      "./extensions/skills.ts"
     ]
   },
   "dependencies": {

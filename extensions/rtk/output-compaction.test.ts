@@ -53,6 +53,14 @@ describe("rtk output compaction", () => {
 
     expect(result).toEqual({
       content: [{ type: "text", text: "3\n4" }],
+      details: {
+        rtkCompaction: {
+          toolName: "bash",
+          originalChars: 7,
+          finalChars: 3,
+          savedChars: 4,
+        },
+      },
     });
     expect(runtime.metrics.snapshot()).toMatchObject({
       totalOriginalChars: 7,
@@ -93,10 +101,55 @@ describe("rtk output compaction", () => {
 
     expect(result).toEqual({
       content: [{ type: "text", text: "1\n2" }],
+      details: {
+        rtkCompaction: {
+          toolName: "read",
+          originalChars: 7,
+          finalChars: 3,
+          savedChars: 4,
+        },
+      },
     });
   });
 
-  it("skips read-patch full skill reads", async () => {
+  it("preserves existing details when adding compaction metadata", async () => {
+    const runtime = createRuntime({
+      ...DEFAULT_RTK_CONFIG,
+      outputCompaction: {
+        ...DEFAULT_RTK_CONFIG.outputCompaction,
+        enabled: true,
+        compactGrep: true,
+        maxLines: 1,
+        maxChars: 1000,
+      },
+    });
+
+    const handler = createRtkToolResultHandler(runtime);
+    const result = await handler({
+      type: "tool_result",
+      toolCallId: "1",
+      toolName: "grep",
+      input: { pattern: "x" },
+      content: [{ type: "text", text: "1\n2" }],
+      details: { truncation: { truncated: true } },
+      isError: false,
+    } as any);
+
+    expect(result).toEqual({
+      content: [{ type: "text", text: "1" }],
+      details: {
+        truncation: { truncated: true },
+        rtkCompaction: {
+          toolName: "grep",
+          originalChars: 3,
+          finalChars: 1,
+          savedChars: 2,
+        },
+      },
+    });
+  });
+
+  it("skips legacy read-patch full skill reads", async () => {
     const runtime = createRuntime({
       ...DEFAULT_RTK_CONFIG,
       outputCompaction: {
@@ -116,6 +169,32 @@ describe("rtk output compaction", () => {
       input: { path: "SKILL.md" },
       content: [{ type: "text", text: "1\n2\n3\n4" }],
       details: { readPatch: { fullSkillRead: true } },
+      isError: false,
+    } as any);
+
+    expect(result).toBeUndefined();
+  });
+
+  it("skips tool-display full skill reads", async () => {
+    const runtime = createRuntime({
+      ...DEFAULT_RTK_CONFIG,
+      outputCompaction: {
+        ...DEFAULT_RTK_CONFIG.outputCompaction,
+        enabled: true,
+        compactRead: true,
+        maxLines: 2,
+        maxChars: 1000,
+      },
+    });
+
+    const handler = createRtkToolResultHandler(runtime);
+    const result = await handler({
+      type: "tool_result",
+      toolCallId: "1",
+      toolName: "read",
+      input: { path: "SKILL.md" },
+      content: [{ type: "text", text: "1\n2\n3\n4" }],
+      details: { toolDisplay: { fullSkillRead: true } },
       isError: false,
     } as any);
 
@@ -147,6 +226,14 @@ describe("rtk output compaction", () => {
 
     expect(result).toEqual({
       content: [{ type: "text", text: "1\n2" }],
+      details: {
+        rtkCompaction: {
+          toolName: "grep",
+          originalChars: 7,
+          finalChars: 3,
+          savedChars: 4,
+        },
+      },
     });
   });
 
@@ -265,6 +352,14 @@ describe("rtk output compaction", () => {
 
     expect(result).toEqual({
       content: [{ type: "text", text: "你好…" }],
+      details: {
+        rtkCompaction: {
+          toolName: "read",
+          originalChars: 4,
+          finalChars: 3,
+          savedChars: 1,
+        },
+      },
     });
   });
 
@@ -293,6 +388,14 @@ describe("rtk output compaction", () => {
 
     expect(result).toEqual({
       content: [{ type: "text", text: "1234…" }],
+      details: {
+        rtkCompaction: {
+          toolName: "read",
+          originalChars: 14,
+          finalChars: 5,
+          savedChars: 9,
+        },
+      },
     });
   });
 
