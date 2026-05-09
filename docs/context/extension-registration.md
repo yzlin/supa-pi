@@ -22,6 +22,10 @@ Do not describe `extensions/om` as active runtime behavior unless package regist
 
 Keep `./extensions/rtk` before `./extensions/tool-display` in `package.json -> pi.extensions` so ownership stays explicit and reviewable.
 
+## Companion packages
+
+Web access tools come from the external `npm:pi-web-access` companion package, not vendored repo code.
+
 ## Deployment model
 
 This repo can be developed from any checkout path. The live Pi config is still the `~/.pi/agent` environment described by setup docs.

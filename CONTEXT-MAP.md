@@ -29,7 +29,6 @@
 - `extensions/tool-display/README.md` — read before changing tool renderer ownership, config, skill-file `read` override behavior, tool-display metadata, or RTK full-skill-read compaction exemptions.
 - `extensions/rtk/README.md` — read before changing output compaction, `bash` ownership, or `/rtk` behavior.
 - `extensions/smart-docs/README.md` — read before changing smart documentation generation workflows.
-- `extensions/web-access/README.md` — read before changing web search, browser curator, fetch, or search-provider behavior.
 
 ## Maintenance rules
 
