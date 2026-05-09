@@ -9,49 +9,58 @@ import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import {
   Editor,
   type EditorTheme,
-  Key,
-  matchesKey,
   Text,
   truncateToWidth,
-  wrapTextWithAnsi,
 } from "@earendil-works/pi-tui";
 import { Type } from "typebox";
 
-const TOP_LEVEL_REGEX_1 =
+import { routeQuestionnaireKey } from "./keys";
+import { renderQuestionnaireRuntime } from "./render";
+import { createQuestionnaireEnvelope } from "./response";
+import {
+  createQuestionnaireRuntimeState,
+  isAllAnswered,
+  reduceQuestionnaireRuntime,
+} from "./state";
+import {
+  CUSTOM_OPTION_LABEL,
+  CUSTOM_OPTION_VALUE,
+  NEXT_OPTION_LABEL,
+  NEXT_OPTION_VALUE,
+  QUESTIONNAIRE_RESERVED_LABELS,
+  QUESTIONNAIRE_RESERVED_VALUES,
+  type Question,
+  type QuestionInput,
+  type QuestionnaireParamsInput,
+  type QuestionnaireResult,
+  type QuestionnaireValidationErrorDetails,
+  type QuestionnaireValidationIssue,
+  type QuestionOption,
+  type RenderOption,
+} from "./types";
+
+const CLARIFICATION_TRIGGER_REGEX =
   /\b(could you|can you|would you|do you want|would you prefer|do you prefer|which|what should|should i|any preference|please clarify|confirm)\b/i;
 
-// Types
-export interface QuestionOption {
-  value: string;
-  label: string;
-  description?: string;
-}
-
-export type RenderOption = QuestionOption & { isOther?: boolean };
-
-const CUSTOM_OPTION_VALUE = "__other__";
-const CUSTOM_OPTION_LABEL = "Type something.";
-
-interface Question {
-  id: string;
-  label: string;
-  prompt: string;
-  options: QuestionOption[];
-}
-
-interface Answer {
-  id: string;
-  value: string;
-  label: string;
-  wasCustom: boolean;
-  index?: number;
-}
-
-interface QuestionnaireResult {
-  questions: Question[];
-  answers: Answer[];
-  cancelled: boolean;
-}
+export type {
+  Answer,
+  Question,
+  QuestionInput,
+  QuestionnaireParamsInput,
+  QuestionnaireResult,
+  QuestionnaireValidationErrorDetails,
+  QuestionnaireValidationIssue,
+  QuestionOption,
+  RenderOption,
+} from "./types";
+export {
+  CUSTOM_OPTION_LABEL,
+  CUSTOM_OPTION_VALUE,
+  NEXT_OPTION_LABEL,
+  NEXT_OPTION_VALUE,
+  QUESTIONNAIRE_RESERVED_LABELS,
+  QUESTIONNAIRE_RESERVED_VALUES,
+} from "./types";
 
 interface AssistantTextBlock {
   type: string;
@@ -82,7 +91,7 @@ function looksLikePlainTextClarification(text: string): boolean {
     return false;
   }
 
-  return TOP_LEVEL_REGEX_1.test(text);
+  return CLARIFICATION_TRIGGER_REGEX.test(text);
 }
 
 function hasAutoRedirectMessage(
@@ -115,24 +124,7 @@ function getQuestionnaireMissLogs(
     .map((entry) => entry.data as QuestionnaireMissLog);
 }
 
-export function wrapQuestionnaireText(text: string, width: number): string[] {
-  const clampedWidth = Math.max(1, width);
-  const normalized = text.replace(/\t/g, "    ");
-
-  if (!normalized) {
-    return [""];
-  }
-
-  return normalized.split("\n").flatMap((line) => {
-    if (!line) {
-      return [""];
-    }
-
-    return wrapTextWithAnsi(line, clampedWidth).map((segment) =>
-      truncateToWidth(segment, clampedWidth)
-    );
-  });
-}
+export { wrapQuestionnaireText } from "./text";
 
 // Schema
 const QuestionOptionSchema = Type.Object({
@@ -140,6 +132,9 @@ const QuestionOptionSchema = Type.Object({
   label: Type.String({ description: "Display label for the option" }),
   description: Type.Optional(
     Type.String({ description: "Optional description shown below label" })
+  ),
+  preview: Type.Optional(
+    Type.String({ description: "Optional preview content for this option" })
   ),
 });
 
@@ -154,28 +149,175 @@ const QuestionSchema = Type.Object({
   prompt: Type.String({ description: "The full question text to display" }),
   options: Type.Array(QuestionOptionSchema, {
     description: "Available options to choose from",
+    minItems: 2,
+    maxItems: 5,
   }),
+  multiSelect: Type.Optional(
+    Type.Boolean({
+      description:
+        "Allow selecting multiple options before committing with Next. Multi-select questions do not include the custom input row.",
+    })
+  ),
 });
 
 const QuestionnaireParams = Type.Object({
   questions: Type.Array(QuestionSchema, {
     description: "Questions to ask the user",
+    minItems: 1,
+    maxItems: 3,
   }),
 });
 
+function addDuplicateIssue(
+  issues: QuestionnaireValidationIssue[],
+  seen: Set<string>,
+  value: string,
+  path: string,
+  code: QuestionnaireValidationIssue["code"],
+  label: string
+): void {
+  if (!seen.has(value)) {
+    seen.add(value);
+    return;
+  }
+  issues.push({
+    path,
+    code,
+    message: `${label} must be unique; duplicates ${value}`,
+  });
+}
+
+export function validateQuestionnaireParams(
+  params: QuestionnaireParamsInput
+):
+  | QuestionnaireValidationErrorDetails
+  | { valid: true; questions: QuestionInput[] } {
+  const issues: QuestionnaireValidationIssue[] = [];
+  const questions = params.questions ?? [];
+
+  if (questions.length < 1 || questions.length > 3) {
+    issues.push({
+      path: "questions",
+      code: "question_count",
+      message: "Questionnaire requires 1-3 questions.",
+    });
+  }
+
+  const questionIds = new Set<string>();
+  questions.forEach((question, questionIndex) => {
+    addDuplicateIssue(
+      issues,
+      questionIds,
+      question.id,
+      `questions[${questionIndex}].id`,
+      "duplicate_question_id",
+      "Question id"
+    );
+
+    if (
+      question.multiSelect === true &&
+      question.options.some((option) => option.preview !== undefined)
+    ) {
+      issues.push({
+        path: `questions[${questionIndex}].options`,
+        code: "preview_multi_select",
+        message: "Multi-select questions cannot include option previews.",
+      });
+    }
+
+    if (question.options.length < 2 || question.options.length > 5) {
+      issues.push({
+        path: `questions[${questionIndex}].options`,
+        code: "option_count",
+        message: "Each question requires 2-5 options.",
+      });
+    }
+
+    const optionValues = new Set<string>();
+    const optionLabels = new Set<string>();
+    question.options.forEach((option, optionIndex) => {
+      const valuePath = `questions[${questionIndex}].options[${optionIndex}].value`;
+      const labelPath = `questions[${questionIndex}].options[${optionIndex}].label`;
+      addDuplicateIssue(
+        issues,
+        optionValues,
+        option.value,
+        valuePath,
+        "duplicate_option_value",
+        "Option value"
+      );
+      addDuplicateIssue(
+        issues,
+        optionLabels,
+        option.label,
+        labelPath,
+        "duplicate_option_label",
+        "Option label"
+      );
+      if (QUESTIONNAIRE_RESERVED_VALUES.includes(option.value as never)) {
+        issues.push({
+          path: valuePath,
+          code: "reserved_option_value",
+          message: `Option value ${option.value} is reserved.`,
+        });
+      }
+      if (QUESTIONNAIRE_RESERVED_LABELS.includes(option.label as never)) {
+        issues.push({
+          path: labelPath,
+          code: "reserved_option_label",
+          message: `Option label ${option.label} is reserved.`,
+        });
+      }
+    });
+  });
+
+  if (issues.length > 0) {
+    return { valid: false, issues };
+  }
+
+  return { valid: true, questions };
+}
+
+export { createQuestionnaireEnvelope } from "./response";
+
+function normalizeQuestion(question: QuestionInput, index: number): Question {
+  return {
+    ...question,
+    label: question.label || `Q${index + 1}`,
+  };
+}
+
 function errorResult(
   message: string,
-  questions: Question[] = []
-): { content: { type: "text"; text: string }[]; details: QuestionnaireResult } {
+  questions: Question[] = [],
+  validation?: QuestionnaireValidationErrorDetails
+): {
+  content: { type: "text"; text: string }[];
+  details: QuestionnaireResult & {
+    error?: QuestionnaireValidationErrorDetails;
+  };
+} {
   return {
     content: [{ type: "text", text: message }],
-    details: { questions, answers: [], cancelled: true },
+    details: { questions, answers: [], cancelled: true, error: validation },
   };
 }
 
 export function getRenderOptions(question: {
+  multiSelect?: boolean;
   options: QuestionOption[];
 }): RenderOption[] {
+  if (question.multiSelect === true) {
+    return [
+      ...question.options,
+      {
+        value: NEXT_OPTION_VALUE,
+        label: NEXT_OPTION_LABEL,
+        isNext: true,
+      },
+    ];
+  }
+
   return [
     ...question.options,
     {
@@ -186,7 +328,7 @@ export function getRenderOptions(question: {
   ];
 }
 
-export default function questionnaire(pi: ExtensionAPI) {
+export default function questionnaire(pi: ExtensionAPI): void {
   let lastInputSource: "interactive" | "rpc" | "extension" | null = null;
 
   pi.on("input", (event) => {
@@ -261,13 +403,14 @@ export default function questionnaire(pi: ExtensionAPI) {
     name: "questionnaire",
     label: "Questionnaire",
     description:
-      "Ask the user one or more questions. Use for clarifying requirements, getting preferences, or confirming decisions. Each question includes a final custom input option. For single questions, shows a simple option list. For multiple questions, shows a tab-based interface.",
+      "Ask the user one or more questions. Use for clarifying requirements, getting preferences, or confirming decisions. Single-select questions include a final custom input option. Multi-select questions use checkboxes and a Next row instead of custom input. For multiple questions, shows a tab-based interface.",
     promptSnippet:
       "Ask the user structured clarifying questions in the interactive main session",
     promptGuidelines: [
       "When you need user input in the interactive main session, prefer questionnaire over asking plain-text questions.",
       "Use a single question with options for simple clarifications; use multiple questions only when several answers are needed together.",
       "Keep questions short, decision-oriented, and limited to what is needed to proceed.",
+      "Single-select questions include a custom input row. Multi-select questions use checkboxes and a Next row, with no custom input row.",
       "Do not use questionnaire in background or non-interactive contexts.",
     ],
     parameters: QuestionnaireParams,
@@ -278,30 +421,22 @@ export default function questionnaire(pi: ExtensionAPI) {
           "Error: UI not available (running in non-interactive mode)"
         );
       }
-      if (params.questions.length === 0) {
-        return errorResult("Error: No questions provided");
+      const validation = validateQuestionnaireParams(params);
+      if (!validation.valid) {
+        return errorResult(
+          `Error: Invalid questionnaire: ${validation.issues.map((issue) => issue.message).join(" ")}`,
+          [],
+          validation
+        );
       }
 
-      // Normalize questions with defaults
-      const questions: Question[] = params.questions.map((q, i) => ({
-        ...q,
-        label: q.label || `Q${i + 1}`,
-      }));
-
-      const isMulti = questions.length > 1;
-      const totalTabs = questions.length + 1; // questions + Submit
+      const questions = validation.questions.map(normalizeQuestion);
 
       const result = await ctx.ui.custom<QuestionnaireResult>(
         (tui, theme, _kb, done) => {
-          // State
-          let currentTab = 0;
-          let optionIndex = 0;
-          let inputMode = false;
-          let inputQuestionId: string | null = null;
+          let state = createQuestionnaireRuntimeState();
           let cachedLines: string[] | undefined;
-          const answers = new Map<string, Answer>();
 
-          // Editor for "Type something" option
           const editorTheme: EditorTheme = {
             borderColor: (s) => theme.fg("accent", s),
             selectList: {
@@ -314,7 +449,6 @@ export default function questionnaire(pi: ExtensionAPI) {
           };
           const editor = new Editor(tui, editorTheme);
 
-          // Helpers
           function refresh() {
             cachedLines = undefined;
             tui.requestRender();
@@ -323,148 +457,97 @@ export default function questionnaire(pi: ExtensionAPI) {
           function submit(cancelled: boolean) {
             done({
               questions,
-              answers: Array.from(answers.values()),
+              answers: Array.from(state.answers.values()),
               cancelled,
             });
           }
 
           function currentQuestion(): Question | undefined {
-            return questions[currentTab];
+            return questions[state.currentTab];
+          }
+
+          function canUsePreviewNotes(): boolean {
+            const question = currentQuestion();
+            return (
+              question !== undefined &&
+              question.multiSelect !== true &&
+              question.options.some((option) => option.preview !== undefined)
+            );
           }
 
           function currentOptions(): RenderOption[] {
-            const q = currentQuestion();
-            if (!q) {
-              return [];
-            }
-            return getRenderOptions(q);
+            const question = currentQuestion();
+            return question ? getRenderOptions(question) : [];
           }
 
-          function allAnswered(): boolean {
-            return questions.every((q) => answers.has(q.id));
-          }
-
-          function advanceAfterAnswer() {
-            if (!isMulti) {
-              submit(false);
-              return;
-            }
-            if (currentTab < questions.length - 1) {
-              currentTab++;
-            } else {
-              currentTab = questions.length; // Submit tab
-            }
-            optionIndex = 0;
-            refresh();
-          }
-
-          function saveAnswer(
-            questionId: string,
-            value: string,
-            label: string,
-            wasCustom: boolean,
-            index?: number
+          function applyEffect(
+            effect: ReturnType<typeof reduceQuestionnaireRuntime>["effect"]
           ) {
-            answers.set(questionId, {
-              id: questionId,
-              value,
-              label,
-              wasCustom,
-              index,
-            });
-          }
-
-          // Editor submit callback
-          editor.onSubmit = (value) => {
-            if (!inputQuestionId) {
+            if (effect.type === "submit") {
+              submit(effect.cancelled);
               return;
             }
-            const trimmed = value.trim() || "(no response)";
-            saveAnswer(inputQuestionId, trimmed, trimmed, true);
-            inputMode = false;
-            inputQuestionId = null;
-            editor.setText("");
-            advanceAfterAnswer();
+            if (effect.type === "startInput" || effect.type === "clearInput") {
+              editor.setText("");
+            }
+            if (effect.type === "startNote") {
+              editor.setText(state.noteDrafts.get(effect.questionId) ?? "");
+            }
+            if (effect.type !== "none") {
+              refresh();
+            }
+          }
+
+          function dispatch(
+            action: Parameters<typeof reduceQuestionnaireRuntime>[1]
+          ) {
+            const reduced = reduceQuestionnaireRuntime(
+              state,
+              action,
+              questions
+            );
+            state = reduced.state;
+            applyEffect(reduced.effect);
+          }
+
+          editor.onSubmit = (value) => {
+            if (state.notesMode && state.noteQuestionId) {
+              dispatch({
+                type: "saveNoteDraft",
+                questionId: state.noteQuestionId,
+                value,
+              });
+              return;
+            }
+            if (!state.inputQuestionId) {
+              return;
+            }
+            dispatch({
+              type: "saveCustomAnswer",
+              questionId: state.inputQuestionId,
+              value,
+            });
           };
 
           function handleInput(data: string) {
-            // Input mode: route to editor
-            if (inputMode) {
-              if (matchesKey(data, Key.escape)) {
-                inputMode = false;
-                inputQuestionId = null;
-                editor.setText("");
-                refresh();
-                return;
-              }
+            const action = routeQuestionnaireKey({
+              data,
+              state,
+              questions,
+              options: currentOptions(),
+              allAnswered: isAllAnswered(questions, state.answers),
+              previewNotesEnabled: canUsePreviewNotes(),
+            });
+
+            if (!action) {
+              return;
+            }
+            if (action.type === "editor") {
               editor.handleInput(data);
               refresh();
               return;
             }
-
-            const q = currentQuestion();
-            const opts = currentOptions();
-
-            // Tab navigation (multi-question only)
-            if (isMulti) {
-              if (matchesKey(data, Key.tab) || matchesKey(data, Key.right)) {
-                currentTab = (currentTab + 1) % totalTabs;
-                optionIndex = 0;
-                refresh();
-                return;
-              }
-              if (
-                matchesKey(data, Key.shift("tab")) ||
-                matchesKey(data, Key.left)
-              ) {
-                currentTab = (currentTab - 1 + totalTabs) % totalTabs;
-                optionIndex = 0;
-                refresh();
-                return;
-              }
-            }
-
-            // Submit tab
-            if (currentTab === questions.length) {
-              if (matchesKey(data, Key.enter) && allAnswered()) {
-                submit(false);
-              } else if (matchesKey(data, Key.escape)) {
-                submit(true);
-              }
-              return;
-            }
-
-            // Option navigation
-            if (matchesKey(data, Key.up)) {
-              optionIndex = Math.max(0, optionIndex - 1);
-              refresh();
-              return;
-            }
-            if (matchesKey(data, Key.down)) {
-              optionIndex = Math.min(opts.length - 1, optionIndex + 1);
-              refresh();
-              return;
-            }
-
-            // Select option
-            if (matchesKey(data, Key.enter) && q) {
-              const opt = opts[optionIndex];
-              if (opt.isOther) {
-                inputMode = true;
-                inputQuestionId = q.id;
-                editor.setText("");
-                refresh();
-                return;
-              }
-              saveAnswer(q.id, opt.value, opt.label, false, optionIndex + 1);
-              advanceAfterAnswer();
-              return;
-            }
-
-            // Cancel
-            if (matchesKey(data, Key.escape)) {
-              submit(true);
-            }
+            dispatch(action);
           }
 
           function render(width: number): string[] {
@@ -472,123 +555,16 @@ export default function questionnaire(pi: ExtensionAPI) {
               return cachedLines;
             }
 
-            const lines: string[] = [];
-            const q = currentQuestion();
-            const opts = currentOptions();
-
-            // Helpers to add rendered lines
-            const add = (s: string) => lines.push(truncateToWidth(s, width));
-            const addWrapped = (
-              text: string,
-              indent: string,
-              color: string
-            ) => {
-              const contentWidth = Math.max(1, width - indent.length);
-              for (const line of wrapQuestionnaireText(text, contentWidth)) {
-                add(`${indent}${theme.fg(color, line)}`);
-              }
-            };
-
-            add(theme.fg("accent", "─".repeat(width)));
-
-            // Tab bar (multi-question only)
-            if (isMulti) {
-              const tabs: string[] = ["← "];
-              for (let i = 0; i < questions.length; i++) {
-                const isActive = i === currentTab;
-                const isAnswered = answers.has(questions[i].id);
-                const lbl = questions[i].label;
-                const box = isAnswered ? "■" : "□";
-                const color = isAnswered ? "success" : "muted";
-                const text = ` ${box} ${lbl} `;
-                const styled = isActive
-                  ? theme.bg("selectedBg", theme.fg("text", text))
-                  : theme.fg(color, text);
-                tabs.push(`${styled} `);
-              }
-              const canSubmit = allAnswered();
-              const isSubmitTab = currentTab === questions.length;
-              const submitText = " ✓ Submit ";
-              const submitStyled = isSubmitTab
-                ? theme.bg("selectedBg", theme.fg("text", submitText))
-                : theme.fg(canSubmit ? "success" : "dim", submitText);
-              tabs.push(`${submitStyled} →`);
-              add(` ${tabs.join("")}`);
-              lines.push("");
-            }
-
-            // Helper to render options list
-            function renderOptions() {
-              for (let i = 0; i < opts.length; i++) {
-                const opt = opts[i];
-                const selected = i === optionIndex;
-                const isOther = opt.isOther === true;
-                const prefix = selected ? theme.fg("accent", "> ") : "  ";
-                const color = selected ? "accent" : "text";
-                // Mark "Type something" differently when in input mode
-                if (isOther && inputMode) {
-                  add(prefix + theme.fg("accent", `${i + 1}. ${opt.label} ✎`));
-                } else {
-                  add(prefix + theme.fg(color, `${i + 1}. ${opt.label}`));
-                }
-                if (opt.description) {
-                  addWrapped(opt.description, "     ", "muted");
-                }
-              }
-            }
-
-            // Content
-            if (inputMode && q) {
-              addWrapped(q.prompt, " ", "text");
-              lines.push("");
-              // Show options for reference
-              renderOptions();
-              lines.push("");
-              add(theme.fg("muted", " Your answer:"));
-              for (const line of editor.render(width - 2)) {
-                add(` ${line}`);
-              }
-              lines.push("");
-              add(theme.fg("dim", " Enter to submit • Esc to cancel"));
-            } else if (currentTab === questions.length) {
-              add(theme.fg("accent", theme.bold(" Ready to submit")));
-              lines.push("");
-              for (const question of questions) {
-                const answer = answers.get(question.id);
-                if (answer) {
-                  const prefix = answer.wasCustom ? "(wrote) " : "";
-                  add(
-                    `${theme.fg("muted", ` ${question.label}: `)}${theme.fg("text", prefix + answer.label)}`
-                  );
-                }
-              }
-              lines.push("");
-              if (allAnswered()) {
-                add(theme.fg("success", " Press Enter to submit"));
-              } else {
-                const missing = questions
-                  .filter((question) => !answers.has(question.id))
-                  .map((question) => question.label)
-                  .join(", ");
-                add(theme.fg("warning", ` Unanswered: ${missing}`));
-              }
-            } else if (q) {
-              addWrapped(q.prompt, " ", "text");
-              lines.push("");
-              renderOptions();
-            }
-
-            lines.push("");
-            if (!inputMode) {
-              const help = isMulti
-                ? " Tab/←→ navigate • ↑↓ select • Enter confirm • Esc cancel"
-                : " ↑↓ navigate • Enter select • Esc cancel";
-              add(theme.fg("dim", help));
-            }
-            add(theme.fg("accent", "─".repeat(width)));
-
-            cachedLines = lines;
-            return lines;
+            cachedLines = renderQuestionnaireRuntime({
+              width,
+              theme,
+              questions,
+              state,
+              options: currentOptions(),
+              editor,
+              previewEnabled: canUsePreviewNotes(),
+            });
+            return cachedLines;
           }
 
           return {
@@ -601,25 +577,7 @@ export default function questionnaire(pi: ExtensionAPI) {
         }
       );
 
-      if (result.cancelled) {
-        return {
-          content: [{ type: "text", text: "User cancelled the questionnaire" }],
-          details: result,
-        };
-      }
-
-      const answerLines = result.answers.map((a) => {
-        const qLabel = questions.find((q) => q.id === a.id)?.label || a.id;
-        if (a.wasCustom) {
-          return `${qLabel}: user wrote: ${a.label}`;
-        }
-        return `${qLabel}: user selected: ${a.index}. ${a.label}`;
-      });
-
-      return {
-        content: [{ type: "text", text: answerLines.join("\n") }],
-        details: result,
-      };
+      return createQuestionnaireEnvelope({ ...result, questions });
     },
 
     renderCall(args, theme) {
@@ -644,8 +602,15 @@ export default function questionnaire(pi: ExtensionAPI) {
         return new Text(theme.fg("warning", "Cancelled"), 0, 0);
       }
       const lines = details.answers.map((a) => {
-        if (a.wasCustom) {
+        if (a.kind === "custom") {
           return `${theme.fg("success", "✓ ")}${theme.fg("accent", a.id)}: ${theme.fg("muted", "(wrote) ")}${a.label}`;
+        }
+        if (a.kind === "multi") {
+          const display =
+            a.selectedOptions
+              .map((option) => `${option.index}. ${option.label}`)
+              .join(", ") || "(none)";
+          return `${theme.fg("success", "✓ ")}${theme.fg("accent", a.id)}: ${display}`;
         }
         const display = a.index ? `${a.index}. ${a.label}` : a.label;
         return `${theme.fg("success", "✓ ")}${theme.fg("accent", a.id)}: ${display}`;

@@ -23,6 +23,7 @@ Documented extensions in this repo include:
 - **`extensions/caveman`** — standalone `/caveman` mode with per-session persistence and generic extension status
 - **`extensions/pieditor`** — editor UX improvements like `@` file picking, shell completions, raw paste, command remapping, and a locally maintained fork lineage from the original upstream extension
 - **`extensions/init-deep`** — deterministic `/init-deep` command flow for generating hierarchical `AGENTS.md`
+- **`extensions/questionnaire`** — active structured clarification tool with bounded schema, single/multi-question TUI flows, preview notes, validation, and locally documented rpiv divergences in `docs/context/questionnaire.md`
 - **`extensions/context-docs`** — deterministic `/context-setup`, `/context-note`, `/adr`, `/context-review`, and `/context-grill` workflows for durable project context docs
 - **`extensions/code-improvement`** — `/simplify` code-simplifier delegation plus `/improve-codebase-architecture` read-only architecture review workflow
 - **`extensions/review.ts`** — interactive current-session `/review` workflow with `/review-summary` and `/review-fix` follow-ups plus reviewer-agent orchestration; adapted in part from `@earendil-works/pi-review`
@@ -31,7 +32,6 @@ Documented extensions in this repo include:
 
 The configured extension set also includes workflow and utility modules such as:
 
-- `questionnaire`
 - `core-prompt`
 - `rules`
 - `execute`

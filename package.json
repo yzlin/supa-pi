@@ -9,7 +9,7 @@
   },
   "pi": {
     "extensions": [
-      "./extensions/questionnaire.ts",
+      "./extensions/questionnaire",
       "./extensions/caveman",
       "./extensions/core-prompt",
       "./extensions/rules",
