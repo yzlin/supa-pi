@@ -30,7 +30,8 @@
       "./extensions/smart-docs",
       "./extensions/pieditor",
       "./extensions/lsp",
-      "./extensions/skills.ts"
+      "./extensions/skills.ts",
+      "./extensions/obsidian"
     ]
   },
   "dependencies": {

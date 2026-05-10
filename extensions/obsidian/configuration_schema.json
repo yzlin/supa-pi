@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "enabled": {
+      "type": "boolean",
+      "default": false
+    },
+    "vaults": {
+      "type": "array",
+      "default": [],
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "path": {
+            "type": "string",
+            "description": "Absolute path, ~, or ~/ path to an Obsidian vault containing a .obsidian directory."
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": ["path"]
+      }
+    }
+  },
+  "required": ["enabled", "vaults"]
+}

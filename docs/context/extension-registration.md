@@ -14,6 +14,8 @@ Do not describe `extensions/om` as active runtime behavior unless package regist
 
 `read-patch` is retired. Its skill-file full-read behavior now belongs to active `extensions/tool-display`; do not re-add `extensions/read-patch.ts` or `extensions/read-patch/` docs.
 
+`extensions/obsidian` is active. It loads vault-local `CLAUDE.md` / `CLAUDE.MD` context from configured Obsidian vaults in `~/.pi/agent/obsidian.json`, injects loaded context through provider payload hooks, and exposes `/obsidian status`.
+
 ## Tool ownership and registration order
 
 `extensions/tool-display` owns `read` and optional compact renderers for `grep`, `find`, `ls`, `edit`, and `write`.
