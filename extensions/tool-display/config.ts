@@ -19,8 +19,32 @@ export interface ToolDisplayToolConfig {
   enabled: boolean;
 }
 
+export const TOOL_DISPLAY_FULL_READ_MAX_BYTES = 256 * 1024;
+
+export type ToolDisplayFullReadSource = "registeredSkills" | "patterns";
+export type ToolDisplayFullReadProvenance = "default" | "global" | "project";
+
+export interface ToolDisplayFullReadTarget {
+  name: string;
+  enabled: boolean;
+  source: ToolDisplayFullReadSource;
+  maxBytes: number;
+  ignorePagination: boolean;
+  baseDir?: string;
+  include?: string[];
+  exclude?: string[];
+  provenance: ToolDisplayFullReadProvenance;
+  warnings: string[];
+}
+
+export interface ToolDisplayFullReadConfig {
+  enabled: boolean;
+  targets: ToolDisplayFullReadTarget[];
+  warnings: string[];
+}
+
 export interface ToolDisplayReadConfig extends ToolDisplayToolConfig {
-  fullSkillRead: boolean;
+  fullRead: ToolDisplayFullReadConfig;
 }
 
 export interface ToolDisplayPreviewConfig {
@@ -58,9 +82,20 @@ export interface ToolDisplayConfig {
   diff: ToolDisplayDiffConfig;
 }
 
-interface ToolDisplayConfigLayer {
+interface ToolDisplayFullReadConfigLayer
+  extends Partial<ToolDisplayFullReadConfig> {
+  order?: string[];
+  targets?: Partial<ToolDisplayFullReadTarget>[];
+}
+
+interface ToolDisplayReadConfigLayer
+  extends Partial<Omit<ToolDisplayReadConfig, "fullRead">> {
+  fullRead?: ToolDisplayFullReadConfigLayer;
+}
+
+export interface ToolDisplayConfigLayer {
   tools?: {
-    read?: Partial<ToolDisplayReadConfig>;
+    read?: ToolDisplayReadConfigLayer;
     search?: Partial<ToolDisplayToolConfig>;
     edit?: Partial<ToolDisplayToolConfig>;
     write?: Partial<ToolDisplayToolConfig>;
@@ -77,7 +112,43 @@ export const DEFAULT_TOOL_DISPLAY_CONFIG: ToolDisplayConfig = {
   tools: {
     read: {
       enabled: true,
-      fullSkillRead: true,
+      fullRead: {
+        enabled: true,
+        targets: [
+          {
+            name: "skills",
+            enabled: true,
+            source: "registeredSkills",
+            maxBytes: TOOL_DISPLAY_FULL_READ_MAX_BYTES,
+            ignorePagination: true,
+            provenance: "default",
+            warnings: [],
+          },
+          {
+            name: "user-rules",
+            enabled: true,
+            source: "patterns",
+            maxBytes: TOOL_DISPLAY_FULL_READ_MAX_BYTES,
+            ignorePagination: true,
+            baseDir: "~/.pi/agent/rules",
+            include: ["**/*.md"],
+            provenance: "default",
+            warnings: [],
+          },
+          {
+            name: "project-rules",
+            enabled: true,
+            source: "patterns",
+            maxBytes: TOOL_DISPLAY_FULL_READ_MAX_BYTES,
+            ignorePagination: true,
+            baseDir: ".pi/rules",
+            include: ["**/*.md"],
+            provenance: "default",
+            warnings: [],
+          },
+        ],
+        warnings: [],
+      },
     },
     search: {
       enabled: true,
@@ -177,23 +248,146 @@ function normalizeToolConfig(
   return enabled === undefined ? undefined : { enabled };
 }
 
-function normalizeReadConfig(
+function normalizeStringArray(value: unknown): string[] | undefined {
+  if (
+    !Array.isArray(value) ||
+    value.some((entry) => typeof entry !== "string")
+  ) {
+    return undefined;
+  }
+  return value;
+}
+
+function normalizeFullReadSource(
   value: unknown
-): Partial<ToolDisplayReadConfig> | undefined {
+): ToolDisplayFullReadSource | undefined {
+  return value === "registeredSkills" || value === "patterns"
+    ? value
+    : undefined;
+}
+
+function normalizeFullReadMaxBytes(
+  value: unknown,
+  warnings: string[],
+  targetName: string
+): number | undefined {
+  const maxBytes = normalizePositiveInteger(value);
+  if (maxBytes === undefined) {
+    return undefined;
+  }
+  if (maxBytes <= TOOL_DISPLAY_FULL_READ_MAX_BYTES) {
+    return maxBytes;
+  }
+
+  warnings.push(
+    `target ${targetName}: maxBytes clamped to ${TOOL_DISPLAY_FULL_READ_MAX_BYTES}`
+  );
+  return TOOL_DISPLAY_FULL_READ_MAX_BYTES;
+}
+
+function normalizeFullReadTarget(
+  value: unknown
+): Partial<ToolDisplayFullReadTarget> | undefined {
+  if (
+    !isPlainObject(value) ||
+    typeof value.name !== "string" ||
+    value.name.length === 0
+  ) {
+    return undefined;
+  }
+
+  const warnings = [...(normalizeStringArray(value.warnings) ?? [])];
+  const source = normalizeFullReadSource(value.source);
+  const enabled = normalizeBoolean(value.enabled);
+  const maxBytes = normalizeFullReadMaxBytes(
+    value.maxBytes,
+    warnings,
+    value.name
+  );
+  const ignorePagination = normalizeBoolean(value.ignorePagination);
+  const baseDir = typeof value.baseDir === "string" ? value.baseDir : undefined;
+  const include = normalizeStringArray(value.include);
+  const exclude = normalizeStringArray(value.exclude);
+
+  if (value.source !== undefined && source === undefined) {
+    warnings.push(`target ${value.name}: invalid source ignored`);
+  }
+  if (source === "patterns" && baseDir === undefined) {
+    warnings.push(`target ${value.name}: pattern target missing baseDir`);
+  }
+  if (source === "patterns" && include === undefined) {
+    warnings.push(`target ${value.name}: pattern target missing include`);
+  }
+
+  return compactConfigSection({
+    name: value.name,
+    enabled,
+    source,
+    maxBytes,
+    ignorePagination,
+    baseDir,
+    include,
+    exclude,
+    warnings,
+  }) as Partial<ToolDisplayFullReadTarget>;
+}
+
+function normalizeFullReadConfig(
+  value: unknown
+): ToolDisplayFullReadConfigLayer | undefined {
   if (!isPlainObject(value)) {
     return undefined;
   }
 
-  const next: Partial<ToolDisplayReadConfig> = {};
   const enabled = normalizeBoolean(value.enabled);
-  const fullSkillRead = normalizeBoolean(value.fullSkillRead);
+  const order = normalizeStringArray(value.order);
+  const warnings = [...(normalizeStringArray(value.warnings) ?? [])];
+  const rawTargets = Array.isArray(value.targets) ? value.targets : undefined;
+  const targets: Partial<ToolDisplayFullReadTarget>[] | undefined = rawTargets
+    ? []
+    : undefined;
+
+  if (rawTargets && targets) {
+    for (const [index, target] of rawTargets.entries()) {
+      const normalizedTarget = normalizeFullReadTarget(target);
+      if (normalizedTarget) {
+        targets.push(normalizedTarget);
+        continue;
+      }
+
+      warnings.push(
+        isPlainObject(target)
+          ? `target at index ${index}: missing name ignored`
+          : `target at index ${index}: invalid target ignored`
+      );
+    }
+  }
+
+  return compactConfigSection({
+    enabled,
+    order,
+    targets,
+    warnings: warnings.length > 0 ? warnings : undefined,
+  }) as ToolDisplayFullReadConfigLayer;
+}
+
+function normalizeReadConfig(
+  value: unknown
+): ToolDisplayReadConfigLayer | undefined {
+  if (!isPlainObject(value)) {
+    return undefined;
+  }
+
+  const next: ToolDisplayReadConfigLayer = {};
+  const enabled = normalizeBoolean(value.enabled);
+  const fullRead = normalizeFullReadConfig(value.fullRead);
 
   if (enabled !== undefined) {
     next.enabled = enabled;
   }
 
-  if (fullSkillRead !== undefined) {
-    next.fullSkillRead = fullSkillRead;
+  if (fullRead !== undefined && Object.keys(fullRead).length > 0) {
+    next.fullRead = fullRead;
   }
 
   return Object.keys(next).length > 0 ? next : undefined;
@@ -227,19 +421,18 @@ function normalizePreviewConfig(
 function normalizeBashOutputConfig(
   value: unknown
 ): Partial<ToolDisplayBashOutputConfig> | undefined {
-  const next = normalizePreviewConfig(value) as
-    | Partial<ToolDisplayBashOutputConfig>
-    | undefined;
   if (!isPlainObject(value)) {
-    return next;
+    return undefined;
   }
 
+  const next: Partial<ToolDisplayBashOutputConfig> =
+    normalizePreviewConfig(value) ?? {};
   const rtkHints = normalizeBoolean(value.rtkHints);
   if (rtkHints !== undefined) {
-    return { ...next, rtkHints };
+    next.rtkHints = rtkHints;
   }
 
-  return next;
+  return Object.keys(next).length > 0 ? next : undefined;
 }
 
 function normalizeDiffConfig(
@@ -326,54 +519,140 @@ export function normalizeToolDisplayConfig(
   return next;
 }
 
-export function resolveToolDisplayConfig(
+function mergeFullReadConfig(
   globalConfig: ToolDisplayConfigLayer | null,
   projectConfig: ToolDisplayConfigLayer | null
+): ToolDisplayFullReadConfig {
+  const defaultFullRead = DEFAULT_TOOL_DISPLAY_CONFIG.tools.read.fullRead;
+  const globalFullRead = globalConfig?.tools?.read?.fullRead;
+  const projectFullRead = projectConfig?.tools?.read?.fullRead;
+  const targetMap = new Map<string, ToolDisplayFullReadTarget>();
+
+  function applyTargets(
+    targets: Partial<ToolDisplayFullReadTarget>[] | undefined,
+    provenance: ToolDisplayFullReadProvenance
+  ): void {
+    for (const target of targets ?? []) {
+      if (!target.name) {
+        continue;
+      }
+
+      const previous = targetMap.get(target.name);
+      targetMap.set(target.name, {
+        enabled: true,
+        source: "patterns",
+        maxBytes: TOOL_DISPLAY_FULL_READ_MAX_BYTES,
+        ignorePagination: true,
+        ...previous,
+        ...target,
+        name: target.name,
+        provenance,
+        warnings: [...(previous?.warnings ?? []), ...(target.warnings ?? [])],
+      });
+    }
+  }
+
+  applyTargets(defaultFullRead.targets, "default");
+  applyTargets(globalFullRead?.targets, "global");
+  applyTargets(projectFullRead?.targets, "project");
+
+  const seen = new Set<string>();
+  const orderedTargets: ToolDisplayFullReadTarget[] = [];
+
+  function appendTarget(target: ToolDisplayFullReadTarget): void {
+    if (seen.has(target.name)) {
+      return;
+    }
+    orderedTargets.push(target);
+    seen.add(target.name);
+  }
+
+  for (const name of [
+    ...(globalFullRead?.order ?? []),
+    ...(projectFullRead?.order ?? []),
+  ]) {
+    const target = targetMap.get(name);
+    if (target) {
+      appendTarget(target);
+    }
+  }
+
+  for (const target of targetMap.values()) {
+    appendTarget(target);
+  }
+
+  return {
+    enabled:
+      projectFullRead?.enabled ??
+      globalFullRead?.enabled ??
+      defaultFullRead.enabled,
+    targets: orderedTargets,
+    warnings: [
+      ...(globalFullRead?.warnings ?? []),
+      ...(projectFullRead?.warnings ?? []),
+    ],
+  };
+}
+
+export function loadToolDisplayConfigFromLayers(
+  globalConfig: unknown,
+  projectConfig: unknown
 ): ToolDisplayConfig {
+  const normalizedGlobalConfig = globalConfig
+    ? normalizeToolDisplayConfig(globalConfig)
+    : null;
+  const normalizedProjectConfig = projectConfig
+    ? normalizeToolDisplayConfig(projectConfig)
+    : null;
+
   return {
     tools: {
       read: {
         ...DEFAULT_TOOL_DISPLAY_CONFIG.tools.read,
-        ...globalConfig?.tools?.read,
-        ...projectConfig?.tools?.read,
+        ...normalizedGlobalConfig?.tools?.read,
+        ...normalizedProjectConfig?.tools?.read,
+        fullRead: mergeFullReadConfig(
+          normalizedGlobalConfig,
+          normalizedProjectConfig
+        ),
       },
       search: {
         ...DEFAULT_TOOL_DISPLAY_CONFIG.tools.search,
-        ...globalConfig?.tools?.search,
-        ...projectConfig?.tools?.search,
+        ...normalizedGlobalConfig?.tools?.search,
+        ...normalizedProjectConfig?.tools?.search,
       },
       edit: {
         ...DEFAULT_TOOL_DISPLAY_CONFIG.tools.edit,
-        ...globalConfig?.tools?.edit,
-        ...projectConfig?.tools?.edit,
+        ...normalizedGlobalConfig?.tools?.edit,
+        ...normalizedProjectConfig?.tools?.edit,
       },
       write: {
         ...DEFAULT_TOOL_DISPLAY_CONFIG.tools.write,
-        ...globalConfig?.tools?.write,
-        ...projectConfig?.tools?.write,
+        ...normalizedGlobalConfig?.tools?.write,
+        ...normalizedProjectConfig?.tools?.write,
       },
     },
     output: {
       read: {
         ...DEFAULT_TOOL_DISPLAY_CONFIG.output.read,
-        ...globalConfig?.output?.read,
-        ...projectConfig?.output?.read,
+        ...normalizedGlobalConfig?.output?.read,
+        ...normalizedProjectConfig?.output?.read,
       },
       search: {
         ...DEFAULT_TOOL_DISPLAY_CONFIG.output.search,
-        ...globalConfig?.output?.search,
-        ...projectConfig?.output?.search,
+        ...normalizedGlobalConfig?.output?.search,
+        ...normalizedProjectConfig?.output?.search,
       },
       bash: {
         ...DEFAULT_TOOL_DISPLAY_CONFIG.output.bash,
-        ...globalConfig?.output?.bash,
-        ...projectConfig?.output?.bash,
+        ...normalizedGlobalConfig?.output?.bash,
+        ...normalizedProjectConfig?.output?.bash,
       },
     },
     diff: {
       ...DEFAULT_TOOL_DISPLAY_CONFIG.diff,
-      ...globalConfig?.diff,
-      ...projectConfig?.diff,
+      ...normalizedGlobalConfig?.diff,
+      ...normalizedProjectConfig?.diff,
     },
   };
 }
@@ -386,15 +665,13 @@ export function getProjectToolDisplayConfigPath(cwd = process.cwd()): string {
   return join(cwd, ".pi", "tool-display.json");
 }
 
-function loadConfigLayer(configPath: string): ToolDisplayConfigLayer | null {
+function loadConfigLayer(configPath: string): unknown {
   if (!existsSync(configPath)) {
     return null;
   }
 
   try {
-    return normalizeToolDisplayConfig(
-      JSON.parse(readFileSync(configPath, "utf8"))
-    );
+    return JSON.parse(readFileSync(configPath, "utf8"));
   } catch {
     return null;
   }
@@ -404,7 +681,7 @@ export function loadToolDisplayConfig(
   cwd = process.cwd(),
   homeDir = homedir()
 ): ToolDisplayConfig {
-  return resolveToolDisplayConfig(
+  return loadToolDisplayConfigFromLayers(
     loadConfigLayer(getGlobalToolDisplayConfigPath(homeDir)),
     loadConfigLayer(getProjectToolDisplayConfigPath(cwd))
   );

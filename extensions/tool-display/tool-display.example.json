@@ -2,7 +2,22 @@
   "tools": {
     "read": {
       "enabled": true,
-      "fullSkillRead": true
+      "fullRead": {
+        "enabled": true,
+        "order": ["skills", "user-rules", "project-rules", "docs"],
+        "targets": [
+          {
+            "name": "docs",
+            "source": "patterns",
+            "enabled": true,
+            "baseDir": "docs",
+            "include": ["**/*.md"],
+            "exclude": ["archive/**"],
+            "maxBytes": 262144,
+            "ignorePagination": true
+          }
+        ]
+      }
     },
     "search": {
       "enabled": true
@@ -35,6 +50,10 @@
   "diff": {
     "enabled": true,
     "collapsed": true,
-    "previewLines": 80
+    "previewLines": 80,
+    "viewMode": "auto",
+    "splitMinWidth": 120,
+    "wordWrap": true,
+    "indicatorMode": "bars"
   }
 }

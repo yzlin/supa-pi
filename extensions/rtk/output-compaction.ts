@@ -38,19 +38,13 @@ function getTrackedToolName(
   }
 }
 
-function isFullSkillRead(details: unknown): boolean {
+function isToolDisplayFullRead(details: unknown): boolean {
   if (!(details && typeof details === "object")) {
     return false;
   }
 
-  const value = details as {
-    readPatch?: { fullSkillRead?: unknown };
-    toolDisplay?: { fullSkillRead?: unknown };
-  };
-  return (
-    value.readPatch?.fullSkillRead === true ||
-    value.toolDisplay?.fullSkillRead === true
-  );
+  const value = details as { toolDisplay?: { fullRead?: unknown } };
+  return value.toolDisplay?.fullRead === true;
 }
 
 interface RtkCompactionMetadata {
@@ -74,7 +68,7 @@ function getCompactionTarget(
   event: ToolResultEvent,
   config: RtkConfig
 ): RtkToolName | null {
-  if (event.toolName === "read" && isFullSkillRead(event.details)) {
+  if (event.toolName === "read" && isToolDisplayFullRead(event.details)) {
     return null;
   }
 

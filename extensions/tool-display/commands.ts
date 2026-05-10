@@ -39,13 +39,56 @@ function isToolDisplayPresetName(
   return value === "compact" || value === "verbose" || value === "off";
 }
 
+function summarizePatterns(
+  target: ToolDisplayConfig["tools"]["read"]["fullRead"]["targets"][number]
+): string {
+  if (target.source !== "patterns") {
+    return "-";
+  }
+
+  const parts: string[] = [];
+  if (target.baseDir) {
+    parts.push(`base=${target.baseDir}`);
+  }
+  if (target.include?.length) {
+    parts.push(`include=${target.include.join(",")}`);
+  }
+  if (target.exclude?.length) {
+    parts.push(`exclude=${target.exclude.join(",")}`);
+  }
+
+  return parts.length > 0 ? parts.join(" ") : "-";
+}
+
+function buildFullReadTargetRows(config: ToolDisplayConfig): string[] {
+  const rows = [
+    "tools.read.fullRead.targets:",
+    "  name | source | enabled | provenance | cap | pagination | patterns",
+    ...config.tools.read.fullRead.targets.map(
+      (target) =>
+        `  ${target.name} | ${target.source} | ${formatBoolean(target.enabled)} | ${target.provenance} | ${target.maxBytes} | ${target.ignorePagination ? "full" : "paged"} | ${summarizePatterns(target)}`
+    ),
+  ];
+
+  const warnings = [
+    ...config.tools.read.fullRead.warnings,
+    ...config.tools.read.fullRead.targets.flatMap((target) => target.warnings),
+  ];
+
+  return [
+    ...rows,
+    ...warnings.map((warning) => `tools.read.fullRead.warning: ${warning}`),
+  ];
+}
+
 function buildShowMessage(ctx: ExtensionCommandContext): string {
   const config = loadToolDisplayConfig(ctx.cwd);
   return [
     "tool-display",
     `projectConfig: ${getProjectToolDisplayConfigPath(ctx.cwd)}`,
     `tools.read.enabled: ${formatBoolean(config.tools.read.enabled)}`,
-    `tools.read.fullSkillRead: ${formatBoolean(config.tools.read.fullSkillRead)}`,
+    `tools.read.fullRead: ${formatBoolean(config.tools.read.fullRead.enabled)}`,
+    ...buildFullReadTargetRows(config),
     `tools.search.enabled: ${formatBoolean(config.tools.search.enabled)}`,
     `tools.edit.enabled: ${formatBoolean(config.tools.edit.enabled)}`,
     `tools.write.enabled: ${formatBoolean(config.tools.write.enabled)}`,

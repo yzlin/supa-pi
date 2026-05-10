@@ -1,5 +1,12 @@
 import { describe, expect, it } from "bun:test";
-import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -96,7 +103,87 @@ describe("tool-display commands", () => {
 
       expect(messages[0]).toContain("tool-display");
       expect(messages[0]).toContain("tools.search.enabled: on");
+      expect(messages[0]).toContain("tools.read.fullRead.targets:");
+      expect(messages[0]).toContain(
+        "name | source | enabled | provenance | cap | pagination | patterns"
+      );
+      expect(messages[0]).toContain(
+        "skills | registeredSkills | on | default | 262144 | full | -"
+      );
+      expect(messages[0]).toContain(
+        "user-rules | patterns | on | default | 262144 | full | base=~/.pi/agent/rules include=**/*.md"
+      );
       expect(messages[0]).toContain("output.bash: compact");
+    } finally {
+      rmSync(cwd, { force: true, recursive: true });
+    }
+  });
+
+  it("shows pattern target details and invalid target warnings", async () => {
+    const command = registerHarness();
+    const cwd = mkdtempSync(join(tmpdir(), "tool-display-command-"));
+    const messages: string[] = [];
+
+    try {
+      mkdirSync(join(cwd, ".pi"), { recursive: true });
+      writeFileSync(
+        getProjectToolDisplayConfigPath(cwd),
+        JSON.stringify({
+          tools: {
+            read: {
+              fullRead: {
+                order: ["docs"],
+                targets: [
+                  {
+                    name: "docs",
+                    source: "patterns",
+                    enabled: false,
+                    maxBytes: 42,
+                    ignorePagination: false,
+                    baseDir: "docs",
+                    include: ["**/*.md"],
+                    exclude: ["drafts/**"],
+                  },
+                  {
+                    name: "broken",
+                    source: "patterns",
+                  },
+                  { enabled: true },
+                  "bad",
+                ],
+              },
+            },
+          },
+        })
+      );
+
+      await command.handler(
+        "show",
+        createContext(cwd, (message) => {
+          messages.push(message);
+        })
+      );
+
+      expect(messages[0]).toContain(
+        "docs | patterns | off | project | 42 | paged | base=docs include=**/*.md exclude=drafts/**"
+      );
+      expect(messages[0]).toContain(
+        "tools.read.fullRead.warning: target broken: pattern target missing baseDir"
+      );
+      expect(messages[0]).toContain(
+        "tools.read.fullRead.warning: target broken: pattern target missing include"
+      );
+      expect(messages[0]).toContain(
+        "tools.read.fullRead.warning: target at index 2: missing name ignored"
+      );
+      expect(messages[0]).toContain(
+        "tools.read.fullRead.warning: target at index 3: invalid target ignored"
+      );
+      expect(
+        messages[0].match(
+          /tools\.read\.fullRead\.warning: target broken: pattern target missing baseDir/g
+        ) ?? []
+      ).toHaveLength(1);
     } finally {
       rmSync(cwd, { force: true, recursive: true });
     }

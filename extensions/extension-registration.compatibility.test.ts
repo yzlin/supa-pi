@@ -18,8 +18,8 @@ const toolDisplayIndexSource = readFileSync(
   join(import.meta.dir, "tool-display", "index.ts"),
   "utf8"
 );
-const fullSkillReadSummaryPattern =
-  /skill read full \(\$\{details\.bytes\} bytes\$\{suffix\}\)/;
+const fullReadSummaryPattern =
+  /full read \$\{details\.targetName\} \(\$\{details\.bytes\} bytes\$\{suffix\}\)/;
 
 function createExtensionHarness() {
   const tools: Array<{ name: string; renderShell?: string }> = [];
@@ -42,11 +42,9 @@ function createExtensionHarness() {
 }
 
 describe("extension registration compatibility", () => {
-  test("tool ownership is explicit and legacy read-patch is inactive", () => {
+  test("tool ownership is explicit", () => {
     const extensions = packageJson.pi?.extensions ?? [];
 
-    expect(extensions).not.toContain("./extensions/read-patch.ts");
-    expect(extensions).not.toContain("./extensions/read-patch");
     expect(extensions).toContain("./extensions/rtk");
     expect(extensions).toContain("./extensions/tool-display");
     expect(extensions.indexOf("./extensions/rtk")).toBeLessThan(
@@ -88,9 +86,8 @@ describe("extension registration compatibility", () => {
     expect(rtkIndexSource).toContain("resolveRtkCommand");
   });
 
-  test("full skill reads render summary-only tool-display details", () => {
+  test("full reads render summary-only tool-display details", () => {
     expect(toolDisplayIndexSource).toContain("isToolDisplayReadDetails");
-    expect(toolDisplayIndexSource).toMatch(fullSkillReadSummaryPattern);
-    expect(toolDisplayIndexSource).not.toContain("readPatch");
+    expect(toolDisplayIndexSource).toMatch(fullReadSummaryPattern);
   });
 });

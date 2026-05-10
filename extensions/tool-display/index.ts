@@ -16,8 +16,8 @@ import {
   getToolDisplayReadErrorMessage,
   isToolDisplayReadDetails,
   normalizeSkillFilePaths,
-  readFullSkillText,
-  resolveFullSkillReadPath,
+  readFullReadText,
+  resolveFullReadPath,
 } from "./read";
 import {
   capturePreviousWriteContent,
@@ -76,22 +76,23 @@ export default function toolDisplayExtension(pi: ExtensionAPI): void {
     pi.registerTool({
       ...readTool,
       async execute(toolCallId, params, signal, onUpdate, ctx) {
-        if (!config.tools.read.fullSkillRead) {
+        if (!config.tools.read.fullRead.enabled) {
           return readTool.execute(toolCallId, params, signal, onUpdate, ctx);
         }
 
-        const patchedPath = await resolveFullSkillReadPath(
+        const fullReadMatch = await resolveFullReadPath(
           params.path,
           cwd,
+          config.tools.read.fullRead.targets,
           skillFilePaths
         );
 
-        if (!patchedPath) {
+        if (!fullReadMatch) {
           return readTool.execute(toolCallId, params, signal, onUpdate, ctx);
         }
 
         try {
-          const result = await readFullSkillText(patchedPath, params);
+          const result = await readFullReadText(fullReadMatch, params);
           return {
             content: [{ type: "text", text: result.content }],
             details: result.details,
@@ -105,7 +106,12 @@ export default function toolDisplayExtension(pi: ExtensionAPI): void {
               },
             ],
             isError: true,
-            details: createToolDisplayReadDetails(patchedPath, 0, params),
+            details: createToolDisplayReadDetails(
+              fullReadMatch.path,
+              fullReadMatch.target.name,
+              0,
+              params
+            ),
           };
         }
       },
@@ -134,7 +140,7 @@ export default function toolDisplayExtension(pi: ExtensionAPI): void {
           return new Text(
             theme.fg(
               status,
-              `skill read full (${details.bytes} bytes${suffix})`
+              `full read ${details.targetName} (${details.bytes} bytes${suffix})`
             ),
             0,
             0

@@ -8,8 +8,10 @@ import {
   getGlobalToolDisplayConfigPath,
   getProjectToolDisplayConfigPath,
   loadToolDisplayConfig,
+  loadToolDisplayConfigFromLayers,
   normalizeToolDisplayConfig,
   saveProjectToolDisplayConfig,
+  TOOL_DISPLAY_FULL_READ_MAX_BYTES,
 } from "./config";
 
 describe("tool-display config", () => {
@@ -39,9 +41,8 @@ describe("tool-display config", () => {
   it("normalizes grouped tool config fields", () => {
     expect(
       normalizeToolDisplayConfig({
-        readPatch: { enabled: true },
         tools: {
-          read: { enabled: false, fullSkillRead: false },
+          read: { enabled: false, fullRead: { enabled: false } },
           search: { enabled: true },
           edit: { enabled: "yes" },
         },
@@ -62,7 +63,7 @@ describe("tool-display config", () => {
       })
     ).toEqual({
       tools: {
-        read: { enabled: false, fullSkillRead: false },
+        read: { enabled: false, fullRead: { enabled: false } },
         search: { enabled: true },
       },
       output: {
@@ -91,7 +92,7 @@ describe("tool-display config", () => {
       getGlobalToolDisplayConfigPath(homeDir),
       JSON.stringify({
         tools: {
-          read: { fullSkillRead: false },
+          read: { fullRead: { targets: [{ name: "skills", enabled: false }] } },
           search: { enabled: true },
         },
       }),
@@ -107,15 +108,125 @@ describe("tool-display config", () => {
       "utf8"
     );
 
-    expect(loadToolDisplayConfig(cwd, homeDir)).toEqual({
-      ...DEFAULT_TOOL_DISPLAY_CONFIG,
+    const config = loadToolDisplayConfig(cwd, homeDir);
+    expect(config.tools.read.enabled).toBe(false);
+    expect(
+      config.tools.read.fullRead.targets.find(
+        (target) => target.name === "skills"
+      )?.enabled
+    ).toBe(false);
+    expect(config.tools.search.enabled).toBe(true);
+  });
+
+  it("normalizes fullRead targets", () => {
+    expect(
+      normalizeToolDisplayConfig({
+        tools: {
+          read: {
+            fullRead: {
+              order: ["project-rules", "skills"],
+              targets: [
+                {
+                  name: "custom",
+                  enabled: false,
+                  source: "patterns",
+                  maxBytes: TOOL_DISPLAY_FULL_READ_MAX_BYTES + 1,
+                  ignorePagination: false,
+                  baseDir: "docs",
+                  include: ["**/*.md"],
+                  exclude: ["drafts/**"],
+                },
+                { name: "bad", source: "nope" },
+                { enabled: true },
+              ],
+            },
+          },
+        },
+      })
+    ).toEqual({
       tools: {
-        read: { enabled: false, fullSkillRead: false },
-        search: { enabled: true },
-        edit: { enabled: true },
-        write: { enabled: true },
+        read: {
+          fullRead: {
+            order: ["project-rules", "skills"],
+            targets: [
+              {
+                name: "custom",
+                enabled: false,
+                source: "patterns",
+                maxBytes: TOOL_DISPLAY_FULL_READ_MAX_BYTES,
+                ignorePagination: false,
+                baseDir: "docs",
+                include: ["**/*.md"],
+                exclude: ["drafts/**"],
+                warnings: [
+                  `target custom: maxBytes clamped to ${TOOL_DISPLAY_FULL_READ_MAX_BYTES}`,
+                ],
+              },
+              { name: "bad", warnings: ["target bad: invalid source ignored"] },
+            ],
+            warnings: ["target at index 2: missing name ignored"],
+          },
+        },
       },
     });
+  });
+
+  it("merges fullRead targets by name, disables by name, orders names first, and keeps provenance/warnings", () => {
+    const config = loadToolDisplayConfigFromLayers(
+      {
+        tools: {
+          read: {
+            fullRead: {
+              targets: [
+                { name: "skills", enabled: false },
+                {
+                  name: "custom",
+                  source: "patterns",
+                  baseDir: "docs",
+                  include: ["**/*.md"],
+                },
+              ],
+            },
+          },
+        },
+      },
+      {
+        tools: {
+          read: {
+            fullRead: {
+              order: ["custom", "skills"],
+              targets: [{ name: "custom", maxBytes: 2048, source: "bad" }],
+            },
+          },
+        },
+      }
+    );
+
+    expect(
+      config.tools.read.fullRead.targets
+        .map((target) => target.name)
+        .slice(0, 2)
+    ).toEqual(["custom", "skills"]);
+    expect(
+      config.tools.read.fullRead.targets.find(
+        (target) => target.name === "skills"
+      )
+    ).toMatchObject({
+      enabled: false,
+      provenance: "global",
+    });
+    expect(
+      config.tools.read.fullRead.targets.find(
+        (target) => target.name === "custom"
+      )
+    ).toMatchObject({
+      maxBytes: 2048,
+      provenance: "project",
+      warnings: ["target custom: invalid source ignored"],
+    });
+    expect(config.tools.read.fullRead.warnings).not.toContain(
+      "target custom: invalid source ignored"
+    );
   });
 
   it("saves normalized project config without overwriting unrelated keys", () => {
@@ -143,7 +254,7 @@ describe("tool-display config", () => {
 
     expect(result).toMatchObject({ ok: true });
     expect(loadToolDisplayConfig(cwd, homeDir).tools).toMatchObject({
-      read: { enabled: false, fullSkillRead: true },
+      read: { enabled: false, fullRead: { enabled: true } },
       search: { enabled: true },
       write: { enabled: true },
     });
