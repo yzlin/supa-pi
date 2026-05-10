@@ -61,3 +61,12 @@ Project defaults:
 - prefer explicit variant components over feature flags
 - prefer provider-backed compound components for complex shared state
 - prefer children/composition over render-prop sprawl unless a callback API is actually needed
+
+## Import Cycles
+
+Avoid import cycles. No exceptions.
+
+- Do not introduce direct or indirect circular imports between TypeScript/JavaScript modules.
+- If modules need shared behavior or types, extract the shared dependency into a lower-level module.
+- Keep dependency direction one-way across layers and feature boundaries.
+- Before merging non-trivial module wiring changes, check with the repo's cycle detector when available (for example `madge`, `dpdm`, `dependency-cruiser`, or the project lint command).
