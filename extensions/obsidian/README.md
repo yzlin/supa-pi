@@ -35,4 +35,6 @@ The extension does not parse bash paths and does not provide add/remove commands
 
 ## Command
 
-`/obsidian status` shows config state, active vault, loaded path count, and warnings.
+`/obsidian` defaults to `/obsidian status`.
+
+`/obsidian status` shows config state, active vault, loaded path count, full loaded path list, and warnings.

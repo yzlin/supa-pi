@@ -234,7 +234,7 @@ export default function obsidianExtension(pi: ExtensionAPI): void {
   });
 
   pi.registerCommand("obsidian", {
-    description: "Show Obsidian extension status: /obsidian status",
+    description: "Show Obsidian extension status",
     getArgumentCompletions(argumentPrefix) {
       const trimmed = argumentPrefix.trimStart();
       return "status".startsWith(trimmed)
@@ -242,17 +242,20 @@ export default function obsidianExtension(pi: ExtensionAPI): void {
         : null;
     },
     handler: (args, ctx) => {
-      if (args.trim() !== "status") {
+      const command = args.trim();
+      if (command !== "" && command !== "status") {
         ctx.ui.notify("Usage: /obsidian status", "warning");
         return Promise.resolve();
       }
       const { config, active, state } = getRuntime(ctx);
+      const loadedPaths = [...state.paths].sort();
       const warnings = [...config.warnings, ...(active?.warnings ?? [])];
       const text = [
         `enabled: ${config.enabled}`,
         `configured vaults: ${config.vaults.length}`,
         `active vault: ${active?.vault.name ?? active?.vault.path ?? "none"}`,
-        `loaded CLAUDE paths: ${state.paths.size}`,
+        `loaded CLAUDE paths: ${loadedPaths.length}`,
+        ...loadedPaths.map((path) => `  - ${path}`),
         ...warnings.map((warning) => `warning: ${warning}`),
       ].join("\n");
       ctx.ui.notify(text, "info");

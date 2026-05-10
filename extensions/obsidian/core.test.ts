@@ -505,8 +505,27 @@ describe("obsidian extension behavior", () => {
           "configured vaults: 2",
           "active vault: nested",
           "loaded CLAUDE paths: 1",
+          `  - ${realpathSync(join(nested, "CLAUDE.md"))}`,
           "warning: Rejected Obsidian vault with non-absolute path",
           "warning: Overlapping Obsidian vaults detected; deepest root wins",
+        ].join("\n"),
+      },
+    ]);
+  });
+
+  it("defaults bare obsidian command to status", async () => {
+    useTempConfig("bare-status");
+    writeConfig({ enabled: false, vaults: [] });
+    const harness = createExtensionHarness();
+
+    expect(await harness.status(tmpdir(), "")).toEqual([
+      {
+        level: "info",
+        text: [
+          "enabled: false",
+          "configured vaults: 0",
+          "active vault: none",
+          "loaded CLAUDE paths: 0",
         ].join("\n"),
       },
     ]);
