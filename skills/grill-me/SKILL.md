@@ -13,7 +13,10 @@ Interview the user relentlessly about every aspect of their plan or design until
 - Resolve dependencies between decisions one by one.
 - Ask exactly one question at a time.
 - Use `questionnaire` for user answers when interactive UI is available.
-- For each question, provide your recommended answer before asking for the user's answer.
+- When using `questionnaire`, ask exactly one single-select question per call; do not use `multiSelect`.
+- Add `preview` to every caller-supplied option; the injected custom answer row is the only no-preview exception.
+- Each preview must explain the option's meaning, implication, and main risk or tradeoff. Do not merely repeat the label.
+- For each question, state your recommended answer before asking the user. In `questionnaire`, put this recommendation as the first sentence of the prompt.
 - If a question was already asked in plain text, accept the user's answer and move on; do not ask the same question again with `questionnaire`.
 - Do not re-ask an answered question. Summarize the answer briefly, then continue to the next unresolved decision.
 - If a question can be answered by exploring the codebase, explore the codebase instead of asking.
