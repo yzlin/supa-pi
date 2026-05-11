@@ -59,15 +59,15 @@ Cancelled or invalid runs return text content plus `details.cancelled: true`; va
 
 Base single-question behavior:
 
-- `↑` / `↓`: move option cursor.
+- `↑` / `↓` or `k` / `j`: move option cursor.
 - `Enter` or `Space`: select current row.
 - `Esc`: cancel.
 - Selecting `Type something.` opens editor input; `Enter` submits non-empty custom text and `Esc` exits input. Empty custom text is rejected and keeps the editor open.
 
 Multiple questions:
 
-- `Tab` / `→`: next tab.
-- `Shift+Tab` / `←`: previous tab.
+- `Tab` / `→` / `l`: next tab.
+- `Shift+Tab` / `←` / `h`: previous tab.
 - After each single-select answer, focus advances to the next question or review tab.
 - Review tab requires all questions answered before `Submit` can complete; `Cancel` is always available.
 

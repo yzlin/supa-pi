@@ -1,10 +1,18 @@
-import { Key, matchesKey } from "@earendil-works/pi-tui";
+import { Key, type KeyId, matchesKey } from "@earendil-works/pi-tui";
 
 import type {
   QuestionnaireRuntimeAction,
   QuestionnaireRuntimeState,
 } from "./state";
 import type { Question, RenderOption } from "./types";
+
+function matchesNavigationKey(
+  data: string,
+  key: KeyId,
+  vimKey: "h" | "j" | "k" | "l"
+): boolean {
+  return matchesKey(data, key) || data === vimKey;
+}
 
 export function routeQuestionnaireKey(args: {
   data: string;
@@ -29,19 +37,25 @@ export function routeQuestionnaireKey(args: {
   const isMulti = questions.length > 1;
 
   if (isMulti) {
-    if (matchesKey(data, Key.tab) || matchesKey(data, Key.right)) {
+    if (
+      matchesKey(data, Key.tab) ||
+      matchesNavigationKey(data, Key.right, "l")
+    ) {
       return { type: "moveTab", delta: 1, totalTabs };
     }
-    if (matchesKey(data, Key.shift("tab")) || matchesKey(data, Key.left)) {
+    if (
+      matchesKey(data, Key.shift("tab")) ||
+      matchesNavigationKey(data, Key.left, "h")
+    ) {
       return { type: "moveTab", delta: -1, totalTabs };
     }
   }
 
   if (state.currentTab === questions.length) {
-    if (matchesKey(data, Key.up)) {
+    if (matchesNavigationKey(data, Key.up, "k")) {
       return { type: "moveOption", delta: -1, optionCount: 2 };
     }
-    if (matchesKey(data, Key.down)) {
+    if (matchesNavigationKey(data, Key.down, "j")) {
       return { type: "moveOption", delta: 1, optionCount: 2 };
     }
     if (matchesKey(data, Key.enter)) {
@@ -60,10 +74,10 @@ export function routeQuestionnaireKey(args: {
     return question ? { type: "startNote", questionId: question.id } : null;
   }
 
-  if (matchesKey(data, Key.up)) {
+  if (matchesNavigationKey(data, Key.up, "k")) {
     return { type: "moveOption", delta: -1, optionCount };
   }
-  if (matchesKey(data, Key.down)) {
+  if (matchesNavigationKey(data, Key.down, "j")) {
     return { type: "moveOption", delta: 1, optionCount };
   }
   if (matchesKey(data, Key.enter) || data === " ") {

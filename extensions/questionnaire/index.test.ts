@@ -266,6 +266,58 @@ describe("questionnaire reducer and key router", () => {
     expect(result.effect).toEqual({ type: "refresh" });
   });
 
+  it("routes vim navigation keys like arrow navigation", () => {
+    const state = createQuestionnaireRuntimeState();
+    const options = getRenderOptions(questions[0]);
+    const cases = [
+      { data: "j", action: { type: "moveOption", delta: 1, optionCount: 3 } },
+      { data: "k", action: { type: "moveOption", delta: -1, optionCount: 3 } },
+      { data: "l", action: { type: "moveTab", delta: 1, totalTabs: 3 } },
+      { data: "h", action: { type: "moveTab", delta: -1, totalTabs: 3 } },
+    ] as const;
+
+    for (const { data, action } of cases) {
+      expect(
+        routeQuestionnaireKey({
+          data,
+          state,
+          questions,
+          options,
+          allAnswered: false,
+        })
+      ).toEqual(action);
+    }
+  });
+
+  it("keeps vim navigation keys in editor and note modes as editor input", () => {
+    const modes = [
+      {
+        ...createQuestionnaireRuntimeState(),
+        inputMode: true,
+        inputQuestionId: "format",
+      },
+      {
+        ...createQuestionnaireRuntimeState(),
+        notesMode: true,
+        noteQuestionId: "format",
+      },
+    ];
+
+    for (const state of modes) {
+      for (const data of ["j", "k", "h", "l"]) {
+        expect(
+          routeQuestionnaireKey({
+            data,
+            state,
+            questions,
+            options: getRenderOptions(questions[0]),
+            allAnswered: false,
+          })
+        ).toEqual({ type: "editor" });
+      }
+    }
+  });
+
   it("routes enter to custom input when Type something is selected", () => {
     const state = { ...createQuestionnaireRuntimeState(), optionIndex: 2 };
     const options = getRenderOptions(questions[0]);
