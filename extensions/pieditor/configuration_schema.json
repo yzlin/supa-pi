@@ -17,6 +17,9 @@
         "type": "string"
       }
     },
+    "editorChrome": {
+      "$ref": "#/$defs/editorChromeConfig"
+    },
     "filePicker": {
       "$ref": "#/$defs/filePickerConfig"
     },
@@ -29,6 +32,19 @@
     }
   },
   "$defs": {
+    "editorChromeConfig": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Editor chrome style config. Defaults to classic; amp is opt-in.",
+      "properties": {
+        "style": {
+          "type": "string",
+          "enum": ["classic", "amp"],
+          "default": "classic",
+          "description": "Editor chrome style. 'classic' preserves the current editor chrome; 'amp' uses rounded Amp-style editor borders in normal and fixed-editor mode, moves path/git status to the bottom border, keeps other enabled status in the top border, keeps an empty frame when statusBar.enabled is false, and falls back to classic lines in very narrow terminals."
+        }
+      }
+    },
     "filePickerConfig": {
       "type": "object",
       "additionalProperties": false,

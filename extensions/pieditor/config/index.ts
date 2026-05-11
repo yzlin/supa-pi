@@ -55,9 +55,20 @@ export interface StatusBarRuntimeConfig {
   segmentOptions?: StatusBarSegmentOptions;
 }
 
+export type EditorChromeStyle = "classic" | "amp";
+
+export interface EditorChromeConfig {
+  style?: EditorChromeStyle;
+}
+
+export interface EditorChromeRuntimeConfig {
+  style: EditorChromeStyle;
+}
+
 export interface EditorEnhancementsConfig {
   doubleEscapeCommand?: string | null;
   commandRemap?: Record<string, string>;
+  editorChrome?: EditorChromeConfig;
   filePicker?: PickerConfig;
   statusBar?: StatusBarConfig;
   fixedEditor?: FixedEditorConfig;
@@ -66,6 +77,7 @@ export interface EditorEnhancementsConfig {
 export interface EditorEnhancementsRuntimeConfig {
   doubleEscapeCommand: string | null;
   commandRemap: Record<string, string>;
+  editorChrome: EditorChromeRuntimeConfig;
   filePicker: PickerRuntimeConfig;
   statusBar: StatusBarRuntimeConfig;
   fixedEditor: FixedEditorRuntimeConfig;
@@ -74,6 +86,7 @@ export interface EditorEnhancementsRuntimeConfig {
 interface EditorEnhancementsConfigLayer {
   doubleEscapeCommand?: string | null;
   commandRemap?: Record<string, string>;
+  editorChrome?: Partial<EditorChromeRuntimeConfig>;
   filePicker?: Partial<PickerRuntimeConfig>;
   statusBar?: Partial<StatusBarRuntimeConfig>;
   fixedEditor?: Partial<FixedEditorRuntimeConfig>;
@@ -87,6 +100,9 @@ interface LoadConfigOptions {
 const DEFAULT_CONFIG: EditorEnhancementsRuntimeConfig = {
   doubleEscapeCommand: null,
   commandRemap: {},
+  editorChrome: {
+    style: "classic",
+  },
   filePicker: mergeFilePickerConfigs(),
   statusBar: {
     enabled: true,
@@ -123,6 +139,37 @@ export function normalizeCommandRemap(value: unknown): Record<string, string> {
     }
   }
   return result;
+}
+
+function normalizeEditorChromeConfig(
+  value: unknown
+): Partial<EditorChromeRuntimeConfig> | undefined {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return undefined;
+  }
+
+  const raw = value as Record<string, unknown>;
+  const next: Partial<EditorChromeRuntimeConfig> = {};
+
+  if (raw.style === "classic" || raw.style === "amp") {
+    next.style = raw.style;
+  }
+
+  return Object.keys(next).length > 0 ? next : undefined;
+}
+
+function mergeEditorChromeConfigs(
+  ...configs: (Partial<EditorChromeRuntimeConfig> | undefined)[]
+): EditorChromeRuntimeConfig {
+  let style = DEFAULT_CONFIG.editorChrome.style;
+
+  for (const config of configs) {
+    if (config?.style !== undefined) {
+      style = config.style;
+    }
+  }
+
+  return { style };
 }
 
 function normalizeStatusBarPreset(value: unknown): StatusBarPreset | null {
@@ -360,6 +407,10 @@ function loadConfigFile(
       next.commandRemap = normalizeCommandRemap(parsed.commandRemap);
     }
 
+    if (Object.hasOwn(parsed, "editorChrome")) {
+      next.editorChrome = normalizeEditorChromeConfig(parsed.editorChrome);
+    }
+
     if (Object.hasOwn(parsed, "filePicker")) {
       next.filePicker = normalizeFilePickerConfig(parsed.filePicker);
     }
@@ -392,6 +443,11 @@ export function resolveRuntimeConfig(
       ...globalConfig?.commandRemap,
       ...projectConfig?.commandRemap,
     },
+    editorChrome: mergeEditorChromeConfigs(
+      DEFAULT_CONFIG.editorChrome,
+      globalConfig?.editorChrome,
+      projectConfig?.editorChrome
+    ),
     filePicker: mergeFilePickerConfigs(
       DEFAULT_CONFIG.filePicker,
       globalConfig?.filePicker,

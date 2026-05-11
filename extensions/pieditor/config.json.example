@@ -4,6 +4,9 @@
     "tree": "anycopy",
     "resume": "switch-session"
   },
+  "editorChrome": {
+    "style": "classic"
+  },
   "filePicker": {
     "respectGitignore": true,
     "skipHidden": true,

@@ -19,20 +19,20 @@ import type {
   UsageStats,
 } from "./types.js";
 
-function renderSegmentWithWidth(
+const AMP_BOTTOM_SEGMENTS = new Set<StatusBarSegmentId>(["path", "git"]);
+
+export interface AmpStatusLayout {
+  topLeftContent: string;
+  topRightContent: string;
+  bottomContent: string;
+}
+
+function renderSegmentContent(
   segId: StatusBarSegmentId,
   ctx: StatusBarContext
-): { content: string; width: number; visible: boolean } {
+): string | null {
   const rendered = renderStatusBarSegment(segId, ctx);
-  if (!(rendered.visible && rendered.content)) {
-    return { content: "", width: 0, visible: false };
-  }
-
-  return {
-    content: rendered.content,
-    width: visibleWidth(rendered.content),
-    visible: true,
-  };
+  return rendered.visible && rendered.content ? rendered.content : null;
 }
 
 function buildContentFromParts(
@@ -62,23 +62,40 @@ function fitToWidth(content: string, width: number): string {
   return content + " ".repeat(width - actualWidth);
 }
 
+function renderVisibleSegments(
+  segmentIds: StatusBarSegmentId[],
+  ctx: StatusBarContext
+): string[] {
+  return segmentIds.flatMap((segId) => {
+    const content = renderSegmentContent(segId, ctx);
+    return content ? [content] : [];
+  });
+}
+
+function renderStatusBarContent(
+  segmentIds: StatusBarSegmentId[],
+  presetDef: StatusBarPresetDef,
+  ctx: StatusBarContext
+): string {
+  return buildContentFromParts(
+    renderVisibleSegments(segmentIds, ctx),
+    presetDef,
+    ctx.theme,
+    ctx.colors
+  );
+}
+
 function computeTopContent(
   ctx: StatusBarContext,
   presetDef: StatusBarPresetDef,
   width: number
 ): string {
-  const renderSide = (segmentIds: StatusBarSegmentId[]) =>
-    segmentIds
-      .map((segId) => renderSegmentWithWidth(segId, ctx))
-      .filter((segment) => segment.visible)
-      .map((segment) => ({ content: segment.content, width: segment.width }));
+  const leftSegments = renderVisibleSegments(presetDef.leftSegments, ctx);
+  const rightSegments = renderVisibleSegments(presetDef.rightSegments, ctx);
 
-  const leftSegments = renderSide(presetDef.leftSegments);
-  const rightSegments = renderSide(presetDef.rightSegments);
-
-  const getSide = (segments: { content: string; width: number }[]) => {
+  const getSide = (segments: string[]) => {
     const content = buildContentFromParts(
-      segments.map((segment) => segment.content),
+      segments,
       presetDef,
       ctx.theme,
       ctx.colors
@@ -211,6 +228,55 @@ export function buildStatusBarContext(
     options: presetDef.segmentOptions ?? {},
     theme,
     colors,
+  };
+}
+
+export function buildAmpStatusLayout(options: {
+  ctx: ExtensionContext | null;
+  footerData: ReadonlyFooterDataProvider | null;
+  config: StatusBarRuntimeConfig;
+  sessionStartTime: number;
+  theme: Theme;
+}): AmpStatusLayout {
+  const { ctx, footerData, config, sessionStartTime, theme } = options;
+  if (!(config.enabled && ctx)) {
+    return { topLeftContent: "", topRightContent: "", bottomContent: "" };
+  }
+
+  const presetDef = resolveStatusBarPresetDef(config);
+  const statusBarContext = buildStatusBarContext(
+    ctx,
+    footerData,
+    presetDef,
+    sessionStartTime,
+    theme
+  );
+  const topLeftSegmentIds = presetDef.leftSegments.filter(
+    (segId) => !AMP_BOTTOM_SEGMENTS.has(segId)
+  );
+  const topRightSegmentIds = presetDef.rightSegments.filter(
+    (segId) => !AMP_BOTTOM_SEGMENTS.has(segId)
+  );
+  const bottomSegmentIds = [
+    ...presetDef.leftSegments,
+    ...presetDef.rightSegments,
+  ].filter((segId) => AMP_BOTTOM_SEGMENTS.has(segId));
+  return {
+    topLeftContent: renderStatusBarContent(
+      topLeftSegmentIds,
+      presetDef,
+      statusBarContext
+    ),
+    topRightContent: renderStatusBarContent(
+      topRightSegmentIds,
+      presetDef,
+      statusBarContext
+    ),
+    bottomContent: renderStatusBarContent(
+      bottomSegmentIds,
+      presetDef,
+      statusBarContext
+    ),
   };
 }
 

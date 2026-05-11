@@ -2,7 +2,7 @@
 
 read_when:
 - refactoring `extensions/pieditor/index.ts`, `composition.ts`, or editor lifecycle wiring
-- changing file-picker runtime/config behavior
+- changing editor chrome or file-picker runtime/config behavior
 - changing status-bar rendering, footer integration, or git invalidation
 - adding another feature that wants to own `setEditorComponent()`
 
@@ -18,6 +18,7 @@ Current feature areas:
 - raw clipboard paste via `alt+v`
 - optional double-escape command trigger
 - slash-command remapping at submit time
+- opt-in editor chrome style config
 - opt-in fixed editor runtime/config command surface
 
 ## Ownership boundaries
@@ -72,6 +73,7 @@ Owns:
 - context collection
 - preset resolution
 - segment rendering
+- Amp chrome status layout extraction; Amp keeps non-path/git segments on the top border and relocates path/git segments to the bottom border
 - git status helpers
 - icon/theme helpers
 
@@ -110,7 +112,10 @@ Merge order:
 3. project config
 
 Notes:
+- `editorChrome.style: "amp"` changes editor borders only, including fixed-editor mode; it does not add Amp non-editor UI, color config, or other Amp features
+- Amp chrome falls back to classic editor lines in very narrow terminals and renders an empty frame when status bar config is disabled
 - `commandRemap` merges by key
+- editor chrome config merges by field; `style` defaults to `classic`, accepts `classic` or `amp`, and invalid values are ignored so lower layers/defaults apply
 - file-picker config merges by field; `skipPatterns` is replaced by the last layer that sets it
 - fixed-editor config merges by field; shortcut arrays are replaced by the last layer that sets them
 - status-bar config merges by field; colors and nested segment options merge by semantic key / nested field

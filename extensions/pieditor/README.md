@@ -92,6 +92,8 @@ Then add the rest of your config fields:
   - `previewHighlightMode`: `"native"` or `"builtin"` (default `"native"`)
     - `"native"`: use the picker-local Rust/syntect highlighter backed by bat's embedded compiled assets, with Pi built-in highlighting as runtime fallback if the native binary is unavailable
     - `"builtin"`: always use Pi's built-in JS highlighter and skip native warmup/load work
+- `editorChrome`: nested editor chrome config
+  - `style`: `classic` or `amp` (default `classic`); `classic` preserves the existing editor chrome. `amp` uses rounded Amp-style editor borders in normal and fixed-editor mode, keeps status-bar `leftSegments` and `rightSegments` split across the top border with border-line fill between them, moves configured `path`/`git` status segments to the right-aligned bottom border, keeps an empty Amp frame when `statusBar.enabled` is `false`, and falls back to classic editor lines in very narrow terminals. It does not add Amp non-editor UI, color config, or other Amp features.
 - `statusBar`: nested status-bar config
   - `enabled`: default `true`
   - `preset`: one of `default`, `minimal`, `compact`, `full`, `nerd`, `ascii`; default `default`
@@ -118,6 +120,9 @@ Then add the rest of your config fields:
   "commandRemap": {
     "tree": "anycopy",
     "resume": "switch-session"
+  },
+  "editorChrome": {
+    "style": "classic"
   },
   "fixedEditor": {
     "enabled": false,
@@ -169,7 +174,7 @@ Runtime merge order for pieditor config is:
 2. global `~/.pi/agent/pieditor.json`
 3. project `.pi/pieditor.json`
 
-`commandRemap` maps are merged by key. `fixedEditor`, `filePicker`, and `statusBar` values are merged by field, with later layers winning; `fixedEditor` shortcut arrays and `filePicker.skipPatterns` come from the last layer that sets them. `statusBar.leftSegments` and `statusBar.rightSegments` are each replaced by the last layer that sets them, `separator` takes the last configured literal string, `colors` merge by semantic key, and `segmentOptions` merge per nested field.
+`commandRemap` maps are merged by key. `editorChrome`, `fixedEditor`, `filePicker`, and `statusBar` values are merged by field, with later layers winning; invalid `editorChrome.style` values are ignored so lower layers/defaults still apply. `fixedEditor` shortcut arrays and `filePicker.skipPatterns` come from the last layer that sets them. `statusBar.leftSegments` and `statusBar.rightSegments` are each replaced by the last layer that sets them, `separator` takes the last configured literal string, `colors` merge by semantic key, and `segmentOptions` merge per nested field.
 
 Config layout:
 

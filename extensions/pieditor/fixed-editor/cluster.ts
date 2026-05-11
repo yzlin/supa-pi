@@ -12,6 +12,10 @@ export const CURSOR_MARKER = "\x1b_pi:c\x07";
 const ESC_PATTERN = "\\x1b";
 const ANSI_SGR_PATTERN = new RegExp(`${ESC_PATTERN}\\[[0-9;]*m`, "g");
 
+function stripAnsi(value: string): string {
+  return value.replace(ANSI_SGR_PATTERN, "");
+}
+
 export interface FixedEditorClusterInput {
   width: number;
   terminalRows: number;
@@ -58,12 +62,9 @@ function clampWindowStart(
   return Math.max(0, Math.min(targetRow, lineCount - rowCount));
 }
 
-function capEditorLines(lines: string[], count: number): string[] {
+function capPlainEditorLines(lines: string[], count: number): string[] {
   if (count <= 0) {
     return [];
-  }
-  if (lines.length <= count) {
-    return lines;
   }
 
   const cursorRow = lines.findIndex((line) => line.includes(CURSOR_MARKER));
@@ -73,7 +74,7 @@ function capEditorLines(lines: string[], count: number): string[] {
   }
 
   const selectedRow = lines.findIndex((line) =>
-    line.replace(ANSI_SGR_PATTERN, "").trimStart().startsWith("→ ")
+    stripAnsi(line).trimStart().startsWith("→ ")
   );
   if (selectedRow === -1) {
     return lines.slice(0, count);
@@ -85,6 +86,53 @@ function capEditorLines(lines: string[], count: number): string[] {
     lines.length
   );
   return lines.slice(start, start + count);
+}
+
+function capFramedEditorLines(
+  lines: string[],
+  count: number,
+  bottomIndex: number
+): string[] {
+  if (count === 1) {
+    return [lines[0]];
+  }
+
+  const top = lines[0];
+  const bottom = lines[bottomIndex];
+  const body = lines.slice(1, bottomIndex);
+  const popup = lines.slice(bottomIndex + 1);
+  const popupCount = Math.min(popup.length, Math.max(0, count - 3));
+  const popupTail = takeTail(popup, popupCount);
+  const includeBottom = count - 1 - popupTail.length >= 2;
+  const bodyCount = Math.max(
+    0,
+    count - 1 - (includeBottom ? 1 : 0) - popupTail.length
+  );
+
+  return [
+    top,
+    ...capPlainEditorLines(body, bodyCount),
+    ...(includeBottom ? [bottom] : []),
+    ...popupTail,
+  ];
+}
+
+function capEditorLines(lines: string[], count: number): string[] {
+  if (count <= 0) {
+    return [];
+  }
+  if (lines.length <= count) {
+    return lines;
+  }
+
+  const bottomIndex = lines.findIndex(
+    (line, index) => index > 0 && stripAnsi(line).startsWith("╰")
+  );
+  if (stripAnsi(lines[0] ?? "").startsWith("╭") && bottomIndex > 1) {
+    return capFramedEditorLines(lines, count, bottomIndex);
+  }
+
+  return capPlainEditorLines(lines, count);
 }
 
 function extractCursor(lines: string[]): FixedEditorClusterRender {

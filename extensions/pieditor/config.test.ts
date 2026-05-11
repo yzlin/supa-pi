@@ -28,6 +28,9 @@ describe("pieditor config", () => {
           tree: "global-tree",
           test: "global-test",
         },
+        editorChrome: {
+          style: "amp",
+        },
         filePicker: {
           respectGitignore: false,
           skipHidden: true,
@@ -95,6 +98,9 @@ describe("pieditor config", () => {
         tree: "project-tree",
         test: "global-test",
       },
+      editorChrome: {
+        style: "amp",
+      },
       filePicker: {
         ...DEFAULT_FILE_PICKER_CONFIG,
         respectGitignore: false,
@@ -148,6 +154,9 @@ describe("pieditor config", () => {
       commandRemap: {
         tree: "anycopy",
       },
+      editorChrome: {
+        style: "classic",
+      },
       filePicker: DEFAULT_FILE_PICKER_CONFIG,
       statusBar: {
         enabled: true,
@@ -155,6 +164,55 @@ describe("pieditor config", () => {
       },
       fixedEditor: DEFAULT_FIXED_EDITOR_CONFIG,
     });
+  });
+
+  it("defaults editor chrome style to classic", () => {
+    expect(resolveRuntimeConfig(null, null).editorChrome).toEqual({
+      style: "classic",
+    });
+  });
+
+  it("uses amp editor chrome style when configured", () => {
+    expect(
+      resolveRuntimeConfig({ editorChrome: { style: "amp" } }, null)
+        .editorChrome
+    ).toEqual({ style: "amp" });
+  });
+
+  it("ignores invalid editor chrome style and falls back through layers", () => {
+    const tempRoot = mkdtempSync(join(tmpdir(), "pieditor-"));
+    const homeDir = join(tempRoot, "home");
+    const cwd = join(tempRoot, "project");
+    const globalConfigPath = join(homeDir, ".pi", "agent", "pieditor.json");
+    const projectConfigPath = join(cwd, ".pi", "pieditor.json");
+
+    mkdirSync(dirname(globalConfigPath), { recursive: true });
+    mkdirSync(dirname(projectConfigPath), { recursive: true });
+    writeFileSync(
+      globalConfigPath,
+      JSON.stringify({ editorChrome: { style: "amp" } })
+    );
+    writeFileSync(
+      projectConfigPath,
+      JSON.stringify({ editorChrome: { style: "modern" } })
+    );
+
+    try {
+      expect(loadConfig({ homeDir, cwd }).editorChrome).toEqual({
+        style: "amp",
+      });
+    } finally {
+      rmSync(tempRoot, { recursive: true, force: true });
+    }
+  });
+
+  it("merges editor chrome with project precedence", () => {
+    expect(
+      resolveRuntimeConfig(
+        { editorChrome: { style: "classic" } },
+        { editorChrome: { style: "amp" } }
+      ).editorChrome
+    ).toEqual({ style: "amp" });
   });
 
   it("falls back to global status bar segments when project does not override them", () => {

@@ -7,8 +7,19 @@ import type {
 import { CustomEditor } from "@earendil-works/pi-coding-agent";
 import type { AutocompleteItem } from "@earendil-works/pi-tui";
 
+import { renderAmpEditorChrome } from "./editor/amp-chrome";
 import { matchesInterrupt } from "./editor/double-escape";
 import { EnhancedEditor } from "./enhanced-editor";
+
+const ESC = String.fromCharCode(27);
+const TOP_SCROLL_COLOR_PATTERN = new RegExp(
+  `${ESC}\\[2m─── ↑ 2 more\\s+${ESC}\\[0m`,
+  "u"
+);
+const BOTTOM_SCROLL_COLOR_PATTERN = new RegExp(
+  `${ESC}\\[2m─── ↓ 3 more\\s+${ESC}\\[0m`,
+  "u"
+);
 
 function createEditor(
   commandRemap: Record<string, string>,
@@ -16,10 +27,12 @@ function createEditor(
     statusBarEnabled?: boolean;
     statusBarContext?: ExtensionContext | null;
     statusBarFooterData?: ReadonlyFooterDataProvider | null;
+    editorChromeStyle?: "classic" | "amp";
     doubleEscapeCommand?: string | null;
     getDoubleEscapeCommand?: () => string | null;
     canTriggerDoubleEscapeCommand?: () => boolean;
     interruptMatches?: boolean;
+    borderColor?: (value: string) => string;
   }
 ) {
   const tui = {
@@ -32,7 +45,7 @@ function createEditor(
   } as any;
 
   const theme = {
-    borderColor: (value: string) => value,
+    borderColor: options?.borderColor ?? ((value: string) => value),
     selectList: {},
   } as any;
 
@@ -62,6 +75,9 @@ function createEditor(
     canTriggerDoubleEscapeCommand:
       options?.canTriggerDoubleEscapeCommand ?? (() => false),
     commandRemap,
+    editorChrome: {
+      style: options?.editorChromeStyle ?? "classic",
+    },
     statusBar: {
       config: {
         enabled: options?.statusBarEnabled ?? false,
@@ -260,6 +276,168 @@ describe("EnhancedEditor command remap", () => {
     expect(submitted).toEqual(["/anycopy"]);
   });
 
+  it("renders Amp chrome with rounded borders, side padding, labels, and minimum body height", () => {
+    const lines = renderAmpEditorChrome({
+      width: 20,
+      editorLines: ["────────────────────", "body", "────────────────────"],
+      labels: {
+        topLeftContent: " top ",
+        topRightContent: " right ",
+        bottomContent: " bottom ",
+      },
+    });
+
+    expect(lines).toEqual([
+      "╭ top ────── right ╮",
+      "│ body             │",
+      "│                  │",
+      "│                  │",
+      "╰────────── bottom ╯",
+    ]);
+  });
+
+  it("renders autocomplete and popup lines outside the Amp frame", () => {
+    const lines = renderAmpEditorChrome({
+      width: 16,
+      editorLines: ["────────────────", "body", "────────────────", "popup"],
+      labels: { topLeftContent: "", topRightContent: "", bottomContent: "" },
+      minBodyHeight: 1,
+    });
+
+    expect(lines).toEqual([
+      "╭──────────────╮",
+      "│ body         │",
+      "╰──────────────╯",
+      "popup",
+    ]);
+  });
+
+  it("clips Amp body lines without adding truncation ellipses", () => {
+    const lines = renderAmpEditorChrome({
+      width: 12,
+      editorLines: ["────────────", "very long body text", "────────────"],
+      labels: { topLeftContent: "", topRightContent: "", bottomContent: "" },
+      minBodyHeight: 1,
+    });
+
+    expect(lines[1]).toBe("│ very lon │");
+    expect(lines[1]).not.toContain("...");
+  });
+
+  it("colors Amp frame glyphs without recoloring status labels or body text", () => {
+    const color = (value: string) => `\u001b[2m${value}\u001b[0m`;
+    const body = "body\u001b[31mred\u001b[0m";
+    const lines = renderAmpEditorChrome({
+      width: 20,
+      editorLines: ["────────────────────", body, "────────────────────"],
+      labels: {
+        topLeftContent: " top ",
+        topRightContent: "",
+        bottomContent: " bottom ",
+      },
+      minBodyHeight: 1,
+      borderColor: color,
+    });
+
+    expect(lines[0]).toContain(color("╭"));
+    expect(lines[0]).toContain(" top ");
+    expect(lines[0]).not.toContain(color(" top "));
+    expect(lines[1]).toContain(color("│"));
+    expect(lines[1]).toContain(body);
+    expect(lines[1]).not.toContain(color(body));
+  });
+
+  it("falls back to classic render output for narrow Amp widths", () => {
+    const editorLines = ["───────────", "body", "───────────"];
+
+    expect(
+      renderAmpEditorChrome({
+        width: 11,
+        editorLines,
+        labels: {
+          topLeftContent: "top",
+          topRightContent: "",
+          bottomContent: "bottom",
+        },
+      })
+    ).toBe(editorLines);
+  });
+
+  it("prioritizes native scroll indicators over Amp status labels and colors them as borders", () => {
+    const color = (value: string) => `\u001b[2m${value}\u001b[0m`;
+    const lines = renderAmpEditorChrome({
+      width: 24,
+      editorLines: ["─── ↑ 2 more ─────────", "body", "─── ↓ 3 more ─────────"],
+      labels: {
+        topLeftContent: "top",
+        topRightContent: "right",
+        bottomContent: "bottom",
+      },
+      minBodyHeight: 1,
+      borderColor: color,
+    });
+
+    expect(lines[0]).toMatch(TOP_SCROLL_COLOR_PATTERN);
+    expect(lines[0]).not.toContain("top");
+    expect(lines[0]).not.toContain("right");
+    expect(lines[2]).toMatch(BOTTOM_SCROLL_COLOR_PATTERN);
+    expect(lines[2]).not.toContain("bottom");
+  });
+
+  it("uses Amp chrome in EnhancedEditor when configured", () => {
+    const borderColor = (value: string) => `\u001b[2m${value}\u001b[0m`;
+    const editor = createEditor(
+      {},
+      {
+        editorChromeStyle: "amp",
+        statusBarEnabled: true,
+        statusBarContext: createStatusBarContext(),
+        statusBarFooterData: createStatusBarFooterData(),
+        borderColor,
+      }
+    );
+
+    const lines = editor.render(60);
+
+    expect(lines[0]).toStartWith(borderColor("╭"));
+    expect(lines[0]).toContain("test-model");
+    expect(lines[0]).not.toContain(borderColor("test-model"));
+    expect(lines.at(-1)).toContain("main");
+    expect(lines.some((line) => line.startsWith(`${borderColor("│")} `))).toBe(
+      true
+    );
+  });
+
+  it("wraps long Amp editor input at the framed body width", () => {
+    const editor = createEditor(
+      {},
+      {
+        editorChromeStyle: "amp",
+      }
+    );
+    editor.setText("0123456789abcdef");
+
+    const lines = editor.render(16);
+
+    expect(lines).toContain("│ 0123456789a  │");
+    expect(lines.some((line) => line.includes("bcdef"))).toBe(true);
+  });
+
+  it("keeps Amp frame with an empty top border when status bar is disabled", () => {
+    const editor = createEditor(
+      {},
+      {
+        editorChromeStyle: "amp",
+        statusBarEnabled: false,
+        statusBarContext: createStatusBarContext(),
+      }
+    );
+
+    const lines = editor.render(20);
+
+    expect(lines[0]).toBe("╭──────────────────╮");
+  });
+
   it("keeps the original top border below the status bar", () => {
     const editor = createEditor(
       {},
@@ -275,6 +453,25 @@ describe("EnhancedEditor command remap", () => {
 
     expect(lines[0]).toContain("test-model");
     expect(lines[1]).toBe("─".repeat(width));
+  });
+
+  it("uses Amp chrome for fixed editor parts without separate status lines", () => {
+    const editor = createEditor(
+      {},
+      {
+        editorChromeStyle: "amp",
+        statusBarEnabled: true,
+        statusBarContext: createStatusBarContext(),
+        statusBarFooterData: createStatusBarFooterData(),
+      }
+    );
+
+    const parts = editor.renderFixedEditorParts(60);
+
+    expect(parts.statusLines).toBeUndefined();
+    expect(parts.editorLines[0]).toStartWith("╭");
+    expect(parts.editorLines[0]).toContain("test-model");
+    expect(parts.editorLines.at(-1)).toContain("main");
   });
 
   it("updates fixed editor status without rerendering base editor lines", () => {

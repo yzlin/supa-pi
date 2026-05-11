@@ -10,12 +10,23 @@ import type {
   EditorTheme,
   TUI,
 } from "@earendil-works/pi-tui";
-import * as Clipboard from "@mariozechner/clipboard";
+import { getText } from "@mariozechner/clipboard";
 
-import type { StatusBarRuntimeConfig } from "../config/index.js";
+import type {
+  EditorChromeRuntimeConfig,
+  StatusBarRuntimeConfig,
+} from "../config/index.js";
 import { openFilePicker } from "../file-picker/index.js";
 import { findCompletionShell, type ShellInfo } from "../shell/index.js";
-import { renderStatusBarLine } from "../status-bar/index.js";
+import {
+  buildAmpStatusLayout,
+  renderStatusBarLine,
+} from "../status-bar/index.js";
+import {
+  AMP_BODY_HORIZONTAL_CHROME_WIDTH,
+  MIN_AMP_WIDTH,
+  renderAmpEditorChrome,
+} from "./amp-chrome.js";
 import { wrapProviderWithShellAndAtFiltering } from "./autocomplete.js";
 import { remapCommand } from "./command-remap.js";
 import {
@@ -42,6 +53,7 @@ interface EnhancedEditorOptions {
   getDoubleEscapeCommand: () => string | null;
   canTriggerDoubleEscapeCommand: () => boolean;
   commandRemap: Record<string, string>;
+  editorChrome: EditorChromeRuntimeConfig;
   statusBar: {
     config: StatusBarRuntimeConfig;
     getContext: () => ExtensionContext | null;
@@ -120,7 +132,7 @@ export class EnhancedEditor extends CustomEditor {
   async pasteClipboardRawAtCursor(): Promise<void> {
     let text: string | undefined;
     try {
-      text = await Clipboard.getText();
+      text = await getText();
     } catch {
       text = undefined;
     }
@@ -208,11 +220,25 @@ export class EnhancedEditor extends CustomEditor {
   }
 
   renderFixedEditorParts(width: number): FixedEditorParts {
-    const editorLines = this.renderEditorLines(width);
-    const statusLine = this.renderStatusLine(width, editorLines);
+    if (this.options.editorChrome.style === "amp" && width >= MIN_AMP_WIDTH) {
+      const baseEditorLines = this.renderEditorLines(
+        width - AMP_BODY_HORIZONTAL_CHROME_WIDTH
+      );
+      return {
+        editorLines: renderAmpEditorChrome({
+          width,
+          editorLines: baseEditorLines,
+          labels: this.buildAmpLabels(),
+          borderColor: (value) => this.theme.borderColor(value),
+        }),
+      };
+    }
+
+    const baseEditorLines = this.renderEditorLines(width);
+    const statusLine = this.renderStatusLine(width, baseEditorLines);
     return {
       statusLines: statusLine === null ? undefined : [statusLine],
-      editorLines,
+      editorLines: baseEditorLines,
     };
   }
 
@@ -256,6 +282,16 @@ export class EnhancedEditor extends CustomEditor {
     const terminal = Reflect.get(this.tuiInstance, "terminal");
     const rows = terminal ? Reflect.get(terminal, "rows") : undefined;
     return typeof rows === "number" && Number.isFinite(rows) ? rows : 0;
+  }
+
+  private buildAmpLabels() {
+    return buildAmpStatusLayout({
+      ctx: this.options.statusBar.getContext(),
+      footerData: this.options.statusBar.getFooterData(),
+      config: this.options.statusBar.config,
+      sessionStartTime: this.sessionStartTime,
+      theme: this.ui.theme,
+    });
   }
 
   private renderStatusLine(

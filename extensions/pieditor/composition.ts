@@ -255,6 +255,7 @@ export function createPieditorComposition(
               );
             },
             commandRemap: config.commandRemap,
+            editorChrome: config.editorChrome,
             statusBar: {
               config: config.statusBar,
               getContext: () => runtime.activeContext,
