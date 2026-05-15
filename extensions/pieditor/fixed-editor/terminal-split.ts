@@ -13,6 +13,11 @@ import {
 } from "@earendil-works/pi-tui";
 
 import type { FixedEditorClusterRender, FixedEditorCursor } from "./cluster.js";
+import {
+  getActiveReplacementLeaseDiagnostics,
+  getActiveReplacementSurface,
+  isReplacementSurfaceLeased,
+} from "./replacement-lease.js";
 
 export interface TerminalLike {
   columns: number;
@@ -70,6 +75,7 @@ export interface PatchedRenderable {
 interface RenderPatch {
   target: PatchedRenderable;
   originalRender: (width: number) => string[];
+  hideCount: number;
 }
 
 interface RenderPassCluster {
@@ -134,6 +140,7 @@ const ROOT_SCROLLBAR_TRACK = `\x1b[2;90m${ROOT_SCROLLBAR_GLYPH}\x1b[0m`;
 const ROOT_SCROLLBAR_THUMB = `\x1b[97m${ROOT_SCROLLBAR_GLYPH}\x1b[0m`;
 const DEFAULT_SCROLL_UP_SHORTCUTS = ["super+up"] as const;
 const DEFAULT_SCROLL_DOWN_SHORTCUTS = ["super+down"] as const;
+const SGR_RESET = "\x1b[0m";
 const ESC_PATTERN = "\\x1b";
 const BEL_PATTERN = "\\x07";
 const MOUSE_MOTION_FLAG = 32;
@@ -220,6 +227,14 @@ export function moveCursor(row: number, col: number): string {
 
 function clearLine(): string {
   return "\x1b[2K";
+}
+
+function resetClearLineStyles(data: string): string {
+  return data.replaceAll(clearLine(), `${SGR_RESET}${clearLine()}${SGR_RESET}`);
+}
+
+function clearsScreen(data: string): boolean {
+  return data.includes("\x1b[2J") || data.includes("\x1b[3J");
 }
 
 function hideCursor(): string {
@@ -654,9 +669,9 @@ export function buildFixedClusterPaint(
   let buffer = resetScrollRegion();
 
   for (let i = 0; i < cluster.lines.length; i++) {
-    buffer += moveCursor(startRow + i, 1);
-    buffer += clearLine();
+    buffer += buildFixedClusterLineClear(startRow + i);
     buffer += sanitizeLine(cluster.lines[i] ?? "", width);
+    buffer += SGR_RESET;
   }
 
   buffer += buildFixedClusterCursorPaint(
@@ -711,6 +726,10 @@ function shouldFullPaintFixedCluster(
   );
 }
 
+function buildFixedClusterLineClear(row: number): string {
+  return `${moveCursor(row, 1)}${SGR_RESET}${clearLine()}${SGR_RESET}`;
+}
+
 function buildFixedClusterChangedLinePaint(
   previous: PaintedCluster,
   next: PaintedCluster
@@ -722,9 +741,9 @@ function buildFixedClusterChangedLinePaint(
     if (previous.lines[i] === next.lines[i]) {
       continue;
     }
-    buffer += moveCursor(startRow + i, 1);
-    buffer += clearLine();
+    buffer += buildFixedClusterLineClear(startRow + i);
     buffer += next.lines[i];
+    buffer += SGR_RESET;
   }
 
   if (buffer || !sameCursor(previous.cursor, next.cursor)) {
@@ -736,6 +755,13 @@ function buildFixedClusterChangedLinePaint(
   }
 
   return buffer;
+}
+
+function buildPaintedClusterClear(painted: PaintedCluster): string {
+  const startRow = Math.max(1, painted.terminalRows - painted.lines.length + 1);
+  return painted.lines
+    .map((_line, index) => buildFixedClusterLineClear(startRow + index))
+    .join("");
 }
 
 export class TerminalSplitCompositor {
@@ -901,13 +927,48 @@ export class TerminalSplitCompositor {
   }
 
   hideRenderable(target: PatchedRenderable): void {
-    if (this.patchedRenders.some((patch) => patch.target === target)) {
+    const existingPatch = this.patchedRenders.find(
+      (patch) => patch.target === target
+    );
+    if (existingPatch) {
+      existingPatch.hideCount += 1;
+      this.requestRender();
       return;
     }
+
     const originalRender = target.render.bind(target);
-    this.patchedRenders.push({ target, originalRender });
+    this.patchedRenders.push({ target, originalRender, hideCount: 1 });
     target.render = (width: number) =>
-      this.hasVisibleOverlay() ? originalRender(width) : [];
+      isReplacementSurfaceLeased(target) ||
+      (!this.isReplacementLeaseActive() && this.hasVisibleOverlay())
+        ? originalRender(width)
+        : [];
+    this.requestRender();
+  }
+
+  unhideRenderable(target: PatchedRenderable): void {
+    const patchIndex = this.patchedRenders.findIndex(
+      (renderPatch) => renderPatch.target === target
+    );
+    if (patchIndex === -1) {
+      this.restoreFixedClusterAfterVisibilityChange();
+      return;
+    }
+
+    const patch = this.patchedRenders[patchIndex];
+    if (!patch) {
+      return;
+    }
+
+    if (patch.hideCount > 1) {
+      patch.hideCount -= 1;
+      this.restoreFixedClusterAfterVisibilityChange();
+      return;
+    }
+
+    this.patchedRenders.splice(patchIndex, 1);
+    target.render = patch.originalRender;
+    this.restoreFixedClusterAfterVisibilityChange();
   }
 
   renderHidden(target: PatchedRenderable, width: number): string[] {
@@ -977,7 +1038,24 @@ export class TerminalSplitCompositor {
   }
 
   requestRepaint(): void {
-    if (this.disposed || this.hasVisibleOverlay()) {
+    if (this.disposed) {
+      return;
+    }
+
+    if (this.isReplacementLeaseActive()) {
+      const rawRows = this.getRawRows();
+      const width = Math.max(1, this.terminal.columns || 80);
+      const cluster = this.getReplacementCluster(width);
+      if (!cluster || cluster.lines.length === 0) {
+        this.clearFixedClusterPaint();
+        return;
+      }
+      const paint = this.buildFixedClusterRepaint(cluster, rawRows, width);
+      this.writeSynchronizedPaint(paint);
+      return;
+    }
+
+    if (this.hasVisibleOverlay()) {
       return;
     }
     const rawRows = this.getRawRows();
@@ -988,6 +1066,10 @@ export class TerminalSplitCompositor {
     }
 
     const paint = this.buildFixedClusterRepaint(cluster, rawRows, width);
+    this.writeSynchronizedPaint(paint);
+  }
+
+  private writeSynchronizedPaint(paint: string): void {
     if (!paint) {
       return;
     }
@@ -995,6 +1077,27 @@ export class TerminalSplitCompositor {
     this.originalWrite(
       beginSynchronizedOutput() + paint + endSynchronizedOutput()
     );
+  }
+
+  private restoreFixedClusterAfterVisibilityChange(): void {
+    this.lastPaintedCluster = null;
+    this.originalWrite(resetScrollRegion() + SGR_RESET);
+    this.requestRender();
+    this.requestRepaint();
+  }
+
+  private clearFixedClusterPaint(): void {
+    const painted = this.lastPaintedCluster;
+    if (!painted || painted.lines.length === 0) {
+      return;
+    }
+
+    const startRow = Math.max(1, this.getRawRows() - painted.lines.length + 1);
+    const clear = painted.lines
+      .map((_line, index) => buildFixedClusterLineClear(startRow + index))
+      .join("");
+    this.lastPaintedCluster = null;
+    this.writeSynchronizedPaint(clear);
   }
 
   private buildFixedClusterRepaint(
@@ -1017,7 +1120,12 @@ export class TerminalSplitCompositor {
       !previousPaintedCluster ||
       shouldFullPaintFixedCluster(previousPaintedCluster, nextPaintedCluster)
     ) {
-      paint = buildFixedClusterPaint(
+      paint =
+        previousPaintedCluster &&
+        previousPaintedCluster.lines.length > nextPaintedCluster.lines.length
+          ? buildPaintedClusterClear(previousPaintedCluster)
+          : "";
+      paint += buildFixedClusterPaint(
         decoratedCluster,
         terminalRows,
         width,
@@ -1129,6 +1237,11 @@ export class TerminalSplitCompositor {
 
     const rawRows = this.getRawRows();
     const width = Math.max(1, this.terminal.columns || 80);
+    const replacementCluster = this.getReplacementCluster(width);
+    if (replacementCluster) {
+      return Math.max(1, rawRows - replacementCluster.lines.length);
+    }
+
     const cluster = this.getCluster(width, rawRows);
     return Math.max(1, rawRows - cluster.lines.length);
   }
@@ -1141,6 +1254,15 @@ export class TerminalSplitCompositor {
     this.renderingScrollableRoot = true;
     try {
       const renderWidth = Math.max(1, width);
+      const replacementCluster = this.getReplacementCluster(renderWidth);
+      if (replacementCluster) {
+        const scrollableRows = Math.max(
+          1,
+          this.getRawRows() - replacementCluster.lines.length
+        );
+        return this.renderRootWithScrollbar(renderWidth, scrollableRows);
+      }
+
       if (this.hasVisibleOverlay()) {
         return this.renderOverlayRoot(renderWidth);
       }
@@ -1148,23 +1270,30 @@ export class TerminalSplitCompositor {
       const rawRows = this.getRawRows();
       const cluster = this.getCluster(renderWidth, rawRows, true);
       const scrollableRows = Math.max(1, rawRows - cluster.lines.length);
-      const lines = this.originalRender(rootScrollbarContentWidth(renderWidth));
-      const start = this.updateRootScrollState(lines, scrollableRows);
-      const highlightedLines = this.visibleRootLines.map((line, index) =>
-        this.renderSelectionHighlight(line, start + index, "root")
-      );
-      return decorateRootScrollbar(
-        highlightedLines,
-        {
-          totalLines: this.rootLines.length,
-          viewportRows: scrollableRows,
-          scrollOffset: this.scrollOffset,
-        },
-        renderWidth
-      );
+      return this.renderRootWithScrollbar(renderWidth, scrollableRows);
     } finally {
       this.renderingScrollableRoot = false;
     }
+  }
+
+  private renderRootWithScrollbar(
+    renderWidth: number,
+    scrollableRows: number
+  ): string[] {
+    const lines = this.originalRender?.(rootScrollbarContentWidth(renderWidth));
+    const start = this.updateRootScrollState(lines ?? [], scrollableRows);
+    const highlightedLines = this.visibleRootLines.map((line, index) =>
+      this.renderSelectionHighlight(line, start + index, "root")
+    );
+    return decorateRootScrollbar(
+      highlightedLines,
+      {
+        totalLines: this.rootLines.length,
+        viewportRows: scrollableRows,
+        scrollOffset: this.scrollOffset,
+      },
+      renderWidth
+    );
   }
 
   private renderOverlayRoot(width: number): string[] {
@@ -1218,6 +1347,10 @@ export class TerminalSplitCompositor {
       return undefined;
     }
 
+    if (this.isReplacementLeaseActive()) {
+      return this.handleReplacementScrollInput(data);
+    }
+
     const mousePackets = this.mouseScroll ? parseSgrMousePackets(data) : null;
     if (mousePackets) {
       for (const packet of mousePackets) {
@@ -1236,6 +1369,34 @@ export class TerminalSplitCompositor {
 
     this.scrollBy(keyboardDelta);
     return { consume: true };
+  }
+
+  private handleReplacementScrollInput(
+    data: string
+  ): { consume?: boolean; data?: string } | undefined {
+    const keyboardDelta = parseKeyboardScrollDelta(
+      data,
+      this.keyboardScrollShortcuts
+    );
+    if (keyboardDelta !== 0) {
+      this.scrollBy(keyboardDelta);
+      return { consume: true };
+    }
+
+    const mousePackets = this.mouseScroll ? parseSgrMousePackets(data) : null;
+    if (!mousePackets) {
+      return undefined;
+    }
+
+    let didScroll = false;
+    for (const packet of mousePackets) {
+      const delta = mouseScrollDelta(packet);
+      if (delta !== 0) {
+        this.scrollBy(delta);
+        didScroll = true;
+      }
+    }
+    return didScroll ? { consume: true } : undefined;
   }
 
   private handleMousePacket(packet: SgrMousePacket): void {
@@ -1747,7 +1908,8 @@ export class TerminalSplitCompositor {
     try {
       const rawRows = this.getRawRows();
       const width = Math.max(1, this.terminal.columns || 80);
-      const cluster = this.getCluster(width, rawRows);
+      const cluster =
+        this.getReplacementCluster(width) ?? this.getCluster(width, rawRows);
       const reservedRows = cluster.lines.length;
 
       if (reservedRows === 0 || rawRows <= 2) {
@@ -1770,11 +1932,18 @@ export class TerminalSplitCompositor {
         1,
         Math.min(scrollBottom, hardwareCursorRow - viewportTop + 1)
       );
+      const safeData = resetClearLineStyles(data);
+      if (clearsScreen(safeData)) {
+        this.lastPaintedCluster = null;
+      }
+
       const buffer =
         beginSynchronizedOutput() +
         setScrollRegion(1, scrollBottom) +
         moveCursor(screenRow, 1) +
-        data +
+        SGR_RESET +
+        safeData +
+        SGR_RESET +
         resetScrollRegion() +
         this.buildFixedClusterRepaint(cluster, rawRows, width) +
         endSynchronizedOutput();
@@ -1842,6 +2011,26 @@ export class TerminalSplitCompositor {
     } finally {
       this.renderingCluster = wasRenderingCluster;
     }
+  }
+
+  private getReplacementCluster(
+    width: number,
+    terminalRows = this.getRawRows()
+  ): FixedEditorClusterRender | null {
+    const surface = getActiveReplacementSurface();
+    if (!surface) {
+      return null;
+    }
+
+    const maxReplacementRows = Math.max(1, terminalRows - 1);
+    return this.withClusterRender(() => ({
+      lines: surface.render(width).slice(0, maxReplacementRows),
+      cursor: null,
+    }));
+  }
+
+  private isReplacementLeaseActive(): boolean {
+    return getActiveReplacementLeaseDiagnostics().length > 0;
   }
 
   private hasVisibleOverlay(): boolean {

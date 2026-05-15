@@ -1,6 +1,11 @@
-import { describe, expect, it } from "bun:test";
+import { afterEach, describe, expect, it } from "bun:test";
 
 import type { FixedEditorClusterRender } from "./cluster";
+import {
+  acquireReplacementSurfaceLease,
+  attachReplacementLeaseCompositor,
+  clearReplacementSurfaceLeases,
+} from "./replacement-lease";
 import {
   buildFixedClusterPaint,
   calculateRootScrollbarThumb,
@@ -125,6 +130,26 @@ function createCompositor(
 }
 
 describe("terminal split compositor", () => {
+  afterEach(() => {
+    clearReplacementSurfaceLeases();
+    attachReplacementLeaseCompositor(null);
+  });
+  it("uses raw terminal rows while rendering a replacement surface", () => {
+    const { compositor, terminal } = createCompositor({ terminalRows: 10 });
+    expect(compositor.install()).toBe(true);
+    attachReplacementLeaseCompositor(compositor);
+
+    acquireReplacementSurfaceLease({
+      owner: "questionnaire",
+      id: "custom-ui",
+      target: {
+        render: () => [`rows:${terminal.rows}`],
+      },
+    });
+
+    expect(terminal.rows).toBe(9);
+  });
+
   it("builds cluster paint with cursor placement", () => {
     const paint = buildFixedClusterPaint(
       { lines: ["one", "two"], cursor: { row: 1, col: 2 } },
@@ -134,8 +159,12 @@ describe("terminal split compositor", () => {
     );
 
     expect(paint).toContain(resetScrollRegion());
-    expect(paint).toContain(`${moveCursor(4, 1)}\x1b[2Kone`);
-    expect(paint).toContain(`${moveCursor(5, 1)}\x1b[2Ktwo`);
+    expect(paint).toContain(
+      `${moveCursor(4, 1)}\x1b[0m\x1b[2K\x1b[0mone\x1b[0m`
+    );
+    expect(paint).toContain(
+      `${moveCursor(5, 1)}\x1b[0m\x1b[2K\x1b[0mtwo\x1b[0m`
+    );
     expect(paint).toContain(moveCursor(5, 3));
     expect(paint).toContain("\x1b[?25h");
   });
@@ -362,6 +391,61 @@ describe("terminal split compositor", () => {
     expect(terminal.writes).toEqual(["after-dispose"]);
   });
 
+  it("keeps unrelated baseline renderables hidden while a lease is active", () => {
+    const baseline = { render: (_width: number) => ["editor"] };
+    const replacement = { render: (_width: number) => ["replacement"] };
+    const { compositor } = createCompositor();
+    expect(compositor.install()).toBe(true);
+    attachReplacementLeaseCompositor(compositor);
+
+    compositor.hideRenderable(baseline);
+    compositor.hideRenderable(replacement);
+    expect(baseline.render(20)).toEqual([]);
+    expect(replacement.render(20)).toEqual([]);
+
+    const lease = acquireReplacementSurfaceLease({
+      owner: "test",
+      id: "replacement",
+      target: replacement,
+    });
+    expect(baseline.render(20)).toEqual([]);
+    expect(replacement.render(20)).toEqual(["replacement"]);
+
+    lease.release();
+
+    expect(baseline.render(20)).toEqual([]);
+    expect(replacement.render(20)).toEqual([]);
+
+    compositor.unhideRenderable(baseline);
+    compositor.unhideRenderable(replacement);
+    expect(baseline.render(20)).toEqual(["editor"]);
+    expect(replacement.render(20)).toEqual(["replacement"]);
+  });
+
+  it("keeps baseline hidden after releasing a lease for the same renderable", () => {
+    const renderable = { render: (_width: number) => ["editor"] };
+    const { compositor } = createCompositor();
+    expect(compositor.install()).toBe(true);
+    attachReplacementLeaseCompositor(compositor);
+
+    compositor.hideRenderable(renderable);
+    expect(renderable.render(20)).toEqual([]);
+
+    const lease = acquireReplacementSurfaceLease({
+      owner: "test",
+      id: "same-target",
+      target: renderable,
+    });
+    expect(renderable.render(20)).toEqual(["editor"]);
+
+    lease.release();
+
+    expect(renderable.render(20)).toEqual([]);
+
+    compositor.unhideRenderable(renderable);
+    expect(renderable.render(20)).toEqual(["editor"]);
+  });
+
   it("fully repaints fixed cluster after an overlay closes", () => {
     const { compositor, terminal, tui } = createCompositor({
       renderCluster: () => ({
@@ -413,10 +497,18 @@ describe("terminal split compositor", () => {
     expect(terminal.writes).toHaveLength(1);
     expect(terminal.writes[0]).toContain(setScrollRegion(1, 4));
     expect(terminal.writes[0]).toContain(moveCursor(3, 1));
-    expect(terminal.writes[0]).toContain("payload");
+    expect(terminal.writes[0]).toContain(
+      `${moveCursor(3, 1)}\x1b[0mpayload\x1b[0m`
+    );
     expect(terminal.writes[0]).toContain("status");
     expect(terminal.writes[0]).toContain("editor");
     expect(terminal.writes[0]).toContain(moveCursor(6, 4));
+
+    terminal.writes.splice(0);
+    terminal.write("first\x1b[2Ksecond\x1b[2Kthird");
+    expect(terminal.writes[0]).toContain(
+      "first\x1b[0m\x1b[2K\x1b[0msecond\x1b[0m\x1b[2K\x1b[0mthird"
+    );
 
     terminal.writes.splice(0);
     tui.doRender?.();
@@ -496,6 +588,188 @@ describe("terminal split compositor", () => {
     expect(terminal.writes[1]).toContain(resetScrollRegion());
     expect(terminal.writes[2]).toContain("second payload");
     expect(terminal.writes[2]).toContain(resetScrollRegion());
+  });
+
+  it("clears fixed cluster paint when a lease becomes active", () => {
+    const renderable = { render: (_width: number) => ["replacement"] };
+    const { compositor, terminal, tui } = createCompositor({
+      cluster: { lines: ["status", "editor"], cursor: null },
+      rootLines: ["root"],
+    });
+    expect(compositor.install()).toBe(true);
+    tui.doRender?.();
+    expect(terminal.writes.at(-1)).toContain("editor");
+    terminal.writes.splice(0);
+    attachReplacementLeaseCompositor(compositor);
+    compositor.hideRenderable(renderable);
+
+    const lease = acquireReplacementSurfaceLease({
+      owner: "test",
+      id: "replacement",
+      target: renderable,
+    });
+
+    const paint = terminal.writes.join("");
+    expect(tui.requestRenderCount).toBe(2);
+    expect(paint).toContain("\x1b[2K");
+    expect(paint).toContain("replacement");
+    expect(terminal.rows).toBe(5);
+    expect(renderable.render(20)).toEqual(["replacement"]);
+    terminal.write("raw-write");
+    const wrappedWrite = terminal.writes.at(-1) ?? "";
+    expect(wrappedWrite).toContain(setScrollRegion(1, 5));
+    expect(wrappedWrite).toContain("raw-write");
+
+    compositor.requestRepaint();
+
+    lease.release();
+  });
+
+  it("caps replacement surfaces to leave one root row", () => {
+    const renderable = {
+      render: (_width: number) => [
+        "replacement-1",
+        "replacement-2",
+        "replacement-3",
+        "replacement-4",
+        "replacement-5",
+      ],
+    };
+    const { compositor, terminal } = createCompositor({ terminalRows: 4 });
+    expect(compositor.install()).toBe(true);
+    attachReplacementLeaseCompositor(compositor);
+    terminal.writes.splice(0);
+
+    const lease = acquireReplacementSurfaceLease({
+      owner: "test",
+      id: "replacement",
+      target: renderable,
+    });
+
+    const paint = terminal.writes.join("");
+    expect(terminal.rows).toBe(1);
+    expect(paint).toContain("replacement-1");
+    expect(paint).toContain("replacement-3");
+    expect(paint).not.toContain("replacement-4");
+    expect(paint).not.toContain(moveCursor(5, 1));
+
+    lease.release();
+  });
+
+  it("clears stale rows when repainting a shorter replacement surface", () => {
+    const renderable = { render: (_width: number) => ["replacement"] };
+    const { compositor, terminal, tui } = createCompositor({
+      cluster: { lines: ["status", "editor-a", "editor-b"], cursor: null },
+    });
+    expect(compositor.install()).toBe(true);
+    tui.doRender?.();
+    terminal.writes.splice(0);
+    attachReplacementLeaseCompositor(compositor);
+
+    const lease = acquireReplacementSurfaceLease({
+      owner: "test",
+      id: "replacement",
+      target: renderable,
+    });
+
+    const paint = terminal.writes.join("");
+    expect(paint).toContain(moveCursor(4, 1));
+    expect(paint).toContain(moveCursor(5, 1));
+    expect(paint).toContain(moveCursor(6, 1));
+    expect(paint).toContain("replacement");
+
+    lease.release();
+  });
+
+  it("resets terminal colors when restoring the fixed cluster after a lease releases", () => {
+    const reset = "\x1b[0m";
+    const borderColor = "\x1b[38;2;102;92;84m";
+    const questionnaireColor = "\x1b[38;2;254;128;25m";
+    const renderable = {
+      render: (_width: number) => [
+        `${questionnaireColor}questionnaire${reset}`,
+      ],
+    };
+    const { compositor, terminal, tui } = createCompositor({
+      renderCluster: () => ({
+        lines: [
+          `${borderColor}╭${reset} status ${borderColor}╮${reset}`,
+          `${borderColor}│${reset} body ${borderColor}│${reset}`,
+        ],
+        cursor: null,
+      }),
+    });
+    expect(compositor.install()).toBe(true);
+    tui.doRender?.();
+    attachReplacementLeaseCompositor(compositor);
+
+    const lease = acquireReplacementSurfaceLease({
+      owner: "questionnaire",
+      id: "custom-ui",
+      target: renderable,
+    });
+
+    terminal.writes.splice(0);
+    lease.release();
+
+    const restorePaint = terminal.writes.join("");
+    expect(restorePaint).toContain(`${reset}\x1b[2K${reset}${borderColor}╭`);
+    expect(restorePaint).toContain(`${reset}\x1b[2K${reset}${borderColor}│`);
+    expect(restorePaint).toContain(`${borderColor}╭${reset} status`);
+    expect(restorePaint).toContain(`${borderColor}│${reset} body`);
+  });
+
+  it("reserves root rows and keeps scrollbar chrome while leased", () => {
+    const renderable = { render: (_width: number) => ["replacement"] };
+    const { compositor, tui } = createCompositor({
+      rootLines: ["root-1", "root-2", "root-3", "root-4", "root-5", "root-6"],
+      terminalRows: 5,
+    });
+    expect(compositor.install()).toBe(true);
+
+    const lease = acquireReplacementSurfaceLease({
+      owner: "test",
+      id: "replacement",
+      target: renderable,
+    });
+
+    expect(rootContent(tui.render?.(20))).toEqual([
+      "root-3",
+      "root-4",
+      "root-5",
+      "root-6",
+    ]);
+    expect((tui.render?.(20) ?? []).join("\n")).toContain("█");
+
+    lease.release();
+  });
+
+  it("keeps root scroll input while leased", () => {
+    const renderable = { render: (_width: number) => ["replacement"] };
+    const copied: string[] = [];
+    const { compositor, terminal, tui } = createCompositor({
+      rootLines: ["root-1", "root-2", "root-3", "root-4", "root-5", "root-6"],
+      terminalRows: 5,
+      onCopySelection: (text) => copied.push(text),
+    });
+    expect(compositor.install()).toBe(true);
+    attachReplacementLeaseCompositor(compositor);
+
+    const lease = acquireReplacementSurfaceLease({
+      owner: "test",
+      id: "replacement",
+      target: renderable,
+    });
+
+    expect(tui.listeners[0]?.("\u001b[1;9A")).toEqual({ consume: true });
+    expect(tui.listeners[0]?.("\u001b[<64;1;1M")).toEqual({ consume: true });
+    expect(
+      tui.listeners[0]?.(`\u001b[<2;1;${terminal.rows + 1}M`)
+    ).toBeUndefined();
+    expect(copied).toEqual([]);
+    expect(tui.requestRenderCount).toBeGreaterThan(0);
+
+    lease.release();
   });
 
   it("leaves writes and input alone while an overlay is visible", () => {

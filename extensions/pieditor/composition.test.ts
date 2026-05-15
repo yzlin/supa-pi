@@ -14,6 +14,11 @@ import type {
 import type { EditorTheme, TUI } from "@earendil-works/pi-tui";
 
 import { createPieditorComposition } from "./composition";
+import {
+  acquireReplacementSurfaceLease,
+  clearReplacementSurfaceLeases,
+  getActiveReplacementLeaseDiagnostics,
+} from "./fixed-editor/replacement-lease";
 
 const originalHome = process.env.HOME;
 const tempRoots: string[] = [];
@@ -213,6 +218,7 @@ function createHarness(options: HarnessOptions) {
 }
 
 afterEach(() => {
+  clearReplacementSurfaceLeases();
   process.env.HOME = originalHome;
   for (const root of tempRoots.splice(0)) {
     rmSync(root, { recursive: true, force: true });
@@ -258,6 +264,54 @@ describe("pieditor fixed editor composition", () => {
     expect(editor.render(80)).toEqual([]);
 
     harness.composition.detachEditor();
+    expect(editor.render(80).length).toBeGreaterThan(0);
+  });
+
+  it("starts fixed editor suppressed when enabled while a replacement lease is active", () => {
+    const harness = createHarness({
+      fixedEditorEnabled: false,
+      rootLines: ["chat"],
+      terminalWrite: () => undefined,
+    });
+
+    const editor = harness.createEditor();
+    harness.createFooter();
+    acquireReplacementSurfaceLease({
+      owner: "file-picker",
+      id: "overlay",
+      target: editor,
+    });
+
+    harness.composition.setFixedEditorEnabled(true);
+
+    expect(getActiveReplacementLeaseDiagnostics()).toEqual([
+      { owner: "file-picker", id: "overlay" },
+    ]);
+    expect(editor.render(80).length).toBeGreaterThan(0);
+    expect(rootContent(harness.tui.render(80)).filter(Boolean)).toEqual([
+      "chat",
+    ]);
+  });
+
+  it("clears active replacement leases on detach", () => {
+    const harness = createHarness({
+      fixedEditorEnabled: false,
+      terminalWrite: () => undefined,
+    });
+
+    const editor = harness.createEditor();
+    harness.createFooter();
+    acquireReplacementSurfaceLease({
+      owner: "file-picker",
+      id: "overlay",
+      target: editor,
+    });
+    harness.composition.setFixedEditorEnabled(true);
+    expect(getActiveReplacementLeaseDiagnostics()).toHaveLength(1);
+
+    harness.composition.detachEditor();
+
+    expect(getActiveReplacementLeaseDiagnostics()).toEqual([]);
     expect(editor.render(80).length).toBeGreaterThan(0);
   });
 

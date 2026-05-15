@@ -13,6 +13,10 @@ import { type FixedEditorRuntimeConfig, loadConfig } from "./config.js";
 import { EnhancedEditor } from "./enhanced-editor.js";
 import { warmPreviewHighlighter } from "./file-picker-highlight.js";
 import { renderFixedEditorCluster } from "./fixed-editor/cluster.js";
+import {
+  attachReplacementLeaseCompositor,
+  clearReplacementSurfaceLeases,
+} from "./fixed-editor/replacement-lease.js";
 import { TerminalSplitCompositor } from "./fixed-editor/terminal-split.js";
 import { invalidateGitBranch, invalidateGitStatus } from "./status-bar-git.js";
 
@@ -98,6 +102,7 @@ export function createPieditorComposition(
   }
 
   function disposeFixedEditorCompositor(): void {
+    attachReplacementLeaseCompositor(null);
     runtime.fixedEditorCompositor?.dispose({
       resetExtendedKeyboardModes: true,
     });
@@ -167,6 +172,7 @@ export function createPieditorComposition(
 
       compositor.hideRenderable(editor);
       runtime.fixedEditorCompositor = compositor;
+      attachReplacementLeaseCompositor(compositor);
       tui.requestRender();
     } catch {
       compositor?.dispose({ resetExtendedKeyboardModes: true });
@@ -302,6 +308,7 @@ export function createPieditorComposition(
     },
 
     detachEditor(): void {
+      clearReplacementSurfaceLeases();
       disposeFixedEditorCompositor();
       runtime.activeContext = null;
       runtime.activeEditor = null;

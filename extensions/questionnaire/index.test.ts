@@ -1,7 +1,11 @@
-import { describe, expect, it } from "bun:test";
+import { beforeEach, describe, expect, it } from "bun:test";
 
 import { visibleWidth } from "@earendil-works/pi-tui";
 
+import {
+  clearReplacementSurfaceLeases,
+  getActiveReplacementLeaseDiagnostics,
+} from "../pieditor/fixed-editor/replacement-lease";
 import questionnaire, {
   CUSTOM_OPTION_LABEL,
   CUSTOM_OPTION_VALUE,
@@ -49,6 +53,129 @@ const EMPTY_EDITOR = {
     return [];
   },
 };
+
+const VALID_EXECUTE_PARAMS = {
+  questions: [
+    {
+      id: "format",
+      prompt: "Which format?",
+      options: [
+        { value: "json", label: "JSON" },
+        { value: "text", label: "Text" },
+      ],
+    },
+  ],
+};
+
+function registerQuestionnaireTool() {
+  let registeredTool: {
+    execute: (...args: unknown[]) => Promise<unknown>;
+  } | null = null;
+  questionnaire({
+    registerTool(tool: { execute: (...args: unknown[]) => Promise<unknown> }) {
+      registeredTool = tool;
+    },
+    registerCommand() {
+      return undefined;
+    },
+    on() {
+      return undefined;
+    },
+    appendEntry() {
+      return undefined;
+    },
+    sendMessage() {
+      return undefined;
+    },
+  } as never);
+
+  if (!registeredTool) {
+    throw new Error("questionnaire tool was not registered");
+  }
+  return registeredTool;
+}
+
+function executeQuestionnaireWithCustom(
+  custom: (renderFactory: unknown) => unknown | Promise<unknown>
+) {
+  const tool = registerQuestionnaireTool();
+  return tool.execute("tool-call", VALID_EXECUTE_PARAMS, undefined, undefined, {
+    hasUI: true,
+    ui: {
+      custom,
+      notify() {
+        return undefined;
+      },
+    },
+  });
+}
+
+beforeEach(() => {
+  clearReplacementSurfaceLeases();
+});
+
+describe("questionnaire replacement lease", () => {
+  it("releases the scoped replacement lease after successful submit", async () => {
+    await executeQuestionnaireWithCustom(() => {
+      expect(getActiveReplacementLeaseDiagnostics()).toEqual([
+        { owner: "questionnaire", id: "custom-ui" },
+      ]);
+      return {
+        questions: [],
+        answers: [
+          {
+            kind: "option",
+            id: "format",
+            value: "json",
+            label: "JSON",
+            wasCustom: false,
+            index: 1,
+          },
+        ],
+        cancelled: false,
+      };
+    });
+
+    expect(getActiveReplacementLeaseDiagnostics()).toEqual([]);
+  });
+
+  it("releases the scoped replacement lease after cancellation", async () => {
+    await executeQuestionnaireWithCustom(() => {
+      expect(getActiveReplacementLeaseDiagnostics()).toHaveLength(1);
+      return { questions: [], answers: [], cancelled: true };
+    });
+
+    expect(getActiveReplacementLeaseDiagnostics()).toEqual([]);
+  });
+
+  it("releases the scoped replacement lease when custom UI throws", async () => {
+    await expect(
+      executeQuestionnaireWithCustom(() => {
+        expect(getActiveReplacementLeaseDiagnostics()).toHaveLength(1);
+        throw new Error("custom UI failed");
+      })
+    ).rejects.toThrow("custom UI failed");
+
+    expect(getActiveReplacementLeaseDiagnostics()).toEqual([]);
+  });
+
+  it("does not acquire a replacement lease for validation errors", async () => {
+    const tool = registerQuestionnaireTool();
+    await tool.execute("tool-call", { questions: [] }, undefined, undefined, {
+      hasUI: true,
+      ui: {
+        custom() {
+          throw new Error("custom UI should not open");
+        },
+        notify() {
+          return undefined;
+        },
+      },
+    });
+
+    expect(getActiveReplacementLeaseDiagnostics()).toEqual([]);
+  });
+});
 
 describe("wrapQuestionnaireText", () => {
   it("wraps long questionnaire copy instead of truncating it", () => {

@@ -14,6 +14,11 @@ import {
 } from "@earendil-works/pi-tui";
 import { Type } from "typebox";
 
+import {
+  hasReplacementLeaseCompositor,
+  type ReplacementSurface,
+  withReplacementSurfaceLease,
+} from "../pieditor/fixed-editor/replacement-lease.js";
 import { routeQuestionnaireKey } from "./keys";
 import { renderQuestionnaireRuntime } from "./render";
 import { createQuestionnaireEnvelope } from "./response";
@@ -41,6 +46,12 @@ import {
 
 const CLARIFICATION_TRIGGER_REGEX =
   /\b(could you|can you|would you|do you want|would you prefer|do you prefer|which|what should|should i|any preference|please clarify|confirm)\b/i;
+
+const QUESTIONNAIRE_REPLACEMENT_OWNER = "questionnaire";
+const QUESTIONNAIRE_REPLACEMENT_SURFACE_ID = "custom-ui";
+const QUESTIONNAIRE_REPLACEMENT_SURFACE: ReplacementSurface = {
+  render: () => [],
+};
 
 export type {
   Answer,
@@ -431,150 +442,185 @@ export default function questionnaire(pi: ExtensionAPI): void {
       }
 
       const questions = validation.questions.map(normalizeQuestion);
+      const shouldUseFixedReplacement = hasReplacementLeaseCompositor();
+      let replacementComponent: {
+        render(width: number): string[];
+        invalidate(): void;
+        handleInput?(data: string): void;
+        dispose?(): void;
+      } | null = null;
+      const replacementSurface: ReplacementSurface = {
+        render: (width) => replacementComponent?.render(width) ?? [],
+      };
 
-      const result = await ctx.ui.custom<QuestionnaireResult>(
-        (tui, theme, _kb, done) => {
-          let state = createQuestionnaireRuntimeState();
-          let cachedLines: string[] | undefined;
+      const result = await withReplacementSurfaceLease(
+        {
+          owner: QUESTIONNAIRE_REPLACEMENT_OWNER,
+          id: QUESTIONNAIRE_REPLACEMENT_SURFACE_ID,
+          target: shouldUseFixedReplacement
+            ? replacementSurface
+            : QUESTIONNAIRE_REPLACEMENT_SURFACE,
+        },
+        () =>
+          ctx.ui.custom<QuestionnaireResult>((tui, theme, _kb, done) => {
+            let state = createQuestionnaireRuntimeState();
+            let cachedLines: string[] | undefined;
 
-          const editorTheme: EditorTheme = {
-            borderColor: (s) => theme.fg("accent", s),
-            selectList: {
-              selectedPrefix: (t) => theme.fg("accent", t),
-              selectedText: (t) => theme.fg("accent", t),
-              description: (t) => theme.fg("muted", t),
-              scrollInfo: (t) => theme.fg("dim", t),
-              noMatch: (t) => theme.fg("warning", t),
-            },
-          };
-          const editor = new Editor(tui, editorTheme);
+            const editorTheme: EditorTheme = {
+              borderColor: (s) => theme.fg("accent", s),
+              selectList: {
+                selectedPrefix: (t) => theme.fg("accent", t),
+                selectedText: (t) => theme.fg("accent", t),
+                description: (t) => theme.fg("muted", t),
+                scrollInfo: (t) => theme.fg("dim", t),
+                noMatch: (t) => theme.fg("warning", t),
+              },
+            };
+            const editor = new Editor(tui, editorTheme);
 
-          function refresh() {
-            cachedLines = undefined;
-            tui.requestRender();
-          }
-
-          function submit(cancelled: boolean) {
-            done({
-              questions,
-              answers: Array.from(state.answers.values()),
-              cancelled,
-            });
-          }
-
-          function currentQuestion(): Question | undefined {
-            return questions[state.currentTab];
-          }
-
-          function canUsePreviewNotes(): boolean {
-            const question = currentQuestion();
-            return (
-              question !== undefined &&
-              question.multiSelect !== true &&
-              question.options.some((option) => option.preview !== undefined)
-            );
-          }
-
-          function currentOptions(): RenderOption[] {
-            const question = currentQuestion();
-            return question ? getRenderOptions(question) : [];
-          }
-
-          function applyEffect(
-            effect: ReturnType<typeof reduceQuestionnaireRuntime>["effect"]
-          ) {
-            if (effect.type === "submit") {
-              submit(effect.cancelled);
-              return;
+            function refresh() {
+              cachedLines = undefined;
+              tui.requestRender();
             }
-            if (effect.type === "startInput" || effect.type === "clearInput") {
-              editor.setText("");
-            }
-            if (effect.type === "startNote") {
-              editor.setText(state.noteDrafts.get(effect.questionId) ?? "");
-            }
-            if (effect.type !== "none") {
-              refresh();
-            }
-          }
 
-          function dispatch(
-            action: Parameters<typeof reduceQuestionnaireRuntime>[1]
-          ) {
-            const reduced = reduceQuestionnaireRuntime(
-              state,
-              action,
-              questions
-            );
-            state = reduced.state;
-            applyEffect(reduced.effect);
-          }
+            function submit(cancelled: boolean) {
+              done({
+                questions,
+                answers: Array.from(state.answers.values()),
+                cancelled,
+              });
+            }
 
-          editor.onSubmit = (value) => {
-            if (state.notesMode && state.noteQuestionId) {
+            function currentQuestion(): Question | undefined {
+              return questions[state.currentTab];
+            }
+
+            function canUsePreviewNotes(): boolean {
+              const question = currentQuestion();
+              return (
+                question !== undefined &&
+                question.multiSelect !== true &&
+                question.options.some((option) => option.preview !== undefined)
+              );
+            }
+
+            function currentOptions(): RenderOption[] {
+              const question = currentQuestion();
+              return question ? getRenderOptions(question) : [];
+            }
+
+            function applyEffect(
+              effect: ReturnType<typeof reduceQuestionnaireRuntime>["effect"]
+            ) {
+              if (effect.type === "submit") {
+                submit(effect.cancelled);
+                return;
+              }
+              if (
+                effect.type === "startInput" ||
+                effect.type === "clearInput"
+              ) {
+                editor.setText("");
+              }
+              if (effect.type === "startNote") {
+                editor.setText(state.noteDrafts.get(effect.questionId) ?? "");
+              }
+              if (effect.type !== "none") {
+                refresh();
+              }
+            }
+
+            function dispatch(
+              action: Parameters<typeof reduceQuestionnaireRuntime>[1]
+            ) {
+              const reduced = reduceQuestionnaireRuntime(
+                state,
+                action,
+                questions
+              );
+              state = reduced.state;
+              applyEffect(reduced.effect);
+            }
+
+            editor.onSubmit = (value) => {
+              if (state.notesMode && state.noteQuestionId) {
+                dispatch({
+                  type: "saveNoteDraft",
+                  questionId: state.noteQuestionId,
+                  value,
+                });
+                return;
+              }
+              if (!state.inputQuestionId) {
+                return;
+              }
               dispatch({
-                type: "saveNoteDraft",
-                questionId: state.noteQuestionId,
+                type: "saveCustomAnswer",
+                questionId: state.inputQuestionId,
                 value,
               });
-              return;
-            }
-            if (!state.inputQuestionId) {
-              return;
-            }
-            dispatch({
-              type: "saveCustomAnswer",
-              questionId: state.inputQuestionId,
-              value,
-            });
-          };
+            };
 
-          function handleInput(data: string) {
-            const action = routeQuestionnaireKey({
-              data,
-              state,
-              questions,
-              options: currentOptions(),
-              allAnswered: isAllAnswered(questions, state.answers),
-              previewNotesEnabled: canUsePreviewNotes(),
-            });
+            function handleInput(data: string) {
+              const action = routeQuestionnaireKey({
+                data,
+                state,
+                questions,
+                options: currentOptions(),
+                allAnswered: isAllAnswered(questions, state.answers),
+                previewNotesEnabled: canUsePreviewNotes(),
+              });
 
-            if (!action) {
-              return;
+              if (!action) {
+                return;
+              }
+              if (action.type === "editor") {
+                editor.handleInput(data);
+                refresh();
+                return;
+              }
+              dispatch(action);
             }
-            if (action.type === "editor") {
-              editor.handleInput(data);
-              refresh();
-              return;
-            }
-            dispatch(action);
-          }
 
-          function render(width: number): string[] {
-            if (cachedLines) {
+            function render(width: number): string[] {
+              if (cachedLines) {
+                return cachedLines;
+              }
+
+              cachedLines = renderQuestionnaireRuntime({
+                width,
+                theme,
+                questions,
+                state,
+                options: currentOptions(),
+                editor,
+                previewEnabled: canUsePreviewNotes(),
+              });
               return cachedLines;
             }
 
-            cachedLines = renderQuestionnaireRuntime({
-              width,
-              theme,
-              questions,
-              state,
-              options: currentOptions(),
-              editor,
-              previewEnabled: canUsePreviewNotes(),
-            });
-            return cachedLines;
-          }
+            const component = {
+              render,
+              invalidate: () => {
+                cachedLines = undefined;
+              },
+              handleInput,
+            };
 
-          return {
-            render,
-            invalidate: () => {
-              cachedLines = undefined;
-            },
-            handleInput,
-          };
-        }
+            if (!shouldUseFixedReplacement) {
+              return component;
+            }
+
+            replacementComponent = component;
+            return {
+              render: () => [],
+              invalidate: component.invalidate,
+              handleInput: component.handleInput,
+              dispose: () => {
+                replacementComponent = null;
+              },
+            };
+          })
       );
 
       return createQuestionnaireEnvelope({ ...result, questions });

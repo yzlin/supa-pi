@@ -13,6 +13,10 @@ import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 
 import { registerPieditorCommands } from "./commands";
 import { DEFAULT_FIXED_EDITOR_CONFIG } from "./config/fixed-editor";
+import {
+  acquireReplacementSurfaceLease,
+  clearReplacementSurfaceLeases,
+} from "./fixed-editor/replacement-lease";
 
 type RegisteredCommandOptions = Parameters<ExtensionAPI["registerCommand"]>[1];
 type HarnessCommandOptions = RegisteredCommandOptions & {
@@ -74,6 +78,7 @@ function createHarness(homeDir?: string) {
 }
 
 afterEach(() => {
+  clearReplacementSurfaceLeases();
   process.env.HOME = originalHome;
   for (const root of tempRoots.splice(0)) {
     rmSync(root, { recursive: true, force: true });
@@ -171,7 +176,40 @@ describe("pieditor command", () => {
 
     expect(harness.notifications).toEqual([
       {
-        message: "pieditor fixed-editor disabled (project override active)",
+        message:
+          "pieditor fixed-editor disabled (project override active); replacement compositor: detached; replacement leases: 0",
+        level: "info",
+      },
+    ]);
+  });
+
+  it("reports active replacement leases in fixed editor status", async () => {
+    const root = createTempDir();
+    const homeDir = join(root, "home");
+    const cwd = join(root, "project");
+    const target = { render: () => ["replacement"] };
+
+    acquireReplacementSurfaceLease({
+      owner: "file-picker",
+      id: "preview",
+      target,
+    });
+    acquireReplacementSurfaceLease({
+      owner: "quick-open",
+      id: "list",
+      target,
+    });
+
+    const harness = createHarness(homeDir);
+    await harness.command.handler(
+      "fixed-editor status",
+      harness.createContext(cwd) as never
+    );
+
+    expect(harness.notifications).toEqual([
+      {
+        message:
+          "pieditor fixed-editor disabled; replacement compositor: detached; replacement leases: 2 (file-picker, quick-open)",
         level: "info",
       },
     ]);

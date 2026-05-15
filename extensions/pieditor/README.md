@@ -43,6 +43,7 @@ Notable interactions:
 - Use `/pieditor fixed-editor [on|off|toggle|status]` to toggle fixed editor mode for the live runtime and persist the global `fixedEditor.enabled` setting; project `.pi/pieditor.json` overrides still win on the next load
 - Fixed editor mode reserves the root scrollback viewport's rightmost column for a visual-only scrollbar: dim gray `█` track, bright white `█` thumb; it has no configuration and stays out of overlay rendering
 - When a user message starts or a follow-up queue update arrives, fixed editor mode jumps the root scrollback back to the bottom; manual root scrollback remains available between sends
+- Internal local extensions that temporarily replace the editor/custom UI surface can acquire a replacement-surface lease so fixed editor mode stands down while the replacement UI is active
 
 ## Configuration
 
@@ -187,6 +188,45 @@ project-root/
 ~/.pi/agent/
 └── pieditor.json
 ```
+
+## Internal replacement-surface lease API
+
+`extensions/pieditor/fixed-editor/replacement-lease.ts` exposes a local, internal coordination API for extensions that temporarily replace the editor surface, such as `ctx.ui.custom` flows. Use it only from trusted in-repo extensions; it is not a public Pi extension API.
+
+Typical usage:
+
+```ts
+await withReplacementSurfaceLease(
+  {
+    owner: "questionnaire",
+    id: "custom-ui",
+    target: QUESTIONNAIRE_REPLACEMENT_SURFACE,
+  },
+  async () => ctx.ui.custom(component)
+);
+```
+
+API surface:
+
+- `acquireReplacementSurfaceLease({ owner, id, target })`: acquires a lease and returns `{ owner, id, release() }`. `release()` is idempotent.
+- `withReplacementSurfaceLease(options, run)`: async helper that always releases in `finally`, including thrown UI errors or cancellation paths.
+- `getActiveReplacementLeaseDiagnostics()`: returns active `{ owner, id }` entries for status reporting and tests.
+- `clearReplacementSurfaceLeases()`: clears all active leases during editor/session teardown.
+- `attachReplacementLeaseCompositor(compositor | null)`: composition hook used by fixed editor mode; callers should not use it directly.
+
+Behavior while leased:
+
+- Multiple leases are additive. A target is unhidden only after its last lease releases.
+- If fixed editor mode is active, the leased target is hidden from the fixed-editor compositor and the terminal is repainted.
+- If no compositor is attached, lease acquisition is a no-op for rendering but diagnostics still track the active lease.
+- If a compositor attaches after a lease exists, it immediately hides all currently leased targets.
+- While any replacement lease is active, the terminal split compositor remains installed but bypasses fixed-editor reservation/repaint, root scrollbar decoration, and fixed-editor scroll/mouse/selection handling so the replacement UI owns the surface.
+- Editor detach/session shutdown clears all leases and detaches the compositor.
+
+Diagnostics:
+
+- `/pieditor fixed-editor status` includes `replacement leases: 0` when none are active.
+- While leases are active, status reports the count and owners, for example `replacement leases: 1 (questionnaire)`.
 
 ## Native preview addon
 

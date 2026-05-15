@@ -8,6 +8,10 @@ import {
   hasProjectFixedEditorEnabledOverride,
   saveGlobalFixedEditorEnabled,
 } from "./config.js";
+import {
+  getActiveReplacementLeaseDiagnostics,
+  hasReplacementLeaseCompositor,
+} from "./fixed-editor/replacement-lease.js";
 
 interface FixedEditorRuntimeHooks {
   getFixedEditorConfig(): FixedEditorRuntimeConfig;
@@ -52,6 +56,19 @@ const PIEDITOR_COMPLETIONS = [
 
 function describeFixedEditorStatus(enabled: boolean): string {
   return `pieditor fixed-editor ${enabled ? "enabled" : "disabled"}`;
+}
+
+function describeReplacementLeaseStatus(): string {
+  const prefix = `replacement compositor: ${
+    hasReplacementLeaseCompositor() ? "attached" : "detached"
+  }; replacement leases`;
+  const leases = getActiveReplacementLeaseDiagnostics();
+  if (leases.length === 0) {
+    return `${prefix}: 0`;
+  }
+
+  const owners = [...new Set(leases.map((lease) => lease.owner))].join(", ");
+  return `${prefix}: ${leases.length} (${owners})`;
 }
 
 function notifyProjectOverride(ctx: ExtensionCommandContext): void {
@@ -107,7 +124,7 @@ function handleFixedEditorCommand(
     ctx.ui.notify(
       `${describeFixedEditorStatus(runtime.getFixedEditorConfig().enabled)}${
         projectOverride ? " (project override active)" : ""
-      }`,
+      }; ${describeReplacementLeaseStatus()}`,
       "info"
     );
     return;
