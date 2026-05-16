@@ -2,6 +2,7 @@
   "name": "supa-pi",
   "version": "1.0.0",
   "description": "Ethan's pi coding agent harness",
+  "license": "MIT",
   "readme": "README.md",
   "type": "module",
   "bin": {

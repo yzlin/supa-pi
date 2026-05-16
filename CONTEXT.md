@@ -31,11 +31,10 @@ The repository is optimized for local workflow quality and maintainable agent be
 - Prefer small, durable Markdown context over chat-only decisions.
 - Develop anywhere, but treat `~/.pi/agent` as the live Pi config location described by setup docs.
 - Do not document secrets, credentials, tokens, private keys, or raw sensitive logs.
-- Root project license is unresolved. Copied or adapted upstream materials must carry source and license notices in durable docs or README entries.
+- Root project license is MIT. Copied or adapted upstream materials must carry source and license notices in durable docs or README entries.
 
 ## Open questions
 
-- What root license should this repository use if shared externally?
 - Should README explicitly label `extensions/om` as present but intentionally disabled?
 - Should `setup.sh` or README better explain the development-clone vs live-Pi-config deployment model?
 

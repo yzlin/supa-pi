@@ -171,4 +171,6 @@ Use this repo if you want a Pi setup with:
 
 ## License / ownership
 
-No license file was found in the repo root during inspection. Add one if you want to publish or share this setup externally.
+MIT. See [`LICENSE.md`](./LICENSE.md).
+
+Copied or adapted upstream materials keep source and license notes near their usage.
