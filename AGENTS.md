@@ -2,7 +2,7 @@
 
 ## Agent Protocol
 
-- No `./runner`. Guardrails: use `trash` for deletes.
+- Guardrails: use `trash` for deletes.
 - Bugs: add regression test when it fits.
 - Editor: `zed <path>`.
 - Prefer end-to-end verify; if blocked, say what’s missing.
