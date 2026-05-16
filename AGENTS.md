@@ -34,6 +34,10 @@
 
 ## Tools
 
+### edit
+
+- Do not use Python scripts to edit files. Use the built-in `edit` tool for targeted file changes.
+
 ### trash
 
 - Move files to Trash: `trash …` (system command).
