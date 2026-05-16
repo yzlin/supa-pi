@@ -4,26 +4,54 @@ import { join } from "node:path";
 
 import codeImprovementExtension, {
   buildImproveCodebaseArchitectureCommandMessage,
+  buildScopedSimplifyCommandMessage,
   buildSimplifyCommandMessage,
 } from "./index";
 
-function createMockCtx(isIdle = true) {
+function createMockCtx(
+  isIdle = true,
+  options: {
+    hasUI?: boolean;
+    confirm?: boolean;
+    select?: string;
+    editor?: string;
+  } = {}
+) {
   const notifications: Array<{ message: string; level: string }> = [];
 
   return {
     notifications,
     ctx: {
+      hasUI: options.hasUI ?? false,
       isIdle: () => isIdle,
       ui: {
         notify(message: string, level: string) {
           notifications.push({ message, level });
         },
+        confirm: async () => options.confirm ?? true,
+        select: async () => options.select,
+        editor: async () => options.editor ?? "",
       },
     },
   };
 }
 
-function createMockPiRuntime() {
+function createMockPiRuntime(
+  exec: (
+    command: string,
+    args: string[]
+  ) =>
+    | Promise<{
+        stdout: string;
+        stderr?: string;
+        code: number;
+      }>
+    | {
+        stdout: string;
+        stderr?: string;
+        code: number;
+      } = () => ({ stdout: "", code: 0 })
+) {
   const commands = new Map<
     string,
     { handler: (args: string, ctx: unknown) => Promise<void> | void }
@@ -34,6 +62,7 @@ function createMockPiRuntime() {
     commands,
     sentUserMessages,
     pi: {
+      exec,
       registerCommand(
         name: string,
         definition: {
@@ -192,7 +221,42 @@ describe("code-improvement commands", () => {
     }
   });
 
-  it("sends /simplify immediately when idle", async () => {
+  it("keeps bare no-UI /simplify legacy recent-session fallback", async () => {
+    const runtime = createMockPiRuntime();
+    const { ctx, notifications } = createMockCtx();
+
+    codeImprovementExtension(runtime.pi as never);
+    const command = getRegisteredCommand(runtime.commands, "simplify");
+
+    await command?.handler("", ctx as never);
+
+    expect(runtime.sentUserMessages).toEqual([
+      {
+        content: buildSimplifyCommandMessage(""),
+        options: undefined,
+      },
+    ]);
+    expect(notifications).toEqual([]);
+  });
+
+  it("opens a selector for bare interactive /simplify", async () => {
+    const runtime = createMockPiRuntime((_command, args) => {
+      if (args[0] === "status") {
+        return { stdout: " M package.json\n", code: 0 };
+      }
+      return { stdout: "", code: 0 };
+    });
+    const { ctx } = createMockCtx(true, { hasUI: true, select: "uncommitted" });
+
+    codeImprovementExtension(runtime.pi as never);
+    const command = getRegisteredCommand(runtime.commands, "simplify");
+
+    await command?.handler("", ctx as never);
+
+    expect(runtime.sentUserMessages[0]?.content).toContain("- package.json");
+  });
+
+  it("rejects freeform /simplify focus under strict grammar", async () => {
     const runtime = createMockPiRuntime();
     const { ctx, notifications } = createMockCtx();
 
@@ -201,13 +265,55 @@ describe("code-improvement commands", () => {
 
     await command?.handler("focus here", ctx as never);
 
-    expect(runtime.sentUserMessages).toEqual([
-      {
-        content: buildSimplifyCommandMessage("focus here"),
-        options: undefined,
-      },
-    ]);
-    expect(notifications).toEqual([]);
+    expect(runtime.sentUserMessages).toEqual([]);
+    expect(notifications[0]?.message).toContain("Usage: /simplify");
+  });
+
+  it("requires --yes for large no-UI /simplify scopes", async () => {
+    const files = [
+      "extensions/research/index.test.ts",
+      "extensions/research/prompt.md",
+      "extensions/research/index.ts",
+      "extensions/btw/helper.test.ts",
+      "extensions/btw/helper.ts",
+      "extensions/btw/subagent.test.ts",
+      "extensions/btw/index.ts",
+      "extensions/btw/subagent.ts",
+      "extensions/ast-grep/prompt.md",
+      "extensions/ast-grep/index.ts",
+      "extensions/context/analyze.ts",
+      "extensions/context/content.test.ts",
+      "extensions/context/analyze.test.ts",
+      "extensions/context/content-view.ts",
+      "extensions/context/content.ts",
+      "extensions/context/view.ts",
+      "extensions/context/render-text.ts",
+      "extensions/context/index.ts",
+      "extensions/core-prompt/prompt.md",
+      "extensions/core-prompt/index.ts",
+      "extensions/init-deep/index.test.ts",
+    ].join("\n");
+    const runtime = createMockPiRuntime((_command, args) => {
+      if (args[0] === "diff") {
+        return { stdout: files, code: 0 };
+      }
+      if (args[0] === "merge-base") {
+        return { stdout: "base", code: 0 };
+      }
+      return { stdout: "", code: 0 };
+    });
+    const { ctx, notifications } = createMockCtx();
+
+    codeImprovementExtension(runtime.pi as never);
+    const command = getRegisteredCommand(runtime.commands, "simplify");
+
+    await command?.handler("branch main", ctx as never);
+
+    expect(runtime.sentUserMessages).toEqual([]);
+    expect(notifications).toContainEqual({
+      message: "Large no-UI /simplify scopes require --yes",
+      level: "error",
+    });
   });
 
   it("sends /improve-codebase-architecture immediately when idle", async () => {
@@ -231,25 +337,161 @@ describe("code-improvement commands", () => {
     expect(notifications).toEqual([]);
   });
 
-  it("queues /simplify as a follow-up when busy and notifies", async () => {
-    const runtime = createMockPiRuntime();
+  it("queues scoped /simplify as a follow-up when busy and notifies", async () => {
+    const runtime = createMockPiRuntime((_command, args) => {
+      if (args[0] === "status") {
+        return { stdout: " M package.json\n?? ../unsafe.ts\n", code: 0 };
+      }
+      return { stdout: "", code: 0 };
+    });
     const { ctx, notifications } = createMockCtx(false);
 
     codeImprovementExtension(runtime.pi as never);
     const command = getRegisteredCommand(runtime.commands, "simplify");
 
-    await command?.handler("src/domain", ctx as never);
+    await command?.handler(
+      'uncommitted --extra "prefer smaller functions"',
+      ctx as never
+    );
 
-    expect(runtime.sentUserMessages).toEqual([
-      {
-        content: buildSimplifyCommandMessage("src/domain"),
-        options: { deliverAs: "followUp" },
-      },
-    ]);
+    expect(runtime.sentUserMessages).toHaveLength(1);
+    expect(runtime.sentUserMessages[0]?.options).toEqual({
+      deliverAs: "followUp",
+    });
+    expect(runtime.sentUserMessages[0]?.content).toContain(
+      "Delegate to code-simplifier. Do not select reviewers."
+    );
+    expect(runtime.sentUserMessages[0]?.content).toContain("- package.json");
+    expect(runtime.sentUserMessages[0]?.content).not.toContain("../unsafe.ts");
+    expect(runtime.sentUserMessages[0]?.content).toContain(
+      "Hard edit boundary: you may read files outside the allowlist for context, but only edit files in the allowlist above."
+    );
+    expect(runtime.sentUserMessages[0]?.content).toContain(
+      "Extra guidance: prefer smaller functions"
+    );
+    expect(runtime.sentUserMessages[0]?.content).toContain(
+      "Before delegating, re-resolve this scope and stop if the file allowlist changed"
+    );
     expect(notifications).toContainEqual({
       message: "Queued /simplify as a follow-up",
       level: "info",
     });
+  });
+
+  it("states scoped simplify may read context outside the edit allowlist", () => {
+    const message = buildScopedSimplifyCommandMessage({
+      targetLabel: "uncommitted changes",
+      allowlist: ["package.json"],
+    });
+
+    expect(message).toContain(
+      "you may read files outside the allowlist for context, but only edit files in the allowlist above"
+    );
+    expect(message).toContain(
+      "If needed edits fall outside it, stop and report the missing file path."
+    );
+  });
+
+  it("filters scoped /simplify allowlists to safe existing text-like files", async () => {
+    const runtime = createMockPiRuntime((_command, args) => {
+      if (args[0] === "status") {
+        return {
+          stdout: [
+            " M README.md",
+            " M package.json",
+            " M missing.ts",
+            " M bun.lock",
+            " M node_modules/blocked.ts",
+            " M themes/nightowl.json",
+            " M ../unsafe.ts",
+          ].join("\n"),
+          code: 0,
+        };
+      }
+      return { stdout: "", code: 0 };
+    });
+    const { ctx } = createMockCtx();
+
+    codeImprovementExtension(runtime.pi as never);
+    const command = getRegisteredCommand(runtime.commands, "simplify");
+
+    await command?.handler("uncommitted --yes", ctx as never);
+
+    const content = runtime.sentUserMessages[0]?.content ?? "";
+    expect(content).toContain("- README.md");
+    expect(content).toContain("- package.json");
+    expect(content).toContain("- themes/nightowl.json");
+    expect(content).not.toContain("missing.ts");
+    expect(content).not.toContain("bun.lock");
+    expect(content).not.toContain("node_modules/blocked.ts");
+    expect(content).not.toContain("../unsafe.ts");
+  });
+
+  it("allows lockfiles only for explicit folder simplify scope", async () => {
+    const runtime = createMockPiRuntime();
+    const { ctx } = createMockCtx();
+
+    codeImprovementExtension(runtime.pi as never);
+    const command = getRegisteredCommand(runtime.commands, "simplify");
+
+    await command?.handler("folder bun.lock", ctx as never);
+
+    expect(runtime.sentUserMessages[0]?.content).toContain("- bun.lock");
+  });
+
+  it("expands explicit folder simplify scope directories recursively", async () => {
+    const runtime = createMockPiRuntime();
+    const { ctx } = createMockCtx();
+
+    codeImprovementExtension(runtime.pi as never);
+    const command = getRegisteredCommand(runtime.commands, "simplify");
+
+    await command?.handler(
+      "folder extensions/code-improvement/__fixtures__/folder-scope",
+      ctx as never
+    );
+
+    const content = runtime.sentUserMessages[0]?.content ?? "";
+    expect(content).toContain(
+      "- extensions/code-improvement/__fixtures__/folder-scope/README.md"
+    );
+    expect(content).toContain(
+      "- extensions/code-improvement/__fixtures__/folder-scope/bun.lock"
+    );
+    expect(content).toContain(
+      "- extensions/code-improvement/__fixtures__/folder-scope/src/good.ts"
+    );
+  });
+
+  it("excludes unsafe, generated, vendor, build, and non-text files from expanded folder simplify scopes", async () => {
+    const runtime = createMockPiRuntime();
+    const { ctx } = createMockCtx();
+
+    codeImprovementExtension(runtime.pi as never);
+    const command = getRegisteredCommand(runtime.commands, "simplify");
+
+    await command?.handler(
+      "folder extensions/code-improvement/__fixtures__/folder-scope ../unsafe.ts node_modules",
+      ctx as never
+    );
+
+    const content = runtime.sentUserMessages[0]?.content ?? "";
+    expect(content).toContain(
+      "- extensions/code-improvement/__fixtures__/folder-scope/src/good.ts"
+    );
+    expect(content).not.toContain("- ../unsafe.ts");
+    expect(content).not.toContain(
+      "- extensions/code-improvement/__fixtures__/folder-scope/generated/ignored.ts"
+    );
+    expect(content).not.toContain(
+      "- extensions/code-improvement/__fixtures__/folder-scope/node_modules/ignored.ts"
+    );
+    expect(content).not.toContain(
+      "- extensions/code-improvement/__fixtures__/folder-scope/dist/ignored.ts"
+    );
+    expect(content).not.toContain(
+      "- extensions/code-improvement/__fixtures__/folder-scope/image.png"
+    );
   });
 
   it("queues /improve-codebase-architecture as a follow-up when busy and notifies", async () => {

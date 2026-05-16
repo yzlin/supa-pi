@@ -15,11 +15,12 @@
 - `docs/context/` — longer durable notes that should not live in chat only.
 - `docs/context/extension-registration.md` — read before changing `package.json -> pi.extensions`, documenting active Extensions, or reasoning about disabled Extension code.
 - `docs/context/questionnaire.md` — read before changing the active Questionnaire Extension, its schema/result shape, keyboard behavior, validation, or rpiv-divergence documentation.
+- `docs/context/code-improvement.md` — read before changing `/simplify`, `/improve-codebase-architecture`, or code-improvement prompt files.
 
 ## Major extension docs
 
 - `extensions/caveman/README.md` — read before changing `/caveman`, caveman-mode persistence, or generic extension status behavior.
-- `extensions/code-improvement/SIMPLIFY.md` — read before changing `/simplify` behavior or code-simplifier delegation.
+- `extensions/code-improvement/SIMPLIFY.md` and `docs/context/code-improvement.md` — read before changing `/simplify` behavior, scoped simplify boundaries, or code-simplifier delegation.
 - `extensions/code-improvement/IMPROVE-CODEBASE-ARCHITECTURE.md` — read before changing `/improve-codebase-architecture` architecture review behavior.
 - `extensions/context-docs/README.md` — read before changing `/context-setup`, `/context-note`, `/adr`, `/context-review`, or `/context-grill` behavior.
 - `extensions/init-deep/README.md` — read before changing `/init-deep` AGENTS.md generation behavior.

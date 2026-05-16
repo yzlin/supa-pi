@@ -42,13 +42,21 @@ const SUMMARY_REVIEW_REPORT = `## Review Scope
 
 function createMockCtx(
   branchEntries: SessionEntry[] = [],
-  options: { idle?: boolean } = {}
+  options: {
+    idle?: boolean;
+    hasUI?: boolean;
+    select?: (message: string, items: string[]) => Promise<string | null>;
+    editor?: (message: string, value: string) => Promise<string | null>;
+    cwd?: string;
+  } = {}
 ) {
   const notifications: Array<{ message: string; level: string }> = [];
 
   return {
     notifications,
     ctx: {
+      cwd: options.cwd ?? process.cwd(),
+      hasUI: options.hasUI ?? true,
       isIdle: () => options.idle ?? true,
       sessionManager: {
         getBranch() {
@@ -62,12 +70,21 @@ function createMockCtx(
         notify(message: string, level: string) {
           notifications.push({ message, level });
         },
+        select: options.select,
+        editor: options.editor,
       },
     },
   };
 }
 
-function createMockPiRuntime() {
+function createMockPiRuntime(
+  exec?: (
+    command: string,
+    args: string[]
+  ) =>
+    | { stdout: string; code: number; stderr?: string }
+    | Promise<{ stdout: string; code: number; stderr?: string }>
+) {
   const commands = new Map<
     string,
     {
@@ -75,11 +92,19 @@ function createMockPiRuntime() {
     }
   >();
   const sentUserMessages: Array<{ content: string; options?: unknown }> = [];
+  const execCalls: Array<{ command: string; args: string[] }> = [];
 
   return {
     commands,
     sentUserMessages,
+    execCalls,
     pi: {
+      async exec(command: string, args: string[]) {
+        execCalls.push({ command, args });
+        return (
+          (await exec?.(command, args)) ?? { stdout: "", stderr: "", code: 0 }
+        );
+      },
       registerCommand(
         name: string,
         definition: {
@@ -100,6 +125,109 @@ function createMockPiRuntime() {
     },
   };
 }
+
+describe("review direct targets", () => {
+  it("reviews uncommitted changes from direct args without opening selector", async () => {
+    const runtime = createMockPiRuntime((_command, args) => {
+      if (args.join(" ") === "status --porcelain") {
+        return { stdout: " M extensions/review.ts\n", code: 0 };
+      }
+      return { stdout: "", code: 0 };
+    });
+    const { ctx, notifications } = createMockCtx([], {
+      select: () =>
+        Promise.reject(
+          new Error("selector should not open for direct --auto-reviewers")
+        ),
+    });
+
+    reviewExtension(runtime.pi as never);
+    const handler = runtime.commands.get("review")?.handler;
+
+    expect(handler).toBeDefined();
+    await handler?.("uncommitted --auto-reviewers", ctx as never);
+
+    expect(runtime.sentUserMessages).toHaveLength(1);
+    expect(String(runtime.sentUserMessages[0]?.content)).toContain(
+      "Review the current code changes"
+    );
+    expect(notifications).toContainEqual({
+      message: "Starting review: current changes [code-reviewer]",
+      level: "info",
+    });
+  });
+
+  it("rejects invalid direct reviewer flags", async () => {
+    const runtime = createMockPiRuntime((_command, args) => {
+      if (args.join(" ") === "rev-parse --git-dir") {
+        return { stdout: ".git\n", code: 0 };
+      }
+      return { stdout: "", code: 0 };
+    });
+    const { ctx, notifications } = createMockCtx();
+
+    reviewExtension(runtime.pi as never);
+    const handler = runtime.commands.get("review")?.handler;
+
+    expect(handler).toBeDefined();
+    await handler?.("uncommitted --reviewers security-reviewr", ctx as never);
+
+    expect(runtime.sentUserMessages).toEqual([]);
+    expect(notifications).toContainEqual({
+      message: "No valid reviewers in --reviewers",
+      level: "error",
+    });
+  });
+
+  it("preserves direct branch targets and merge-base prompts", async () => {
+    const runtime = createMockPiRuntime((_command, args) => {
+      if (args.join(" ") === "rev-parse --abbrev-ref main@{upstream}") {
+        return { stdout: "origin/main\n", code: 0 };
+      }
+      if (args.join(" ") === "merge-base HEAD origin/main") {
+        return { stdout: "abc123\n", code: 0 };
+      }
+      if (args.join(" ") === "diff --name-only abc123") {
+        return { stdout: "supabase/schema.sql\n", code: 0 };
+      }
+      return { stdout: "", code: 0 };
+    });
+    const { ctx } = createMockCtx();
+
+    reviewExtension(runtime.pi as never);
+    const handler = runtime.commands.get("review")?.handler;
+
+    expect(handler).toBeDefined();
+    await handler?.("branch main --auto-reviewers", ctx as never);
+
+    expect(String(runtime.sentUserMessages[0]?.content)).toContain(
+      "Run `git diff abc123`"
+    );
+    expect(String(runtime.sentUserMessages[0]?.content)).toContain(
+      "- database-reviewer"
+    );
+  });
+
+  it("preserves direct folder targets and extra instructions", async () => {
+    const runtime = createMockPiRuntime();
+    const { ctx } = createMockCtx();
+
+    reviewExtension(runtime.pi as never);
+    const handler = runtime.commands.get("review")?.handler;
+
+    expect(handler).toBeDefined();
+    await handler?.(
+      'folder src "docs guides" --auto-reviewers --extra "check public API"',
+      ctx as never
+    );
+
+    const message = String(runtime.sentUserMessages[0]?.content);
+    expect(message).toContain(
+      "Review the code in the following paths: src, docs guides"
+    );
+    expect(message).toContain("check public API");
+  });
+});
 
 describe("review follow-up helpers", () => {
   it("warns when /review-summary cannot find a review report", async () => {

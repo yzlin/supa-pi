@@ -54,9 +54,16 @@ import {
   Text,
 } from "@earendil-works/pi-tui";
 
-const GITHUB_PULL_REQUEST_URL_PATTERN =
-  /github\.com\/[^/]+\/[^/]+\/pull\/(\d+)/;
-const WHITESPACE_PATTERN = /\s+/;
+import {
+  type GitExec,
+  getChangedPaths as getSharedChangedPaths,
+  getMergeBase as getSharedMergeBase,
+  parsePrReference,
+  parseReviewPaths,
+  parseReviewTargetArgs,
+  type ReviewTarget,
+} from "./shared/review-targets";
+
 const SECURITY_PATH_PATTERNS = [
   /(^|\/)(auth|permissions?|middleware|webhooks?|api|server)\//i,
   /(^|\/)(cookies?|headers?|redirects?)\b/i,
@@ -67,7 +74,6 @@ const DATABASE_PATH_PATTERNS = [
   /(^|\/)(db|database|migrations?|schema|sql|supabase)\//i,
   /\.sql$/i,
 ];
-const WHITESPACE_CHARACTER_PATTERN = /\s/;
 
 type ReviewerAgent =
   | "code-reviewer"
@@ -102,6 +108,11 @@ interface ReviewSettingsState {
 
 function isReviewerAgent(value: string): value is ReviewerAgent {
   return ALL_REVIEWERS.includes(value as ReviewerAgent);
+}
+
+function createGitExec(pi: ExtensionAPI): GitExec {
+  return (args) =>
+    pi.exec("git", args) as Promise<{ stdout: string; code: number }>;
 }
 
 function normalizeReviewerSelection(
@@ -142,14 +153,6 @@ function applyReviewSettings(ctx: ExtensionContext) {
   reviewSelectedAgents = state.selectedReviewers ?? DEFAULT_REVIEWERS;
   reviewReviewerSelectionMode = state.reviewerSelectionMode ?? "auto";
 }
-
-// Review target types (matching Codex's approach)
-type ReviewTarget =
-  | { type: "uncommitted" }
-  | { type: "baseBranch"; branch: string }
-  | { type: "commit"; sha: string; title?: string }
-  | { type: "pullRequest"; prNumber: number; baseBranch: string; title: string }
-  | { type: "folder"; paths: string[] };
 
 // Prompts (adapted from Codex)
 const UNCOMMITTED_PROMPT =
@@ -370,39 +373,7 @@ async function getMergeBase(
   pi: ExtensionAPI,
   branch: string
 ): Promise<string | null> {
-  try {
-    // First try to get the upstream tracking branch
-    const { stdout: upstream, code: upstreamCode } = await pi.exec("git", [
-      "rev-parse",
-      "--abbrev-ref",
-      `${branch}@{upstream}`,
-    ]);
-
-    if (upstreamCode === 0 && upstream.trim()) {
-      const { stdout: mergeBase, code } = await pi.exec("git", [
-        "merge-base",
-        "HEAD",
-        upstream.trim(),
-      ]);
-      if (code === 0 && mergeBase.trim()) {
-        return mergeBase.trim();
-      }
-    }
-
-    // Fall back to using the branch directly
-    const { stdout: mergeBase, code } = await pi.exec("git", [
-      "merge-base",
-      "HEAD",
-      branch,
-    ]);
-    if (code === 0 && mergeBase.trim()) {
-      return mergeBase.trim();
-    }
-
-    return null;
-  } catch {
-    return null;
-  }
+  return await getSharedMergeBase(createGitExec(pi), branch);
 }
 
 /**
@@ -475,29 +446,6 @@ async function hasPendingChanges(pi: ExtensionAPI): Promise<boolean> {
     .filter((line) => line.trim());
   const trackedChanges = lines.filter((line) => !line.startsWith("??"));
   return trackedChanges.length > 0;
-}
-
-/**
- * Parse a PR reference (URL or number) and return the PR number
- */
-function parsePrReference(ref: string): number | null {
-  const trimmed = ref.trim();
-
-  // Try as a number first
-  const num = Number.parseInt(trimmed, 10);
-  if (!Number.isNaN(num) && num > 0) {
-    return num;
-  }
-
-  // Try to extract from GitHub URL
-  // Formats: https://github.com/owner/repo/pull/123
-  //          github.com/owner/repo/pull/123
-  const urlMatch = trimmed.match(GITHUB_PULL_REQUEST_URL_PATTERN);
-  if (urlMatch) {
-    return Number.parseInt(urlMatch[1], 10);
-  }
-
-  return null;
 }
 
 /**
@@ -1427,34 +1375,11 @@ export default function reviewExtension(pi: ExtensionAPI) {
     return { type: "commit", sha: result.sha, title: result.title };
   }
 
-  function parseReviewPaths(value: string): string[] {
-    return value
-      .split(WHITESPACE_PATTERN)
-      .map((item) => item.trim())
-      .filter((item) => item.length > 0);
-  }
-
   function parseReviewerList(value: string): ReviewerAgent[] {
     return value
       .split(",")
       .map((item) => item.trim())
       .filter(isReviewerAgent);
-  }
-
-  function normalizeStatusPaths(lines: string[]): string[] {
-    return lines
-      .map((line) => {
-        const trimmed = line.trim();
-        if (trimmed.startsWith("?? ")) {
-          return trimmed.slice(3);
-        }
-
-        const pathPortion =
-          trimmed.length > 3 ? trimmed.slice(3).trim() : trimmed;
-        const renameParts = pathPortion.split(" -> ");
-        return renameParts.at(-1)?.trim() || pathPortion;
-      })
-      .filter(Boolean);
   }
 
   function matchesAnyPattern(
@@ -1465,44 +1390,7 @@ export default function reviewExtension(pi: ExtensionAPI) {
   }
 
   async function getChangedPaths(target: ReviewTarget): Promise<string[]> {
-    const run = async (args: string[]) => {
-      const { stdout, code } = await pi.exec("git", args);
-      if (code !== 0) {
-        return [];
-      }
-      return stdout
-        .trim()
-        .split("\n")
-        .map((line) => line.trim())
-        .filter(Boolean);
-    };
-
-    switch (target.type) {
-      case "uncommitted":
-        return normalizeStatusPaths(await run(["status", "--porcelain"]));
-
-      case "baseBranch": {
-        const mergeBase = await getMergeBase(pi, target.branch);
-        return mergeBase ? run(["diff", "--name-only", mergeBase]) : [];
-      }
-
-      case "commit":
-        return run([
-          "diff-tree",
-          "--no-commit-id",
-          "--name-only",
-          "-r",
-          target.sha,
-        ]);
-
-      case "pullRequest": {
-        const mergeBase = await getMergeBase(pi, target.baseBranch);
-        return mergeBase ? run(["diff", "--name-only", mergeBase]) : [];
-      }
-
-      case "folder":
-        return target.paths;
-    }
+    return await getSharedChangedPaths(target, createGitExec(pi));
   }
 
   async function detectReviewers(
@@ -1686,222 +1574,15 @@ export default function reviewExtension(pi: ExtensionAPI) {
     return true;
   }
 
-  /**
-   * Parse command arguments for direct invocation
-   * Returns the target or a special marker for PR that needs async handling
-   */
-  interface ParsedReviewArgs {
-    target: ReviewTarget | { type: "pr"; ref: string } | null;
-    extraInstruction?: string;
-    reviewers?: ReviewerAgent[];
-    useAutoReviewers?: boolean;
-    error?: string;
-  }
+  function parseArgs(args: string | undefined) {
+    const parsed = parseReviewTargetArgs(args, {
+      parseReviewers: parseReviewerList,
+    });
 
-  function tokenizeArgs(value: string): string[] {
-    const tokens: string[] = [];
-    let current = "";
-    let quote: '"' | "'" | null = null;
-
-    for (let i = 0; i < value.length; i++) {
-      const char = value[i];
-
-      if (quote) {
-        if (char === "\\" && i + 1 < value.length) {
-          current += value[i + 1];
-          i += 1;
-          continue;
-        }
-        if (char === quote) {
-          quote = null;
-          continue;
-        }
-        current += char;
-        continue;
-      }
-
-      if (char === '"' || char === "'") {
-        quote = char;
-        continue;
-      }
-
-      if (WHITESPACE_CHARACTER_PATTERN.test(char)) {
-        if (current.length > 0) {
-          tokens.push(current);
-          current = "";
-        }
-        continue;
-      }
-
-      current += char;
-    }
-
-    if (current.length > 0) {
-      tokens.push(current);
-    }
-
-    return tokens;
-  }
-
-  function parseArgs(args: string | undefined): ParsedReviewArgs {
-    if (!args?.trim()) {
-      return { target: null };
-    }
-
-    const rawParts = tokenizeArgs(args.trim());
-    const parts: string[] = [];
-    let extraInstruction: string | undefined;
-    let reviewers: ReviewerAgent[] | undefined;
-    let useAutoReviewers = false;
-
-    for (let i = 0; i < rawParts.length; i++) {
-      const part = rawParts[i];
-      if (part === "--extra") {
-        const next = rawParts[i + 1];
-        if (!next) {
-          return { target: null, error: "Missing value for --extra" };
-        }
-        extraInstruction = next;
-        i += 1;
-        continue;
-      }
-
-      if (part.startsWith("--extra=")) {
-        extraInstruction = part.slice("--extra=".length);
-        continue;
-      }
-
-      if (part === "--reviewers") {
-        const next = rawParts[i + 1];
-        if (!next) {
-          return { target: null, error: "Missing value for --reviewers" };
-        }
-        const parsedReviewers = parseReviewerList(next);
-        if (!parsedReviewers.length) {
-          return { target: null, error: "No valid reviewers in --reviewers" };
-        }
-        reviewers = normalizeReviewerSelection(parsedReviewers);
-        i += 1;
-        continue;
-      }
-
-      if (part.startsWith("--reviewers=")) {
-        const parsedReviewers = parseReviewerList(
-          part.slice("--reviewers=".length)
-        );
-        if (!parsedReviewers.length) {
-          return { target: null, error: "No valid reviewers in --reviewers" };
-        }
-        reviewers = normalizeReviewerSelection(parsedReviewers);
-        continue;
-      }
-
-      if (part === "--auto-reviewers") {
-        useAutoReviewers = true;
-        continue;
-      }
-
-      parts.push(part);
-    }
-
-    if (reviewers?.length && useAutoReviewers) {
-      return {
-        target: null,
-        error: "Use either --reviewers or --auto-reviewers, not both",
-      };
-    }
-
-    if (parts.length === 0) {
-      return { target: null, extraInstruction, reviewers, useAutoReviewers };
-    }
-
-    const subcommand = parts[0]?.toLowerCase();
-
-    switch (subcommand) {
-      case "uncommitted":
-        return {
-          target: { type: "uncommitted" },
-          extraInstruction,
-          reviewers,
-          useAutoReviewers,
-        };
-
-      case "branch": {
-        const branch = parts[1];
-        if (!branch) {
-          return {
-            target: null,
-            extraInstruction,
-            reviewers,
-            useAutoReviewers,
-          };
-        }
-        return {
-          target: { type: "baseBranch", branch },
-          extraInstruction,
-          reviewers,
-          useAutoReviewers,
-        };
-      }
-
-      case "commit": {
-        const sha = parts[1];
-        if (!sha) {
-          return {
-            target: null,
-            extraInstruction,
-            reviewers,
-            useAutoReviewers,
-          };
-        }
-        const title = parts.slice(2).join(" ") || undefined;
-        return {
-          target: { type: "commit", sha, title },
-          extraInstruction,
-          reviewers,
-          useAutoReviewers,
-        };
-      }
-
-      case "folder": {
-        const paths = parseReviewPaths(parts.slice(1).join(" "));
-        if (paths.length === 0) {
-          return {
-            target: null,
-            extraInstruction,
-            reviewers,
-            useAutoReviewers,
-          };
-        }
-        return {
-          target: { type: "folder", paths },
-          extraInstruction,
-          reviewers,
-          useAutoReviewers,
-        };
-      }
-
-      case "pr": {
-        const ref = parts[1];
-        if (!ref) {
-          return {
-            target: null,
-            extraInstruction,
-            reviewers,
-            useAutoReviewers,
-          };
-        }
-        return {
-          target: { type: "pr", ref },
-          extraInstruction,
-          reviewers,
-          useAutoReviewers,
-        };
-      }
-
-      default:
-        return { target: null, extraInstruction, reviewers, useAutoReviewers };
-    }
+    return {
+      ...parsed,
+      reviewers: parsed.reviewers as ReviewerAgent[] | undefined,
+    };
   }
 
   /**
