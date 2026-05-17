@@ -1,6 +1,5 @@
-import type { Stats } from "node:fs";
-import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
-import { dirname, extname, isAbsolute, join, normalize } from "node:path";
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
 
 import type {
   ExtensionAPI,
@@ -16,52 +15,21 @@ import {
   type ReviewTarget,
   tokenizeReviewTargetArgs,
 } from "../shared/review-targets";
+import { classifySimplifyScopePaths } from "./simplify-scope";
 
 const EXTENSION_DIR = dirname(new URL(import.meta.url).pathname);
 const LARGE_SCOPE_FILE_COUNT = 20;
+const SIMPLIFY_USAGE =
+  "Usage: /simplify [uncommitted|branch <base>|commit <sha>|pr <ref>|folder <paths>] [--extra <guidance>] [--yes]";
+const SIMPLIFY_TARGET_COMMANDS = new Set([
+  "uncommitted",
+  "branch",
+  "commit",
+  "pr",
+  "folder",
+]);
 const PR_CHECKOUT_BLOCKED_BY_PENDING_CHANGES_MESSAGE =
   "Cannot checkout PR: you have uncommitted changes. Please commit or stash them first.";
-const TEXT_LIKE_EXTENSIONS = new Set([
-  ".cjs",
-  ".css",
-  ".html",
-  ".js",
-  ".json",
-  ".jsonc",
-  ".jsx",
-  ".md",
-  ".mjs",
-  ".sh",
-  ".ts",
-  ".tsx",
-  ".txt",
-  ".yaml",
-  ".yml",
-]);
-const TEXT_LIKE_FILENAMES = new Set([
-  ".env.example",
-  ".gitignore",
-  "Dockerfile",
-  "Makefile",
-]);
-const LOCKFILE_NAMES = new Set([
-  "bun.lock",
-  "Cargo.lock",
-  "package-lock.json",
-  "pnpm-lock.yaml",
-  "yarn.lock",
-]);
-const GENERATED_OR_VENDOR_SEGMENTS = new Set([
-  ".git",
-  ".next",
-  ".turbo",
-  "build",
-  "coverage",
-  "dist",
-  "generated",
-  "node_modules",
-  "vendor",
-]);
 
 function readPrompt(fileName: string): string {
   return readFileSync(join(EXTENSION_DIR, fileName), "utf8").trim();
@@ -89,123 +57,12 @@ interface ParsedSimplifyArgs {
   error?: string;
 }
 
-function isSafeRelativePath(value: string): boolean {
-  const normalized = normalize(value).replaceAll("\\", "/");
-  return (
-    value.trim().length > 0 &&
-    !isAbsolute(value) &&
-    normalized !== ".." &&
-    !normalized.startsWith("../")
-  );
-}
-
-function hasGeneratedOrVendorSegment(path: string): boolean {
-  return path
-    .split("/")
-    .some((segment) => GENERATED_OR_VENDOR_SEGMENTS.has(segment));
-}
-
-function isBinaryLookingFile(path: string): boolean {
-  const bytes = readFileSync(path).subarray(0, 8192);
-  return bytes.includes(0);
-}
-
-function isTextLikePath(path: string): boolean {
-  const fileName = path.split("/").at(-1) ?? "";
-  return (
-    TEXT_LIKE_FILENAMES.has(fileName) ||
-    TEXT_LIKE_EXTENSIONS.has(extname(fileName).toLowerCase())
-  );
-}
-
-function isSafeAllowlistFile(path: string, allowLockfiles: boolean): boolean {
-  const normalizedPath = normalize(path).replaceAll("\\", "/");
-  const fileName = normalizedPath.split("/").at(-1) ?? "";
-  if (
-    !isSafeRelativePath(path) ||
-    hasGeneratedOrVendorSegment(normalizedPath)
-  ) {
-    return false;
-  }
-  const isLockfile = LOCKFILE_NAMES.has(fileName);
-  if (isLockfile && !allowLockfiles) {
-    return false;
-  }
-  if (!(isLockfile || isTextLikePath(normalizedPath))) {
-    return false;
-  }
-  try {
-    return (
-      existsSync(normalizedPath) &&
-      statSync(normalizedPath).isFile() &&
-      !isBinaryLookingFile(normalizedPath)
-    );
-  } catch {
-    return false;
-  }
-}
-
-function expandFolderScopePaths(paths: readonly string[]): string[] {
-  const expanded: string[] = [];
-  const visit = (path: string) => {
-    const trimmedPath = path.trim();
-    const normalizedPath = normalize(trimmedPath).replaceAll("\\", "/");
-    if (
-      !isSafeRelativePath(trimmedPath) ||
-      hasGeneratedOrVendorSegment(normalizedPath)
-    ) {
-      return;
-    }
-
-    let stats: Stats;
-    try {
-      stats = statSync(normalizedPath);
-    } catch {
-      expanded.push(trimmedPath);
-      return;
-    }
-
-    if (stats.isFile()) {
-      expanded.push(normalizedPath);
-      return;
-    }
-    if (!stats.isDirectory()) {
-      return;
-    }
-
-    for (const entry of readdirSync(normalizedPath)) {
-      visit(join(normalizedPath, entry));
-    }
-  };
-
-  for (const path of paths) {
-    visit(path);
-  }
-
-  return expanded;
-}
-
-function toSafeAllowlist(
-  paths: readonly string[],
-  options: { allowLockfiles?: boolean; expandDirectories?: boolean } = {}
-): string[] {
-  const candidatePaths = options.expandDirectories
-    ? expandFolderScopePaths(paths)
-    : paths;
-
-  return Array.from(
-    new Set(
-      candidatePaths
-        .map((item) => item.trim())
-        .filter((item) =>
-          isSafeAllowlistFile(item, options.allowLockfiles ?? false)
-        )
-    )
-  ).sort();
-}
-
-function formatAllowlist(paths: readonly string[]): string {
+function formatFileList(paths: readonly string[]): string {
   return paths.map((item) => `- ${item}`).join("\n");
+}
+
+function formatOptionalFileList(paths: readonly string[]): string {
+  return paths.length > 0 ? formatFileList(paths) : "- None";
 }
 
 function parseSimplifyArgs(args: string | undefined): ParsedSimplifyArgs {
@@ -234,13 +91,11 @@ function parseSimplifyArgs(args: string | undefined): ParsedSimplifyArgs {
     positional.push(token);
   }
   const command = positional[0]?.toLowerCase();
-  const allowed = new Set(["uncommitted", "branch", "commit", "pr", "folder"]);
 
-  if (!(command && allowed.has(command))) {
+  if (!(command && SIMPLIFY_TARGET_COMMANDS.has(command))) {
     return {
       target: null,
-      error:
-        "Usage: /simplify [uncommitted|branch <base>|commit <sha>|pr <ref>|folder <paths>] [--extra <guidance>] [--yes]",
+      error: SIMPLIFY_USAGE,
     };
   }
 
@@ -281,6 +136,8 @@ export function buildSimplifyCommandMessage(args: string): string {
 export function buildScopedSimplifyCommandMessage(options: {
   targetLabel: string;
   allowlist: readonly string[];
+  ignoredLockfiles?: readonly string[];
+  unsupportedChangedFiles?: readonly string[];
   extraInstruction?: string;
   staleCheck?: string;
 }): string {
@@ -288,10 +145,12 @@ export function buildScopedSimplifyCommandMessage(options: {
     ? `\n\nExtra guidance: ${options.extraInstruction.trim()}`
     : "";
   const staleCheck = options.staleCheck?.trim()
-    ? `\n\nBefore delegating, re-resolve this scope and stop if the file allowlist changed: ${options.staleCheck.trim()}`
+    ? `\n\nBefore delegating, re-resolve this scope and compare editable files only. Ignore lockfile drift. Stop if editable files changed. Stop if new unsupported non-lock files appeared: ${options.staleCheck.trim()}`
     : "";
+  const ignoredLockfiles = options.ignoredLockfiles ?? [];
+  const unsupportedChangedFiles = options.unsupportedChangedFiles ?? [];
 
-  return `${SIMPLIFY_PROMPT}\n\nDelegate to code-simplifier. Do not select reviewers.\n\nScope: ${options.targetLabel}\n\nAllowed files preview (${options.allowlist.length}):\n${formatAllowlist(options.allowlist)}\n\nHard edit boundary: you may read files outside the allowlist for context, but only edit files in the allowlist above. Do not edit files outside this allowlist. If needed edits fall outside it, stop and report the missing file path.${extra}${staleCheck}`;
+  return `${SIMPLIFY_PROMPT}\n\nDelegate to code-simplifier. Do not select reviewers.\n\nScope: ${options.targetLabel}\n\nEditable files (${options.allowlist.length}):\n${formatFileList(options.allowlist)}\n\nIgnored lockfiles (read-only, ${ignoredLockfiles.length}):\n${formatOptionalFileList(ignoredLockfiles)}\n\nUnsupported changed files (${unsupportedChangedFiles.length}):\n${formatOptionalFileList(unsupportedChangedFiles)}\n\nHard edit boundary: you may read files outside editable files for context, but only edit files in the editable files list above. Do not edit ignored lockfiles or unsupported changed files. If needed edits fall outside editable files, stop and report the missing file path.${extra}${staleCheck}`;
 }
 
 export function buildImproveCodebaseArchitectureCommandMessage(
@@ -474,25 +333,45 @@ async function dispatchSimplify(
   extraInstruction: string | undefined,
   yes: boolean | undefined
 ) {
-  const allowlist = toSafeAllowlist(
+  const scope = classifySimplifyScopePaths(
     await getChangedPaths(target, createGitExec(pi)),
-    {
-      allowLockfiles: target.type === "folder",
-      expandDirectories: target.type === "folder",
-    }
+    { expandDirectories: target.type === "folder" }
   );
-  if (allowlist.length === 0) {
-    ctx.ui.notify("No files resolved for /simplify scope", "warning");
+  if (scope.unsupportedChangedFiles.length > 0 && !yes) {
+    if (!ctx.hasUI) {
+      ctx.ui.notify(
+        "Unsupported changed files in no-UI /simplify scope require --yes",
+        "error"
+      );
+      return;
+    }
+    const confirmed = await ctx.ui.confirm(
+      "Unsupported changed files",
+      `Continue with ${scope.unsupportedChangedFiles.length} unsupported changed files excluded from editable files?`
+    );
+    if (!confirmed) {
+      return;
+    }
+  }
+  if (scope.editableFiles.length === 0) {
+    if (scope.ignoredLockfiles.length > 0) {
+      ctx.ui.notify(
+        `No editable files resolved for /simplify scope; ignored ${scope.ignoredLockfiles.length} lockfile(s).`,
+        "info"
+      );
+      return;
+    }
+    ctx.ui.notify("No editable files resolved for /simplify scope", "warning");
     return;
   }
-  if (allowlist.length > LARGE_SCOPE_FILE_COUNT && !yes) {
+  if (scope.editableFiles.length > LARGE_SCOPE_FILE_COUNT && !yes) {
     if (!ctx.hasUI) {
       ctx.ui.notify("Large no-UI /simplify scopes require --yes", "error");
       return;
     }
     const confirmed = await ctx.ui.confirm(
       "Large simplify scope",
-      `Allow code-simplifier to edit ${allowlist.length} files?`
+      `Allow code-simplifier to edit ${scope.editableFiles.length} files?`
     );
     if (!confirmed) {
       return;
@@ -500,7 +379,9 @@ async function dispatchSimplify(
   }
   const message = buildScopedSimplifyCommandMessage({
     targetLabel: targetLabel(target),
-    allowlist,
+    allowlist: scope.editableFiles,
+    ignoredLockfiles: scope.ignoredLockfiles,
+    unsupportedChangedFiles: scope.unsupportedChangedFiles,
     extraInstruction,
     staleCheck: targetLabel(target),
   });

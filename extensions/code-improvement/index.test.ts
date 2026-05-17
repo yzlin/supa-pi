@@ -18,9 +18,11 @@ function createMockCtx(
   } = {}
 ) {
   const notifications: Array<{ message: string; level: string }> = [];
+  const confirmations: Array<{ title: string; message?: string }> = [];
 
   return {
     notifications,
+    confirmations,
     ctx: {
       hasUI: options.hasUI ?? false,
       isIdle: () => isIdle,
@@ -28,7 +30,10 @@ function createMockCtx(
         notify(message: string, level: string) {
           notifications.push({ message, level });
         },
-        confirm: async () => options.confirm ?? true,
+        confirm: (title: string, message?: string) => {
+          confirmations.push({ title, message });
+          return Promise.resolve(options.confirm ?? true);
+        },
         select: async () => options.select,
         editor: async () => options.editor ?? "",
       },
@@ -133,6 +138,9 @@ describe("code-improvement commands", () => {
     );
     expect(buildSimplifyCommandMessage("  focus here  ")).toBe(
       `${simplifyPrompt}\n\nFocus instruction: focus here`
+    );
+    expect(buildSimplifyCommandMessage("   ")).toContain(
+      "Do not set `max_turns` on the `code-simplifier` Agent call"
     );
   });
 
@@ -350,7 +358,7 @@ describe("code-improvement commands", () => {
     const command = getRegisteredCommand(runtime.commands, "simplify");
 
     await command?.handler(
-      'uncommitted --extra "prefer smaller functions"',
+      'uncommitted --extra "prefer smaller functions" --yes',
       ctx as never
     );
 
@@ -362,15 +370,17 @@ describe("code-improvement commands", () => {
       "Delegate to code-simplifier. Do not select reviewers."
     );
     expect(runtime.sentUserMessages[0]?.content).toContain("- package.json");
-    expect(runtime.sentUserMessages[0]?.content).not.toContain("../unsafe.ts");
     expect(runtime.sentUserMessages[0]?.content).toContain(
-      "Hard edit boundary: you may read files outside the allowlist for context, but only edit files in the allowlist above."
+      "Unsupported changed files (1):\n- ../unsafe.ts"
+    );
+    expect(runtime.sentUserMessages[0]?.content).toContain(
+      "Hard edit boundary: you may read files outside editable files for context, but only edit files in the editable files list above."
     );
     expect(runtime.sentUserMessages[0]?.content).toContain(
       "Extra guidance: prefer smaller functions"
     );
     expect(runtime.sentUserMessages[0]?.content).toContain(
-      "Before delegating, re-resolve this scope and stop if the file allowlist changed"
+      "Before delegating, re-resolve this scope and compare editable files only. Ignore lockfile drift. Stop if editable files changed. Stop if new unsupported non-lock files appeared"
     );
     expect(notifications).toContainEqual({
       message: "Queued /simplify as a follow-up",
@@ -378,17 +388,22 @@ describe("code-improvement commands", () => {
     });
   });
 
-  it("states scoped simplify may read context outside the edit allowlist", () => {
+  it("states the scoped simplify three-section file contract", () => {
     const message = buildScopedSimplifyCommandMessage({
       targetLabel: "uncommitted changes",
       allowlist: ["package.json"],
+      ignoredLockfiles: ["bun.lock"],
+      unsupportedChangedFiles: ["image.png"],
     });
 
+    expect(message).toContain("Editable files (1):\n- package.json");
+    expect(message).toContain("Ignored lockfiles (read-only, 1):\n- bun.lock");
+    expect(message).toContain("Unsupported changed files (1):\n- image.png");
     expect(message).toContain(
-      "you may read files outside the allowlist for context, but only edit files in the allowlist above"
+      "you may read files outside editable files for context, but only edit files in the editable files list above"
     );
     expect(message).toContain(
-      "If needed edits fall outside it, stop and report the missing file path."
+      "Do not edit ignored lockfiles or unsupported changed files. If needed edits fall outside editable files, stop and report the missing file path."
     );
   });
 
@@ -421,22 +436,28 @@ describe("code-improvement commands", () => {
     expect(content).toContain("- README.md");
     expect(content).toContain("- package.json");
     expect(content).toContain("- themes/nightowl.json");
-    expect(content).not.toContain("missing.ts");
-    expect(content).not.toContain("bun.lock");
-    expect(content).not.toContain("node_modules/blocked.ts");
-    expect(content).not.toContain("../unsafe.ts");
+    expect(content).toContain("Ignored lockfiles (read-only, 1):\n- bun.lock");
+    expect(content).toContain("Unsupported changed files (3):");
+    expect(content).toContain("- missing.ts");
+    expect(content).toContain("- node_modules/blocked.ts");
+    expect(content).toContain("- ../unsafe.ts");
   });
 
-  it("allows lockfiles only for explicit folder simplify scope", async () => {
+  it("no-ops lockfile-only explicit folder simplify scope", async () => {
     const runtime = createMockPiRuntime();
-    const { ctx } = createMockCtx();
+    const { ctx, notifications } = createMockCtx();
 
     codeImprovementExtension(runtime.pi as never);
     const command = getRegisteredCommand(runtime.commands, "simplify");
 
     await command?.handler("folder bun.lock", ctx as never);
 
-    expect(runtime.sentUserMessages[0]?.content).toContain("- bun.lock");
+    expect(runtime.sentUserMessages).toEqual([]);
+    expect(notifications).toContainEqual({
+      message:
+        "No editable files resolved for /simplify scope; ignored 1 lockfile(s).",
+      level: "info",
+    });
   });
 
   it("expands explicit folder simplify scope directories recursively", async () => {
@@ -447,7 +468,7 @@ describe("code-improvement commands", () => {
     const command = getRegisteredCommand(runtime.commands, "simplify");
 
     await command?.handler(
-      "folder extensions/code-improvement/__fixtures__/folder-scope",
+      "folder extensions/code-improvement/__fixtures__/folder-scope --yes",
       ctx as never
     );
 
@@ -456,7 +477,7 @@ describe("code-improvement commands", () => {
       "- extensions/code-improvement/__fixtures__/folder-scope/README.md"
     );
     expect(content).toContain(
-      "- extensions/code-improvement/__fixtures__/folder-scope/bun.lock"
+      "Ignored lockfiles (read-only, 1):\n- extensions/code-improvement/__fixtures__/folder-scope/bun.lock"
     );
     expect(content).toContain(
       "- extensions/code-improvement/__fixtures__/folder-scope/src/good.ts"
@@ -471,7 +492,7 @@ describe("code-improvement commands", () => {
     const command = getRegisteredCommand(runtime.commands, "simplify");
 
     await command?.handler(
-      "folder extensions/code-improvement/__fixtures__/folder-scope ../unsafe.ts node_modules",
+      "folder extensions/code-improvement/__fixtures__/folder-scope ../unsafe.ts node_modules --yes",
       ctx as never
     );
 
@@ -479,7 +500,6 @@ describe("code-improvement commands", () => {
     expect(content).toContain(
       "- extensions/code-improvement/__fixtures__/folder-scope/src/good.ts"
     );
-    expect(content).not.toContain("- ../unsafe.ts");
     expect(content).not.toContain(
       "- extensions/code-improvement/__fixtures__/folder-scope/generated/ignored.ts"
     );
@@ -489,8 +509,128 @@ describe("code-improvement commands", () => {
     expect(content).not.toContain(
       "- extensions/code-improvement/__fixtures__/folder-scope/dist/ignored.ts"
     );
-    expect(content).not.toContain(
+    expect(content).toContain("Unsupported changed files (3):");
+    expect(content).toContain("- ../unsafe.ts");
+    expect(content).toContain(
       "- extensions/code-improvement/__fixtures__/folder-scope/image.png"
+    );
+    expect(content).toContain("- node_modules");
+  });
+
+  it("stops no-UI folder /simplify with explicit unsafe paths unless --yes", async () => {
+    const runtime = createMockPiRuntime();
+    const { ctx, notifications } = createMockCtx();
+
+    codeImprovementExtension(runtime.pi as never);
+    const command = getRegisteredCommand(runtime.commands, "simplify");
+
+    await command?.handler("folder package.json ../unsafe.ts", ctx as never);
+
+    expect(runtime.sentUserMessages).toEqual([]);
+    expect(notifications).toContainEqual({
+      message:
+        "Unsupported changed files in no-UI /simplify scope require --yes",
+      level: "error",
+    });
+  });
+
+  it("continues after UI confirmation for unsupported non-lock files", async () => {
+    const runtime = createMockPiRuntime((_command, args) => {
+      if (args[0] === "status") {
+        return { stdout: " M package.json\n M image.png\n", code: 0 };
+      }
+      return { stdout: "", code: 0 };
+    });
+    const { ctx, confirmations } = createMockCtx(true, {
+      hasUI: true,
+      confirm: true,
+    });
+
+    codeImprovementExtension(runtime.pi as never);
+    const command = getRegisteredCommand(runtime.commands, "simplify");
+
+    await command?.handler("uncommitted", ctx as never);
+
+    expect(confirmations).toEqual([
+      {
+        title: "Unsupported changed files",
+        message:
+          "Continue with 1 unsupported changed files excluded from editable files?",
+      },
+    ]);
+    expect(runtime.sentUserMessages).toHaveLength(1);
+    expect(runtime.sentUserMessages[0]?.content).toContain(
+      "Unsupported changed files (1):\n- image.png"
+    );
+  });
+
+  it("stops no-UI scoped /simplify with unsupported non-lock files unless --yes", async () => {
+    const runtime = createMockPiRuntime((_command, args) => {
+      if (args[0] === "status") {
+        return { stdout: " M package.json\n M image.png\n", code: 0 };
+      }
+      return { stdout: "", code: 0 };
+    });
+    const { ctx, notifications } = createMockCtx();
+
+    codeImprovementExtension(runtime.pi as never);
+    const command = getRegisteredCommand(runtime.commands, "simplify");
+
+    await command?.handler("uncommitted", ctx as never);
+
+    expect(runtime.sentUserMessages).toEqual([]);
+    expect(notifications).toContainEqual({
+      message:
+        "Unsupported changed files in no-UI /simplify scope require --yes",
+      level: "error",
+    });
+  });
+
+  it("continues no-UI scoped /simplify with unsupported non-lock files when --yes", async () => {
+    const runtime = createMockPiRuntime((_command, args) => {
+      if (args[0] === "status") {
+        return { stdout: " M package.json\n M image.png\n", code: 0 };
+      }
+      return { stdout: "", code: 0 };
+    });
+    const { ctx, notifications } = createMockCtx();
+
+    codeImprovementExtension(runtime.pi as never);
+    const command = getRegisteredCommand(runtime.commands, "simplify");
+
+    await command?.handler("uncommitted --yes", ctx as never);
+
+    expect(notifications).toEqual([]);
+    expect(runtime.sentUserMessages).toHaveLength(1);
+    expect(runtime.sentUserMessages[0]?.content).toContain(
+      "Unsupported changed files (1):\n- image.png"
+    );
+  });
+
+  it("proceeds for diff scopes that include ignored lockfiles", async () => {
+    const runtime = createMockPiRuntime((_command, args) => {
+      if (args[0] === "diff") {
+        return { stdout: "package.json\nbun.lock\n", code: 0 };
+      }
+      if (args[0] === "merge-base") {
+        return { stdout: "base", code: 0 };
+      }
+      return { stdout: "", code: 0 };
+    });
+    const { ctx, notifications } = createMockCtx();
+
+    codeImprovementExtension(runtime.pi as never);
+    const command = getRegisteredCommand(runtime.commands, "simplify");
+
+    await command?.handler("branch main --yes", ctx as never);
+
+    expect(notifications).toEqual([]);
+    expect(runtime.sentUserMessages).toHaveLength(1);
+    expect(runtime.sentUserMessages[0]?.content).toContain(
+      "Editable files (1):\n- package.json"
+    );
+    expect(runtime.sentUserMessages[0]?.content).toContain(
+      "Ignored lockfiles (read-only, 1):\n- bun.lock"
     );
   });
 
