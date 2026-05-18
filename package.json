@@ -18,7 +18,7 @@
       "./extensions/research",
       "./extensions/diagnose",
       "./extensions/code-improvement",
-      "./extensions/review.ts",
+      "./extensions/review",
       "./extensions/session-query.ts",
       "./extensions/handoff.ts",
       "./extensions/context",

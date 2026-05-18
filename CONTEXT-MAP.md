@@ -16,6 +16,7 @@
 - `docs/context/extension-registration.md` — read before changing `package.json -> pi.extensions`, documenting active Extensions, or reasoning about disabled Extension code.
 - `docs/context/questionnaire.md` — read before changing the active Questionnaire Extension, its schema/result shape, keyboard behavior, validation, or rpiv-divergence documentation.
 - `docs/context/code-improvement.md` — read before changing `/simplify`, `/improve-codebase-architecture`, or code-improvement prompt files.
+- `extensions/review/README.md` — read before changing `/review`, `/review-summary`, `/review-fix`, reviewer-agent orchestration, or review prompt contracts.
 
 ## Major extension docs
 

@@ -62,7 +62,7 @@ import {
   parseReviewPaths,
   parseReviewTargetArgs,
   type ReviewTarget,
-} from "./shared/review-targets";
+} from "../shared/review-targets";
 
 const SECURITY_PATH_PATTERNS = [
   /(^|\/)(auth|permissions?|middleware|webhooks?|api|server)\//i,
@@ -299,13 +299,14 @@ Reviewer responsibilities:
 
 Instructions:
 1. Delegate to the selected reviewer agents when useful.
-2. Keep each reviewer focused on the reviewed change and relevant files only.
-3. Merge reviewer outputs into one final report.
-4. De-duplicate overlapping findings.
-5. Prefer the highest-confidence, highest-severity version of overlapping findings.
-6. Do not include speculative issues.
-7. Only report issues introduced by the reviewed change or directly exposed by it.
-8. Keep non-blocking human callouts separate from findings.
+2. When delegating via the Agent tool, omit \`max_turns\` from reviewer Agent calls.
+3. Keep each reviewer focused on the reviewed change and relevant files only.
+4. Merge reviewer outputs into one final report.
+5. De-duplicate overlapping findings.
+6. Prefer the highest-confidence, highest-severity version of overlapping findings.
+7. Do not include speculative issues.
+8. Only report issues introduced by the reviewed change or directly exposed by it.
+9. Keep non-blocking human callouts separate from findings.
 
 Required final output:
 

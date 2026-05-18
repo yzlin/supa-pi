@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
 
-import reviewExtension from "./review";
+import reviewExtension from "./index";
 
 interface SessionEntry {
   type: string;
@@ -130,7 +130,7 @@ describe("review direct targets", () => {
   it("reviews uncommitted changes from direct args without opening selector", async () => {
     const runtime = createMockPiRuntime((_command, args) => {
       if (args.join(" ") === "status --porcelain") {
-        return { stdout: " M extensions/review.ts\n", code: 0 };
+        return { stdout: " M extensions/review/index.ts\n", code: 0 };
       }
       return { stdout: "", code: 0 };
     });
@@ -148,8 +148,10 @@ describe("review direct targets", () => {
     await handler?.("uncommitted --auto-reviewers", ctx as never);
 
     expect(runtime.sentUserMessages).toHaveLength(1);
-    expect(String(runtime.sentUserMessages[0]?.content)).toContain(
-      "Review the current code changes"
+    const message = String(runtime.sentUserMessages[0]?.content);
+    expect(message).toContain("Review the current code changes");
+    expect(message).toContain(
+      "When delegating via the Agent tool, omit `max_turns` from reviewer Agent calls."
     );
     expect(notifications).toContainEqual({
       message: "Starting review: current changes [code-reviewer]",
