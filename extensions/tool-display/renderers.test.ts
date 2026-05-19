@@ -9,7 +9,9 @@ import {
   renderCompactBashResult,
   renderCompactGrepResult,
   renderCompactReadResult,
+  renderEditCall,
   renderFinalDiffResult,
+  renderWriteCall,
 } from "./renderers";
 
 const theme = {
@@ -18,6 +20,9 @@ const theme = {
 };
 
 const toolSuccessBgAnsi = "\x1b[48;2;32;35;42m";
+const splitAddLeftoverPattern = /^\s*│\s+│ ▌2 │ new2/;
+const splitAddOnlyPattern = /^\s+│\s+│ ▌1 │ new/;
+const splitRemoveOnlyPattern = /^▌1 │ old\s+│\s+│/;
 
 const tokenTheme = {
   bold: (text: string) => text,
@@ -48,6 +53,12 @@ const ansiDiffTheme = {
   },
   getBgAnsi: tokenTheme.getBgAnsi,
   getFgAnsi: tokenTheme.getFgAnsi,
+};
+
+const dimContextTheme = {
+  bold: (text: string) => text,
+  fg: (token: string, text: string) =>
+    token === "toolDiffContext" ? `\x1b[2m${text}\x1b[22m` : text,
 };
 
 const tempDirs: string[] = [];
@@ -294,6 +305,192 @@ describe("tool-display renderers", () => {
     expect(new Set(lines.map((line) => line.length))).toEqual(new Set([120]));
   });
 
+  test("pairs replacement runs and leaves unequal split leftovers blank", () => {
+    const details = createWriteDiffDetails("file.txt", "new1\nnew2\n", {
+      ok: true,
+      content: "old1\n",
+    });
+    const rendered = renderFinalDiffResult(
+      { content: [], details },
+      { expanded: true },
+      theme,
+      { collapsed: false, enabled: true, previewLines: 20, viewMode: "split" }
+    ).render(140);
+
+    expect(rendered).toContainEqual(expect.stringContaining("▌1 │ old1"));
+    expect(rendered).toContainEqual(expect.stringContaining("▌1 │ new1"));
+    expect(rendered).toContainEqual(
+      expect.stringMatching(splitAddLeftoverPattern)
+    );
+  });
+
+  test("renders add-only and remove-only split rows with blank opposite cells", () => {
+    const removeOnly = renderFinalDiffResult(
+      {
+        content: [],
+        details: { diff: "--- a\n+++ a\n@@ -1,1 +0,0 @@\n-old" },
+      },
+      { expanded: true },
+      theme,
+      { collapsed: false, enabled: true, previewLines: 20, viewMode: "split" }
+    ).render(140);
+    const addOnly = renderFinalDiffResult(
+      {
+        content: [],
+        details: { diff: "--- a\n+++ a\n@@ -0,0 +1,1 @@\n+new" },
+      },
+      { expanded: true },
+      theme,
+      { collapsed: false, enabled: true, previewLines: 20, viewMode: "split" }
+    ).render(140);
+
+    expect(removeOnly).toContainEqual(
+      expect.stringMatching(splitRemoveOnlyPattern)
+    );
+    expect(addOnly).toContainEqual(expect.stringMatching(splitAddOnlyPattern));
+  });
+
+  test("themes blank split cells like context cells", () => {
+    const rendered = renderFinalDiffResult(
+      {
+        content: [],
+        details: { diff: "--- a\n+++ a\n@@ -0,0 +1,1 @@\n+new" },
+      },
+      { expanded: true },
+      dimContextTheme,
+      { collapsed: false, enabled: true, previewLines: 20, viewMode: "split" }
+    )
+      .render(140)
+      .join("\n");
+
+    expect(rendered).toContain("\x1b[2m");
+    expect(rendered).toContain("│");
+    expect(rendered).toContain("\x1b[22m");
+  });
+
+  test("renders split meta and path rows as single full-width rows", () => {
+    const rendered = renderFinalDiffResult(
+      {
+        content: [],
+        details: {
+          diff: "--- file.txt\n+++ file.txt\n@@ -1,2 +1,2 @@\n unchanged\n-old\n+new",
+        },
+      },
+      { expanded: true },
+      theme,
+      { collapsed: false, enabled: true, previewLines: 20, viewMode: "split" }
+    ).render(140);
+
+    expect(rendered[1]?.trim()).toBe("file.txt");
+    expect(rendered[2]?.trim()).toBe("@@ -1,2 +1,2 @@");
+    expect(rendered[1]).not.toContain(" │ ");
+    expect(rendered[2]).not.toContain(" │ ");
+  });
+
+  test("renders changed split path rows old-to-new", () => {
+    const rendered = renderFinalDiffResult(
+      {
+        content: [],
+        details: {
+          diff: "--- old.txt\n+++ new.txt\n@@ -1,1 +1,1 @@\n-old\n+new",
+        },
+      },
+      { expanded: true },
+      theme,
+      { collapsed: false, enabled: true, previewLines: 20, viewMode: "split" }
+    ).render(140);
+
+    expect(rendered[1]?.trim()).toBe("old.txt → new.txt");
+    expect(rendered[1]).not.toContain(" │ ");
+  });
+
+  test("widens split gutters for larger context row line numbers", () => {
+    const rendered = renderFinalDiffResult(
+      {
+        content: [],
+        details: {
+          diff: "--- a\n+++ a\n@@ -98,3 +98,3 @@\n same\n-old\n+new\n tail",
+        },
+      },
+      { expanded: true },
+      theme,
+      { collapsed: false, enabled: true, previewLines: 20, viewMode: "split" }
+    )
+      .render(140)
+      .join("\n");
+
+    expect(rendered).toContain("  98 │ same");
+    expect(rendered).toContain("▌ 99 │ old");
+    expect(rendered).toContain(" 100 │ tail");
+  });
+
+  test("uses headerless edit diff line numbers as split gutters", () => {
+    const rendered = renderFinalDiffResult(
+      {
+        content: [],
+        details: {
+          diff: " 3 > This file extends docs\n-17 old plan\n+19 new plan",
+        },
+      },
+      { expanded: true },
+      theme,
+      { collapsed: false, enabled: true, previewLines: 20, viewMode: "split" }
+    )
+      .render(140)
+      .join("\n");
+
+    expect(rendered).toContain(" 3 │ > This file extends docs");
+    expect(rendered).toContain("▌17 │ old plan");
+    expect(rendered).toContain("▌19 │ new plan");
+    expect(rendered).not.toContain("│ 3 > This file extends docs");
+    expect(rendered).not.toContain("│ 17 old plan");
+    expect(rendered).not.toContain("│ 19 new plan");
+  });
+
+  test("preserves headerless edit diff line numbers in unified view", () => {
+    const rendered = renderFinalDiffResult(
+      {
+        content: [],
+        details: {
+          diff: " 3 > This file extends docs\n-17 old plan\n+19 new plan",
+        },
+      },
+      { expanded: true },
+      theme,
+      { collapsed: false, enabled: true, previewLines: 20, viewMode: "unified" }
+    )
+      .render(80)
+      .join("\n");
+
+    expect(rendered).toContain(" 3 > This file extends docs");
+    expect(rendered).toContain("▌17 old plan");
+    expect(rendered).toContain("▌19 new plan");
+    expect(rendered).not.toContain("▌old plan");
+    expect(rendered).not.toContain("▌new plan");
+  });
+
+  test("leaves headerless skipped-context rows unnumbered", () => {
+    const rendered = renderFinalDiffResult(
+      {
+        content: [],
+        details: {
+          diff: " 3 before\n    ...\n 19 after",
+        },
+      },
+      { expanded: true },
+      theme,
+      { collapsed: false, enabled: true, previewLines: 20, viewMode: "split" }
+    )
+      .render(140)
+      .join("\n");
+
+    expect(rendered).toContain(" 3 │ before");
+    expect(rendered).toContain("19 │ after");
+    expect(rendered).toContain("│    ...");
+    expect(rendered).not.toContain(" 4 │    ...");
+    expect(rendered).not.toContain(" 1 │    ...");
+  });
+
   test("preserves line numbers only on the first rendered split row", () => {
     const details = createWriteDiffDetails(
       "file.txt",
@@ -307,12 +504,14 @@ describe("tool-display renderers", () => {
       { collapsed: false, enabled: true, previewLines: 20 }
     ).render(120);
 
-    expect(
-      rendered.filter((line) => line.includes("   1 │ ▌old"))
-    ).toHaveLength(1);
-    expect(
-      rendered.filter((line) => line.includes("   1 │ ▌new"))
-    ).toHaveLength(1);
+    expect(rendered.filter((line) => line.includes("▌1 │ old"))).toHaveLength(
+      1
+    );
+    expect(rendered.filter((line) => line.includes("▌1 │ new"))).toHaveLength(
+      1
+    );
+    expect(rendered.some((line) => line.includes("   │ old"))).toBe(true);
+    expect(rendered.some((line) => line.includes("   │ new"))).toBe(true);
   });
 
   test("honors unified diff indicator modes", () => {
@@ -431,18 +630,18 @@ describe("tool-display renderers", () => {
       .render(140)
       .join("\n");
 
-    expect(bars).toContain("│ ▌old");
-    expect(bars).toContain("│ ▌new");
-    expect(bars).not.toContain("│ -old");
-    expect(bars).not.toContain("│ +new");
-    expect(classic).toContain("│ -old");
-    expect(classic).toContain("│ +new");
-    expect(none).toContain("│ old");
-    expect(none).toContain("│ new");
-    expect(none).not.toContain("│ ▌old");
-    expect(none).not.toContain("│ ▌new");
-    expect(none).not.toContain("│ -old");
-    expect(none).not.toContain("│ +new");
+    expect(bars).toContain("▌1 │ old");
+    expect(bars).toContain("▌1 │ new");
+    expect(bars).not.toContain("-1 │ old");
+    expect(bars).not.toContain("+1 │ new");
+    expect(classic).toContain("-1 │ old");
+    expect(classic).toContain("+1 │ new");
+    expect(none).toContain("1 │ old");
+    expect(none).toContain("1 │ new");
+    expect(none).not.toContain("▌1 │ old");
+    expect(none).not.toContain("▌1 │ new");
+    expect(none).not.toContain("-1 │ old");
+    expect(none).not.toContain("+1 │ new");
   });
 
   test("reserves bar indicator space on context rows", () => {
@@ -481,8 +680,8 @@ describe("tool-display renderers", () => {
 
     expect(unified).toContain("\n unchanged");
     expect(unified).toContain("\n▌old");
-    expect(split).toContain("│  unchanged");
-    expect(split).toContain("│ ▌old");
+    expect(split).toContain(" 1 │ unchanged");
+    expect(split).toContain("▌2 │ old");
   });
 
   test("wraps split diff continuation rows when wordWrap is true", () => {
@@ -505,10 +704,10 @@ describe("tool-display renderers", () => {
       }
     ).render(120);
 
-    expect(
-      rendered.filter((line) => line.includes("   1 │ ▌old"))
-    ).toHaveLength(1);
-    expect(rendered.some((line) => line.includes("     │  old"))).toBe(true);
+    expect(rendered.filter((line) => line.includes("▌1 │ old"))).toHaveLength(
+      1
+    );
+    expect(rendered.some((line) => line.includes("   │ old"))).toBe(true);
   });
 
   test("clamps split diff rows when wordWrap is false", () => {
@@ -531,10 +730,10 @@ describe("tool-display renderers", () => {
       }
     ).render(120);
 
-    expect(
-      rendered.filter((line) => line.includes("   1 │ ▌old"))
-    ).toHaveLength(1);
-    expect(rendered.some((line) => line.includes("     │  old"))).toBe(false);
+    expect(rendered.filter((line) => line.includes("▌1 │ old"))).toHaveLength(
+      1
+    );
+    expect(rendered.some((line) => line.includes("   │ old"))).toBe(false);
   });
 
   test("captures new file, overwritten file, outside-workspace, and large fallback", () => {
@@ -724,5 +923,58 @@ describe("tool-display renderers", () => {
     expect(rendered).toContain(`▌${oldText}`);
     expect(rendered).toContain(`▌${newText}`);
     expect(rendered.split("\x1b[48;2;").length).toBeLessThan(10);
+  });
+
+  test("counts rendered split rows when collapsed", () => {
+    const details = createWriteDiffDetails("file.txt", "new1\nnew2\nnew3\n", {
+      ok: true,
+      content: "old1\nold2\nold3\n",
+    });
+    const rendered = renderFinalDiffResult(
+      { content: [], details },
+      { expanded: true },
+      theme,
+      {
+        collapsed: true,
+        enabled: true,
+        previewLines: 3,
+        viewMode: "split",
+        wordWrap: false,
+      }
+    )
+      .render(140)
+      .join("\n");
+
+    expect(rendered).toContain("▌1 │ old1");
+    expect(rendered).toContain("▌2 │ old2");
+    expect(rendered).not.toContain("▌3 │ old3");
+    expect(rendered).toContain("… 2 diff lines collapsed");
+  });
+
+  test("shares final diff rendering for edit and write results", () => {
+    const diff = "--- a.txt\n+++ a.txt\n@@ -1,1 +1,1 @@\n-old\n+new";
+    const editRendered = renderFinalDiffResult(
+      { content: [], details: { diff } },
+      { expanded: true },
+      theme,
+      { collapsed: false, enabled: true, previewLines: 20, viewMode: "split" }
+    ).render(140);
+    const writeRendered = renderFinalDiffResult(
+      {
+        content: [],
+        details: {
+          toolDisplay: { writeDiff: diff, writeSummary: "rewrote file" },
+        },
+      },
+      { expanded: true },
+      theme,
+      { collapsed: false, enabled: true, previewLines: 20, viewMode: "split" }
+    ).render(140);
+
+    expect(renderEditCall({ path: "a.txt" }, theme).text).toBe("edit a.txt");
+    expect(renderWriteCall({ content: "new", path: "a.txt" }, theme).text).toBe(
+      "write a.txt (1 lines)"
+    );
+    expect(editRendered.slice(1)).toEqual(writeRendered.slice(1));
   });
 });

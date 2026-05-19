@@ -70,6 +70,7 @@ const MAX_TITLE_LENGTH = 100;
 const WRITE_DIFF_CAPTURE_MAX_BYTES = 512 * 1024;
 const FALLBACK_SUMMARY_CHARS = 160;
 const HUNK_HEADER_PATTERN = /^@@ -(\d+)(?:,\d+)? \+(\d+)(?:,\d+)? @@/;
+const HEADERLESS_EDIT_LINE_NUMBER_PATTERN = /^\s*(\d+)\s(.*)$/;
 const SPLIT_DIFF_MIN_WIDTH = 100;
 const INLINE_DIFF_MAX_LINE_LENGTH = 700;
 const INLINE_DIFF_MAX_TOKENS = 200;
@@ -443,6 +444,7 @@ function terminalWidth(): number {
 
 interface ParsedDiffLine {
   kind: "add" | "remove" | "context" | "meta";
+  splitText?: string;
   text: string;
   oldNumber?: number;
   newNumber?: number;
@@ -466,6 +468,55 @@ interface DiffPalette {
   baseBgAnsi?: string;
   removeEmphasisBgAnsi?: string;
   removeRowBgAnsi?: string;
+}
+
+interface ParsedHeaderlessEditLine {
+  matched: boolean;
+  number?: number;
+  splitText: string;
+  text: string;
+}
+
+function parseHeaderlessEditLineNumber(
+  text: string,
+  enabled: boolean
+): ParsedHeaderlessEditLine {
+  if (!enabled) {
+    return { matched: false, splitText: text, text };
+  }
+
+  const match = text.match(HEADERLESS_EDIT_LINE_NUMBER_PATTERN);
+  if (!match) {
+    return { matched: false, splitText: text, text };
+  }
+
+  return {
+    matched: true,
+    number: Number.parseInt(match[1] ?? "1", 10),
+    splitText: match[2] ?? "",
+    text,
+  };
+}
+
+function parsedHeaderlessLineNumber(
+  parsed: ParsedHeaderlessEditLine,
+  fallback: number,
+  parsesInlineLineNumbers: boolean
+): number | undefined {
+  if (parsed.matched) {
+    return parsed.number;
+  }
+  if (parsesInlineLineNumbers) {
+    return undefined;
+  }
+  return fallback;
+}
+
+function nextDiffLineNumber(
+  current: number,
+  parsedLineNumber: number | undefined
+): number {
+  return parsedLineNumber === undefined ? current : parsedLineNumber + 1;
 }
 
 function parseUnifiedDiff(diff: string): ParsedDiffFile[] {
@@ -507,6 +558,8 @@ function parseUnifiedDiff(diff: string): ParsedDiffFile[] {
       files.push(file);
     }
     const hunk = line.match(HUNK_HEADER_PATTERN);
+    const parsesInlineLineNumbers =
+      !inHunk && file.oldPath === "" && file.newPath === "";
     if (hunk) {
       oldNumber = Number.parseInt(hunk[1] ?? "1", 10);
       newNumber = Number.parseInt(hunk[2] ?? "1", 10);
@@ -514,16 +567,64 @@ function parseUnifiedDiff(diff: string): ParsedDiffFile[] {
       inHunk = true;
       expectingNewPath = false;
     } else if (line.startsWith("-")) {
-      file.lines.push({ kind: "remove", oldNumber, text: line.slice(1) });
-      oldNumber += 1;
+      const parsed = parseHeaderlessEditLineNumber(
+        line.slice(1),
+        parsesInlineLineNumbers
+      );
+      const parsedOldNumber = parsedHeaderlessLineNumber(
+        parsed,
+        oldNumber,
+        parsesInlineLineNumbers
+      );
+      file.lines.push({
+        kind: "remove",
+        oldNumber: parsedOldNumber,
+        splitText: parsed.splitText,
+        text: parsed.text,
+      });
+      oldNumber = nextDiffLineNumber(oldNumber, parsedOldNumber);
     } else if (line.startsWith("+")) {
-      file.lines.push({ kind: "add", newNumber, text: line.slice(1) });
-      newNumber += 1;
+      const parsed = parseHeaderlessEditLineNumber(
+        line.slice(1),
+        parsesInlineLineNumbers
+      );
+      const parsedNewNumber = parsedHeaderlessLineNumber(
+        parsed,
+        newNumber,
+        parsesInlineLineNumbers
+      );
+      file.lines.push({
+        kind: "add",
+        newNumber: parsedNewNumber,
+        splitText: parsed.splitText,
+        text: parsed.text,
+      });
+      newNumber = nextDiffLineNumber(newNumber, parsedNewNumber);
     } else {
-      const text = line.startsWith(" ") ? line.slice(1) : line;
-      file.lines.push({ kind: "context", newNumber, oldNumber, text });
-      oldNumber += 1;
-      newNumber += 1;
+      const rawText = line.startsWith(" ") ? line.slice(1) : line;
+      const parsed = parseHeaderlessEditLineNumber(
+        rawText,
+        parsesInlineLineNumbers
+      );
+      const parsedOldNumber = parsedHeaderlessLineNumber(
+        parsed,
+        oldNumber,
+        parsesInlineLineNumbers
+      );
+      const parsedNewNumber = parsedHeaderlessLineNumber(
+        parsed,
+        newNumber,
+        parsesInlineLineNumbers
+      );
+      file.lines.push({
+        kind: "context",
+        newNumber: parsedNewNumber,
+        oldNumber: parsedOldNumber,
+        splitText: parsed.splitText,
+        text: parsed.text,
+      });
+      oldNumber = nextDiffLineNumber(oldNumber, parsedOldNumber);
+      newNumber = nextDiffLineNumber(newNumber, parsedNewNumber);
     }
   }
   return files;
@@ -982,45 +1083,135 @@ function wrapCell(
   return (wrapped.length ? wrapped : [""]).map((line) => fitCell(line, width));
 }
 
-function renderSplitRow(
-  oldNo: string,
-  oldText: string,
-  oldToken: string,
-  oldIndicator: string,
-  oldRowBgAnsi: string | undefined,
-  newNo: string,
-  newText: string,
-  newToken: string,
-  newIndicator: string,
-  newRowBgAnsi: string | undefined,
-  numberWidth: number,
-  codeWidth: number,
-  theme: ThemeLike,
-  config: ToolDisplayDiffConfig | undefined,
-  restoreBgAnsi: string | undefined
+type SplitCellToken = "toolDiffAdded" | "toolDiffContext" | "toolDiffRemoved";
+
+interface SplitCellInput {
+  indicator: string;
+  lineNumber: string;
+  rowBgAnsi?: string;
+  text: string;
+  token?: SplitCellToken;
+}
+
+interface SplitRowOptions {
+  codeWidth: number;
+  config: ToolDisplayDiffConfig | undefined;
+  numberWidth: number;
+  restoreBgAnsi: string | undefined;
+  sideWidth: number;
+  theme: ThemeLike;
+}
+
+function renderSplitCell(
+  cell: SplitCellInput,
+  options: SplitRowOptions
 ): string[] {
-  const oldIndicatorWidth = visibleWidth(oldIndicator);
-  const newIndicatorWidth = visibleWidth(newIndicator);
-  const oldTextWidth = Math.max(1, codeWidth - oldIndicatorWidth);
-  const newTextWidth = Math.max(1, codeWidth - newIndicatorWidth);
-  const oldLines = wrapCell(oldText, oldTextWidth, config);
-  const newLines = wrapCell(newText, newTextWidth, config);
+  const indicatorWidth = visibleWidth(cell.indicator);
+  const lines = wrapCell(
+    cell.text,
+    Math.max(1, options.codeWidth),
+    options.config
+  );
+  return lines.map((line, index) => {
+    const marker = index === 0 ? cell.indicator : " ".repeat(indicatorWidth);
+    const number = index === 0 ? cell.lineNumber : "";
+    const text = `${marker}${number.padStart(options.numberWidth)} │ ${line}`;
+    return cell.token
+      ? themedDiffRow(
+          cell.token,
+          text,
+          cell.rowBgAnsi,
+          options.theme,
+          options.restoreBgAnsi
+        )
+      : options.theme.fg("toolDiffContext", text);
+  });
+}
+
+function renderSplitRow(
+  oldCell: SplitCellInput,
+  newCell: SplitCellInput,
+  options: SplitRowOptions
+): string[] {
+  const oldLines = renderSplitCell(oldCell, options);
+  const newLines = renderSplitCell(newCell, options);
   const count = Math.max(oldLines.length, newLines.length);
   const rows: string[] = [];
   for (let index = 0; index < count; index += 1) {
-    const oldNumber = index === 0 ? oldNo : "";
-    const newNumber = index === 0 ? newNo : "";
-    const oldMarker =
-      index === 0 ? oldIndicator : " ".repeat(oldIndicatorWidth);
-    const newMarker =
-      index === 0 ? newIndicator : " ".repeat(newIndicatorWidth);
-    const oldCell = `${oldNumber.padStart(numberWidth)} │ ${oldMarker}${oldLines[index] ?? fitCell("", oldTextWidth)}`;
-    const newCell = `${newNumber.padStart(numberWidth)} │ ${newMarker}${newLines[index] ?? fitCell("", newTextWidth)}`;
-    rows.push(
-      `${themedDiffRow(oldToken, oldCell, oldRowBgAnsi, theme, restoreBgAnsi)} │ ${themedDiffRow(newToken, newCell, newRowBgAnsi, theme, restoreBgAnsi)}`
-    );
+    const oldText = fitCell(oldLines[index] ?? "", options.sideWidth);
+    const newText = fitCell(newLines[index] ?? "", options.sideWidth);
+    rows.push(`${oldText} │ ${newText}`);
   }
   return rows;
+}
+
+function lineNumberText(lineNumber: number | undefined): string {
+  return lineNumber === undefined ? "" : String(lineNumber);
+}
+
+function blankSplitCell(indicatorWidth: number): SplitCellInput {
+  return {
+    indicator: " ".repeat(indicatorWidth),
+    lineNumber: "",
+    text: "",
+  };
+}
+
+function splitContextCell(
+  line: ParsedDiffLine,
+  side: "old" | "new",
+  file: ParsedDiffFile,
+  config: ToolDisplayDiffConfig | undefined
+): SplitCellInput {
+  const lineNumber = side === "old" ? line.oldNumber : line.newNumber;
+  const path = side === "old" ? file.oldPath : file.newPath;
+  return {
+    indicator: splitSideIndicator("context", side, config),
+    lineNumber: lineNumberText(lineNumber),
+    text: highlightDiffText(path, splitDiffText(line)),
+    token: "toolDiffContext",
+  };
+}
+
+function splitChangeCell(
+  line: ParsedDiffLine | undefined,
+  kind: "add" | "remove",
+  side: "old" | "new",
+  text: string,
+  config: ToolDisplayDiffConfig | undefined,
+  palette: DiffPalette,
+  indicatorWidth: number
+): SplitCellInput {
+  if (!line) {
+    return blankSplitCell(indicatorWidth);
+  }
+
+  const lineNumber = side === "old" ? line.oldNumber : line.newNumber;
+  return {
+    indicator: splitSideIndicator(kind, side, config),
+    lineNumber: lineNumberText(lineNumber),
+    rowBgAnsi: kind === "add" ? palette.addRowBgAnsi : palette.removeRowBgAnsi,
+    text,
+    token: kind === "add" ? "toolDiffAdded" : "toolDiffRemoved",
+  };
+}
+
+function splitLineNumberWidth(file: ParsedDiffFile): number {
+  const maxLineNumber = file.lines.reduce(
+    (max, line) => Math.max(max, line.oldNumber ?? 0, line.newNumber ?? 0),
+    0
+  );
+  return Math.max(1, String(maxLineNumber).length);
+}
+
+function splitPathLabel(file: ParsedDiffFile): string {
+  const oldPath = file.oldPath || "old";
+  const newPath = file.newPath || "new";
+  return oldPath === newPath ? oldPath : `${oldPath} → ${newPath}`;
+}
+
+function splitDiffText(line: ParsedDiffLine): string {
+  return line.splitText ?? line.text;
 }
 
 function renderSplitDiff(
@@ -1030,16 +1221,29 @@ function renderSplitDiff(
   width: number,
   palette: DiffPalette
 ): string {
-  const columnWidth = Math.max(20, Math.floor((width - 5) / 2));
-  const numberWidth = 4;
-  const codeWidth = Math.max(8, columnWidth - numberWidth - 3);
+  const sideWidth = Math.max(20, Math.floor((width - 3) / 2));
   const limited = createLimitedDiffRows(config);
   for (const file of files) {
-    limited.push([
-      `${theme.fg("dim", fitCell(file.oldPath || "old", columnWidth))} │ ${theme.fg("dim", fitCell(file.newPath || "new", columnWidth))}`,
-    ]);
-    for (let index = 0; index < file.lines.length; index += 1) {
+    const numberWidth = splitLineNumberWidth(file);
+    const indicatorWidth = Math.max(
+      visibleWidth(diffIndicator("add", config)),
+      visibleWidth(diffIndicator("remove", config)),
+      visibleWidth(diffIndicator("context", config))
+    );
+    const codeWidth = Math.max(1, sideWidth - indicatorWidth - numberWidth - 3);
+    const splitRowOptions: SplitRowOptions = {
+      codeWidth,
+      config,
+      numberWidth,
+      restoreBgAnsi: palette.baseBgAnsi,
+      sideWidth,
+      theme,
+    };
+    limited.push([theme.fg("dim", fitCell(splitPathLabel(file), width))]);
+    let index = 0;
+    while (index < file.lines.length) {
       const line = file.lines[index];
+      index += 1;
       if (!line) {
         continue;
       }
@@ -1048,47 +1252,93 @@ function renderSplitDiff(
         continue;
       }
       if (line.kind === "meta") {
-        const meta = theme.fg("dim", fitCell(line.text, columnWidth));
-        limited.push([`${meta} │ ${meta}`]);
+        limited.push([theme.fg("dim", fitCell(line.text, width))]);
         continue;
       }
-      const oldNo = line.oldNumber === undefined ? "" : String(line.oldNumber);
-      const newNo = line.newNumber === undefined ? "" : String(line.newNumber);
-      let oldText = "";
-      let newText = "";
       if (line.kind === "remove") {
-        const next = file.lines[index + 1];
-        oldText =
-          next?.kind === "add"
-            ? inlineDiffPair(line.text, next.text, palette).oldText
-            : highlightDiffText(file.oldPath, line.text);
-      } else if (line.kind === "add") {
-        const previous = file.lines[index - 1];
-        newText =
-          previous?.kind === "remove"
-            ? inlineDiffPair(previous.text, line.text, palette).newText
-            : highlightDiffText(file.newPath, line.text);
-      } else {
-        oldText = highlightDiffText(file.oldPath, line.text);
-        newText = highlightDiffText(file.newPath, line.text);
+        const removeRun: ParsedDiffLine[] = [line];
+        while (file.lines[index]?.kind === "remove") {
+          removeRun.push(file.lines[index] as ParsedDiffLine);
+          index += 1;
+        }
+        const addRun: ParsedDiffLine[] = [];
+        while (file.lines[index]?.kind === "add") {
+          addRun.push(file.lines[index] as ParsedDiffLine);
+          index += 1;
+        }
+        const rowCount = Math.max(removeRun.length, addRun.length);
+        for (let rowIndex = 0; rowIndex < rowCount; rowIndex += 1) {
+          const oldLine = removeRun[rowIndex];
+          const newLine = addRun[rowIndex];
+          if (limited.isFull()) {
+            limited.omit(rowCount - rowIndex);
+            break;
+          }
+          const pair =
+            oldLine && newLine
+              ? inlineDiffPair(
+                  splitDiffText(oldLine),
+                  splitDiffText(newLine),
+                  palette
+                )
+              : undefined;
+          const oldText = oldLine
+            ? (pair?.oldText ??
+              highlightDiffText(file.oldPath, splitDiffText(oldLine)))
+            : "";
+          const newText = newLine
+            ? (pair?.newText ??
+              highlightDiffText(file.newPath, splitDiffText(newLine)))
+            : "";
+          limited.push(
+            renderSplitRow(
+              splitChangeCell(
+                oldLine,
+                "remove",
+                "old",
+                oldText,
+                config,
+                palette,
+                indicatorWidth
+              ),
+              splitChangeCell(
+                newLine,
+                "add",
+                "new",
+                newText,
+                config,
+                palette,
+                indicatorWidth
+              ),
+              splitRowOptions
+            )
+          );
+        }
+        continue;
+      }
+      if (line.kind === "add") {
+        limited.push(
+          renderSplitRow(
+            blankSplitCell(indicatorWidth),
+            splitChangeCell(
+              line,
+              "add",
+              "new",
+              highlightDiffText(file.newPath, splitDiffText(line)),
+              config,
+              palette,
+              indicatorWidth
+            ),
+            splitRowOptions
+          )
+        );
+        continue;
       }
       limited.push(
         renderSplitRow(
-          oldNo,
-          oldText,
-          line.kind === "remove" ? "toolDiffRemoved" : "toolDiffContext",
-          splitSideIndicator(line.kind, "old", config),
-          line.kind === "remove" ? palette.removeRowBgAnsi : undefined,
-          newNo,
-          newText,
-          line.kind === "add" ? "toolDiffAdded" : "toolDiffContext",
-          splitSideIndicator(line.kind, "new", config),
-          line.kind === "add" ? palette.addRowBgAnsi : undefined,
-          numberWidth,
-          codeWidth,
-          theme,
-          config,
-          palette.baseBgAnsi
+          splitContextCell(line, "old", file, config),
+          splitContextCell(line, "new", file, config),
+          splitRowOptions
         )
       );
     }
