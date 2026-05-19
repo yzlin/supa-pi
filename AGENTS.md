@@ -6,8 +6,11 @@
 - Bugs: add regression test when it fits.
 - Editor: `zed <path>`.
 - Prefer end-to-end verify; if blocked, say what’s missing.
+- Before non-trivial coding: state assumptions, material ambiguities, and done criteria.
 - Style: telegraph. Drop filler/grammar. Min tokens (global AGENTS + replies).
-- Smallest change that solves task; no drive-by refactors
+- Smallest change that solves task; no drive-by refactors.
+- Every changed line must trace to the user request.
+- No speculative flexibility, config, or abstractions unless required by the task or existing pattern.
 
 ## Docs
 
@@ -20,6 +23,7 @@
 
 - Fix root cause (not band-aid).
 - Unsure: read more code; if still stuck, ask w/ short options.
+- If multiple materially different interpretations exist, do not choose silently; ask or list options.
 - Conflicts: call out; pick safer path.
 - Unrecognized changes: assume other agent; keep going; focus your changes. If it causes issues, stop + ask user.
 - Leave breadcrumb notes in thread.

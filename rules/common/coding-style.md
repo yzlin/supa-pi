@@ -20,6 +20,14 @@ MANY SMALL FILES > FEW LARGE FILES:
 - Extract utilities from large modules
 - Organize by feature/domain, not by type
 
+## Simplicity & Abstraction
+
+Minimum code that solves the request:
+- No features beyond what was asked
+- No abstractions for single-use code unless an existing pattern requires one
+- No new config or extension points for hypothetical future needs
+- Prefer simple local code until there is a second real use case
+
 ## Error Handling
 
 ALWAYS handle errors comprehensively:

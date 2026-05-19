@@ -90,6 +90,8 @@ See `package.json` for the full registration list.
 
 Each language folder includes coding-style, patterns, security, and testing guidance.
 
+The root agent protocol and common workflow rules include guidance adapted from `karpathy-guidelines`, licensed under MIT: https://github.com/multica-ai/andrej-karpathy-skills/blob/main/skills/karpathy-guidelines/SKILL.md
+
 ## Repository layout
 
 ```text

@@ -4,6 +4,8 @@
 
 The Feature Implementation Workflow describes the development pipeline: research, planning, TDD, code review, and then committing to git.
 
+Scale this workflow to task size. For trivial or local edits, use judgment and keep the loop light: inspect → patch → targeted verify. For non-trivial implementation, define success criteria before coding, such as `step → verify: check`.
+
 ## Feature Implementation Workflow
 
 0. **Research & Reuse** _(mandatory before any new implementation)_
@@ -14,8 +16,8 @@ The Feature Implementation Workflow describes the development pipeline: research
    - Prefer adopting or porting a proven approach over writing net-new code when it meets the requirement.
 
 1. **Plan First**
-   - Use **planner** agent to create implementation plan
-   - Generate planning docs before coding: PRD, architecture, system_design, tech_doc, task_list
+   - Use **planner** agent for complex or ambiguous implementation plans
+   - Generate planning docs before coding when the decision or rollout needs durable review: PRD, architecture, system_design, tech_doc, task_list
    - Identify dependencies and risks
    - Break down into phases
 
