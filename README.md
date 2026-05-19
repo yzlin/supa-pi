@@ -18,7 +18,7 @@ This repo is a curated `~/.pi/agent` setup with local extensions, custom agents,
 Documented extensions in this repo include:
 
 - **`extensions/lsp`** — unified `lsp` tool for diagnostics, definitions, references, hover, symbols, call hierarchy, and code actions
-- **`extensions/om`** — Observational Memory for branch-local memory restore, observer/reflector passes, and `/om` admin commands
+- **`extensions/om`** — disabled Observational Memory extension code for branch-local memory restore, observer/reflector passes, and `/om` admin commands; present in the repo but not registered in `package.json -> pi.extensions`
 - **`extensions/rtk`** — output compaction and `/rtk stats` dashboard; owns `bash` execution, rewrite, and stats
 - **`extensions/caveman`** — standalone `/caveman` mode with per-session persistence and generic extension status
 - **`extensions/pieditor`** — editor UX improvements like `@` file picking, shell completions, raw paste, command remapping, and a locally maintained fork lineage from the original upstream extension
@@ -128,7 +128,7 @@ After setup, restart Pi to pick up the changes.
 
 The setup script installs these Pi packages if they are not already present:
 
-- `@tintinweb/pi-subagents`
+- `@yzlin/pi-subagents`
 - `pi-mcp-adapter`
 - `pi-rewind`
 - `pi-web-access`
@@ -136,8 +136,6 @@ The setup script installs these Pi packages if they are not already present:
 - `pi-skill-palette`
 - `pi-claude-bridge`
 - `pi-anycopy`
-- `pi-tool-display`
-- `pi-promptsmith`
 - `pi-token-burden`
 - `@tintinweb/pi-tasks`
 

@@ -35,8 +35,7 @@ The repository is optimized for local workflow quality and maintainable agent be
 
 ## Open questions
 
-- Should README explicitly label `extensions/om` as present but intentionally disabled?
-- Should `setup.sh` or README better explain the development-clone vs live-Pi-config deployment model?
+- None currently documented.
 
 ## Context map
 

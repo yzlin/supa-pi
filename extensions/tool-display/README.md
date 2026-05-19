@@ -130,4 +130,4 @@ Keep `./extensions/rtk` before `./extensions/tool-display` in `package.json`. RT
 
 ## Attribution
 
-The full-read behavior is adapted from the former local `read-patch` extension in this repository. No external upstream source or external license applies to that local code path. The root project license remains unresolved; keep copied or adapted external materials attributed near their usage.
+The full-read behavior is adapted from the former local `read-patch` extension in this repository. No external upstream source or external license applies to that local code path. The root project license is MIT; keep copied or adapted external materials attributed near their usage.

@@ -39,6 +39,6 @@ When changing setup or installation docs, keep this distinction clear:
 
 ## License context
 
-The root project license is unresolved. Keep this as an open question until a license is chosen.
+The root project license is MIT, as declared by `package.json` and `LICENSE.md`.
 
 Copied or adapted upstream materials must include durable source and license attribution in README or nearby docs. Matt-derived materials should mention Matt Pocock, the MIT license name, and the upstream source URL.
