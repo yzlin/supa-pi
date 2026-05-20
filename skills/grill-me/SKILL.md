@@ -16,7 +16,7 @@ Interview the user relentlessly about every aspect of their plan or design until
 - When using `questionnaire`, ask exactly one single-select question per call; do not use `multiSelect`.
 - Add `preview` to every caller-supplied option; the injected custom answer row is the only no-preview exception.
 - Each preview must explain the option's meaning, implication, and main risk or tradeoff. Do not merely repeat the label.
-- For each question, state your recommended answer before asking the user. In `questionnaire`, put this recommendation as the first sentence of the prompt.
+- For each `questionnaire` question, do not put the recommendation in the prompt or question description. Instead, prefix the recommended option label with `Recommend:`; if that option has a `preview`, prefix the preview with `Recommend:` too.
 - If a question was already asked in plain text, accept the user's answer and move on; do not ask the same question again with `questionnaire`.
 - Do not re-ask an answered question. Summarize the answer briefly, then continue to the next unresolved decision.
 - If a question can be answered by exploring the codebase, explore the codebase instead of asking.
