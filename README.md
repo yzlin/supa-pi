@@ -71,6 +71,8 @@ See `package.json` for the full registration list.
 
 `skills/` includes locally curated skills authored in this repo plus selected imports from Vercel agent-skills at commit `ce3e64e468f8fa09a2d075d102771838061fdac0`. Current imported-and-curated snapshots include `composition-patterns`, `react-best-practices`, `react-native-skills`, and `react-view-transitions`. Local workflow skills include `grill-me` for natural-language adversarial design review triggers like "grill me" or "stress-test this plan", and `context-docs` for durable `CONTEXT.md`, `CONTEXT-MAP.md`, ADR, `/context-review`, and `/context-grill` workflows.
 
+Run `/skill` or `/skill list` in a custom UI session to open the first-slice Skills Manager. It shows managed and bundled/read-only skills, supports filtering, and includes a preview pane with current action hints. In degraded or non-custom UI sessions, the same commands fall back to the simple text list. `/skill` commands show a Pi-like animated foreground activity widget while they load, search, install, update, or remove skills, then clear it before any follow-up prompt or notification. Existing `/skill search`, `/skill install`, `/skill update`, and `/skill remove` commands keep their previous prompt-based behavior.
+
 ## Included prompts
 
 `prompts/to-prd.md` is adapted from Matt Pocock's `to-prd` skill: https://github.com/mattpocock/skills/blob/main/skills/engineering/to-prd/SKILL.md
@@ -110,7 +112,7 @@ The root agent protocol and common workflow rules include guidance adapted from 
 
 ## Install
 
-This repo can live anywhere. `setup.sh` links repo-managed files into `~/.pi/agent`.
+This repo can live anywhere. `setup.sh` links repo-managed files into `~/.pi/agent` and the bundled skills extension discovers this repo's `skills/` directory directly.
 
 ```bash
 git clone git@github.com:yzlin/supa-pi ~/dev/yzlin/supa-pi
@@ -122,20 +124,19 @@ cd ~/dev/yzlin/supa-pi
 
 1. create `~/.pi/agent` and `~/.pi/agent/settings.json` if missing
 2. install companion Pi packages with `pi install`
-3. symlink this repo's `keybindings.json`, `skills/`, `agents/`, `prompts/`, and `rules/` into the live Pi agent directory
+3. symlink this repo's `keybindings.json`, `agents/`, `prompts/`, and `rules/` into the live Pi agent directory
 
 After setup, restart Pi to pick up the changes.
 
 ## Companion packages installed by setup
 
-The setup script installs these Pi packages if they are not already present:
+The setup script installs these Pi packages if they are not already present. It no longer installs `pi-skill-palette`; uninstall that global package yourself if it is still present from an older setup.
 
 - `@yzlin/pi-subagents`
 - `pi-mcp-adapter`
 - `pi-rewind`
 - `pi-web-access`
 - `glimpseui`
-- `pi-skill-palette`
 - `pi-claude-bridge`
 - `pi-anycopy`
 - `pi-token-burden`
