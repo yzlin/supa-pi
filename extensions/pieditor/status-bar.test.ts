@@ -8,6 +8,9 @@ import type {
 import { buildAmpStatusLayout, renderStatusBarLine } from "./status-bar";
 
 const CAVEMAN_STATUS_TEXT = "🪨 caveman";
+const FAST_MODE_STATUS_KEY = "fast";
+const FAST_MODE_STATUS_TEXT = "⚡ fast";
+const FAST_MODE_UNSUPPORTED_STATUS_TEXT = "⚡ fast*";
 
 function createStatusBarHarness() {
   const ctx = {
@@ -59,6 +62,32 @@ function createStatusBarHarness() {
   } as any;
 
   return { ctx, footerData, theme };
+}
+
+function renderModelStatusLine(
+  extensionStatuses: readonly (readonly [string, string])[] = []
+): string {
+  const { ctx, footerData, theme } = createStatusBarHarness();
+  const footerDataWithStatuses = {
+    ...footerData,
+    getExtensionStatuses() {
+      return new Map(extensionStatuses);
+    },
+  } satisfies ReadonlyFooterDataProvider;
+
+  return renderStatusBarLine({
+    width: 120,
+    ctx,
+    footerData: footerDataWithStatuses,
+    config: {
+      enabled: true,
+      preset: "default",
+      leftSegments: ["model"],
+      rightSegments: ["extension_statuses"],
+    },
+    sessionStartTime: Date.now(),
+    theme,
+  });
 }
 
 describe("status bar", () => {
@@ -659,6 +688,52 @@ describe("status bar", () => {
         process.env.POWERLINE_NERD_FONTS = originalNerdFonts;
       }
     }
+  });
+
+  it("renders model without fast mode status when fast mode is hidden", () => {
+    const line = renderModelStatusLine();
+
+    expect(line).toContain("test-model");
+    expect(line).not.toContain("⚡");
+  });
+
+  it("renders model without fast mode status when fast mode is off", () => {
+    const line = renderModelStatusLine([[FAST_MODE_STATUS_KEY, ""]]);
+
+    expect(line).toContain("test-model");
+    expect(line).not.toContain("⚡");
+  });
+
+  it("appends applicable fast mode status to the model segment", () => {
+    const line = renderModelStatusLine([
+      [FAST_MODE_STATUS_KEY, FAST_MODE_STATUS_TEXT],
+    ]);
+
+    expect(line).toContain("test-model ⚡");
+    expect(line).not.toContain("test-model · ⚡");
+    expect(line).not.toContain(FAST_MODE_STATUS_TEXT);
+  });
+
+  it("appends unsupported fast mode status to the model segment", () => {
+    const line = renderModelStatusLine([
+      [FAST_MODE_STATUS_KEY, FAST_MODE_UNSUPPORTED_STATUS_TEXT],
+    ]);
+
+    expect(line).toContain("test-model ⚡*");
+    expect(line).not.toContain("test-model · ⚡*");
+    expect(line).not.toContain(FAST_MODE_UNSUPPORTED_STATUS_TEXT);
+  });
+
+  it("does not duplicate consumed fast mode status as a generic extension status", () => {
+    const line = renderModelStatusLine([
+      [FAST_MODE_STATUS_KEY, FAST_MODE_STATUS_TEXT],
+      ["other", "other status"],
+    ]);
+
+    const occurrences = line.split("⚡").length - 1;
+    expect(line).toContain("other status");
+    expect(line).not.toContain(FAST_MODE_STATUS_TEXT);
+    expect(occurrences).toBe(1);
   });
 
   it("renders active caveman status as a dedicated status segment", () => {

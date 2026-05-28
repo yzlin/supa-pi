@@ -33,7 +33,8 @@
       "./extensions/pieditor",
       "./extensions/lsp",
       "./extensions/skills",
-      "./extensions/obsidian"
+      "./extensions/obsidian",
+      "./extensions/fast"
     ]
   },
   "dependencies": {

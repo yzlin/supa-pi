@@ -38,6 +38,7 @@ Notable interactions:
 - The file picker's search box uses Pi's shared `Input` editing behavior for word/home/end cursor movement and related text editing shortcuts
 - Press `alt+v` to paste clipboard text raw into the editor
 - If the standalone `extensions/caveman` extension is loaded, built-in presets show the active `🪨 caveman` indicator through the dedicated `caveman` segment; custom segment lists must include `caveman` or `extension_statuses` to show it.
+- If the standalone `extensions/fast` extension is loaded, status key `fast` is appended to the `model` segment as compact `⚡` or `⚡*` without a dot separator. `extension_statuses` suppresses `fast` when `model` is configured.
 - Optionally configure `doubleEscapeCommand` in `~/.pi/agent/pieditor.json` or `.pi/pieditor.json` to invoke an extension command on double-escape when the editor is empty and Pi is idle
 - Optionally configure `commandRemap` in `~/.pi/agent/pieditor.json` or `.pi/pieditor.json` to redirect slash commands at submit time (e.g. typing `/tree` executes `/anycopy` instead)
 - Use `/pieditor fixed-editor [on|off|toggle|status]` to toggle fixed editor mode for the live runtime and persist the global `fixedEditor.enabled` setting; project `.pi/pieditor.json` overrides still win on the next load
@@ -114,6 +115,7 @@ Then add the rest of your config fields:
   - icon mode: Nerd Font icons are on by default; set `POWERLINE_NERD_FONTS=0` before launching Pi to force ASCII fallbacks
   - supported segment ids: `pi`, `model`, `path`, `git`, `token_in`, `token_out`, `token_total`, `cost`, `context_pct`, `context_total`, `time_spent`, `time`, `session`, `hostname`, `cache_read`, `cache_write`, `thinking`, `caveman`, `extension_statuses`
   - `caveman` renders the generic extension status key `caveman`; `extension_statuses` suppresses that key when the dedicated `caveman` segment is configured
+  - `model` appends Fast Mode's generic extension status key `fast` as compact `⚡` or `⚡*` without a dot separator; `extension_statuses` suppresses `fast` when `model` is configured
 
 ```json
 {

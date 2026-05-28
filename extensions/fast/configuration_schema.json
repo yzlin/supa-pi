@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Fast Mode configuration",
+  "type": "object",
+  "properties": {
+    "enabled": {
+      "type": "boolean",
+      "default": false,
+      "description": "Whether Fast Mode starts enabled."
+    },
+    "warned": {
+      "type": "boolean",
+      "default": false,
+      "description": "Whether the one-time Fast Mode cost warning has already been shown."
+    },
+    "allowlist": {
+      "type": "array",
+      "default": ["openai-codex/gpt-5.5"],
+      "description": "Additional exact canonical provider/id model IDs that support Fast Mode.",
+      "items": {
+        "type": "string",
+        "pattern": "^[^/\\s]+/[^/\\s]+$"
+      }
+    }
+  },
+  "required": ["enabled", "allowlist"],
+  "not": {
+    "required": ["allowList"]
+  }
+}

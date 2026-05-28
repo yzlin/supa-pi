@@ -209,9 +209,13 @@ export function buildStatusBarContext(
   const hasDedicatedCavemanSegment =
     presetDef.leftSegments.includes("caveman") ||
     presetDef.rightSegments.includes("caveman");
-  const dedicatedExtensionStatusKeys = new Set(
-    hasDedicatedCavemanSegment ? ["caveman"] : []
-  );
+  const hasModelSegment =
+    presetDef.leftSegments.includes("model") ||
+    presetDef.rightSegments.includes("model");
+  const dedicatedExtensionStatusKeys = new Set([
+    ...(hasDedicatedCavemanSegment ? ["caveman"] : []),
+    ...(hasModelSegment ? ["fast"] : []),
+  ]);
 
   return {
     model,

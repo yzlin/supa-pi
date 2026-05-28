@@ -69,6 +69,24 @@ const piSegment: StatusBarSegment = {
   },
 };
 
+const FAST_MODE_EXTENSION_STATUS_KEY = "fast";
+const FAST_MODE_EXTENSION_STATUS_TEXT = "⚡ fast";
+const FAST_MODE_EXTENSION_UNSUPPORTED_STATUS_TEXT = "⚡ fast*";
+const FAST_MODE_MODEL_STATUS_TEXT = "⚡";
+const FAST_MODE_MODEL_UNSUPPORTED_STATUS_TEXT = "⚡*";
+
+function resolveFastModeModelStatus(ctx: StatusBarContext): string | null {
+  const status = ctx.extensionStatuses.get(FAST_MODE_EXTENSION_STATUS_KEY);
+  if (status === FAST_MODE_EXTENSION_STATUS_TEXT) {
+    return FAST_MODE_MODEL_STATUS_TEXT;
+  }
+  if (status === FAST_MODE_EXTENSION_UNSUPPORTED_STATUS_TEXT) {
+    return FAST_MODE_MODEL_UNSUPPORTED_STATUS_TEXT;
+  }
+
+  return null;
+}
+
 const modelSegment: StatusBarSegment = {
   id: "model",
   render(ctx) {
@@ -81,6 +99,10 @@ const modelSegment: StatusBarSegment = {
     }
 
     let content = withIcon(icons.model, modelName);
+    const fastModeStatus = resolveFastModeModelStatus(ctx);
+    if (fastModeStatus) {
+      content += ` ${fastModeStatus}`;
+    }
     if (opts.showThinkingLevel !== false && ctx.model?.reasoning) {
       const level = ctx.thinkingLevel || "off";
       if (level !== "off") {

@@ -16,6 +16,17 @@ Do not describe `extensions/om` as active runtime behavior unless package regist
 
 `extensions/obsidian` is active. It loads vault-local `CLAUDE.md` / `CLAUDE.MD` context from configured Obsidian vaults in `~/.pi/agent/obsidian.json`, injects loaded context through provider payload hooks, and exposes `/obsidian status`.
 
+`extensions/fast` is active. It registers:
+
+- `/fast [on|off|status]` (bare `/fast` toggles)
+- the `--fast` boolean flag
+- the generic `fast` UI status key
+- a provider-payload hook that adds `service_tier: "priority"`
+
+The provider hook only patches payloads when Fast Mode is enabled, the selected model supports Fast Mode, and the payload does not already set `service_tier` or `serviceTier`. Model support comes from metadata `fastMode: true`, the built-in allowlist, or the config allowlist.
+
+Fast Mode persists global state and additive exact-match model support in `~/.pi/agent/fast-mode.json`. The config requires boolean `enabled` and array `allowlist` of canonical `provider/id` strings; invalid config fails fast. Writes preserve unknown top-level keys and the existing allowlist. Status notifications report the support source (`model`, `built-in allowlist`, `config allowlist`, or `unsupported`). Config changes are not live-reloaded.
+
 ## Tool ownership and registration order
 
 `extensions/tool-display` owns `read` and optional compact renderers for `grep`, `find`, `ls`, `edit`, and `write`.
