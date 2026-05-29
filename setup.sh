@@ -9,7 +9,6 @@ PI_PACKAGES=(
   "npm:pi-rewind"
   "npm:pi-web-access"
   "npm:glimpseui"
-  "npm:pi-claude-bridge"
   "npm:pi-anycopy"
   "npm:pi-token-burden"
   "npm:@tintinweb/pi-tasks"
@@ -137,16 +136,23 @@ if [ ! -f "$PI_AGENT_DIR/settings.json" ]; then
     cat <<EOF
 {
   "defaultProvider": "openai-codex",
-  "defaultModel": "gpt-5.4",
-  "defaultThinkingLevel": "xhigh",
+  "defaultModel": "gpt-5.5",
+  "defaultThinkingLevel": "high",
   "packages": [
 EOF
     print_package_json_lines
     cat <<'EOF'
   ],
+  "skills": [
+    "!/Users/yzlin/.agents/skills/**"
+  ],
+  "enableSkillCommands": true,
   "hideThinkingBlock": false,
-  "workingVibe": "zen",
-  "workingVibeModel": "openai-codex/gpt-5.4-mini"
+  "theme": "amp-gruvbox-dark-hard",
+  "transport": "sse",
+  "npmCommand": [
+    "bun"
+  ]
 }
 EOF
   } >"$PI_AGENT_DIR/settings.json"
