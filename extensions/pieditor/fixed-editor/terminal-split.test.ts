@@ -772,6 +772,70 @@ describe("terminal split compositor", () => {
     lease.release();
   });
 
+  it("re-enables fixed-editor mouse reporting after custom focus returns", () => {
+    const editor = { render: (_width: number) => ["editor"] };
+    const viewer = { render: (_width: number) => ["viewer"] };
+    const { compositor, terminal, tui } = createCompositor({
+      rootLines: ["root-1", "root-2", "root-3", "root-4", "root-5", "root-6"],
+      terminalRows: 5,
+    });
+    expect(compositor.install()).toBe(true);
+    compositor.hideRenderable(editor);
+
+    tui.focusedComponent = viewer;
+    tui.render?.(20);
+    terminal.writes.splice(0);
+
+    tui.focusedComponent = editor;
+    tui.render?.(20);
+
+    expect(terminal.writes.join("")).toContain("\x1b[?1002h\x1b[?1006h");
+  });
+
+  it("passes mouse input through to non-editor focused custom components", () => {
+    const editor = { render: (_width: number) => ["editor"] };
+    const viewer = { render: (_width: number) => ["viewer"] };
+    const { compositor, tui } = createCompositor({
+      rootLines: ["root-1", "root-2", "root-3", "root-4", "root-5", "root-6"],
+      terminalRows: 5,
+    });
+    expect(compositor.install()).toBe(true);
+    compositor.hideRenderable(editor);
+
+    tui.focusedComponent = editor;
+    expect(tui.listeners[0]?.("\u001b[<64;1;1M")).toEqual({
+      consume: true,
+    });
+
+    tui.focusedComponent = viewer;
+    expect(tui.listeners[0]?.("\u001b[<64;1;1M")).toBeUndefined();
+  });
+
+  it("passes replacement-surface wheel input through while leased", () => {
+    const renderable = { render: (_width: number) => ["replacement"] };
+    const { compositor, terminal, tui } = createCompositor({
+      rootLines: ["root-1", "root-2", "root-3", "root-4", "root-5", "root-6"],
+      terminalRows: 5,
+    });
+    expect(compositor.install()).toBe(true);
+    attachReplacementLeaseCompositor(compositor);
+
+    const lease = acquireReplacementSurfaceLease({
+      owner: "agents",
+      id: "subagent-viewer",
+      target: renderable,
+    });
+
+    expect(tui.listeners[0]?.("\u001b[<64;1;1M")).toEqual({
+      consume: true,
+    });
+    expect(
+      tui.listeners[0]?.(`\u001b[<64;1;${terminal.rows + 1}M`)
+    ).toBeUndefined();
+
+    lease.release();
+  });
+
   it("leaves writes and input alone while an overlay is visible", () => {
     const { compositor, terminal, tui } = createCompositor({
       rootLines: ["plain", "\u001b]8;;https://example.test\u0007linked"],

@@ -37,6 +37,7 @@ export interface TuiLike {
   hardwareCursorRow?: number;
   cursorRow?: number;
   previousViewportTop?: number;
+  focusedComponent?: unknown;
   hasOverlay?: () => boolean;
   overlayStack?: Array<{ hidden?: boolean } | null | undefined>;
 }
@@ -797,6 +798,7 @@ export class TerminalSplitCompositor {
   private renderingCluster = false;
   private renderingScrollableRoot = false;
   private checkingOverlay = false;
+  private hadExternalFocusedComponent = false;
   private scrollOffset = 0;
   private maxScrollOffset = 0;
   private lastRootLineCount = 0;
@@ -1253,6 +1255,7 @@ export class TerminalSplitCompositor {
 
     this.renderingScrollableRoot = true;
     try {
+      this.reconcileExternalFocusMouseReporting();
       const renderWidth = Math.max(1, width);
       const replacementCluster = this.getReplacementCluster(renderWidth);
       if (replacementCluster) {
@@ -1351,6 +1354,10 @@ export class TerminalSplitCompositor {
       return this.handleReplacementScrollInput(data);
     }
 
+    if (this.hasExternalFocusedComponent()) {
+      return undefined;
+    }
+
     const mousePackets = this.mouseScroll ? parseSgrMousePackets(data) : null;
     if (mousePackets) {
       for (const packet of mousePackets) {
@@ -1388,10 +1395,11 @@ export class TerminalSplitCompositor {
       return undefined;
     }
 
+    const scrollableRows = this.getScrollableRows();
     let didScroll = false;
     for (const packet of mousePackets) {
       const delta = mouseScrollDelta(packet);
-      if (delta !== 0) {
+      if (delta !== 0 && packet.row <= scrollableRows) {
         this.scrollBy(delta);
         didScroll = true;
       }
@@ -2031,6 +2039,33 @@ export class TerminalSplitCompositor {
 
   private isReplacementLeaseActive(): boolean {
     return getActiveReplacementLeaseDiagnostics().length > 0;
+  }
+
+  private reconcileExternalFocusMouseReporting(): void {
+    const hasExternalFocus = this.hasExternalFocusedComponent();
+    if (
+      this.mouseScroll &&
+      this.hadExternalFocusedComponent &&
+      !hasExternalFocus
+    ) {
+      this.originalWrite(
+        beginSynchronizedOutput() +
+          enableMouseReporting() +
+          endSynchronizedOutput()
+      );
+    }
+    this.hadExternalFocusedComponent = hasExternalFocus;
+  }
+
+  private hasExternalFocusedComponent(): boolean {
+    const focusedComponent = this.tui.focusedComponent;
+    if (!focusedComponent) {
+      return false;
+    }
+
+    return !this.patchedRenders.some(
+      (patch) => patch.target === focusedComponent
+    );
   }
 
   private hasVisibleOverlay(): boolean {
