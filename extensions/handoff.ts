@@ -12,13 +12,23 @@
  *   /handoff now implement this for teams as well
  *   /handoff -model anthropic/claude-haiku-4-5 check other places that need this fix
  *
- * The generated prompt appears as a draft in the editor for review/editing.
+ * The generated handoff document is saved to the OS temp directory and included
+ * in the new-session prompt for immediate use.
  *
  * Credits: This extension was originally developed by @pasky. Modified and enhanced by @yzlin.
  */
 
+import { chmod, mkdtemp, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+
 import type { AgentMessage } from "@earendil-works/pi-agent-core";
-import { complete, type Message } from "@earendil-works/pi-ai";
+import {
+  type Api,
+  complete,
+  type Message,
+  type Model,
+} from "@earendil-works/pi-ai";
 import type {
   ExtensionAPI,
   ExtensionCommandContext,
@@ -36,27 +46,45 @@ import { getModelAuthOrThrow } from "./llm-auth";
 
 const TOP_LEVEL_REGEX_1 = /(?:^|\s)-model\s+(\S+)/;
 
-const CONTEXT_SUMMARY_SYSTEM_PROMPT = `You are a context transfer assistant. Given a conversation history and the user's goal for a new thread, generate a focused prompt that:
+const CONTEXT_SUMMARY_SYSTEM_PROMPT = `You are a context transfer assistant. Given a conversation history and the user's goal for a new thread, generate a focused handoff document that:
 
 1. Summarizes relevant context from the conversation (decisions made, approaches taken, key findings)
 2. Lists any relevant files that were discussed or modified
 3. Clearly states the next task based on the user's goal
-4. Is self-contained - the new thread should be able to proceed without the old conversation
+4. Includes a "Suggested Skills" section naming skills the next agent should invoke, if any are relevant
+5. Is self-contained enough for the new thread to proceed, but references existing artifacts instead of duplicating them
 
-Format your response as a prompt the user can send to start the new thread. Be concise but include all necessary context. Do not include any preamble like "Here's the prompt" - just output the prompt itself.
+Rules:
+- Redact sensitive information, including API keys, passwords, tokens, secrets, and personally identifiable information, unless a local file or session path is necessary for continuation.
+- Do not duplicate content already captured in PRDs, plans, ADRs, issues, commits, or diffs. Reference those artifacts by path or URL.
+- If a detail is uncertain, say so explicitly.
+- Be concise but include all necessary context.
+- Do not include any preamble like "Here's the handoff" - just output the document itself.
 
 Example output format:
+# Handoff
+
+## Focus
+[Clear description of what to do next based on user's goal]
+
 ## Context
 We've been working on X. Key decisions:
 - Decision 1
 - Decision 2
 
-Files involved:
-- path/to/file1.ts
-- path/to/file2.ts
+## Files and Artifacts
+- path/to/file1.ts — why it matters
+- path/to/file2.ts — why it matters
 
-## Task
-[Clear description of what to do next based on user's goal]`;
+## Suggested Skills
+- skill-name — why it helps
+
+## Next Steps
+- Step 1
+- Step 2
+
+## Open Questions / Risks
+- Risk or question, if any`;
 
 /**
  * Generate a context summary by asking an LLM to distill the conversation
@@ -65,7 +93,7 @@ Files involved:
  * @returns The generated summary text, or null if aborted.
  */
 async function generateContextSummary(
-  model: unknown,
+  model: Model<Api>,
   apiKey: string | undefined,
   headers: Record<string, string> | undefined,
   messages: AgentMessage[],
@@ -99,6 +127,74 @@ async function generateContextSummary(
     .filter((c): c is { type: "text"; text: string } => c.type === "text")
     .map((c) => c.text)
     .join("\n");
+}
+
+function buildHandoffDocument(
+  goal: string,
+  body: string,
+  parentSession: string | undefined
+): string {
+  const metadata = [
+    `Generated: ${new Date().toISOString()}`,
+    `Goal: ${goal}`,
+    parentSession ? `Parent session: ${parentSession}` : undefined,
+  ].filter((line): line is string => Boolean(line));
+
+  return `${metadata.join("\n")}\n\n${body.trim()}\n`;
+}
+
+async function buildHandoffDocumentPath(): Promise<string> {
+  const handoffDir = await mkdtemp(join(tmpdir(), "pi-handoff-"));
+  await chmod(handoffDir, 0o700);
+
+  return join(handoffDir, "handoff.md");
+}
+
+async function writeHandoffDocument(document: string): Promise<string> {
+  const handoffPath = await buildHandoffDocumentPath();
+  await writeFile(handoffPath, document, {
+    encoding: "utf8",
+    flag: "wx",
+    mode: 0o600,
+  });
+
+  return handoffPath;
+}
+
+function hasNumericTimestamp(
+  message: unknown
+): message is { timestamp: number } {
+  return (
+    typeof message === "object" &&
+    message !== null &&
+    "timestamp" in message &&
+    typeof (message as { timestamp?: unknown }).timestamp === "number"
+  );
+}
+
+interface SessionManagerWithNewSession {
+  newSession(options: { parentSession: string | undefined }): void;
+}
+
+function onSessionSwitch(pi: ExtensionAPI, listener: () => void): void {
+  const on = pi.on as unknown as (
+    event: "session_switch",
+    handler: () => void
+  ) => void;
+
+  on("session_switch", listener);
+}
+
+function buildHandoffPrompt(
+  goal: string,
+  handoffPath: string,
+  parentSession: string | undefined
+): string {
+  const parentContext = parentSession
+    ? `/skill:session-query\n\n**Parent session:** \`${parentSession}\`\n\n`
+    : "";
+
+  return `${goal}\n\n${parentContext}**Handoff document:** \`${handoffPath}\`\n\nRead the handoff document first, then continue with the goal above.`;
 }
 
 interface HandoffOptions {
@@ -183,22 +279,23 @@ async function performHandoff(
 
   const currentSessionFile = ctx.sessionManager.getSessionFile();
 
-  // Generate the handoff prompt with loader UI
+  // Generate the handoff document with loader UI
   const result = await ctx.ui.custom<string | null>((tui, theme, _kb, done) => {
     const loader = new BorderedLoader(
       tui,
       theme,
-      "Generating handoff prompt..."
+      "Generating handoff document..."
     );
     loader.onAbort = () => done(null);
 
     const doGenerate = async () => {
+      const model = ctx.model as Model<Api>;
       const { apiKey, headers } = await getModelAuthOrThrow(
         ctx.modelRegistry,
-        ctx.model!
+        model
       );
       return generateContextSummary(
-        ctx.model!,
+        model,
         apiKey,
         headers,
         messages,
@@ -221,13 +318,21 @@ async function performHandoff(
     return "Handoff cancelled.";
   }
 
-  // Build the final prompt with user's goal first for easy identification
-  let finalPrompt = result;
-  if (currentSessionFile) {
-    finalPrompt = `${goal}\n\n/skill:session-query\n\n**Parent session:** \`${currentSessionFile}\`\n\n${result}`;
-  } else {
-    finalPrompt = `${goal}\n\n${result}`;
+  const handoffDocument = buildHandoffDocument(
+    goal,
+    result,
+    currentSessionFile
+  );
+  let handoffPath: string;
+  try {
+    handoffPath = await writeHandoffDocument(handoffDocument);
+  } catch (err) {
+    console.error("Handoff document write failed:", err);
+    return "Handoff document write failed.";
   }
+
+  // Build the final prompt with user's goal first for easy identification.
+  const finalPrompt = buildHandoffPrompt(goal, handoffPath, currentSessionFile);
 
   if (!fromTool && "newSession" in ctx) {
     // Command path: full reset via ctx.newSession()
@@ -335,7 +440,9 @@ export default function (pi: ExtensionAPI) {
 
     // Low-level session switch: creates new session file, resets entries.
     // This does NOT clear agent.state.messages (we handle that via context event).
-    (ctx.sessionManager as unknown).newSession({ parentSession });
+    (ctx.sessionManager as unknown as SessionManagerWithNewSession).newSession({
+      parentSession,
+    });
 
     // Defer sendUserMessage to the next macrotask to ensure the old agent
     // loop's _runLoop cleanup has fully completed (isStreaming reset,
@@ -366,7 +473,7 @@ export default function (pi: ExtensionAPI) {
     const ts = handoffTimestamp;
 
     const newMessages = event.messages.filter(
-      (m: unknown) => m.timestamp >= ts
+      (m: unknown) => hasNumericTimestamp(m) && m.timestamp >= ts
     );
     if (newMessages.length > 0) {
       return { messages: newMessages };
@@ -378,7 +485,7 @@ export default function (pi: ExtensionAPI) {
   // When a proper session switch occurs (e.g., /new, tree navigation, /switch),
   // agent.state.messages is fully reset by AgentSession.newSession(). Clear our
   // filter so we don't interfere with the properly-reset state.
-  pi.on("session_switch", () => {
+  onSessionSwitch(pi, () => {
     handoffTimestamp = null;
   });
 
