@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
 
-import { parseGoalCommand } from "./command";
+import { completeGoalCommandArguments, parseGoalCommand } from "./command";
 
 describe("goal command parser", () => {
   it("parses classic objectives with quoted text and defaults", () => {
@@ -68,9 +68,99 @@ describe("goal command parser", () => {
       ok: true,
       value: { action: "resume", resume: true },
     });
+    expect(parseGoalCommand("clear")).toMatchObject({
+      ok: true,
+      value: { action: "clear" },
+    });
+    expect(parseGoalCommand("stop")).toMatchObject({
+      ok: true,
+      value: { action: "stop" },
+    });
     expect(parseGoalCommand("statusbar")).toMatchObject({
       ok: true,
       value: { action: "statusbar" },
     });
+  });
+
+  it("rejects extra lifecycle arguments", () => {
+    expect(parseGoalCommand("stop now")).toEqual({
+      ok: false,
+      error: "/goal stop does not accept extra arguments.",
+    });
+    expect(parseGoalCommand("stop --dry-run")).toEqual({
+      ok: false,
+      error: "/goal stop does not accept extra arguments.",
+    });
+    expect(parseGoalCommand("stop --resume")).toEqual({
+      ok: false,
+      error: "/goal stop does not accept extra arguments.",
+    });
+    expect(parseGoalCommand("clear now")).toEqual({
+      ok: false,
+      error: "/goal clear does not accept extra arguments.",
+    });
+  });
+
+  it("completes empty first-token subcommands with descriptions", () => {
+    expect(completeGoalCommandArguments("")).toEqual([
+      {
+        value: "task ",
+        label: "task",
+        description: "Start a budget-limited task goal",
+      },
+      {
+        value: "status",
+        label: "status",
+        description: "Show active goal status",
+      },
+      {
+        value: "statusbar",
+        label: "statusbar",
+        description: "Refresh goal status bar text",
+      },
+      {
+        value: "pause",
+        label: "pause",
+        description: "Pause the active goal",
+      },
+      {
+        value: "resume",
+        label: "resume",
+        description: "Resume a paused goal",
+      },
+      {
+        value: "clear",
+        label: "clear",
+        description: "Clear the active goal",
+      },
+      {
+        value: "stop",
+        label: "stop",
+        description: "Clear active goal; does not interrupt current turn",
+      },
+    ]);
+  });
+
+  it("completes first-token subcommands", () => {
+    expect(completeGoalCommandArguments("st")).toEqual([
+      {
+        value: "status",
+        label: "status",
+        description: "Show active goal status",
+      },
+      {
+        value: "statusbar",
+        label: "statusbar",
+        description: "Refresh goal status bar text",
+      },
+      {
+        value: "stop",
+        label: "stop",
+        description: "Clear active goal; does not interrupt current turn",
+      },
+    ]);
+    expect(completeGoalCommandArguments("task --")).toEqual([]);
+    expect(completeGoalCommandArguments("status ")).toEqual([]);
+    expect(completeGoalCommandArguments("stop ")).toEqual([]);
   });
 });

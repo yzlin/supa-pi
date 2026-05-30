@@ -7,7 +7,7 @@ import { Text } from "@earendil-works/pi-tui";
 import { Type } from "typebox";
 
 import { loadGoalCheckpoint, saveGoalCheckpoint } from "./core/checkpoint";
-import { parseGoalCommand } from "./core/command";
+import { completeGoalCommandArguments, parseGoalCommand } from "./core/command";
 import { captureDirtyBaseline } from "./core/dirty-baseline";
 import { buildGoalTaskPacket, buildGoalTaskPrompt } from "./core/packet";
 import {
@@ -724,7 +724,8 @@ export default function goalExtension(pi: ExtensionAPI): void {
 
   pi.registerCommand("goal", {
     description:
-      "/goal <objective> | /goal task --tasks N <objective> | /goal status|pause|resume|clear",
+      "/goal <objective> | /goal task --tasks N <objective> | /goal status|pause|resume|clear|stop (clears active goal; Esc interrupts current turn)",
+    getArgumentCompletions: completeGoalCommandArguments,
     handler: (args, ctx) => {
       const parsed = parseGoalCommand(args ?? "");
       if (!parsed.ok) {
@@ -799,7 +800,7 @@ export default function goalExtension(pi: ExtensionAPI): void {
         sendPrompt(pi, ctx, promptFor(saved.value));
         return;
       }
-      if (input.action === "clear") {
+      if (input.action === "clear" || input.action === "stop") {
         if (activeGoal && activeGoalCwd === cwd) {
           const saved = saveGoal(pi, { ...activeGoal, status: "cleared" }, cwd);
           if (!saved.ok) {

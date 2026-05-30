@@ -16,6 +16,12 @@ interface Token {
   value: string;
 }
 
+export interface GoalCommandCompletion {
+  value: string;
+  label: string;
+  description: string;
+}
+
 const WHITESPACE = /\s/;
 const POSITIVE_INTEGER = /^\d+$/;
 const OBJECTIVE_WHITESPACE = /\s+/g;
@@ -25,8 +31,43 @@ const ACTIONS = new Set<GoalCommandAction>([
   "status",
   "pause",
   "clear",
+  "stop",
   "statusbar",
 ]);
+
+const FIRST_TOKEN_COMPLETIONS: GoalCommandCompletion[] = [
+  {
+    value: "task ",
+    label: "task",
+    description: "Start a budget-limited task goal",
+  },
+  { value: "status", label: "status", description: "Show active goal status" },
+  {
+    value: "statusbar",
+    label: "statusbar",
+    description: "Refresh goal status bar text",
+  },
+  { value: "pause", label: "pause", description: "Pause the active goal" },
+  { value: "resume", label: "resume", description: "Resume a paused goal" },
+  { value: "clear", label: "clear", description: "Clear the active goal" },
+  {
+    value: "stop",
+    label: "stop",
+    description: "Clear active goal; does not interrupt current turn",
+  },
+];
+
+export function completeGoalCommandArguments(
+  argumentPrefix: string
+): GoalCommandCompletion[] {
+  const trimmedStart = argumentPrefix.trimStart();
+  if (WHITESPACE.test(trimmedStart)) {
+    return [];
+  }
+  return FIRST_TOKEN_COMPLETIONS.filter((completion) =>
+    completion.value.startsWith(trimmedStart)
+  );
+}
 
 function tokenize(rawArgs: string): Result<Token[]> {
   const tokens: Token[] = [];
@@ -109,8 +150,8 @@ function normalizeObjective(objective: string): string {
 
 export function parseGoalCommand(rawArgs: string): Result<GoalCommandInput> {
   const tokenized = tokenize(rawArgs);
-  if (!tokenized.ok) {
-    return tokenized;
+  if ("error" in tokenized) {
+    return { ok: false, error: tokenized.error };
   }
 
   const tokens = tokenized.value.map((token) => token.value);
@@ -132,6 +173,9 @@ export function parseGoalCommand(rawArgs: string): Result<GoalCommandInput> {
     action = first as GoalCommandAction;
     resume = action === "resume";
     index = 1;
+  }
+  if (action === "stop" && tokens.length > index) {
+    return { ok: false, error: "/goal stop does not accept extra arguments." };
   }
 
   for (; index < tokens.length; index += 1) {
@@ -168,8 +212,8 @@ export function parseGoalCommand(rawArgs: string): Result<GoalCommandInput> {
         return { ok: false, error: `${token} requires a value.` };
       }
       const parsed = parsePositiveInteger(next, token);
-      if (!parsed.ok) {
-        return parsed;
+      if ("error" in parsed) {
+        return { ok: false, error: parsed.error };
       }
       if (token === "--tasks") {
         taskBudget = parsed.value;
@@ -185,8 +229,8 @@ export function parseGoalCommand(rawArgs: string): Result<GoalCommandInput> {
     ) {
       const [flag = "", value = ""] = token.split("=", 2);
       const parsed = parsePositiveInteger(value, flag);
-      if (!parsed.ok) {
-        return parsed;
+      if ("error" in parsed) {
+        return { ok: false, error: parsed.error };
       }
       if (flag === "--tasks") {
         taskBudget = parsed.value;
@@ -208,6 +252,12 @@ export function parseGoalCommand(rawArgs: string): Result<GoalCommandInput> {
   const normalizedObjective = normalizeObjective(objective);
   if (mode === "task" && action === "start" && taskBudget === null) {
     return { ok: false, error: "/goal task requires --tasks N." };
+  }
+  if (action !== "start" && normalizedObjective.length > 0) {
+    return {
+      ok: false,
+      error: `/goal ${action} does not accept extra arguments.`,
+    };
   }
   if (action === "start" && normalizedObjective.length === 0) {
     return { ok: false, error: "Goal objective is required." };

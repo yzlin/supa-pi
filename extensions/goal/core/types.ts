@@ -14,6 +14,7 @@ export type GoalCommandAction =
   | "status"
   | "pause"
   | "clear"
+  | "stop"
   | "statusbar";
 
 export type GoalTaskStatus =

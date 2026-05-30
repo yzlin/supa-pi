@@ -12,6 +12,7 @@ Goal Extension adds `/goal`, a checkpointed objective runner for Pi sessions.
 /goal pause
 /goal resume
 /goal clear
+/goal stop
 ```
 
 Options:
@@ -52,6 +53,8 @@ Task statuses:
 - `complete`
 
 The status bar shows `goal:<status>` with task counts while a goal is active, paused, blocked, budget-limited, or complete. `clear` removes the status bar entry.
+
+`/goal stop` is an alias for clearing the active goal. It clears Goal Extension state and status display after the command is handled, but it does not interrupt the current agent turn. Press Esc to interrupt the current turn immediately.
 
 ## Checkpoints
 

@@ -231,6 +231,20 @@ describe("goal extension", () => {
     expect(harness.statuses.at(-1)).toBeUndefined();
   });
 
+  it("stops like clear and restores active tools", () => {
+    const harness = createHarness();
+
+    harness.command.handler("task --tasks 1 ship", harness.ctx(true));
+    harness.command.handler("stop", harness.ctx(true));
+
+    expect(harness.getActiveTools()).toEqual(["bash", "read"]);
+    expect(harness.statuses.at(-1)).toBeUndefined();
+    expect(harness.appendEntries.at(-1)).toEqual({
+      type: "goal-state",
+      data: { cwd: null, goalId: null },
+    });
+  });
+
   it("goal_checkpoint persists valid status patches and rejects budget rewrites", async () => {
     const harness = createHarness();
     const tool = getTool(harness);
