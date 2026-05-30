@@ -25,6 +25,7 @@ Documented extensions in this repo include:
 - **`extensions/init-deep`** — deterministic `/init-deep` command flow for generating hierarchical `AGENTS.md`
 - **`extensions/questionnaire`** — active structured clarification tool with bounded schema, single/multi-question TUI flows, preview notes, validation, and locally documented rpiv divergences in `docs/context/questionnaire.md`
 - **`extensions/context-docs`** — deterministic `/context-setup`, `/context-note`, `/adr`, `/context-review`, and `/context-grill` workflows for durable project context docs
+- **`extensions/docs-list`** — `docs_list` tool for discovering project markdown docs before coding; backed by the same implementation as the `docs-list` CLI
 - **`extensions/code-improvement`** — scoped `/simplify` code-simplifier delegation with strict target grammar, `--extra` guidance, `--yes` consent bypass for large/PR scopes, hard file allowlists, and `/improve-codebase-architecture` read-only architecture review workflow
 - **`extensions/review`** — interactive current-session `/review` workflow with `/review-summary` and `/review-fix` follow-ups plus reviewer-agent orchestration; adapted in part from `@earendil-works/pi-review`
 - **`extensions/smart-docs`** — deterministic `/smart-docs` command flow for codebase documentation generation
@@ -146,6 +147,8 @@ The setup script installs these Pi packages if they are not already present. It 
 
 - Extension registration lives in `package.json`
 - Installing this package globally exposes `docs-list`, which runs `scripts/docs-list.ts` against the current working directory's `docs/` folder.
+- Active Pi registers `docs_list`, a tool for the same docs-discovery behavior. It defaults to `cwd/docs`, accepts an optional safe relative docs path, strips a leading `@`, rejects absolute or escaping paths, skips `archive` and `research` directories, and returns readable output plus structured doc metadata and front matter warnings.
+- Use `docs_list` first when it is available; otherwise run `docs-list` or inspect the docs folder directly before coding.
 - Formatting/linting is configured via `biome.jsonc`
 - Biome scripts:
   - `bun run format`

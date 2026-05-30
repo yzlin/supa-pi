@@ -16,6 +16,8 @@ Do not describe `extensions/om` as active runtime behavior unless package regist
 
 `extensions/obsidian` is active. It loads vault-local `CLAUDE.md` / `CLAUDE.MD` context from configured Obsidian vaults in `~/.pi/agent/obsidian.json`, injects loaded context through provider payload hooks, and exposes `/obsidian status`.
 
+`extensions/docs-list` is active. It registers the `docs_list` tool, backed by the same docs-discovery implementation as the `docs-list` CLI. It defaults to `cwd/docs`, accepts an optional safe relative path (leading `@` stripped), excludes `archive` and `research` directories, and returns readable output plus structured doc metadata and front matter warnings.
+
 `extensions/fast` is active. It registers:
 
 - `/fast [on|off|status]` (bare `/fast` toggles)

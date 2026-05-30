@@ -30,6 +30,7 @@
       "./extensions/tool-display",
       "./extensions/init-deep",
       "./extensions/smart-docs",
+      "./extensions/docs-list",
       "./extensions/pieditor",
       "./extensions/lsp",
       "./extensions/skills",

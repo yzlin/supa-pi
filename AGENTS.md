@@ -14,7 +14,8 @@
 
 ## Docs
 
-- Start: run docs list (`docs-list` here if present; ignore if not installed); open docs before coding.
+- Start: discover relevant docs before coding; use `docs_list` first when available, otherwise use the local docs-list command or equivalent file search.
+- Open docs whose summaries or `read_when` hints match the task.
 - Follow links until domain makes sense.
 - Keep notes short; update docs when behavior/API changes (no ship w/o docs).
 - Add `read_when` hints on cross-cutting docs.
