@@ -47,6 +47,7 @@ function createMockCtx(
     hasUI?: boolean;
     select?: (message: string, items: string[]) => Promise<string | null>;
     editor?: (message: string, value: string) => Promise<string | null>;
+    custom?: <T>(renderer: unknown) => Promise<T>;
     cwd?: string;
   } = {}
 ) {
@@ -72,6 +73,7 @@ function createMockCtx(
         },
         select: options.select,
         editor: options.editor,
+        custom: options.custom,
       },
     },
   };
@@ -228,6 +230,24 @@ describe("review direct targets", () => {
       "Review the code in the following paths: src, docs guides"
     );
     expect(message).toContain("check public API");
+  });
+
+  it("keeps the default folder target as cwd instead of parent", async () => {
+    const runtime = createMockPiRuntime();
+    const { ctx } = createMockCtx([], {
+      custom: async () => "folder" as never,
+      editor: async (_message, value) => value,
+    });
+
+    reviewExtension(runtime.pi as never);
+    const handler = runtime.commands.get("review")?.handler;
+
+    expect(handler).toBeDefined();
+    await handler?.("--auto-reviewers", ctx as never);
+
+    const message = String(runtime.sentUserMessages[0]?.content);
+    expect(message).toContain("Review the code in the following paths: .\n");
+    expect(message).not.toContain("Review the code in the following paths: ..");
   });
 });
 

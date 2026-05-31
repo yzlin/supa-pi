@@ -177,7 +177,7 @@ const PULL_REQUEST_PROMPT_FALLBACK =
   "Review pull request #{prNumber} (\"{title}\") against the base branch '{baseBranch}'. Start by finding the merge base between the current branch and {baseBranch} (e.g., `git merge-base HEAD {baseBranch}`), then run `git diff` against that SHA to see the changes that would be merged. Provide prioritized, actionable findings.";
 
 const FOLDER_REVIEW_PROMPT =
-  "Review the code in the following paths: {paths}. This is a snapshot review (not a diff). Read the files directly in these paths and provide prioritized, actionable findings.";
+  "Review the code in the following paths: {paths}\nThis is a snapshot review (not a diff). Read the files directly in these paths and provide prioritized, actionable findings.";
 
 // The detailed review rubric (adapted from Codex's review_prompt.md)
 const REVIEW_RUBRIC = `# Review Guidelines
