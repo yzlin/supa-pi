@@ -28,7 +28,7 @@
 - `extensions/goal/README.md` — read before changing `/goal`, goal task mode, goal checkpoint behavior, goal status rendering, or Goal Extension registration.
 - `extensions/init-deep/README.md` — read before changing `/init-deep` AGENTS.md generation behavior.
 - `extensions/lsp/README.md` — read before changing the LSP tool or `/lsp` command behavior.
-- `extensions/pieditor/README.md` — read before changing editor UX features such as file picking, shell completions, raw paste, command remapping, or status bar behavior.
+- `@yzlin/pieditor` — external npm-installed Pi package for editor UX behavior; `setup.sh` installs it via `npm:@yzlin/pieditor`.
 - `docs/context/questionnaire.md` — read before changing `extensions/questionnaire/*` behavior.
 - `extensions/tool-display/README.md` — read before changing tool renderer ownership, config, skill-file `read` override behavior, tool-display metadata, or RTK full-skill-read compaction exemptions.
 - `extensions/rtk/README.md` — read before changing output compaction, `bash` ownership, or `/rtk` behavior.

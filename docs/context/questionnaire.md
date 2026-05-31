@@ -55,9 +55,9 @@ Answer variants:
 
 Cancelled or invalid runs return text content plus `details.cancelled: true`; validation errors also include `details.error` with issue objects.
 
-## Initial pieditor replacement lease integration
+## Pieditor replacement lease integration
 
-When the questionnaire opens its custom TUI through `ctx.ui.custom`, it wraps that UI in pieditor's internal replacement-surface lease with owner `questionnaire` and id `custom-ui`.
+When the questionnaire opens its custom TUI through `ctx.ui.custom`, it loads `@yzlin/pieditor/replacement-surface-lease` and wraps that UI in pieditor's replacement-surface lease with owner `questionnaire` and id `custom-ui`. If the pieditor package is unavailable, questionnaire still opens normally without a lease.
 
 Effects:
 

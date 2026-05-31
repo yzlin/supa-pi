@@ -5,7 +5,7 @@ import { visibleWidth } from "@earendil-works/pi-tui";
 import {
   clearReplacementSurfaceLeases,
   getActiveReplacementLeaseDiagnostics,
-} from "../pieditor/fixed-editor/replacement-lease";
+} from "@yzlin/pieditor/replacement-surface-lease";
 import questionnaire, {
   CUSTOM_OPTION_LABEL,
   CUSTOM_OPTION_VALUE,

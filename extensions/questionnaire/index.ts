@@ -12,13 +12,12 @@ import {
   Text,
   truncateToWidth,
 } from "@earendil-works/pi-tui";
+import type {
+  ReplacementLeaseModule,
+  ReplacementSurface,
+} from "@yzlin/pieditor/replacement-surface-lease";
 import { Type } from "typebox";
 
-import {
-  hasReplacementLeaseCompositor,
-  type ReplacementSurface,
-  withReplacementSurfaceLease,
-} from "../pieditor/fixed-editor/replacement-lease.js";
 import { routeQuestionnaireKey } from "./keys";
 import { renderQuestionnaireRuntime } from "./render";
 import { createQuestionnaireEnvelope } from "./response";
@@ -46,6 +45,23 @@ import {
 
 const CLARIFICATION_TRIGGER_REGEX =
   /\b(could you|can you|would you|do you want|would you prefer|do you prefer|which|what should|should i|any preference|please clarify|confirm)\b/i;
+
+const FALLBACK_REPLACEMENT_LEASE_MODULE: ReplacementLeaseModule = {
+  hasReplacementLeaseCompositor: () => false,
+  withReplacementSurfaceLease: (_options, run) => run(),
+};
+
+let replacementLeaseModulePromise: Promise<ReplacementLeaseModule> | null = null;
+
+async function loadReplacementLeaseModule(): Promise<ReplacementLeaseModule> {
+  replacementLeaseModulePromise ??= import(
+    "@yzlin/pieditor/replacement-surface-lease"
+  )
+    .then((module) => module as ReplacementLeaseModule)
+    .catch(() => FALLBACK_REPLACEMENT_LEASE_MODULE);
+
+  return replacementLeaseModulePromise;
+}
 
 const QUESTIONNAIRE_REPLACEMENT_OWNER = "questionnaire";
 const QUESTIONNAIRE_REPLACEMENT_SURFACE_ID = "custom-ui";
@@ -442,7 +458,9 @@ export default function questionnaire(pi: ExtensionAPI): void {
       }
 
       const questions = validation.questions.map(normalizeQuestion);
-      const shouldUseFixedReplacement = hasReplacementLeaseCompositor();
+      const replacementLeaseModule = await loadReplacementLeaseModule();
+      const shouldUseFixedReplacement =
+        replacementLeaseModule.hasReplacementLeaseCompositor();
       let replacementComponent: {
         render(width: number): string[];
         invalidate(): void;
@@ -453,7 +471,7 @@ export default function questionnaire(pi: ExtensionAPI): void {
         render: (width) => replacementComponent?.render(width) ?? [],
       };
 
-      const result = await withReplacementSurfaceLease(
+      const result = await replacementLeaseModule.withReplacementSurfaceLease(
         {
           owner: QUESTIONNAIRE_REPLACEMENT_OWNER,
           id: QUESTIONNAIRE_REPLACEMENT_SURFACE_ID,

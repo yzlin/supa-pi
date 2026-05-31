@@ -21,7 +21,7 @@ Documented extensions in this repo include:
 - **`extensions/om`** — disabled Observational Memory extension code for branch-local memory restore, observer/reflector passes, and `/om` admin commands; present in the repo but not registered in `package.json -> pi.extensions`
 - **`extensions/rtk`** — output compaction and `/rtk stats` dashboard; owns `bash` execution, rewrite, and stats
 - **`extensions/caveman`** — standalone `/caveman` mode with per-session persistence and generic extension status
-- **`extensions/pieditor`** — editor UX improvements like `@` file picking, shell completions, raw paste, command remapping, and a locally maintained fork lineage from the original upstream extension
+- **`@yzlin/pieditor`** — npm-installed Pi package for editor UX improvements like `@` file picking, shell completions, raw paste, and command remapping; installed by `setup.sh`
 - **`extensions/init-deep`** — deterministic `/init-deep` command flow for generating hierarchical `AGENTS.md`
 - **`extensions/questionnaire`** — active structured clarification tool with bounded schema, single/multi-question TUI flows, preview notes, validation, and locally documented rpiv divergences in `docs/context/questionnaire.md`
 - **`extensions/context-docs`** — deterministic `/context-setup`, `/context-note`, `/adr`, `/context-review`, and `/context-grill` workflows for durable project context docs

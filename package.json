@@ -31,7 +31,6 @@
       "./extensions/init-deep",
       "./extensions/smart-docs",
       "./extensions/docs-list",
-      "./extensions/pieditor",
       "./extensions/lsp",
       "./extensions/skills",
       "./extensions/obsidian",
@@ -42,15 +41,11 @@
     "ignore": "^7.0.5"
   },
   "scripts": {
-    "build:syntect-picker-preview": "node ./extensions/pieditor/native/syntect-picker-preview/scripts/build.mjs",
-    "build:syntect-picker-preview:debug": "node ./extensions/pieditor/native/syntect-picker-preview/scripts/build.mjs --debug",
     "check": "biome check .",
     "check:write": "biome check --write .",
-    "check:syntect-picker-preview": "cargo check --manifest-path ./extensions/pieditor/native/syntect-picker-preview/Cargo.toml",
     "format": "biome format --write .",
     "lint": "biome lint .",
     "lint:fix": "biome lint --write .",
-    "test:syntect-picker-preview": "cargo test --manifest-path ./extensions/pieditor/native/syntect-picker-preview/Cargo.toml",
     "test": "bun test"
   },
   "peerDependencies": {
@@ -62,6 +57,7 @@
   "devDependencies": {
     "@biomejs/biome": "^2.4.7",
     "@types/bun": "^1.3.12",
+    "@yzlin/pieditor": "^1.0.0",
     "typescript": "^6.0.3",
     "ultracite": "^7.3.1"
   }
