@@ -25,6 +25,7 @@
 - `extensions/code-improvement/SIMPLIFY.md` and `docs/context/code-improvement.md` — read before changing `/simplify` behavior, scoped simplify boundaries, or code-simplifier delegation.
 - `extensions/code-improvement/IMPROVE-CODEBASE-ARCHITECTURE.md` — read before changing `/improve-codebase-architecture` architecture review behavior.
 - `extensions/context-docs/README.md` — read before changing `/context-setup`, `/context-note`, `/adr`, `/context-review`, or `/context-grill` behavior.
+- `extensions/execute/README.md` — read before changing `/execute`, Execution Brief reuse/synthesis, or execute orchestration behavior.
 - `extensions/goal/README.md` — read before changing `/goal`, goal task mode, goal checkpoint behavior, goal status rendering, or Goal Extension registration.
 - `extensions/init-deep/README.md` — read before changing `/init-deep` AGENTS.md generation behavior.
 - `extensions/lsp/README.md` — read before changing the LSP tool or `/lsp` command behavior.

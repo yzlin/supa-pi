@@ -13,6 +13,40 @@ import { join } from "node:path";
 import { EXECUTE_PROMPT } from "./constants";
 import executeExtension from "./index";
 
+const EXECUTION_BRIEF = [
+  "# Execution Brief",
+  "## Execution Scope\nShip it",
+  "## Plan\n- Implement it",
+  "## Done Criteria\n- Done",
+  "## Verification\n- Test it",
+  "## Out of Scope\n- Anything else",
+].join("\n\n");
+
+const EXECUTION_BRIEF_SYNTHESIS_MESSAGE_PARTS = [
+  "Synthesize a new Execution Brief from the current session context.",
+  "You may inspect the repo read-only if needed.",
+  "Do not implement anything yet.",
+  "If material ambiguity exists, ask concise clarifying questions and emit no executable brief.",
+  "- # Execution Brief",
+  "- ## Execution Scope",
+  "- ## Plan",
+  "- ## Done Criteria",
+  "- ## Verification",
+  "- ## Out of Scope",
+];
+
+function expectExecutionBriefSynthesisRequest(
+  content: string | undefined
+): void {
+  if (content === undefined) {
+    throw new Error("Expected sent user message content");
+  }
+
+  for (const expected of EXECUTION_BRIEF_SYNTHESIS_MESSAGE_PARTS) {
+    expect(content).toContain(expected);
+  }
+}
+
 function createMockCtx(
   branchEntries: Array<{
     type: string;
@@ -149,14 +183,14 @@ describe("execute command", () => {
     });
   });
 
-  it("reuses the last session message when /execute has no args", async () => {
+  it("executes the latest assistant Execution Brief when /execute has no args", async () => {
     const runtime = createMockPiRuntime();
     const { ctx, notifications } = createMockCtx([
       {
         type: "message",
         message: {
           role: "assistant",
-          content: [{ type: "text", text: "1. Ship it\n2. Validate it" }],
+          content: [{ type: "text", text: EXECUTION_BRIEF }],
         },
       },
     ]);
@@ -169,21 +203,79 @@ describe("execute command", () => {
 
     expect(runtime.sentUserMessages).toEqual([
       {
-        content: `${EXECUTE_PROMPT}\n\n<plan>\n1. Ship it\n2. Validate it\n</plan>`,
+        content: `${EXECUTE_PROMPT}\n\n<plan>\n${EXECUTION_BRIEF}\n</plan>`,
         options: undefined,
       },
     ]);
     expect(notifications).toEqual([]);
   });
 
-  it("skips prior /execute prompt wrappers when reusing the last message", async () => {
+  it("asks for an Execution Brief when a later user message makes the brief stale", async () => {
     const runtime = createMockPiRuntime();
     const { ctx, notifications } = createMockCtx([
       {
         type: "message",
         message: {
           role: "assistant",
-          content: [{ type: "text", text: "Ship the settings migration" }],
+          content: EXECUTION_BRIEF,
+        },
+      },
+      {
+        type: "message",
+        message: {
+          role: "user",
+          content: "Actually, include settings too",
+        },
+      },
+    ]);
+
+    executeExtension(runtime.pi as never);
+    const handler = runtime.commands.get("execute")?.handler;
+
+    expect(handler).toBeDefined();
+    await handler?.("   ", ctx as never);
+
+    expectExecutionBriefSynthesisRequest(runtime.sentUserMessages[0]?.content);
+    expect(notifications).toEqual([]);
+  });
+
+  it("asks for an Execution Brief when a later textless user message makes the brief stale", async () => {
+    const runtime = createMockPiRuntime();
+    const { ctx, notifications } = createMockCtx([
+      {
+        type: "message",
+        message: {
+          role: "assistant",
+          content: EXECUTION_BRIEF,
+        },
+      },
+      {
+        type: "message",
+        message: {
+          role: "user",
+          content: [],
+        },
+      },
+    ]);
+
+    executeExtension(runtime.pi as never);
+    const handler = runtime.commands.get("execute")?.handler;
+
+    expect(handler).toBeDefined();
+    await handler?.("   ", ctx as never);
+
+    expectExecutionBriefSynthesisRequest(runtime.sentUserMessages[0]?.content);
+    expect(notifications).toEqual([]);
+  });
+
+  it("asks for an Execution Brief when a later /execute wrapper consumed the brief", async () => {
+    const runtime = createMockPiRuntime();
+    const { ctx, notifications } = createMockCtx([
+      {
+        type: "message",
+        message: {
+          role: "assistant",
+          content: EXECUTION_BRIEF,
         },
       },
       {
@@ -201,16 +293,11 @@ describe("execute command", () => {
     expect(handler).toBeDefined();
     await handler?.("   ", ctx as never);
 
-    expect(runtime.sentUserMessages).toEqual([
-      {
-        content: `${EXECUTE_PROMPT}\n\n<plan>\nShip the settings migration\n</plan>`,
-        options: undefined,
-      },
-    ]);
+    expectExecutionBriefSynthesisRequest(runtime.sentUserMessages[0]?.content);
     expect(notifications).toEqual([]);
   });
 
-  it("warns when /execute has no args and no reusable message", async () => {
+  it("asks for an Execution Brief when /execute has no args and no usable brief", async () => {
     const runtime = createMockPiRuntime();
     const { ctx, notifications } = createMockCtx();
 
@@ -220,12 +307,8 @@ describe("execute command", () => {
     expect(handler).toBeDefined();
     await handler?.("   ", ctx as never);
 
-    expect(runtime.sentUserMessages).toEqual([]);
-    expect(notifications).toContainEqual({
-      message:
-        "Usage: /execute [plan] (or run it after a message to reuse that text)",
-      level: "warning",
-    });
+    expectExecutionBriefSynthesisRequest(runtime.sentUserMessages[0]?.content);
+    expect(notifications).toEqual([]);
   });
 });
 

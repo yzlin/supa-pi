@@ -11,6 +11,15 @@ interface MessageLike {
   content?: string | Array<{ type?: string; text?: string }>;
 }
 
+const EXECUTION_BRIEF_TITLE = "Execution Brief";
+const EXECUTION_BRIEF_REQUIRED_SECTIONS = [
+  "Execution Scope",
+  "Plan",
+  "Done Criteria",
+  "Verification",
+  "Out of Scope",
+] as const;
+
 function buildExecuteCommandMessage(args: string): string {
   const plan = args.trim();
   return plan
@@ -35,7 +44,36 @@ function extractTextContent(content: MessageLike["content"]): string {
     .trim();
 }
 
-function getLastPlanFromSession(ctx: ExtensionCommandContext): string {
+function hasMarkdownHeading(
+  text: string,
+  heading: string,
+  level: number
+): boolean {
+  const escapedHeading = heading.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return new RegExp(`^#{${level}}\\s+${escapedHeading}\\s*$`, "im").test(text);
+}
+
+function isExecutionBrief(text: string): boolean {
+  return (
+    hasMarkdownHeading(text, EXECUTION_BRIEF_TITLE, 1) &&
+    EXECUTION_BRIEF_REQUIRED_SECTIONS.every((section) =>
+      hasMarkdownHeading(text, section, 2)
+    )
+  );
+}
+
+function buildExecutionBriefSynthesisMessage(): string {
+  const requiredHeadings = [
+    `- # ${EXECUTION_BRIEF_TITLE}`,
+    ...EXECUTION_BRIEF_REQUIRED_SECTIONS.map((section) => `- ## ${section}`),
+  ].join("\n");
+
+  return `Synthesize a new Execution Brief from the current session context. You may inspect the repo read-only if needed. Do not implement anything yet. If material ambiguity exists, ask concise clarifying questions and emit no executable brief.\n\nThe brief must include these exact markdown sections:\n${requiredHeadings}`;
+}
+
+function getLastExecutionBriefFromSession(
+  ctx: ExtensionCommandContext
+): string {
   const branch = ctx.sessionManager.getBranch();
 
   for (let i = branch.length - 1; i >= 0; i--) {
@@ -45,16 +83,18 @@ function getLastPlanFromSession(ctx: ExtensionCommandContext): string {
     }
 
     const message = entry.message as MessageLike;
-    if (message.role !== "user" && message.role !== "assistant") {
+    if (message.role === "user") {
+      return "";
+    }
+
+    if (message.role !== "assistant") {
       continue;
     }
 
     const text = extractTextContent(message.content);
-    if (!text || text.startsWith(EXECUTE_PROMPT)) {
-      continue;
+    if (text && isExecutionBrief(text)) {
+      return text;
     }
-
-    return text;
   }
 
   return "";
@@ -67,23 +107,20 @@ export default function executeExtension(pi: ExtensionAPI): void {
     description:
       "Execute a plan via main-session task orchestration: /execute [plan]",
     handler: (args, ctx) => {
-      const task = (args ?? "").trim() || getLastPlanFromSession(ctx);
-      if (!task) {
-        ctx.ui.notify(
-          "Usage: /execute [plan] (or run it after a message to reuse that text)",
-          "warning"
-        );
-        return;
-      }
+      const explicitPlan = (args ?? "").trim();
+      const task = explicitPlan || getLastExecutionBriefFromSession(ctx);
+      const message = task
+        ? buildExecuteCommandMessage(task)
+        : buildExecutionBriefSynthesisMessage();
 
-      const message = buildExecuteCommandMessage(task);
       if (ctx.isIdle()) {
         pi.sendUserMessage(message);
-        return;
+        return Promise.resolve();
       }
 
       pi.sendUserMessage(message, { deliverAs: "followUp" });
       ctx.ui.notify("Queued /execute as a follow-up", "info");
+      return Promise.resolve();
     },
   });
 }
