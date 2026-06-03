@@ -77,6 +77,54 @@ function inventoryWithManyBundled(count: number) {
   });
 }
 
+const LEGACY_ESCAPE = "\u001b";
+const KITTY_ESCAPE = "\u001b[27u";
+const LEGACY_CTRL_B = "\u0002";
+const LEGACY_CTRL_F = "\u0006";
+const LEGACY_CTRL_N = "\u000e";
+const LEGACY_CTRL_P = "\u0010";
+const LEGACY_PAGE_DOWN = "\u001b[6~";
+const LEGACY_PAGE_UP = "\u001b[5~";
+const KITTY_CTRL_B = "\u001b[98;5u";
+const KITTY_CTRL_F = "\u001b[102;5u";
+
+const IGNORED_CTRL_NAVIGATION_KEYS = [LEGACY_CTRL_N, LEGACY_CTRL_P] as const;
+const PAGE_NAVIGATION_KEY_PAIRS = [
+  [LEGACY_CTRL_F, LEGACY_CTRL_B],
+  [KITTY_CTRL_F, KITTY_CTRL_B],
+  [LEGACY_PAGE_DOWN, LEGACY_PAGE_UP],
+] as const;
+
+interface NavigationTestComponent {
+  readonly state: { readonly selectedIndex: number };
+  handleInput(data: string): void;
+}
+
+function expectPageShortcutHelp(text: string): void {
+  expect(text).toContain("ctrl+b/ctrl+f page");
+  expect(text).not.toContain("ctrl+p");
+  expect(text).not.toContain("ctrl+n");
+}
+
+function expectIgnoredCtrlNavigationKeys(
+  component: NavigationTestComponent
+): void {
+  for (const key of IGNORED_CTRL_NAVIGATION_KEYS) {
+    component.handleInput(key);
+    expect(component.state.selectedIndex).toBe(0);
+  }
+}
+
+function expectPageNavigationKeys(component: NavigationTestComponent): void {
+  for (const [pageDownKey, pageUpKey] of PAGE_NAVIGATION_KEY_PAIRS) {
+    component.handleInput(pageDownKey);
+    expect(component.state.selectedIndex).toBeGreaterThan(1);
+
+    component.handleInput(pageUpKey);
+    expect(component.state.selectedIndex).toBe(0);
+  }
+}
+
 describe("skills install picker UI", () => {
   it("starts with no selected skills and renders installed/dirty row status", () => {
     const state = createInitialSkillsInstallPickerState();
@@ -89,6 +137,8 @@ describe("skills install picker UI", () => {
     expect(text).toContain("installed dirty");
     expect(text).toContain("[ ] bundled-demo");
     expect(text).toContain("space toggle");
+    expectPageShortcutHelp(text);
+    expect(text).toContain("esc/q cancel");
   });
 
   it("navigates, toggles selection, confirms selected skills, and cancels", () => {
@@ -108,6 +158,30 @@ describe("skills install picker UI", () => {
 
     transition = reduceSkillsInstallPickerState(state, "cancel", model.all);
     expect(transition.cancelled).toBe(true);
+  });
+
+  it("ignores ctrl+n and ctrl+p and uses page shortcuts for picker navigation", () => {
+    const model = inventoryWithManyBundled(30);
+    let state = createInitialSkillsInstallPickerState();
+
+    let transition = reduceSkillsInstallPickerState(
+      state,
+      "pageDown",
+      model.all
+    );
+    state = transition.state;
+    expect(state.selectedIndex).toBeGreaterThan(1);
+
+    transition = reduceSkillsInstallPickerState(state, "pageUp", model.all);
+    state = transition.state;
+    expect(state.selectedIndex).toBe(0);
+
+    const component = createSkillsInstallPickerComponent({
+      inventory: model,
+      done: () => undefined,
+    });
+    expectIgnoredCtrlNavigationKeys(component);
+    expectPageNavigationKeys(component);
   });
 
   it("keeps picker open and shows warning when confirming empty selection", () => {
@@ -144,12 +218,14 @@ describe("skills install picker UI", () => {
     component.handleInput("\r");
     expect(results).toEqual([["managed-demo"]]);
 
-    const cancelComponent = createSkillsInstallPickerComponent({
-      inventory: inventory(),
-      done: (selectedIds) => results.push(selectedIds),
-    });
-    cancelComponent.handleInput("q");
-    expect(results.at(-1)).toBeUndefined();
+    for (const cancelKey of ["q", LEGACY_ESCAPE, KITTY_ESCAPE]) {
+      const cancelComponent = createSkillsInstallPickerComponent({
+        inventory: inventory(),
+        done: (selectedIds) => results.push(selectedIds),
+      });
+      cancelComponent.handleInput(cancelKey);
+      expect(results.at(-1)).toBeUndefined();
+    }
   });
 });
 
@@ -203,7 +279,9 @@ describe("skills manager UI", () => {
     expect(text).toContain(
       "<dim:Actions: install/update/remove unavailable in this first slice>"
     );
-    expect(text).toContain("<dim:↑/k/ctrl+p ↓/j/ctrl+n navigate");
+    expect(text).toContain("<dim:↑/k ↓/j navigate");
+    expectPageShortcutHelp(text);
+    expect(text).toContain("esc/q close");
   });
 
   it("renders local SKILL.md content in preview when available", () => {
@@ -240,7 +318,8 @@ describe("skills manager UI", () => {
     const text = lines.join("\n");
 
     expect(text).toContain("<dim:…>");
-    expect(text).toContain("<dim:↑/k/ctrl+p ↓/j/ctrl+n navigate");
+    expect(text).toContain("<dim:↑/k ↓/j navigate");
+    expectPageShortcutHelp(text);
     expect(lines.at(-1)).toContain("<border:╰");
   });
 
@@ -263,7 +342,8 @@ describe("skills manager UI", () => {
     expect(text.indexOf("<dim:Preview>")).toBeGreaterThan(
       text.indexOf("<accent:›> <bold:bundled-39>")
     );
-    expect(text).toContain("<dim:↑/k/ctrl+p ↓/j/ctrl+n navigate");
+    expect(text).toContain("<dim:↑/k ↓/j navigate");
+    expectPageShortcutHelp(text);
     expect(lines.at(-1)).toContain("<border:╰");
   });
 
@@ -285,8 +365,7 @@ describe("skills manager UI", () => {
     expect(text).toContain(
       "Browse skill inventory and preview local SKILL.md content"
     );
-    expect(text).toContain("ctrl+p");
-    expect(text).toContain("ctrl+n");
+    expectPageShortcutHelp(text);
   });
 
   it("updates preview when navigating", () => {
@@ -296,14 +375,14 @@ describe("skills manager UI", () => {
     });
 
     expect(component.render().join("\n")).toContain("Managed skill");
-    component.handleInput("\u000e");
+    component.handleInput("j");
 
     const text = component.render().join("\n");
     expect(text).toContain("bundled-demo");
     expect(text).toContain("Bundled/read-only skill");
     expect(text).toContain("Status: clean/read-only");
 
-    component.handleInput("\u0010");
+    component.handleInput("k");
     expect(component.render().join("\n")).toContain("Managed skill");
   });
 
@@ -332,29 +411,39 @@ describe("skills manager UI", () => {
       done: () => undefined,
     });
 
-    component.handleInput("\u000e");
+    component.handleInput("j");
 
     const text = component.render().join("\n");
     expect(text).toContain("<dim:Status: clean/read-only>");
     expect(text).not.toContain("<success:Status: clean/read-only>");
   });
 
-  it("opens action menu shell and closes with escape", () => {
-    let closed = false;
+  it("closes with q and escape even when a nested action shell is open", () => {
+    for (const closeKey of ["q", LEGACY_ESCAPE, KITTY_ESCAPE]) {
+      let closed = false;
+      const component = createSkillsManagerComponent({
+        inventory: inventory(),
+        done: () => {
+          closed = true;
+        },
+      });
+
+      component.handleInput("\r");
+      expect(component.render().join("\n")).toContain(
+        "Actions: install/update/remove unavailable"
+      );
+      component.handleInput(closeKey);
+      expect(closed).toBe(true);
+    }
+  });
+
+  it("ignores ctrl+n and ctrl+p and uses ctrl+f and ctrl+b for page navigation", () => {
     const component = createSkillsManagerComponent({
-      inventory: inventory(),
-      done: () => {
-        closed = true;
-      },
+      inventory: inventoryWithManyBundled(30),
+      done: () => undefined,
     });
 
-    component.handleInput("\r");
-    expect(component.render().join("\n")).toContain(
-      "Actions: install/update/remove unavailable"
-    );
-    component.handleInput("\u001b");
-    expect(closed).toBe(false);
-    component.handleInput("\u001b");
-    expect(closed).toBe(true);
+    expectIgnoredCtrlNavigationKeys(component);
+    expectPageNavigationKeys(component);
   });
 });

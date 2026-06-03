@@ -1,4 +1,8 @@
-import { truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
+import {
+  parseKey,
+  truncateToWidth,
+  visibleWidth,
+} from "@earendil-works/pi-tui";
 
 import {
   buildSkillPreviewModel,
@@ -36,6 +40,8 @@ export interface SkillsInstallPickerState {
 export type SkillsInstallPickerInput =
   | "down"
   | "up"
+  | "pageDown"
+  | "pageUp"
   | "toggle"
   | "confirm"
   | "cancel";
@@ -52,9 +58,50 @@ export interface SkillsInstallPickerComponentOptions {
   done: (selectedIds: string[] | undefined) => void;
 }
 
-const CLOSE_KEYS = new Set(["\u001b", "q"]);
-const DOWN_KEYS = new Set(["\u001b[B", "j", "\u000e"]);
-const UP_KEYS = new Set(["\u001b[A", "k", "\u0010"]);
+const PAGE_NAVIGATION_STEP = 10;
+
+type SkillsNavigationInput = Extract<
+  SkillsInstallPickerInput,
+  "down" | "up" | "pageDown" | "pageUp"
+>;
+
+function isCloseKey(key: string | undefined): boolean {
+  return key === "escape" || key === "q";
+}
+
+function navigationInputForKey(
+  key: string | undefined
+): SkillsNavigationInput | undefined {
+  switch (key) {
+    case "down":
+    case "j":
+      return "down";
+    case "up":
+    case "k":
+      return "up";
+    case "pageDown":
+    case "ctrl+f":
+      return "pageDown";
+    case "pageUp":
+    case "ctrl+b":
+      return "pageUp";
+    default:
+      return;
+  }
+}
+
+function selectionDeltaForInput(input: SkillsNavigationInput): number {
+  switch (input) {
+    case "down":
+      return 1;
+    case "up":
+      return -1;
+    case "pageDown":
+      return PAGE_NAVIGATION_STEP;
+    case "pageUp":
+      return -PAGE_NAVIGATION_STEP;
+  }
+}
 
 function clampIndex(index: number, length: number): number {
   if (length <= 0) {
@@ -349,7 +396,7 @@ export function renderSkillsManager(
   const help = color(
     theme,
     "dim",
-    "↑/k/ctrl+p ↓/j/ctrl+n navigate  / filter  backspace edit  enter actions  esc/q close"
+    "↑/k ↓/j navigate  pgup/pgdn ctrl+b/ctrl+f page  / filter  enter actions  esc/q close"
   );
   return [
     titleBorder(frameWidth, " Skills Manager ", theme),
@@ -389,16 +436,15 @@ export function reduceSkillsInstallPickerState(
     case "cancel":
       return { state, cancelled: true };
     case "down":
-      return {
-        state: {
-          selectedIndex: clampIndex(state.selectedIndex + 1, items.length),
-          selectedIds: state.selectedIds,
-        },
-      };
     case "up":
+    case "pageDown":
+    case "pageUp":
       return {
         state: {
-          selectedIndex: clampIndex(state.selectedIndex - 1, items.length),
+          selectedIndex: clampIndex(
+            state.selectedIndex + selectionDeltaForInput(input),
+            items.length
+          ),
           selectedIds: state.selectedIds,
         },
       };
@@ -460,7 +506,7 @@ export function renderSkillsInstallPicker(
   const help = color(
     theme,
     "dim",
-    "↑/k/ctrl+p ↓/j/ctrl+n navigate  space toggle  enter install selected  esc/q cancel"
+    "↑/k ↓/j navigate  pgup/pgdn ctrl+b/ctrl+f page  space toggle  enter install  esc/q cancel"
   );
   return [
     titleBorder(frameWidth, " Install Skills ", theme),
@@ -486,14 +532,13 @@ export function renderSkillsInstallPicker(
 function inputForInstallPicker(
   data: string
 ): SkillsInstallPickerInput | undefined {
-  if (CLOSE_KEYS.has(data)) {
+  const key = parseKey(data);
+  if (isCloseKey(key)) {
     return "cancel";
   }
-  if (DOWN_KEYS.has(data)) {
-    return "down";
-  }
-  if (UP_KEYS.has(data)) {
-    return "up";
+  const navigationInput = navigationInputForKey(key);
+  if (navigationInput) {
+    return navigationInput;
   }
   if (data === " ") {
     return "toggle";
@@ -501,7 +546,7 @@ function inputForInstallPicker(
   if (data === "\r" || data === "\n") {
     return "confirm";
   }
-  return undefined;
+  return;
 }
 
 export function createSkillsInstallPickerComponent({
@@ -572,8 +617,13 @@ export function createSkillsManagerComponent({
       return renderSkillsManager(inventory, state, width, theme);
     },
     handleInput(data: string) {
+      const key = parseKey(data);
       if (state.filterMode) {
-        if (data === "\r" || data === "\n" || data === "\u001b") {
+        if (key === "escape") {
+          done();
+          return;
+        }
+        if (key === "enter") {
           state.filterMode = false;
           return;
         }
@@ -589,21 +639,13 @@ export function createSkillsManagerComponent({
         }
         return;
       }
-      if (CLOSE_KEYS.has(data)) {
-        if (state.actionMenuOpen) {
-          state.actionMenuOpen = false;
-          return;
-        }
+      if (isCloseKey(key)) {
         done();
         return;
       }
-      if (DOWN_KEYS.has(data)) {
-        state.selectedIndex += 1;
-        normalizeSelection();
-        return;
-      }
-      if (UP_KEYS.has(data)) {
-        state.selectedIndex -= 1;
+      const navigationInput = navigationInputForKey(key);
+      if (navigationInput) {
+        state.selectedIndex += selectionDeltaForInput(navigationInput);
         normalizeSelection();
         return;
       }
