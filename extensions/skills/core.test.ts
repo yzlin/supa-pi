@@ -56,6 +56,24 @@ function writeSkill(
   );
 }
 
+interface SkillCommand {
+  handler(args: string, context: never): Promise<void>;
+}
+
+function registerSkillsCommand(): Map<string, SkillCommand> {
+  const commands = new Map<string, SkillCommand>();
+  const pi = {
+    on() {
+      // Test stub.
+    },
+    registerCommand(name: string, registeredCommand: unknown) {
+      commands.set(name, registeredCommand as SkillCommand);
+    },
+  };
+  skillsExtension(pi as never);
+  return commands;
+}
+
 describe("skills core", () => {
   it("discovers bundled SKILL.md files recursively", () => {
     const root = tempRoot("discover");
@@ -575,6 +593,11 @@ describe("skills core", () => {
 
     const root = tempRoot("skills-sh-github-name");
     const paths = createSkillsManagerPaths(join(root, ".pi", "agent"));
+    const exactSources: Array<{
+      path: string;
+      ref?: string;
+      subpath?: string;
+    }> = [];
     const sourceRoot = await materializeResolvedSkillSource(
       parseSkillSource(source),
       paths,
@@ -612,7 +635,15 @@ describe("skills core", () => {
         }
         return Promise.resolve(new Response("missing", { status: 404 }));
       },
-      result?.skillName
+      {
+        requestedSkillName: result?.skillName,
+        onExactSourceResolved: (identity) =>
+          exactSources.push({
+            path: identity.path,
+            ref: identity.ref,
+            subpath: identity.subpath,
+          }),
+      }
     );
 
     expect(listSkillsInSource(sourceRoot)).toMatchObject([
@@ -621,6 +652,276 @@ describe("skills core", () => {
     expect(
       requestedUrls.some((url) => url.endsWith("/skills/ai-sdk/SKILL.md"))
     ).toBe(false);
+    expect(exactSources).toEqual([
+      {
+        path: "vercel/ai/skills/use-ai-sdk",
+        ref: "HEAD",
+        subpath: "skills/use-ai-sdk",
+      },
+    ]);
+  });
+
+  it("reuses GitHub root metadata across requested broad source resolutions", async () => {
+    const root = tempRoot("github-root-metadata-cache");
+    const paths = createSkillsManagerPaths(join(root, ".pi", "agent"));
+    const githubSkillNameCache = new Map<string, string | null>();
+    const rawRequests: string[] = [];
+
+    const fetcher = (url: string | URL | Request) => {
+      const value = String(url);
+      if (value.includes("/git/trees/")) {
+        return Promise.resolve(
+          Response.json({
+            tree: [
+              { path: "skills/one/SKILL.md", type: "blob" },
+              { path: "skills/two/SKILL.md", type: "blob" },
+            ],
+          })
+        );
+      }
+      rawRequests.push(value);
+      if (value.endsWith("/skills/one/SKILL.md")) {
+        return Promise.resolve(new Response("# one\n\ndescription: One.\n"));
+      }
+      return Promise.resolve(new Response("# two\n\ndescription: Two.\n"));
+    };
+
+    await materializeResolvedSkillSource(
+      parseSkillSource("acme/repo"),
+      paths,
+      fetcher as typeof fetch,
+      { requestedSkillName: "one", githubSkillNameCache }
+    );
+    await materializeResolvedSkillSource(
+      parseSkillSource("acme/repo"),
+      paths,
+      fetcher as typeof fetch,
+      { requestedSkillName: "two", githubSkillNameCache }
+    );
+
+    expect(
+      rawRequests.filter((url) => url.endsWith("/skills/one/SKILL.md"))
+    ).toHaveLength(2);
+    expect(
+      rawRequests.filter((url) => url.endsWith("/skills/two/SKILL.md"))
+    ).toHaveLength(2);
+  });
+
+  it("rejects ambiguous GitHub roots with duplicate requested folder names", async () => {
+    const root = tempRoot("github-duplicate-folder-name");
+    const paths = createSkillsManagerPaths(join(root, ".pi", "agent"));
+
+    await expect(
+      materializeResolvedSkillSource(
+        parseSkillSource("acme/repo"),
+        paths,
+        (url) => {
+          const value = String(url);
+          if (value.includes("/git/trees/")) {
+            return Promise.resolve(
+              Response.json({
+                tree: [
+                  { path: "skills/demo/SKILL.md", type: "blob" },
+                  { path: "packages/demo/SKILL.md", type: "blob" },
+                ],
+              })
+            );
+          }
+          return Promise.resolve(
+            new Response("# Demo Skill\n\ndescription: Demo.\n")
+          );
+        },
+        { requestedSkillName: "demo" }
+      )
+    ).rejects.toThrow(
+      "Ambiguous GitHub skill source for demo: packages/demo, skills/demo"
+    );
+  });
+
+  it("rejects ambiguous GitHub roots with duplicate requested SKILL.md names", async () => {
+    const root = tempRoot("github-duplicate-skill-name");
+    const paths = createSkillsManagerPaths(join(root, ".pi", "agent"));
+
+    await expect(
+      materializeResolvedSkillSource(
+        parseSkillSource("acme/repo"),
+        paths,
+        (url) => {
+          const value = String(url);
+          if (value.includes("/git/trees/")) {
+            return Promise.resolve(
+              Response.json({
+                tree: [
+                  { path: "skills/one/SKILL.md", type: "blob" },
+                  { path: "skills/two/SKILL.md", type: "blob" },
+                ],
+              })
+            );
+          }
+          if (value.endsWith("/skills/one/SKILL.md")) {
+            return Promise.resolve(
+              new Response(
+                "---\nname: demo\ndescription: First duplicate.\n---\n"
+              )
+            );
+          }
+          return Promise.resolve(
+            new Response(
+              "---\nname: demo\ndescription: Second duplicate.\n---\n"
+            )
+          );
+        },
+        { requestedSkillName: "demo" }
+      )
+    ).rejects.toThrow(
+      "Ambiguous GitHub skill source for demo: skills/one, skills/two"
+    );
+  });
+
+  it("rejects ambiguous GitHub roots when folder and SKILL.md names both match", async () => {
+    const root = tempRoot("github-folder-and-skill-name-duplicate");
+    const paths = createSkillsManagerPaths(join(root, ".pi", "agent"));
+
+    await expect(
+      materializeResolvedSkillSource(
+        parseSkillSource("acme/repo"),
+        paths,
+        (url) => {
+          const value = String(url);
+          if (value.includes("/git/trees/")) {
+            return Promise.resolve(
+              Response.json({
+                tree: [
+                  { path: "skills/demo/SKILL.md", type: "blob" },
+                  { path: "skills/other/SKILL.md", type: "blob" },
+                ],
+              })
+            );
+          }
+          if (value.endsWith("/skills/demo/SKILL.md")) {
+            return Promise.resolve(
+              new Response("---\nname: demo\ndescription: Folder match.\n---\n")
+            );
+          }
+          return Promise.resolve(
+            new Response("---\nname: demo\ndescription: Name match.\n---\n")
+          );
+        },
+        { requestedSkillName: "demo" }
+      )
+    ).rejects.toThrow(
+      "Ambiguous GitHub skill source for demo: skills/demo, skills/other"
+    );
+  });
+
+  it("rejects ambiguous GitHub roots when a candidate metadata fetch fails", async () => {
+    const root = tempRoot("github-ambiguous-metadata-fetch-fails");
+    const paths = createSkillsManagerPaths(join(root, ".pi", "agent"));
+
+    await expect(
+      materializeResolvedSkillSource(
+        parseSkillSource("acme/repo"),
+        paths,
+        (url) => {
+          const value = String(url);
+          if (value.includes("/git/trees/")) {
+            return Promise.resolve(
+              Response.json({
+                tree: [
+                  { path: "skills/demo/SKILL.md", type: "blob" },
+                  { path: "skills/other/SKILL.md", type: "blob" },
+                ],
+              })
+            );
+          }
+          if (value.endsWith("/skills/demo/SKILL.md")) {
+            return Promise.resolve(
+              new Response("---\nname: demo\ndescription: Folder match.\n---\n")
+            );
+          }
+          return Promise.resolve(new Response("server error", { status: 500 }));
+        },
+        { requestedSkillName: "demo" }
+      )
+    ).rejects.toThrow("Fetch failed: 500");
+  });
+
+  it("rejects ambiguous HTML fallback roots before resolving exact source", async () => {
+    const root = tempRoot("github-html-folder-and-skill-name-duplicate");
+    const paths = createSkillsManagerPaths(join(root, ".pi", "agent"));
+
+    await expect(
+      materializeResolvedSkillSource(
+        parseSkillSource("acme/repo"),
+        paths,
+        (url) => {
+          const value = String(url);
+          if (value.includes("/git/trees/")) {
+            return Promise.resolve(
+              new Response("rate limited", { status: 403 })
+            );
+          }
+          if (value === "https://github.com/acme/repo/tree/HEAD/skills") {
+            return Promise.resolve(
+              new Response(
+                '<a href="/acme/repo/tree/HEAD/skills/demo">demo</a><a href="/acme/repo/tree/HEAD/skills/other">other</a>'
+              )
+            );
+          }
+          if (value.endsWith("/skills/demo/SKILL.md")) {
+            return Promise.resolve(
+              new Response("---\nname: demo\ndescription: Folder match.\n---\n")
+            );
+          }
+          return Promise.resolve(
+            new Response("---\nname: demo\ndescription: Name match.\n---\n")
+          );
+        },
+        { requestedSkillName: "demo" }
+      )
+    ).rejects.toThrow(
+      "Ambiguous GitHub skill source for demo: skills/demo, skills/other"
+    );
+  });
+
+  it("resolves the only HTML fallback root as exact when names differ", async () => {
+    const root = tempRoot("github-html-single-root-name-differs");
+    const paths = createSkillsManagerPaths(join(root, ".pi", "agent"));
+    const exactSources: Array<{ path: string; subpath?: string }> = [];
+
+    const sourceRoot = await materializeResolvedSkillSource(
+      parseSkillSource("acme/repo"),
+      paths,
+      (url) => {
+        const value = String(url);
+        if (value.includes("/git/trees/")) {
+          return Promise.resolve(new Response("rate limited", { status: 403 }));
+        }
+        if (value === "https://github.com/acme/repo/tree/HEAD/skills") {
+          return Promise.resolve(
+            new Response(
+              '<a href="/acme/repo/tree/HEAD/skills/actual">actual</a>'
+            )
+          );
+        }
+        return Promise.resolve(
+          new Response("---\nname: actual\ndescription: Actual skill.\n---\n")
+        );
+      },
+      {
+        requestedSkillName: "Display Skill",
+        onExactSourceResolved: (identity) => {
+          exactSources.push({ path: identity.path, subpath: identity.subpath });
+        },
+      }
+    );
+
+    expect(listSkillsInSource(sourceRoot)).toMatchObject([
+      { id: "actual", name: "actual", description: "Actual skill." },
+    ]);
+    expect(exactSources).toEqual([
+      { path: "acme/repo/skills/actual", subpath: "skills/actual" },
+    ]);
   });
 
   it("materializes multiple GitHub skills through the tree API", async () => {
@@ -1575,7 +1876,9 @@ describe("skills extension", () => {
     process.env.HOME = home;
     try {
       globalThis.fetch = (() =>
-        Promise.resolve(Response.json({ skills: [] }))) as typeof fetch;
+        Promise.resolve(
+          Response.json({ skills: [] })
+        )) as unknown as typeof fetch;
       const commands = new Map<
         string,
         { handler(args: string, context: never): Promise<void> }
@@ -1654,7 +1957,7 @@ describe("skills extension", () => {
           await Promise.resolve();
         }
         return new Response("missing", { status: 404 });
-      }) as typeof fetch;
+      }) as unknown as typeof fetch;
       const commands = new Map<
         string,
         { handler(args: string, context: never): Promise<void> }
@@ -1722,6 +2025,1029 @@ describe("skills extension", () => {
         key: "skills-activity",
         content: undefined,
       });
+    } finally {
+      globalThis.fetch = originalFetch;
+      process.env.HOME = originalHome;
+    }
+  });
+
+  it("persists exact GitHub source from a skills.sh broad repo install", async () => {
+    const home = tempRoot("command-search-exact-source-install");
+    const originalHome = process.env.HOME;
+    const originalFetch = globalThis.fetch;
+    process.env.HOME = home;
+    try {
+      globalThis.fetch = ((url: string | URL | Request) => {
+        const value = String(url);
+        if (value === "https://skills.sh/api/search?q=ai-sdk") {
+          return Promise.resolve(
+            Response.json({
+              skills: [
+                { skillId: "ai-sdk", name: "ai-sdk", source: "vercel/ai" },
+              ],
+            })
+          );
+        }
+        if (value.includes("/git/trees/")) {
+          return Promise.resolve(
+            Response.json({
+              tree: [
+                { path: "skills/other/SKILL.md", type: "blob" },
+                { path: "skills/use-ai-sdk/SKILL.md", type: "blob" },
+              ],
+            })
+          );
+        }
+        if (value.endsWith("skills/other/SKILL.md")) {
+          return Promise.resolve(
+            new Response("---\nname: other\ndescription: Other skill.\n---\n")
+          );
+        }
+        if (value.endsWith("skills/use-ai-sdk/SKILL.md")) {
+          return Promise.resolve(
+            new Response(
+              "---\nname: ai-sdk\ndescription: Answer questions.\n---\n"
+            )
+          );
+        }
+        return Promise.resolve(new Response("missing", { status: 404 }));
+      }) as typeof fetch;
+      const commandCtx = {
+        hasUI: true,
+        ui: {
+          select: () => Promise.resolve("ai-sdk — vercel/ai"),
+          notify() {
+            // Test stub.
+          },
+          setStatus() {
+            // Test stub.
+          },
+          setWidget() {
+            // Test stub.
+          },
+        },
+      };
+      const commands = registerSkillsCommand();
+
+      await commands
+        .get("skill")
+        ?.handler("search ai-sdk", commandCtx as never);
+
+      const [skill] = readManagedManifest(
+        createSkillsManagerPaths().manifestPath
+      ).skills;
+      expect(skill?.source).toMatchObject({
+        type: "github",
+        owner: "vercel",
+        repo: "ai",
+        ref: "HEAD",
+        subpath: "skills/use-ai-sdk",
+        path: "vercel/ai/skills/use-ai-sdk",
+      });
+    } finally {
+      globalThis.fetch = originalFetch;
+      process.env.HOME = originalHome;
+    }
+  });
+
+  it("installs the only skill in a broad GitHub source when search metadata differs", async () => {
+    const home = tempRoot("command-search-single-skill-exact-source-install");
+    const originalHome = process.env.HOME;
+    const originalFetch = globalThis.fetch;
+    process.env.HOME = home;
+    try {
+      globalThis.fetch = ((url: string | URL | Request) => {
+        const value = String(url);
+        if (value === "https://skills.sh/api/search?q=display") {
+          return Promise.resolve(
+            Response.json({
+              skills: [
+                {
+                  skillId: "display-skill",
+                  name: "Display Skill",
+                  source: "owner/repo",
+                },
+              ],
+            })
+          );
+        }
+        if (value.includes("/git/trees/")) {
+          return Promise.resolve(
+            Response.json({
+              tree: [{ path: "skills/actual/SKILL.md", type: "blob" }],
+            })
+          );
+        }
+        if (value.endsWith("skills/actual/SKILL.md")) {
+          return Promise.resolve(
+            new Response("---\nname: actual\ndescription: Actual skill.\n---\n")
+          );
+        }
+        return Promise.resolve(new Response("missing", { status: 404 }));
+      }) as typeof fetch;
+      const commandCtx = {
+        hasUI: true,
+        ui: {
+          select: () => Promise.resolve("Display Skill — owner/repo"),
+          notify() {
+            // Test stub.
+          },
+          setStatus() {
+            // Test stub.
+          },
+          setWidget() {
+            // Test stub.
+          },
+        },
+      };
+      const commands = registerSkillsCommand();
+
+      await commands
+        .get("skill")
+        ?.handler("search display", commandCtx as never);
+
+      const [skill] = readManagedManifest(
+        createSkillsManagerPaths().manifestPath
+      ).skills;
+      expect(skill).toMatchObject({ id: "actual", name: "actual" });
+      expect(skill?.source).toMatchObject({
+        owner: "owner",
+        repo: "repo",
+        ref: "HEAD",
+        subpath: "skills/actual",
+        path: "owner/repo/skills/actual",
+      });
+    } finally {
+      globalThis.fetch = originalFetch;
+      process.env.HOME = originalHome;
+    }
+  });
+
+  it("heals broad GitHub source metadata on explicit /skill update", async () => {
+    const home = tempRoot("command-update-heal-source");
+    const originalHome = process.env.HOME;
+    const originalFetch = globalThis.fetch;
+    process.env.HOME = home;
+    try {
+      const paths = createSkillsManagerPaths();
+      const install = join(paths.managedDir, "ai-sdk");
+      mkdirSync(install, { recursive: true });
+      writeFileSync(
+        join(install, "SKILL.md"),
+        "---\nname: ai-sdk\ndescription: Answer questions.\n---\n"
+      );
+      writeManagedManifest(paths.manifestPath, {
+        version: 1,
+        skills: [
+          {
+            id: "ai-sdk",
+            name: "ai-sdk",
+            description: "Answer questions.",
+            source: parseSkillSource("vercel/ai").identity,
+            installPath: install,
+            installedAt: "2026-05-21T00:00:00.000Z",
+            files: hashSkillDirectory(install),
+          },
+        ],
+      });
+      globalThis.fetch = ((url: string | URL | Request) => {
+        const value = String(url);
+        if (value.includes("/git/trees/")) {
+          return Promise.resolve(
+            Response.json({
+              tree: [{ path: "skills/use-ai-sdk/SKILL.md", type: "blob" }],
+            })
+          );
+        }
+        if (value.endsWith("skills/use-ai-sdk/SKILL.md")) {
+          return Promise.resolve(
+            new Response(
+              "---\nname: ai-sdk\ndescription: Answer questions.\n---\n"
+            )
+          );
+        }
+        return Promise.resolve(new Response("missing", { status: 404 }));
+      }) as typeof fetch;
+      const commands = new Map<
+        string,
+        { handler(args: string, context: never): Promise<void> }
+      >();
+      const pi = {
+        on() {
+          // Test stub.
+        },
+        registerCommand(name: string, registeredCommand: unknown) {
+          commands.set(
+            name,
+            registeredCommand as {
+              handler(args: string, context: never): Promise<void>;
+            }
+          );
+        },
+      };
+      const notifications: { message: string; level?: string }[] = [];
+      const commandCtx = {
+        hasUI: true,
+        ui: {
+          notify(message: string, level?: string) {
+            notifications.push({ message, level });
+          },
+          setStatus() {
+            // Test stub.
+          },
+          setWidget() {
+            // Test stub.
+          },
+          setWorkingMessage() {
+            // Test stub.
+          },
+          setWorkingVisible() {
+            // Test stub.
+          },
+        },
+      };
+
+      skillsExtension(pi as never);
+      await commands
+        .get("skill")
+        ?.handler("update ai-sdk", commandCtx as never);
+
+      const [skill] = readManagedManifest(paths.manifestPath).skills;
+      expect(skill?.source).toMatchObject({
+        type: "github",
+        owner: "vercel",
+        repo: "ai",
+        subpath: "skills/use-ai-sdk",
+      });
+      expect(skill?.files).toEqual(hashSkillDirectory(install));
+      expect(notifications).toEqual([
+        {
+          message: "Updated exact source metadata for 1 skill(s).",
+          level: "info",
+        },
+        { message: "No skill updates found.", level: "info" },
+      ]);
+    } finally {
+      globalThis.fetch = originalFetch;
+      process.env.HOME = originalHome;
+    }
+  });
+
+  it("updates root-level GitHub skills from broad sources", async () => {
+    const home = tempRoot("command-update-root-github-skill");
+    const originalHome = process.env.HOME;
+    const originalFetch = globalThis.fetch;
+    process.env.HOME = home;
+    try {
+      const paths = createSkillsManagerPaths();
+      const install = join(paths.managedDir, "demo");
+      mkdirSync(install, { recursive: true });
+      writeFileSync(
+        join(install, "SKILL.md"),
+        "---\nname: demo\ndescription: Demo.\n---\n"
+      );
+      writeManagedManifest(paths.manifestPath, {
+        version: 1,
+        skills: [
+          {
+            id: "demo",
+            name: "demo",
+            description: "Demo.",
+            source: parseSkillSource("owner/repo").identity,
+            installPath: install,
+            installedAt: "2026-05-21T00:00:00.000Z",
+            files: hashSkillDirectory(install),
+          },
+        ],
+      });
+      globalThis.fetch = ((url: string | URL | Request) => {
+        const value = String(url);
+        if (value.includes("/git/trees/")) {
+          return Promise.resolve(
+            Response.json({ tree: [{ path: "SKILL.md", type: "blob" }] })
+          );
+        }
+        if (value === "https://github.com/owner/repo/tree/HEAD/skills") {
+          return Promise.resolve(new Response("missing", { status: 404 }));
+        }
+        return Promise.resolve(
+          new Response("---\nname: demo\ndescription: Demo.\n---\n")
+        );
+      }) as typeof fetch;
+      const commands = new Map<
+        string,
+        { handler(args: string, context: never): Promise<void> }
+      >();
+      const pi = {
+        on() {
+          // Test stub.
+        },
+        registerCommand(name: string, registeredCommand: unknown) {
+          commands.set(
+            name,
+            registeredCommand as {
+              handler(args: string, context: never): Promise<void>;
+            }
+          );
+        },
+      };
+      const notifications: { message: string; level?: string }[] = [];
+      const commandCtx = {
+        hasUI: true,
+        ui: {
+          notify(message: string, level?: string) {
+            notifications.push({ message, level });
+          },
+          setStatus() {
+            // Test stub.
+          },
+          setWidget() {
+            // Test stub.
+          },
+          setWorkingMessage() {
+            // Test stub.
+          },
+          setWorkingVisible() {
+            // Test stub.
+          },
+        },
+      };
+
+      skillsExtension(pi as never);
+      await commands.get("skill")?.handler("update demo", commandCtx as never);
+
+      expect(notifications).toEqual([
+        { message: "No skill updates found.", level: "info" },
+      ]);
+    } finally {
+      globalThis.fetch = originalFetch;
+      process.env.HOME = originalHome;
+    }
+  });
+
+  it("recomputes persisted GitHub source ids before update materialization", async () => {
+    const home = tempRoot("command-update-safe-source-id");
+    const originalHome = process.env.HOME;
+    const originalFetch = globalThis.fetch;
+    process.env.HOME = home;
+    try {
+      const paths = createSkillsManagerPaths();
+      const sentinelDir = join(paths.rootDir, "do-not-delete");
+      mkdirSync(sentinelDir, { recursive: true });
+      writeFileSync(join(sentinelDir, "sentinel.txt"), "keep\n");
+      const install = join(paths.managedDir, "demo");
+      mkdirSync(install, { recursive: true });
+      writeFileSync(
+        join(install, "SKILL.md"),
+        "---\nname: demo\ndescription: Demo.\n---\n"
+      );
+      writeManagedManifest(paths.manifestPath, {
+        version: 1,
+        skills: [
+          {
+            id: "demo",
+            name: "demo",
+            description: "Demo.",
+            source: {
+              ...parseSkillSource("owner/repo").identity,
+              id: "../../do-not-delete",
+            },
+            installPath: install,
+            installedAt: "2026-05-21T00:00:00.000Z",
+            files: hashSkillDirectory(install),
+          },
+        ],
+      });
+      globalThis.fetch = ((url: string | URL | Request) => {
+        const value = String(url);
+        if (value.includes("/git/trees/")) {
+          return Promise.resolve(
+            Response.json({
+              tree: [{ path: "skills/demo/SKILL.md", type: "blob" }],
+            })
+          );
+        }
+        return Promise.resolve(
+          new Response("---\nname: demo\ndescription: Demo.\n---\n")
+        );
+      }) as typeof fetch;
+      const commands = new Map<
+        string,
+        { handler(args: string, context: never): Promise<void> }
+      >();
+      const pi = {
+        on() {
+          // Test stub.
+        },
+        registerCommand(name: string, registeredCommand: unknown) {
+          commands.set(
+            name,
+            registeredCommand as {
+              handler(args: string, context: never): Promise<void>;
+            }
+          );
+        },
+      };
+      const commandCtx = {
+        hasUI: true,
+        ui: {
+          notify() {
+            // Test stub.
+          },
+          setStatus() {
+            // Test stub.
+          },
+          setWidget() {
+            // Test stub.
+          },
+          setWorkingMessage() {
+            // Test stub.
+          },
+          setWorkingVisible() {
+            // Test stub.
+          },
+        },
+      };
+
+      skillsExtension(pi as never);
+      await commands.get("skill")?.handler("update demo", commandCtx as never);
+
+      const [skill] = readManagedManifest(paths.manifestPath).skills;
+      expect(existsSync(join(sentinelDir, "sentinel.txt"))).toBe(true);
+      expect(skill?.source).toMatchObject({
+        owner: "owner",
+        repo: "repo",
+        subpath: "skills/demo",
+      });
+      expect(skill?.source.id).not.toBe("../../do-not-delete");
+    } finally {
+      globalThis.fetch = originalFetch;
+      process.env.HOME = originalHome;
+    }
+  });
+
+  it("preserves broad GitHub source refs while healing metadata", async () => {
+    const home = tempRoot("command-update-heal-source-ref");
+    const originalHome = process.env.HOME;
+    const originalFetch = globalThis.fetch;
+    process.env.HOME = home;
+    try {
+      const paths = createSkillsManagerPaths();
+      const install = join(paths.managedDir, "demo");
+      mkdirSync(install, { recursive: true });
+      writeFileSync(
+        join(install, "SKILL.md"),
+        "---\nname: demo\ndescription: Demo.\n---\n"
+      );
+      writeManagedManifest(paths.manifestPath, {
+        version: 1,
+        skills: [
+          {
+            id: "demo",
+            name: "demo",
+            description: "Demo.",
+            source: parseSkillSource("owner/repo#dev").identity,
+            installPath: install,
+            installedAt: "2026-05-21T00:00:00.000Z",
+            files: hashSkillDirectory(install),
+          },
+        ],
+      });
+      const requestedUrls: string[] = [];
+      globalThis.fetch = ((url: string | URL | Request) => {
+        const value = String(url);
+        requestedUrls.push(value);
+        if (value.includes("/git/trees/")) {
+          return Promise.resolve(
+            Response.json({
+              tree: [{ path: "skills/demo/SKILL.md", type: "blob" }],
+            })
+          );
+        }
+        return Promise.resolve(
+          new Response("---\nname: demo\ndescription: Demo.\n---\n")
+        );
+      }) as typeof fetch;
+      const commands = new Map<
+        string,
+        { handler(args: string, context: never): Promise<void> }
+      >();
+      const pi = {
+        on() {
+          // Test stub.
+        },
+        registerCommand(name: string, registeredCommand: unknown) {
+          commands.set(
+            name,
+            registeredCommand as {
+              handler(args: string, context: never): Promise<void>;
+            }
+          );
+        },
+      };
+      const commandCtx = {
+        hasUI: true,
+        ui: {
+          notify() {
+            // Test stub.
+          },
+          setStatus() {
+            // Test stub.
+          },
+          setWidget() {
+            // Test stub.
+          },
+          setWorkingMessage() {
+            // Test stub.
+          },
+          setWorkingVisible() {
+            // Test stub.
+          },
+        },
+      };
+
+      skillsExtension(pi as never);
+      await commands.get("skill")?.handler("update demo", commandCtx as never);
+
+      const [skill] = readManagedManifest(paths.manifestPath).skills;
+      expect(skill?.source).toMatchObject({
+        ref: "dev",
+        subpath: "skills/demo",
+        path: "owner/repo/skills/demo",
+      });
+      expect(requestedUrls).toContain(
+        "https://api.github.com/repos/owner/repo/git/trees/dev?recursive=1"
+      );
+    } finally {
+      globalThis.fetch = originalFetch;
+      process.env.HOME = originalHome;
+    }
+  });
+
+  it("installs exact GitHub source updates with slash-containing refs", async () => {
+    const home = tempRoot("command-update-exact-source-slash-ref");
+    const originalHome = process.env.HOME;
+    const originalFetch = globalThis.fetch;
+    process.env.HOME = home;
+    try {
+      const paths = createSkillsManagerPaths();
+      const install = join(paths.managedDir, "demo");
+      mkdirSync(install, { recursive: true });
+      writeFileSync(
+        join(install, "SKILL.md"),
+        "---\nname: demo\ndescription: Old demo.\n---\n"
+      );
+      writeManagedManifest(paths.manifestPath, {
+        version: 1,
+        skills: [
+          {
+            id: "demo",
+            name: "demo",
+            description: "Demo.",
+            source: {
+              ...parseSkillSource("owner/repo#feature/foo").identity,
+              path: "owner/repo/skills/demo",
+              subpath: "skills/demo",
+              id: "slash-ref-exact-source",
+            },
+            installPath: install,
+            installedAt: "2026-05-21T00:00:00.000Z",
+            files: hashSkillDirectory(install),
+          },
+        ],
+      });
+      const requestedUrls: string[] = [];
+      globalThis.fetch = ((url: string | URL | Request) => {
+        const value = String(url);
+        requestedUrls.push(value);
+        if (value.includes("/git/trees/")) {
+          return Promise.resolve(
+            Response.json({
+              tree: [{ path: "skills/demo/SKILL.md", type: "blob" }],
+            })
+          );
+        }
+        return Promise.resolve(
+          new Response("---\nname: demo\ndescription: New demo.\n---\n")
+        );
+      }) as typeof fetch;
+      const commands = new Map<
+        string,
+        { handler(args: string, context: never): Promise<void> }
+      >();
+      const pi = {
+        on() {
+          // Test stub.
+        },
+        registerCommand(name: string, registeredCommand: unknown) {
+          commands.set(
+            name,
+            registeredCommand as {
+              handler(args: string, context: never): Promise<void>;
+            }
+          );
+        },
+      };
+      const commandCtx = {
+        hasUI: true,
+        ui: {
+          notify() {
+            // Test stub.
+          },
+          setStatus() {
+            // Test stub.
+          },
+          setWidget() {
+            // Test stub.
+          },
+          setWorkingMessage() {
+            // Test stub.
+          },
+          setWorkingVisible() {
+            // Test stub.
+          },
+        },
+      };
+
+      skillsExtension(pi as never);
+      await commands.get("skill")?.handler("update demo", commandCtx as never);
+
+      expect(requestedUrls).toContain(
+        "https://api.github.com/repos/owner/repo/git/trees/feature%2Ffoo?recursive=1"
+      );
+      expect(requestedUrls).not.toContain(
+        "https://api.github.com/repos/owner/repo/git/trees/feature?recursive=1"
+      );
+      expect(readFileSync(join(install, "SKILL.md"), "utf8")).toBe(
+        "---\nname: demo\ndescription: New demo.\n---\n"
+      );
+    } finally {
+      globalThis.fetch = originalFetch;
+      process.env.HOME = originalHome;
+    }
+  });
+
+  it("does not heal broad GitHub source metadata when resolved root has another skill id", async () => {
+    const home = tempRoot("command-update-heal-wrong-skill");
+    const originalHome = process.env.HOME;
+    const originalFetch = globalThis.fetch;
+    process.env.HOME = home;
+    try {
+      const paths = createSkillsManagerPaths();
+      const install = join(paths.managedDir, "ai-sdk");
+      mkdirSync(install, { recursive: true });
+      writeFileSync(
+        join(install, "SKILL.md"),
+        "---\nname: ai-sdk\ndescription: Answer questions.\n---\n"
+      );
+      const broadSource = parseSkillSource("vercel/ai").identity;
+      writeManagedManifest(paths.manifestPath, {
+        version: 1,
+        skills: [
+          {
+            id: "ai-sdk",
+            name: "ai-sdk",
+            description: "Answer questions.",
+            source: broadSource,
+            installPath: install,
+            installedAt: "2026-05-21T00:00:00.000Z",
+            files: hashSkillDirectory(install),
+          },
+        ],
+      });
+      globalThis.fetch = ((url: string | URL | Request) => {
+        const value = String(url);
+        if (value.includes("/git/trees/")) {
+          return Promise.resolve(
+            Response.json({
+              tree: [{ path: "skills/ai-sdk/SKILL.md", type: "blob" }],
+            })
+          );
+        }
+        return Promise.resolve(
+          new Response("---\nname: other\ndescription: Other skill.\n---\n")
+        );
+      }) as typeof fetch;
+      const commands = new Map<
+        string,
+        { handler(args: string, context: never): Promise<void> }
+      >();
+      const pi = {
+        on() {
+          // Test stub.
+        },
+        registerCommand(name: string, registeredCommand: unknown) {
+          commands.set(
+            name,
+            registeredCommand as {
+              handler(args: string, context: never): Promise<void>;
+            }
+          );
+        },
+      };
+      const notifications: { message: string; level?: string }[] = [];
+      const commandCtx = {
+        hasUI: true,
+        ui: {
+          notify(message: string, level?: string) {
+            notifications.push({ message, level });
+          },
+          setStatus() {
+            // Test stub.
+          },
+          setWidget() {
+            // Test stub.
+          },
+          setWorkingMessage() {
+            // Test stub.
+          },
+          setWorkingVisible() {
+            // Test stub.
+          },
+        },
+      };
+
+      skillsExtension(pi as never);
+      await commands
+        .get("skill")
+        ?.handler("update ai-sdk", commandCtx as never);
+
+      const [skill] = readManagedManifest(paths.manifestPath).skills;
+      expect(skill?.source).toEqual(broadSource);
+      expect(notifications).toEqual([
+        { message: "No skill updates found.", level: "info" },
+      ]);
+    } finally {
+      globalThis.fetch = originalFetch;
+      process.env.HOME = originalHome;
+    }
+  });
+
+  it("heals source metadata without overwriting dirty installed files", async () => {
+    const home = tempRoot("command-update-heal-dirty");
+    const originalHome = process.env.HOME;
+    const originalFetch = globalThis.fetch;
+    process.env.HOME = home;
+    try {
+      const paths = createSkillsManagerPaths();
+      const install = join(paths.managedDir, "ai-sdk");
+      mkdirSync(install, { recursive: true });
+      const cleanSkill =
+        "---\nname: ai-sdk\ndescription: Answer questions.\n---\n";
+      writeFileSync(join(install, "SKILL.md"), cleanSkill);
+      const files = hashSkillDirectory(install);
+      writeFileSync(join(install, "SKILL.md"), `${cleanSkill}\n# local note\n`);
+      writeManagedManifest(paths.manifestPath, {
+        version: 1,
+        skills: [
+          {
+            id: "ai-sdk",
+            name: "ai-sdk",
+            description: "Answer questions.",
+            source: parseSkillSource("vercel/ai").identity,
+            installPath: install,
+            installedAt: "2026-05-21T00:00:00.000Z",
+            files,
+          },
+        ],
+      });
+      globalThis.fetch = ((url: string | URL | Request) => {
+        const value = String(url);
+        if (value.includes("/git/trees/")) {
+          return Promise.resolve(
+            Response.json({
+              tree: [{ path: "skills/use-ai-sdk/SKILL.md", type: "blob" }],
+            })
+          );
+        }
+        return Promise.resolve(new Response(cleanSkill));
+      }) as typeof fetch;
+      const commands = new Map<
+        string,
+        { handler(args: string, context: never): Promise<void> }
+      >();
+      const pi = {
+        on() {
+          // Test stub.
+        },
+        registerCommand(name: string, registeredCommand: unknown) {
+          commands.set(
+            name,
+            registeredCommand as {
+              handler(args: string, context: never): Promise<void>;
+            }
+          );
+        },
+      };
+      const notifications: { message: string; level?: string }[] = [];
+      const commandCtx = {
+        hasUI: true,
+        ui: {
+          notify(message: string, level?: string) {
+            notifications.push({ message, level });
+          },
+          setStatus() {
+            // Test stub.
+          },
+          setWidget() {
+            // Test stub.
+          },
+          setWorkingMessage() {
+            // Test stub.
+          },
+          setWorkingVisible() {
+            // Test stub.
+          },
+        },
+      };
+
+      skillsExtension(pi as never);
+      await commands
+        .get("skill")
+        ?.handler("update ai-sdk", commandCtx as never);
+
+      const [skill] = readManagedManifest(paths.manifestPath).skills;
+      expect(skill?.source).toMatchObject({ subpath: "skills/use-ai-sdk" });
+      expect(readFileSync(join(install, "SKILL.md"), "utf8")).toBe(
+        `${cleanSkill}\n# local note\n`
+      );
+      expect(skill?.files).toEqual(files);
+      expect(notifications).toContainEqual({
+        message: "Updated exact source metadata for 1 skill(s).",
+        level: "info",
+      });
+    } finally {
+      globalThis.fetch = originalFetch;
+      process.env.HOME = originalHome;
+    }
+  });
+
+  it("reports ambiguous broad GitHub source healing clearly", async () => {
+    const home = tempRoot("command-update-heal-ambiguous");
+    const originalHome = process.env.HOME;
+    const originalFetch = globalThis.fetch;
+    process.env.HOME = home;
+    try {
+      const paths = createSkillsManagerPaths();
+      writeManagedManifest(paths.manifestPath, {
+        version: 1,
+        skills: [
+          {
+            id: "demo-skill",
+            name: "Demo Skill",
+            description: "Demo.",
+            source: parseSkillSource("owner/repo").identity,
+            installPath: join(paths.managedDir, "demo-skill"),
+            installedAt: "2026-05-21T00:00:00.000Z",
+            files: [{ relativePath: "SKILL.md", sha256: "old", bytes: 1 }],
+          },
+        ],
+      });
+      globalThis.fetch = ((url: string | URL | Request) => {
+        const value = String(url);
+        if (value.includes("/git/trees/")) {
+          return Promise.resolve(
+            Response.json({
+              tree: [
+                { path: "skills/one/SKILL.md", type: "blob" },
+                { path: "skills/two/SKILL.md", type: "blob" },
+              ],
+            })
+          );
+        }
+        return Promise.resolve(
+          new Response("# Other Skill\n\ndescription: Demo.\n")
+        );
+      }) as typeof fetch;
+      const commands = new Map<
+        string,
+        { handler(args: string, context: never): Promise<void> }
+      >();
+      const pi = {
+        on() {
+          // Test stub.
+        },
+        registerCommand(name: string, registeredCommand: unknown) {
+          commands.set(
+            name,
+            registeredCommand as {
+              handler(args: string, context: never): Promise<void>;
+            }
+          );
+        },
+      };
+      const notifications: { message: string; level?: string }[] = [];
+      const commandCtx = {
+        hasUI: true,
+        ui: {
+          notify(message: string, level?: string) {
+            notifications.push({ message, level });
+          },
+          setStatus() {
+            // Test stub.
+          },
+          setWidget() {
+            // Test stub.
+          },
+          setWorkingMessage() {
+            // Test stub.
+          },
+          setWorkingVisible() {
+            // Test stub.
+          },
+        },
+      };
+
+      skillsExtension(pi as never);
+      await commands
+        .get("skill")
+        ?.handler("update demo-skill", commandCtx as never);
+
+      expect(notifications).toContainEqual({
+        message:
+          "Unable to check 1 skill update source: Demo Skill (owner/repo): Unable to resolve demo-skill to one exact GitHub skill source.",
+        level: "error",
+      });
+    } finally {
+      globalThis.fetch = originalFetch;
+      process.env.HOME = originalHome;
+    }
+  });
+
+  it("keeps background update checks read-only when source metadata can be healed", async () => {
+    const home = tempRoot("background-update-heal-read-only");
+    const originalHome = process.env.HOME;
+    const originalFetch = globalThis.fetch;
+    process.env.HOME = home;
+    try {
+      const paths = createSkillsManagerPaths();
+      const install = join(paths.managedDir, "ai-sdk");
+      mkdirSync(install, { recursive: true });
+      writeFileSync(
+        join(install, "SKILL.md"),
+        "---\nname: ai-sdk\ndescription: Answer questions.\n---\n"
+      );
+      const broadSource = parseSkillSource("vercel/ai").identity;
+      writeManagedManifest(paths.manifestPath, {
+        version: 1,
+        skills: [
+          {
+            id: "ai-sdk",
+            name: "ai-sdk",
+            description: "Answer questions.",
+            source: broadSource,
+            installPath: install,
+            installedAt: "2026-05-21T00:00:00.000Z",
+            files: hashSkillDirectory(install),
+          },
+        ],
+      });
+      globalThis.fetch = ((url: string | URL | Request) => {
+        const value = String(url);
+        if (value.includes("/git/trees/")) {
+          return Promise.resolve(
+            Response.json({
+              tree: [{ path: "skills/use-ai-sdk/SKILL.md", type: "blob" }],
+            })
+          );
+        }
+        return Promise.resolve(
+          new Response(
+            "---\nname: ai-sdk\ndescription: Answer questions.\n---\n"
+          )
+        );
+      }) as typeof fetch;
+      const handlers = new Map<string, (event: unknown, ctx: never) => void>();
+      const pi = {
+        on(name: string, handler: (event: unknown, ctx: never) => void) {
+          handlers.set(name, handler);
+        },
+        registerCommand() {
+          // Test stub.
+        },
+      };
+      const notifications: { message: string; level?: string }[] = [];
+      const ctx = {
+        hasUI: true,
+        ui: {
+          notify(message: string, level?: string) {
+            notifications.push({ message, level });
+          },
+          setStatus() {
+            // Test stub.
+          },
+        },
+      };
+
+      skillsExtension(pi as never);
+      handlers.get("session_start")?.({}, ctx as never);
+      await Promise.resolve();
+      await Promise.resolve();
+
+      expect(readManagedManifest(paths.manifestPath).skills[0]?.source).toEqual(
+        broadSource
+      );
+      expect(notifications).toEqual([]);
     } finally {
       globalThis.fetch = originalFetch;
       process.env.HOME = originalHome;
@@ -1980,7 +3306,7 @@ describe("skills extension", () => {
       globalThis.fetch = (() =>
         Promise.resolve(
           new Response("missing", { status: 404 })
-        )) as typeof fetch;
+        )) as unknown as typeof fetch;
       const commands = new Map<
         string,
         { handler(args: string, context: never): Promise<void> }
