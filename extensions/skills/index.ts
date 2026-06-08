@@ -472,6 +472,8 @@ async function installLocalSource(
     resolved.localPath ??
     (await materializeResolvedSkillSource(resolved, paths, fetch, {
       requestedSkillName,
+      exactSubpath:
+        resolved.identity.type === "github" && !!resolved.identity.subpath,
       onExactSourceResolved: (identity) => {
         exactSourceIdentity = identity;
       },

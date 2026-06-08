@@ -34,7 +34,6 @@ const TRAILING_SLASH_RE = /\/$/;
 const WHITESPACE_RE = /\s+/;
 const ALPHANUMERIC_RE = /[a-z0-9]/;
 const HTML_HREF_RE = /href=["']([^"']+)["']/gi;
-const SLASH_RE = /\//;
 
 export type SkillSourceKind = "directory" | "github" | "repo" | "skills.sh";
 type SkillFetch = (
@@ -901,6 +900,29 @@ function githubRawUrl(
   return `https://raw.githubusercontent.com/${owner}/${repo}/${ref}/${path}`;
 }
 
+function githubHrefPrefix(
+  owner: string,
+  repo: string,
+  kind: "blob" | "tree"
+): string {
+  return `/${owner}/${repo}/${kind}/`;
+}
+
+function githubPathFromHref(
+  href: string,
+  owner: string,
+  repo: string,
+  kind: "blob" | "tree"
+): string | null {
+  const prefix = githubHrefPrefix(owner, repo, kind);
+  if (!href.startsWith(prefix)) {
+    return null;
+  }
+  const [, ...pathParts] = href.slice(prefix.length).split("/");
+  const path = pathParts.join("/");
+  return path || null;
+}
+
 function decodeHtmlAttribute(value: string): string {
   return value
     .replace(/&amp;/g, "&")
@@ -916,20 +938,11 @@ function githubSkillRootsFromHtml(
   subpath: string
 ): string[] {
   const prefix = `${subpath.replace(TRAILING_SLASH_RE, "")}/`;
-  const repoTreePrefix = `/${owner}/${repo}/tree/`;
   const roots = new Set<string>();
   for (const match of html.matchAll(HTML_HREF_RE)) {
     const href = decodeHtmlAttribute(match[1] ?? "");
-    if (!href.startsWith(repoTreePrefix)) {
-      continue;
-    }
-    const [, path = ""] = href.slice(repoTreePrefix.length).split(SLASH_RE, 2);
-    const fullPath = href
-      .slice(repoTreePrefix.length)
-      .split("/")
-      .slice(1)
-      .join("/");
-    if (!(path && fullPath.startsWith(prefix))) {
+    const fullPath = githubPathFromHref(href, owner, repo, "tree");
+    if (!fullPath?.startsWith(prefix)) {
       continue;
     }
     const parts = fullPath.split("/").filter(Boolean);
@@ -940,6 +953,82 @@ function githubSkillRootsFromHtml(
     }
   }
   return [...roots].sort();
+}
+
+function githubExactRootHtmlPaths(
+  html: string,
+  owner: string,
+  repo: string,
+  root: string
+): { blobs: string[]; trees: string[] } {
+  const rootPrefix = `${root.replace(TRAILING_SLASH_RE, "")}/`;
+  const blobs = new Set<string>();
+  const trees = new Set<string>();
+  for (const match of html.matchAll(HTML_HREF_RE)) {
+    const href = decodeHtmlAttribute(match[1] ?? "");
+    const blobPath = githubPathFromHref(href, owner, repo, "blob");
+    if (blobPath?.startsWith(rootPrefix)) {
+      blobs.add(blobPath);
+    }
+    const treePath = githubPathFromHref(href, owner, repo, "tree");
+    if (treePath?.startsWith(rootPrefix) && treePath !== root) {
+      trees.add(treePath);
+    }
+  }
+  return { blobs: [...blobs].sort(), trees: [...trees].sort() };
+}
+
+async function materializeExactGithubRootFromHtml(
+  fetcher: SkillFetch,
+  owner: string,
+  repo: string,
+  ref: string,
+  sourceDir: string,
+  root: string,
+  baseRoot = root,
+  seen = new Set<string>()
+): Promise<boolean> {
+  if (seen.has(root)) {
+    return false;
+  }
+  seen.add(root);
+  const response = await fetcher(githubTreePageUrl(owner, repo, ref, root));
+  if (!response.ok) {
+    return false;
+  }
+  const { blobs, trees } = githubExactRootHtmlPaths(
+    await response.text(),
+    owner,
+    repo,
+    root
+  );
+  for (const blob of blobs) {
+    const targetPath = assertInsideDirectory(
+      join(sourceDir, stripGithubPrefix(blob, `${baseRoot}/`)),
+      sourceDir,
+      "Remote file path escapes source directory"
+    );
+    await writeResponseFile(
+      fetcher,
+      githubRawUrl(owner, repo, ref, blob),
+      targetPath
+    );
+  }
+  const nested = await Promise.all(
+    trees.map((tree) =>
+      materializeExactGithubRootFromHtml(
+        fetcher,
+        owner,
+        repo,
+        ref,
+        sourceDir,
+        tree,
+        baseRoot,
+        seen
+      )
+    )
+  );
+  return blobs.length > 0 || nested.some(Boolean);
 }
 
 async function writeGithubSkillMarkdownFiles(
@@ -1156,7 +1245,22 @@ export async function materializeResolvedSkillSource(
         return sourceDir;
       }
     }
-    if (!exactSubpath) {
+    if (exactSubpath && subpath) {
+      const htmlExactRoot = await materializeExactGithubRootFromHtml(
+        fetcher,
+        owner,
+        repo,
+        ref,
+        sourceDir,
+        subpath
+      );
+      if (htmlExactRoot) {
+        onExactSourceResolved?.(
+          sourceIdentityForGithubSkillRoot(resolved, subpath)
+        );
+        return sourceDir;
+      }
+    } else {
       const htmlSourceRoot = await materializeGithubSourceFromHtml(
         fetcher,
         owner,

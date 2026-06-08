@@ -254,6 +254,15 @@ describe("skills core", () => {
         return Promise.resolve(new Response("rate limited", { status: 403 }));
       }
       if (
+        String(url) === "https://github.com/owner/repo/tree/main/skills/demo"
+      ) {
+        return Promise.resolve(
+          new Response(
+            '<a href="/owner/repo/blob/main/skills/demo/SKILL.md">SKILL.md</a><a href="/owner/repo/tree/main/skills/demo/references">references</a>'
+          )
+        );
+      }
+      if (
         String(url) ===
         "https://raw.githubusercontent.com/owner/repo/main/skills/demo/SKILL.md"
       ) {
@@ -274,8 +283,11 @@ describe("skills core", () => {
     expect(listSkillsInSource(sourceRoot).map((skill) => skill.id)).toEqual([
       "demo-skill",
     ]);
-    expect(requestedUrls).not.toContain(
+    expect(requestedUrls).toContain(
       "https://github.com/owner/repo/tree/main/skills/demo"
+    );
+    expect(requestedUrls).not.toContain(
+      "https://raw.githubusercontent.com/owner/repo/main/skills/demo/references/SKILL.md"
     );
   });
 
@@ -3178,6 +3190,258 @@ describe("skills extension", () => {
       expect(requestedUrls).toContain(
         "https://raw.githubusercontent.com/owner/repo/HEAD/skills/use-ai-sdk/scripts/setup.sh"
       );
+    } finally {
+      globalThis.fetch = originalFetch;
+      process.env.HOME = originalHome;
+    }
+  });
+
+  it("does not treat exact-source child directories as skills during /skill update HTML fallback", async () => {
+    const home = tempRoot("command-update-exact-html-fallback");
+    const originalHome = process.env.HOME;
+    const originalFetch = globalThis.fetch;
+    process.env.HOME = home;
+    try {
+      const paths = createSkillsManagerPaths();
+      const install = join(paths.managedDir, "ai-sdk");
+      mkdirSync(join(install, "references"), { recursive: true });
+      writeFileSync(
+        join(install, "SKILL.md"),
+        "# AI SDK\n\ndescription: Build with AI SDK.\n"
+      );
+      writeFileSync(join(install, "references", "errors.md"), "# Errors\n");
+      const files = hashSkillDirectory(install);
+      writeManagedManifest(paths.manifestPath, {
+        version: 1,
+        skills: [
+          {
+            id: "ai-sdk",
+            name: "ai-sdk",
+            description: "Build with AI SDK.",
+            source: parseSkillSource("vercel/ai/tree/HEAD/skills/use-ai-sdk")
+              .identity,
+            installPath: install,
+            installedAt: "2026-05-21T00:00:00.000Z",
+            files,
+          },
+        ],
+      });
+      const requestedUrls: string[] = [];
+      const responses = new Map<string, Response>([
+        [
+          "https://api.github.com/repos/vercel/ai/git/trees/HEAD?recursive=1",
+          Response.json({ message: "rate limited" }, { status: 403 }),
+        ],
+        [
+          "https://github.com/vercel/ai/tree/HEAD/skills/use-ai-sdk",
+          new Response(
+            '<a href="/vercel/ai/blob/HEAD/skills/use-ai-sdk/SKILL.md">SKILL.md</a><a href="/vercel/ai/tree/HEAD/skills/use-ai-sdk/references">references</a>'
+          ),
+        ],
+        [
+          "https://github.com/vercel/ai/tree/HEAD/skills/use-ai-sdk/references",
+          new Response(
+            '<a href="/vercel/ai/blob/HEAD/skills/use-ai-sdk/references/errors.md">errors.md</a>'
+          ),
+        ],
+        [
+          "https://raw.githubusercontent.com/vercel/ai/HEAD/skills/use-ai-sdk/SKILL.md",
+          new Response("# AI SDK\n\ndescription: Build with AI SDK.\n"),
+        ],
+        [
+          "https://raw.githubusercontent.com/vercel/ai/HEAD/skills/use-ai-sdk/references/errors.md",
+          new Response("# Errors\n"),
+        ],
+      ]);
+      globalThis.fetch = ((url: string | URL | Request) => {
+        const value = String(url);
+        requestedUrls.push(value);
+        return Promise.resolve(
+          responses.get(value)?.clone() ??
+            new Response("missing", { status: 404 })
+        );
+      }) as typeof fetch;
+      const commands = new Map<
+        string,
+        { handler(args: string, context: never): Promise<void> }
+      >();
+      const pi = {
+        on() {
+          // Test stub.
+        },
+        registerCommand(name: string, registeredCommand: unknown) {
+          commands.set(
+            name,
+            registeredCommand as {
+              handler(args: string, context: never): Promise<void>;
+            }
+          );
+        },
+      };
+      const notifications: { message: string; level?: string }[] = [];
+      const commandCtx = {
+        hasUI: true,
+        ui: {
+          notify(message: string, level?: string) {
+            notifications.push({ message, level });
+          },
+          setStatus() {
+            // Test stub.
+          },
+          setWidget() {
+            // Test stub.
+          },
+          setWorkingMessage() {
+            // Test stub.
+          },
+          setWorkingVisible() {
+            // Test stub.
+          },
+        },
+      };
+
+      skillsExtension(pi as never);
+      await commands
+        .get("skill")
+        ?.handler("update ai-sdk", commandCtx as never);
+
+      expect(notifications).toEqual([
+        { message: "No skill updates found.", level: "info" },
+      ]);
+      expect(requestedUrls).not.toContain(
+        "https://raw.githubusercontent.com/vercel/ai/HEAD/skills/use-ai-sdk/references/SKILL.md"
+      );
+      expect(requestedUrls).toContain(
+        "https://raw.githubusercontent.com/vercel/ai/HEAD/skills/use-ai-sdk/references/errors.md"
+      );
+    } finally {
+      globalThis.fetch = originalFetch;
+      process.env.HOME = originalHome;
+    }
+  });
+
+  it("updates an exact-source skill via HTML fallback without treating child directories as skills", async () => {
+    const home = tempRoot("command-update-exact-html-fallback-apply");
+    const originalHome = process.env.HOME;
+    const originalFetch = globalThis.fetch;
+    process.env.HOME = home;
+    try {
+      const paths = createSkillsManagerPaths();
+      const install = join(paths.managedDir, "ai-sdk");
+      mkdirSync(join(install, "references"), { recursive: true });
+      writeFileSync(
+        join(install, "SKILL.md"),
+        "# AI SDK\n\ndescription: Old AI SDK.\n"
+      );
+      writeFileSync(join(install, "references", "errors.md"), "# Errors\n");
+      const files = hashSkillDirectory(install);
+      writeManagedManifest(paths.manifestPath, {
+        version: 1,
+        skills: [
+          {
+            id: "ai-sdk",
+            name: "ai-sdk",
+            description: "Old AI SDK.",
+            source: parseSkillSource("vercel/ai/tree/HEAD/skills/use-ai-sdk")
+              .identity,
+            installPath: install,
+            installedAt: "2026-05-21T00:00:00.000Z",
+            files,
+          },
+        ],
+      });
+      const requestedUrls: string[] = [];
+      const responses = new Map<string, Response>([
+        [
+          "https://api.github.com/repos/vercel/ai/git/trees/HEAD?recursive=1",
+          Response.json({ message: "rate limited" }, { status: 403 }),
+        ],
+        [
+          "https://github.com/vercel/ai/tree/HEAD/skills/use-ai-sdk",
+          new Response(
+            '<a href="/vercel/ai/blob/HEAD/skills/use-ai-sdk/SKILL.md">SKILL.md</a><a href="/vercel/ai/tree/HEAD/skills/use-ai-sdk/references">references</a>'
+          ),
+        ],
+        [
+          "https://github.com/vercel/ai/tree/HEAD/skills/use-ai-sdk/references",
+          new Response(
+            '<a href="/vercel/ai/blob/HEAD/skills/use-ai-sdk/references/errors.md">errors.md</a>'
+          ),
+        ],
+        [
+          "https://raw.githubusercontent.com/vercel/ai/HEAD/skills/use-ai-sdk/SKILL.md",
+          new Response("# AI SDK\n\ndescription: New AI SDK.\n"),
+        ],
+        [
+          "https://raw.githubusercontent.com/vercel/ai/HEAD/skills/use-ai-sdk/references/errors.md",
+          new Response("# Updated errors\n"),
+        ],
+      ]);
+      globalThis.fetch = ((url: string | URL | Request) => {
+        const value = String(url);
+        requestedUrls.push(value);
+        return Promise.resolve(
+          responses.get(value)?.clone() ??
+            new Response("missing", { status: 404 })
+        );
+      }) as typeof fetch;
+      const commands = new Map<
+        string,
+        { handler(args: string, context: never): Promise<void> }
+      >();
+      const pi = {
+        on() {
+          // Test stub.
+        },
+        registerCommand(name: string, registeredCommand: unknown) {
+          commands.set(
+            name,
+            registeredCommand as {
+              handler(args: string, context: never): Promise<void>;
+            }
+          );
+        },
+      };
+      const notifications: { message: string; level?: string }[] = [];
+      const commandCtx = {
+        hasUI: true,
+        ui: {
+          notify(message: string, level?: string) {
+            notifications.push({ message, level });
+          },
+          select() {
+            return "All updates";
+          },
+          setStatus() {
+            // Test stub.
+          },
+          setWidget() {
+            // Test stub.
+          },
+          setWorkingMessage() {
+            // Test stub.
+          },
+          setWorkingVisible() {
+            // Test stub.
+          },
+        },
+      };
+
+      skillsExtension(pi as never);
+      await commands.get("skill")?.handler("update", commandCtx as never);
+
+      expect(notifications.some((item) => item.level === "error")).toBe(false);
+      expect(notifications).toContainEqual({
+        message:
+          "Updated 1 skill(s). Changes apply after /reload or next session.",
+        level: "info",
+      });
+      expect(requestedUrls).not.toContain(
+        "https://raw.githubusercontent.com/vercel/ai/HEAD/skills/use-ai-sdk/references/SKILL.md"
+      );
+      expect(
+        readFileSync(join(install, "references", "errors.md"), "utf8")
+      ).toBe("# Updated errors\n");
     } finally {
       globalThis.fetch = originalFetch;
       process.env.HOME = originalHome;
