@@ -9,6 +9,7 @@ PI_PACKAGES=(
   "npm:pi-mcp-adapter"
   "npm:pi-rewind"
   "npm:pi-web-access"
+  "npm:@plannotator/pi-extension"
   "npm:glimpseui"
   "npm:pi-anycopy"
   "npm:pi-token-burden"
