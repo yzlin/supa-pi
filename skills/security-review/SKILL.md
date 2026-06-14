@@ -16,7 +16,40 @@ This skill ensures all code follows security best practices and identifies poten
 - Working with secrets or credentials
 - Implementing payment features
 - Storing or transmitting sensitive data
-- Integrating third-party APIs
+- Integrating third-party APIs, callbacks, or webhooks
+- Building AI/LLM features, tools, agents, or RAG workflows
+
+## Threat Model First
+
+Before hardening code, spend five minutes identifying:
+
+1. **Trust boundaries**: where untrusted data enters or crosses systems, such as HTTP requests, forms, file uploads, webhooks, third-party APIs, queues, config files, and LLM output.
+2. **Assets**: credentials, sessions, PII, payment data, tenant data, admin actions, money movement, and secrets.
+3. **Abuse cases**: how someone could spoof identity, tamper with data, deny an action, leak information, overload the system, or elevate privileges.
+
+If trust boundaries are unclear, stop and clarify before coding.
+
+## Ask First
+
+Get explicit user approval before:
+
+- adding or changing authentication flows
+- changing authorization, roles, or permissions
+- storing new categories of sensitive data
+- adding external service integrations, callbacks, or webhooks
+- changing CORS, cookie, or security header behavior
+- adding file upload handlers
+- modifying rate limits or throttling
+- granting elevated permissions or destructive capabilities
+
+## Never Do
+
+- Never commit secrets or put them in logs.
+- Never trust client-side validation as a security boundary.
+- Never expose stack traces or internal errors to users.
+- Never store auth tokens in client-readable storage when httpOnly cookies are viable.
+- Never use `eval`, shell execution, raw SQL execution, or raw HTML rendering with untrusted data.
+- Never pass unvalidated LLM output into privileged code paths.
 
 ## Security Checklist
 
@@ -388,7 +421,73 @@ async function verifyTransaction(transaction: Transaction) {
 - [ ] Balance checks before transactions
 - [ ] No blind transaction signing
 
-### 10. Dependency Security
+### 10. SSRF Prevention
+
+Any server-side fetch influenced by users can target internal services such as localhost, private networks, or cloud metadata endpoints.
+
+#### ❌ NEVER Fetch Arbitrary User URLs
+```typescript
+// DANGEROUS - user can target internal services
+await fetch(req.body.webhookUrl)
+```
+
+#### ✅ Prefer Allowlisted Endpoints
+```typescript
+const ALLOWED_WEBHOOK_HOSTS = new Set(['hooks.example.com'])
+
+function assertAllowedWebhookUrl(raw: string) {
+  const url = new URL(raw)
+
+  if (url.protocol !== 'https:') {
+    throw new Error('HTTPS required')
+  }
+
+  if (!ALLOWED_WEBHOOK_HOSTS.has(url.hostname)) {
+    throw new Error('Webhook host not allowed')
+  }
+
+  return url
+}
+
+await fetch(assertAllowedWebhookUrl(input.webhookUrl), { redirect: 'error' })
+```
+
+#### Verification Steps
+- [ ] User-influenced server fetches use scheme and host allowlists
+- [ ] Localhost, private, link-local, and reserved IP ranges rejected on high-risk paths
+- [ ] Redirects disabled or each redirect target revalidated
+- [ ] Fixed integration endpoints preferred over arbitrary URLs
+
+### 11. AI / LLM Security
+
+Treat model output like any other untrusted input. Prompts are not a security boundary.
+
+#### ❌ NEVER Trust Model Output Directly
+```typescript
+const sql = await model.generate(`Write SQL for: ${userQuestion}`)
+await db.query(sql) // arbitrary query execution
+
+const html = await model.generate(userPrompt)
+element.innerHTML = html // XSS risk
+```
+
+#### ✅ Validate and Constrain Model Output
+```typescript
+const raw = await model.generateObject({ prompt: userPrompt, schema: ActionSchema })
+const action = ActionSchema.parse(raw)
+
+await runAllowlistedAction(action.name, action.args)
+```
+
+#### Verification Steps
+- [ ] Model output validated before use
+- [ ] No raw model output passed to SQL, shell, `eval`, HTML, file paths, or tool calls
+- [ ] Secrets, cross-tenant data, and privileged system prompts kept out of model context
+- [ ] Tool permissions scoped to the minimum required
+- [ ] Destructive or irreversible tool actions require confirmation
+- [ ] Token, loop, and request limits prevent unbounded consumption
+
+### 12. Dependency Security
 
 #### Regular Updates
 ```bash
@@ -414,10 +513,22 @@ git add package-lock.json
 npm ci  # Instead of npm install
 ```
 
+#### Supply-Chain Review
+
+Before adding dependencies:
+- confirm the existing stack does not already solve the problem
+- check package name for typosquatting risk
+- check maintenance health and license compatibility
+- inspect install scripts such as `postinstall`
+- distinguish runtime dependencies from dev-only dependencies
+- assess whether vulnerabilities are reachable in production paths
+
 #### Verification Steps
 - [ ] Dependencies up to date
-- [ ] No known vulnerabilities (npm audit clean)
+- [ ] No known critical/high vulnerabilities reachable in production
 - [ ] Lock files committed
+- [ ] CI uses reproducible installs (`npm ci`, `bun install --frozen-lockfile`, or equivalent)
+- [ ] New dependencies justified and reviewed
 - [ ] Dependabot enabled on GitHub
 - [ ] Regular security updates
 
@@ -477,10 +588,12 @@ Before ANY production deployment:
 - [ ] **Security Headers**: CSP, X-Frame-Options configured
 - [ ] **Error Handling**: No sensitive data in errors
 - [ ] **Logging**: No sensitive data logged
-- [ ] **Dependencies**: Up to date, no vulnerabilities
+- [ ] **Dependencies**: Up to date, no reachable critical/high vulnerabilities
 - [ ] **Row Level Security**: Enabled in Supabase
 - [ ] **CORS**: Properly configured
 - [ ] **File Uploads**: Validated (size, type)
+- [ ] **SSRF**: User-influenced server fetches allowlisted and redirect-safe
+- [ ] **AI/LLM**: Model output validated before privileged use
 - [ ] **Wallet Signatures**: Verified (if blockchain)
 
 ## Resources

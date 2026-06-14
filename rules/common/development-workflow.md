@@ -30,6 +30,7 @@ Scale this workflow to task size. For trivial or local edits, use judgment and k
 
 3. **Code Review**
    - Use **code-reviewer** agent immediately after writing code
+   - Use **security-reviewer** agent before or after changes involving auth, permissions, user input, file uploads, external APIs/webhooks, secrets, payment/PII, or AI tools/agents
    - Address CRITICAL and HIGH issues
    - Fix MEDIUM issues when possible
 

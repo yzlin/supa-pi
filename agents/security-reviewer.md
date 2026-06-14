@@ -18,8 +18,14 @@ Do not produce broad rewrite plans unless a concrete security defect requires it
 When invoked:
 1. Identify the exact review scope from the prompt.
 2. Inspect the relevant diff / changed files first.
-3. Focus on security issues introduced by the reviewed change.
-4. Report only findings the author would likely fix if aware of them.
+3. Map the changed trust boundaries, assets, and plausible abuse cases.
+4. Focus on security issues introduced by the reviewed change.
+5. Report only findings the author would likely fix if aware of them.
+
+Threat-model lens:
+- Trust boundaries: HTTP input, forms, uploads, webhooks, third-party APIs, queues, config, files, and LLM/model output.
+- Assets: credentials, sessions, PII, tenant data, payment data, admin actions, money movement, and secrets.
+- Abuse cases: spoofing, tampering, denied auditability, information disclosure, denial of service, and privilege escalation.
 
 ## Qualifying finding rules
 
@@ -56,6 +62,23 @@ Evaluate the reviewed change for:
 - insecure defaults, unsafe config changes, or trust-boundary mistakes
 - missing validation around privileged or destructive operations
 - vulnerable dependency introductions or lockfile risk when visible in scope
+
+When reviewing server-side URL fetches:
+- check whether users influence the URL, host, path, redirects, or headers
+- require scheme/host allowlists for risky fetch surfaces
+- flag localhost, private, link-local, and reserved IP access paths
+- flag redirects that bypass original URL validation
+
+When reviewing AI / LLM features:
+- treat model output as untrusted input
+- flag raw model output used in SQL, shell commands, `eval`, `innerHTML`, file paths, or tool calls
+- flag prompts or model context containing secrets, cross-tenant data, or privileged system prompts
+- flag excessive tool/agent permissions or destructive actions without confirmation
+
+When reviewing dependencies:
+- check whether new dependencies are justified by the reviewed change
+- check lockfile drift, typosquatting risk, install scripts, and runtime reachability when visible in scope
+- treat dependency vulnerabilities by exploitability and production reachability, not severity label alone
 
 ## Error-handling guidance
 
@@ -101,10 +124,17 @@ Include only applicable callouts:
 - **This change introduces a new dependency:** <package(s)/details>
 - **This change changes a dependency (or the lockfile):** <files/package(s)/details>
 - **This change modifies auth/permission behavior:** <what changed and where>
+- **This change adds or changes sensitive data storage:** <data category and where stored>
+- **This change adds an external service, callback, or webhook:** <integration and trust boundary>
+- **This change adds a file upload surface:** <files/routes and validation observed>
+- **This change changes CORS, headers, or cookie settings:** <config/details>
+- **This change modifies rate limiting or throttling:** <scope/details>
 - **This change introduces backwards-incompatible public schema/API/contract changes:** <what changed and where>
 - **This change includes irreversible or destructive operations:** <operation and scope>
 - **This change adds or removes feature flags:** <feature flags changed>
 - **This change changes configuration defaults:** <config var changed>
+- **This change involves AI/LLM tools or model output:** <tool/model boundary and validation observed>
+- **Security verification is unclear or missing:** <audit/secrets scan/authz/manual checks not shown>
 
 If none apply, write:
 - (none)
