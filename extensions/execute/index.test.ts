@@ -23,16 +23,19 @@ const EXECUTION_BRIEF = [
 ].join("\n\n");
 
 const EXECUTION_BRIEF_SYNTHESIS_MESSAGE_PARTS = [
+  EXECUTE_PROMPT,
+  "<plan>",
   "Synthesize a new Execution Brief from the current session context.",
   "You may inspect the repo read-only if needed.",
-  "Do not implement anything yet.",
-  "If material ambiguity exists, ask concise clarifying questions and emit no executable brief.",
+  "If the requested work is safe and unambiguous, continue into execution immediately after synthesizing the brief.",
+  "If material ambiguity exists, ask concise clarifying questions and do not execute.",
   "- # Execution Brief",
   "- ## Execution Scope",
   "- ## Plan",
   "- ## Done Criteria",
   "- ## Verification",
   "- ## Out of Scope",
+  "</plan>",
 ];
 
 function expectExecutionBriefSynthesisRequest(
@@ -210,7 +213,7 @@ describe("execute command", () => {
     expect(notifications).toEqual([]);
   });
 
-  it("asks for an Execution Brief when a later user message makes the brief stale", async () => {
+  it("synthesizes a brief and continues when a later user message makes the brief stale", async () => {
     const runtime = createMockPiRuntime();
     const { ctx, notifications } = createMockCtx([
       {
@@ -239,7 +242,7 @@ describe("execute command", () => {
     expect(notifications).toEqual([]);
   });
 
-  it("asks for an Execution Brief when a later textless user message makes the brief stale", async () => {
+  it("synthesizes a brief and continues when a later textless user message makes the brief stale", async () => {
     const runtime = createMockPiRuntime();
     const { ctx, notifications } = createMockCtx([
       {
@@ -268,7 +271,7 @@ describe("execute command", () => {
     expect(notifications).toEqual([]);
   });
 
-  it("asks for an Execution Brief when a later /execute wrapper consumed the brief", async () => {
+  it("synthesizes a brief and continues when a later /execute wrapper consumed the brief", async () => {
     const runtime = createMockPiRuntime();
     const { ctx, notifications } = createMockCtx([
       {
@@ -297,7 +300,7 @@ describe("execute command", () => {
     expect(notifications).toEqual([]);
   });
 
-  it("asks for an Execution Brief when /execute has no args and no usable brief", async () => {
+  it("synthesizes a brief and continues when /execute has no args and no usable brief", async () => {
     const runtime = createMockPiRuntime();
     const { ctx, notifications } = createMockCtx();
 
@@ -421,6 +424,232 @@ describe("execute_checkpoint tool", () => {
         path: checkpointPath,
         checkpoint: written,
       });
+    });
+  });
+
+  it("lists unfinished checkpoints for collision detection", async () => {
+    await withTempDir(async (cwd) => {
+      const runtime = createMockPiRuntime();
+      executeExtension(runtime.pi as never);
+
+      const tool = runtime.tools.get("execute_checkpoint");
+      expect(tool).toBeDefined();
+
+      const checkpointDir = join(cwd, ".pi", "execute");
+      mkdirSync(checkpointDir, { recursive: true });
+      writeFileSync(
+        join(checkpointDir, "done-plan.json"),
+        `${JSON.stringify(
+          {
+            planId: "done-plan",
+            status: "done",
+            createdAt: "2026-04-17T00:00:00.000Z",
+            updatedAt: "2026-04-17T00:00:00.000Z",
+            normalizedSummary: "Finished work",
+            tasks: [],
+          },
+          null,
+          2
+        )}\n`,
+        "utf8"
+      );
+      writeFileSync(
+        join(checkpointDir, "running-plan.json"),
+        `${JSON.stringify(
+          {
+            planId: "running-plan",
+            status: "running",
+            createdAt: "2026-04-17T00:00:00.000Z",
+            updatedAt: "2026-04-17T00:00:00.000Z",
+            normalizedSummary: "Unfinished work",
+            tasks: [
+              {
+                id: "1",
+                subject: "Continue work",
+                status: "pending",
+              },
+            ],
+          },
+          null,
+          2
+        )}\n`,
+        "utf8"
+      );
+
+      const result = (await tool?.execute(
+        "call-5",
+        { op: "list_unfinished" },
+        undefined,
+        undefined,
+        { cwd }
+      )) as {
+        content: Array<{ text: string }>;
+      };
+      const payload = JSON.parse(result.content[0]?.text ?? "{}");
+
+      expect(payload).toEqual({
+        checkpoints: [
+          {
+            path: join(checkpointDir, "running-plan.json"),
+            checkpoint: {
+              planId: "running-plan",
+              status: "running",
+              createdAt: "2026-04-17T00:00:00.000Z",
+              updatedAt: "2026-04-17T00:00:00.000Z",
+              normalizedSummary: "Unfinished work",
+              tasks: [
+                {
+                  id: "1",
+                  subject: "Continue work",
+                  status: "pending",
+                },
+              ],
+            },
+          },
+        ],
+      });
+    });
+  });
+
+  it("persists dangerous-action approval on the same plan fingerprint", async () => {
+    await withTempDir(async (cwd) => {
+      const runtime = createMockPiRuntime();
+      executeExtension(runtime.pi as never);
+
+      const tool = runtime.tools.get("execute_checkpoint");
+      expect(tool).toBeDefined();
+
+      const approvedCheckpoint = {
+        status: "running",
+        normalizedSummary: "Run dangerous migration.",
+        tasks: [
+          {
+            id: "1",
+            subject: "Apply migration",
+            status: "pending",
+          },
+        ],
+        dangerousActionApproval: {
+          approved: true,
+          approvedAt: "2026-04-17T00:00:00.000Z",
+          reason: "User approved database migration.",
+        },
+      };
+
+      await tool?.execute(
+        "call-6",
+        {
+          op: "save",
+          planId: "plan-with-approval",
+          checkpoint: approvedCheckpoint,
+        },
+        undefined,
+        undefined,
+        { cwd }
+      );
+
+      await tool?.execute(
+        "call-7",
+        {
+          op: "save",
+          planId: "plan-with-approval",
+          checkpoint: {
+            status: "running",
+            normalizedSummary: approvedCheckpoint.normalizedSummary,
+            tasks: approvedCheckpoint.tasks,
+          },
+        },
+        undefined,
+        undefined,
+        { cwd }
+      );
+
+      const checkpointPath = join(
+        cwd,
+        ".pi",
+        "execute",
+        "plan-with-approval.json"
+      );
+      const written = JSON.parse(readFileSync(checkpointPath, "utf8"));
+
+      expect(typeof written.dangerousActionApproval.planFingerprint).toBe(
+        "string"
+      );
+      expect(written.dangerousActionApproval).toEqual({
+        approved: true,
+        approvedAt: "2026-04-17T00:00:00.000Z",
+        reason: "User approved database migration.",
+        planFingerprint: written.dangerousActionApproval.planFingerprint,
+      });
+    });
+  });
+
+  it("drops dangerous-action approval when plan content changes", async () => {
+    await withTempDir(async (cwd) => {
+      const runtime = createMockPiRuntime();
+      executeExtension(runtime.pi as never);
+
+      const tool = runtime.tools.get("execute_checkpoint");
+      expect(tool).toBeDefined();
+
+      await tool?.execute(
+        "call-8",
+        {
+          op: "save",
+          planId: "plan-with-stale-approval",
+          checkpoint: {
+            status: "running",
+            normalizedSummary: "Run dangerous migration.",
+            tasks: [
+              {
+                id: "1",
+                subject: "Apply migration",
+                status: "pending",
+              },
+            ],
+            dangerousActionApproval: {
+              approved: true,
+              approvedAt: "2026-04-17T00:00:00.000Z",
+              reason: "User approved database migration.",
+            },
+          },
+        },
+        undefined,
+        undefined,
+        { cwd }
+      );
+
+      await tool?.execute(
+        "call-9",
+        {
+          op: "save",
+          planId: "plan-with-stale-approval",
+          checkpoint: {
+            status: "running",
+            normalizedSummary: "Run different dangerous migration.",
+            tasks: [
+              {
+                id: "1",
+                subject: "Apply different migration",
+                status: "pending",
+              },
+            ],
+          },
+        },
+        undefined,
+        undefined,
+        { cwd }
+      );
+
+      const checkpointPath = join(
+        cwd,
+        ".pi",
+        "execute",
+        "plan-with-stale-approval.json"
+      );
+      const written = JSON.parse(readFileSync(checkpointPath, "utf8"));
+
+      expect(written.dangerousActionApproval).toBeUndefined();
     });
   });
 

@@ -68,7 +68,9 @@ function buildExecutionBriefSynthesisMessage(): string {
     ...EXECUTION_BRIEF_REQUIRED_SECTIONS.map((section) => `- ## ${section}`),
   ].join("\n");
 
-  return `Synthesize a new Execution Brief from the current session context. You may inspect the repo read-only if needed. Do not implement anything yet. If material ambiguity exists, ask concise clarifying questions and emit no executable brief.\n\nThe brief must include these exact markdown sections:\n${requiredHeadings}`;
+  const plan = `Synthesize a new Execution Brief from the current session context. You may inspect the repo read-only if needed. If the requested work is safe and unambiguous, continue into execution immediately after synthesizing the brief. If material ambiguity exists, ask concise clarifying questions and do not execute.\n\nThe brief must include these exact markdown sections:\n${requiredHeadings}`;
+
+  return buildExecuteCommandMessage(plan);
 }
 
 function getLastExecutionBriefFromSession(
@@ -106,11 +108,11 @@ export default function executeExtension(pi: ExtensionAPI): void {
   pi.registerCommand(EXECUTE_COMMAND_NAME, {
     description:
       "Execute a plan via main-session task orchestration: /execute [plan]",
-    handler: (args, ctx) => {
+    handler(args, ctx) {
       const explicitPlan = (args ?? "").trim();
-      const task = explicitPlan || getLastExecutionBriefFromSession(ctx);
-      const message = task
-        ? buildExecuteCommandMessage(task)
+      const plan = explicitPlan || getLastExecutionBriefFromSession(ctx);
+      const message = plan
+        ? buildExecuteCommandMessage(plan)
         : buildExecutionBriefSynthesisMessage();
 
       if (ctx.isIdle()) {

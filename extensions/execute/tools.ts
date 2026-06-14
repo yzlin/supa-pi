@@ -1,7 +1,11 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
 
-import { loadExecuteCheckpoint, saveExecuteCheckpoint } from "./checkpoint";
+import {
+  listUnfinishedExecuteCheckpoints,
+  loadExecuteCheckpoint,
+  saveExecuteCheckpoint,
+} from "./checkpoint";
 
 const ExecuteCheckpointTaskSchema = Type.Object({
   id: Type.String({ minLength: 1 }),
@@ -14,15 +18,27 @@ const ExecuteCheckpointTaskSchema = Type.Object({
   ),
 });
 
+const ExecuteDangerousActionApprovalSchema = Type.Object({
+  approved: Type.Boolean(),
+  approvedAt: Type.String({ minLength: 1 }),
+  reason: Type.Optional(Type.String({ minLength: 1 })),
+  planFingerprint: Type.Optional(Type.String({ minLength: 1 })),
+});
+
 const ExecuteCheckpointSaveSchema = Type.Object({
   status: Type.String({ minLength: 1 }),
   normalizedSummary: Type.String({ minLength: 1 }),
   tasks: Type.Array(ExecuteCheckpointTaskSchema),
+  dangerousActionApproval: Type.Optional(ExecuteDangerousActionApprovalSchema),
 });
 
 const ExecuteCheckpointParams = Type.Object({
-  op: Type.Union([Type.Literal("load"), Type.Literal("save")]),
-  planId: Type.String({ minLength: 1 }),
+  op: Type.Union([
+    Type.Literal("load"),
+    Type.Literal("save"),
+    Type.Literal("list_unfinished"),
+  ]),
+  planId: Type.Optional(Type.String({ minLength: 1 })),
   checkpoint: Type.Optional(ExecuteCheckpointSaveSchema),
 });
 
@@ -58,7 +74,7 @@ export function registerExecuteCheckpointTool(pi: ExtensionAPI): void {
     name: "execute_checkpoint",
     label: "Execute Checkpoint",
     description:
-      "Load or save /execute checkpoint state under .pi/execute/. Use this from the main-session orchestrator only for deterministic checkpoint persistence; it does not manage pi-tasks or orchestration decisions.",
+      "Load, save, or list unfinished /execute checkpoint state under .pi/execute/. Use this from the main-session orchestrator only for deterministic checkpoint persistence; it does not manage pi-tasks or orchestration decisions.",
     parameters: ExecuteCheckpointParams,
 
     execute(_toolCallId, params, _signal, _onUpdate, ctx) {
@@ -67,8 +83,16 @@ export function registerExecuteCheckpointTool(pi: ExtensionAPI): void {
       try {
         switch (params.op) {
           case "load":
+            if (!params.planId) {
+              return errorResult("planId is required when op is load.");
+            }
+
             return jsonResult(loadExecuteCheckpoint(params.planId, cwd));
           case "save":
+            if (!params.planId) {
+              return errorResult("planId is required when op is save.");
+            }
+
             if (!params.checkpoint) {
               return errorResult("checkpoint is required when op is save.");
             }
@@ -78,6 +102,8 @@ export function registerExecuteCheckpointTool(pi: ExtensionAPI): void {
                 saveExecuteCheckpoint(params.planId, params.checkpoint, cwd)
               )
             );
+          case "list_unfinished":
+            return jsonResult(listUnfinishedExecuteCheckpoints(cwd));
         }
       } catch (error) {
         return errorResult(

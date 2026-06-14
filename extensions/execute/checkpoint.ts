@@ -1,7 +1,8 @@
-import { randomBytes } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 import {
   existsSync,
   mkdirSync,
+  readdirSync,
   readFileSync,
   renameSync,
   writeFileSync,
@@ -15,6 +16,13 @@ export interface ExecuteCheckpointTask {
   blockedBy?: string[];
 }
 
+export interface ExecuteDangerousActionApproval {
+  approved: boolean;
+  approvedAt: string;
+  reason?: string;
+  planFingerprint?: string;
+}
+
 export interface ExecuteCheckpoint {
   planId: string;
   status: string;
@@ -22,12 +30,14 @@ export interface ExecuteCheckpoint {
   updatedAt: string;
   normalizedSummary: string;
   tasks: ExecuteCheckpointTask[];
+  dangerousActionApproval?: ExecuteDangerousActionApproval;
 }
 
 export interface ExecuteCheckpointInput {
   status: string;
   normalizedSummary: string;
   tasks: ExecuteCheckpointTask[];
+  dangerousActionApproval?: ExecuteDangerousActionApproval;
 }
 
 export type ExecuteCheckpointLoadResult =
@@ -48,6 +58,21 @@ export interface ExecuteCheckpointSaveResult {
   taskCount: number;
   checkpoint: ExecuteCheckpoint;
 }
+
+export interface ExecuteCheckpointListResult {
+  checkpoints: Array<{
+    path: string;
+    checkpoint: ExecuteCheckpoint;
+  }>;
+}
+
+const FINISHED_CHECKPOINT_STATUSES = new Set([
+  "canceled",
+  "cancelled",
+  "complete",
+  "completed",
+  "done",
+]);
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
@@ -73,6 +98,46 @@ function assertStringArray(value: unknown, fieldName: string): string[] {
   return value.map((entry, index) =>
     assertNonEmptyString(entry, `${fieldName}[${index}]`)
   );
+}
+
+function normalizeDangerousActionApproval(
+  approval: unknown
+): ExecuteDangerousActionApproval {
+  if (!isRecord(approval)) {
+    throw new Error(
+      "Invalid execute checkpoint: dangerousActionApproval must be an object."
+    );
+  }
+
+  if (typeof approval.approved !== "boolean") {
+    throw new Error(
+      "Invalid execute checkpoint: dangerousActionApproval.approved must be a boolean."
+    );
+  }
+
+  const normalizedApproval: ExecuteDangerousActionApproval = {
+    approved: approval.approved,
+    approvedAt: assertNonEmptyString(
+      approval.approvedAt,
+      "dangerousActionApproval.approvedAt"
+    ),
+  };
+
+  if (approval.reason !== undefined) {
+    normalizedApproval.reason = assertNonEmptyString(
+      approval.reason,
+      "dangerousActionApproval.reason"
+    );
+  }
+
+  if (approval.planFingerprint !== undefined) {
+    normalizedApproval.planFingerprint = assertNonEmptyString(
+      approval.planFingerprint,
+      "dangerousActionApproval.planFingerprint"
+    );
+  }
+
+  return normalizedApproval;
 }
 
 function normalizeTask(task: unknown, index: number): ExecuteCheckpointTask {
@@ -117,7 +182,7 @@ function parseStoredCheckpoint(
     throw new Error("Invalid execute checkpoint: tasks must be an array.");
   }
 
-  return {
+  const checkpoint: ExecuteCheckpoint = {
     planId: storedPlanId,
     status: assertNonEmptyString(value.status, "status"),
     createdAt: assertNonEmptyString(value.createdAt, "createdAt"),
@@ -128,6 +193,23 @@ function parseStoredCheckpoint(
     ),
     tasks: value.tasks.map((task, index) => normalizeTask(task, index)),
   };
+
+  if (value.dangerousActionApproval !== undefined) {
+    checkpoint.dangerousActionApproval = normalizeDangerousActionApproval(
+      value.dangerousActionApproval
+    );
+  }
+
+  return checkpoint;
+}
+
+function buildPlanFingerprint(
+  normalizedSummary: string,
+  tasks: ExecuteCheckpointTask[]
+): string {
+  return createHash("sha256")
+    .update(JSON.stringify({ normalizedSummary, tasks }))
+    .digest("hex");
 }
 
 function normalizeCheckpointForSave(
@@ -136,17 +218,35 @@ function normalizeCheckpointForSave(
   existingCheckpoint: ExecuteCheckpoint | null,
   now: string
 ): ExecuteCheckpoint {
-  return {
+  const normalizedSummary = assertNonEmptyString(
+    input.normalizedSummary,
+    "normalizedSummary"
+  );
+  const tasks = input.tasks.map((task, index) => normalizeTask(task, index));
+  const planFingerprint = buildPlanFingerprint(normalizedSummary, tasks);
+  const checkpoint: ExecuteCheckpoint = {
     planId,
     status: assertNonEmptyString(input.status, "status"),
     createdAt: existingCheckpoint?.createdAt ?? now,
     updatedAt: now,
-    normalizedSummary: assertNonEmptyString(
-      input.normalizedSummary,
-      "normalizedSummary"
-    ),
-    tasks: input.tasks.map((task, index) => normalizeTask(task, index)),
+    normalizedSummary,
+    tasks,
   };
+
+  if (input.dangerousActionApproval !== undefined) {
+    checkpoint.dangerousActionApproval = {
+      ...normalizeDangerousActionApproval(input.dangerousActionApproval),
+      planFingerprint,
+    };
+  } else if (
+    existingCheckpoint?.dangerousActionApproval?.planFingerprint ===
+    planFingerprint
+  ) {
+    checkpoint.dangerousActionApproval =
+      existingCheckpoint.dangerousActionApproval;
+  }
+
+  return checkpoint;
 }
 
 function writeJsonAtomically(filePath: string, value: unknown): void {
@@ -163,6 +263,22 @@ export function getExecuteCheckpointPath(
   return join(cwd, ".pi", "execute", `${planId}.json`);
 }
 
+function readCheckpointFile(
+  planId: string,
+  checkpointPath: string
+): ExecuteCheckpoint {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(readFileSync(checkpointPath, "utf8"));
+  } catch (error) {
+    throw new Error(
+      `Failed to parse execute checkpoint ${checkpointPath}: ${error instanceof Error ? error.message : String(error)}`
+    );
+  }
+
+  return parseStoredCheckpoint(planId, parsed);
+}
+
 export function loadExecuteCheckpoint(
   planId: string,
   cwd = process.cwd()
@@ -175,20 +291,39 @@ export function loadExecuteCheckpoint(
     };
   }
 
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(readFileSync(checkpointPath, "utf8"));
-  } catch (error) {
-    throw new Error(
-      `Failed to parse execute checkpoint ${checkpointPath}: ${error instanceof Error ? error.message : String(error)}`
-    );
-  }
-
   return {
     found: true,
     path: checkpointPath,
-    checkpoint: parseStoredCheckpoint(planId, parsed),
+    checkpoint: readCheckpointFile(planId, checkpointPath),
   };
+}
+
+function isUnfinishedCheckpoint(status: string): boolean {
+  return !FINISHED_CHECKPOINT_STATUSES.has(status.trim().toLowerCase());
+}
+
+export function listUnfinishedExecuteCheckpoints(
+  cwd = process.cwd()
+): ExecuteCheckpointListResult {
+  const checkpointDir = join(cwd, ".pi", "execute");
+  if (!existsSync(checkpointDir)) {
+    return { checkpoints: [] };
+  }
+
+  const checkpoints = readdirSync(checkpointDir)
+    .filter((entry) => entry.endsWith(".json"))
+    .sort()
+    .map((entry) => {
+      const planId = entry.slice(0, -".json".length);
+      const path = join(checkpointDir, entry);
+      return {
+        path,
+        checkpoint: readCheckpointFile(planId, path),
+      };
+    })
+    .filter(({ checkpoint }) => isUnfinishedCheckpoint(checkpoint.status));
+
+  return { checkpoints };
 }
 
 export function saveExecuteCheckpoint(
