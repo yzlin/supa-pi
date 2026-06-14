@@ -21,6 +21,8 @@ Interview the user relentlessly about every aspect of their plan or design until
 - Do not re-ask an answered question. Summarize the answer briefly, then continue to the next unresolved decision.
 - If a question can be answered by exploring the codebase, explore the codebase instead of asking.
 - Keep going until the plan is clear, risks are exposed, tradeoffs are explicit, and all major decisions have been resolved.
+- Once all major decisions are resolved, ask one final `questionnaire` gate with exactly two caller-supplied options: `Lock plan, stop here` and `Keep grilling`. Rely on the injected custom row for `Type something.`; do not supply it yourself.
+- The final gate must not ask whether to proceed to implementation, and must not include any implement/proceed/start-coding option.
 
 ## Question Style
 
