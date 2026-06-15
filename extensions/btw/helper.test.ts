@@ -26,7 +26,7 @@ describe("resolveModelAndThinking", () => {
       if (provider === "anthropic" && modelId === "claude-haiku-4-5") {
         return { provider, id: modelId };
       }
-      return undefined;
+      return;
     },
   };
 

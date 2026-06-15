@@ -1,11 +1,11 @@
 import { beforeEach, describe, expect, it } from "bun:test";
 
 import { visibleWidth } from "@earendil-works/pi-tui";
-
 import {
   clearReplacementSurfaceLeases,
   getActiveReplacementLeaseDiagnostics,
 } from "@yzlin/pieditor/replacement-surface-lease";
+
 import questionnaire, {
   CUSTOM_OPTION_LABEL,
   CUSTOM_OPTION_VALUE,
@@ -76,16 +76,16 @@ function registerQuestionnaireTool() {
       registeredTool = tool;
     },
     registerCommand() {
-      return undefined;
+      return;
     },
     on() {
-      return undefined;
+      return;
     },
     appendEntry() {
-      return undefined;
+      return;
     },
     sendMessage() {
-      return undefined;
+      return;
     },
   } as never);
 
@@ -104,7 +104,7 @@ function executeQuestionnaireWithCustom(
     ui: {
       custom,
       notify() {
-        return undefined;
+        return;
       },
     },
   });
@@ -168,7 +168,7 @@ describe("questionnaire replacement lease", () => {
           throw new Error("custom UI should not open");
         },
         notify() {
-          return undefined;
+          return;
         },
       },
     });

@@ -507,7 +507,7 @@ function parsedHeaderlessLineNumber(
     return parsed.number;
   }
   if (parsesInlineLineNumbers) {
-    return undefined;
+    return;
   }
   return fallback;
 }
@@ -674,7 +674,7 @@ function ansi256ToRgb(code: number): RgbColor {
 
 function parseAnsiColorCode(ansi: string | undefined): RgbColor | undefined {
   if (!ansi) {
-    return undefined;
+    return;
   }
 
   const rgbMatch = ANSI_RGB_COLOR_PATTERN.exec(ansi);
@@ -691,7 +691,7 @@ function parseAnsiColorCode(ansi: string | undefined): RgbColor | undefined {
     return ansi256ToRgb(Number.parseInt(bitMatch[1] ?? "0", 10));
   }
 
-  return undefined;
+  return;
 }
 
 function mixRgb(base: RgbColor, tint: RgbColor, ratio: number): RgbColor {
@@ -721,7 +721,7 @@ function readThemeAnsi(
     }
     return theme.getFgAnsi?.(token);
   } catch {
-    return undefined;
+    return;
   }
 }
 
@@ -787,7 +787,7 @@ function inlineDiffRanges(
     oldText.length > INLINE_DIFF_MAX_LINE_LENGTH ||
     newText.length > INLINE_DIFF_MAX_LINE_LENGTH
   ) {
-    return undefined;
+    return;
   }
 
   const oldTokens = tokenizeInlineDiff(oldText);
@@ -797,7 +797,7 @@ function inlineDiffRanges(
     newTokens.length > INLINE_DIFF_MAX_TOKENS ||
     oldTokens.length * newTokens.length > INLINE_DIFF_MAX_CELLS
   ) {
-    return undefined;
+    return;
   }
 
   const matrix: number[][] = Array.from({ length: oldTokens.length + 1 }, () =>
@@ -1588,7 +1588,7 @@ function firstChangedLine(
       return index + 1;
     }
   }
-  return undefined;
+  return;
 }
 
 export function capturePreviousWriteContent(

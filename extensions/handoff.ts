@@ -358,7 +358,7 @@ async function performHandoff(
     });
   }
 
-  return undefined;
+  return;
 }
 
 export default function (pi: ExtensionAPI) {

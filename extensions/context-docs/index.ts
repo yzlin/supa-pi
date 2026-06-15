@@ -670,12 +670,12 @@ export default function contextDocsExtension(pi: ExtensionAPI): void {
 
   pi.on("input", async (event, ctx) => {
     if (event.source !== "interactive" || !ctx.hasUI || event.images?.length) {
-      return undefined;
+      return;
     }
 
     const matched = matchNaturalLanguageInput(event.text);
     if (!matched) {
-      return undefined;
+      return;
     }
 
     const input = buildNaturalLanguageInput(
@@ -712,7 +712,7 @@ export default function contextDocsExtension(pi: ExtensionAPI): void {
 
   pi.on("before_agent_start", (event, ctx) => {
     if (!shouldInjectContextDocsReminder(event.prompt ?? "", ctx.cwd)) {
-      return undefined;
+      return;
     }
 
     return {

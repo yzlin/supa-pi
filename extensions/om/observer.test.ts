@@ -1038,7 +1038,7 @@ Trailing prose that should be ignored.`);
         model: { provider: "openai", id: "gpt-5-mini" },
         modelRegistry: {
           find() {
-            return undefined;
+            return;
           },
           getApiKeyAndHeaders(model) {
             expect(model).toEqual({ provider: "openai", id: "gpt-5-mini" });
@@ -1090,7 +1090,7 @@ Trailing prose that should be ignored.`);
         model: { provider: "openai", id: "gpt-5-mini" },
         modelRegistry: {
           find() {
-            return undefined;
+            return;
           },
           getApiKeyAndHeaders() {
             return {
@@ -1128,7 +1128,7 @@ Trailing prose that should be ignored.`);
         model: { provider: "openai-codex", id: "gpt-5.5" },
         modelRegistry: {
           find() {
-            return undefined;
+            return;
           },
           getApiKey() {
             return "observer-token";
@@ -1175,7 +1175,7 @@ Trailing prose that should be ignored.`);
       model: { provider: "openai", id: "gpt-5-mini" },
       modelRegistry: {
         find() {
-          return undefined;
+          return;
         },
         getApiKey() {
           return "observer-token";
@@ -1249,7 +1249,7 @@ Trailing prose that should be ignored.`);
         model: { provider: "openai", id: "gpt-5-mini" },
         modelRegistry: {
           find() {
-            return undefined;
+            return;
           },
           getApiKey() {
             return "observer-token";
@@ -1313,7 +1313,7 @@ Trailing prose that should be ignored.`);
         model: { provider: "openai", id: "gpt-5-mini" },
         modelRegistry: {
           find() {
-            return undefined;
+            return;
           },
           getApiKey() {
             return "observer-token";

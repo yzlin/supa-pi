@@ -85,12 +85,12 @@ function bundledNameFromPath(skillPath: string): string {
 function readSkillContent(skillDir: string): string | undefined {
   const skillPath = join(skillDir, "SKILL.md");
   if (!existsSync(skillPath)) {
-    return undefined;
+    return;
   }
   try {
     return readFileSync(skillPath, "utf8").trim();
   } catch {
-    return undefined;
+    return;
   }
 }
 
@@ -159,7 +159,7 @@ export function filterSkillInventory(
 
 function sourceLabel(item: SkillInventoryItem): string | undefined {
   if (!item.source) {
-    return undefined;
+    return;
   }
   const { owner, path, ref, repo, subpath, url } = item.source;
   if (!owner) {

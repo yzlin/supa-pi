@@ -94,7 +94,7 @@ describe("om compaction helper", () => {
         },
         modelRegistry: {
           find() {
-            return undefined;
+            return;
           },
           getApiKeyAndHeaders() {
             return { ok: true as const, apiKey: "key" };
@@ -123,7 +123,7 @@ describe("om compaction helper", () => {
       },
       modelRegistry: {
         find() {
-          return undefined;
+          return;
         },
         getApiKeyAndHeaders() {
           return { ok: true as const, apiKey: "key" };

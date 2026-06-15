@@ -345,13 +345,13 @@ export function registerCavemanMode(pi: ExtensionAPI): void {
 
   pi.on("before_agent_start", (event: BeforeAgentStartEvent) => {
     if (!cavemanModeEnabled) {
-      return undefined;
+      return;
     }
 
     const systemPrompt = applyCavemanPrompt(event.systemPrompt, true);
 
     if (systemPrompt === event.systemPrompt) {
-      return undefined;
+      return;
     }
 
     return { systemPrompt };

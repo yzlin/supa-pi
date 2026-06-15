@@ -381,7 +381,7 @@ async function selectSkillSourceDirs(
       `Multiple skills found. Run /skill install ${suggestion} to install one skill.`,
       "warning"
     );
-    return undefined;
+    return;
   }
   const selectedIds = await ctx.ui.custom<string[] | undefined>(
     (_tui, theme, _kb, done) =>
@@ -406,11 +406,11 @@ async function selectSkillSourceDirs(
     }
   );
   if (!selectedIds) {
-    return undefined;
+    return;
   }
   if (selectedIds.length === 0) {
     ctx.ui.notify("Select at least one skill to install.", "warning");
-    return undefined;
+    return;
   }
   const selected = new Set(selectedIds);
   return entries
@@ -858,7 +858,7 @@ async function searchSkills(
 
 function updateStatusText(updateCount: number): string | undefined {
   if (updateCount === 0) {
-    return undefined;
+    return;
   }
   const suffix = updateCount === 1 ? "" : "s";
   return `Skills: ${updateCount} update${suffix}`;

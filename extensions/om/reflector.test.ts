@@ -377,7 +377,7 @@ describe("om reflector helpers", () => {
         },
         modelRegistry: {
           find() {
-            return undefined;
+            return;
           },
           getApiKeyAndHeaders() {
             return { ok: true as const, apiKey: "key", headers: { a: "b" } };
@@ -447,7 +447,7 @@ describe("om reflector helpers", () => {
         },
         modelRegistry: {
           find() {
-            return undefined;
+            return;
           },
           getApiKeyAndHeaders() {
             return { ok: false as const, error: "missing key" };
@@ -471,7 +471,7 @@ describe("om reflector helpers", () => {
       },
       modelRegistry: {
         find() {
-          return undefined;
+          return;
         },
         getApiKeyAndHeaders() {
           return { ok: true as const, apiKey: "key" };

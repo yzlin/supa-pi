@@ -147,7 +147,7 @@ function buildOmTextPreview(text: string, maxChars = 240): string | undefined {
   const normalized = text.replace(/\s+/g, " ").trim();
 
   if (!normalized) {
-    return undefined;
+    return;
   }
 
   if (normalized.length <= maxChars) {

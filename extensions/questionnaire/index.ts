@@ -51,9 +51,10 @@ const FALLBACK_REPLACEMENT_LEASE_MODULE: ReplacementLeaseModule = {
   withReplacementSurfaceLease: (_options, run) => run(),
 };
 
-let replacementLeaseModulePromise: Promise<ReplacementLeaseModule> | null = null;
+let replacementLeaseModulePromise: Promise<ReplacementLeaseModule> | null =
+  null;
 
-async function loadReplacementLeaseModule(): Promise<ReplacementLeaseModule> {
+function loadReplacementLeaseModule(): Promise<ReplacementLeaseModule> {
   replacementLeaseModulePromise ??= import(
     "@yzlin/pieditor/replacement-surface-lease"
   )
@@ -360,7 +361,7 @@ export default function questionnaire(pi: ExtensionAPI): void {
 
   pi.on("input", (event) => {
     lastInputSource = event.source;
-    return undefined;
+    return;
   });
 
   pi.registerCommand("questionnaire-stats", {
@@ -685,7 +686,7 @@ export default function questionnaire(pi: ExtensionAPI): void {
 
   pi.on("before_agent_start", (event, ctx) => {
     if (!ctx.hasUI) {
-      return undefined;
+      return;
     }
 
     return {
@@ -719,7 +720,7 @@ QUESTION-ASKING RULES:
       (message) => message.role === "assistant"
     );
     const lastAssistant = assistantMessages.at(-1);
-    if (!lastAssistant || lastAssistant.stopReason !== "stop") {
+    if (lastAssistant?.stopReason !== "stop") {
       return;
     }
     if (hasToolCall(lastAssistant.content)) {

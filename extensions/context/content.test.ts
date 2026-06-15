@@ -21,7 +21,7 @@ function makeCtx(
     model: undefined,
     modelRegistry: {
       find() {
-        return undefined;
+        return;
       },
     },
     getSystemPrompt() {

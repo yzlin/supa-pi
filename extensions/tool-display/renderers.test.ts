@@ -36,7 +36,7 @@ const tokenTheme = {
     if (token === "toolDiffRemoved") {
       return "\x1b[38;2;196;98;98m";
     }
-    return undefined;
+    return;
   },
 };
 

@@ -82,7 +82,7 @@ function asNonEmptyString(value: unknown): string | null {
 
 function asOptionalEntryId(value: unknown): string | null | undefined {
   if (value === undefined) {
-    return undefined;
+    return;
   }
 
   return asNonEmptyString(value);
@@ -182,7 +182,7 @@ function normalizeOmBranchScope(
 
 function normalizeContinuationHint(value: unknown): string | undefined {
   if (typeof value !== "string") {
-    return undefined;
+    return;
   }
 
   const normalized = value.trim();

@@ -126,7 +126,7 @@ function appendToProviderPayload(
   contextPrompt: string
 ): unknown | undefined {
   if (!isRecord(payload)) {
-    return undefined;
+    return;
   }
 
   if (typeof payload.system === "string") {
@@ -171,7 +171,7 @@ function appendToProviderPayload(
     }
   }
 
-  return undefined;
+  return;
 }
 
 export default function obsidianExtension(pi: ExtensionAPI): void {

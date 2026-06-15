@@ -151,7 +151,7 @@ function createOmHarness(
     model: undefined,
     modelRegistry: {
       find() {
-        return undefined;
+        return;
       },
     },
     sessionManager: {

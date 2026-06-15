@@ -312,13 +312,13 @@ export function applyFastModeToPayload(
   model: unknown
 ): unknown | undefined {
   if (!(enabled && modelSupportsFastMode(model))) {
-    return undefined;
+    return;
   }
   if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
-    return undefined;
+    return;
   }
   if ("service_tier" in payload || "serviceTier" in payload) {
-    return undefined;
+    return;
   }
 
   return { ...payload, service_tier: "priority" };

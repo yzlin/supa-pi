@@ -582,11 +582,9 @@ function runPattern(
 }
 
 export default function astGrepExtension(pi: ExtensionAPI): void {
-  pi.on("before_agent_start", (event) => {
-    return {
-      systemPrompt: `${event.systemPrompt}\n\n${prompt}`,
-    };
-  });
+  pi.on("before_agent_start", (event) => ({
+    systemPrompt: `${event.systemPrompt}\n\n${prompt}`,
+  }));
 
   pi.registerTool({
     name: "ast_grep",

@@ -241,7 +241,7 @@ function normalizeToolConfig(
   value: unknown
 ): Partial<ToolDisplayToolConfig> | undefined {
   if (!isPlainObject(value)) {
-    return undefined;
+    return;
   }
 
   const enabled = normalizeBoolean(value.enabled);
@@ -253,7 +253,7 @@ function normalizeStringArray(value: unknown): string[] | undefined {
     !Array.isArray(value) ||
     value.some((entry) => typeof entry !== "string")
   ) {
-    return undefined;
+    return;
   }
   return value;
 }
@@ -273,7 +273,7 @@ function normalizeFullReadMaxBytes(
 ): number | undefined {
   const maxBytes = normalizePositiveInteger(value);
   if (maxBytes === undefined) {
-    return undefined;
+    return;
   }
   if (maxBytes <= TOOL_DISPLAY_FULL_READ_MAX_BYTES) {
     return maxBytes;
@@ -293,7 +293,7 @@ function normalizeFullReadTarget(
     typeof value.name !== "string" ||
     value.name.length === 0
   ) {
-    return undefined;
+    return;
   }
 
   const warnings = [...(normalizeStringArray(value.warnings) ?? [])];
@@ -336,7 +336,7 @@ function normalizeFullReadConfig(
   value: unknown
 ): ToolDisplayFullReadConfigLayer | undefined {
   if (!isPlainObject(value)) {
-    return undefined;
+    return;
   }
 
   const enabled = normalizeBoolean(value.enabled);
@@ -375,7 +375,7 @@ function normalizeReadConfig(
   value: unknown
 ): ToolDisplayReadConfigLayer | undefined {
   if (!isPlainObject(value)) {
-    return undefined;
+    return;
   }
 
   const next: ToolDisplayReadConfigLayer = {};
@@ -397,7 +397,7 @@ function normalizePreviewConfig(
   value: unknown
 ): Partial<ToolDisplayPreviewConfig> | undefined {
   if (!isPlainObject(value)) {
-    return undefined;
+    return;
   }
 
   const next: Partial<ToolDisplayPreviewConfig> = {};
@@ -422,7 +422,7 @@ function normalizeBashOutputConfig(
   value: unknown
 ): Partial<ToolDisplayBashOutputConfig> | undefined {
   if (!isPlainObject(value)) {
-    return undefined;
+    return;
   }
 
   const next: Partial<ToolDisplayBashOutputConfig> =
@@ -439,7 +439,7 @@ function normalizeDiffConfig(
   value: unknown
 ): Partial<ToolDisplayDiffConfig> | undefined {
   if (!isPlainObject(value)) {
-    return undefined;
+    return;
   }
 
   const next: Partial<ToolDisplayDiffConfig> = {};

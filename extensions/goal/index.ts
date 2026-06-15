@@ -149,7 +149,7 @@ function createCheckpoint(input: {
 
 function statusText(checkpoint: GoalCheckpoint | null): string | undefined {
   if (!checkpoint || checkpoint.status === "cleared") {
-    return undefined;
+    return;
   }
   const taskStatuses = checkpoint.tasks.map((task) => task.status);
   return formatGoalStatus(checkpoint.status, taskStatuses);
@@ -343,7 +343,7 @@ function notifySaveFailure(
 function activeGoalForContext(
   ctx: ExtensionCommandContext | ExtensionContext
 ): Result<GoalCheckpoint> {
-  if (!activeGoal || activeGoal.status !== "active") {
+  if (activeGoal?.status !== "active") {
     return { ok: false, error: "No active goal." };
   }
   const cwd = currentCwd(ctx);
@@ -687,7 +687,7 @@ export default function goalExtension(pi: ExtensionAPI): void {
     (message, _opts, theme) => {
       const details = message.details;
       if (!details) {
-        return undefined;
+        return;
       }
       const suffix = details.status ? ` (${details.status})` : "";
       return new Text(
@@ -710,7 +710,7 @@ export default function goalExtension(pi: ExtensionAPI): void {
     setGoalTools(activeToolsPi, false);
   });
   pi.on("agent_end", (_event, ctx) => {
-    if (!activeGoal || activeGoal.status !== "active") {
+    if (activeGoal?.status !== "active") {
       return;
     }
     if (activeGoalCwd !== currentCwd(ctx)) {

@@ -142,7 +142,7 @@ export default function (pi: ExtensionAPI) {
     (message, _opts, theme) => {
       const details = message.details;
       if (!details?.result) {
-        return undefined;
+        return;
       }
       return renderBtwResult(details.result, theme);
     }
@@ -194,9 +194,8 @@ export default function (pi: ExtensionAPI) {
       ];
 
       const systemPrompt = ctx.getSystemPrompt();
-      const apiKeyResolver = (_provider: string) => {
-        return getProviderApiKeyForModel(ctx.modelRegistry, targetModel!);
-      };
+      const apiKeyResolver = (_provider: string) =>
+        getProviderApiKeyForModel(ctx.modelRegistry, targetModel!);
 
       // Serialize current conversation context for the subagent
       const branch = ctx.sessionManager.getBranch();

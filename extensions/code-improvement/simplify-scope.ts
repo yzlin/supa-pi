@@ -92,7 +92,7 @@ function readStats(path: string): Stats | undefined {
   try {
     return statSync(path);
   } catch {
-    return undefined;
+    return;
   }
 }
 
