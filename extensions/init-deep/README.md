@@ -147,6 +147,8 @@ Command rules:
 - Keep reads/writes/deletes scoped to that target root.
 - If create-new is true, read existing AGENTS.md files first, then remove them with `trash` before regenerating.
 - If dry run is true, inspect and propose changes only.
+- Use TaskCreate and TaskUpdate for phase tracking.
+- Complete each phase task when that phase finishes; do not emit the final answer while any init-deep task is pending or in_progress.
 - The max depth above is a hard limit.
 
 <contents of prompt.md>

@@ -150,7 +150,7 @@ export function parseInitDeepArgs(
   cwd: string
 ): InitDeepParseResult {
   const tokenized = tokenizeArgs(rawArgs);
-  if (!tokenized.ok) {
+  if (tokenized.ok === false) {
     return tokenized;
   }
 
@@ -200,7 +200,7 @@ export function parseInitDeepArgs(
       }
 
       const parsedDepth = parsePositiveInteger(nextToken, "--max-depth");
-      if (!parsedDepth.ok) {
+      if (parsedDepth.ok === false) {
         return parsedDepth;
       }
 
@@ -212,7 +212,7 @@ export function parseInitDeepArgs(
     if (token.startsWith("--max-depth=")) {
       const rawValue = token.slice("--max-depth=".length);
       const parsedDepth = parsePositiveInteger(rawValue, "--max-depth");
-      if (!parsedDepth.ok) {
+      if (parsedDepth.ok === false) {
         return parsedDepth;
       }
 

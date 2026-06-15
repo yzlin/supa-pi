@@ -48,8 +48,6 @@ const DEPTH_COMPLETIONS: AutocompleteItem[] = [1, 2, 3, 4, 5, 6].map(
   })
 );
 
-const VALUE_FLAGS = new Set(["--max-depth"]);
-
 interface CompletionState {
   currentToken: string;
   precedingTokens: string[];
@@ -95,7 +93,7 @@ function analyzeCompletionState(argumentPrefix: string): CompletionState {
       continue;
     }
 
-    if (VALUE_FLAGS.has(token)) {
+    if (token === "--max-depth") {
       usedFlags.add(token);
       expectedValueFor = token;
       continue;
@@ -291,6 +289,7 @@ export function buildInitDeepMessage(input: InitDeepCommandInput): string {
     "- If create-new is true, read existing AGENTS.md files in scope first, then remove them with `trash` before regenerating.",
     "- If dry run is true, inspect and propose changes only. Do not write, edit, or delete files.",
     "- Use TaskCreate and TaskUpdate for phase tracking.",
+    "- Complete each phase task when that phase finishes; do not emit the final answer while any init-deep task is pending or in_progress.",
     "",
     PROMPT,
   ].join("\n");
@@ -305,20 +304,21 @@ export default function initDeepExtension(pi: ExtensionAPI): void {
     },
     handler: (args, ctx) => {
       const parsed = parseInitDeepArgs(args ?? "", process.cwd());
-      if (!parsed.ok) {
+      if (parsed.ok === false) {
         ctx.ui.notify(parsed.error, "warning");
-        return;
+        return Promise.resolve();
       }
 
       const message = buildInitDeepMessage(parsed.value);
 
       if (ctx.isIdle()) {
         pi.sendUserMessage(message);
-        return;
+        return Promise.resolve();
       }
 
       pi.sendUserMessage(message, { deliverAs: "followUp" });
       ctx.ui.notify("Queued /init-deep as a follow-up", "info");
+      return Promise.resolve();
     },
   });
 }

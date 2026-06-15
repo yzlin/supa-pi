@@ -136,6 +136,9 @@ describe("init-deep prompt builder", () => {
     expect(message).toContain(
       "Use TaskCreate and TaskUpdate for phase tracking."
     );
+    expect(message).toContain(
+      "do not emit the final answer while any init-deep task is pending or in_progress."
+    );
   });
 });
 

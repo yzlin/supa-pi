@@ -311,6 +311,8 @@ Instructions:
 7. Do not include speculative issues.
 8. Only report issues introduced by the reviewed change or directly exposed by it.
 9. Keep non-blocking human callouts separate from findings.
+10. If you use pi task tools for review orchestration, complete every review task before the final report: mark delegation tasks completed after reviewer agents return, mark synthesis tasks in_progress before merging outputs, and mark synthesis tasks completed before emitting the final answer.
+11. Do not emit the final report while any review task is pending or in_progress.
 
 Required final output:
 
@@ -1711,7 +1713,7 @@ export default function reviewExtension(pi: ExtensionAPI) {
           "No review report found in this session. Run /review first.",
           "warning"
         );
-        return;
+        return Promise.resolve();
       }
 
       dispatchFollowUpMessage(
@@ -1720,6 +1722,7 @@ export default function reviewExtension(pi: ExtensionAPI) {
         buildReviewSummaryMessage(reviewReport, args),
         "Queued /review-summary as a follow-up"
       );
+      return Promise.resolve();
     },
   });
 
@@ -1736,7 +1739,7 @@ export default function reviewExtension(pi: ExtensionAPI) {
           "No review report found in this session. Run /review first.",
           "warning"
         );
-        return;
+        return Promise.resolve();
       }
 
       dispatchFollowUpMessage(
@@ -1745,6 +1748,7 @@ export default function reviewExtension(pi: ExtensionAPI) {
         buildReviewFixMessage(reviewReport, args),
         "Queued /review-fix as a follow-up"
       );
+      return Promise.resolve();
     },
   });
 }

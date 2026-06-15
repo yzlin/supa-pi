@@ -6,6 +6,7 @@ Rules:
 - Inspect before writing. Ground claims in files you actually read.
 - Prefer `find`, `grep`, `ls`, `read`, and focused `bash` over speculative reasoning.
 - Use `TaskCreate` / `TaskUpdate` for multi-step tracking.
+- Complete each phase task when that phase finishes; do not emit the final answer while any init-deep task is pending or in_progress.
 - Use telegraphic style inside generated `AGENTS.md` files.
 - Do not add generic advice that applies to every repo.
 - Child `AGENTS.md` files must not repeat parent guidance.

@@ -155,6 +155,9 @@ describe("review direct targets", () => {
     expect(message).toContain(
       "When delegating via the Agent tool, omit `max_turns` from reviewer Agent calls."
     );
+    expect(message).toContain(
+      "Do not emit the final report while any review task is pending or in_progress."
+    );
     expect(notifications).toContainEqual({
       message: "Starting review: current changes [code-reviewer]",
       level: "info",
