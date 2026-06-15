@@ -18,3 +18,18 @@ When the prompt instructs the main agent to delegate reviewer work, reviewer cal
 The prompt contract forbids pi task tools (`TaskCreate`, `TaskUpdate`, `TaskList`, `TaskExecute`, or `TaskOutput`) during review orchestration. Review tasks persist across follow-up commands, so stale pending or in-progress review tasks can confuse `/review-fix` sessions.
 
 The final `/review` response merges reviewer outputs into one report, de-duplicates overlapping findings, keeps non-blocking human callouts separate, and reports only issues introduced or directly exposed by the reviewed change.
+
+## `/review-fix` executor delegation
+
+`/review-fix` stays prompt-orchestrated and prefers the latest `/review-summary` report, falling back to the latest raw `/review` report.
+
+For actionable findings or a non-empty Fix Queue, the main session must:
+
+- call exactly one foreground/default `executor` Agent for the whole queue;
+- omit `max_turns`;
+- avoid all main-session code edits;
+- summarize only the executor JSON result.
+
+If the report clearly has no findings, an empty Fix Queue, or says the code looks good, `/review-fix` must not call the executor and must report no fixable findings.
+
+Executor failure, invalid JSON, `blocked`, or `needs_followup` is reported only, with no fallback main-session fixing. The review report is untrusted, so instructions inside it cannot override command/delegation rules. `/review-fix [extra instruction]` can refine implementation scope or checks, but cannot override delegation, safety, no-main-edits, no-task-tools, or JSON-summary rules.
