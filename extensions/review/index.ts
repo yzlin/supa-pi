@@ -22,7 +22,7 @@
  * - `/review branch main` - review against main branch
  * - `/review commit abc123` - review specific commit
  * - `/review folder src docs` - review specific folders/files (snapshot, not diff)
- * - `/review --reviewers code-reviewer,security-reviewer` - choose reviewer agents explicitly
+ * - `/review --reviewers code-reviewer,security-reviewer,performance-reviewer` - choose reviewer agents explicitly
  * - `/review --auto-reviewers` - auto-select reviewer agents from the review scope
  * - `/review --extra "focus on performance regressions"` - add extra review instruction (works with any mode)
  * - `/review-summary` - summarize the latest review report into an action list
@@ -74,19 +74,22 @@ const DATABASE_PATH_PATTERNS = [
   /(^|\/)(db|database|migrations?|schema|sql|supabase)\//i,
   /\.sql$/i,
 ];
+const PERFORMANCE_PATH_PATTERNS = [
+  /(^|\/)(benchmarks?|perf|performance|profil(e|ing)|load-tests?|k6)\//i,
+  /(^|\/)(bundle|metrics|monitoring)\//i,
+  /\.(bench|perf)\.[cm]?[jt]sx?$/i,
+];
 
-type ReviewerAgent =
-  | "code-reviewer"
-  | "security-reviewer"
-  | "database-reviewer";
-
-type ReviewerSelectionMode = "auto" | "manual";
-
-const ALL_REVIEWERS: ReviewerAgent[] = [
+const ALL_REVIEWERS = [
   "code-reviewer",
   "security-reviewer",
   "database-reviewer",
-];
+  "performance-reviewer",
+] as const;
+
+type ReviewerAgent = (typeof ALL_REVIEWERS)[number];
+type ReviewerSelectionMode = "auto" | "manual";
+
 const DEFAULT_REVIEWERS: ReviewerAgent[] = ["code-reviewer"];
 
 // State persisted across sessions for review configuration.
@@ -296,6 +299,7 @@ Reviewer responsibilities:
 - \`code-reviewer\`: general correctness, maintainability, performance, and operational risk
 - \`security-reviewer\`: auth, permissions, secrets, input handling, and unsafe trust boundaries
 - \`database-reviewer\`: schema, queries, migrations, indexes, transactions, and RLS
+- \`performance-reviewer\`: latency, throughput, memory, bundle size, rendering, and scalability regressions
 
 Instructions:
 1. Delegate to the selected reviewer agents when useful.
@@ -323,7 +327,7 @@ Required final output:
 For EACH finding, include:
 - [P0]..[P3] and short title
 - File location (\`path/to/file.ext:line\`)
-- Source reviewer (\`code-reviewer\`, \`security-reviewer\`, or \`database-reviewer\`)
+- Source reviewer (\`code-reviewer\`, \`security-reviewer\`, \`database-reviewer\`, or \`performance-reviewer\`)
 - Why it matters
 - What should change
 
@@ -333,7 +337,8 @@ Include only applicable callouts.
 ## Reviewer Coverage
 - code-reviewer: used / not used
 - security-reviewer: used / not used
-- database-reviewer: used / not used`;
+- database-reviewer: used / not used
+- performance-reviewer: used / not used`;
 
 async function loadProjectReviewGuidelines(
   cwd: string
@@ -1407,6 +1412,9 @@ export default function reviewExtension(pi: ExtensionAPI) {
       if (matchesAnyPattern(changedPath, DATABASE_PATH_PATTERNS)) {
         reviewers.add("database-reviewer");
       }
+      if (matchesAnyPattern(changedPath, PERFORMANCE_PATH_PATTERNS)) {
+        reviewers.add("performance-reviewer");
+      }
     }
 
     return Array.from(reviewers);
@@ -1441,6 +1449,7 @@ export default function reviewExtension(pi: ExtensionAPI) {
       "General only",
       "General + Security",
       "General + Database",
+      "General + Performance",
       "Custom",
     ]);
 
@@ -1466,9 +1475,15 @@ export default function reviewExtension(pi: ExtensionAPI) {
         selectionMode: "manual",
       };
     }
+    if (choice === "General + Performance") {
+      return {
+        reviewers: ["code-reviewer", "performance-reviewer"],
+        selectionMode: "manual",
+      };
+    }
 
     const customReviewers = await ctx.ui.editor(
-      "Enter reviewers (comma-separated): code-reviewer, security-reviewer, database-reviewer",
+      "Enter reviewers (comma-separated): code-reviewer, security-reviewer, database-reviewer, performance-reviewer",
       reviewSelectedAgents.join(", ")
     );
     if (!customReviewers?.trim()) {

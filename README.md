@@ -63,6 +63,7 @@ See `package.json` for the full registration list.
 - `security-reviewer`
 - `build-error-resolver`
 - `database-reviewer`
+- `performance-reviewer`
 - `doc-updater`
 - `e2e-runner`
 - `refactor-cleaner`

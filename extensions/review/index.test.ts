@@ -212,6 +212,54 @@ describe("review direct targets", () => {
     );
   });
 
+  it("accepts the performance reviewer in direct reviewer flags", async () => {
+    const runtime = createMockPiRuntime();
+    const { ctx, notifications } = createMockCtx();
+
+    reviewExtension(runtime.pi as never);
+    const handler = runtime.commands.get("review")?.handler;
+
+    expect(handler).toBeDefined();
+    await handler?.(
+      "uncommitted --reviewers performance-reviewer",
+      ctx as never
+    );
+
+    const message = String(runtime.sentUserMessages[0]?.content);
+    expect(message).toContain("- performance-reviewer");
+    expect(message).toContain(
+      "`performance-reviewer`: latency, throughput, memory, bundle size, rendering, and scalability regressions"
+    );
+    expect(message).toContain(
+      "Source reviewer (`code-reviewer`, `security-reviewer`, `database-reviewer`, or `performance-reviewer`)"
+    );
+    expect(message).toContain("- performance-reviewer: used / not used");
+    expect(notifications).toContainEqual({
+      message: "Starting review: current changes [performance-reviewer]",
+      level: "info",
+    });
+  });
+
+  it("auto-selects the performance reviewer for performance-sensitive paths", async () => {
+    const runtime = createMockPiRuntime((_command, args) => {
+      if (args.join(" ") === "status --porcelain --untracked-files=all") {
+        return { stdout: " M benchmarks/render.bench.ts\n", code: 0 };
+      }
+      return { stdout: "", code: 0 };
+    });
+    const { ctx } = createMockCtx();
+
+    reviewExtension(runtime.pi as never);
+    const handler = runtime.commands.get("review")?.handler;
+
+    expect(handler).toBeDefined();
+    await handler?.("uncommitted --auto-reviewers", ctx as never);
+
+    expect(String(runtime.sentUserMessages[0]?.content)).toContain(
+      "- performance-reviewer"
+    );
+  });
+
   it("preserves direct folder targets and extra instructions", async () => {
     const runtime = createMockPiRuntime();
     const { ctx } = createMockCtx();
