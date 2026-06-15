@@ -15,4 +15,6 @@ Reviewer selection can be automatic or explicit. Auto-selection always includes 
 
 When the prompt instructs the main agent to delegate reviewer work, reviewer calls use the Agent tool only and must not set `max_turns`. Reviews need enough turns for each reviewer to inspect relevant files, reason about the diff or snapshot, and return findings. If a reviewer is not useful for the selected scope, the orchestrating agent may skip that reviewer and mark it as not used in Reviewer Coverage.
 
+The prompt contract forbids pi task tools (`TaskCreate`, `TaskUpdate`, `TaskList`, `TaskExecute`, or `TaskOutput`) during review orchestration. Review tasks persist across follow-up commands, so stale pending or in-progress review tasks can confuse `/review-fix` sessions.
+
 The final `/review` response merges reviewer outputs into one report, de-duplicates overlapping findings, keeps non-blocking human callouts separate, and reports only issues introduced or directly exposed by the reviewed change.

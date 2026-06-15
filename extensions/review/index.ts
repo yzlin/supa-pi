@@ -311,8 +311,7 @@ Instructions:
 7. Do not include speculative issues.
 8. Only report issues introduced by the reviewed change or directly exposed by it.
 9. Keep non-blocking human callouts separate from findings.
-10. If you use pi task tools for review orchestration, complete every review task before the final report: mark delegation tasks completed after reviewer agents return, mark synthesis tasks in_progress before merging outputs, and mark synthesis tasks completed before emitting the final answer.
-11. Do not emit the final report while any review task is pending or in_progress.
+10. Do not use pi task tools (\`TaskCreate\`, \`TaskUpdate\`, \`TaskList\`, \`TaskExecute\`, or \`TaskOutput\`) for review orchestration. Use reviewer Agent calls directly and synthesize the final report in this conversation.
 
 Required final output:
 

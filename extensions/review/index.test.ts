@@ -156,6 +156,9 @@ describe("review direct targets", () => {
       "When delegating via the Agent tool, omit `max_turns` from reviewer Agent calls."
     );
     expect(message).toContain(
+      "Do not use pi task tools (`TaskCreate`, `TaskUpdate`, `TaskList`, `TaskExecute`, or `TaskOutput`) for review orchestration."
+    );
+    expect(message).not.toContain(
       "Do not emit the final report while any review task is pending or in_progress."
     );
     expect(notifications).toContainEqual({
