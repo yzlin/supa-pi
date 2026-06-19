@@ -35,6 +35,7 @@
       "./extensions/skills",
       "./extensions/obsidian",
       "./extensions/no-sleep.ts",
+      "./extensions/whimsical.ts",
       "./extensions/fast"
     ]
   },
