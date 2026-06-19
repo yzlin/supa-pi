@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Whimsical configuration",
+  "type": "object",
+  "properties": {
+    "selectedSet": {
+      "type": "string",
+      "default": "default",
+      "description": "Bundled whimsical message set to use for working messages.",
+      "enum": ["default", "negative-energy"]
+    }
+  },
+  "required": ["selectedSet"]
+}

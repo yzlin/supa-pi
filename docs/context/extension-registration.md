@@ -20,7 +20,7 @@ Do not describe `extensions/om` as active runtime behavior unless package regist
 
 `extensions/no-sleep.ts` is active. It prevents macOS from sleeping while Pi's agent is running by spawning `caffeinate`, registers `/no-sleep [status|on|off|toggle|agent|session]`, defaults to `PI_NO_SLEEP=on`, defaults to agent-scoped caffeination, and supports `PI_NO_SLEEP_SCOPE=session` plus `PI_NO_SLEEP_DISPLAY=1`.
 
-`extensions/whimsical.ts` is active. It sets a random whimsical working message at `turn_start` and clears it at `turn_end`. It is adapted from Armin Ronacher's `agent-stuff` `extensions/whimsical.ts` under Apache License 2.0.
+`extensions/whimsical` is active. It sets a random whimsical working message at `turn_start`, clears it at `turn_end`, and registers `/whimsical [set]` to show or select bundled message sets (`default`, `negative-energy`). Selection persists to the session and `~/.pi/agent/whimsical.json`; latest command session state wins over global config, with unavailable sets falling back to `default`. It is adapted from Armin Ronacher's `agent-stuff` `extensions/whimsical.ts` under Apache License 2.0.
 
 `extensions/fast` is active. It registers:
 
