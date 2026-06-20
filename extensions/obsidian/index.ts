@@ -16,15 +16,7 @@ import {
 } from "./context";
 import { type ActiveVault, assertContained, resolveActiveVault } from "./vault";
 
-const GUARDED_TOOLS = new Set([
-  "ast_grep",
-  "read",
-  "edit",
-  "write",
-  "grep",
-  "find",
-  "ls",
-]);
+const GUARDED_TOOLS = new Set(["read", "edit", "write", "grep", "find", "ls"]);
 
 function targetPathFor(event: ToolCallEvent, cwd: string): string | null {
   if (!GUARDED_TOOLS.has(event.toolName)) {

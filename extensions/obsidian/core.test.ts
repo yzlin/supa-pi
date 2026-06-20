@@ -453,31 +453,6 @@ describe("obsidian extension behavior", () => {
     });
   });
 
-  it("guards ast_grep path inputs", () => {
-    useTempConfig("ast-grep");
-    const root = makeVault("ast-grep");
-    const child = join(root, "child");
-    mkdirSync(child, { recursive: true });
-    const claude = join(child, "CLAUDE.md");
-    writeFileSync(claude, "child rules");
-    writeConfig({ enabled: true, vaults: [{ path: root }] });
-
-    const harness = createExtensionHarness();
-
-    expect(
-      harness.toolCall({ toolName: "ast_grep", input: { path: child } }, root)
-    ).toEqual({
-      block: true,
-      reason: `Obsidian loaded missing CLAUDE context for ${child}. Retry the same structured tool call now.`,
-    });
-    expect(harness.entries).toEqual([
-      {
-        customType: OBSIDIAN_CONTEXT_ENTRY,
-        data: { paths: [realpathSync(claude)] },
-      },
-    ]);
-  });
-
   it("reports status with config, active vault, loaded paths, and warnings", async () => {
     useTempConfig("status");
     const root = makeVault("status-root");

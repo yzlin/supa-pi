@@ -29,7 +29,7 @@ The extension is active only when Pi's cwd is inside a configured vault. If vaul
 - Blocks guarded structured path tool calls when missing context is found; retry the same tool call after the next provider request includes the new context.
 - Blocks context files over 64KB and context chains over 256KB total.
 
-Guarded tools: `ast_grep`, `read`, `edit`, `write`, `grep`, `find`, `ls`.
+Guarded tools: `read`, `edit`, `write`, `grep`, `find`, `ls`.
 
 The extension does not parse bash paths and does not provide add/remove commands.
 

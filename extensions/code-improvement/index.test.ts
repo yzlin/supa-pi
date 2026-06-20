@@ -287,8 +287,6 @@ describe("code-improvement commands", () => {
       "extensions/btw/subagent.test.ts",
       "extensions/btw/index.ts",
       "extensions/btw/subagent.ts",
-      "extensions/ast-grep/prompt.md",
-      "extensions/ast-grep/index.ts",
       "extensions/context/analyze.ts",
       "extensions/context/content.test.ts",
       "extensions/context/analyze.test.ts",
@@ -299,6 +297,8 @@ describe("code-improvement commands", () => {
       "extensions/context/index.ts",
       "extensions/core-prompt/prompt.md",
       "extensions/core-prompt/index.ts",
+      "extensions/goal/index.test.ts",
+      "extensions/goal/index.ts",
       "extensions/init-deep/index.test.ts",
     ].join("\n");
     const runtime = createMockPiRuntime((_command, args) => {

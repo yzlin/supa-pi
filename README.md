@@ -43,7 +43,6 @@ The configured extension set also includes workflow and utility modules such as:
 - `handoff`
 - `context`
 - `btw`
-- `ast-grep`
 - `tool-display`
 - `skills`
 

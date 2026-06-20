@@ -25,7 +25,6 @@
       "./extensions/context",
       "./extensions/context-docs",
       "./extensions/btw",
-      "./extensions/ast-grep",
       "./extensions/rtk",
       "./extensions/tool-display",
       "./extensions/init-deep",
