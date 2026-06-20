@@ -2,11 +2,18 @@ import type { Editor } from "@earendil-works/pi-tui";
 import { truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
 
 import { isAllAnswered, type QuestionnaireRuntimeState } from "./state";
-import { wrapQuestionnaireText } from "./text";
+import { stripTerminalControlsUpTo, wrapQuestionnaireText } from "./text";
 import type { Question, RenderOption } from "./types";
 
 const PREVIEW_OPENING_CODE_FENCE_REGEX = /^```[\w-]*\s*$/;
 const PREVIEW_CLOSING_CODE_FENCE_REGEX = /^```\s*$/;
+const OPTION_TITLE_MIN_WIDTH = 24;
+const OPTION_PREVIEW_MIN_WIDTH = 12;
+const OPTION_COLUMN_GUTTER_WIDTH = 3;
+const OPTION_TITLE_SPLIT = 0.45;
+const OPTION_PREVIEW_MAX_LINES = 6;
+const OPTION_LABEL_MAX_LINES = 6;
+const NOTE_PREVIEW_MAX_LINES = 6;
 
 interface QuestionnaireTheme {
   fg(color: string, text: string): string;
@@ -50,6 +57,36 @@ export function renderQuestionnaireRuntime(args: {
       ? "Custom answer preview will appear after you type it."
       : selectedOption?.preview;
 
+  const notePreviewLinesByWidth = new Map<number, string[]>();
+  const getNotePreviewLines = (paneWidth = width) => {
+    const cachedPreviewLines = notePreviewLinesByWidth.get(paneWidth);
+    if (cachedPreviewLines !== undefined) {
+      return cachedPreviewLines;
+    }
+
+    const note = question ? state.noteDrafts.get(question.id) : undefined;
+    const contentWidth = Math.max(1, paneWidth - 1);
+    const wrappedNoteLines = note
+      ? wrapCappedQuestionnaireText(note, contentWidth, NOTE_PREVIEW_MAX_LINES)
+      : [];
+    const previewLines = wrappedNoteLines.some((line) => line.trim().length > 0)
+      ? wrappedNoteLines
+      : [];
+    notePreviewLinesByWidth.set(paneWidth, previewLines);
+    return previewLines;
+  };
+
+  const renderNoteDraft = (paneWidth = width) => {
+    const noteLines = getNotePreviewLines(paneWidth);
+    if (noteLines.length === 0) {
+      return;
+    }
+    add(theme.fg("muted", " Note"));
+    for (const line of noteLines) {
+      add(` ${theme.fg("text", line)}`);
+    }
+  };
+
   const renderPreviewPane = (paneWidth = width) => {
     add(theme.fg("muted", " Preview"));
     const contentWidth = Math.max(1, paneWidth - 1);
@@ -60,41 +97,24 @@ export function renderQuestionnaireRuntime(args: {
     } else {
       add(theme.fg("dim", " No preview available."));
     }
-    const note = question ? state.noteDrafts.get(question.id)?.trim() : "";
-    if (note) {
-      add(theme.fg("muted", " Note"));
-      for (const line of wrapQuestionnaireText(note, contentWidth)) {
-        add(` ${theme.fg("text", line)}`);
-      }
-    }
+    renderNoteDraft(paneWidth);
   };
 
-  const formatOptionLine = (option: RenderOption, index: number) => {
-    const selected = index === state.optionIndex;
-    const prefix = selected ? theme.fg("accent", "> ") : "  ";
-    const color = selected ? "accent" : "text";
-    if (question?.multiSelect === true) {
-      const checked = state.multiSelections.get(question.id)?.has(option.value);
-      let marker = "☐ ";
-      if (option.isNext === true) {
-        marker = "  ";
-      } else if (checked) {
-        marker = "☑ ";
-      }
-      return prefix + theme.fg(color, `${marker}${option.label}`);
-    }
-    if (option.isOther === true && state.inputMode) {
-      return prefix + theme.fg("accent", `${index + 1}. ${option.label} ✎`);
-    }
-    return prefix + theme.fg(color, `${index + 1}. ${option.label}`);
-  };
+  const formatOptionBlock = (option: RenderOption, index: number) =>
+    formatOptionBlockForWidth(
+      option,
+      index,
+      width,
+      index === state.optionIndex,
+      question,
+      state,
+      theme
+    );
 
   const renderOptions = () => {
     for (let index = 0; index < options.length; index++) {
-      const option = options[index];
-      add(formatOptionLine(option, index));
-      if (option.description) {
-        addWrapped(option.description, "     ", "muted");
+      for (const line of formatOptionBlock(options[index], index)) {
+        add(line);
       }
     }
   };
@@ -155,37 +175,48 @@ export function renderQuestionnaireRuntime(args: {
     addWrapped(question.prompt, " ", "text");
     lines.push("");
     if (previewEnabled === true && question.multiSelect !== true) {
-      if (width >= 96) {
-        const leftWidth = Math.floor((width - 3) / 2);
-        const rightWidth = width - leftWidth - 3;
-        const leftLines = [theme.fg("muted", " Options")];
+      const columnWidths = getOptionColumnWidths(width);
+      if (columnWidths) {
+        const { titleWidth, previewWidth } = columnWidths;
+        const headerLeft = padToVisibleWidth(
+          theme.fg("muted", " Options"),
+          titleWidth
+        );
+        add(`${headerLeft} │ ${theme.fg("muted", " Preview")}`);
         for (let optionIndex = 0; optionIndex < options.length; optionIndex++) {
           const option = options[optionIndex];
-          leftLines.push(formatOptionLine(option, optionIndex));
-          if (option.description) {
-            for (const line of wrapQuestionnaireText(
-              option.description,
-              Math.max(1, leftWidth - 5)
-            )) {
-              leftLines.push(`     ${theme.fg("muted", line)}`);
-            }
+          const selected = optionIndex === state.optionIndex;
+          const leftLines = formatOptionBlockForWidth(
+            option,
+            optionIndex,
+            titleWidth,
+            selected,
+            question,
+            state,
+            theme
+          );
+          const previewLines = getOptionPreviewLines(
+            option,
+            previewWidth,
+            selected,
+            theme
+          );
+          const rowCount = Math.max(leftLines.length, previewLines.length);
+          for (let rowIndex = 0; rowIndex < rowCount; rowIndex++) {
+            const left = padToVisibleWidth(
+              leftLines[rowIndex] ?? "",
+              titleWidth
+            );
+            const right = truncateToWidth(
+              previewLines[rowIndex] ?? "",
+              previewWidth
+            );
+            add(`${left} │ ${right}`);
           }
         }
-        const rightLines = [theme.fg("muted", " Preview")];
-        if (previewText) {
-          rightLines.push(
-            ...wrapPreviewText(previewText, rightWidth - 1).map((line) =>
-              theme.fg("text", ` ${line}`)
-            )
-          );
-        } else {
-          rightLines.push(theme.fg("dim", " No preview available."));
-        }
-        const rowCount = Math.max(leftLines.length, rightLines.length);
-        for (let index = 0; index < rowCount; index++) {
-          const left = padToVisibleWidth(leftLines[index] ?? "", leftWidth);
-          const right = truncateToWidth(rightLines[index] ?? "", rightWidth);
-          add(`${left} │ ${right}`);
+        if (getNotePreviewLines(width).length > 0) {
+          lines.push("");
+          renderNoteDraft(width);
         }
       } else {
         renderOptions();
@@ -226,8 +257,202 @@ function stripOuterCodeFence(text: string): string {
   return text;
 }
 
-function wrapPreviewText(text: string, width: number): string[] {
-  return wrapQuestionnaireText(stripOuterCodeFence(text), width);
+function prepareCappedPreviewText(
+  text: string,
+  maxChars: number
+): { text: string; truncated: boolean } {
+  const sanitized = stripTerminalControlsUpTo(text, maxChars + 1);
+  const firstLineEnd = sanitized.text.indexOf("\n");
+  const firstLine =
+    firstLineEnd === -1
+      ? sanitized.text
+      : sanitized.text.slice(0, firstLineEnd);
+  const startsWithCodeFence = PREVIEW_OPENING_CODE_FENCE_REGEX.test(
+    firstLine.trim()
+  );
+  const suffixWindow = stripTerminalControlsUpTo(
+    text.slice(-(maxChars + 1)),
+    maxChars + 1
+  ).text;
+  const lastLineStart = suffixWindow.lastIndexOf("\n");
+  const lastLine =
+    lastLineStart === -1 ? suffixWindow : suffixWindow.slice(lastLineStart + 1);
+  const hasOuterClosingFence =
+    startsWithCodeFence &&
+    PREVIEW_CLOSING_CODE_FENCE_REGEX.test(lastLine.trim());
+  const previewText = hasOuterClosingFence
+    ? sanitized.text.slice(firstLineEnd + 1)
+    : sanitized.text;
+  const strippedText = hasOuterClosingFence
+    ? stripTrailingOuterClosingFence(previewText)
+    : previewText;
+  const truncated = sanitized.truncated || strippedText.length > maxChars;
+
+  return {
+    text: truncated ? `${strippedText.slice(0, maxChars)}…` : strippedText,
+    truncated,
+  };
+}
+
+function wrapPreviewText(
+  text: string,
+  width: number,
+  options: { maxLines?: number } = {}
+): string[] {
+  if (!options.maxLines) {
+    return wrapQuestionnaireText(stripOuterCodeFence(text), width);
+  }
+
+  const maxChars = Math.max(1, width) * options.maxLines;
+  const cappedText = prepareCappedPreviewText(text, maxChars).text;
+  return capWrappedLines(
+    wrapQuestionnaireText(cappedText, width),
+    width,
+    options.maxLines
+  );
+}
+
+function stripTrailingOuterClosingFence(text: string): string {
+  const lines = text.split("\n");
+  const lastLine = lines.at(-1);
+  if (
+    lastLine !== undefined &&
+    PREVIEW_CLOSING_CODE_FENCE_REGEX.test(lastLine.trim())
+  ) {
+    return lines.slice(0, -1).join("\n");
+  }
+  return text;
+}
+
+function wrapCappedQuestionnaireText(
+  text: string,
+  width: number,
+  maxLines: number
+): string[] {
+  const maxChars = Math.max(1, width) * maxLines;
+  const sanitized = stripTerminalControlsUpTo(text, maxChars + 1);
+  const truncated = sanitized.truncated || sanitized.text.length > maxChars;
+  const cappedText = truncated
+    ? `${sanitized.text.slice(0, maxChars)}…`
+    : sanitized.text;
+  return capWrappedLines(
+    wrapQuestionnaireText(cappedText, width),
+    width,
+    maxLines
+  );
+}
+
+function capWrappedLines(
+  lines: string[],
+  width: number,
+  maxLines: number
+): string[] {
+  if (lines.length <= maxLines) {
+    return lines;
+  }
+
+  const cappedLines = lines.slice(0, maxLines);
+  cappedLines[cappedLines.length - 1] = truncateToWidth(
+    `${cappedLines.at(-1)}…`,
+    width
+  );
+  return cappedLines;
+}
+
+function getOptionColumnWidths(
+  width: number
+): { titleWidth: number; previewWidth: number } | null {
+  const contentWidth = width - OPTION_COLUMN_GUTTER_WIDTH;
+  if (contentWidth < 2) {
+    return null;
+  }
+
+  if (contentWidth < OPTION_TITLE_MIN_WIDTH + 1) {
+    return { titleWidth: contentWidth - 1, previewWidth: 1 };
+  }
+
+  if (contentWidth < OPTION_TITLE_MIN_WIDTH + OPTION_PREVIEW_MIN_WIDTH) {
+    return {
+      titleWidth: OPTION_TITLE_MIN_WIDTH,
+      previewWidth: contentWidth - OPTION_TITLE_MIN_WIDTH,
+    };
+  }
+
+  let titleWidth = Math.round(contentWidth * OPTION_TITLE_SPLIT);
+  let previewWidth = contentWidth - titleWidth;
+  if (titleWidth < OPTION_TITLE_MIN_WIDTH) {
+    titleWidth = OPTION_TITLE_MIN_WIDTH;
+    previewWidth = contentWidth - titleWidth;
+  }
+  if (previewWidth < OPTION_PREVIEW_MIN_WIDTH) {
+    previewWidth = OPTION_PREVIEW_MIN_WIDTH;
+    titleWidth = contentWidth - previewWidth;
+  }
+
+  return { titleWidth, previewWidth };
+}
+
+function formatOptionBlockForWidth(
+  option: RenderOption,
+  index: number,
+  width: number,
+  selected: boolean,
+  question: Question | undefined,
+  state: QuestionnaireRuntimeState,
+  theme: QuestionnaireTheme
+): string[] {
+  const cursor = selected ? "> " : "  ";
+  let marker = `${index + 1}. `;
+  if (question?.multiSelect === true) {
+    const checked = state.multiSelections.get(question.id)?.has(option.value);
+    marker = checked ? "☑ " : "☐ ";
+    if (option.isNext === true) {
+      marker = "  ";
+    }
+  }
+  const title =
+    option.isOther === true && state.inputMode
+      ? `${option.label} ✎`
+      : option.label;
+  const color = selected ? "accent" : "text";
+  const contentWidth = Math.max(1, width - visibleWidth(cursor + marker));
+  const continuation = " ".repeat(visibleWidth(cursor + marker));
+  const block = wrapCappedQuestionnaireText(
+    title,
+    contentWidth,
+    OPTION_LABEL_MAX_LINES
+  ).map((line, lineIndex) => {
+    const prefix = lineIndex === 0 ? cursor + marker : continuation;
+    return prefix + theme.fg(color, line);
+  });
+
+  if (option.description) {
+    for (const line of wrapQuestionnaireText(
+      option.description,
+      contentWidth
+    )) {
+      block.push(continuation + theme.fg(selected ? "accent" : "muted", line));
+    }
+  }
+  return block;
+}
+
+function getOptionPreviewLines(
+  option: RenderOption,
+  width: number,
+  selected: boolean,
+  theme: QuestionnaireTheme
+): string[] {
+  const preview =
+    option.isOther === true
+      ? "Custom answer preview will appear after you type it."
+      : option.preview;
+  if (!preview) {
+    return [theme.fg(selected ? "accent" : "dim", " No preview available.")];
+  }
+  return wrapPreviewText(preview, Math.max(1, width - 1), {
+    maxLines: OPTION_PREVIEW_MAX_LINES,
+  }).map((line) => theme.fg(selected ? "accent" : "text", ` ${line}`));
 }
 
 function padToVisibleWidth(text: string, width: number): string {

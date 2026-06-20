@@ -94,7 +94,7 @@ Preview mode:
 - Shows option preview content for the highlighted row, or a no-preview message.
 - Questionnaire-provided display text strips terminal control sequences before rendering.
 - A preview wrapped in one outer fenced code block renders the fence contents without the surrounding backtick fence.
-- Wide layouts render options and preview side-by-side; narrow layouts stack them.
+- Preview-enabled option lists render option titles and previews side-by-side when both columns can meet minimum widths; very narrow layouts stack options above the focused preview.
 - `n`: edit a preview note for the current question.
 - In note editor, `Enter` saves the note and `Esc` cancels note editing.
 

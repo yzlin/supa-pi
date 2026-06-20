@@ -23,6 +23,7 @@ import {
   createQuestionnaireRuntimeState,
   reduceQuestionnaireRuntime,
 } from "./state";
+import { stripTerminalControlsUpTo } from "./text";
 
 const PLAIN_THEME = {
   fg(_color: string, text: string): string {
@@ -311,19 +312,20 @@ describe("validateQuestionnaireParams", () => {
     });
 
     expect(result).toMatchObject({ valid: false });
-    if (result.valid) {
-      throw new Error("expected validation errors");
+    if (result.valid === false) {
+      expect(result.issues.map((issue) => issue.code)).toEqual(
+        expect.arrayContaining([
+          "preview_multi_select",
+          "option_count",
+          "duplicate_option_value",
+          "duplicate_option_label",
+          "reserved_option_value",
+          "reserved_option_label",
+        ])
+      );
+      return;
     }
-    expect(result.issues.map((issue) => issue.code)).toEqual(
-      expect.arrayContaining([
-        "preview_multi_select",
-        "option_count",
-        "duplicate_option_value",
-        "duplicate_option_label",
-        "reserved_option_value",
-        "reserved_option_label",
-      ])
-    );
+    throw new Error("expected validation errors");
   });
 });
 
@@ -678,9 +680,596 @@ describe("questionnaire reducer and key router", () => {
     );
     expect(wideLines.join("\n")).toContain("Structured JSON output");
     expect(narrowLines.join("\n")).toContain("Type something.");
-    expect(narrowLines.join("\n")).toContain(
-      "Custom answer preview will appear after you type it."
+    expect(narrowLines.join("\n")).toContain("Custom answer preview");
+    expect(narrowLines.join("\n")).toContain("appear after you type it.");
+  });
+
+  it("renders saved note drafts in side-by-side preview layout", () => {
+    const question = {
+      id: "format",
+      label: "Format",
+      prompt: "Which format?",
+      options: [{ value: "json", label: "JSON", preview: "Structured JSON" }],
+    };
+    const state = createQuestionnaireRuntimeState();
+    state.noteDrafts.set("format", "Remember to include schema details.");
+
+    const lines = renderQuestionnaireRuntime({
+      width: 100,
+      theme: PLAIN_THEME,
+      questions: [question],
+      state,
+      options: getRenderOptions(question),
+      editor: EMPTY_EDITOR as never,
+      previewEnabled: true,
+    });
+    const rendered = lines.join("\n");
+
+    expect(rendered).toContain("Options");
+    expect(rendered).toContain("Preview");
+    expect(rendered).toContain("Note");
+    expect(rendered).toContain("Remember to include schema details.");
+  });
+
+  it("caps saved note draft rendering in side-by-side preview layout", () => {
+    const question = {
+      id: "format",
+      label: "Format",
+      prompt: "Which format?",
+      options: [{ value: "json", label: "JSON", preview: "Structured JSON" }],
+    };
+    const state = createQuestionnaireRuntimeState();
+    state.noteDrafts.set("format", "note ".repeat(10_000));
+
+    const lines = renderQuestionnaireRuntime({
+      width: 80,
+      theme: PLAIN_THEME,
+      questions: [question],
+      state,
+      options: getRenderOptions(question),
+      editor: EMPTY_EDITOR as never,
+      previewEnabled: true,
+    });
+    const noteIndex = lines.findIndex((line) => line.includes("Note"));
+    const noteEndIndex = lines.findIndex(
+      (line, index) => index > noteIndex && line === ""
     );
+    const noteLines = lines.slice(noteIndex + 1, noteEndIndex);
+
+    expect(noteIndex).toBeGreaterThanOrEqual(0);
+    expect(noteLines.length).toBeLessThanOrEqual(6);
+    expect(noteLines.join("\n")).toContain("…");
+  });
+
+  it("does not trim the full saved note while rendering its capped preview", () => {
+    const question = {
+      id: "format",
+      label: "Format",
+      prompt: "Which format?",
+      options: [{ value: "json", label: "JSON", preview: "Structured JSON" }],
+    };
+    const state = createQuestionnaireRuntimeState();
+    state.noteDrafts.set("format", "note ".repeat(10_000));
+    const originalTrim = String.prototype.trim;
+    String.prototype.trim = function trimWithoutLongInputs() {
+      if (this.length > 1000) {
+        throw new Error("trimmed full note");
+      }
+      return originalTrim.call(this);
+    };
+
+    try {
+      expect(() =>
+        renderQuestionnaireRuntime({
+          width: 80,
+          theme: PLAIN_THEME,
+          questions: [question],
+          state,
+          options: getRenderOptions(question),
+          editor: EMPTY_EDITOR as never,
+          previewEnabled: true,
+        })
+      ).not.toThrow();
+    } finally {
+      String.prototype.trim = originalTrim;
+    }
+  });
+
+  it("does not trim the full option preview while checking capped fences", () => {
+    const question = {
+      id: "format",
+      label: "Format",
+      prompt: "Which format?",
+      options: [
+        {
+          value: "json",
+          label: "JSON",
+          preview: `\`\`\`\n${"preview ".repeat(10_000)}`,
+        },
+      ],
+    };
+    const originalTrim = String.prototype.trim;
+    String.prototype.trim = function trimWithoutLongInputs() {
+      if (this.length > 1000) {
+        throw new Error("trimmed full preview");
+      }
+      return originalTrim.call(this);
+    };
+
+    try {
+      expect(() =>
+        renderQuestionnaireRuntime({
+          width: 80,
+          theme: PLAIN_THEME,
+          questions: [question],
+          state: createQuestionnaireRuntimeState(),
+          options: getRenderOptions(question),
+          editor: EMPTY_EDITOR as never,
+          previewEnabled: true,
+        })
+      ).not.toThrow();
+    } finally {
+      String.prototype.trim = originalTrim;
+    }
+  });
+
+  it("wraps narrow preview option rows by visible cell width", () => {
+    const question = {
+      id: "layout",
+      label: "Layout",
+      prompt: "Which layout?",
+      options: [
+        {
+          value: "long",
+          label: "Supercalifragilisticexpialidocious option title wraps safely",
+          preview: "Preview text wraps alongside the option title.",
+        },
+        { value: "short", label: "Short", preview: "Tiny" },
+      ],
+    };
+
+    const lines = renderQuestionnaireRuntime({
+      width: 60,
+      theme: ANSI_THEME,
+      questions: [question],
+      state: createQuestionnaireRuntimeState(),
+      options: getRenderOptions(question),
+      editor: EMPTY_EDITOR as never,
+      previewEnabled: true,
+    });
+    const optionRows = lines.filter((line) => line.includes("│"));
+
+    expect(optionRows.length).toBeGreaterThan(question.options.length);
+    expect(optionRows.some((line) => line.includes("        "))).toBe(true);
+    for (const row of optionRows) {
+      expect(visibleWidth(row)).toBeLessThanOrEqual(60);
+    }
+  });
+
+  it("keeps preview columns when the preview minimum must shrink first", () => {
+    const question = {
+      id: "layout",
+      label: "Layout",
+      prompt: "Which layout?",
+      options: [
+        {
+          value: "long",
+          label: "Long option title remains protected",
+          preview: "Preview still renders in the narrow preview column.",
+        },
+      ],
+    };
+
+    const previewMinBreakLines = renderQuestionnaireRuntime({
+      width: 38,
+      theme: PLAIN_THEME,
+      questions: [question],
+      state: createQuestionnaireRuntimeState(),
+      options: getRenderOptions(question),
+      editor: EMPTY_EDITOR as never,
+      previewEnabled: true,
+    });
+    const titleMinBreakLines = renderQuestionnaireRuntime({
+      width: 27,
+      theme: PLAIN_THEME,
+      questions: [question],
+      state: createQuestionnaireRuntimeState(),
+      options: getRenderOptions(question),
+      editor: EMPTY_EDITOR as never,
+      previewEnabled: true,
+    });
+
+    const previewMinBreakRows = previewMinBreakLines.filter((line) =>
+      line.includes("│")
+    );
+    const titleMinBreakRows = titleMinBreakLines.filter((line) =>
+      line.includes("│")
+    );
+
+    expect(previewMinBreakRows.length).toBeGreaterThan(0);
+    expect(titleMinBreakRows.length).toBeGreaterThan(0);
+    expect(
+      visibleWidth(
+        previewMinBreakRows[0].slice(0, previewMinBreakRows[0].indexOf("│"))
+      )
+    ).toBe(25);
+    expect(
+      visibleWidth(
+        titleMinBreakRows[0].slice(0, titleMinBreakRows[0].indexOf("│"))
+      )
+    ).toBe(24);
+    for (const row of previewMinBreakRows) {
+      expect(visibleWidth(row)).toBeLessThanOrEqual(38);
+    }
+    for (const row of titleMinBreakRows) {
+      expect(visibleWidth(row)).toBeLessThanOrEqual(27);
+    }
+  });
+
+  it("keeps the selected marker and accent styling on wrapped narrow row blocks", () => {
+    const question = {
+      id: "layout",
+      label: "Layout",
+      prompt: "Which layout?",
+      options: [
+        { value: "plain", label: "Plain", preview: "Short preview" },
+        {
+          value: "detailed",
+          label: "Detailed option title wraps over several visible rows",
+          preview: "Selected preview also wraps over several visible rows.",
+        },
+      ],
+    };
+    const state = { ...createQuestionnaireRuntimeState(), optionIndex: 1 };
+
+    const rows = renderQuestionnaireRuntime({
+      width: 40,
+      theme: ANSI_THEME,
+      questions: [question],
+      state,
+      options: getRenderOptions(question),
+      editor: EMPTY_EDITOR as never,
+      previewEnabled: true,
+    }).filter((line) => line.includes("│"));
+    const selectedRows = rows.filter((line) => line.includes("\u001b[34m"));
+
+    expect(rows.filter((line) => line.startsWith("> 2. "))).toHaveLength(1);
+    expect(rows.some((line) => line.startsWith("     \u001b[34m"))).toBe(true);
+    expect(selectedRows.length).toBeGreaterThan(1);
+    expect(selectedRows.every((line) => line.includes("\u001b[34m"))).toBe(
+      true
+    );
+    for (const row of rows) {
+      expect(visibleWidth(row)).toBeLessThanOrEqual(40);
+    }
+  });
+
+  it("caps option preview row wrapping work in side-by-side layout", () => {
+    const question = {
+      id: "large-preview",
+      label: "Large preview",
+      prompt: "Which preview?",
+      options: [
+        {
+          value: "large",
+          label: "Large",
+          preview: "x ".repeat(10_000),
+        },
+      ],
+    };
+
+    const rows = renderQuestionnaireRuntime({
+      width: 80,
+      theme: PLAIN_THEME,
+      questions: [question],
+      state: createQuestionnaireRuntimeState(),
+      options: getRenderOptions(question),
+      editor: EMPTY_EDITOR as never,
+      previewEnabled: true,
+    }).filter((line) => line.includes("│"));
+
+    const customOptionRowIndex = rows.findIndex((line) =>
+      line.startsWith("  2. ")
+    );
+    const largeOptionRows = rows.slice(1, customOptionRowIndex);
+
+    expect(largeOptionRows.length).toBeLessThanOrEqual(6);
+    expect(largeOptionRows.join("\n")).toContain("…");
+  });
+
+  it("strips fenced option previews before capping side-by-side rows", () => {
+    const question = {
+      id: "large-fenced-preview",
+      label: "Large fenced preview",
+      prompt: "Which preview?",
+      options: [
+        {
+          value: "large",
+          label: "Large",
+          preview: `\`\`\`text\n${"x ".repeat(10_000)}\n\`\`\``,
+        },
+      ],
+    };
+
+    const rows = renderQuestionnaireRuntime({
+      width: 80,
+      theme: PLAIN_THEME,
+      questions: [question],
+      state: createQuestionnaireRuntimeState(),
+      options: getRenderOptions(question),
+      editor: EMPTY_EDITOR as never,
+      previewEnabled: true,
+    }).filter((line) => line.includes("│"));
+    const rendered = rows.join("\n");
+
+    expect(rendered).not.toContain("```text");
+    expect(rendered).not.toContain("```");
+    expect(rendered).toContain("…");
+  });
+
+  it("keeps unmatched opening preview fences in side-by-side rows", () => {
+    const question = {
+      id: "unmatched-fenced-preview",
+      label: "Unmatched fenced preview",
+      prompt: "Which preview?",
+      options: [
+        {
+          value: "unmatched",
+          label: "Unmatched",
+          preview: "```text",
+        },
+      ],
+    };
+
+    const rows = renderQuestionnaireRuntime({
+      width: 80,
+      theme: PLAIN_THEME,
+      questions: [question],
+      state: createQuestionnaireRuntimeState(),
+      options: getRenderOptions(question),
+      editor: EMPTY_EDITOR as never,
+      previewEnabled: true,
+    }).filter((line) => line.includes("│"));
+
+    expect(rows.join("\n")).toContain("```text");
+  });
+
+  it("marks control-only preview sanitizing as truncated at the input budget", () => {
+    const sanitized = stripTerminalControlsUpTo(
+      "\u001b[2J".repeat(10_000),
+      20,
+      100
+    );
+
+    expect(sanitized).toEqual({ text: "", truncated: true });
+  });
+
+  it("bounds malformed escape scanning to the input budget", () => {
+    const sanitized = stripTerminalControlsUpTo(
+      `\u001b]${"x".repeat(500_000)}`,
+      20,
+      100
+    );
+
+    expect(sanitized).toEqual({ text: "", truncated: true });
+  });
+
+  it("keeps embedded preview code fences when there is no outer fence", () => {
+    const question = {
+      id: "embedded-fence-preview",
+      label: "Embedded fence preview",
+      prompt: "Which preview?",
+      options: [
+        {
+          value: "embedded",
+          label: "Embedded",
+          preview: "Intro\n```\nconst value = true;\n```\nOutro",
+        },
+      ],
+    };
+
+    const rows = renderQuestionnaireRuntime({
+      width: 80,
+      theme: PLAIN_THEME,
+      questions: [question],
+      state: createQuestionnaireRuntimeState(),
+      options: getRenderOptions(question),
+      editor: EMPTY_EDITOR as never,
+      previewEnabled: true,
+    }).filter((line) => line.includes("│"));
+    const rendered = rows.join("\n");
+
+    expect(rendered).toContain("Intro");
+    expect(rendered).toContain("```");
+    expect(rendered).toContain("const value");
+  });
+
+  it("strips preview terminal controls before applying side-by-side caps", () => {
+    const question = {
+      id: "control-preview",
+      label: "Control preview",
+      prompt: "Which preview?",
+      options: [
+        {
+          value: "control",
+          label: "Control",
+          preview: `${"\u001b[2J".repeat(200)}Visible preview text`,
+        },
+      ],
+    };
+
+    const rows = renderQuestionnaireRuntime({
+      width: 40,
+      theme: PLAIN_THEME,
+      questions: [question],
+      state: createQuestionnaireRuntimeState(),
+      options: getRenderOptions(question),
+      editor: EMPTY_EDITOR as never,
+      previewEnabled: true,
+    }).filter((line) => line.includes("│"));
+    const rendered = rows.join("\n");
+
+    expect(rendered).toContain("Visible");
+    expect(rendered).toContain("preview text");
+    expect(rendered).not.toContain("\u001b[2J");
+  });
+
+  it("bounds side-by-side preview work before splitting large preview text", () => {
+    const question = {
+      id: "large-unsplit-preview",
+      label: "Large unsplit preview",
+      prompt: "Which preview?",
+      options: [
+        {
+          value: "large",
+          label: "Large",
+          preview: `${"x ".repeat(10_000)}\ntrailing line`,
+        },
+      ],
+    };
+    const originalSplit = String.prototype.split;
+    let largeSplitCount = 0;
+    String.prototype.split = function split(separator, limit) {
+      if (separator === "\n" && this.length > 1000) {
+        largeSplitCount++;
+      }
+      return originalSplit.call(this, separator, limit);
+    };
+
+    try {
+      renderQuestionnaireRuntime({
+        width: 80,
+        theme: PLAIN_THEME,
+        questions: [question],
+        state: createQuestionnaireRuntimeState(),
+        options: getRenderOptions(question),
+        editor: EMPTY_EDITOR as never,
+        previewEnabled: true,
+      });
+    } finally {
+      String.prototype.split = originalSplit;
+    }
+
+    expect(largeSplitCount).toBe(0);
+  });
+
+  it("caps option label wrapping work in normal option blocks", () => {
+    const question = {
+      id: "large-label",
+      label: "Large label",
+      prompt: "Which label?",
+      options: [{ value: "large", label: "x ".repeat(10_000) }],
+    };
+
+    const lines = renderQuestionnaireRuntime({
+      width: 40,
+      theme: PLAIN_THEME,
+      questions: [question],
+      state: createQuestionnaireRuntimeState(),
+      options: getRenderOptions(question),
+      editor: EMPTY_EDITOR as never,
+    });
+    const optionStart = lines.findIndex((line) => line.startsWith("> 1. "));
+    const customOptionStart = lines.findIndex((line) =>
+      line.startsWith("  2. ")
+    );
+    const largeOptionRows = lines.slice(optionStart, customOptionStart);
+
+    expect(largeOptionRows.length).toBeLessThanOrEqual(6);
+    expect(largeOptionRows.join("\n")).toContain("…");
+  });
+
+  it("strips option label terminal controls before applying label caps", () => {
+    const question = {
+      id: "control-label",
+      label: "Control label",
+      prompt: "Which label?",
+      options: [
+        {
+          value: "control",
+          label: `${"\u001b[2J".repeat(200)}Visible label text`,
+          preview: "Short preview",
+        },
+      ],
+    };
+
+    const rows = renderQuestionnaireRuntime({
+      width: 80,
+      theme: PLAIN_THEME,
+      questions: [question],
+      state: createQuestionnaireRuntimeState(),
+      options: getRenderOptions(question),
+      editor: EMPTY_EDITOR as never,
+      previewEnabled: true,
+    }).filter((line) => line.includes("│"));
+    const rendered = rows.join("\n");
+
+    expect(rendered).toContain("Visible label");
+    expect(rendered).not.toContain("\u001b[2J");
+  });
+
+  it("caps option label wrapping work in side-by-side option blocks", () => {
+    const question = {
+      id: "large-label-preview",
+      label: "Large label preview",
+      prompt: "Which label?",
+      options: [
+        {
+          value: "large",
+          label: "x ".repeat(10_000),
+          preview: "Short preview",
+        },
+      ],
+    };
+
+    const rows = renderQuestionnaireRuntime({
+      width: 80,
+      theme: PLAIN_THEME,
+      questions: [question],
+      state: createQuestionnaireRuntimeState(),
+      options: getRenderOptions(question),
+      editor: EMPTY_EDITOR as never,
+      previewEnabled: true,
+    }).filter((line) => line.includes("│"));
+    const customOptionRowIndex = rows.findIndex((line) =>
+      line.startsWith("  2. ")
+    );
+    const largeOptionRows = rows.slice(1, customOptionRowIndex);
+
+    expect(largeOptionRows.length).toBeLessThanOrEqual(6);
+    expect(largeOptionRows.join("\n")).toContain("…");
+  });
+
+  it("wraps narrow preview rows with ANSI styling and wide glyphs by cell width", () => {
+    const question = {
+      id: "glyphs",
+      label: "Glyphs",
+      prompt: "Which glyph layout?",
+      options: [
+        {
+          value: "wide",
+          label: "界界界界界界界界 title wraps",
+          preview: "Emoji 😀😀😀 and wide 界界 preview wrap safely.",
+        },
+      ],
+    };
+
+    const rows = renderQuestionnaireRuntime({
+      width: 42,
+      theme: ANSI_THEME,
+      questions: [question],
+      state: createQuestionnaireRuntimeState(),
+      options: getRenderOptions(question),
+      editor: EMPTY_EDITOR as never,
+      previewEnabled: true,
+    }).filter((line) => line.includes("│"));
+
+    expect(rows.length).toBeGreaterThan(2);
+    expect(rows.join("\n")).toContain("界界");
+    expect(rows.join("\n")).toContain("😀");
+    for (const row of rows) {
+      expect(visibleWidth(row)).toBeLessThanOrEqual(42);
+    }
   });
 
   it("keeps wide preview separator aligned with ANSI themes and strips outer code fences", () => {
