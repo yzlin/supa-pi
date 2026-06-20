@@ -5,9 +5,10 @@
   "properties": {
     "selectedSet": {
       "type": "string",
+      "minLength": 1,
+      "pattern": "^[a-z0-9_-]+$",
       "default": "default",
-      "description": "Bundled whimsical message set to use for working messages.",
-      "enum": ["default", "negative-energy"]
+      "description": "Whimsical message set to use. Bundled sets and custom sets from ~/.pi/agent/whimsical/<slug>.json are supported; slugs use lowercase letters, digits, underscores, and hyphens."
     }
   },
   "required": ["selectedSet"]

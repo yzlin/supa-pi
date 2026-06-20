@@ -6,11 +6,12 @@ It sets a random working message on `turn_start` and clears it on `turn_end`.
 
 ## Usage
 
-- `/whimsical` shows the current selected message set and available bundled sets.
+- `/whimsical` shows the current selected message set and available bundled plus valid custom sets.
 - `/whimsical default` selects the default message set.
 - `/whimsical negative-energy` selects the negative-energy message set.
+- `/whimsical <custom-slug>` selects a valid custom message set.
 
-Command arguments support completions for bundled set names. Unknown names are rejected with usage help.
+Command arguments support completions for bundled and valid custom set names. Unknown names are rejected with usage help.
 
 ## Bundled sets
 
@@ -19,7 +20,7 @@ Message sets live in `extensions/whimsical/messages/`:
 - `default.json` — the standard whimsical message pool.
 - `negative-energy.json` — a darker alternate message pool.
 
-Each bundled set is a non-empty JSON array of non-empty strings:
+Each bundled set is a non-empty JSON array of non-whitespace strings:
 
 ```json
 [
@@ -29,6 +30,20 @@ Each bundled set is a non-empty JSON array of non-empty strings:
 ```
 
 Invalid bundled JSON or invalid message arrays fail during extension load.
+
+## Custom sets
+
+Users can add custom message sets in the live Pi config directory:
+
+```text
+~/.pi/agent/whimsical/<slug>.json
+```
+
+Custom filenames must use lowercase slugs with only `a-z`, `0-9`, `_`, and `-`, plus the `.json` extension. Each file must contain a non-empty JSON array of non-whitespace strings.
+
+Custom sets are scanned on extension init/session lifecycle and command invocation. Command completions use the cached list from the last scan. There is no live reload or file watcher. Valid custom sets appear after bundled sets in alphabetical order, with duplicates removed. If a valid custom set uses the same name as a bundled set, it shadows that bundled set when selected. Fallback to `default` always uses the bundled default, even if a custom `default.json` is invalid.
+
+Invalid unselected custom files are ignored quietly. If an invalid custom set is selected by session/config state or command, whimsical warns with the set name and validation reason only, then uses bundled `default`. If `~/.pi/agent/whimsical/` exists but is not a readable directory, whimsical warns once and ignores custom sets.
 
 ## Persistence and precedence
 
@@ -59,8 +74,8 @@ There is no live reload or file watcher. Config is read when runtime state is re
 
 ## Fallback behavior
 
-If persisted state requests a set that is no longer bundled, whimsical falls back to `default` and warns once per runtime. Malformed config JSON or a config object without a non-empty string `selectedSet` fails fast during config read.
+If persisted state requests a set that is no longer available, whimsical falls back to bundled `default` and warns once per runtime. Malformed config JSON or a config object without a non-empty string `selectedSet` fails fast during config read.
 
 ## Out of scope
 
-Users cannot add arbitrary message-set files through config. Only bundled sets listed by the extension are selectable. Adding new sets requires a code change that updates the bundled JSON file list, command completions, schema enum, and docs.
+Whimsical does not watch custom files for live reload. Changes are picked up on extension init/session lifecycle and command invocation.
