@@ -39,6 +39,7 @@
     ]
   },
   "dependencies": {
+    "diff": "^8.0.4",
     "ignore": "^7.0.5"
   },
   "scripts": {

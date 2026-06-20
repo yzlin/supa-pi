@@ -1,4 +1,4 @@
-import { existsSync, readFileSync, statSync } from "node:fs";
+import { open, readFile, stat } from "node:fs/promises";
 import { relative, resolve } from "node:path";
 
 import {
@@ -65,11 +65,25 @@ export interface ToolDisplayWriteDiffDetails {
   };
 }
 
+interface ToolDisplayEditDetails extends EditToolDetails {
+  diffOmitted?: boolean;
+  files?: string[];
+}
+
+interface EditCallArgs {
+  edits?: Array<{ path?: string }> | string;
+  multi?: Array<{ path?: string }>;
+  newText?: string;
+  oldText?: string;
+  patch?: string;
+  path?: string;
+}
+
 const BASH_EXIT_CODE_PATTERN = /exit code: (\d+)/;
 const MAX_TITLE_LENGTH = 100;
 const WRITE_DIFF_CAPTURE_MAX_BYTES = 512 * 1024;
 const FALLBACK_SUMMARY_CHARS = 160;
-const HUNK_HEADER_PATTERN = /^@@ -(\d+)(?:,\d+)? \+(\d+)(?:,\d+)? @@/;
+const HUNK_HEADER_PATTERN = /^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@/;
 const HEADERLESS_EDIT_LINE_NUMBER_PATTERN = /^\s*(\d+)\s(.*)$/;
 const SPLIT_DIFF_MIN_WIDTH = 100;
 const INLINE_DIFF_MAX_LINE_LENGTH = 700;
@@ -414,9 +428,56 @@ export function renderCompactLsResult(
   return new Text(text, 0, 0);
 }
 
-export function renderEditCall(args: { path: string }, theme: ThemeLike): Text {
+const FILE_LIST_PREVIEW_LIMIT = 5;
+
+function formatFileList(files: string[], totalCount = files.length): string {
+  if (totalCount <= FILE_LIST_PREVIEW_LIMIT) {
+    return files.map((file) => truncateMiddle(file)).join(", ");
+  }
+  return `${files
+    .slice(0, FILE_LIST_PREVIEW_LIMIT)
+    .map((file) => truncateMiddle(file))
+    .join(", ")} +${totalCount - FILE_LIST_PREVIEW_LIMIT} more`;
+}
+
+function collectEditCallPreviewFiles(args: EditCallArgs): string[] {
+  const files: string[] = [];
+  const seen = new Set<string>();
+  const add = (path: string | undefined) => {
+    if (path && !seen.has(path)) {
+      seen.add(path);
+      files.push(path);
+    }
+  };
+
+  add(args.path);
+  const multi = args.multi ?? (Array.isArray(args.edits) ? args.edits : []);
+  for (let i = 0; i < multi.length && i < FILE_LIST_PREVIEW_LIMIT; i++) {
+    const item = multi[i];
+    add(item.path ?? args.path);
+    if (files.length >= FILE_LIST_PREVIEW_LIMIT) {
+      break;
+    }
+  }
+
+  return files;
+}
+
+export function renderEditCall(args: EditCallArgs, theme: ThemeLike): Text {
+  if (args.patch) {
+    return new Text(theme.fg("toolTitle", theme.bold("patch")), 0, 0);
+  }
+
+  const files = collectEditCallPreviewFiles(args);
+  const hasTopLevelEdit = args.path !== undefined && args.oldText !== undefined && args.newText !== undefined;
+  const editItems = args.multi ?? (Array.isArray(args.edits) ? args.edits : undefined);
+  const hasSinglePathEdit = editItems === undefined && args.path !== undefined;
+  const editCount = (editItems?.length ?? 0) + (hasTopLevelEdit || hasSinglePathEdit ? 1 : 0);
+  const label = editCount > 1 ? `multi ${editCount}` : "edit";
+  const target = files.length > 0 ? ` ${formatFileList(files, editCount)}` : "";
+
   return new Text(
-    `${theme.fg("toolTitle", theme.bold("edit "))}${theme.fg("accent", truncateMiddle(args.path))}`,
+    `${theme.fg("toolTitle", theme.bold(label))}${theme.fg("accent", target)}`,
     0,
     0
   );
@@ -434,6 +495,13 @@ function diffStats(diff: string): { additions: number; removals: number } {
     }
   }
   return { additions, removals };
+}
+
+function isOmittedDiff(diff: string, details: unknown): boolean {
+  return (
+    (details as ToolDisplayEditDetails | undefined)?.diffOmitted === true ||
+    diff.startsWith("[diff omitted:")
+  );
 }
 
 function terminalWidth(): number {
@@ -526,6 +594,20 @@ function parseUnifiedDiff(diff: string): ParsedDiffFile[] {
   let newNumber = 1;
   let expectingNewPath = false;
   let inHunk = false;
+  let remainingOldHunkLines = 0;
+  let remainingNewHunkLines = 0;
+
+  const finishHunkLine = (oldDelta: number, newDelta: number) => {
+    if (!inHunk) {
+      return;
+    }
+
+    remainingOldHunkLines -= oldDelta;
+    remainingNewHunkLines -= newDelta;
+    if (remainingOldHunkLines <= 0 && remainingNewHunkLines <= 0) {
+      inHunk = false;
+    }
+  };
 
   for (const line of diff.split("\n")) {
     if (!inHunk && line.startsWith("--- ")) {
@@ -538,6 +620,9 @@ function parseUnifiedDiff(diff: string): ParsedDiffFile[] {
       oldNumber = 1;
       newNumber = 1;
       expectingNewPath = true;
+      inHunk = false;
+      remainingOldHunkLines = 0;
+      remainingNewHunkLines = 0;
       continue;
     }
     if (expectingNewPath && line.startsWith("+++ ")) {
@@ -562,7 +647,9 @@ function parseUnifiedDiff(diff: string): ParsedDiffFile[] {
       !inHunk && file.oldPath === "" && file.newPath === "";
     if (hunk) {
       oldNumber = Number.parseInt(hunk[1] ?? "1", 10);
-      newNumber = Number.parseInt(hunk[2] ?? "1", 10);
+      newNumber = Number.parseInt(hunk[3] ?? "1", 10);
+      remainingOldHunkLines = Number.parseInt(hunk[2] ?? "1", 10);
+      remainingNewHunkLines = Number.parseInt(hunk[4] ?? "1", 10);
       file.lines.push({ kind: "meta", text: line });
       inHunk = true;
       expectingNewPath = false;
@@ -583,6 +670,7 @@ function parseUnifiedDiff(diff: string): ParsedDiffFile[] {
         text: parsed.text,
       });
       oldNumber = nextDiffLineNumber(oldNumber, parsedOldNumber);
+      finishHunkLine(1, 0);
     } else if (line.startsWith("+")) {
       const parsed = parseHeaderlessEditLineNumber(
         line.slice(1),
@@ -600,6 +688,7 @@ function parseUnifiedDiff(diff: string): ParsedDiffFile[] {
         text: parsed.text,
       });
       newNumber = nextDiffLineNumber(newNumber, parsedNewNumber);
+      finishHunkLine(0, 1);
     } else {
       const rawText = line.startsWith(" ") ? line.slice(1) : line;
       const parsed = parseHeaderlessEditLineNumber(
@@ -625,6 +714,8 @@ function parseUnifiedDiff(diff: string): ParsedDiffFile[] {
       });
       oldNumber = nextDiffLineNumber(oldNumber, parsedOldNumber);
       newNumber = nextDiffLineNumber(newNumber, parsedNewNumber);
+      const hunkDelta = line.startsWith("\\") ? 0 : 1;
+      finishHunkLine(hunkDelta, hunkDelta);
     }
   }
   return files;
@@ -1402,19 +1493,27 @@ function renderFinalDiffText(
   diffConfig: ToolDisplayDiffConfig | undefined,
   width: number
 ): string {
+  const editDetails = result.details as ToolDisplayEditDetails | undefined;
   const diff =
-    (
-      result.details as
-        | EditToolDetails
-        | ToolDisplayWriteDiffDetails
-        | undefined
-    )?.diff ??
+    editDetails?.diff ??
     (result.details as ToolDisplayWriteDiffDetails | undefined)?.toolDisplay
       ?.writeDiff;
   const summary = (result.details as ToolDisplayWriteDiffDetails | undefined)
     ?.toolDisplay?.writeSummary;
   if (!diff || diffConfig?.enabled === false) {
     return theme.fg("success", summary ?? "applied");
+  }
+
+  if (isOmittedDiff(diff, editDetails)) {
+    let text = theme.fg("warning", "diff omitted");
+    const files = editDetails?.files;
+    if (files?.length) {
+      text += theme.fg("dim", ` in ${formatFileList(files)}`);
+    }
+    if (options.expanded || diffConfig?.collapsed === false) {
+      text += `\n${theme.fg("dim", diff)}`;
+    }
+    return text;
   }
 
   const stats = diffStats(diff);
@@ -1427,6 +1526,10 @@ function renderFinalDiffText(
   }
   if (changedLine !== undefined) {
     text += theme.fg("dim", ` line ${changedLine}`);
+  }
+  const files = editDetails?.files;
+  if (files?.length) {
+    text += theme.fg("dim", ` in ${formatFileList(files)}`);
   }
   if (options.expanded || diffConfig?.collapsed === false) {
     const body = renderAdaptiveDiff(
@@ -1591,10 +1694,10 @@ function firstChangedLine(
   return;
 }
 
-export function capturePreviousWriteContent(
+export async function capturePreviousWriteContent(
   cwd: string,
   path: string
-): { ok: true; content: string | null } | { ok: false; summary: string } {
+): Promise<{ ok: true; content: string | null } | { ok: false; summary: string }> {
   const workspace = resolve(cwd);
   const absolutePath = resolve(workspace, path);
   const relativePath = relative(workspace, absolutePath);
@@ -1611,21 +1714,34 @@ export function capturePreviousWriteContent(
   }
 
   try {
-    if (!existsSync(absolutePath)) {
+    const stats = await stat(absolutePath).catch((error: NodeJS.ErrnoException) => {
+      if (error.code === "ENOENT") {
+        return null;
+      }
+      throw error;
+    });
+    if (!stats) {
       return { ok: true, content: null };
     }
-    const bytes = statSync(absolutePath).size;
+    const bytes = stats.size;
     if (bytes > WRITE_DIFF_CAPTURE_MAX_BYTES) {
-      const preview = readFileSync(absolutePath)
-        .subarray(0, FALLBACK_SUMMARY_CHARS)
-        .toString("utf8")
-        .replaceAll("\n", "\\n");
-      return {
-        ok: false,
-        summary: `previous content too large (${bytes} bytes; starts ${JSON.stringify(preview)})`,
-      };
+      const handle = await open(absolutePath, "r");
+      try {
+        const buffer = Buffer.alloc(FALLBACK_SUMMARY_CHARS);
+        const { bytesRead } = await handle.read(buffer, 0, buffer.length, 0);
+        const preview = buffer
+          .subarray(0, bytesRead)
+          .toString("utf8")
+          .replaceAll("\n", "\\n");
+        return {
+          ok: false,
+          summary: `previous content too large (${bytes} bytes; starts ${JSON.stringify(preview)})`,
+        };
+      } finally {
+        await handle.close();
+      }
     }
-    return { ok: true, content: readFileSync(absolutePath, "utf8") };
+    return { ok: true, content: await readFile(absolutePath, "utf8") };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     return { ok: false, summary: `previous content unavailable: ${message}` };
@@ -1635,7 +1751,7 @@ export function capturePreviousWriteContent(
 export function createWriteDiffDetails(
   path: string,
   nextContent: string,
-  previous: ReturnType<typeof capturePreviousWriteContent>
+  previous: Awaited<ReturnType<typeof capturePreviousWriteContent>>
 ): ToolDisplayWriteDiffDetails {
   if (!previous.ok) {
     return { toolDisplay: { writeSummary: previous.summary } };

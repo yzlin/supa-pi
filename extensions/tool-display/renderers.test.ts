@@ -153,11 +153,11 @@ describe("tool-display renderers", () => {
     ).toContain("2 lines [limit 2]");
   });
 
-  test("captures previous write content and renders final diff", () => {
+  test("captures previous write content and renders final diff", async () => {
     const cwd = tempDir();
     writeFileSync(join(cwd, "file.txt"), "old\n", "utf8");
 
-    const previous = capturePreviousWriteContent(cwd, "file.txt");
+    const previous = await capturePreviousWriteContent(cwd, "file.txt");
     const details = createWriteDiffDetails("file.txt", "new\n", previous);
 
     expect(details.toolDisplay?.writeDiff).toContain("-old");
@@ -167,8 +167,27 @@ describe("tool-display renderers", () => {
     ).toBe("+1 / -1 (rewrote file) line 1");
     expect(
       renderFinalDiffResult({ content: [], details }, { expanded: true }, theme)
-        .text
+      .text
     ).toContain("▌new");
+  });
+
+  test("renders omitted edit diffs without zero change counts", () => {
+    const rendered = renderFinalDiffResult(
+      {
+        content: [],
+        details: {
+          diff: "[diff omitted: input exceeds limit]",
+          diffOmitted: true,
+          files: ["large.txt"],
+        },
+      },
+      {},
+      theme
+    ).text;
+
+    expect(rendered).toContain("diff omitted");
+    expect(rendered).toContain("in large.txt");
+    expect(rendered).not.toContain("+0 / -0");
   });
 
   test("renders expanded diff modes and collapse limits", () => {
@@ -201,6 +220,37 @@ describe("tool-display renderers", () => {
     } finally {
       process.stdout.columns = originalColumns;
     }
+  });
+
+  test("renders expanded concatenated multi-file unified diffs as separate files", () => {
+    const details = {
+      diff: [
+        "--- a.txt",
+        "+++ a.txt",
+        "@@ -1,1 +1,1 @@",
+        "-old a",
+        "+new a",
+        "--- b.txt",
+        "+++ b.txt",
+        "@@ -1,1 +1,1 @@",
+        "-old b",
+        "+new b",
+      ].join("\n"),
+    };
+
+    const rendered = renderFinalDiffResult(
+      { content: [], details },
+      { expanded: true },
+      theme,
+      { collapsed: false, enabled: true, previewLines: 20, viewMode: "unified" }
+    ).text;
+
+    expect(rendered).toContain("--- a.txt");
+    expect(rendered).toContain("+++ a.txt");
+    expect(rendered).toContain("--- b.txt");
+    expect(rendered).toContain("+++ b.txt");
+    expect(rendered).toContain("old b");
+    expect(rendered).toContain("new b");
   });
 
   test("selects diff view by width: split, unified, compact, then summary", () => {
@@ -736,24 +786,24 @@ describe("tool-display renderers", () => {
     expect(rendered.some((line) => line.includes("   │ old"))).toBe(false);
   });
 
-  test("captures new file, overwritten file, outside-workspace, and large fallback", () => {
+  test("captures new file, overwritten file, outside-workspace, and large fallback", async () => {
     const cwd = tempDir();
     writeFileSync(join(cwd, "old.txt"), "old", "utf8");
     writeFileSync(join(cwd, "large.txt"), "x".repeat(512 * 1024 + 1), "utf8");
 
-    expect(capturePreviousWriteContent(cwd, "new.txt")).toEqual({
+    await expect(capturePreviousWriteContent(cwd, "new.txt")).resolves.toEqual({
       ok: true,
       content: null,
     });
-    expect(capturePreviousWriteContent(cwd, "old.txt")).toEqual({
+    await expect(capturePreviousWriteContent(cwd, "old.txt")).resolves.toEqual({
       ok: true,
       content: "old",
     });
-    expect(capturePreviousWriteContent(cwd, "../outside.txt")).toEqual({
+    await expect(capturePreviousWriteContent(cwd, "../outside.txt")).resolves.toEqual({
       ok: false,
       summary: "previous content unavailable: outside workspace",
     });
-    const large = capturePreviousWriteContent(cwd, "large.txt");
+    const large = await capturePreviousWriteContent(cwd, "large.txt");
     expect(large.ok).toBe(false);
     expect(large.ok ? "" : large.summary).toContain(
       "previous content too large"
@@ -972,9 +1022,94 @@ describe("tool-display renderers", () => {
     ).render(140);
 
     expect(renderEditCall({ path: "a.txt" }, theme).text).toBe("edit a.txt");
+    expect(
+      renderEditCall(
+        { multi: [{ path: "a.txt" }, { path: "b.txt" }, { path: "c.txt" }] },
+        theme
+      ).text
+    ).toBe("multi 3 a.txt, b.txt, c.txt");
+    expect(
+      renderEditCall(
+        { path: "top.txt", oldText: "old", newText: "new", multi: [{ path: "b.txt" }] },
+        theme
+      ).text
+    ).toBe("multi 2 top.txt, b.txt");
+    expect(
+      renderEditCall(
+        { edits: [{ path: "a.txt" }, { path: "b.txt" }, { path: "c.txt" }] },
+        theme
+      ).text
+    ).toBe("multi 3 a.txt, b.txt, c.txt");
+    expect(
+      renderEditCall(
+        {
+          multi: [
+            { path: "a.txt" },
+            { path: "b.txt" },
+            { path: "c.txt" },
+            { path: "d.txt" },
+            { path: "e.txt" },
+            { path: "f.txt" },
+            { path: "g.txt" },
+          ],
+        },
+        theme
+      ).text
+    ).toBe("multi 7 a.txt, b.txt, c.txt, d.txt, e.txt +2 more");
+    const hugeMulti = Array.from({ length: 100 }, (_, index) => ({
+      path: `${index}.txt`,
+    }));
+    Object.defineProperty(hugeMulti, 5, {
+      get() {
+        throw new Error("render walked too far");
+      },
+    });
+    expect(renderEditCall({ multi: hugeMulti }, theme).text).toBe(
+      "multi 100 0.txt, 1.txt, 2.txt, 3.txt, 4.txt +95 more"
+    );
+    const duplicateMulti = Array.from({ length: 100 }, () => ({
+      path: "same.txt",
+    }));
+    Object.defineProperty(duplicateMulti, 5, {
+      get() {
+        throw new Error("render walked too far");
+      },
+    });
+    expect(renderEditCall({ multi: duplicateMulti }, theme).text).toBe(
+      "multi 100 same.txt +95 more"
+    );
+    const missingPathMulti = Array.from({ length: 100 }, () => ({}));
+    Object.defineProperty(missingPathMulti, 5, {
+      get() {
+        throw new Error("render walked too far");
+      },
+    });
+    expect(renderEditCall({ path: "fallback.txt", multi: missingPathMulti }, theme).text).toBe(
+      "multi 100 fallback.txt +95 more"
+    );
+    expect(renderEditCall({ patch: "*** Begin Patch" }, theme).text).toBe(
+      "patch"
+    );
     expect(renderWriteCall({ content: "new", path: "a.txt" }, theme).text).toBe(
       "write a.txt (1 lines)"
     );
     expect(editRendered.slice(1)).toEqual(writeRendered.slice(1));
+  });
+
+  test("includes edited file list in collapsed multi-edit results", () => {
+    const rendered = renderFinalDiffResult(
+      {
+        content: [],
+        details: {
+          diff: "--- a.txt\n+++ a.txt\n@@ -1,1 +1,1 @@\n-old\n+new",
+          files: ["a.txt", "b.txt", "c.txt", "d.txt", "e.txt", "f.txt", "g.txt"],
+        },
+      },
+      {},
+      theme
+    ).text;
+
+    expect(rendered).toContain("+1 / -1");
+    expect(rendered).toContain("in a.txt, b.txt, c.txt, d.txt, e.txt +2 more");
   });
 });

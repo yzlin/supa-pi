@@ -1,5 +1,4 @@
 import {
-  createEditTool,
   createFindTool,
   createGrepTool,
   createLsTool,
@@ -11,6 +10,7 @@ import { Text } from "@earendil-works/pi-tui";
 
 import { registerToolDisplayCommands } from "./commands";
 import { loadToolDisplayConfig } from "./config";
+import { editTool, resolveToCwd, withFileMutationQueue } from "./edit-tool";
 import {
   createToolDisplayReadDetails,
   getToolDisplayReadErrorMessage,
@@ -45,7 +45,6 @@ export default function toolDisplayExtension(pi: ExtensionAPI): void {
   let grepTool = createGrepTool(cwd);
   let findTool = createFindTool(cwd);
   let lsTool = createLsTool(cwd);
-  let editTool = createEditTool(cwd);
   let writeTool = createWriteTool(cwd);
   let skillFilePaths = new Set<string>();
 
@@ -56,7 +55,6 @@ export default function toolDisplayExtension(pi: ExtensionAPI): void {
     grepTool = createGrepTool(cwd);
     findTool = createFindTool(cwd);
     lsTool = createLsTool(cwd);
-    editTool = createEditTool(cwd);
     writeTool = createWriteTool(cwd);
   }
 
@@ -218,7 +216,12 @@ export default function toolDisplayExtension(pi: ExtensionAPI): void {
       ...editTool,
       renderShell: "default",
       execute(toolCallId, params, signal, onUpdate, ctx) {
-        return editTool.execute(toolCallId, params, signal, onUpdate, ctx);
+        const activeCwd = ctx?.cwd ?? cwd;
+        return editTool.execute(toolCallId, params, signal, onUpdate, {
+          ...ctx,
+          cwd: activeCwd,
+          toolDisplayAllowPatchAdd: config.tools.write.enabled === true,
+        });
       },
       renderCall(args, theme) {
         return renderEditCall(args, theme);
@@ -234,27 +237,34 @@ export default function toolDisplayExtension(pi: ExtensionAPI): void {
       ...writeTool,
       renderShell: "default",
       async execute(toolCallId, params, signal, onUpdate, ctx) {
-        const previous = capturePreviousWriteContent(cwd, params.path);
-        const result = await writeTool.execute(
-          toolCallId,
-          params,
-          signal,
-          onUpdate,
-          ctx
+        const activeCwd = ctx?.cwd ?? cwd;
+        const targetPath = resolveToCwd(activeCwd, params.path);
+        const activeWriteTool = createWriteTool(activeCwd);
+        const result = await withFileMutationQueue(
+          [targetPath],
+          async () => {
+            const previous = await capturePreviousWriteContent(activeCwd, targetPath);
+            const result = await activeWriteTool.execute(toolCallId, params, signal, onUpdate, {
+              ...ctx,
+              cwd: activeCwd,
+            });
+
+            if (result.isError) {
+              return result;
+            }
+
+            return {
+              ...result,
+              details: createWriteDiffDetails(
+                params.path,
+                params.content,
+                previous
+              ),
+            };
+          },
+          signal
         );
-
-        if (result.isError) {
-          return result;
-        }
-
-        return {
-          ...result,
-          details: createWriteDiffDetails(
-            params.path,
-            params.content,
-            previous
-          ),
-        };
+        return result;
       },
       renderCall(args, theme) {
         return renderWriteCall(args, theme);

@@ -14,6 +14,8 @@ Do not describe `extensions/om` as active runtime behavior unless package regist
 
 `read-patch` is retired. Its skill-file full-read behavior now belongs to active `extensions/tool-display`; do not re-add `extensions/read-patch.ts` or `extensions/read-patch/` docs.
 
+`extensions/tool-display` owns `edit`, including batch `multi` edits and Codex-style `patch` payload support. The multi-edit behavior is adapted from Armin Ronacher's `agent-stuff` `extensions/multi-edit.ts` under Apache License 2.0. `extensions/multi-edit.ts` may still exist in the repository, but it is not an active standalone extension unless re-added to `package.json -> pi.extensions`.
+
 `extensions/obsidian` is active. It loads vault-local `CLAUDE.md` / `CLAUDE.MD` context from configured Obsidian vaults in `~/.pi/agent/obsidian.json`, injects loaded context through provider payload hooks, and exposes `/obsidian status`.
 
 `extensions/docs-list` is active. It registers the `docs_list` tool, backed by the same docs-discovery implementation as the `docs-list` CLI. It defaults to `cwd/docs`, accepts an optional safe relative path (leading `@` stripped), excludes `archive` and `research` directories, and returns readable output plus structured doc metadata and front matter warnings.
@@ -35,7 +37,7 @@ Fast Mode persists global state and additive exact-match model support in `~/.pi
 
 ## Tool ownership and registration order
 
-`extensions/tool-display` owns `read` and optional compact renderers for `grep`, `find`, `ls`, `edit`, and `write`.
+`extensions/tool-display` owns `read`, `edit`, `write`, and optional compact renderers for `grep`, `find`, and `ls`. Its `edit` tool includes multi-edit behavior; there is no standalone active multi-edit extension entry.
 
 `extensions/rtk` owns `bash` execution, output rewrite, statistics, and compaction metadata. RTK may reuse tool-display bash rendering helpers, but tool-display must not register `bash`.
 
