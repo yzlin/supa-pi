@@ -26,7 +26,7 @@ Each option:
 - `value`: returned value.
 - `label`: visible label.
 - `description`: optional muted helper text under the option.
-- `preview`: optional preview content. When any option in a single-select question has preview content, the UI shows the preview pane automatically.
+- `preview`: optional preview content. When any option in the current question has preview content, the UI enables preview mode automatically.
 
 Reserved values and labels are injected by the extension and cannot be supplied by callers:
 
@@ -51,7 +51,7 @@ Answer variants:
 - Custom answer: `{ kind: "custom", id, value, label, wasCustom: true, note? }`
 - Multi-select answer: `{ kind: "multi", id, value: string[], label, wasCustom: false, multi: true, selectedOptions, note? }`
 
-`index` is 1-based. `selectedOptions` contains original option fields plus a 1-based `index`. `note` is available for preview-enabled single-select/custom answers.
+`index` is 1-based. `selectedOptions` contains original option fields, including `preview` when supplied, plus a 1-based `index`. `preview` is copied onto submitted single-select option answers only. `note` is available for preview-enabled single-select/custom answers; the UI does not expose note editing for multi-select questions.
 
 Cancelled or invalid runs return text content plus `details.cancelled: true`; validation errors also include `details.error` with issue objects.
 
@@ -80,7 +80,8 @@ Multiple questions:
 - `Tab` / `→` / `l`: next tab.
 - `Shift+Tab` / `←` / `h`: previous tab.
 - After each single-select answer, focus advances to the next question or review tab.
-- Review tab requires all questions answered before `Submit` can complete; `Cancel` is always available.
+- Review tab lists submitted answers by question label. Multi-select answers show their comma-separated selected labels, or `(none)` for an empty commit.
+- Review tab requires all questions answered before `Submit` can complete and shows an `Unanswered:` warning for missing labels. `Cancel` is always available.
 
 Multi-select questions:
 
@@ -90,12 +91,15 @@ Multi-select questions:
 
 Preview mode:
 
-- Enables automatically for single-select questions when any option has `preview` content.
-- Shows option preview content for the highlighted row, or a no-preview message.
+- Enables automatically for the current question when any option has `preview` content, including multi-select questions.
+- Wide layouts render option titles in the left column and one active preview pane in the right column. The preview pane follows the highlighted row only; inactive option previews are not rendered.
+- Single-select custom rows show `Custom answer preview will appear after you type it.` while highlighted.
+- Rows without preview content show `No preview available.` in the active preview pane.
+- Narrow layouts that cannot satisfy the preview column minimums render only the option list; they omit the active preview pane instead of stacking it below the options.
 - Questionnaire-provided display text strips terminal control sequences before rendering.
 - A preview wrapped in one outer fenced code block renders the fence contents without the surrounding backtick fence.
-- Preview-enabled option lists render option titles and previews side-by-side when both columns can meet minimum widths; very narrow layouts stack options above the focused preview.
-- `n`: edit a preview note for the current question.
+- Multi-select preview mode supports highlighted-option previews while retaining checkbox toggles and the `Next` commit row. The `Next` row has no preview unless the injected row is highlighted, in which case the pane shows `No preview available.`
+- `n`: edit a preview note for the current single-select question.
 - In note editor, `Enter` saves the note and `Esc` cancels note editing.
 
 ## Validation
@@ -108,7 +112,8 @@ Preview mode:
 - Duplicate option values within a question.
 - Duplicate option labels within a question.
 - Reserved option values or labels.
-- Any `multiSelect: true` question where any option includes `preview`.
+
+Multi-select questions may include option previews. They still omit the custom-answer row and preview note editing.
 
 Validation failures return a cancelled error envelope and do not open UI.
 
@@ -124,5 +129,6 @@ Intentional differences:
 - Supports up to 3 questions and 5 options per question to keep clarification small and decision-oriented.
 - Provides an explicit review tab for multi-question flows before final submission.
 - Allows empty multi-select commits instead of forcing at least one selected option.
-- Preview mode is deliberately single-select only and is activated by option preview content; multi-select + option preview is rejected to avoid ambiguous preview/note semantics.
+- Preview mode is activated by option preview content and supports both single-select and multi-select questions, but only the active option preview is rendered.
+- Preview notes remain single-select only to keep multi-select result semantics clear.
 - Logs and auto-redirects likely plain-text clarification misses within an interactive session.

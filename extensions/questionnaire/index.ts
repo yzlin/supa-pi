@@ -242,17 +242,6 @@ export function validateQuestionnaireParams(
       "Question id"
     );
 
-    if (
-      question.multiSelect === true &&
-      question.options.some((option) => option.preview !== undefined)
-    ) {
-      issues.push({
-        path: `questions[${questionIndex}].options`,
-        code: "preview_multi_select",
-        message: "Multi-select questions cannot include option previews.",
-      });
-    }
-
     if (question.options.length < 2 || question.options.length > 5) {
       issues.push({
         path: `questions[${questionIndex}].options`,
@@ -366,7 +355,7 @@ export default function questionnaire(pi: ExtensionAPI): void {
 
   pi.registerCommand("questionnaire-stats", {
     description: "Show questionnaire miss and redirect stats for this session",
-    handler: (_args, ctx) => {
+    async handler(_args, ctx) {
       const logs = getQuestionnaireMissLogs(ctx.sessionManager.getEntries());
       if (logs.length === 0) {
         ctx.ui.notify(
@@ -450,7 +439,7 @@ export default function questionnaire(pi: ExtensionAPI): void {
         );
       }
       const validation = validateQuestionnaireParams(params);
-      if (!validation.valid) {
+      if (validation.valid === false) {
         return errorResult(
           `Error: Invalid questionnaire: ${validation.issues.map((issue) => issue.message).join(" ")}`,
           [],
@@ -514,12 +503,27 @@ export default function questionnaire(pi: ExtensionAPI): void {
               return questions[state.currentTab];
             }
 
+            function questionHasPreview(
+              question: Question | undefined
+            ): boolean {
+              return (
+                question?.options.some(
+                  (option) => option.preview !== undefined
+                ) === true
+              );
+            }
+
+            function canUsePreview(): boolean {
+              const question = currentQuestion();
+              return questionHasPreview(question);
+            }
+
             function canUsePreviewNotes(): boolean {
               const question = currentQuestion();
               return (
                 question !== undefined &&
                 question.multiSelect !== true &&
-                question.options.some((option) => option.preview !== undefined)
+                questionHasPreview(question)
               );
             }
 
@@ -613,7 +617,7 @@ export default function questionnaire(pi: ExtensionAPI): void {
                 state,
                 options: currentOptions(),
                 editor,
-                previewEnabled: canUsePreviewNotes(),
+                previewEnabled: canUsePreview(),
               });
               return cachedLines;
             }

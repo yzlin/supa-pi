@@ -293,7 +293,7 @@ describe("validateQuestionnaireParams", () => {
     });
   });
 
-  it("rejects invalid counts, duplicate options, reserved sentinels, and multiSelect option previews", () => {
+  it("rejects invalid counts, duplicate options, and reserved sentinels", () => {
     const result = validateQuestionnaireParams({
       questions: [
         {
@@ -315,7 +315,6 @@ describe("validateQuestionnaireParams", () => {
     if (result.valid === false) {
       expect(result.issues.map((issue) => issue.code)).toEqual(
         expect.arrayContaining([
-          "preview_multi_select",
           "option_count",
           "duplicate_option_value",
           "duplicate_option_label",
@@ -326,6 +325,24 @@ describe("validateQuestionnaireParams", () => {
       return;
     }
     throw new Error("expected validation errors");
+  });
+
+  it("allows multi-select option previews", () => {
+    expect(
+      validateQuestionnaireParams({
+        questions: [
+          {
+            id: "scope",
+            prompt: "What should change?",
+            multiSelect: true,
+            options: [
+              { value: "docs", label: "Docs", preview: "Docs preview" },
+              { value: "tests", label: "Tests", preview: "Tests preview" },
+            ],
+          },
+        ],
+      })
+    ).toMatchObject({ valid: true });
   });
 });
 
@@ -573,9 +590,9 @@ describe("questionnaire reducer and key router", () => {
       prompt: "What should change?",
       multiSelect: true,
       options: [
-        { value: "docs", label: "Docs" },
-        { value: "tests", label: "Tests" },
-        { value: "code", label: "Code" },
+        { value: "docs", label: "Docs", preview: "Docs preview" },
+        { value: "tests", label: "Tests", preview: "Tests preview" },
+        { value: "code", label: "Code", preview: "Code preview" },
       ],
     };
     const options = getRenderOptions(multiQuestion);
@@ -629,8 +646,8 @@ describe("questionnaire reducer and key router", () => {
       label: "Docs, Code",
       multi: true,
       selectedOptions: [
-        { value: "docs", label: "Docs", index: 1 },
-        { value: "code", label: "Code", index: 3 },
+        { value: "docs", label: "Docs", preview: "Docs preview", index: 1 },
+        { value: "code", label: "Code", preview: "Code preview", index: 3 },
       ],
     });
   });
@@ -673,15 +690,105 @@ describe("questionnaire reducer and key router", () => {
       previewEnabled: true,
     });
 
-    expect(wideLines.join("\n")).toContain("Options");
-    expect(wideLines.join("\n")).toContain("Preview");
-    expect(wideLines.join("\n")).toContain(
-      "Best for structured downstream parsing."
-    );
-    expect(wideLines.join("\n")).toContain("Structured JSON output");
-    expect(narrowLines.join("\n")).toContain("Type something.");
-    expect(narrowLines.join("\n")).toContain("Custom answer preview");
-    expect(narrowLines.join("\n")).toContain("appear after you type it.");
+    const wideOutput = wideLines.join("\n");
+    const narrowOutput = narrowLines.join("\n");
+
+    expect(wideOutput).toContain("Options");
+    expect(wideOutput).toContain("Preview");
+    expect(wideOutput).toContain("Best for structured downstream parsing.");
+    expect(wideOutput).toContain("Structured JSON output");
+    expect(narrowOutput).toContain("Type something.");
+    expect(narrowOutput).not.toContain("Custom answer preview");
+    expect(narrowOutput).not.toContain("appear after you type it.");
+  });
+
+  it("renders only the active option preview on wide layouts and omits previews on narrow layouts", () => {
+    const question = {
+      id: "scope",
+      label: "Scope",
+      prompt: "What should change?",
+      multiSelect: true,
+      options: [
+        { value: "docs", label: "Docs", preview: "Docs preview" },
+        { value: "tests", label: "Tests", preview: "Tests preview" },
+      ],
+    };
+    const state = { ...createQuestionnaireRuntimeState(), optionIndex: 1 };
+    state.multiSelections.set("scope", new Set(["docs"]));
+
+    const wideOutput = renderQuestionnaireRuntime({
+      width: 100,
+      theme: PLAIN_THEME,
+      questions: [question],
+      state,
+      options: getRenderOptions(question),
+      editor: EMPTY_EDITOR as never,
+      previewEnabled: true,
+    }).join("\n");
+    const narrowOutput = renderQuestionnaireRuntime({
+      width: 60,
+      theme: PLAIN_THEME,
+      questions: [question],
+      state,
+      options: getRenderOptions(question),
+      editor: EMPTY_EDITOR as never,
+      previewEnabled: true,
+    }).join("\n");
+
+    expect(wideOutput).toContain("☑ Docs");
+    expect(wideOutput).toContain("☐ Tests");
+    expect(wideOutput).toContain("Tests preview");
+    expect(wideOutput).not.toContain("Docs preview");
+    expect(narrowOutput).toContain("☑ Docs");
+    expect(narrowOutput).not.toContain("│");
+    expect(narrowOutput).not.toContain("Tests preview");
+  });
+
+  it("does not render option previews on the review tab", () => {
+    const question = {
+      id: "format",
+      label: "Format",
+      prompt: "Which format?",
+      options: [
+        { value: "json", label: "JSON", preview: "Structured JSON output" },
+        { value: "text", label: "Text", preview: "Plain text output" },
+      ],
+    };
+    const state = {
+      ...createQuestionnaireRuntimeState(),
+      currentTab: 1,
+      answers: new Map([
+        [
+          "format",
+          {
+            kind: "option" as const,
+            id: "format",
+            value: "json",
+            label: "JSON",
+            wasCustom: false as const,
+            index: 1,
+            preview: "Structured JSON output",
+          },
+        ],
+      ]),
+    };
+
+    const output = renderQuestionnaireRuntime({
+      width: 100,
+      theme: PLAIN_THEME,
+      questions: [question],
+      state,
+      options: getRenderOptions(question),
+      editor: EMPTY_EDITOR as never,
+      previewEnabled: true,
+    }).join("\n");
+
+    expect(output).toContain("Review answers");
+    expect(output).toContain("Format: JSON");
+    expect(output).not.toContain("Preview");
+    expect(output).not.toContain("n notes");
+    expect(output).not.toContain("Structured JSON output");
+    expect(output).not.toContain("Plain text output");
   });
 
   it("renders saved note drafts in side-by-side preview layout", () => {
@@ -813,7 +920,7 @@ describe("questionnaire reducer and key router", () => {
     }
   });
 
-  it("wraps narrow preview option rows by visible cell width", () => {
+  it("wraps wide active preview rows by visible cell width", () => {
     const question = {
       id: "layout",
       label: "Layout",
@@ -829,7 +936,7 @@ describe("questionnaire reducer and key router", () => {
     };
 
     const lines = renderQuestionnaireRuntime({
-      width: 60,
+      width: 80,
       theme: ANSI_THEME,
       questions: [question],
       state: createQuestionnaireRuntimeState(),
@@ -842,11 +949,11 @@ describe("questionnaire reducer and key router", () => {
     expect(optionRows.length).toBeGreaterThan(question.options.length);
     expect(optionRows.some((line) => line.includes("        "))).toBe(true);
     for (const row of optionRows) {
-      expect(visibleWidth(row)).toBeLessThanOrEqual(60);
+      expect(visibleWidth(row)).toBeLessThanOrEqual(80);
     }
   });
 
-  it("keeps preview columns when the preview minimum must shrink first", () => {
+  it("keeps preview columns on wide layouts", () => {
     const question = {
       id: "layout",
       label: "Layout",
@@ -861,7 +968,7 @@ describe("questionnaire reducer and key router", () => {
     };
 
     const previewMinBreakLines = renderQuestionnaireRuntime({
-      width: 38,
+      width: 80,
       theme: PLAIN_THEME,
       questions: [question],
       state: createQuestionnaireRuntimeState(),
@@ -870,7 +977,7 @@ describe("questionnaire reducer and key router", () => {
       previewEnabled: true,
     });
     const titleMinBreakLines = renderQuestionnaireRuntime({
-      width: 27,
+      width: 72,
       theme: PLAIN_THEME,
       questions: [question],
       state: createQuestionnaireRuntimeState(),
@@ -892,17 +999,17 @@ describe("questionnaire reducer and key router", () => {
       visibleWidth(
         previewMinBreakRows[0].slice(0, previewMinBreakRows[0].indexOf("│"))
       )
-    ).toBe(25);
+    ).toBe(36);
     expect(
       visibleWidth(
         titleMinBreakRows[0].slice(0, titleMinBreakRows[0].indexOf("│"))
       )
-    ).toBe(24);
+    ).toBe(32);
     for (const row of previewMinBreakRows) {
-      expect(visibleWidth(row)).toBeLessThanOrEqual(38);
+      expect(visibleWidth(row)).toBeLessThanOrEqual(80);
     }
     for (const row of titleMinBreakRows) {
-      expect(visibleWidth(row)).toBeLessThanOrEqual(27);
+      expect(visibleWidth(row)).toBeLessThanOrEqual(72);
     }
   });
 
@@ -923,7 +1030,7 @@ describe("questionnaire reducer and key router", () => {
     const state = { ...createQuestionnaireRuntimeState(), optionIndex: 1 };
 
     const rows = renderQuestionnaireRuntime({
-      width: 40,
+      width: 80,
       theme: ANSI_THEME,
       questions: [question],
       state,
@@ -940,7 +1047,7 @@ describe("questionnaire reducer and key router", () => {
       true
     );
     for (const row of rows) {
-      expect(visibleWidth(row)).toBeLessThanOrEqual(40);
+      expect(visibleWidth(row)).toBeLessThanOrEqual(80);
     }
   });
 
@@ -968,13 +1075,10 @@ describe("questionnaire reducer and key router", () => {
       previewEnabled: true,
     }).filter((line) => line.includes("│"));
 
-    const customOptionRowIndex = rows.findIndex((line) =>
-      line.startsWith("  2. ")
-    );
-    const largeOptionRows = rows.slice(1, customOptionRowIndex);
+    const previewRows = rows.slice(1);
 
-    expect(largeOptionRows.length).toBeLessThanOrEqual(6);
-    expect(largeOptionRows.join("\n")).toContain("…");
+    expect(previewRows.length).toBeLessThanOrEqual(6);
+    expect(previewRows.join("\n")).toContain("…");
   });
 
   it("strips fenced option previews before capping side-by-side rows", () => {
@@ -1099,7 +1203,7 @@ describe("questionnaire reducer and key router", () => {
     };
 
     const rows = renderQuestionnaireRuntime({
-      width: 40,
+      width: 80,
       theme: PLAIN_THEME,
       questions: [question],
       state: createQuestionnaireRuntimeState(),
@@ -1240,7 +1344,7 @@ describe("questionnaire reducer and key router", () => {
     expect(largeOptionRows.join("\n")).toContain("…");
   });
 
-  it("wraps narrow preview rows with ANSI styling and wide glyphs by cell width", () => {
+  it("wraps active preview rows with ANSI styling and wide glyphs by cell width", () => {
     const question = {
       id: "glyphs",
       label: "Glyphs",
@@ -1255,7 +1359,7 @@ describe("questionnaire reducer and key router", () => {
     };
 
     const rows = renderQuestionnaireRuntime({
-      width: 42,
+      width: 80,
       theme: ANSI_THEME,
       questions: [question],
       state: createQuestionnaireRuntimeState(),
@@ -1268,7 +1372,7 @@ describe("questionnaire reducer and key router", () => {
     expect(rows.join("\n")).toContain("界界");
     expect(rows.join("\n")).toContain("😀");
     for (const row of rows) {
-      expect(visibleWidth(row)).toBeLessThanOrEqual(42);
+      expect(visibleWidth(row)).toBeLessThanOrEqual(80);
     }
   });
 

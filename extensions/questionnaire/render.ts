@@ -14,6 +14,7 @@ const OPTION_TITLE_SPLIT = 0.45;
 const OPTION_PREVIEW_MAX_LINES = 6;
 const OPTION_LABEL_MAX_LINES = 6;
 const NOTE_PREVIEW_MAX_LINES = 6;
+const PREVIEW_LAYOUT_MIN_WIDTH = 72;
 
 interface QuestionnaireTheme {
   fg(color: string, text: string): string;
@@ -51,12 +52,6 @@ export function renderQuestionnaireRuntime(args: {
     lines.push("");
   }
 
-  const selectedOption = options[state.optionIndex];
-  const previewText =
-    selectedOption?.isOther === true
-      ? "Custom answer preview will appear after you type it."
-      : selectedOption?.preview;
-
   const notePreviewLinesByWidth = new Map<number, string[]>();
   const getNotePreviewLines = (paneWidth = width) => {
     const cachedPreviewLines = notePreviewLinesByWidth.get(paneWidth);
@@ -85,19 +80,6 @@ export function renderQuestionnaireRuntime(args: {
     for (const line of noteLines) {
       add(` ${theme.fg("text", line)}`);
     }
-  };
-
-  const renderPreviewPane = (paneWidth = width) => {
-    add(theme.fg("muted", " Preview"));
-    const contentWidth = Math.max(1, paneWidth - 1);
-    if (previewText) {
-      for (const line of wrapPreviewText(previewText, contentWidth)) {
-        add(` ${theme.fg("text", line)}`);
-      }
-    } else {
-      add(theme.fg("dim", " No preview available."));
-    }
-    renderNoteDraft(paneWidth);
   };
 
   const formatOptionBlock = (option: RenderOption, index: number) =>
@@ -174,7 +156,7 @@ export function renderQuestionnaireRuntime(args: {
   } else if (question) {
     addWrapped(question.prompt, " ", "text");
     lines.push("");
-    if (previewEnabled === true && question.multiSelect !== true) {
+    if (previewEnabled === true) {
       const columnWidths = getOptionColumnWidths(width);
       if (columnWidths) {
         const { titleWidth, previewWidth } = columnWidths;
@@ -183,45 +165,46 @@ export function renderQuestionnaireRuntime(args: {
           titleWidth
         );
         add(`${headerLeft} │ ${theme.fg("muted", " Preview")}`);
-        for (let optionIndex = 0; optionIndex < options.length; optionIndex++) {
-          const option = options[optionIndex];
-          const selected = optionIndex === state.optionIndex;
-          const leftLines = formatOptionBlockForWidth(
+        const optionColumnLines = options.flatMap((option, optionIndex) =>
+          formatOptionBlockForWidth(
             option,
             optionIndex,
             titleWidth,
-            selected,
+            optionIndex === state.optionIndex,
             question,
             state,
             theme
+          )
+        );
+        const previewColumnLines = getOptionPreviewLines(
+          options[state.optionIndex],
+          previewWidth,
+          theme
+        );
+        const rowCount = Math.max(
+          optionColumnLines.length,
+          previewColumnLines.length
+        );
+        for (let rowIndex = 0; rowIndex < rowCount; rowIndex++) {
+          const left = padToVisibleWidth(
+            optionColumnLines[rowIndex] ?? "",
+            titleWidth
           );
-          const previewLines = getOptionPreviewLines(
-            option,
-            previewWidth,
-            selected,
-            theme
+          const right = truncateToWidth(
+            previewColumnLines[rowIndex] ?? "",
+            previewWidth
           );
-          const rowCount = Math.max(leftLines.length, previewLines.length);
-          for (let rowIndex = 0; rowIndex < rowCount; rowIndex++) {
-            const left = padToVisibleWidth(
-              leftLines[rowIndex] ?? "",
-              titleWidth
-            );
-            const right = truncateToWidth(
-              previewLines[rowIndex] ?? "",
-              previewWidth
-            );
-            add(`${left} │ ${right}`);
-          }
+          add(`${left} │ ${right}`);
         }
-        if (getNotePreviewLines(width).length > 0) {
+        if (
+          question.multiSelect !== true &&
+          getNotePreviewLines(width).length > 0
+        ) {
           lines.push("");
           renderNoteDraft(width);
         }
       } else {
         renderOptions();
-        lines.push("");
-        renderPreviewPane(width);
       }
     } else {
       renderOptions();
@@ -362,20 +345,13 @@ function capWrappedLines(
 function getOptionColumnWidths(
   width: number
 ): { titleWidth: number; previewWidth: number } | null {
-  const contentWidth = width - OPTION_COLUMN_GUTTER_WIDTH;
-  if (contentWidth < 2) {
+  if (width < PREVIEW_LAYOUT_MIN_WIDTH) {
     return null;
   }
 
-  if (contentWidth < OPTION_TITLE_MIN_WIDTH + 1) {
-    return { titleWidth: contentWidth - 1, previewWidth: 1 };
-  }
-
+  const contentWidth = width - OPTION_COLUMN_GUTTER_WIDTH;
   if (contentWidth < OPTION_TITLE_MIN_WIDTH + OPTION_PREVIEW_MIN_WIDTH) {
-    return {
-      titleWidth: OPTION_TITLE_MIN_WIDTH,
-      previewWidth: contentWidth - OPTION_TITLE_MIN_WIDTH,
-    };
+    return null;
   }
 
   let titleWidth = Math.round(contentWidth * OPTION_TITLE_SPLIT);
@@ -438,21 +414,20 @@ function formatOptionBlockForWidth(
 }
 
 function getOptionPreviewLines(
-  option: RenderOption,
+  option: RenderOption | undefined,
   width: number,
-  selected: boolean,
   theme: QuestionnaireTheme
 ): string[] {
   const preview =
-    option.isOther === true
+    option?.isOther === true
       ? "Custom answer preview will appear after you type it."
-      : option.preview;
+      : option?.preview;
   if (!preview) {
-    return [theme.fg(selected ? "accent" : "dim", " No preview available.")];
+    return [theme.fg("accent", " No preview available.")];
   }
   return wrapPreviewText(preview, Math.max(1, width - 1), {
     maxLines: OPTION_PREVIEW_MAX_LINES,
-  }).map((line) => theme.fg(selected ? "accent" : "text", ` ${line}`));
+  }).map((line) => theme.fg("accent", ` ${line}`));
 }
 
 function padToVisibleWidth(text: string, width: number): string {
