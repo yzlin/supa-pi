@@ -17,6 +17,10 @@ MANDATORY workflow:
 5. Refactor (IMPROVE)
 6. Verify coverage (80%+)
 
+## Regression Tests
+
+- Regression tests should pin the missing invariant, not duplicate an existing test path.
+
 ## Troubleshooting Test Failures
 
 1. Use **tdd-guide** agent

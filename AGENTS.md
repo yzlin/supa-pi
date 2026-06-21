@@ -9,6 +9,8 @@
 - Before non-trivial coding: state assumptions, material ambiguities, and done criteria.
 - Style: telegraph. Drop filler/grammar. Min tokens (global AGENTS + replies).
 - Smallest change that solves task; no drive-by refactors.
+- Follow YAGNI: do not add abstractions, options, or future-proofing unless needed now.
+- Prefer one-line or smallest-diff solutions when they fully solve the task.
 - Every changed line must trace to the user request.
 - No speculative flexibility, config, or abstractions unless required by the task or existing pattern.
 
@@ -31,6 +33,7 @@
 
 ## Evidence baseline
 
+- Verify code, files, flags, and current behavior before fixing or recommending from memory.
 - Do not invent citations, URLs, file references, or facts.
 - If a claim is uncertain or unverified, say so explicitly.
 - Distinguish clearly between verified facts, informed inferences, and hypotheses.
