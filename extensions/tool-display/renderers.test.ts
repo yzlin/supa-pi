@@ -79,6 +79,22 @@ afterEach(() => {
   }
 });
 
+function renderPatchCallText(
+  patch: string | string[],
+  lineEnding = "\n"
+): string {
+  const patchText = Array.isArray(patch) ? patch.join(lineEnding) : patch;
+  return renderEditCall({ patch: patchText }, theme).text;
+}
+
+function expectPatchCallText(
+  patch: string | string[],
+  text: string,
+  lineEnding = "\n"
+): void {
+  expect(renderPatchCallText(patch, lineEnding)).toBe(text);
+}
+
 describe("tool-display renderers", () => {
   test("renders compact bash call and result", () => {
     expect(
@@ -1094,6 +1110,185 @@ describe("tool-display renderers", () => {
       "write a.txt (1 lines)"
     );
     expect(editRendered.slice(1)).toEqual(writeRendered.slice(1));
+  });
+
+  test("renders patch call file preview from headers", () => {
+    expectPatchCallText(
+      [
+        "*** Begin Patch",
+        "*** Add File: a.ts",
+        "+export const a = 1;",
+        "*** Update File: b.ts",
+        "@@",
+        "-old",
+        "+new",
+        "*** Update File: a.ts",
+        "*** End Patch",
+      ],
+      "patch 2 a.ts, b.ts"
+    );
+  });
+
+  test("renders single-file patch call count", () => {
+    expectPatchCallText(
+      [
+        "*** Begin Patch",
+        "*** Update File: a.ts",
+        "@@",
+        "-old",
+        "+new",
+        "*** End Patch",
+      ],
+      "patch 1 a.ts"
+    );
+  });
+
+  test("does not count context lines as patch file headers", () => {
+    expectPatchCallText(
+      [
+        "*** Begin Patch",
+        "*** Update File: a.ts",
+        "@@",
+        "-old",
+        " *** Update File: b.ts",
+        "+new",
+        "*** End Patch",
+      ],
+      "patch 1 a.ts"
+    );
+  });
+
+  test("renders patch call file preview with trailing newline", () => {
+    expectPatchCallText(
+      [
+        "*** Begin Patch",
+        "*** Update File: a.ts",
+        "@@",
+        "-old",
+        "+new",
+        "*** End Patch",
+        "",
+      ],
+      "patch 1 a.ts"
+    );
+  });
+
+  test("renders patch call file preview with CRLF and CR line endings", () => {
+    const patchLines = [
+      "*** Begin Patch",
+      "*** Update File: a.ts",
+      "@@",
+      "-old",
+      "+new",
+      "*** End Patch",
+    ];
+
+    expectPatchCallText(patchLines, "patch 1 a.ts", "\r\n");
+    expectPatchCallText(patchLines, "patch 1 a.ts", "\r");
+  });
+
+  test("falls back when patch body has junk before file header", () => {
+    expectPatchCallText(
+      [
+        "*** Begin Patch",
+        "junk",
+        "*** Update File: a.ts",
+        "@@",
+        "-old",
+        "+new",
+        "*** End Patch",
+      ],
+      "patch"
+    );
+  });
+
+  test("falls back when patch includes unsupported delete file header", () => {
+    expectPatchCallText(
+      [
+        "*** Begin Patch",
+        "*** Delete File: old.ts",
+        "*** Update File: a.ts",
+        "@@",
+        "-old",
+        "+new",
+        "*** End Patch",
+      ],
+      "patch"
+    );
+  });
+
+  test("falls back when patch includes unsupported header after valid file header", () => {
+    expectPatchCallText(
+      [
+        "*** Begin Patch",
+        "*** Update File: old.ts",
+        "*** Move to: new.ts",
+        "@@",
+        "-old",
+        "+new",
+        "*** End Patch",
+      ],
+      "patch"
+    );
+  });
+
+  test("falls back when patch body has junk after file header", () => {
+    expectPatchCallText(
+      [
+        "*** Begin Patch",
+        "*** Update File: old.ts",
+        "junk",
+        "*** Update File: a.ts",
+        "@@",
+        "-old",
+        "+new",
+        "*** End Patch",
+      ],
+      "patch"
+    );
+  });
+
+  test("falls back when patch includes whitespace-prefixed unsupported header", () => {
+    expectPatchCallText(
+      [
+        "*** Begin Patch",
+        "*** Update File: old.ts",
+        "   *** Move to: new.ts",
+        "@@",
+        "-old",
+        "+new",
+        "*** End Patch",
+      ],
+      "patch"
+    );
+  });
+
+  test("limits patch call file preview to five unique files", () => {
+    expectPatchCallText(
+      [
+        "*** Begin Patch",
+        "*** Add File: a.ts",
+        "*** Update File: b.ts",
+        "*** Add File: c.ts",
+        "*** Update File: d.ts",
+        "*** Add File: e.ts",
+        "*** Update File: f.ts",
+        "*** Add File: g.ts",
+        "*** End Patch",
+      ],
+      "patch 7 a.ts, b.ts, c.ts, d.ts, e.ts +2 more"
+    );
+  });
+
+  test("falls back for patch calls without valid file headers", () => {
+    expectPatchCallText("*** Begin Patch", "patch");
+    expectPatchCallText("*** Update File:\n@@", "patch");
+    expectPatchCallText("*** Delete File: removed.ts", "patch");
+    expectPatchCallText("*** Begin Patch\n*** Add File: partial.ts", "patch");
+    expectPatchCallText(
+      "*** Begin Patch\n*** End Patch\nnotes\n*** Update File: a.ts\n*** End Patch",
+      "patch"
+    );
   });
 
   test("includes edited file list in collapsed multi-edit results", () => {

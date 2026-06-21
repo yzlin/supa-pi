@@ -463,9 +463,71 @@ function collectEditCallPreviewFiles(args: EditCallArgs): string[] {
   return files;
 }
 
+function collectPatchCallPreviewFiles(patch: string): string[] {
+  const lines = patch.replace(/\r\n?/g, "\n").split("\n");
+  const endIndex = lines.findIndex((line) => line === "*** End Patch");
+  if (
+    lines[0] !== "*** Begin Patch" ||
+    endIndex === -1 ||
+    lines.slice(endIndex + 1).some((line) => line.trim() !== "")
+  ) {
+    return [];
+  }
+
+  const files: string[] = [];
+  const seen = new Set<string>();
+
+  function addFile(path: string): void {
+    if (!seen.has(path)) {
+      seen.add(path);
+      files.push(path);
+    }
+  }
+
+  for (const line of lines.slice(1, endIndex)) {
+    const headerMatch = line.match(/^\*\*\* (?:Add|Update) File: (.+)$/);
+    const unsupportedHeaderMatch = line.match(
+      /^\s*\*\*\* (?!Add File:|Update File:)/
+    );
+
+    if (!headerMatch && unsupportedHeaderMatch) {
+      return [];
+    }
+
+    if (headerMatch) {
+      addFile(headerMatch[1]);
+      continue;
+    }
+
+    const hasFileHeader = files.length > 0;
+    const isPatchBodyLine =
+      line.trim() === "" ||
+      (hasFileHeader &&
+        (line.startsWith("+") ||
+          line.startsWith("-") ||
+          line.startsWith(" ") ||
+          line.startsWith("@@")));
+    if (!isPatchBodyLine) {
+      return [];
+    }
+  }
+
+  return files;
+}
+
 export function renderEditCall(args: EditCallArgs, theme: ThemeLike): Text {
   if (args.patch) {
-    return new Text(theme.fg("toolTitle", theme.bold("patch")), 0, 0);
+    const files = collectPatchCallPreviewFiles(args.patch);
+    if (files.length === 0) {
+      return new Text(theme.fg("toolTitle", theme.bold("patch")), 0, 0);
+    }
+
+    return new Text(
+      theme.fg("toolTitle", theme.bold(`patch ${files.length}`)) +
+        theme.fg("accent", ` ${formatFileList(files)}`),
+      0,
+      0
+    );
   }
 
   const files = collectEditCallPreviewFiles(args);
