@@ -30,6 +30,8 @@ const SIMPLIFY_TARGET_COMMANDS = new Set([
 ]);
 const PR_CHECKOUT_BLOCKED_BY_PENDING_CHANGES_MESSAGE =
   "Cannot checkout PR: you have uncommitted changes. Please commit or stash them first.";
+const SIMPLIFY_INVOCATION_PREAMBLE =
+  "Use the `simplify` skill behavior as canonical.\n\nSimplify invocation packet:";
 
 function readPrompt(fileName: string): string {
   return readFileSync(join(EXTENSION_DIR, fileName), "utf8").trim();
@@ -40,7 +42,6 @@ function createGitExec(pi: ExtensionAPI): GitExec {
     pi.exec("git", args) as Promise<{ stdout: string; code: number }>;
 }
 
-const SIMPLIFY_PROMPT = readPrompt("SIMPLIFY.md");
 const IMPROVE_CODEBASE_ARCHITECTURE_PROMPT = [
   "IMPROVE-CODEBASE-ARCHITECTURE.md",
   "LANGUAGE.md",
@@ -130,7 +131,7 @@ export function buildSimplifyCommandMessage(args: string): string {
     ? `Focus instruction: ${focus}`
     : "Focus instruction: Simplify the recent feature implementation or recently modified code in this session.";
 
-  return `${SIMPLIFY_PROMPT}\n\n${focusInstruction}`;
+  return `${SIMPLIFY_INVOCATION_PREAMBLE}\n- Scope: recent session\n- ${focusInstruction}`;
 }
 
 export function buildScopedSimplifyCommandMessage(options: {
@@ -150,7 +151,7 @@ export function buildScopedSimplifyCommandMessage(options: {
   const ignoredLockfiles = options.ignoredLockfiles ?? [];
   const unsupportedChangedFiles = options.unsupportedChangedFiles ?? [];
 
-  return `${SIMPLIFY_PROMPT}\n\nDelegate to code-simplifier. Do not select reviewers.\n\nScope: ${options.targetLabel}\n\nEditable files (${options.allowlist.length}):\n${formatFileList(options.allowlist)}\n\nIgnored lockfiles (read-only, ${ignoredLockfiles.length}):\n${formatOptionalFileList(ignoredLockfiles)}\n\nUnsupported changed files (${unsupportedChangedFiles.length}):\n${formatOptionalFileList(unsupportedChangedFiles)}\n\nHard edit boundary: you may read files outside editable files for context, but only edit files in the editable files list above. Do not edit ignored lockfiles or unsupported changed files. If needed edits fall outside editable files, stop and report the missing file path.${extra}${staleCheck}`;
+  return `${SIMPLIFY_INVOCATION_PREAMBLE}\n- Scope: ${options.targetLabel}\n- Editable files (${options.allowlist.length}):\n${formatFileList(options.allowlist)}\n- Ignored lockfiles (read-only, ${ignoredLockfiles.length}):\n${formatOptionalFileList(ignoredLockfiles)}\n- Unsupported changed files (${unsupportedChangedFiles.length}):\n${formatOptionalFileList(unsupportedChangedFiles)}${extra}${staleCheck}`;
 }
 
 export function buildImproveCodebaseArchitectureCommandMessage(

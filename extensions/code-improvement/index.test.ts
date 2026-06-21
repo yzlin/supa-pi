@@ -127,20 +127,11 @@ describe("code-improvement commands", () => {
   });
 
   it("preserves /simplify default and focused prompt semantics", () => {
-    const simplifyPrompt = readRepoFile(
-      "extensions",
-      "code-improvement",
-      "SIMPLIFY.md"
-    );
-
     expect(buildSimplifyCommandMessage("   ")).toBe(
-      `${simplifyPrompt}\n\nFocus instruction: Simplify the recent feature implementation or recently modified code in this session.`
+      "Use the `simplify` skill behavior as canonical.\n\nSimplify invocation packet:\n- Scope: recent session\n- Focus instruction: Simplify the recent feature implementation or recently modified code in this session."
     );
     expect(buildSimplifyCommandMessage("  focus here  ")).toBe(
-      `${simplifyPrompt}\n\nFocus instruction: focus here`
-    );
-    expect(buildSimplifyCommandMessage("   ")).toContain(
-      "Do not set `max_turns` on the `code-simplifier` Agent call"
+      "Use the `simplify` skill behavior as canonical.\n\nSimplify invocation packet:\n- Scope: recent session\n- Focus instruction: focus here"
     );
   });
 
@@ -367,14 +358,14 @@ describe("code-improvement commands", () => {
       deliverAs: "followUp",
     });
     expect(runtime.sentUserMessages[0]?.content).toContain(
-      "Delegate to code-simplifier. Do not select reviewers."
+      "Use the `simplify` skill behavior as canonical."
     );
     expect(runtime.sentUserMessages[0]?.content).toContain("- package.json");
     expect(runtime.sentUserMessages[0]?.content).toContain(
       "Unsupported changed files (1):\n- ../unsafe.ts"
     );
     expect(runtime.sentUserMessages[0]?.content).toContain(
-      "Hard edit boundary: you may read files outside editable files for context, but only edit files in the editable files list above."
+      "Simplify invocation packet:"
     );
     expect(runtime.sentUserMessages[0]?.content).toContain(
       "Extra guidance: prefer smaller functions"
@@ -400,11 +391,9 @@ describe("code-improvement commands", () => {
     expect(message).toContain("Ignored lockfiles (read-only, 1):\n- bun.lock");
     expect(message).toContain("Unsupported changed files (1):\n- image.png");
     expect(message).toContain(
-      "you may read files outside editable files for context, but only edit files in the editable files list above"
+      "Use the `simplify` skill behavior as canonical."
     );
-    expect(message).toContain(
-      "Do not edit ignored lockfiles or unsupported changed files. If needed edits fall outside editable files, stop and report the missing file path."
-    );
+    expect(message).toContain("Simplify invocation packet:");
   });
 
   it("filters scoped /simplify allowlists to safe existing text-like files", async () => {
