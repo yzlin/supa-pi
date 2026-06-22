@@ -20,6 +20,13 @@ interface SentUserMessage {
   options?: unknown;
 }
 
+const DIAGNOSE_INVOCATION_PREAMBLE =
+  "Use the `diagnose` skill behavior as canonical.\n\nDiagnose invocation packet:";
+
+function expectedDiagnoseCommandMessage(request: string): string {
+  return `${DIAGNOSE_INVOCATION_PREAMBLE}\n- Diagnosis request: ${request}`;
+}
+
 function createMockCtx(isIdle = true) {
   const notifications: Notification[] = [];
 
@@ -90,20 +97,18 @@ describe("diagnose command", () => {
     expect([...runtime.commands.keys()]).toEqual(["diagnose"]);
   });
 
-  it("builds a diagnosis message with the supplied request", () => {
+  it("builds a diagnosis invocation packet with the supplied request", () => {
     const message = buildDiagnoseCommandMessage("  export button crashes  ");
 
-    expect(message).toContain("# Diagnose");
-    expect(message).toContain("Phase 1 — Build a feedback loop");
-    expect(message).toContain("Diagnosis request: export button crashes");
+    expect(message).toBe(
+      expectedDiagnoseCommandMessage("export button crashes")
+    );
   });
 
-  it("builds a current-session diagnosis message when args are empty", () => {
+  it("builds a current-session invocation packet when args are empty", () => {
     const message = buildDiagnoseCommandMessage("   ");
 
-    expect(message).toContain(
-      "Diagnosis request: Diagnose the current session. First inspect recent conversation context and identify the active failure or ambiguity; if none, ask one clarifying question."
-    );
+    expect(message).toBe(expectedDiagnoseCommandMessage("current session"));
   });
 
   it("sends the diagnose prompt immediately when idle", async () => {
@@ -145,12 +150,12 @@ describe("diagnose command", () => {
     });
   });
 
-  it("keeps durable Matt Pocock credit in the extension README", () => {
-    const readme = readRepoFile("extensions", "diagnose", "README.md");
+  it("keeps durable Matt Pocock credit in the diagnose skill", () => {
+    const skill = readRepoFile("skills", "diagnose", "SKILL.md");
 
-    expect(readme).toContain("Matt Pocock");
-    expect(readme).toContain("MIT");
-    expect(readme).toContain(
+    expect(skill).toContain("Matt Pocock");
+    expect(skill).toContain("MIT");
+    expect(skill).toContain(
       "https://github.com/mattpocock/skills/tree/main/skills/engineering/diagnose"
     );
   });

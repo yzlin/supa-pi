@@ -1,8 +1,13 @@
+---
+name: diagnose
+description: Diagnose bugs, performance regressions, or current-session failures using a disciplined reproduce-minimise-hypothesise-instrument-fix loop.
+---
+
 # Diagnose
 
 A disciplined diagnosis loop for hard bugs and performance regressions. Reproduce → minimise → hypothesise → instrument → fix → regression-test.
 
-Adapted for pi from Matt Pocock's diagnose skill.
+Adapted for pi from Matt Pocock's `diagnose` skill, licensed MIT, upstream source: https://github.com/mattpocock/skills/tree/main/skills/engineering/diagnose
 
 ## Operating rules
 
