@@ -1,3 +1,8 @@
+---
+name: execute
+description: Execute a safe, unambiguous plan in the current main session using checkpointed pi-task orchestration and executor agents.
+---
+
 # Execute
 
 Execute the requested plan in this session.
@@ -9,7 +14,7 @@ Requirements:
 - If the request includes `<plan>...</plan>`, treat only the content inside that tag pair as the executable plan input.
 - Parse the plan carefully. Support inline plans and file-backed plans like `@plan.md` or `implement @plan.md`.
 - If a referenced plan file exists, read it and extract executable items from it. Prefer markdown list items when present, then fall back to line-based parsing.
-- For bare `/execute` with a missing or stale brief, the extension supplies a plan asking you to synthesize a new Execution Brief from current session context. Produce the brief, then continue through this normal execute orchestration in the same run if it is safe and unambiguous; do not require a second `/execute`.
+- For bare `/execute` with a missing or stale brief, the extension supplies a short mode asking you to synthesize a new Execution Brief from current session context. Produce the brief, then continue through this normal execute orchestration in the same run if it is safe and unambiguous; do not require a second `/execute`.
 - Explicit plan args and a valid, fresh assistant-authored Execution Brief execute immediately through this orchestration.
 - Before dispatching tasks, present a concise plan: the normalized goal, task breakdown, key constraints, and validation/checkpoint approach.
 - Ask concise clarifying questions before execution if material ambiguity could change the task graph, scope, safety posture, or done criteria.
@@ -29,6 +34,15 @@ Requirements:
 - Reconcile checkpoint state against live task state before resuming or dispatching more work.
 - On task failure, stop dispatching dependent or new work, checkpoint current state, reconcile live task results, and report the failure, blockers, files touched, validation, and exact next choices.
 - Continue until all tasks are completed or terminally blocked.
+
+Execution Brief:
+- When synthesizing a brief, include these exact markdown sections:
+  - `# Execution Brief`
+  - `## Execution Scope`
+  - `## Plan`
+  - `## Done Criteria`
+  - `## Verification`
+  - `## Out of Scope`
 
 Execution loop:
 1. Resolve the plan input and normalize it.

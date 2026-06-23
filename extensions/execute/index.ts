@@ -3,7 +3,11 @@ import type {
   ExtensionCommandContext,
 } from "@earendil-works/pi-coding-agent";
 
-import { EXECUTE_COMMAND_NAME, EXECUTE_PROMPT } from "./constants";
+import {
+  EXECUTE_COMMAND_NAME,
+  EXECUTE_INVOCATION_PREAMBLE,
+  EXECUTE_SYNTHESIS_MESSAGE,
+} from "./constants";
 import { registerExecuteCheckpointTool } from "./tools";
 
 interface MessageLike {
@@ -20,11 +24,9 @@ const EXECUTION_BRIEF_REQUIRED_SECTIONS = [
   "Out of Scope",
 ] as const;
 
-function buildExecuteCommandMessage(args: string): string {
+function buildPlanInvocationMessage(args: string): string {
   const plan = args.trim();
-  return plan
-    ? `${EXECUTE_PROMPT}\n\n<plan>\n${plan}\n</plan>`
-    : EXECUTE_PROMPT;
+  return `${EXECUTE_INVOCATION_PREAMBLE}\n\n<plan>\n${plan}\n</plan>`;
 }
 
 function extractTextContent(content: MessageLike["content"]): string {
@@ -60,17 +62,6 @@ function isExecutionBrief(text: string): boolean {
       hasMarkdownHeading(text, section, 2)
     )
   );
-}
-
-function buildExecutionBriefSynthesisMessage(): string {
-  const requiredHeadings = [
-    `- # ${EXECUTION_BRIEF_TITLE}`,
-    ...EXECUTION_BRIEF_REQUIRED_SECTIONS.map((section) => `- ## ${section}`),
-  ].join("\n");
-
-  const plan = `Synthesize a new Execution Brief from the current session context. You may inspect the repo read-only if needed. If the requested work is safe and unambiguous, continue into execution immediately after synthesizing the brief. If material ambiguity exists, ask concise clarifying questions and do not execute.\n\nThe brief must include these exact markdown sections:\n${requiredHeadings}`;
-
-  return buildExecuteCommandMessage(plan);
 }
 
 function getLastExecutionBriefFromSession(
@@ -112,8 +103,8 @@ export default function executeExtension(pi: ExtensionAPI): void {
       const explicitPlan = (args ?? "").trim();
       const plan = explicitPlan || getLastExecutionBriefFromSession(ctx);
       const message = plan
-        ? buildExecuteCommandMessage(plan)
-        : buildExecutionBriefSynthesisMessage();
+        ? buildPlanInvocationMessage(plan)
+        : EXECUTE_SYNTHESIS_MESSAGE;
 
       if (ctx.isIdle()) {
         pi.sendUserMessage(message);

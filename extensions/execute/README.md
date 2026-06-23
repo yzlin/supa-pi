@@ -12,9 +12,9 @@ status: active
 
 ## Command behavior
 
-- `/execute <plan>` executes immediately. The extension wraps the trimmed args in `<plan>...</plan>` and sends the execute prompt.
+- `/execute <plan>` executes immediately. The extension sends a concise execute-skill invocation packet and wraps the trimmed args in `<plan>...</plan>`.
 - Bare `/execute` reuses the most recent valid assistant message titled `# Execution Brief`, unless a newer user message appears after it.
-- If no usable brief exists, or the last brief is stale, bare `/execute` asks the assistant to synthesize a new Execution Brief from current session context and then continue through normal execute orchestration in the same run if safe and unambiguous. No second `/execute` is required.
+- If no usable brief exists, or the last brief is stale, bare `/execute` sends a concise mode line asking the assistant to synthesize a new Execution Brief from current session context and then continue through normal execute orchestration in the same run if safe and unambiguous. No second `/execute` is required.
 - Explicit plan args and valid, fresh assistant-authored briefs execute immediately through orchestration.
 - When the agent is busy, `/execute` queues the same message as a follow-up and notifies the user.
 
@@ -35,7 +35,7 @@ User-authored briefs are not accepted as reusable briefs. Any user message after
 
 ## Orchestration behavior
 
-The execute prompt instructs the main-session orchestrator to:
+Canonical orchestration workflow: `../../skills/execute/SKILL.md`. It instructs the main-session orchestrator to:
 
 - present a concise plan before dispatching executor tasks;
 - ask concise ambiguity questions before execution when the answer could change scope, safety, task breakdown, or done criteria;

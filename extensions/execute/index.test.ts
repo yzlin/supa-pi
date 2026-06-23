@@ -10,7 +10,10 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { EXECUTE_PROMPT } from "./constants";
+import {
+  EXECUTE_INVOCATION_PREAMBLE,
+  EXECUTE_SYNTHESIS_MESSAGE,
+} from "./constants";
 import executeExtension from "./index";
 
 const EXECUTION_BRIEF = [
@@ -22,22 +25,6 @@ const EXECUTION_BRIEF = [
   "## Out of Scope\n- Anything else",
 ].join("\n\n");
 
-const EXECUTION_BRIEF_SYNTHESIS_MESSAGE_PARTS = [
-  EXECUTE_PROMPT,
-  "<plan>",
-  "Synthesize a new Execution Brief from the current session context.",
-  "You may inspect the repo read-only if needed.",
-  "If the requested work is safe and unambiguous, continue into execution immediately after synthesizing the brief.",
-  "If material ambiguity exists, ask concise clarifying questions and do not execute.",
-  "- # Execution Brief",
-  "- ## Execution Scope",
-  "- ## Plan",
-  "- ## Done Criteria",
-  "- ## Verification",
-  "- ## Out of Scope",
-  "</plan>",
-];
-
 function expectExecutionBriefSynthesisRequest(
   content: string | undefined
 ): void {
@@ -45,9 +32,7 @@ function expectExecutionBriefSynthesisRequest(
     throw new Error("Expected sent user message content");
   }
 
-  for (const expected of EXECUTION_BRIEF_SYNTHESIS_MESSAGE_PARTS) {
-    expect(content).toContain(expected);
-  }
+  expect(content).toBe(EXECUTE_SYNTHESIS_MESSAGE);
 }
 
 function createMockCtx(
@@ -131,6 +116,20 @@ function createMockPiRuntime() {
   };
 }
 
+async function runExecuteCommand(
+  runtime: ReturnType<typeof createMockPiRuntime>,
+  args: string,
+  ctx: unknown
+): Promise<void> {
+  const handler = runtime.commands.get("execute")?.handler;
+
+  if (!handler) {
+    throw new Error("Expected execute command handler");
+  }
+
+  await handler(args, ctx);
+}
+
 async function withTempDir<T>(run: (cwd: string) => Promise<T> | T) {
   const cwd = mkdtempSync(join(tmpdir(), "pi-execute-test-"));
 
@@ -142,41 +141,35 @@ async function withTempDir<T>(run: (cwd: string) => Promise<T> | T) {
 }
 
 describe("execute command", () => {
-  it("sends the orchestrator prompt immediately when idle", async () => {
+  it("sends the execute skill invocation packet immediately when idle", async () => {
     const runtime = createMockPiRuntime();
     const { ctx, notifications } = createMockCtx();
 
     executeExtension(runtime.pi as never);
-    const handler = runtime.commands.get("execute")?.handler;
-
-    expect(handler).toBeDefined();
-    await handler?.("implement @plan.md", ctx as never);
+    await runExecuteCommand(runtime, "implement @plan.md", ctx);
 
     expect(runtime.sentUserMessages).toEqual([
       {
-        content: `${EXECUTE_PROMPT}\n\n<plan>\nimplement @plan.md\n</plan>`,
+        content: `${EXECUTE_INVOCATION_PREAMBLE}\n\n<plan>\nimplement @plan.md\n</plan>`,
         options: undefined,
       },
     ]);
     expect(notifications).toEqual([]);
   });
 
-  it("queues the orchestrator prompt as a follow-up when busy", async () => {
+  it("queues the execute skill invocation packet as a follow-up when busy", async () => {
     const runtime = createMockPiRuntime();
     const { ctx, notifications } = createMockCtx();
 
     executeExtension(runtime.pi as never);
-    const handler = runtime.commands.get("execute")?.handler;
-
-    expect(handler).toBeDefined();
-    await handler?.("implement @plan.md", {
+    await runExecuteCommand(runtime, "implement @plan.md", {
       ...ctx,
       isIdle: () => false,
-    } as never);
+    });
 
     expect(runtime.sentUserMessages).toEqual([
       {
-        content: `${EXECUTE_PROMPT}\n\n<plan>\nimplement @plan.md\n</plan>`,
+        content: `${EXECUTE_INVOCATION_PREAMBLE}\n\n<plan>\nimplement @plan.md\n</plan>`,
         options: { deliverAs: "followUp" },
       },
     ]);
@@ -199,14 +192,11 @@ describe("execute command", () => {
     ]);
 
     executeExtension(runtime.pi as never);
-    const handler = runtime.commands.get("execute")?.handler;
-
-    expect(handler).toBeDefined();
-    await handler?.("   ", ctx as never);
+    await runExecuteCommand(runtime, "   ", ctx);
 
     expect(runtime.sentUserMessages).toEqual([
       {
-        content: `${EXECUTE_PROMPT}\n\n<plan>\n${EXECUTION_BRIEF}\n</plan>`,
+        content: `${EXECUTE_INVOCATION_PREAMBLE}\n\n<plan>\n${EXECUTION_BRIEF}\n</plan>`,
         options: undefined,
       },
     ]);
@@ -233,10 +223,7 @@ describe("execute command", () => {
     ]);
 
     executeExtension(runtime.pi as never);
-    const handler = runtime.commands.get("execute")?.handler;
-
-    expect(handler).toBeDefined();
-    await handler?.("   ", ctx as never);
+    await runExecuteCommand(runtime, "   ", ctx);
 
     expectExecutionBriefSynthesisRequest(runtime.sentUserMessages[0]?.content);
     expect(notifications).toEqual([]);
@@ -262,10 +249,7 @@ describe("execute command", () => {
     ]);
 
     executeExtension(runtime.pi as never);
-    const handler = runtime.commands.get("execute")?.handler;
-
-    expect(handler).toBeDefined();
-    await handler?.("   ", ctx as never);
+    await runExecuteCommand(runtime, "   ", ctx);
 
     expectExecutionBriefSynthesisRequest(runtime.sentUserMessages[0]?.content);
     expect(notifications).toEqual([]);
@@ -285,16 +269,13 @@ describe("execute command", () => {
         type: "message",
         message: {
           role: "user",
-          content: `${EXECUTE_PROMPT}\n\n<plan>\nold task\n</plan>`,
+          content: `${EXECUTE_INVOCATION_PREAMBLE}\n\n<plan>\nold task\n</plan>`,
         },
       },
     ]);
 
     executeExtension(runtime.pi as never);
-    const handler = runtime.commands.get("execute")?.handler;
-
-    expect(handler).toBeDefined();
-    await handler?.("   ", ctx as never);
+    await runExecuteCommand(runtime, "   ", ctx);
 
     expectExecutionBriefSynthesisRequest(runtime.sentUserMessages[0]?.content);
     expect(notifications).toEqual([]);
@@ -305,10 +286,7 @@ describe("execute command", () => {
     const { ctx, notifications } = createMockCtx();
 
     executeExtension(runtime.pi as never);
-    const handler = runtime.commands.get("execute")?.handler;
-
-    expect(handler).toBeDefined();
-    await handler?.("   ", ctx as never);
+    await runExecuteCommand(runtime, "   ", ctx);
 
     expectExecutionBriefSynthesisRequest(runtime.sentUserMessages[0]?.content);
     expect(notifications).toEqual([]);
