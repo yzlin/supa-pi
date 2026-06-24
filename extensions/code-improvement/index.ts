@@ -338,6 +338,12 @@ async function dispatchSimplify(
     await getChangedPaths(target, createGitExec(pi)),
     { expandDirectories: target.type === "folder" }
   );
+  if (scope.gitIgnoreUnavailable) {
+    ctx.ui.notify(
+      "Git ignore checks unavailable; continuing without ignored-file pruning.",
+      "warning"
+    );
+  }
   if (scope.unsupportedChangedFiles.length > 0 && !yes) {
     if (!ctx.hasUI) {
       ctx.ui.notify(
@@ -454,7 +460,7 @@ export default function codeImprovementExtension(pi: ExtensionAPI): void {
   pi.registerCommand("improve-codebase-architecture", {
     description:
       "Read-only architecture review with deepening candidates: /improve-codebase-architecture [scope]",
-    handler: (args, ctx) => {
+    handler: async (args, ctx) => {
       const message = buildImproveCodebaseArchitectureCommandMessage(
         args ?? ""
       );

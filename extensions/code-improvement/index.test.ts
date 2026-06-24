@@ -1,5 +1,6 @@
 import { describe, expect, it } from "bun:test";
-import { readFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import codeImprovementExtension, {
@@ -473,7 +474,35 @@ describe("code-improvement commands", () => {
     );
   });
 
-  it("excludes unsafe, generated, vendor, build, and non-text files from expanded folder simplify scopes", async () => {
+  it("warns and falls back when Git ignore pruning is unavailable", async () => {
+    const originalCwd = process.cwd();
+    const tempDir = mkdtempSync(join(tmpdir(), "simplify-command-nonrepo-"));
+    process.chdir(tempDir);
+    writeFileSync("safe.ts", "export const safe = true;\n");
+
+    try {
+      const runtime = createMockPiRuntime();
+      const { ctx, notifications } = createMockCtx();
+
+      codeImprovementExtension(runtime.pi as never);
+      const command = getRegisteredCommand(runtime.commands, "simplify");
+
+      await command?.handler("folder safe.ts --yes", ctx as never);
+
+      expect(notifications).toContainEqual({
+        message:
+          "Git ignore checks unavailable; continuing without ignored-file pruning.",
+        level: "warning",
+      });
+      expect(runtime.sentUserMessages[0]?.content).toContain(
+        "Editable files (1):\n- safe.ts"
+      );
+    } finally {
+      process.chdir(originalCwd);
+    }
+  });
+
+  it("excludes unsafe, generated, vendor, and non-text files from expanded folder simplify scopes", async () => {
     const runtime = createMockPiRuntime();
     const { ctx } = createMockCtx();
 

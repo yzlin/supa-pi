@@ -18,15 +18,15 @@ Supported scopes:
 - `branch <base>` — files changed relative to the base branch.
 - `commit <sha>` — files changed by a commit.
 - `pr <ref>` — checkout a PR number or GitHub PR URL, then simplify files changed by that PR.
-- `folder <paths>` — explicit files or folders.
+- `folder <paths>` — explicit files or folders. Folder descendants are pruned recursively using Git ignore rules.
 
 Scoped runs build a three-section file contract:
 
 - `Editable files` — the hard edit boundary for the agent prompt.
 - `Ignored lockfiles (read-only)` — lockfiles found in the scope; never editable, including folder scopes.
-- `Unsupported changed files` — safe-filtered files such as missing, unsafe, generated/vendor/build, binary, or non-text paths.
+- `Unsupported changed files` — safe-filtered files such as missing, unsafe, generated/vendor, binary, non-text, or explicit ignored paths.
 
-The simplifier may inspect context outside editable files, but may edit only `Editable files`. If useful simplification needs another file, stop and report the missing path instead of widening scope. Lockfile-only scopes no-op after reporting ignored lockfiles.
+The simplifier may inspect context outside editable files, but may edit only `Editable files`. If useful simplification needs another file, stop and report the missing path instead of widening scope. Lockfile-only scopes no-op after reporting ignored lockfiles. If Git ignore checks are unavailable, `/simplify` warns and falls back without ignore-based pruning.
 
 `--extra <guidance>` adds extra guidance to the simplifier prompt. It does not widen editable files.
 
