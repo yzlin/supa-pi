@@ -1,9 +1,11 @@
 import { describe, expect, it } from "bun:test";
+import { createHash } from "node:crypto";
 import {
   existsSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
+  readdirSync,
   rmSync,
   writeFileSync,
 } from "node:fs";
@@ -293,6 +295,40 @@ describe("execute command", () => {
   });
 });
 
+function hashCanonicalPlan(canonicalPlan: string): string {
+  return createHash("sha256").update(canonicalPlan.trim()).digest("hex");
+}
+
+function readToolPayload(result: unknown): Record<string, unknown> {
+  const text = (result as { content: Array<{ text: string }> }).content[0]
+    ?.text;
+
+  if (!text) {
+    throw new Error("Expected tool text payload");
+  }
+
+  return JSON.parse(text);
+}
+
+async function runExecuteCheckpointTool(
+  runtime: ReturnType<typeof createMockPiRuntime>,
+  cwd: string,
+  params: unknown,
+  toolCallId = "call"
+): Promise<unknown> {
+  const tool = runtime.tools.get("execute_checkpoint");
+
+  if (!tool) {
+    throw new Error("Expected execute_checkpoint tool");
+  }
+
+  return await tool.execute(toolCallId, params, undefined, undefined, { cwd });
+}
+
+function writeJsonFile(path: string, value: unknown): void {
+  writeFileSync(path, `${JSON.stringify(value)}\n`, "utf8");
+}
+
 describe("execute_checkpoint tool", () => {
   it("registers the checkpoint tool with the execute extension", () => {
     const runtime = createMockPiRuntime();
@@ -302,406 +338,466 @@ describe("execute_checkpoint tool", () => {
     expect(runtime.tools.has("execute_checkpoint")).toBe(true);
   });
 
-  it("returns not found when no checkpoint exists", async () => {
+  it("pure load misses by canonicalPlan without creating checkpoint files", async () => {
     await withTempDir(async (cwd) => {
       const runtime = createMockPiRuntime();
       executeExtension(runtime.pi as never);
-
-      const tool = runtime.tools.get("execute_checkpoint");
-      expect(tool).toBeDefined();
-
-      const result = (await tool?.execute(
-        "call-1",
-        { op: "load", planId: "plan-1" },
-        undefined,
-        undefined,
-        { cwd }
-      )) as {
-        content: Array<{ text: string }>;
-      };
-      const payload = JSON.parse(result.content[0]?.text ?? "{}");
+      const result = await runExecuteCheckpointTool(
+        runtime,
+        cwd,
+        { op: "load", canonicalPlan: "  Ship thumbnails  " },
+        "call-1"
+      );
+      const payload = readToolPayload(result);
 
       expect(payload).toEqual({
         found: false,
-        path: join(cwd, ".pi", "execute", "plan-1.json"),
+        canonicalPlanHash: hashCanonicalPlan("Ship thumbnails"),
+        warnings: [],
       });
+      expect(existsSync(join(cwd, ".pi", "execute"))).toBe(false);
     });
   });
 
-  it("saves a new checkpoint and preserves stored state on load", async () => {
+  it("pure load with legacy files does not create an index", async () => {
     await withTempDir(async (cwd) => {
       const runtime = createMockPiRuntime();
       executeExtension(runtime.pi as never);
-
-      const tool = runtime.tools.get("execute_checkpoint");
-      expect(tool).toBeDefined();
-
-      const saveResult = (await tool?.execute(
-        "call-2",
-        {
-          op: "save",
-          planId: "plan-2",
-          checkpoint: {
-            status: "running",
-            normalizedSummary: "Ship the gallery thumbnail strip.",
-            tasks: [
-              {
-                id: "1",
-                subject: "Implement thumbnail strip feature",
-                status: "pending",
-              },
-            ],
-          },
-        },
-        undefined,
-        undefined,
-        { cwd }
-      )) as {
-        content: Array<{ text: string }>;
-      };
-      const savePayload = JSON.parse(saveResult.content[0]?.text ?? "{}");
-      const checkpointPath = join(cwd, ".pi", "execute", "plan-2.json");
-
-      expect(savePayload).toEqual({
-        path: checkpointPath,
-        created: true,
+      const checkpointDir = join(cwd, ".pi", "execute");
+      mkdirSync(checkpointDir, { recursive: true });
+      writeJsonFile(join(checkpointDir, "legacy-plan.json"), {
+        planId: "legacy-plan",
         status: "running",
-        taskCount: 1,
       });
-      expect(existsSync(checkpointPath)).toBe(true);
 
-      const written = JSON.parse(readFileSync(checkpointPath, "utf8"));
-      expect(written.planId).toBe("plan-2");
-      expect(written.status).toBe("running");
-      expect(written.normalizedSummary).toBe(
-        "Ship the gallery thumbnail strip."
+      const payload = readToolPayload(
+        await runExecuteCheckpointTool(
+          runtime,
+          cwd,
+          { op: "load", canonicalPlan: "No match" },
+          "call-1b"
+        )
       );
-      expect(written.tasks).toEqual([
-        {
-          id: "1",
-          subject: "Implement thumbnail strip feature",
-          status: "pending",
-        },
-      ]);
-      expect(typeof written.createdAt).toBe("string");
-      expect(typeof written.updatedAt).toBe("string");
 
-      const loadResult = (await tool?.execute(
-        "call-3",
-        { op: "load", planId: "plan-2" },
-        undefined,
-        undefined,
-        { cwd }
-      )) as {
-        content: Array<{ text: string }>;
-      };
-      const loadPayload = JSON.parse(loadResult.content[0]?.text ?? "{}");
+      expect(payload.found).toBe(false);
+      expect(existsSync(join(checkpointDir, "index.json"))).toBe(false);
+    });
+  });
+
+  it("saves and loads canonicalPlan checkpoints using UUID filenames and index entries", async () => {
+    await withTempDir(async (cwd) => {
+      const runtime = createMockPiRuntime();
+      executeExtension(runtime.pi as never);
+      const canonicalPlan = "Ship the gallery thumbnail strip.";
+      const canonicalPlanHash = hashCanonicalPlan(canonicalPlan);
+
+      const savePayload = readToolPayload(
+        await runExecuteCheckpointTool(
+          runtime,
+          cwd,
+          {
+            op: "save",
+            canonicalPlan,
+            checkpoint: {
+              status: "running",
+              normalizedSummary: "Ship thumbnails.",
+              tasks: [{ id: "1", subject: "Build strip", status: "pending" }],
+            },
+          },
+          "call-2"
+        )
+      );
+
+      expect(savePayload.created).toBe(true);
+      expect(savePayload.status).toBe("running");
+      expect(savePayload.taskCount).toBe(1);
+      expect(savePayload.path).toMatch(/execute-v1-[0-9a-f-]+\.json$/);
+
+      const checkpointPath = savePayload.path as string;
+      const written = JSON.parse(readFileSync(checkpointPath, "utf8"));
+      expect(written).toMatchObject({
+        version: 1,
+        canonicalPlanHash,
+        status: "running",
+        normalizedSummary: "Ship thumbnails.",
+      });
+      expect(typeof written.id).toBe("string");
+      expect(checkpointPath).toBe(
+        join(cwd, ".pi", "execute", `execute-v1-${written.id}.json`)
+      );
+      expect(
+        JSON.parse(
+          readFileSync(join(cwd, ".pi", "execute", "index.json"), "utf8")
+        )
+      ).toEqual({
+        [canonicalPlanHash]: written.id,
+      });
+
+      const loadPayload = readToolPayload(
+        await runExecuteCheckpointTool(
+          runtime,
+          cwd,
+          { op: "load", canonicalPlan },
+          "call-3"
+        )
+      );
 
       expect(loadPayload).toEqual({
         found: true,
         path: checkpointPath,
+        canonicalPlanHash,
         checkpoint: written,
+        warnings: [],
       });
     });
   });
 
-  it("lists unfinished checkpoints for collision detection", async () => {
+  it("resolves the same canonicalPlan to the same checkpoint on repeated saves", async () => {
     await withTempDir(async (cwd) => {
       const runtime = createMockPiRuntime();
       executeExtension(runtime.pi as never);
+      const canonicalPlan = "Repeatable plan identity";
+      const saveParams = {
+        op: "save",
+        canonicalPlan,
+        checkpoint: {
+          status: "running",
+          normalizedSummary: "Repeatable work",
+          tasks: [{ id: "1", subject: "Do work", status: "pending" }],
+        },
+      };
 
-      const tool = runtime.tools.get("execute_checkpoint");
-      expect(tool).toBeDefined();
+      const first = readToolPayload(
+        await runExecuteCheckpointTool(runtime, cwd, saveParams, "call-4")
+      );
+      const second = readToolPayload(
+        await runExecuteCheckpointTool(runtime, cwd, saveParams, "call-5")
+      );
 
-      const checkpointDir = join(cwd, ".pi", "execute");
-      mkdirSync(checkpointDir, { recursive: true });
-      writeFileSync(
-        join(checkpointDir, "done-plan.json"),
-        `${JSON.stringify(
-          {
-            planId: "done-plan",
-            status: "done",
-            createdAt: "2026-04-17T00:00:00.000Z",
-            updatedAt: "2026-04-17T00:00:00.000Z",
-            normalizedSummary: "Finished work",
+      expect(first.created).toBe(true);
+      expect(second.created).toBe(false);
+      expect(second.path).toBe(first.path);
+      const checkpointFiles = readdirSync(join(cwd, ".pi", "execute")).filter(
+        (entry) => entry.startsWith("execute-v1-")
+      );
+      expect(checkpointFiles).toHaveLength(1);
+    });
+  });
+
+  it("finds missing-index checkpoints by scan and repairs cache on save", async () => {
+    await withTempDir(async (cwd) => {
+      const runtime = createMockPiRuntime();
+      executeExtension(runtime.pi as never);
+      const canonicalPlan = "Repair index from files";
+      const canonicalPlanHash = hashCanonicalPlan(canonicalPlan);
+
+      await runExecuteCheckpointTool(
+        runtime,
+        cwd,
+        {
+          op: "save",
+          canonicalPlan,
+          checkpoint: {
+            status: "running",
+            normalizedSummary: "Repair",
             tasks: [],
           },
-          null,
-          2
-        )}\n`,
-        "utf8"
+        },
+        "call-6"
       );
-      writeFileSync(
-        join(checkpointDir, "running-plan.json"),
-        `${JSON.stringify(
-          {
-            planId: "running-plan",
-            status: "running",
-            createdAt: "2026-04-17T00:00:00.000Z",
-            updatedAt: "2026-04-17T00:00:00.000Z",
-            normalizedSummary: "Unfinished work",
-            tasks: [
-              {
-                id: "1",
-                subject: "Continue work",
-                status: "pending",
-              },
-            ],
-          },
-          null,
-          2
-        )}\n`,
-        "utf8"
+      rmSync(join(cwd, ".pi", "execute", "index.json"), { force: true });
+
+      const loadPayload = readToolPayload(
+        await runExecuteCheckpointTool(
+          runtime,
+          cwd,
+          { op: "load", canonicalPlan },
+          "call-7"
+        )
       );
 
-      const result = (await tool?.execute(
-        "call-5",
-        { op: "list_unfinished" },
-        undefined,
-        undefined,
-        { cwd }
-      )) as {
-        content: Array<{ text: string }>;
-      };
-      const payload = JSON.parse(result.content[0]?.text ?? "{}");
+      expect(loadPayload.found).toBe(true);
+      expect(existsSync(join(cwd, ".pi", "execute", "index.json"))).toBe(
+        false
+      );
+
+      await runExecuteCheckpointTool(
+        runtime,
+        cwd,
+        {
+          op: "save",
+          canonicalPlan,
+          checkpoint: {
+            status: "running",
+            normalizedSummary: "Repair updated",
+            tasks: [],
+          },
+        },
+        "call-7b"
+      );
+
+      const repairedIndex = JSON.parse(
+        readFileSync(join(cwd, ".pi", "execute", "index.json"), "utf8")
+      );
+      expect(repairedIndex[canonicalPlanHash]).toBe(
+        (loadPayload.checkpoint as { id: string }).id
+      );
+    });
+  });
+
+  it("lists only unfinished v1 checkpoints and ignores readable legacy files", async () => {
+    await withTempDir(async (cwd) => {
+      const runtime = createMockPiRuntime();
+      executeExtension(runtime.pi as never);
+      const checkpointDir = join(cwd, ".pi", "execute");
+      mkdirSync(checkpointDir, { recursive: true });
+      writeJsonFile(join(checkpointDir, "legacy-plan.json"), {
+        planId: "legacy-plan",
+        status: "running",
+        normalizedSummary: "Legacy",
+        tasks: [],
+      });
+
+      await runExecuteCheckpointTool(
+        runtime,
+        cwd,
+        {
+          op: "save",
+          canonicalPlan: "Running v1",
+          checkpoint: {
+            status: "running",
+            normalizedSummary: "Running v1",
+            tasks: [{ id: "1", subject: "Continue", status: "pending" }],
+          },
+        },
+        "call-8"
+      );
+      await runExecuteCheckpointTool(
+        runtime,
+        cwd,
+        {
+          op: "save",
+          canonicalPlan: "Done v1",
+          checkpoint: {
+            status: "done",
+            normalizedSummary: "Done v1",
+            tasks: [],
+          },
+        },
+        "call-9"
+      );
+
+      const payload = readToolPayload(
+        await runExecuteCheckpointTool(
+          runtime,
+          cwd,
+          { op: "list_unfinished" },
+          "call-10"
+        )
+      );
 
       expect(payload).toEqual({
         checkpoints: [
           {
-            path: join(checkpointDir, "running-plan.json"),
-            checkpoint: {
-              planId: "running-plan",
-              status: "running",
-              createdAt: "2026-04-17T00:00:00.000Z",
-              updatedAt: "2026-04-17T00:00:00.000Z",
-              normalizedSummary: "Unfinished work",
-              tasks: [
-                {
-                  id: "1",
-                  subject: "Continue work",
-                  status: "pending",
-                },
-              ],
-            },
+            id: (payload.checkpoints as Array<{ id: string }>)[0]?.id,
+            path: (payload.checkpoints as Array<{ path: string }>)[0]?.path,
+            status: "running",
+            normalizedSummary: "Running v1",
+            tasks: [{ id: "1", subject: "Continue", status: "pending" }],
+            canonicalPlanHash: hashCanonicalPlan("Running v1"),
           },
         ],
+        warnings: [],
       });
+      expect(existsSync(join(checkpointDir, "legacy-plan.json"))).toBe(true);
     });
   });
 
-  it("persists dangerous-action approval on the same plan fingerprint", async () => {
+  it("hard-errors old planId-only load and save calls", async () => {
     await withTempDir(async (cwd) => {
       const runtime = createMockPiRuntime();
       executeExtension(runtime.pi as never);
-
-      const tool = runtime.tools.get("execute_checkpoint");
-      expect(tool).toBeDefined();
-
-      const approvedCheckpoint = {
-        status: "running",
-        normalizedSummary: "Run dangerous migration.",
-        tasks: [
-          {
-            id: "1",
-            subject: "Apply migration",
-            status: "pending",
-          },
-        ],
-        dangerousActionApproval: {
-          approved: true,
-          approvedAt: "2026-04-17T00:00:00.000Z",
-          reason: "User approved database migration.",
-        },
-      };
-
-      await tool?.execute(
-        "call-6",
-        {
-          op: "save",
-          planId: "plan-with-approval",
-          checkpoint: approvedCheckpoint,
-        },
-        undefined,
-        undefined,
-        { cwd }
+      const loadResult = await runExecuteCheckpointTool(
+        runtime,
+        cwd,
+        { op: "load", planId: "old-plan" },
+        "call-11"
       );
-
-      await tool?.execute(
-        "call-7",
+      const saveResult = await runExecuteCheckpointTool(
+        runtime,
+        cwd,
         {
           op: "save",
-          planId: "plan-with-approval",
+          planId: "old-plan",
           checkpoint: {
             status: "running",
-            normalizedSummary: approvedCheckpoint.normalizedSummary,
-            tasks: approvedCheckpoint.tasks,
+            normalizedSummary: "Old",
+            tasks: [],
           },
         },
-        undefined,
-        undefined,
-        { cwd }
+        "call-12"
+      );
+      const loadPayload = readToolPayload(loadResult);
+      const savePayload = readToolPayload(saveResult);
+
+      expect((loadResult as { isError?: boolean }).isError).toBe(true);
+      expect((saveResult as { isError?: boolean }).isError).toBe(true);
+      expect(loadPayload.error).toBe(
+        "planId-only execute_checkpoint load is no longer supported; canonicalPlan is required."
+      );
+      expect(savePayload.error).toBe(
+        "planId-only execute_checkpoint save is no longer supported; canonicalPlan is required."
+      );
+    });
+  });
+
+  it("stamps dangerous-action approvals that lack canonicalPlanHash", async () => {
+    await withTempDir(async (cwd) => {
+      const runtime = createMockPiRuntime();
+      executeExtension(runtime.pi as never);
+      const canonicalPlan = "Dangerous canonical plan";
+      const canonicalPlanHash = hashCanonicalPlan(canonicalPlan);
+
+      const savePayload = readToolPayload(
+        await runExecuteCheckpointTool(
+          runtime,
+          cwd,
+          {
+            op: "save",
+            canonicalPlan,
+            checkpoint: {
+              status: "running",
+              normalizedSummary: "Run migration",
+              tasks: [{ id: "1", subject: "Migrate", status: "pending" }],
+              dangerousActionApproval: {
+                approved: true,
+                approvedAt: "2026-04-17T00:00:00.000Z",
+                reason: "User approved.",
+              },
+            },
+          },
+          "call-13"
+        )
+      );
+      const written = JSON.parse(
+        readFileSync(savePayload.path as string, "utf8")
       );
 
-      const checkpointPath = join(
-        cwd,
-        ".pi",
-        "execute",
-        "plan-with-approval.json"
-      );
-      const written = JSON.parse(readFileSync(checkpointPath, "utf8"));
-
-      expect(typeof written.dangerousActionApproval.planFingerprint).toBe(
-        "string"
-      );
       expect(written.dangerousActionApproval).toEqual({
         approved: true,
         approvedAt: "2026-04-17T00:00:00.000Z",
-        reason: "User approved database migration.",
-        planFingerprint: written.dangerousActionApproval.planFingerprint,
+        reason: "User approved.",
+        canonicalPlanHash,
       });
     });
   });
 
-  it("drops dangerous-action approval when plan content changes", async () => {
+  it("rejects dangerous-action approvals bound to another canonicalPlanHash", async () => {
     await withTempDir(async (cwd) => {
       const runtime = createMockPiRuntime();
       executeExtension(runtime.pi as never);
-
-      const tool = runtime.tools.get("execute_checkpoint");
-      expect(tool).toBeDefined();
-
-      await tool?.execute(
-        "call-8",
+      const saveResult = await runExecuteCheckpointTool(
+        runtime,
+        cwd,
         {
           op: "save",
-          planId: "plan-with-stale-approval",
+          canonicalPlan: "New dangerous canonical plan",
           checkpoint: {
             status: "running",
-            normalizedSummary: "Run dangerous migration.",
-            tasks: [
-              {
-                id: "1",
-                subject: "Apply migration",
-                status: "pending",
-              },
-            ],
+            normalizedSummary: "Run migration",
+            tasks: [{ id: "1", subject: "Migrate", status: "pending" }],
             dangerousActionApproval: {
               approved: true,
               approvedAt: "2026-04-17T00:00:00.000Z",
-              reason: "User approved database migration.",
+              reason: "User approved old plan.",
+              canonicalPlanHash: hashCanonicalPlan("Old dangerous plan"),
             },
           },
         },
-        undefined,
-        undefined,
-        { cwd }
+        "call-14"
       );
+      const savePayload = readToolPayload(saveResult);
 
-      await tool?.execute(
-        "call-9",
-        {
-          op: "save",
-          planId: "plan-with-stale-approval",
-          checkpoint: {
-            status: "running",
-            normalizedSummary: "Run different dangerous migration.",
-            tasks: [
-              {
-                id: "1",
-                subject: "Apply different migration",
-                status: "pending",
-              },
-            ],
-          },
-        },
-        undefined,
-        undefined,
-        { cwd }
+      expect((saveResult as { isError?: boolean }).isError).toBe(true);
+      expect(savePayload.error).toBe(
+        "Invalid execute checkpoint: dangerousActionApproval.canonicalPlanHash must match canonicalPlanHash."
       );
-
-      const checkpointPath = join(
-        cwd,
-        ".pi",
-        "execute",
-        "plan-with-stale-approval.json"
-      );
-      const written = JSON.parse(readFileSync(checkpointPath, "utf8"));
-
-      expect(written.dangerousActionApproval).toBeUndefined();
+      expect(existsSync(join(cwd, ".pi", "execute"))).toBe(false);
     });
   });
 
-  it("preserves createdAt when saving an existing checkpoint", async () => {
+  it("chooses the newest duplicate same-hash v1 file and warns with paths", async () => {
     await withTempDir(async (cwd) => {
       const runtime = createMockPiRuntime();
       executeExtension(runtime.pi as never);
-
-      const tool = runtime.tools.get("execute_checkpoint");
-      expect(tool).toBeDefined();
-
       const checkpointDir = join(cwd, ".pi", "execute");
-      const checkpointPath = join(checkpointDir, "plan-3.json");
+      const canonicalPlan = "Duplicate canonical plan";
+      const canonicalPlanHash = hashCanonicalPlan(canonicalPlan);
+      const olderPath = join(
+        checkpointDir,
+        "execute-v1-11111111-1111-4111-8111-111111111111.json"
+      );
+      const newerPath = join(
+        checkpointDir,
+        "execute-v1-22222222-2222-4222-8222-222222222222.json"
+      );
       mkdirSync(checkpointDir, { recursive: true });
-      writeFileSync(
-        checkpointPath,
-        `${JSON.stringify(
-          {
-            planId: "plan-3",
-            status: "starting",
-            createdAt: "2026-04-17T00:00:00.000Z",
-            updatedAt: "2026-04-17T00:00:00.000Z",
-            normalizedSummary: "Old summary",
-            tasks: [],
-          },
-          null,
-          2
-        )}\n`,
-        "utf8"
+      writeJsonFile(olderPath, {
+        version: 1,
+        id: "11111111-1111-4111-8111-111111111111",
+        canonicalPlanHash,
+        status: "running",
+        createdAt: "2026-04-17T00:00:00.000Z",
+        updatedAt: "2026-04-17T00:00:00.000Z",
+        normalizedSummary: "Older",
+        tasks: [],
+      });
+      writeJsonFile(newerPath, {
+        version: 1,
+        id: "22222222-2222-4222-8222-222222222222",
+        canonicalPlanHash,
+        status: "running",
+        createdAt: "2026-04-17T00:00:00.000Z",
+        updatedAt: "2026-04-18T00:00:00.000Z",
+        normalizedSummary: "Newer",
+        tasks: [],
+      });
+
+      const payload = readToolPayload(
+        await runExecuteCheckpointTool(
+          runtime,
+          cwd,
+          { op: "load", canonicalPlan },
+          "call-14"
+        )
       );
 
-      const result = (await tool?.execute(
-        "call-4",
-        {
-          op: "save",
-          planId: "plan-3",
-          checkpoint: {
-            status: "running",
-            normalizedSummary: "New summary",
-            tasks: [
-              {
-                id: "1",
-                subject: "Do the work",
-                status: "in_progress",
-                blockedBy: ["0"],
-              },
-            ],
-          },
-        },
-        undefined,
-        undefined,
-        { cwd }
-      )) as {
-        content: Array<{ text: string }>;
-      };
-      const payload = JSON.parse(result.content[0]?.text ?? "{}");
-      const written = JSON.parse(readFileSync(checkpointPath, "utf8"));
+      expect(payload.found).toBe(true);
+      expect(payload.path).toBe(newerPath);
+      expect(
+        (payload.checkpoint as { normalizedSummary: string }).normalizedSummary
+      ).toBe("Newer");
+      expect((payload.warnings as string[])[0]).toContain(canonicalPlanHash);
+      expect((payload.warnings as string[])[0]).toContain(newerPath);
+      expect((payload.warnings as string[])[0]).toContain(olderPath);
 
-      expect(payload).toEqual({
-        path: checkpointPath,
-        created: false,
-        status: "running",
-        taskCount: 1,
-      });
-      expect(written.createdAt).toBe("2026-04-17T00:00:00.000Z");
-      expect(written.updatedAt).not.toBe("2026-04-17T00:00:00.000Z");
-      expect(written.tasks).toEqual([
-        {
-          id: "1",
-          subject: "Do the work",
-          status: "in_progress",
-          blockedBy: ["0"],
-        },
-      ]);
+      const savePayload = readToolPayload(
+        await runExecuteCheckpointTool(
+          runtime,
+          cwd,
+          {
+            op: "save",
+            canonicalPlan,
+            checkpoint: {
+              status: "running",
+              normalizedSummary: "Saved newest",
+              tasks: [],
+            },
+          },
+          "call-15"
+        )
+      );
+      expect((savePayload.warnings as string[])[0]).toContain(olderPath);
     });
   });
 });

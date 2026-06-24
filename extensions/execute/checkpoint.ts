@@ -1,4 +1,4 @@
-import { createHash, randomBytes } from "node:crypto";
+import { createHash, randomBytes, randomUUID } from "node:crypto";
 import {
   existsSync,
   mkdirSync,
@@ -20,11 +20,13 @@ export interface ExecuteDangerousActionApproval {
   approved: boolean;
   approvedAt: string;
   reason?: string;
-  planFingerprint?: string;
+  canonicalPlanHash?: string;
 }
 
 export interface ExecuteCheckpoint {
-  planId: string;
+  version: 1;
+  id: string;
+  canonicalPlanHash: string;
   status: string;
   createdAt: string;
   updatedAt: string;
@@ -43,12 +45,15 @@ export interface ExecuteCheckpointInput {
 export type ExecuteCheckpointLoadResult =
   | {
       found: false;
-      path: string;
+      canonicalPlanHash: string;
+      warnings?: string[];
     }
   | {
       found: true;
       path: string;
+      canonicalPlanHash: string;
       checkpoint: ExecuteCheckpoint;
+      warnings?: string[];
     };
 
 export interface ExecuteCheckpointSaveResult {
@@ -57,14 +62,25 @@ export interface ExecuteCheckpointSaveResult {
   status: string;
   taskCount: number;
   checkpoint: ExecuteCheckpoint;
+  warnings?: string[];
 }
 
 export interface ExecuteCheckpointListResult {
   checkpoints: Array<{
+    id: string;
     path: string;
-    checkpoint: ExecuteCheckpoint;
+    status: string;
+    normalizedSummary: string;
+    tasks: ExecuteCheckpointTask[];
+    canonicalPlanHash: string;
   }>;
+  warnings?: string[];
 }
+
+type CheckpointEntry = {
+  path: string;
+  checkpoint: ExecuteCheckpoint;
+};
 
 const FINISHED_CHECKPOINT_STATUSES = new Set([
   "canceled",
@@ -73,6 +89,7 @@ const FINISHED_CHECKPOINT_STATUSES = new Set([
   "completed",
   "done",
 ]);
+const V1_CHECKPOINT_FILE_PATTERN = /^execute-v1-[0-9a-fA-F-]+\.json$/;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
@@ -100,8 +117,19 @@ function assertStringArray(value: unknown, fieldName: string): string[] {
   );
 }
 
+function normalizeCanonicalPlan(canonicalPlan: string): string {
+  return assertNonEmptyString(canonicalPlan, "canonicalPlan");
+}
+
+function hashCanonicalPlan(canonicalPlan: string): string {
+  return createHash("sha256")
+    .update(normalizeCanonicalPlan(canonicalPlan))
+    .digest("hex");
+}
+
 function normalizeDangerousActionApproval(
-  approval: unknown
+  approval: unknown,
+  canonicalPlanHash: string
 ): ExecuteDangerousActionApproval {
   if (!isRecord(approval)) {
     throw new Error(
@@ -123,17 +151,26 @@ function normalizeDangerousActionApproval(
     ),
   };
 
+  let approvalCanonicalPlanHash = canonicalPlanHash;
+  if (approval.canonicalPlanHash !== undefined) {
+    approvalCanonicalPlanHash = assertNonEmptyString(
+      approval.canonicalPlanHash,
+      "dangerousActionApproval.canonicalPlanHash"
+    );
+  }
+
+  if (approvalCanonicalPlanHash !== canonicalPlanHash) {
+    throw new Error(
+      "Invalid execute checkpoint: dangerousActionApproval.canonicalPlanHash must match canonicalPlanHash."
+    );
+  }
+
+  normalizedApproval.canonicalPlanHash = approvalCanonicalPlanHash;
+
   if (approval.reason !== undefined) {
     normalizedApproval.reason = assertNonEmptyString(
       approval.reason,
       "dangerousActionApproval.reason"
-    );
-  }
-
-  if (approval.planFingerprint !== undefined) {
-    normalizedApproval.planFingerprint = assertNonEmptyString(
-      approval.planFingerprint,
-      "dangerousActionApproval.planFingerprint"
     );
   }
 
@@ -163,27 +200,23 @@ function normalizeTask(task: unknown, index: number): ExecuteCheckpointTask {
   return normalizedTask;
 }
 
-function parseStoredCheckpoint(
-  planId: string,
-  value: unknown
-): ExecuteCheckpoint {
-  if (!isRecord(value)) {
-    throw new Error("Invalid execute checkpoint: expected an object.");
-  }
-
-  const storedPlanId = assertNonEmptyString(value.planId, "planId");
-  if (storedPlanId !== planId) {
-    throw new Error(
-      `Invalid execute checkpoint: expected planId ${planId}, got ${storedPlanId}.`
-    );
+function parseStoredCheckpoint(value: unknown): ExecuteCheckpoint | null {
+  if (!isRecord(value) || value.version !== 1) {
+    return null;
   }
 
   if (!Array.isArray(value.tasks)) {
     throw new Error("Invalid execute checkpoint: tasks must be an array.");
   }
 
+  const canonicalPlanHash = assertNonEmptyString(
+    value.canonicalPlanHash,
+    "canonicalPlanHash"
+  );
   const checkpoint: ExecuteCheckpoint = {
-    planId: storedPlanId,
+    version: 1,
+    id: assertNonEmptyString(value.id, "id"),
+    canonicalPlanHash,
     status: assertNonEmptyString(value.status, "status"),
     createdAt: assertNonEmptyString(value.createdAt, "createdAt"),
     updatedAt: assertNonEmptyString(value.updatedAt, "updatedAt"),
@@ -196,24 +229,17 @@ function parseStoredCheckpoint(
 
   if (value.dangerousActionApproval !== undefined) {
     checkpoint.dangerousActionApproval = normalizeDangerousActionApproval(
-      value.dangerousActionApproval
+      value.dangerousActionApproval,
+      canonicalPlanHash
     );
   }
 
   return checkpoint;
 }
 
-function buildPlanFingerprint(
-  normalizedSummary: string,
-  tasks: ExecuteCheckpointTask[]
-): string {
-  return createHash("sha256")
-    .update(JSON.stringify({ normalizedSummary, tasks }))
-    .digest("hex");
-}
-
 function normalizeCheckpointForSave(
-  planId: string,
+  id: string,
+  canonicalPlanHash: string,
   input: ExecuteCheckpointInput,
   existingCheckpoint: ExecuteCheckpoint | null,
   now: string
@@ -223,9 +249,10 @@ function normalizeCheckpointForSave(
     "normalizedSummary"
   );
   const tasks = input.tasks.map((task, index) => normalizeTask(task, index));
-  const planFingerprint = buildPlanFingerprint(normalizedSummary, tasks);
   const checkpoint: ExecuteCheckpoint = {
-    planId,
+    version: 1,
+    id,
+    canonicalPlanHash,
     status: assertNonEmptyString(input.status, "status"),
     createdAt: existingCheckpoint?.createdAt ?? now,
     updatedAt: now,
@@ -234,13 +261,13 @@ function normalizeCheckpointForSave(
   };
 
   if (input.dangerousActionApproval !== undefined) {
-    checkpoint.dangerousActionApproval = {
-      ...normalizeDangerousActionApproval(input.dangerousActionApproval),
-      planFingerprint,
-    };
+    checkpoint.dangerousActionApproval = normalizeDangerousActionApproval(
+      input.dangerousActionApproval,
+      canonicalPlanHash
+    );
   } else if (
-    existingCheckpoint?.dangerousActionApproval?.planFingerprint ===
-    planFingerprint
+    existingCheckpoint?.dangerousActionApproval?.canonicalPlanHash ===
+    canonicalPlanHash
   ) {
     checkpoint.dangerousActionApproval =
       existingCheckpoint.dangerousActionApproval;
@@ -256,17 +283,22 @@ function writeJsonAtomically(filePath: string, value: unknown): void {
   renameSync(tempPath, filePath);
 }
 
-export function getExecuteCheckpointPath(
-  planId: string,
-  cwd = process.cwd()
-): string {
-  return join(cwd, ".pi", "execute", `${planId}.json`);
+function getExecuteCheckpointDir(cwd = process.cwd()): string {
+  return join(cwd, ".pi", "execute");
 }
 
-function readCheckpointFile(
-  planId: string,
-  checkpointPath: string
-): ExecuteCheckpoint {
+function getExecuteCheckpointIndexPath(cwd = process.cwd()): string {
+  return join(getExecuteCheckpointDir(cwd), "index.json");
+}
+
+export function getExecuteCheckpointPath(
+  id: string,
+  cwd = process.cwd()
+): string {
+  return join(getExecuteCheckpointDir(cwd), `execute-v1-${id}.json`);
+}
+
+function readCheckpointFile(checkpointPath: string): ExecuteCheckpoint | null {
   let parsed: unknown;
   try {
     parsed = JSON.parse(readFileSync(checkpointPath, "utf8"));
@@ -276,25 +308,106 @@ function readCheckpointFile(
     );
   }
 
-  return parseStoredCheckpoint(planId, parsed);
+  return parseStoredCheckpoint(parsed);
+}
+
+function checkpointIndexFromEntries(
+  byHash: Map<string, CheckpointEntry>
+): Record<string, string> {
+  return Object.fromEntries(
+    [...byHash.entries()].map(([hash, entry]) => [hash, entry.checkpoint.id])
+  );
+}
+
+function chooseNewest(entries: CheckpointEntry[]): {
+  winner: CheckpointEntry;
+  warnings: string[];
+} {
+  const sorted = [...entries].sort((a, b) =>
+    b.checkpoint.updatedAt.localeCompare(a.checkpoint.updatedAt)
+  );
+  const [winner, ...duplicates] = sorted;
+  if (!winner) {
+    throw new Error("Invalid execute checkpoint scan: expected entries.");
+  }
+
+  const warnings: string[] = [];
+  if (duplicates.length > 0) {
+    warnings.push(
+      `Duplicate execute checkpoint files for canonicalPlanHash ${winner.checkpoint.canonicalPlanHash}; using newest updatedAt: ${winner.path}; ignored: ${duplicates
+        .map((entry) => entry.path)
+        .join(", ")}.`
+    );
+  }
+
+  return { winner, warnings };
+}
+
+function scanV1Checkpoints(
+  cwd: string,
+  options: { repairIndex?: boolean } = {}
+): {
+  byHash: Map<string, CheckpointEntry>;
+  warnings: string[];
+} {
+  const checkpointDir = getExecuteCheckpointDir(cwd);
+  const byHash = new Map<string, CheckpointEntry[]>();
+  const warnings: string[] = [];
+
+  if (!existsSync(checkpointDir)) {
+    return { byHash: new Map(), warnings };
+  }
+
+  for (const entry of readdirSync(checkpointDir).sort()) {
+    if (!V1_CHECKPOINT_FILE_PATTERN.test(entry)) {
+      continue;
+    }
+
+    const path = join(checkpointDir, entry);
+    const checkpoint = readCheckpointFile(path);
+    if (checkpoint === null) {
+      continue;
+    }
+
+    const entries = byHash.get(checkpoint.canonicalPlanHash) ?? [];
+    entries.push({ path, checkpoint });
+    byHash.set(checkpoint.canonicalPlanHash, entries);
+  }
+
+  const winners = new Map<string, CheckpointEntry>();
+  for (const [canonicalPlanHash, entries] of byHash) {
+    const { winner, warnings: duplicateWarnings } = chooseNewest(entries);
+    winners.set(canonicalPlanHash, winner);
+    warnings.push(...duplicateWarnings);
+  }
+
+  if (options.repairIndex) {
+    writeJsonAtomically(
+      getExecuteCheckpointIndexPath(cwd),
+      checkpointIndexFromEntries(winners)
+    );
+  }
+
+  return { byHash: winners, warnings };
 }
 
 export function loadExecuteCheckpoint(
-  planId: string,
+  canonicalPlan: string,
   cwd = process.cwd()
 ): ExecuteCheckpointLoadResult {
-  const checkpointPath = getExecuteCheckpointPath(planId, cwd);
-  if (!existsSync(checkpointPath)) {
-    return {
-      found: false,
-      path: checkpointPath,
-    };
+  const canonicalPlanHash = hashCanonicalPlan(canonicalPlan);
+  const scan = scanV1Checkpoints(cwd);
+  const entry = scan.byHash.get(canonicalPlanHash);
+  if (!entry) {
+    return { found: false, canonicalPlanHash, warnings: scan.warnings };
   }
 
   return {
     found: true,
-    path: checkpointPath,
-    checkpoint: readCheckpointFile(planId, checkpointPath),
+    path: entry.path,
+    canonicalPlanHash,
+    checkpoint: entry.checkpoint,
+    warnings: scan.warnings,
   };
 }
 
@@ -305,49 +418,53 @@ function isUnfinishedCheckpoint(status: string): boolean {
 export function listUnfinishedExecuteCheckpoints(
   cwd = process.cwd()
 ): ExecuteCheckpointListResult {
-  const checkpointDir = join(cwd, ".pi", "execute");
-  if (!existsSync(checkpointDir)) {
-    return { checkpoints: [] };
-  }
+  const scan = scanV1Checkpoints(cwd, { repairIndex: true });
+  const checkpoints = [...scan.byHash.values()]
+    .filter(({ checkpoint }) => isUnfinishedCheckpoint(checkpoint.status))
+    .sort((a, b) => a.path.localeCompare(b.path))
+    .map(({ path, checkpoint }) => ({
+      id: checkpoint.id,
+      path,
+      status: checkpoint.status,
+      normalizedSummary: checkpoint.normalizedSummary,
+      tasks: checkpoint.tasks,
+      canonicalPlanHash: checkpoint.canonicalPlanHash,
+    }));
 
-  const checkpoints = readdirSync(checkpointDir)
-    .filter((entry) => entry.endsWith(".json"))
-    .sort()
-    .map((entry) => {
-      const planId = entry.slice(0, -".json".length);
-      const path = join(checkpointDir, entry);
-      return {
-        path,
-        checkpoint: readCheckpointFile(planId, path),
-      };
-    })
-    .filter(({ checkpoint }) => isUnfinishedCheckpoint(checkpoint.status));
-
-  return { checkpoints };
+  return { checkpoints, warnings: scan.warnings };
 }
 
 export function saveExecuteCheckpoint(
-  planId: string,
+  canonicalPlan: string,
   input: ExecuteCheckpointInput,
   cwd = process.cwd()
 ): ExecuteCheckpointSaveResult {
-  const existing = loadExecuteCheckpoint(planId, cwd);
+  const canonicalPlanHash = hashCanonicalPlan(canonicalPlan);
+  const scan = scanV1Checkpoints(cwd, { repairIndex: true });
+  const existing = scan.byHash.get(canonicalPlanHash) ?? null;
+  const id = existing?.checkpoint.id ?? randomUUID();
   const now = new Date().toISOString();
   const checkpoint = normalizeCheckpointForSave(
-    planId,
+    id,
+    canonicalPlanHash,
     input,
-    existing.found ? existing.checkpoint : null,
+    existing?.checkpoint ?? null,
     now
   );
-  const checkpointPath = existing.path;
+  const checkpointPath = existing?.path ?? getExecuteCheckpointPath(id, cwd);
 
   writeJsonAtomically(checkpointPath, checkpoint);
+  writeJsonAtomically(getExecuteCheckpointIndexPath(cwd), {
+    ...checkpointIndexFromEntries(scan.byHash),
+    [canonicalPlanHash]: id,
+  });
 
   return {
     path: checkpointPath,
-    created: !existing.found,
+    created: existing === null,
     status: checkpoint.status,
     taskCount: checkpoint.tasks.length,
     checkpoint,
+    warnings: scan.warnings,
   };
 }
