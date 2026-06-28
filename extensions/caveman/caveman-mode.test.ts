@@ -116,15 +116,17 @@ function createContext(
   return { ctx, statuses, notifications };
 }
 
-function setupHarness(): {
+function setupHarness(flags: Record<string, boolean | string | undefined> = {}): {
   handlers: Map<string, ExtensionEventHandler>;
   eventHandlers: Map<string, ExtensionEventHandler>;
   command: HarnessCommandOptions;
   appendedEntries: Array<{ customType: string; data: unknown }>;
+  registeredFlags: string[];
 } {
   const handlers = new Map<string, ExtensionEventHandler>();
   const eventHandlers = new Map<string, ExtensionEventHandler>();
   const appendedEntries: Array<{ customType: string; data: unknown }> = [];
+  const registeredFlags: string[] = [];
   let command: RegisteredCommandOptions | undefined;
 
   const events = {
@@ -149,6 +151,12 @@ function setupHarness(): {
         command = options;
       }
     },
+    registerFlag(name: string) {
+      registeredFlags.push(name);
+    },
+    getFlag(name: string) {
+      return flags[name];
+    },
     appendEntry(customType: string, data: unknown) {
       appendedEntries.push({ customType, data });
     },
@@ -163,6 +171,7 @@ function setupHarness(): {
     eventHandlers,
     command: command as HarnessCommandOptions,
     appendedEntries,
+    registeredFlags,
   };
 }
 
@@ -262,6 +271,12 @@ describe("caveman mode", () => {
     ]);
   });
 
+  it("registers child-native caveman mode flags", () => {
+    const { registeredFlags } = setupHarness();
+
+    expect(registeredFlags).toEqual(["caveman", "no-caveman"]);
+  });
+
   it("uses global config as the default state", () => {
     writeGlobalConfig({ enabled: true });
     const { handlers, appendedEntries } = setupHarness();
@@ -273,6 +288,32 @@ describe("caveman mode", () => {
     expect(isCavemanModeEnabled()).toBe(true);
     expect(statuses).toEqual([
       { key: CAVEMAN_MODE_STATUS_KEY, text: CAVEMAN_MODE_STATUS_TEXT },
+    ]);
+  });
+
+  it("lets --caveman override config for the child process", () => {
+    writeProjectConfig(testProjectDir, { enabled: false });
+    const { handlers } = setupHarness({ caveman: true });
+    const { ctx, statuses } = createContext();
+
+    getHandler(handlers, "session_start")({ type: "session_start" }, ctx);
+
+    expect(isCavemanModeEnabled()).toBe(true);
+    expect(statuses).toEqual([
+      { key: CAVEMAN_MODE_STATUS_KEY, text: CAVEMAN_MODE_STATUS_TEXT },
+    ]);
+  });
+
+  it("lets --no-caveman override config for the child process", () => {
+    writeProjectConfig(testProjectDir, { enabled: true });
+    const { handlers } = setupHarness({ "no-caveman": true });
+    const { ctx, statuses } = createContext();
+
+    getHandler(handlers, "session_start")({ type: "session_start" }, ctx);
+
+    expect(isCavemanModeEnabled()).toBe(false);
+    expect(statuses).toEqual([
+      { key: CAVEMAN_MODE_STATUS_KEY, text: undefined },
     ]);
   });
 
@@ -401,7 +442,7 @@ describe("caveman mode", () => {
     });
 
     expect(inactiveResult).toBeUndefined();
-    expect(inactiveWithExistingPromptResult).toBeUndefined();
+    expect(inactiveWithExistingPromptResult).toEqual({ systemPrompt: "base" });
 
     const { ctx } = createContext([
       {

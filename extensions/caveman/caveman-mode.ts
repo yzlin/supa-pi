@@ -183,13 +183,31 @@ function getConfigCavemanModeState(
 
 function resolveCavemanModeState(
   entries: readonly SessionEntryLike[],
+  flagOverride: boolean | undefined,
   cwd = process.cwd(),
   homeDir = homedir()
 ): CavemanModeState {
+  if (typeof flagOverride === "boolean") {
+    return { enabled: flagOverride };
+  }
+
   return (
     getLatestCavemanModeState(entries) ??
     getConfigCavemanModeState(cwd, homeDir) ?? { enabled: false }
   );
+}
+
+function getCavemanFlagOverride(pi: ExtensionAPI): boolean | undefined {
+  const cavemanFlag = pi.getFlag("caveman");
+  const noCavemanFlag = pi.getFlag("no-caveman");
+
+  if (typeof noCavemanFlag === "boolean") {
+    return !noCavemanFlag;
+  }
+
+  if (typeof cavemanFlag === "boolean") {
+    return cavemanFlag;
+  }
 }
 
 function refreshCavemanStatus(ctx: ExtensionContext): void {
@@ -308,7 +326,19 @@ function registerCavemanRpc(pi: ExtensionAPI): void {
 }
 
 export function registerCavemanMode(pi: ExtensionAPI): void {
-  cavemanModeEnabled = resolveCavemanModeState([]).enabled;
+  pi.registerFlag("caveman", {
+    description: "Enable caveman mode for this child process",
+    type: "boolean",
+  });
+  pi.registerFlag("no-caveman", {
+    description: "Disable caveman mode for this child process",
+    type: "boolean",
+  });
+
+  cavemanModeEnabled = resolveCavemanModeState(
+    [],
+    getCavemanFlagOverride(pi)
+  ).enabled;
   registerCavemanRpc(pi);
 
   function setEnabled(
@@ -330,6 +360,7 @@ export function registerCavemanMode(pi: ExtensionAPI): void {
   function refreshRuntimeState(ctx: ExtensionContext): void {
     const state = resolveCavemanModeState(
       ctx.sessionManager.getEntries() as readonly SessionEntryLike[],
+      getCavemanFlagOverride(pi),
       ctx.cwd
     );
     setEnabled(ctx, state.enabled, false);
@@ -344,11 +375,10 @@ export function registerCavemanMode(pi: ExtensionAPI): void {
   });
 
   pi.on("before_agent_start", (event: BeforeAgentStartEvent) => {
-    if (!cavemanModeEnabled) {
-      return;
-    }
-
-    const systemPrompt = applyCavemanPrompt(event.systemPrompt, true);
+    const systemPrompt = applyCavemanPrompt(
+      event.systemPrompt,
+      cavemanModeEnabled
+    );
 
     if (systemPrompt === event.systemPrompt) {
       return;

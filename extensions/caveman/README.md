@@ -69,3 +69,5 @@ Prompt behavior:
 ### Runtime behavior
 
 When active, caveman appends a system-prompt instruction before agent start and publishes generic extension status key `caveman` with value `🪨 caveman`. Status UIs can display the active mode through Pi's generic extension status channel. `pieditor` also has a dedicated `caveman` status-bar segment that reads the same status key when this extension is loaded.
+
+Child processes can override config/session state with `--caveman` or `--no-caveman`. Herdr-backed subagent launches rely on these child-native flags; real Herdr end-to-end validation is intentionally out of scope for this extension's normal tests.
