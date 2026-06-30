@@ -62,6 +62,27 @@ Evaluate the reviewed change for:
 - operational risk / on-call risk
 - test gaps for behavior introduced or changed
 
+## Maintainability smell baseline
+
+Use these code smells as review heuristics for maintainability, not as automatic findings:
+- Mysterious Name: a new or changed name hides purpose enough to slow safe edits.
+- Duplicated Code: copied logic makes future fixes likely to miss one path.
+- Feature Envy: behavior lives far from the data or abstraction it primarily uses.
+- Data Clumps: repeated parameter or field groups suggest a missing concept.
+- Primitive Obsession: raw strings, numbers, or booleans obscure domain rules or valid states.
+- Repeated Switches: duplicated branching over the same variants makes adding cases risky.
+- Shotgun Surgery: one behavior change now requires coordinated edits across many places.
+- Divergent Change: one module is being made responsible for unrelated reasons to change.
+- Speculative Generality: abstraction, options, or indirection are added before a concrete need.
+- Message Chains: callers reach through object chains and become coupled to internal shape.
+- Middle Man: a wrapper mostly forwards calls while adding maintenance surface.
+- Refused Bequest: an implementation inherits or conforms but cannot honor the inherited contract.
+
+Documented repository standards override these heuristics.
+Only report a smell when the reviewed change creates concrete maintainability impact that fits the qualifying finding rules.
+Use the normal P0-P3 priority rules.
+Name the smell in the finding title or explanation only when the label helps the author understand the issue.
+
 When reviewing tests:
 - check whether tests describe the expected behavior, not implementation details
 - check important edge cases and error paths for changed behavior
