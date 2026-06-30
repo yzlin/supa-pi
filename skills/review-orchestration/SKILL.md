@@ -16,6 +16,9 @@ Orchestrate a code review with selected reviewer agents, then synthesize one fin
 
 ## Orchestration contract
 
+- Treat the `/review` invocation packet as the canonical review contract.
+- For diff targets, use the packet's changed paths, exact inspect commands, and commit list metadata to inspect the reviewed change; do not expect full diff output in the packet.
+- For folder snapshots, review the snapshot basis without diff-target preflight metadata.
 - Delegate to selected reviewer agents when useful.
 - When delegating via the Agent tool, omit `max_turns` from reviewer Agent calls.
 - Keep each reviewer focused on the reviewed change and relevant files only.

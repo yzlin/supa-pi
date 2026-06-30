@@ -26,6 +26,13 @@ export interface GitExecResult {
 
 export type GitExec = (args: string[]) => Promise<GitExecResult>;
 
+export class GitChangedPathsError extends Error {
+  constructor(public readonly command: string) {
+    super(`Git command failed while resolving changed paths: git ${command}`);
+    this.name = "GitChangedPathsError";
+  }
+}
+
 export function tokenizeReviewTargetArgs(value: string): string[] {
   const tokens: string[] = [];
   let current = "";
@@ -253,13 +260,31 @@ export async function getChangedPaths(
   target: ReviewTarget,
   gitExec: GitExec
 ): Promise<string[]> {
+  try {
+    return await getChangedPathsOrThrow(target, gitExec);
+  } catch {
+    return [];
+  }
+}
+
+export async function getChangedPathsOrThrow(
+  target: ReviewTarget,
+  gitExec: GitExec
+): Promise<string[]> {
   const run = async (
     args: string[],
     options: { preserveLines?: boolean } = {}
   ) => {
-    const { stdout, code } = await gitExec(args);
+    const command = args.join(" ");
+    let result: GitExecResult;
+    try {
+      result = await gitExec(args);
+    } catch {
+      throw new GitChangedPathsError(command);
+    }
+    const { stdout, code } = result;
     if (code !== 0) {
-      return [];
+      throw new GitChangedPathsError(command);
     }
     const output = options.preserveLines ? stdout : stdout.trim();
     return output
@@ -282,6 +307,7 @@ export async function getChangedPaths(
     case "commit":
       return run([
         "diff-tree",
+        "--root",
         "--no-commit-id",
         "--name-only",
         "-r",

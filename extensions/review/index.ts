@@ -56,7 +56,9 @@ import {
 
 import {
   type GitExec,
+  GitChangedPathsError,
   getChangedPaths as getSharedChangedPaths,
+  getChangedPathsOrThrow,
   getMergeBase as getSharedMergeBase,
   parsePrReference,
   parseReviewPaths,
@@ -89,6 +91,7 @@ const ALL_REVIEWERS = [
 
 type ReviewerAgent = (typeof ALL_REVIEWERS)[number];
 type ReviewerSelectionMode = "auto" | "manual";
+type DiffReviewTarget = Exclude<ReviewTarget, { type: "folder" }>;
 
 const DEFAULT_REVIEWERS: ReviewerAgent[] = ["code-reviewer"];
 
@@ -480,6 +483,133 @@ function getUserFacingHint(target: ReviewTarget): string {
         : `folders: ${joined}`;
     }
   }
+}
+
+interface ReviewPreflightMetadata {
+  changedPaths: string[];
+  inspectCommands: string[];
+  commitList?: string;
+}
+
+async function getValidatedChangedPaths(
+  ctx: ExtensionCommandContext,
+  target: DiffReviewTarget,
+  gitExec: GitExec
+): Promise<string[] | null> {
+  try {
+    const changedPaths = await getChangedPathsOrThrow(target, gitExec);
+    if (changedPaths.length > 0) {
+      return changedPaths;
+    }
+  } catch (error) {
+    const detail =
+      error instanceof GitChangedPathsError ? `: git ${error.command}` : "";
+    ctx.ui.notify(`Could not resolve changed paths${detail}`, "error");
+    return null;
+  }
+
+  ctx.ui.notify("No changed paths found for review target", "error");
+  return null;
+}
+
+async function getReviewPreflightMetadata(
+  pi: ExtensionAPI,
+  ctx: ExtensionCommandContext,
+  target: DiffReviewTarget
+): Promise<ReviewPreflightMetadata | null> {
+  const gitExec = createGitExec(pi);
+
+  if (target.type === "uncommitted") {
+    const changedPaths = await getValidatedChangedPaths(ctx, target, gitExec);
+    if (!changedPaths) {
+      return null;
+    }
+
+    return {
+      changedPaths,
+      inspectCommands: [
+        "git status --porcelain --untracked-files=all",
+        "git diff --cached",
+        "git diff",
+      ],
+    };
+  }
+
+  if (target.type === "commit") {
+    const { code } = await gitExec(["rev-parse", `${target.sha}^{commit}`]);
+    if (code !== 0) {
+      ctx.ui.notify(`Invalid commit '${target.sha}'`, "error");
+      return null;
+    }
+
+    const changedPaths = await getValidatedChangedPaths(ctx, target, gitExec);
+    if (!changedPaths) {
+      return null;
+    }
+
+    return {
+      changedPaths,
+      inspectCommands: [`git show --stat --patch --find-renames ${target.sha}`],
+    };
+  }
+
+  const branch =
+    target.type === "baseBranch" ? target.branch : target.baseBranch;
+  const mergeBase = await getMergeBase(pi, branch);
+  if (!mergeBase) {
+    ctx.ui.notify(`Could not resolve merge base for '${branch}'`, "error");
+    return null;
+  }
+
+  const changedPaths = await getValidatedChangedPaths(ctx, target, gitExec);
+  if (!changedPaths) {
+    return null;
+  }
+
+  const commitList = (
+    await gitExec(["log", `${mergeBase}..HEAD`, "--oneline"])
+  ).stdout.trim();
+
+  return {
+    changedPaths,
+    inspectCommands: [
+      `git diff ${mergeBase}`,
+      `git log ${mergeBase}..HEAD --oneline`,
+    ],
+    commitList,
+  };
+}
+
+function formatReviewPreflightMetadata(
+  metadata: ReviewPreflightMetadata,
+  target: DiffReviewTarget
+): string {
+  const lines = [
+    "- Changed paths:",
+    ...metadata.changedPaths.map((changedPath) => `  - ${changedPath}`),
+  ];
+
+  if (metadata.inspectCommands.length > 0) {
+    lines.push(
+      "- Exact inspect commands (run these; do not expect full diff output in this packet):",
+      ...metadata.inspectCommands.map((command) => `  - ${command}`)
+    );
+  }
+
+  if (target.type === "uncommitted") {
+    lines.push(
+      "- Note: read untracked paths directly from the changed path list above."
+    );
+  }
+
+  if (metadata.commitList) {
+    lines.push(
+      "- Commit list:",
+      ...metadata.commitList.split("\n").map((commit) => `  - ${commit}`)
+    );
+  }
+
+  return lines.join("\n");
 }
 
 // Review preset options for the selector (keep this order stable)
@@ -1401,6 +1531,22 @@ export default function reviewExtension(pi: ExtensionAPI) {
     target: ReviewTarget,
     options?: { extraInstruction?: string; reviewers?: ReviewerAgent[] }
   ): Promise<boolean> {
+    let metadataPacket = "";
+    if (target.type !== "folder") {
+      const preflightMetadata = await getReviewPreflightMetadata(
+        pi,
+        ctx,
+        target
+      );
+      if (!preflightMetadata) {
+        return false;
+      }
+      metadataPacket = `\n${formatReviewPreflightMetadata(
+        preflightMetadata,
+        target
+      )}`;
+    }
+
     const prompt = await buildReviewPrompt(pi, target);
     const hint = getUserFacingHint(target);
     const projectGuidelines = await loadProjectReviewGuidelines(ctx.cwd);
@@ -1410,7 +1556,7 @@ export default function reviewExtension(pi: ExtensionAPI) {
     const selectedReviewers = reviewers
       .map((reviewer) => `  - ${reviewer}`)
       .join("\n");
-    let fullPrompt = `${REVIEW_INVOCATION_PREAMBLE}\n- Scope: ${hint}\n- Selected reviewers:\n${selectedReviewers}\n- Diff/snapshot instruction:\n${prompt}`;
+    let fullPrompt = `${REVIEW_INVOCATION_PREAMBLE}\n- Scope: ${hint}\n- Selected reviewers:\n${selectedReviewers}${metadataPacket}\n- Diff/snapshot instruction:\n${prompt}`;
 
     if (reviewCustomInstructions) {
       fullPrompt += `\n- Shared custom review instructions:\n${reviewCustomInstructions}`;

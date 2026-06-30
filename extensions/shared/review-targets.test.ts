@@ -153,7 +153,7 @@ describe("changed path resolution", () => {
       getChangedPaths({ type: "commit", sha: "abc123" }, gitExec)
     ).resolves.toEqual(["src/commit.ts"]);
     expect(commitCalls).toEqual([
-      ["diff-tree", "--no-commit-id", "--name-only", "-r", "abc123"],
+      ["diff-tree", "--root", "--no-commit-id", "--name-only", "-r", "abc123"],
     ]);
 
     await expect(
