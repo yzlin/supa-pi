@@ -43,28 +43,41 @@ import type {
   ExtensionCommandContext,
   ExtensionContext,
 } from "@earendil-works/pi-coding-agent";
-import { DynamicBorder } from "@earendil-works/pi-coding-agent";
+import {
+  DynamicBorder,
+  getMarkdownTheme,
+} from "@earendil-works/pi-coding-agent";
 import {
   Container,
   fuzzyFilter,
   Input,
+  Markdown,
   type SelectItem,
   SelectList,
   Spacer,
   Text,
 } from "@earendil-works/pi-tui";
+import { createWorkflowProgressUi } from "@yzlin/pi-subagents/workflow-progress";
 
 import {
-  type GitExec,
   GitChangedPathsError,
-  getChangedPaths as getSharedChangedPaths,
+  type GitExec,
   getChangedPathsOrThrow,
+  getChangedPaths as getSharedChangedPaths,
   getMergeBase as getSharedMergeBase,
   parsePrReference,
   parseReviewPaths,
   parseReviewTargetArgs,
   type ReviewTarget,
 } from "../shared/review-targets";
+import {
+  assertVerifierModelPolicy,
+  REVIEW_REPORT_MESSAGE_TYPE,
+  REVIEWER_MODEL_POLICY_MODEL,
+  type ReviewerAgent,
+  type ReviewWorkflowProgressUpdate,
+  runReviewWorkflow,
+} from "./workflow";
 
 const SECURITY_PATH_PATTERNS = [
   /(^|\/)(auth|permissions?|middleware|webhooks?|api|server)\//i,
@@ -89,7 +102,6 @@ const ALL_REVIEWERS = [
   "performance-reviewer",
 ] as const;
 
-type ReviewerAgent = (typeof ALL_REVIEWERS)[number];
 type ReviewerSelectionMode = "auto" | "manual";
 type DiffReviewTarget = Exclude<ReviewTarget, { type: "folder" }>;
 
@@ -99,6 +111,7 @@ const DEFAULT_REVIEWERS: ReviewerAgent[] = ["code-reviewer"];
 let reviewCustomInstructions: string | undefined;
 let reviewSelectedAgents: ReviewerAgent[] = DEFAULT_REVIEWERS;
 let reviewReviewerSelectionMode: ReviewerSelectionMode = "auto";
+let reviewVerifierModel: string | undefined;
 
 const REVIEW_SETTINGS_TYPE = "review-settings";
 const GH_SETUP_INSTRUCTIONS =
@@ -120,6 +133,7 @@ interface ReviewSettingsState {
   customInstructions?: string;
   selectedReviewers?: ReviewerAgent[];
   reviewerSelectionMode?: ReviewerSelectionMode;
+  verifierModel?: string;
 }
 
 function isReviewerAgent(value: string): value is ReviewerAgent {
@@ -153,6 +167,8 @@ function getReviewSettings(ctx: ExtensionContext): ReviewSettingsState {
     }
   }
 
+  const verifierModel = state?.verifierModel?.trim();
+
   return {
     customInstructions: state?.customInstructions?.trim() || undefined,
     selectedReviewers: normalizeReviewerSelection(
@@ -160,6 +176,7 @@ function getReviewSettings(ctx: ExtensionContext): ReviewSettingsState {
     ),
     reviewerSelectionMode:
       state?.reviewerSelectionMode === "manual" ? "manual" : "auto",
+    verifierModel: verifierModel || undefined,
   };
 }
 
@@ -168,6 +185,18 @@ function applyReviewSettings(ctx: ExtensionContext) {
   reviewCustomInstructions = state.customInstructions?.trim() || undefined;
   reviewSelectedAgents = state.selectedReviewers ?? DEFAULT_REVIEWERS;
   reviewReviewerSelectionMode = state.reviewerSelectionMode ?? "auto";
+  const verifierModel = state.verifierModel?.trim();
+  if (verifierModel) {
+    try {
+      assertVerifierModelPolicy(verifierModel);
+      assertVerifierModelAvailable(ctx, verifierModel);
+      reviewVerifierModel = verifierModel;
+    } catch {
+      reviewVerifierModel = undefined;
+    }
+    return;
+  }
+  reviewVerifierModel = undefined;
 }
 
 // Prompts (adapted from Codex)
@@ -638,17 +667,25 @@ const REVIEW_PRESETS = [
 ] as const;
 
 const TOGGLE_CUSTOM_INSTRUCTIONS_VALUE = "toggleCustomInstructions" as const;
+const SET_VERIFIER_MODEL_VALUE = "setVerifierModel" as const;
 
 type ReviewPresetValue =
   | (typeof REVIEW_PRESETS)[number]["value"]
-  | typeof TOGGLE_CUSTOM_INSTRUCTIONS_VALUE;
+  | typeof TOGGLE_CUSTOM_INSTRUCTIONS_VALUE
+  | typeof SET_VERIFIER_MODEL_VALUE;
 
 function persistReviewSettings(pi: ExtensionAPI) {
-  pi.appendEntry(REVIEW_SETTINGS_TYPE, {
+  const settings: ReviewSettingsState = {
     customInstructions: reviewCustomInstructions,
     selectedReviewers: reviewSelectedAgents,
     reviewerSelectionMode: reviewReviewerSelectionMode,
-  });
+  };
+
+  if (reviewVerifierModel) {
+    settings.verifierModel = reviewVerifierModel;
+  }
+
+  pi.appendEntry(REVIEW_SETTINGS_TYPE, settings);
 }
 
 function setReviewSelection(
@@ -667,6 +704,55 @@ function setReviewCustomInstructions(
 ) {
   reviewCustomInstructions = instructions?.trim() || undefined;
   persistReviewSettings(pi);
+}
+
+function setReviewVerifierModel(
+  pi: ExtensionAPI,
+  ctx: ExtensionContext,
+  verifierModel: string
+) {
+  const normalized = verifierModel.trim();
+  if (!normalized) {
+    reviewVerifierModel = undefined;
+    persistReviewSettings(pi);
+    return;
+  }
+  assertVerifierModelPolicy(normalized);
+  assertVerifierModelAvailable(ctx, normalized);
+  reviewVerifierModel = normalized;
+  persistReviewSettings(pi);
+}
+
+function assertVerifierModelAvailable(
+  ctx: ExtensionContext,
+  verifierModel: string
+) {
+  const [provider, ...idParts] = verifierModel.split("/");
+  const id = idParts.join("/");
+  if (!(provider && id)) {
+    throw new Error(`Invalid review verifier model '${verifierModel}'.`);
+  }
+
+  if (!ctx.modelRegistry.find(provider, id)) {
+    throw new Error(
+      `Review verifier model '${verifierModel}' is not available.`
+    );
+  }
+}
+
+function resolveReviewVerifierModel(
+  explicitModel?: string
+): string | undefined {
+  const normalizedExplicitModel = explicitModel?.trim();
+  if (normalizedExplicitModel) {
+    assertVerifierModelPolicy(normalizedExplicitModel);
+    return normalizedExplicitModel;
+  }
+
+  if (reviewVerifierModel) {
+    assertVerifierModelPolicy(reviewVerifierModel);
+    return reviewVerifierModel;
+  }
 }
 
 interface SessionMessageLike {
@@ -719,16 +805,32 @@ function getLatestReviewReport(
 
   for (let i = branch.length - 1; i >= 0; i--) {
     const entry = branch[i];
-    if (entry?.type !== "message") {
+    let text = "";
+    if (entry?.type === "message") {
+      const message = entry.message as SessionMessageLike;
+      if (message.role !== "assistant") {
+        continue;
+      }
+      text = extractTextContent(message.content);
+    } else if (
+      (entry?.type === "custom" || entry?.type === "custom_message") &&
+      (entry as { customType?: string }).customType ===
+        REVIEW_REPORT_MESSAGE_TYPE
+    ) {
+      const customEntry = entry as {
+        content?: string;
+        data?: { report?: string };
+        details?: { report?: string };
+      };
+      text =
+        customEntry.content ??
+        customEntry.data?.report ??
+        customEntry.details?.report ??
+        "";
+    } else {
       continue;
     }
 
-    const message = entry.message as SessionMessageLike;
-    if (message.role !== "assistant") {
-      continue;
-    }
-
-    const text = extractTextContent(message.content);
     if (!looksLikeReviewReport(text)) {
       continue;
     }
@@ -809,10 +911,16 @@ function dispatchFollowUpMessage(
 }
 
 export default function reviewExtension(pi: ExtensionAPI) {
-  function applyAllReviewState(ctx: ExtensionContext) {
-    applyReviewSettings(ctx);
-  }
-
+  pi.registerMessageRenderer<{ report?: string }>(
+    REVIEW_REPORT_MESSAGE_TYPE,
+    (message) =>
+      new Markdown(
+        String(message.details?.report ?? message.content ?? ""),
+        0,
+        0,
+        getMarkdownTheme()
+      )
+  );
   async function ensureGithubCliReady(ctx: ExtensionContext): Promise<boolean> {
     const ghVersion = await pi.exec("gh", ["--version"]);
     if (ghVersion.code !== 0) {
@@ -897,11 +1005,11 @@ export default function reviewExtension(pi: ExtensionAPI) {
   }
 
   pi.on("session_start", (_event, ctx) => {
-    applyAllReviewState(ctx);
+    applyReviewSettings(ctx);
   });
 
   pi.on("session_tree", (_event, ctx) => {
-    applyAllReviewState(ctx);
+    applyReviewSettings(ctx);
   });
 
   /**
@@ -956,6 +1064,13 @@ export default function reviewExtension(pi: ExtensionAPI) {
           value: TOGGLE_CUSTOM_INSTRUCTIONS_VALUE,
           label: customInstructionsLabel,
           description: customInstructionsDescription,
+        },
+        {
+          value: SET_VERIFIER_MODEL_VALUE,
+          label: "Set review verifier model",
+          description: reviewVerifierModel
+            ? `(current override: ${reviewVerifierModel})`
+            : "(using review-verifier agent default)",
         },
       ];
 
@@ -1033,6 +1148,35 @@ export default function reviewExtension(pi: ExtensionAPI) {
 
         setReviewCustomInstructions(pi, customInstructions);
         ctx.ui.notify("Custom review instructions saved", "info");
+        continue;
+      }
+
+      if (result === SET_VERIFIER_MODEL_VALUE) {
+        const verifierModel = await ctx.ui.editor(
+          `Enter verifier model (must differ from reviewer policy ${REVIEWER_MODEL_POLICY_MODEL}):`,
+          reviewVerifierModel ?? ""
+        );
+
+        if (verifierModel === null || verifierModel === undefined) {
+          ctx.ui.notify("Review verifier model not changed", "info");
+          continue;
+        }
+
+        try {
+          const cleared = !verifierModel.trim();
+          setReviewVerifierModel(pi, ctx, verifierModel);
+          ctx.ui.notify(
+            cleared
+              ? "Review verifier model cleared"
+              : "Review verifier model saved",
+            "info"
+          );
+        } catch (error) {
+          ctx.ui.notify(
+            error instanceof Error ? error.message : String(error),
+            "error"
+          );
+        }
         continue;
       }
 
@@ -1523,13 +1667,34 @@ export default function reviewExtension(pi: ExtensionAPI) {
     });
   }
 
+  function createReviewProgressPublisher(ctx: ExtensionCommandContext) {
+    const controller = createWorkflowProgressUi(ctx, {
+      statusKey: "review",
+      widgetKey: "review-progress",
+      widgetPlacement: "aboveEditor",
+    });
+
+    return {
+      clear() {
+        controller?.clear();
+      },
+      publish(progress: ReviewWorkflowProgressUpdate) {
+        controller?.update(progress.envelope);
+      },
+    };
+  }
+
   /**
    * Execute the review
    */
   async function executeReview(
     ctx: ExtensionCommandContext,
     target: ReviewTarget,
-    options?: { extraInstruction?: string; reviewers?: ReviewerAgent[] }
+    options?: {
+      extraInstruction?: string;
+      reviewers?: ReviewerAgent[];
+      verifierModel?: string;
+    }
   ): Promise<boolean> {
     let metadataPacket = "";
     if (target.type !== "folder") {
@@ -1553,26 +1718,60 @@ export default function reviewExtension(pi: ExtensionAPI) {
     const reviewers = normalizeReviewerSelection(
       options?.reviewers ?? reviewSelectedAgents
     );
+    const verifierModel = options?.verifierModel;
+    if (verifierModel) {
+      assertVerifierModelPolicy(verifierModel);
+    }
     const selectedReviewers = reviewers
       .map((reviewer) => `  - ${reviewer}`)
       .join("\n");
-    let fullPrompt = `${REVIEW_INVOCATION_PREAMBLE}\n- Scope: ${hint}\n- Selected reviewers:\n${selectedReviewers}${metadataPacket}\n- Diff/snapshot instruction:\n${prompt}`;
+    let invocationPacket = `${REVIEW_INVOCATION_PREAMBLE}\n- Scope: ${hint}\n- Selected reviewers:\n${selectedReviewers}${metadataPacket}\n- Diff/snapshot instruction:\n${prompt}`;
 
     if (reviewCustomInstructions) {
-      fullPrompt += `\n- Shared custom review instructions:\n${reviewCustomInstructions}`;
+      invocationPacket += `\n- Shared custom review instructions:\n${reviewCustomInstructions}`;
     }
 
     if (options?.extraInstruction?.trim()) {
-      fullPrompt += `\n- Additional user-provided review instruction:\n${options.extraInstruction.trim()}`;
+      invocationPacket += `\n- Additional user-provided review instruction:\n${options.extraInstruction.trim()}`;
     }
 
-    if (projectGuidelines) {
-      fullPrompt += `\n- Project review guidelines:\n${projectGuidelines}`;
+    if (ctx.hasUI !== false) {
+      ctx.ui.notify(
+        `Starting review workflow: ${hint} [${reviewers.join(", ")}]`,
+        "info"
+      );
     }
 
-    ctx.ui.notify(`Starting review: ${hint} [${reviewers.join(", ")}]`, "info");
+    const progressPublisher = createReviewProgressPublisher(ctx);
+    let result: Awaited<ReturnType<typeof runReviewWorkflow>>;
+    try {
+      result = await runReviewWorkflow(pi, ctx, {
+        cwd: ctx.cwd,
+        scopeHint: hint,
+        invocationPacket,
+        reviewers,
+        verifierModel,
+        projectGuidelines,
+        signal: ctx.signal,
+        onProgress: progressPublisher?.publish,
+      });
+    } finally {
+      progressPublisher?.clear();
+    }
 
-    pi.sendUserMessage(fullPrompt);
+    pi.sendMessage({
+      customType: REVIEW_REPORT_MESSAGE_TYPE,
+      content: result.report,
+      display: true,
+      details: {
+        report: result.report,
+        verifier: result.verifier,
+        reviewers: result.reviewerOutputs,
+      },
+    });
+    if (ctx.hasUI !== false) {
+      ctx.ui.notify("Review workflow complete", "info");
+    }
     return true;
   }
 
@@ -1602,10 +1801,7 @@ export default function reviewExtension(pi: ExtensionAPI) {
     description:
       "Review code changes (PR, uncommitted, branch, commit, or folder)",
     handler: async (args, ctx) => {
-      if (!ctx.hasUI) {
-        ctx.ui.notify("Review requires interactive mode", "error");
-        return;
-      }
+      applyReviewSettings(ctx);
 
       // Check if we're in a git repository
       const { code } = await pi.exec("git", ["rev-parse", "--git-dir"]);
@@ -1617,25 +1813,37 @@ export default function reviewExtension(pi: ExtensionAPI) {
       // Try to parse direct arguments
       let target: ReviewTarget | null = null;
       let fromSelector = false;
-      let extraInstruction: string | undefined;
-      let reviewers: ReviewerAgent[] | undefined;
-      let useAutoReviewers = false;
       const parsed = parseArgs(args);
       if (parsed.error) {
         ctx.ui.notify(parsed.error, "error");
         return;
       }
-      extraInstruction = parsed.extraInstruction?.trim() || undefined;
-      reviewers = parsed.reviewers;
-      useAutoReviewers = parsed.useAutoReviewers ?? false;
+      const extraInstruction = parsed.extraInstruction?.trim() || undefined;
+      const reviewers = parsed.reviewers;
+      const useAutoReviewers = parsed.useAutoReviewers ?? false;
+      const verifierModel = parsed.verifierModel?.trim() || undefined;
+      if (verifierModel) {
+        try {
+          setReviewVerifierModel(pi, ctx, verifierModel);
+        } catch (error) {
+          ctx.ui.notify(
+            error instanceof Error ? error.message : String(error),
+            "error"
+          );
+          return;
+        }
+      }
 
+      const isHeadless = ctx.hasUI === false;
       if (parsed.target) {
         if (parsed.target.type === "pr") {
           // Handle PR checkout (async operation)
           target = await handlePrCheckout(ctx, parsed.target.ref);
           if (!target) {
             ctx.ui.notify(
-              "PR review failed. Returning to review menu.",
+              isHeadless
+                ? "PR review failed."
+                : "PR review failed. Returning to review menu.",
               "warning"
             );
           }
@@ -1644,9 +1852,24 @@ export default function reviewExtension(pi: ExtensionAPI) {
         }
       }
 
-      // If no args or invalid args, show selector
+      // If no args or invalid args, show selector when UI is available.
       if (!target) {
+        if (isHeadless) {
+          ctx.ui.notify(
+            "Headless /review requires a direct target and reviewer mode (--reviewers or --auto-reviewers).",
+            "error"
+          );
+          return;
+        }
         fromSelector = true;
+      }
+
+      if (isHeadless && !reviewers?.length && !useAutoReviewers) {
+        ctx.ui.notify(
+          "Headless /review requires a direct target and reviewer mode (--reviewers or --auto-reviewers).",
+          "error"
+        );
+        return;
       }
 
       while (true) {
@@ -1675,10 +1898,20 @@ export default function reviewExtension(pi: ExtensionAPI) {
           reviewerSelection.selectionMode
         );
 
-        await executeReview(ctx, target, {
-          extraInstruction,
-          reviewers: reviewerSelection.reviewers,
-        });
+        const resolvedVerifierModel = resolveReviewVerifierModel(verifierModel);
+
+        try {
+          await executeReview(ctx, target, {
+            extraInstruction,
+            reviewers: reviewerSelection.reviewers,
+            verifierModel: resolvedVerifierModel,
+          });
+        } catch (error) {
+          ctx.ui.notify(
+            error instanceof Error ? error.message : String(error),
+            "error"
+          );
+        }
         return;
       }
     },

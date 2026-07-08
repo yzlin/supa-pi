@@ -15,6 +15,7 @@ export interface ParsedReviewTargetArgs {
   extraInstruction?: string;
   reviewers?: string[];
   useAutoReviewers?: boolean;
+  verifierModel?: string;
   yes?: boolean;
   error?: string;
 }
@@ -27,8 +28,11 @@ export interface GitExecResult {
 export type GitExec = (args: string[]) => Promise<GitExecResult>;
 
 export class GitChangedPathsError extends Error {
-  constructor(public readonly command: string) {
+  readonly command: string;
+
+  constructor(command: string) {
     super(`Git command failed while resolving changed paths: git ${command}`);
+    this.command = command;
     this.name = "GitChangedPathsError";
   }
 }
@@ -98,6 +102,7 @@ export function parseReviewTargetArgs(
   let extraInstruction: string | undefined;
   let reviewers: string[] | undefined;
   let useAutoReviewers = false;
+  let verifierModel: string | undefined;
   let yes = false;
 
   for (let i = 0; i < rawParts.length; i++) {
@@ -146,6 +151,21 @@ export function parseReviewTargetArgs(
       continue;
     }
 
+    if (part === "--verifier-model") {
+      const next = rawParts[i + 1];
+      if (!next) {
+        return { target: null, error: "Missing value for --verifier-model" };
+      }
+      verifierModel = next;
+      i += 1;
+      continue;
+    }
+
+    if (part.startsWith("--verifier-model=")) {
+      verifierModel = part.slice("--verifier-model=".length);
+      continue;
+    }
+
     if (part === "--yes") {
       yes = true;
       continue;
@@ -161,7 +181,13 @@ export function parseReviewTargetArgs(
     };
   }
 
-  const base = { extraInstruction, reviewers, useAutoReviewers, yes };
+  const base = {
+    extraInstruction,
+    reviewers,
+    useAutoReviewers,
+    verifierModel,
+    yes,
+  };
   if (parts.length === 0) {
     return { target: null, ...base };
   }

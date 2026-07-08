@@ -39,6 +39,7 @@
     ]
   },
   "dependencies": {
+    "@yzlin/pi-subagents": "^0.6.0",
     "diff": "^8.0.4",
     "ignore": "^7.0.5"
   },

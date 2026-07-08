@@ -5,7 +5,7 @@ description: Orchestrate compact multi-agent code reviews for /review. Use when 
 
 # Review Orchestration
 
-Orchestrate a code review with selected reviewer agents, then synthesize one final report.
+Review the requested change with selected reviewer agents. In the current `/review` implementation, the extension performs direct pi-subagents orchestration and renders the final Markdown report from validated JSON.
 
 ## Reviewer agents
 
@@ -14,21 +14,20 @@ Orchestrate a code review with selected reviewer agents, then synthesize one fin
 - `database-reviewer`: schema, queries, migrations, indexes, transactions, and RLS
 - `performance-reviewer`: latency, throughput, memory, bundle size, rendering, and scalability regressions
 
-## Orchestration contract
+## Direct workflow contract
 
 - Treat the `/review` invocation packet as the canonical review contract.
 - For diff targets, use the packet's changed paths, exact inspect commands, and commit list metadata to inspect the reviewed change; do not expect full diff output in the packet.
 - For folder snapshots, review the snapshot basis without diff-target preflight metadata.
-- Delegate to selected reviewer agents when useful.
-- When delegating via the Agent tool, omit `max_turns` from reviewer Agent calls.
-- Keep each reviewer focused on the reviewed change and relevant files only.
-- Merge reviewer outputs into one final report.
-- De-duplicate overlapping findings.
-- Prefer the highest-confidence, highest-severity version of overlapping findings.
+- When invoked as a selected reviewer agent, do not delegate to other reviewers; inspect only your assigned concerns and return the JSON schema requested by the prompt.
+- The extension validates reviewer JSON, performs one repair retry on invalid JSON, merges nearby duplicate candidates, and prefers the highest-severity candidate before verifier review.
+- `review-verifier` independently inspects changed code/cited locations before accepting candidates; low-confidence verifier findings are filtered from the rendered report.
+- If reviewer agents return no findings, the extension skips `review-verifier` and renders a compatible “Code looks good” report.
+- Human reviewer callouts come deterministically from reviewer outputs and stay separate from findings; verifier callouts are ignored.
 - Do not include speculative issues.
 - Only report issues introduced by the reviewed change or directly exposed by it.
 - Keep non-blocking human callouts separate from findings.
-- Do not use pi task tools (`TaskCreate`, `TaskUpdate`, `TaskList`, `TaskExecute`, or `TaskOutput`) for review orchestration. Use reviewer Agent calls directly and synthesize the final report in this conversation.
+- Do not use pi task tools (`TaskCreate`, `TaskUpdate`, `TaskList`, `TaskExecute`, or `TaskOutput`) for review orchestration. If manually orchestrating outside the extension workflow, use reviewer Agent calls directly and synthesize the final report in this conversation.
 
 ## Review guidelines
 
@@ -47,7 +46,19 @@ Prefer fail-fast error handling. Flag catch blocks that hide failure signals, re
 - Do not flag trivial style issues unless they obscure meaning or violate documented standards.
 - Do not generate a full PR fix.
 
-## Required final output
+## Reviewer JSON output
+
+When the prompt requests JSON, return only that JSON object with:
+
+- `reviewer`
+- `verdict`: `correct` or `needs attention`
+- `findings`: prioritized `P0`..`P3` findings with `title`, `file`, `line`, `why`, and `change`
+- `humanReviewerCallouts`: non-blocking callouts only
+- `notes`
+
+## Manual final report shape
+
+If running review orchestration manually instead of through the extension, synthesize this Markdown shape:
 
 ## Review Scope
 - what was reviewed
@@ -63,6 +74,7 @@ For each finding, include:
 - `[P0]`..`[P3]` and short title
 - File location (`path/to/file.ext:line`)
 - Source reviewer (`code-reviewer`, `security-reviewer`, `database-reviewer`, or `performance-reviewer`)
+- Verifier opinion (`accepted (high|medium) — <one-sentence evidence reason>`) for verified findings
 - Why it matters
 - What should change
 

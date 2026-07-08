@@ -5,6 +5,7 @@
     "": {
       "name": "supa-pi",
       "dependencies": {
+        "@yzlin/pi-subagents": "^0.6.0",
         "diff": "^8.0.4",
         "ignore": "^7.0.5",
       },
@@ -181,6 +182,8 @@
     "@types/node": ["@types/node@25.9.1", "", { "dependencies": { "undici-types": ">=7.24.0 <7.24.7" } }, "sha512-xfrlY7UD5rMJk3ZVJP8BNzS28J36YJg+xp+LPXV1TdWxr8uMH5A860QNxYDGQe/ylDSgjxE52Q9VnO7p75tJxg=="],
 
     "@types/retry": ["@types/retry@0.12.0", "", {}, "sha512-wWKOClTTiizcZhXnPY4wikVAwmdYHp8q6DmC+EJUzAMsycb7HB32Kh9RN4+0gExjmPmZSAQjgURXIGATPegAvA=="],
+
+    "@yzlin/pi-subagents": ["@yzlin/pi-subagents@0.6.0", "", { "peerDependencies": { "@earendil-works/pi-agent-core": "*", "@earendil-works/pi-ai": "*", "@earendil-works/pi-coding-agent": "*", "@earendil-works/pi-tui": "*", "typebox": "*" } }, "sha512-0txdGDCArG4MzIqA3HyU037IiFr9iJW89kTf472cHV8mNIaSjXP6FH4LEwJASdq/FfS4isoQQalYVlqdQJd/BA=="],
 
     "@yzlin/pieditor": ["@yzlin/pieditor@1.0.0", "", { "dependencies": { "@mariozechner/clipboard": "^0.3.5", "ignore": "^7.0.5" }, "peerDependencies": { "@earendil-works/pi-ai": "^0.74.0", "@earendil-works/pi-coding-agent": "^0.74.0", "@earendil-works/pi-tui": "^0.74.0", "typebox": "^1.1.34" } }, "sha512-eQ9ZkBPwd9iikfgUXKvqivF6+ly6yukwvf/IFvKnmWxtHl7xsH0bPFOEADrUHzZL2bkNnh/6jWTq6GAQM56/MQ=="],
 

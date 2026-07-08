@@ -4,7 +4,7 @@ Read when changing `/review`, `/review-summary`, `/review-fix`, reviewer-agent o
 
 ## `/review` reviewer orchestration
 
-`/review` stays prompt-orchestrated. The extension builds a review prompt for the main agent, which then decides whether to delegate to the selected reviewer agents:
+`/review` runs a direct pi-subagents workflow. The extension builds a typed review packet, launches the selected reviewer agents, validates their JSON outputs, merges duplicate candidate findings, and renders the final Markdown report. It launches `review-verifier` only when reviewer agents return at least one candidate finding:
 
 - `code-reviewer` for general correctness, maintainability, performance, and operational risk.
 - `security-reviewer` for auth, permissions, secrets, input handling, and unsafe trust boundaries.
@@ -15,11 +15,13 @@ Reviewer selection can be automatic or explicit. Auto-selection always includes 
 
 For diff targets (`uncommitted`, base branch, commit, or pull request), `/review` performs preflight validation before sending the orchestration packet. It fails fast when the target is invalid or no changed paths are found. The packet includes changed paths, exact inspect commands, and, when available for merge-base comparisons, commit list metadata. Inspect commands are target-specific: uncommitted reviews use `git status --porcelain --untracked-files=all`, `git diff --cached`, and `git diff`; base branch and pull request reviews use `git diff <merge-base>` plus `git log <merge-base>..HEAD --oneline`; commit reviews use `git show --stat --patch --find-renames <sha>`. Folder snapshot reviews do not receive diff-target preflight metadata.
 
-When the prompt instructs the main agent to delegate reviewer work, reviewer calls use the Agent tool only and must not set `max_turns`. Reviews need enough turns for each reviewer to inspect relevant files, reason about the diff or snapshot, and return findings. If a reviewer is not useful for the selected scope, the orchestrating agent may skip that reviewer and mark it as not used in Reviewer Coverage.
+Reviewer and verifier outputs must be strict JSON. The extension validates model output before acting, performs one JSON repair retry per invalid reviewer/verifier output, and fails the whole review if any selected reviewer fails at runtime or still returns invalid JSON after repair.
 
-The prompt contract forbids pi task tools (`TaskCreate`, `TaskUpdate`, `TaskList`, `TaskExecute`, or `TaskOutput`) during review orchestration. Review tasks persist across follow-up commands, so stale pending or in-progress review tasks can confuse `/review-fix` sessions.
+During direct orchestration, `/review` publishes workflow progress through the shared `review-progress` above-editor widget/status while running, showing the current workflow phase, active agents, latest workflow log, and one compact active-agent activity line for reviewer/verifier agents. Live activity prefers parsed tool calls as pi-tasks-like verb + target snippets (for example, `reading extensions/review/workflow.ts`, `running bun test extensions/review/index.test.ts`, or `searching outputFile`) and falls back to assistant transcript text when no tool activity is available. User prompts are never shown, and completed agents still show compact result snippets. Successful and failed runs clear the transient widget and post the final `review-report` or failure notification separately.
 
-The final `/review` response merges reviewer outputs into one report, de-duplicates overlapping findings, keeps non-blocking human callouts separate, and reports only issues introduced or directly exposed by the reviewed change.
+The verifier uses the default model from `agents/review-verifier.md` unless `/review --verifier-model <provider/model>` or the interactive review selector configures an override. Any override must differ from the reviewer model policy (`openai-codex/gpt-5.5`).
+
+The workflow de-duplicates nearby overlapping reviewer findings before verification, preserving all source reviewers and keeping the highest-severity candidate. The verifier independently inspects changed code and cited locations before accepting candidate findings. The final `/review` response is rendered by extension code from validated verifier JSON, filters out low-confidence verifier findings, keeps deterministic reviewer callouts separate from verifier output, includes verifier confidence/reason for accepted high/medium findings, and reports only issues introduced or directly exposed by the reviewed change. If reviewer agents return no findings, the workflow skips `review-verifier` and renders a compatible “Code looks good” report with reviewer coverage and human callouts.
 
 ## `/review-fix` executor delegation
 
