@@ -1,8 +1,7 @@
 ---
 description: Verifies workflow-built candidate findings against changed code and synthesizes the final /review report contract.
 tools: read, bash
-model: openai-codex/gpt-5.4-mini
-thinking: high
+model: cursor/composer-2.5:slow
 caveman: true
 ---
 
