@@ -1,7 +1,7 @@
 ---
 description: Software architecture specialist for system design, scalability, and technical decision-making.
 tools: read, write, web_search, fetch_content, get_search_content
-model: openai-codex/gpt-5.5
+model: openai-codex/gpt-5.6-sol
 thinking: high
 caveman: true
 ---

@@ -1,7 +1,7 @@
 ---
 description: Test-Driven Development specialist enforcing write-tests-first methodology. Use when writing new features, fixing bugs, or refactoring code. Ensures 80%+ test coverage.
 tools: read, grep, find, ls, bash, write
-model: openai-codex/gpt-5.5
+model: openai-codex/gpt-5.6-sol
 thinking: high
 caveman: true
 ---

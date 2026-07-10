@@ -1,7 +1,7 @@
 ---
 description: Expert planning specialist for complex features and refactoring. Use for implementation planning, architectural changes, or complex refactoring.
 tools: read, grep, find, ls, write
-model: openai-codex/gpt-5.5
+model: openai-codex/gpt-5.6-sol
 thinking: high
 caveman: true
 ---

@@ -1,7 +1,7 @@
 ---
 description: Documentation and codemap specialist. Use for updating codemaps and documentation.
 tools: read, grep, find, ls, bash, write
-model: openai-codex/gpt-5.5
+model: openai-codex/gpt-5.6-terra
 thinking: high
 caveman: true
 ---

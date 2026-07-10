@@ -1,7 +1,7 @@
 ---
 description: Dead code cleanup and consolidation specialist. Use for removing unused code, duplicates, and refactoring.
 tools: read, grep, find, ls, bash, write
-model: openai-codex/gpt-5.5
+model: openai-codex/gpt-5.6-sol
 thinking: high
 caveman: true
 ---
