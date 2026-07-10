@@ -1,7 +1,7 @@
 ---
 description: Verifies workflow-built candidate findings against changed code and synthesizes the final /review report contract.
 tools: read, bash
-model: cursor/composer-2.5:slow
+model: cursor/composer-2.5
 caveman: false
 ---
 
@@ -28,6 +28,7 @@ When invoked:
 Submit exactly one final result through the `structured_output` tool. Do not emit the final result as assistant text and do not respond after the tool call.
 
 The submitted object must contain only:
+
 - `reviewScope`: an array of short scope strings
 - `verdict`: `"correct"` or `"needs attention"`
 - `findings`: an array of accepted candidate findings
