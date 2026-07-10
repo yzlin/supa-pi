@@ -158,10 +158,11 @@ The setup script installs these Pi packages if they are not already present. It 
   - `bun run check:write`
 - This repo uses Bun (`bun.lock` present)
 - Peer dependencies include:
-  - `@earendil-works/pi-coding-agent`
-  - `@earendil-works/pi-ai`
-  - `@earendil-works/pi-tui`
+  - `@earendil-works/pi-coding-agent` (`>=0.80.6`)
+  - `@earendil-works/pi-ai` (`>=0.80.6`)
+  - `@earendil-works/pi-tui` (`>=0.80.6`)
   - `typebox` (`^1.1.34`)
+- Pi version policy: consumers must provide Pi `0.80.6` or newer. Local development pins `@earendil-works/pi-agent-core`, `@earendil-works/pi-ai`, `@earendil-works/pi-coding-agent`, and `@earendil-works/pi-tui` together at exactly `0.80.6`; upgrade that set together and regenerate `bun.lock`.
 
 ## When to use this repo
 

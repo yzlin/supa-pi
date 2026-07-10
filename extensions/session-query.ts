@@ -10,7 +10,8 @@
  * Credits: This extension was originally developed by @pasky. Modified and enhanced by @yzlin.
  */
 
-import { complete, type Message } from "@earendil-works/pi-ai";
+import type { Message } from "@earendil-works/pi-ai";
+import { complete } from "@earendil-works/pi-ai/compat";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import {
   convertToLlm,

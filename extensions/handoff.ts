@@ -23,12 +23,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import type { AgentMessage } from "@earendil-works/pi-agent-core";
-import {
-  type Api,
-  complete,
-  type Message,
-  type Model,
-} from "@earendil-works/pi-ai";
+import type { Api, Message, Model } from "@earendil-works/pi-ai";
+import { complete } from "@earendil-works/pi-ai/compat";
 import type {
   ExtensionAPI,
   ExtensionCommandContext,

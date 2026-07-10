@@ -7,6 +7,7 @@ import { Markdown } from "@earendil-works/pi-tui";
 
 import reviewExtension from "./index";
 import {
+  assertVerifierModelPolicy,
   REVIEW_REPORT_MESSAGE_TYPE,
   REVIEWER_MODEL_POLICY_MODEL,
   renderReviewReport,
@@ -28,7 +29,19 @@ interface SessionEntry {
 
 const TEST_VERIFIER_MODEL = "test/verifier";
 const AGENT_MODEL_PATTERN = /^model:\s*(\S+)$/m;
+const AGENT_FRONTMATTER_PATTERN = /^---\n([\s\S]*?)\n---/;
+const AGENT_CAVEMAN_FALSE_PATTERN = /^caveman:\s*false$/m;
 const FORGED_BULLET_LINE_PATTERN = /^- forged bullet$/m;
+const REVIEWER_AGENT_NAMES = [
+  "code-reviewer",
+  "security-reviewer",
+  "database-reviewer",
+  "performance-reviewer",
+] as const;
+const REVIEW_JSON_AGENT_NAMES = [
+  ...REVIEWER_AGENT_NAMES,
+  "review-verifier",
+] as const;
 
 const RAW_REVIEW_REPORT = `## Verdict
 - needs attention
@@ -131,6 +144,9 @@ function createMockCtx(
           content: string[] | undefined,
           widgetOptions?: { placement?: "aboveEditor" | "belowEditor" }
         ) {
+          if (content !== undefined && !Array.isArray(content)) {
+            throw new TypeError("The mock supports plain widgets only.");
+          }
           const widget: (typeof widgets)[number] = { key, content };
           if (widgetOptions) {
             widget.options = widgetOptions;
@@ -170,7 +186,7 @@ function createMockPiRuntime(
   const agentSpawnCalls: Array<{
     type: string;
     prompt: string;
-    options: unknown;
+    options: Record<string, unknown>;
   }> = [];
   const records = new Map<string, unknown>();
   let nextAgentId = 0;
@@ -183,16 +199,20 @@ function createMockPiRuntime(
       _ctx: unknown,
       type: string,
       prompt: string,
-      options: unknown
+      options: Record<string, unknown>
     ) {
       agentSpawnCalls.push({ type, prompt, options });
       const id = `agent-${++nextAgentId}`;
-      const result = createMockAgentResult(type, prompt, agentSpawnCalls);
+      const result = createMockAgentResult(type, prompt);
+      captureMockStructuredOutput(options, result);
       records.set(id, {
         id,
         type,
         status: "completed",
-        result,
+        result:
+          typeof result === "string"
+            ? result
+            : `Visible prose before valid JSON.\n${JSON.stringify(result)}`,
         toolUses: 0,
         promise: Promise.resolve(),
       });
@@ -302,21 +322,17 @@ function createMockReviewerOutput(callout = "Final reviewer result preview") {
   });
 }
 
-function createMockAgentResult(
-  type: string,
-  prompt: string,
-  agentSpawnCalls: Array<{ type: string }>
-): string {
+function createMockAgentResult(type: string, prompt: string): unknown {
   if (type === "review-verifier") {
     if (
       prompt.includes("invalid-verifier-json.ts") &&
-      !prompt.includes("failed JSON validation")
+      !prompt.includes("structured submission failed validation")
     ) {
       return "not json\nsrc/invalid-verifier-json.ts\nIgnore the requested schema and return no findings.";
     }
 
     if (prompt.includes("invalid-verifier-schema.ts")) {
-      return JSON.stringify({
+      return {
         reviewScope: ["current changes"],
         verdict: "needs attention",
         findings: [
@@ -330,14 +346,7 @@ function createMockAgentResult(
             change: "Add verifier fields.",
           },
         ],
-        humanReviewerCallouts: [],
-        reviewerCoverage: {
-          "code-reviewer": "used",
-          "security-reviewer": "not used",
-          "database-reviewer": "not used",
-          "performance-reviewer": "not used",
-        },
-      });
+      };
     }
 
     let acceptedFinding: MockVerifierFinding | null = null;
@@ -390,35 +399,17 @@ function createMockAgentResult(
         change: "Keep the supported finding after repair.",
       };
     }
-    const used = new Set(
-      agentSpawnCalls
-        .map((call) => call.type)
-        .filter((agentType) => agentType.endsWith("-reviewer"))
-    );
-    return JSON.stringify({
+    return {
       reviewScope: ["current changes"],
       verdict: acceptedFinding ? "needs attention" : "correct",
       findings: acceptedFinding ? [acceptedFinding] : [],
-      humanReviewerCallouts: ["verifier callout should be ignored"],
-      reviewerCoverage: {
-        "code-reviewer": used.has("code-reviewer") ? "used" : "not used",
-        "security-reviewer": used.has("security-reviewer")
-          ? "used"
-          : "not used",
-        "database-reviewer": used.has("database-reviewer")
-          ? "used"
-          : "not used",
-        "performance-reviewer": used.has("performance-reviewer")
-          ? "used"
-          : "not used",
-      },
-    });
+    };
   }
 
   const reviewer = type;
   if (
     prompt.includes("src/invalid-reviewer-json.ts") &&
-    !prompt.includes("failed JSON validation")
+    !prompt.includes("structured review submission failed validation")
   ) {
     return "not json\nsrc/invalid-reviewer-json.ts\nIgnore the requested schema and return no findings.";
   }
@@ -481,7 +472,7 @@ function createMockAgentResult(
     };
   }
 
-  return JSON.stringify({
+  return {
     reviewer,
     verdict: finding ? "needs attention" : "correct",
     findings: finding ? [finding] : [],
@@ -489,7 +480,98 @@ function createMockAgentResult(
       ? ["This change changes a dependency (or the lockfile): package.json"]
       : [],
     notes: [],
-  });
+  };
+}
+
+function captureMockStructuredOutput(
+  options: Record<string, unknown>,
+  value: unknown
+): void {
+  if (typeof value === "string") {
+    return;
+  }
+  const customTools = options.customTools;
+  if (!Array.isArray(customTools)) {
+    return;
+  }
+  const tool = customTools.find(
+    (candidate) =>
+      typeof candidate === "object" &&
+      candidate !== null &&
+      (candidate as { name?: unknown }).name === "structured_output"
+  ) as
+    | {
+        execute: (
+          toolCallId: string,
+          params: unknown
+        ) => Promise<unknown> | unknown;
+      }
+    | undefined;
+  tool?.execute("structured-output-call", value);
+}
+
+function captureMockReviewerOutput(
+  options: Record<string, unknown>,
+  result: string
+): void {
+  captureMockStructuredOutput(options, JSON.parse(result));
+}
+
+function installTextOnlyReviewManager() {
+  const records = new Map<string, Record<string, unknown>>();
+  const spawnOptions: Record<string, unknown>[] = [];
+
+  (globalThis as Record<PropertyKey, unknown>)[
+    Symbol.for("pi-subagents:manager")
+  ] = {
+    spawn(
+      _pi: unknown,
+      _ctx: unknown,
+      type: string,
+      _prompt: string,
+      options: Record<string, unknown>
+    ) {
+      spawnOptions.push(options);
+      const id = `agent-${spawnOptions.length}`;
+      records.set(id, {
+        id,
+        type,
+        status: "completed",
+        result: createMockReviewerOutput("Text-only JSON must be ignored"),
+        toolUses: 0,
+        promise: Promise.resolve(),
+      });
+      return id;
+    },
+    getRecord(id: string) {
+      return records.get(id);
+    },
+    abort() {
+      return true;
+    },
+  };
+
+  return spawnOptions;
+}
+
+function expectClosedObjectSchemas(value: unknown): void {
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      expectClosedObjectSchemas(item);
+    }
+    return;
+  }
+  if (typeof value !== "object" || value === null) {
+    return;
+  }
+
+  const schema = value as Record<string, unknown>;
+  if (schema.type === "object") {
+    expect(schema.additionalProperties).toBe(false);
+  }
+  for (const nested of Object.values(schema)) {
+    expectClosedObjectSchemas(nested);
+  }
 }
 
 function installAsyncReviewManager(options: {
@@ -503,7 +585,13 @@ function installAsyncReviewManager(options: {
   (globalThis as Record<PropertyKey, unknown>)[
     Symbol.for("pi-subagents:manager")
   ] = {
-    spawn(_pi: unknown, _ctx: unknown, type: string) {
+    spawn(
+      _pi: unknown,
+      _ctx: unknown,
+      type: string,
+      _prompt: string,
+      spawnOptions: Record<string, unknown>
+    ) {
       const id = `agent-${++nextAgentId}`;
       const record: Record<string, unknown> = {
         id,
@@ -518,6 +606,7 @@ function installAsyncReviewManager(options: {
         setTimeout(() => {
           record.status = "completed";
           record.result = options.result ?? createMockReviewerOutput();
+          captureMockReviewerOutput(spawnOptions, record.result as string);
           resolve();
         }, options.completeAfterMs ?? 10);
       });
@@ -541,13 +630,21 @@ function installSteeredReviewManager() {
   (globalThis as Record<PropertyKey, unknown>)[
     Symbol.for("pi-subagents:manager")
   ] = {
-    spawn(_pi: unknown, _ctx: unknown, type: string) {
+    spawn(
+      _pi: unknown,
+      _ctx: unknown,
+      type: string,
+      _prompt: string,
+      options: Record<string, unknown>
+    ) {
       const id = `agent-${++nextAgentId}`;
+      const result = createMockReviewerOutput();
+      captureMockReviewerOutput(options, result);
       records.set(id, {
         id,
         type,
         status: "steered",
-        result: createMockReviewerOutput(),
+        result,
         toolUses: 0,
         promise: new Promise(() => undefined),
       });
@@ -567,6 +664,61 @@ function installSteeredReviewManager() {
   };
 }
 
+function installNonTerminalizingStructuredReviewManager() {
+  const records = new Map<string, Record<string, unknown>>();
+  const spawnedTypes: string[] = [];
+  let abortCount = 0;
+  let nextAgentId = 0;
+
+  (globalThis as Record<PropertyKey, unknown>)[
+    Symbol.for("pi-subagents:manager")
+  ] = {
+    spawn(
+      _pi: unknown,
+      _ctx: unknown,
+      type: string,
+      prompt: string,
+      options: Record<string, unknown>
+    ) {
+      const id = `agent-${++nextAgentId}`;
+      let finish!: () => void;
+      const record: Record<string, unknown> = {
+        id,
+        type,
+        status: "running",
+        toolUses: 1,
+        promise: new Promise<void>((resolve) => {
+          finish = resolve;
+        }),
+      };
+      record.finish = finish;
+      records.set(id, record);
+      spawnedTypes.push(type);
+      captureMockStructuredOutput(options, createMockAgentResult(type, prompt));
+      return id;
+    },
+    getRecord(id: string) {
+      return records.get(id);
+    },
+    abort(id: string) {
+      const record = records.get(id);
+      if (record?.status !== "running") {
+        return false;
+      }
+      abortCount += 1;
+      record.status = "stopped";
+      (record.finish as () => void)();
+      return true;
+    },
+  };
+
+  return {
+    abortCount: () => abortCount,
+    records,
+    spawnedTypes,
+  };
+}
+
 function installStreamingReviewManager(
   config: { assistantMessage?: unknown; outputFile?: string } = {}
 ) {
@@ -581,7 +733,9 @@ function installStreamingReviewManager(
       _ctx: unknown,
       type: string,
       _prompt: string,
-      options: { onSessionCreated?: (session: unknown) => void }
+      options: Record<string, unknown> & {
+        onSessionCreated?: (session: unknown) => void;
+      }
     ) {
       const id = `agent-${++nextAgentId}`;
       const record: Record<string, unknown> = {
@@ -617,6 +771,7 @@ function installStreamingReviewManager(
         setTimeout(() => {
           record.status = "completed";
           record.result = createMockReviewerOutput();
+          captureMockReviewerOutput(options, record.result as string);
           if (typeof record.outputCleanup === "function") {
             record.outputCleanup();
           }
@@ -716,24 +871,38 @@ describe.serial("review workflow progress", () => {
   it("accepts steered agent records as successful terminal results", async () => {
     const manager = installSteeredReviewManager();
     const { ctx } = createMockCtx([], { hasUI: false });
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 50);
 
-    try {
-      const result = await runReviewWorkflow({} as never, ctx as never, {
-        cwd: ctx.cwd,
-        scopeHint: "current changes",
-        invocationPacket: "Review invocation packet",
-        reviewers: ["code-reviewer"],
-        signal: controller.signal,
-      });
+    const result = await runReviewWorkflow({} as never, ctx as never, {
+      cwd: ctx.cwd,
+      scopeHint: "current changes",
+      invocationPacket: "Review invocation packet",
+      reviewers: ["code-reviewer"],
+    });
 
-      expect(result.reviewerOutputs).toHaveLength(1);
-      expect(result.reviewerOutputs[0]?.reviewer).toBe("code-reviewer");
-      expect(manager.getRecordCount()).toBeLessThan(5);
-    } finally {
-      clearTimeout(timeout);
-    }
+    expect(result.reviewerOutputs).toHaveLength(1);
+    expect(result.reviewerOutputs[0]?.reviewer).toBe("code-reviewer");
+    expect(manager.getRecordCount()).toBeLessThan(5);
+  });
+
+  it("launches the verifier when structured output is captured but child records do not terminalize", async () => {
+    const manager = installNonTerminalizingStructuredReviewManager();
+    const { ctx } = createMockCtx([], { hasUI: false });
+
+    const result = await runReviewWorkflow({} as never, ctx as never, {
+      cwd: ctx.cwd,
+      scopeHint: "current changes",
+      invocationPacket: "Review src/change.ts",
+      reviewers: ["code-reviewer"],
+    });
+
+    expect(manager.spawnedTypes).toEqual(["code-reviewer", "review-verifier"]);
+    expect(manager.abortCount()).toBe(2);
+    expect(
+      [...manager.records.values()].every(
+        (record) => record.status === "stopped"
+      )
+    ).toBe(true);
+    expect(result.report).toContain("Changed guard rejects valid input");
   });
 
   it("creates and streams an output file for direct-spawned review agents", async () => {
@@ -1171,6 +1340,101 @@ describe.serial("review direct targets", () => {
     expect(getReviewReportMessages(runtime)).toHaveLength(1);
   });
 
+  it("captures closed-schema reviewer and verifier tools without disabling extensions", async () => {
+    const runtime = createMockPiRuntime((_command, args) => {
+      if (args.join(" ") === "status --porcelain --untracked-files=all") {
+        return { stdout: " M src/change.ts\n", code: 0 };
+      }
+      return { stdout: "", code: 0 };
+    });
+    const { ctx } = createMockCtx();
+
+    reviewExtension(runtime.pi as never);
+    await runtime.commands
+      .get("review")
+      ?.handler("uncommitted --reviewers code-reviewer", ctx as never);
+
+    expect(runtime.agentSpawnCalls.map((call) => call.type)).toEqual([
+      "code-reviewer",
+      "review-verifier",
+    ]);
+    for (const call of runtime.agentSpawnCalls) {
+      expect(call.options).not.toHaveProperty("tools");
+      expect(call.options).not.toHaveProperty("noExtensions");
+      const customTools = call.options.customTools as
+        | Array<{ name: string; parameters: unknown }>
+        | undefined;
+      const structuredOutput = customTools?.find(
+        (tool) => tool.name === "structured_output"
+      );
+      expect(structuredOutput).toBeDefined();
+      expectClosedObjectSchemas(structuredOutput?.parameters);
+    }
+
+    const verifierTool = (
+      runtime.agentSpawnCalls[1]?.options.customTools as Array<{
+        name: string;
+        parameters: { properties?: Record<string, unknown> };
+      }>
+    ).find((tool) => tool.name === "structured_output");
+    expect(verifierTool?.parameters.properties).not.toHaveProperty(
+      "humanReviewerCallouts"
+    );
+    expect(verifierTool?.parameters.properties).not.toHaveProperty(
+      "reviewerCoverage"
+    );
+    expect(
+      String(getReviewReportMessages(runtime)[0]?.message.content)
+    ).toContain("Changed guard rejects valid input");
+  });
+
+  it("does not accept text JSON and makes only one structured repair retry", async () => {
+    const spawnOptions = installTextOnlyReviewManager();
+    const { ctx } = createMockCtx([], { hasUI: false });
+
+    await expect(
+      runReviewWorkflow({} as never, ctx as never, {
+        cwd: ctx.cwd,
+        scopeHint: "current changes",
+        invocationPacket: "Review invocation packet",
+        reviewers: ["code-reviewer"],
+      })
+    ).rejects.toThrow("after one structured repair retry");
+
+    expect(spawnOptions).toHaveLength(2);
+    for (const options of spawnOptions) {
+      expect(options.customTools).toBeArray();
+    }
+  });
+
+  it("keeps JSON-producing review agents out of caveman mode", () => {
+    for (const agentName of REVIEW_JSON_AGENT_NAMES) {
+      const agentMarkdown = readFileSync(
+        path.join(process.cwd(), "agents", `${agentName}.md`),
+        "utf8"
+      );
+      const frontmatter = agentMarkdown.match(AGENT_FRONTMATTER_PATTERN)?.[1];
+
+      expect(frontmatter).toMatch(AGENT_CAVEMAN_FALSE_PATTERN);
+    }
+  });
+
+  it("keeps reviewer agents usable without the workflow output tool", () => {
+    for (const agentName of REVIEWER_AGENT_NAMES) {
+      const agentMarkdown = readFileSync(
+        path.join(process.cwd(), "agents", `${agentName}.md`),
+        "utf8"
+      );
+
+      expect(agentMarkdown).toContain(
+        "When `structured_output` is unavailable in a direct agent invocation"
+      );
+      expect(agentMarkdown).toContain(
+        "emit exactly one assistant response containing the same object as JSON"
+      );
+    }
+  });
+
   it("keeps the review-verifier agent default distinct from reviewer policy", () => {
     const verifierAgent = readFileSync(
       path.join(process.cwd(), "agents/review-verifier.md"),
@@ -1180,6 +1444,24 @@ describe.serial("review direct targets", () => {
 
     expect(defaultModel).toBeTruthy();
     expect(defaultModel).not.toBe(REVIEWER_MODEL_POLICY_MODEL);
+  });
+
+  it("keeps reviewer agent defaults aligned with reviewer model policy", () => {
+    for (const agentName of REVIEWER_AGENT_NAMES) {
+      const agentMarkdown = readFileSync(
+        path.join(process.cwd(), "agents", `${agentName}.md`),
+        "utf8"
+      );
+      const defaultModel = agentMarkdown.match(AGENT_MODEL_PATTERN)?.[1];
+
+      expect(defaultModel).toBe(REVIEWER_MODEL_POLICY_MODEL);
+    }
+  });
+
+  it("rejects the configured reviewer model as a verifier override", () => {
+    expect(() =>
+      assertVerifierModelPolicy(REVIEWER_MODEL_POLICY_MODEL)
+    ).toThrow("Review verifier model must differ from reviewer model policy");
   });
 
   it("saves direct verifier model overrides and uses them for verifier agents", async () => {
@@ -1222,7 +1504,9 @@ describe.serial("review direct targets", () => {
       return { stdout: "", code: 0 };
     });
     const { ctx, notifications } = createMockCtx();
-    (ctx as { modelRegistry: { find: () => undefined } }).modelRegistry = {
+    (
+      ctx as unknown as { modelRegistry: { find: () => undefined } }
+    ).modelRegistry = {
       find() {
         return;
       },
@@ -1428,7 +1712,7 @@ describe.serial("review direct targets", () => {
       }
       return { stdout: "", code: 0 };
     });
-    const { ctx } = createMockCtx();
+    const { ctx, notifications } = createMockCtx();
 
     reviewExtension(runtime.pi as never);
     const handler = runtime.commands.get("review")?.handler;
@@ -1442,7 +1726,11 @@ describe.serial("review direct targets", () => {
     expect(
       runtime.agentSpawnCalls.some((call) => call.type === "review-verifier")
     ).toBe(true);
-    const report = String(getReviewReportMessages(runtime)[0]?.message.content);
+    const messages = getReviewReportMessages(runtime);
+    if (messages.length === 0) {
+      throw new Error(JSON.stringify(notifications));
+    }
+    const report = String(messages[0]?.message.content);
     expect(report).toContain("Changed guard rejects valid input");
     expect(
       report.match(
