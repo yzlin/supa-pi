@@ -16,11 +16,19 @@ import {
   applyRemovePlan,
   computeSkillFilesHash,
   copyInstallPlan,
+  createGithubRepoTreeCacheSession,
   createSkillsManagerPaths,
   detectDirtySkills,
   discoverBundledSkillPaths,
+  fetchGithubRepoTreeSnapshot,
   fetchSkillsShSearchCache,
   findListedSkillSourceDir,
+  type GithubRepoTreeCacheSession,
+  type GithubRepoTreeSnapshot,
+  githubRemoteSlug,
+  githubSkillFolderHash,
+  githubSkillOwnedFilePaths,
+  githubSkillRootsFromTree,
   installSelectedSkillsSequentially,
   type ListedSkillSource,
   listSkillsInSource,
@@ -33,6 +41,7 @@ import {
   type ResolvedSkillSource,
   readManagedManifest,
   readSkillsSearchCache,
+  resolveGithubSkillPathFromTree,
   type SkillSourceIdentity,
   searchCachedSkills,
   sourceIdentityForGithubSkillRoot,
@@ -369,10 +378,10 @@ async function selectSkillSourceDirs(
   sourceRoot: string,
   manifest = readManagedManifest(createSkillsManagerPaths().manifestPath)
 ): Promise<string[] | undefined> {
-  if (entries.length === 1) {
-    return entries[0] ? [entries[0].sourceDir] : [];
-  }
   if (!ctx.hasUI || typeof ctx.ui.custom !== "function") {
+    if (entries.length === 1) {
+      return entries[0] ? [entries[0].sourceDir] : [];
+    }
     const first = entries[0];
     const suggestion = first
       ? `${source.replace(TRAILING_SLASH_RE, "")}/tree/${parseSkillSource(source).identity.ref ?? "HEAD"}/${relative(sourceRoot, first.sourceDir).replace(BACKSLASH_RE, "/")}`
@@ -419,11 +428,10 @@ async function selectSkillSourceDirs(
 }
 
 function remoteIdentityForEntry(
-  source: string,
+  resolved: ResolvedSkillSource,
   sourceRoot: string,
   entry: ListedSkillSource
 ) {
-  const resolved = parseSkillSource(source);
   if (resolved.identity.type !== "github") {
     return resolved.identity;
   }
@@ -434,9 +442,54 @@ function remoteIdentityForEntry(
   const subpath = [resolved.identity.subpath, relativeEntry]
     .filter(Boolean)
     .join("/");
-  return parseSkillSource(
-    `${resolved.identity.owner}/${resolved.identity.repo}/tree/${resolved.identity.ref ?? "HEAD"}/${subpath}`
-  ).identity;
+  return sourceIdentityForGithubSkillRoot(resolved, subpath);
+}
+
+type GithubSkillMetadata = Pick<
+  ManagedSkillEntry,
+  "remoteSlug" | "skillFolderHash" | "skillPath"
+>;
+
+function githubMetadataForIdentity(
+  identity: SkillSourceIdentity,
+  snapshot: GithubRepoTreeSnapshot | undefined
+): GithubSkillMetadata {
+  if (
+    identity.type !== "github" ||
+    !identity.owner ||
+    !identity.repo ||
+    identity.subpath === undefined
+  ) {
+    return {};
+  }
+  const metadata: GithubSkillMetadata = {
+    remoteSlug: githubRemoteSlug(identity),
+    skillPath: identity.subpath,
+  };
+  if (!(snapshot?.revision && !snapshot.stale)) {
+    return metadata;
+  }
+  return {
+    ...metadata,
+    skillFolderHash:
+      githubSkillFolderHash(snapshot.tree, identity.subpath) ?? undefined,
+  };
+}
+
+function applyInstalledMetadata(
+  paths: ReturnType<typeof createSkillsManagerPaths>,
+  patches: Map<string, GithubSkillMetadata>
+): ManagedSkillEntry[] {
+  const manifest = readManagedManifest(paths.manifestPath);
+  const next = {
+    version: manifest.version,
+    skills: manifest.skills.map((skill) => ({
+      ...skill,
+      ...(patches.get(skill.id) ?? {}),
+    })),
+  };
+  writeManagedManifest(paths.manifestPath, next);
+  return next.skills;
 }
 
 function formatInstalledMessage(installed: { name: string }[]): string {
@@ -453,16 +506,26 @@ function exactGithubSourceResolutionError(
   );
 }
 
+interface MaterializedRemoteSource {
+  sourceRoot: string;
+  githubTreeSnapshot?: GithubRepoTreeSnapshot;
+}
+
 async function installLocalSource(
   ctx: ExtensionCommandContext,
   source: string,
   confirmDirty = true,
   requestedSkillName?: string,
-  resolvedSource?: ResolvedSkillSource
+  resolvedSource?: ResolvedSkillSource,
+  materializedSource?: MaterializedRemoteSource
 ): Promise<void> {
   const paths = createSkillsManagerPaths();
   const resolved = resolvedSource ?? parseSkillSource(source);
-  let exactSourceIdentity: SkillSourceIdentity | undefined;
+  let exactSourceIdentity =
+    materializedSource && resolved.identity.type === "github"
+      ? resolved.identity
+      : undefined;
+  let githubTreeSnapshot = materializedSource?.githubTreeSnapshot;
   const shouldResolveExactSource =
     !resolved.localPath &&
     resolved.identity.type === "github" &&
@@ -470,12 +533,16 @@ async function installLocalSource(
     !!requestedSkillName;
   const sourceRoot =
     resolved.localPath ??
+    materializedSource?.sourceRoot ??
     (await materializeResolvedSkillSource(resolved, paths, fetch, {
       requestedSkillName,
       exactSubpath:
         resolved.identity.type === "github" && !!resolved.identity.subpath,
       onExactSourceResolved: (identity) => {
         exactSourceIdentity = identity;
+      },
+      onGithubTreeResolved: (snapshot) => {
+        githubTreeSnapshot = snapshot;
       },
     }));
   if (shouldResolveExactSource && !exactSourceIdentity) {
@@ -486,13 +553,15 @@ async function installLocalSource(
     ctx.ui.notify("No SKILL.md files found in source.", "warning");
     return;
   }
-  const isRepoShorthand =
+  const isGithubRepoRootInstall =
     !resolved.localPath &&
     resolved.identity.type === "github" &&
     !resolved.identity.subpath &&
-    !source.startsWith("http") &&
     !requestedSkillName;
-  if (isRepoShorthand) {
+  const isRepoShorthand = isGithubRepoRootInstall && !source.startsWith("http");
+  const hasCustomInstallPicker =
+    ctx.hasUI && typeof ctx.ui.custom === "function";
+  if (isRepoShorthand || (isGithubRepoRootInstall && hasCustomInstallPicker)) {
     const selectedSourceDirs = await selectSkillSourceDirs(
       ctx,
       entries,
@@ -521,14 +590,47 @@ async function installLocalSource(
         }
       }
     }
-    const result = withSkillsWriteLock(paths, () =>
-      installSelectedSkillsSequentially(
+    const identities = new Map<string, SkillSourceIdentity>();
+    const metadata = new Map<string, GithubSkillMetadata>();
+    for (const entry of entries) {
+      if (!selectedSourceDirs.includes(entry.sourceDir)) {
+        continue;
+      }
+      const identity = remoteIdentityForEntry(resolved, sourceRoot, entry);
+      identities.set(entry.id, identity);
+      metadata.set(
+        entry.id,
+        githubMetadataForIdentity(identity, githubTreeSnapshot)
+      );
+    }
+    const result = withSkillsWriteLock(paths, () => {
+      const installedResult = installSelectedSkillsSequentially(
         entries,
         selectedSourceDirs,
         paths,
-        (entry) => remoteIdentityForEntry(source, sourceRoot, entry)
-      )
-    );
+        (entry) => identities.get(entry.id),
+        (entry) => {
+          const identity = identities.get(entry.id);
+          if (!(identity?.type === "github" && githubTreeSnapshot)) {
+            return;
+          }
+          return githubSkillOwnedFilePaths(
+            githubTreeSnapshot.tree,
+            identity.subpath ?? ""
+          );
+        }
+      );
+      if (installedResult.installed.length > 0) {
+        const latest = applyInstalledMetadata(paths, metadata);
+        return {
+          ...installedResult,
+          installed: latest.filter((skill) =>
+            installedResult.installed.some((entry) => entry.id === skill.id)
+          ),
+        };
+      }
+      return installedResult;
+    });
     if (result.failed) {
       throw new Error(
         `Failed to install ${result.failed.sourceDir}: ${
@@ -559,6 +661,19 @@ async function installLocalSource(
       return;
     }
   }
+  const selectedEntry = entries.find((entry) => entry.sourceDir === choice);
+  if (!selectedEntry) {
+    throw new Error(`Selected skill source is unavailable: ${choice}`);
+  }
+  const finalSource =
+    exactSourceIdentity ??
+    (!resolved.localPath && resolved.identity.type === "github"
+      ? remoteIdentityForEntry(resolved, sourceRoot, selectedEntry)
+      : resolved.identity);
+  const githubMetadata = githubMetadataForIdentity(
+    finalSource,
+    githubTreeSnapshot
+  );
   const installed = withSkillsWriteLock(paths, () => {
     const entry = copyInstallPlan(plan, paths);
     if (!resolved.localPath) {
@@ -567,7 +682,7 @@ async function installLocalSource(
         version: manifest.version,
         skills: manifest.skills.map((skill) =>
           skill.id === entry.id
-            ? { ...entry, source: exactSourceIdentity ?? resolved.identity }
+            ? { ...entry, source: finalSource, ...githubMetadata }
             : skill
         ),
       };
@@ -587,7 +702,8 @@ interface PendingSkillUpdate {
 
 interface PendingSkillSourceHeal {
   skill: ManagedSkillEntry;
-  source: SkillSourceIdentity;
+  source?: SkillSourceIdentity;
+  metadata?: GithubSkillMetadata;
 }
 
 interface PendingSkillUpdateFailure {
@@ -621,10 +737,246 @@ function applySourceHeals(
       version: latestManifest.version,
       skills: latestManifest.skills.map((entry) => {
         const heal = sourceHeals.find(({ skill }) => skill.id === entry.id);
-        return heal ? { ...entry, source: heal.source } : entry;
+        return heal
+          ? {
+              ...entry,
+              ...(heal.source ? { source: heal.source } : {}),
+              ...(heal.metadata ?? {}),
+            }
+          : entry;
       }),
     });
   });
+}
+
+function githubUpdateGroupKey(skill: ManagedSkillEntry): string | null {
+  if (
+    skill.source.type !== "github" ||
+    !skill.source.owner ||
+    !skill.source.repo
+  ) {
+    return null;
+  }
+  return `${skill.source.owner}/${skill.source.repo}#${skill.source.ref ?? "HEAD"}`;
+}
+
+function exactGithubResolvedSource(
+  skill: ManagedSkillEntry,
+  skillPath: string
+): ResolvedSkillSource {
+  const { owner, repo, ref = "HEAD" } = skill.source;
+  if (!(owner && repo)) {
+    throw new Error("GitHub skill source is missing owner or repo.");
+  }
+  const identity = sourceIdentityForGithubSkillRoot(
+    {
+      identity: skill.source,
+      displayName: sourceText(skill),
+    },
+    skillPath
+  );
+  return {
+    identity,
+    displayName: sourceText(skill),
+    rawUrl: `https://raw.githubusercontent.com/${owner}/${repo}/${ref}/${skillPath ? `${skillPath}/` : ""}SKILL.md`,
+  };
+}
+
+async function materializeGithubUpdateSource(
+  paths: ReturnType<typeof createSkillsManagerPaths>,
+  skill: ManagedSkillEntry,
+  resolvedSource: ResolvedSkillSource
+): Promise<MaterializedRemoteSource | undefined> {
+  if (resolvedSource.identity.type !== "github") {
+    return;
+  }
+  let githubTreeSnapshot: GithubRepoTreeSnapshot | undefined;
+  const sourceRoot = await materializeResolvedSkillSource(
+    resolvedSource,
+    paths,
+    fetch,
+    {
+      requestedSkillName: skill.id,
+      exactSubpath: !!resolvedSource.identity.subpath,
+      skipSkillsShSnapshots: true,
+      onGithubTreeResolved: (snapshot) => {
+        githubTreeSnapshot = snapshot;
+      },
+    }
+  );
+  return { sourceRoot, githubTreeSnapshot };
+}
+
+async function checkLegacyGithubUpdate(
+  paths: ReturnType<typeof createSkillsManagerPaths>,
+  skill: ManagedSkillEntry,
+  resolvedSource: ResolvedSkillSource,
+  githubSkillNameCache: Map<string, string | null>,
+  githubTreeCacheSession: GithubRepoTreeCacheSession
+): Promise<{ found: boolean; updateAvailable: boolean }> {
+  const sourceRoot = await materializeResolvedSkillSource(
+    resolvedSource,
+    paths,
+    fetch,
+    {
+      requestedSkillName: skill.id,
+      exactSubpath: !!resolvedSource.identity.subpath,
+      skipSkillsShSnapshots: true,
+      githubSkillNameCache,
+      githubTreeCacheSession,
+    }
+  );
+  const latest = listSkillsInSource(sourceRoot).find(
+    (listed) => listed.id === skill.id
+  );
+  return {
+    found: !!latest,
+    updateAvailable:
+      !!latest && latest.hash !== computeSkillFilesHash(skill.files),
+  };
+}
+
+async function checkGithubUpdateGroup(
+  paths: ReturnType<typeof createSkillsManagerPaths>,
+  skills: ManagedSkillEntry[],
+  updates: PendingSkillUpdate[],
+  sourceHeals: PendingSkillSourceHeal[],
+  failures: PendingSkillUpdateFailure[],
+  githubSkillNameCache: Map<string, string | null>,
+  githubTreeCacheSession: GithubRepoTreeCacheSession,
+  suppressFailures: boolean
+): Promise<void> {
+  const first = skills[0];
+  if (!(first?.source.owner && first.source.repo)) {
+    return;
+  }
+  const { owner, repo, ref = "HEAD" } = first.source;
+  let tree: Awaited<ReturnType<typeof fetchGithubRepoTreeSnapshot>>["tree"];
+  let staleTree = false;
+  try {
+    const snapshot = await fetchGithubRepoTreeSnapshot(
+      paths,
+      owner,
+      repo,
+      ref,
+      fetch,
+      githubTreeCacheSession
+    );
+    tree = snapshot.tree;
+    staleTree = snapshot.stale;
+  } catch {
+    for (const skill of skills) {
+      const source = sourceText(skill);
+      const resolvedSource = resolvedSourceForSkill(skill);
+      try {
+        const legacyStatus = await checkLegacyGithubUpdate(
+          paths,
+          skill,
+          resolvedSource,
+          githubSkillNameCache,
+          githubTreeCacheSession
+        );
+        if (legacyStatus.updateAvailable) {
+          updates.push({ skill, source, resolvedSource });
+        }
+      } catch (error) {
+        if (!suppressFailures) {
+          failures.push({
+            skill,
+            source,
+            message: error instanceof Error ? error.message : String(error),
+          });
+        }
+      }
+    }
+    return;
+  }
+
+  for (const skill of skills) {
+    const source = sourceText(skill);
+    try {
+      const roots = githubSkillRootsFromTree(tree);
+      const storedSkillPath =
+        skill.skillPath ?? (skill.source.subpath || undefined);
+      const broadGithubSource = storedSkillPath === undefined;
+      const resolvedPath =
+        storedSkillPath ??
+        (await resolveGithubSkillPathFromTree(
+          fetch,
+          owner,
+          repo,
+          ref,
+          tree,
+          skill.id,
+          roots,
+          githubSkillNameCache
+        ));
+      if (resolvedPath === null) {
+        if (broadGithubSource && roots.length === 0) {
+          throw new Error(
+            `Deleted GitHub skill source: ${source} contains no skills.`
+          );
+        }
+        if (broadGithubSource && roots.length === 1) {
+          continue;
+        }
+        throw new Error(
+          `Unable to resolve ${skill.id} to one exact GitHub skill source.`
+        );
+      }
+      if (!roots.includes(resolvedPath)) {
+        throw new Error(`Deleted GitHub skill path: ${resolvedPath}.`);
+      }
+      const latestFolderHash = githubSkillFolderHash(tree, resolvedPath);
+      const resolvedSource = exactGithubResolvedSource(skill, resolvedPath);
+      const exactSource = sourceIdentityForGithubSkillRoot(
+        resolvedSource,
+        resolvedPath
+      );
+      const metadata: GithubSkillMetadata = {
+        remoteSlug: `${owner}/${repo}`,
+        skillPath: resolvedPath,
+        ...(staleTree
+          ? {}
+          : { skillFolderHash: latestFolderHash ?? undefined }),
+      };
+      const hasCurrentFolderHash =
+        !!skill.skillFolderHash && latestFolderHash !== null && !staleTree;
+      const legacyStatus = hasCurrentFolderHash
+        ? {
+            found: true,
+            updateAvailable: latestFolderHash !== skill.skillFolderHash,
+          }
+        : await checkLegacyGithubUpdate(
+            paths,
+            skill,
+            resolvedSource,
+            githubSkillNameCache,
+            githubTreeCacheSession
+          );
+      if (broadGithubSource && !legacyStatus.found) {
+        continue;
+      }
+      const shouldHealExactLegacy = !(hasCurrentFolderHash || staleTree);
+      const needsHeal = broadGithubSource
+        ? resolvedPath !== ""
+        : shouldHealExactLegacy;
+      if (needsHeal && !legacyStatus.updateAvailable) {
+        sourceHeals.push({ skill, source: exactSource, metadata });
+      }
+      if (legacyStatus.updateAvailable) {
+        updates.push({ skill, source, resolvedSource });
+      }
+    } catch (error) {
+      if (!suppressFailures) {
+        failures.push({
+          skill,
+          source,
+          message: error instanceof Error ? error.message : String(error),
+        });
+      }
+    }
+  }
 }
 
 async function findRemoteUpdates(
@@ -636,46 +988,47 @@ async function findRemoteUpdates(
   const sourceHeals: PendingSkillSourceHeal[] = [];
   const failures: PendingSkillUpdateFailure[] = [];
   const githubSkillNameCache = new Map<string, string | null>();
+  const githubTreeCacheSession = createGithubRepoTreeCacheSession(paths);
   const candidates = manifest.skills.filter(
     (skill) => skill.source.type !== "directory"
   );
+  const githubGroups = new Map<string, ManagedSkillEntry[]>();
+  const otherCandidates: ManagedSkillEntry[] = [];
   for (const skill of candidates) {
+    const groupKey = githubUpdateGroupKey(skill);
+    if (groupKey) {
+      githubGroups.set(groupKey, [
+        ...(githubGroups.get(groupKey) ?? []),
+        skill,
+      ]);
+    } else {
+      otherCandidates.push(skill);
+    }
+  }
+  for (const skills of githubGroups.values()) {
+    await checkGithubUpdateGroup(
+      paths,
+      skills,
+      updates,
+      sourceHeals,
+      failures,
+      githubSkillNameCache,
+      githubTreeCacheSession,
+      !!options.suppressFailures
+    );
+  }
+  for (const skill of otherCandidates) {
     const source = sourceText(skill);
     try {
-      const exactSubpath = !!skill.source.subpath;
-      const broadGithubSource =
-        skill.source.type === "github" && !skill.source.subpath;
-      let exactSourceIdentity: SkillSourceIdentity | undefined;
       const resolvedSource = resolvedSourceForSkill(skill);
       const sourceRoot = await materializeResolvedSkillSource(
         resolvedSource,
         paths,
-        fetch,
-        {
-          requestedSkillName: exactSubpath ? undefined : skill.id,
-          exactSubpath,
-          onExactSourceResolved: (identity) => {
-            exactSourceIdentity = identity;
-          },
-          githubSkillNameCache,
-        }
+        fetch
       );
-      if (broadGithubSource && !exactSourceIdentity) {
-        throw new Error(
-          `Unable to resolve ${skill.id} to one exact GitHub skill source.`
-        );
-      }
       const latest = listSkillsInSource(sourceRoot).find(
         (listed) => listed.id === skill.id
       );
-      if (
-        broadGithubSource &&
-        exactSourceIdentity &&
-        latest &&
-        exactSourceIdentity.id !== skill.source.id
-      ) {
-        sourceHeals.push({ skill, source: exactSourceIdentity });
-      }
       if (latest && latest.hash !== computeSkillFilesHash(skill.files)) {
         updates.push({ skill, source, resolvedSource });
       }
@@ -707,7 +1060,7 @@ async function updateManaged(
   if (matchingFailures.length > 0) {
     throw new Error(formatUpdateFailures(matchingFailures));
   }
-  if (failures.length > 0) {
+  if (!requestedId && failures.length > 0) {
     ctx.ui.notify(formatUpdateFailures(failures), "warning");
   }
   const matchingSourceHeals = requestedId
@@ -751,7 +1104,19 @@ async function updateManaged(
   for (const { skill, source, resolvedSource } of targets) {
     const ok = await confirmCleanOverwrite(ctx, skill, manifest);
     if (ok) {
-      await installLocalSource(ctx, source, false, skill.id, resolvedSource);
+      const materializedSource = await materializeGithubUpdateSource(
+        paths,
+        skill,
+        resolvedSource
+      );
+      await installLocalSource(
+        ctx,
+        source,
+        false,
+        skill.id,
+        resolvedSource,
+        materializedSource
+      );
       updatedCount += 1;
     }
   }

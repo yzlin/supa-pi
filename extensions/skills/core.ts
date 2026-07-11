@@ -1,4 +1,4 @@
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import {
   closeSync,
   copyFileSync,
@@ -7,6 +7,7 @@ import {
   openSync,
   readdirSync,
   readFileSync,
+  renameSync,
   rmSync,
   statSync,
   writeFileSync,
@@ -17,6 +18,10 @@ import { basename, dirname, join, relative, resolve, sep } from "node:path";
 export const SKILL_FILE_NAME = "SKILL.md";
 export const MANIFEST_VERSION = 1;
 export const SEARCH_CACHE_VERSION = 5;
+export const GITHUB_TREE_CACHE_VERSION = 2;
+export const GITHUB_TREE_CACHE_MAX_ENTRIES = 32;
+
+const GITHUB_TREE_CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
 const FRONTMATTER_RE = /^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/;
 const H1_RE = /^#\s+(.+)$/m;
@@ -26,7 +31,7 @@ const DESCRIPTION_SECTION_RE = /^##\s+Description\s*\n+([^#\n].*)$/im;
 const FENCE_START_RE = /^\s*(```|~~~)/;
 const LINE_BREAK_RE = /\r?\n/;
 const GITHUB_SOURCE_RE =
-  /^(?:https:\/\/github\.com\/|git@github\.com:)?([^/\s:]+)\/([^/\s:#]+)(?:\.git)?(?:\/(?:tree|blob)\/([^/]+)\/(.*))?(?:#(.+))?$/;
+  /^(?:https:\/\/github\.com\/|git@github\.com:)?([^/\s:]+)\/([^/\s:#]+)(?:\.git)?(?:\/(?:tree|blob)\/([^/]+)\/(.*))?\/?(?:#(.+))?$/;
 const GIT_SUFFIX_RE = /\.git$/;
 const HTTP_URL_RE = /^https?:\/\//;
 const PLAIN_HTTP_URL_RE = /^http:\/\//;
@@ -34,6 +39,8 @@ const TRAILING_SLASH_RE = /\/$/;
 const WHITESPACE_RE = /\s+/;
 const ALPHANUMERIC_RE = /[a-z0-9]/;
 const HTML_HREF_RE = /href=["']([^"']+)["']/gi;
+const GITHUB_COMMIT_PATH_RE = /^[0-9a-f]{40}\/(.+)$/i;
+const GIT_SHA1_RE = /^[0-9a-f]{40}$/i;
 
 export type SkillSourceKind = "directory" | "github" | "repo" | "skills.sh";
 type SkillFetch = (
@@ -86,7 +93,7 @@ export interface ListedSkillSource {
   hash: string;
 }
 
-interface GitHubTreeItem {
+export interface GitHubTreeItem {
   path?: string;
   type?: string;
   sha?: string;
@@ -100,8 +107,11 @@ interface GitHubBlobItem extends GitHubTreeItem {
 export interface MaterializeResolvedSkillSourceOptions {
   requestedSkillName?: string;
   exactSubpath?: boolean;
+  skipSkillsShSnapshots?: boolean;
   onExactSourceResolved?: (identity: SkillSourceIdentity) => void;
+  onGithubTreeResolved?: (snapshot: GithubRepoTreeSnapshot) => void;
   githubSkillNameCache?: Map<string, string | null>;
+  githubTreeCacheSession?: GithubRepoTreeCacheSession;
 }
 
 export interface SkillUpdateStatus {
@@ -124,9 +134,42 @@ export interface ManagedSkillEntry {
   name: string;
   description: string;
   source: SkillSourceIdentity;
+  skillPath?: string;
+  skillFolderHash?: string;
+  remoteSlug?: string;
   installPath: string;
   installedAt: string;
   files: ManagedSkillFile[];
+}
+
+export interface GithubRepoTreeCacheEntry {
+  etag?: string;
+  fetchedAt: string;
+  revision?: string;
+  tree: GitHubTreeItem[];
+}
+
+export interface GithubRepoTreeCache {
+  version: typeof GITHUB_TREE_CACHE_VERSION;
+  entries: Record<string, GithubRepoTreeCacheEntry>;
+}
+
+export interface GithubRepoTreeCacheSession {
+  cache: GithubRepoTreeCache;
+}
+
+export interface GithubRepoTreeSnapshot {
+  tree: GitHubTreeItem[];
+  etag?: string;
+  revision?: string;
+  fromCache: boolean;
+  stale: boolean;
+}
+
+export interface SkillsShDownloadSnapshotResult {
+  sourceDir: string;
+  files: ManagedSkillFile[];
+  hash: string | null;
 }
 
 export interface ManagedSkillsManifest {
@@ -261,11 +304,173 @@ function hashSourceIdentity(identity: Omit<SkillSourceIdentity, "id">): string {
   return hashString(JSON.stringify(identity)).slice(0, 16);
 }
 
+function githubTreeCachePath(paths: SkillsManagerPaths): string {
+  return join(paths.cacheDir, "github-repo-trees.json");
+}
+
+function githubTreeCacheKey(owner: string, repo: string, ref: string): string {
+  return `${owner}/${repo}#${ref}`;
+}
+
+function emptyGithubRepoTreeCache(): GithubRepoTreeCache {
+  return { version: GITHUB_TREE_CACHE_VERSION, entries: {} };
+}
+
+function parseGithubTreeItem(value: unknown): GitHubTreeItem | null {
+  if (
+    !(
+      isRecord(value) &&
+      typeof value.path === "string" &&
+      typeof value.type === "string" &&
+      (value.sha === undefined || typeof value.sha === "string")
+    )
+  ) {
+    return null;
+  }
+  const sha = value.sha as string | undefined;
+  return {
+    path: value.path,
+    type: value.type,
+    ...(sha === undefined ? {} : { sha }),
+  };
+}
+
+function isSafeCachedGithubTreeItem(item: GitHubTreeItem): boolean {
+  return !!(
+    item.path &&
+    item.path.length > 0 &&
+    !item.path.includes("\\") &&
+    item.path
+      .split("/")
+      .every((segment) => segment && segment !== "." && segment !== "..") &&
+    (item.type === "blob" || item.type === "tree" || item.type === "commit")
+  );
+}
+
+function parseGithubRepoTreeCacheEntry(
+  value: unknown
+): GithubRepoTreeCacheEntry | null {
+  if (
+    !(
+      isRecord(value) &&
+      typeof value.fetchedAt === "string" &&
+      Number.isFinite(Date.parse(value.fetchedAt)) &&
+      (value.etag === undefined || typeof value.etag === "string") &&
+      (value.revision === undefined || typeof value.revision === "string") &&
+      Array.isArray(value.tree)
+    )
+  ) {
+    return null;
+  }
+  const tree = value.tree.map(parseGithubTreeItem);
+  if (
+    tree.some((item) => item === null) ||
+    !(tree as GitHubTreeItem[]).every(isSafeCachedGithubTreeItem)
+  ) {
+    return null;
+  }
+  const etag = value.etag as string | undefined;
+  const revision = value.revision as string | undefined;
+  return {
+    ...(etag === undefined ? {} : { etag }),
+    fetchedAt: value.fetchedAt,
+    ...(revision === undefined ? {} : { revision }),
+    tree: tree as GitHubTreeItem[],
+  };
+}
+
+function pruneGithubRepoTreeCache(
+  cache: GithubRepoTreeCache,
+  now = Date.now()
+): GithubRepoTreeCache {
+  const entries = Object.entries(cache.entries)
+    .filter(
+      ([, entry]) =>
+        now - Date.parse(entry.fetchedAt) <= GITHUB_TREE_CACHE_TTL_MS
+    )
+    .sort(([leftKey, left], [rightKey, right]) => {
+      const fetchedAtDifference =
+        Date.parse(right.fetchedAt) - Date.parse(left.fetchedAt);
+      return fetchedAtDifference || leftKey.localeCompare(rightKey);
+    })
+    .slice(0, GITHUB_TREE_CACHE_MAX_ENTRIES);
+  return {
+    version: GITHUB_TREE_CACHE_VERSION,
+    entries: Object.fromEntries(entries),
+  };
+}
+
+export function readGithubRepoTreeCache(
+  paths: SkillsManagerPaths
+): GithubRepoTreeCache {
+  const cachePath = githubTreeCachePath(paths);
+  if (!existsSync(cachePath)) {
+    return emptyGithubRepoTreeCache();
+  }
+  try {
+    const parsed: unknown = JSON.parse(readFileSync(cachePath, "utf8"));
+    if (
+      !(
+        isRecord(parsed) &&
+        parsed.version === GITHUB_TREE_CACHE_VERSION &&
+        isRecord(parsed.entries)
+      )
+    ) {
+      return emptyGithubRepoTreeCache();
+    }
+    const entries = Object.entries(parsed.entries).map(
+      ([key, value]) => [key, parseGithubRepoTreeCacheEntry(value)] as const
+    );
+    if (entries.some(([, entry]) => entry === null)) {
+      return emptyGithubRepoTreeCache();
+    }
+    return pruneGithubRepoTreeCache({
+      version: GITHUB_TREE_CACHE_VERSION,
+      entries: Object.fromEntries(entries) as Record<
+        string,
+        GithubRepoTreeCacheEntry
+      >,
+    });
+  } catch {
+    return emptyGithubRepoTreeCache();
+  }
+}
+
+export function createGithubRepoTreeCacheSession(
+  paths: SkillsManagerPaths
+): GithubRepoTreeCacheSession {
+  return { cache: readGithubRepoTreeCache(paths) };
+}
+
+function writeGithubRepoTreeCache(
+  paths: SkillsManagerPaths,
+  cache: GithubRepoTreeCache
+): GithubRepoTreeCache {
+  const cachePath = githubTreeCachePath(paths);
+  const tempPath = `${cachePath}.${process.pid}.${randomUUID()}.tmp`;
+  const pruned = pruneGithubRepoTreeCache(cache);
+  try {
+    mkdirSync(dirname(cachePath), { recursive: true });
+    writeFileSync(tempPath, `${JSON.stringify(pruned, null, 2)}\n`);
+    renameSync(tempPath, cachePath);
+  } catch {
+    try {
+      rmSync(tempPath, { force: true });
+    } catch {
+      return pruned;
+    }
+  }
+  return pruned;
+}
+
 function isGitHubBlobItem(item: GitHubTreeItem): item is GitHubBlobItem {
   return item.type === "blob" && item.path !== undefined && item.path !== null;
 }
 
 function githubSkillRoot(item: GitHubBlobItem, prefix: string): string | null {
+  if (item.path === `${prefix}${SKILL_FILE_NAME}`) {
+    return prefix.replace(TRAILING_SLASH_RE, "");
+  }
   if (
     item.path.startsWith(prefix) &&
     item.path.endsWith(`/${SKILL_FILE_NAME}`)
@@ -283,6 +488,86 @@ function stripGithubPrefix(itemPath: string, prefix: string): string {
 
 function githubSkillRootFolderName(root: string): string {
   return root.split("/").filter(Boolean).at(-1) ?? root;
+}
+
+export function githubRemoteSlug(
+  identity: SkillSourceIdentity
+): string | undefined {
+  return identity.owner && identity.repo
+    ? `${identity.owner}/${identity.repo}`
+    : undefined;
+}
+
+function githubSkillOwnedItems(
+  tree: GitHubTreeItem[],
+  skillPath: string
+): GitHubTreeItem[] {
+  const root = normalizeSlashPath(skillPath);
+  const prefix = root ? `${root}/` : "";
+  const nestedRootPrefixes = githubSkillRootsFromTree(tree)
+    .filter(
+      (candidateRoot) =>
+        candidateRoot !== root && candidateRoot.startsWith(prefix)
+    )
+    .map((candidateRoot) => `${candidateRoot}/`);
+  return tree.filter(
+    (item) =>
+      typeof item.path === "string" &&
+      item.path.startsWith(prefix) &&
+      !nestedRootPrefixes.some((nestedPrefix) =>
+        item.path.startsWith(nestedPrefix)
+      )
+  );
+}
+
+export function githubSkillOwnedFilePaths(
+  tree: GitHubTreeItem[],
+  skillPath: string
+): Set<string> {
+  const root = normalizeSlashPath(skillPath);
+  const prefix = root ? `${root}/` : "";
+  return new Set(
+    githubSkillOwnedItems(tree, root)
+      .filter(isGitHubBlobItem)
+      .map((item) => stripGithubPrefix(item.path, prefix))
+  );
+}
+
+export function githubSkillFolderHash(
+  tree: GitHubTreeItem[],
+  skillPath: string
+): string | null {
+  const root = normalizeSlashPath(skillPath);
+  const prefix = root ? `${root}/` : "";
+  const skillFilePath = root ? `${root}/${SKILL_FILE_NAME}` : SKILL_FILE_NAME;
+  const files = githubSkillOwnedItems(tree, root).filter(isGitHubBlobItem);
+  if (
+    !files.some((item) => item.path === skillFilePath) ||
+    files.some((item) => !item.sha)
+  ) {
+    return null;
+  }
+  return hashString(
+    files
+      .map((item) => `${stripGithubPrefix(item.path, prefix)}\0${item.sha}`)
+      .sort()
+      .join("\n")
+  );
+}
+
+export function githubSkillRootsFromTree(
+  tree: GitHubTreeItem[],
+  prefix = ""
+): string[] {
+  const normalizedPrefix = prefix ? `${normalizeSlashPath(prefix)}/` : "";
+  return [
+    ...new Set(
+      tree
+        .filter(isGitHubBlobItem)
+        .map((item) => githubSkillRoot(item, normalizedPrefix))
+        .filter((value): value is string => value !== null)
+    ),
+  ].sort();
 }
 
 function cleanMetadataValue(value: string | undefined): string | null {
@@ -704,7 +989,10 @@ export function installSelectedSkillsSequentially(
   entries: ListedSkillSource[],
   selectedSourceDirs: string[],
   paths: SkillsManagerPaths,
-  sourceForEntry?: (entry: ListedSkillSource) => SkillSourceIdentity | undefined
+  sourceForEntry?: (
+    entry: ListedSkillSource
+  ) => SkillSourceIdentity | undefined,
+  ownedFilePathsForEntry?: (entry: ListedSkillSource) => Set<string> | undefined
 ): InstallSelectedSkillsResult {
   const selected = new Set(
     selectedSourceDirs.map((sourceDir) => resolve(sourceDir))
@@ -717,8 +1005,17 @@ export function installSelectedSkillsSequentially(
     try {
       const manifest = readManagedManifest(paths.manifestPath);
       const plan = planInstallSkill(entry.sourceDir, paths, manifest);
+      const ownedFilePaths = ownedFilePathsForEntry?.(entry);
+      const ownedPlan = ownedFilePaths
+        ? {
+            ...plan,
+            files: plan.files.filter((file) =>
+              ownedFilePaths.has(file.relativePath)
+            ),
+          }
+        : plan;
       installed.push(
-        copyInstallPlan(plan, paths, undefined, sourceForEntry?.(entry))
+        copyInstallPlan(ownedPlan, paths, undefined, sourceForEntry?.(entry))
       );
     } catch (error) {
       return { installed, failed: { sourceDir: entry.sourceDir, error } };
@@ -737,7 +1034,80 @@ async function writeResponseFile(
     throw new Error(`Fetch failed: ${response.status}`);
   }
   mkdirSync(dirname(targetPath), { recursive: true });
-  writeFileSync(targetPath, Buffer.from(await response.arrayBuffer()));
+  writeFileSync(targetPath, Buffer.from(await response.clone().arrayBuffer()));
+}
+
+function skillsShDownloadSnapshotUrl(
+  remoteSlug: string,
+  skillSlug: string
+): string {
+  const encodedRemoteSlug = remoteSlug
+    .split("/")
+    .filter(Boolean)
+    .map(encodeURIComponent)
+    .join("/");
+  return `https://skills.sh/api/download/${encodedRemoteSlug}/${encodeURIComponent(skillSlug)}`;
+}
+
+function snapshotResponseHash(responseHash: unknown): string | null {
+  if (responseHash === null || responseHash === undefined) {
+    return null;
+  }
+  if (typeof responseHash !== "string") {
+    throw new Error("Invalid skills.sh snapshot hash.");
+  }
+  return responseHash;
+}
+
+export async function materializeSkillsShDownloadSnapshot(
+  paths: SkillsManagerPaths,
+  remoteSlug: string,
+  skillSlug: string,
+  fetcher: SkillFetch = fetch
+): Promise<SkillsShDownloadSnapshotResult | null> {
+  const response = await fetcher(
+    skillsShDownloadSnapshotUrl(remoteSlug, skillSlug)
+  );
+  if (!response.ok) {
+    return null;
+  }
+  const payload: unknown = await response.clone().json();
+  if (!(isRecord(payload) && Array.isArray(payload.files))) {
+    return null;
+  }
+  const sourceDir = assertInsideDirectory(
+    join(
+      paths.cacheDir,
+      "skills-sh-snapshots",
+      hashString(`${remoteSlug}/${skillSlug}`)
+    ),
+    paths.cacheDir,
+    "skills.sh snapshot cache path escapes cache directory"
+  );
+  rmSync(sourceDir, { recursive: true, force: true });
+  mkdirSync(sourceDir, { recursive: true });
+  for (const file of payload.files) {
+    if (
+      !(
+        isRecord(file) &&
+        typeof file.path === "string" &&
+        typeof file.contents === "string"
+      )
+    ) {
+      rmSync(sourceDir, { recursive: true, force: true });
+      return null;
+    }
+    const targetPath = assertInsideDirectory(
+      join(sourceDir, normalizeSlashPath(file.path)),
+      sourceDir,
+      "skills.sh snapshot file path escapes source directory"
+    );
+    mkdirSync(dirname(targetPath), { recursive: true });
+    writeFileSync(targetPath, file.contents);
+  }
+  const files = hashSkillDirectory(sourceDir);
+  const hash = snapshotResponseHash(payload.hash);
+  return { sourceDir, files, hash };
 }
 
 function sortedGithubSkillRoots(roots: Iterable<string>): string[] {
@@ -761,7 +1131,7 @@ function exactGithubRoot(
   roots: Iterable<string>,
   requestedRoot: string | null
 ): string | null {
-  if (requestedRoot) {
+  if (requestedRoot !== null) {
     return requestedRoot;
   }
   const rootList = [...roots];
@@ -780,7 +1150,7 @@ async function fetchGithubSkillRootName(
   if (cache?.has(cacheKey)) {
     return cache.get(cacheKey) ?? null;
   }
-  const rawUrl = `https://raw.githubusercontent.com/${owner}/${repo}/${ref}/${root}/${SKILL_FILE_NAME}`;
+  const rawUrl = `https://raw.githubusercontent.com/${owner}/${repo}/${ref}/${root ? `${root}/` : ""}${SKILL_FILE_NAME}`;
   const response = await fetcher(rawUrl);
   if (!response.ok) {
     if (response.status === 404) {
@@ -789,7 +1159,7 @@ async function fetchGithubSkillRootName(
     }
     throw new Error(`Fetch failed: ${response.status}`);
   }
-  const { name } = parseSkillMetadata(await response.text());
+  const { name } = parseSkillMetadata(await response.clone().text());
   cache?.set(cacheKey, name);
   return name;
 }
@@ -856,20 +1226,174 @@ function findGithubSkillRootByName(
   );
 }
 
+export function resolveGithubSkillPathFromTree(
+  fetcher: SkillFetch,
+  owner: string,
+  repo: string,
+  ref: string,
+  tree: GitHubTreeItem[],
+  requestedName: string,
+  candidateRoots?: Iterable<string>,
+  githubSkillNameCache?: Map<string, string | null>
+): Promise<string | null> {
+  return findGithubSkillRootByName(
+    fetcher,
+    owner,
+    repo,
+    ref,
+    tree.filter(isGitHubBlobItem),
+    requestedName,
+    candidateRoots,
+    githubSkillNameCache
+  );
+}
+
+function snapshotTargetRelativeRoot(
+  root: string,
+  relativePrefix: string
+): string {
+  const normalizedPrefix = relativePrefix.replace(TRAILING_SLASH_RE, "");
+  if (normalizedPrefix && root === normalizedPrefix) {
+    return "";
+  }
+  return stripGithubPrefix(root, relativePrefix);
+}
+
+function gitBlobSha(contents: Buffer): string {
+  return createHash("sha1")
+    .update(`blob ${contents.byteLength}\0`)
+    .update(contents)
+    .digest("hex");
+}
+
+function snapshotMatchesGithubTree(
+  snapshot: SkillsShDownloadSnapshotResult,
+  tree: GitHubTreeItem[],
+  root: string
+): boolean {
+  const normalizedRoot = normalizeSlashPath(root);
+  const rootPrefix = normalizedRoot ? `${normalizedRoot}/` : "";
+  const ownedItems = githubSkillOwnedItems(tree, normalizedRoot);
+  if (ownedItems.some((item) => item.type !== "blob" && item.type !== "tree")) {
+    return false;
+  }
+  const expectedBlobs = ownedItems.filter(isGitHubBlobItem);
+  if (
+    expectedBlobs.some((item) => !(item.sha && GIT_SHA1_RE.test(item.sha))) ||
+    expectedBlobs.length !== snapshot.files.length
+  ) {
+    return false;
+  }
+  const expectedByPath = new Map(
+    expectedBlobs.map((item) => [
+      normalizeSlashPath(stripGithubPrefix(item.path, rootPrefix)),
+      item.sha as string,
+    ])
+  );
+  if (expectedByPath.size !== expectedBlobs.length) {
+    return false;
+  }
+  const matchedPaths = new Set<string>();
+  for (const file of snapshot.files) {
+    const relativePath = normalizeSlashPath(file.relativePath);
+    const expectedSha = expectedByPath.get(relativePath);
+    if (!expectedSha || matchedPaths.has(relativePath)) {
+      return false;
+    }
+    const sourcePath = assertInsideDirectory(
+      join(snapshot.sourceDir, relativePath),
+      snapshot.sourceDir,
+      "skills.sh snapshot file path escapes source directory"
+    );
+    if (
+      !existsSync(sourcePath) ||
+      gitBlobSha(readFileSync(sourcePath)) !== expectedSha
+    ) {
+      return false;
+    }
+    matchedPaths.add(relativePath);
+  }
+  return matchedPaths.size === expectedByPath.size;
+}
+
+async function writeGithubSkillSnapshotFiles(
+  paths: SkillsManagerPaths,
+  fetcher: SkillFetch,
+  owner: string,
+  repo: string,
+  ref: string,
+  sourceDir: string,
+  tree: GitHubTreeItem[],
+  roots: string[],
+  relativePrefix: string
+): Promise<Set<string>> {
+  const writtenRoots = new Set<string>();
+  if (ref !== "HEAD") {
+    return writtenRoots;
+  }
+  for (const root of roots) {
+    const slug = githubSkillRootFolderName(root);
+    if (!slug) {
+      continue;
+    }
+    let snapshot: SkillsShDownloadSnapshotResult | null = null;
+    try {
+      snapshot = await materializeSkillsShDownloadSnapshot(
+        paths,
+        `${owner}/${repo}`,
+        slug,
+        fetcher
+      );
+    } catch {
+      snapshot = null;
+    }
+    if (!(snapshot && snapshotMatchesGithubTree(snapshot, tree, root))) {
+      continue;
+    }
+    const targetRelativeRoot = snapshotTargetRelativeRoot(root, relativePrefix);
+    const targetRoot = targetRelativeRoot
+      ? assertInsideDirectory(
+          join(sourceDir, targetRelativeRoot),
+          sourceDir,
+          "skills.sh snapshot target path escapes source directory"
+        )
+      : sourceDir;
+    for (const file of listFilesRecursive(snapshot.sourceDir)) {
+      const relativePath = relative(snapshot.sourceDir, file)
+        .split(sep)
+        .join("/");
+      const targetPath = assertInsideDirectory(
+        join(targetRoot, relativePath),
+        sourceDir,
+        "skills.sh snapshot file path escapes source directory"
+      );
+      mkdirSync(dirname(targetPath), { recursive: true });
+      copyFileSync(file, targetPath);
+    }
+    writtenRoots.add(root);
+  }
+  return writtenRoots;
+}
+
 async function writeGithubSkillFiles(
   fetcher: SkillFetch,
   owner: string,
   repo: string,
   ref: string,
   sourceDir: string,
-  blobItems: GitHubBlobItem[],
+  tree: GitHubTreeItem[],
   roots: string[],
   relativePrefix: string
 ): Promise<void> {
-  const rootPrefixes = roots.map((root) => `${root}/`);
-  const skillFiles = blobItems.filter((item) =>
-    rootPrefixes.some((rootPrefix) => item.path.startsWith(rootPrefix))
-  );
+  const skillFiles = [
+    ...new Map(
+      roots
+        .flatMap((root) =>
+          githubSkillOwnedItems(tree, root).filter(isGitHubBlobItem)
+        )
+        .map((item) => [item.path, item])
+    ).values(),
+  ];
   for (const item of skillFiles) {
     const relativePath = stripGithubPrefix(item.path, relativePrefix);
     const targetPath = assertInsideDirectory(
@@ -912,15 +1436,20 @@ function githubPathFromHref(
   href: string,
   owner: string,
   repo: string,
+  ref: string,
   kind: "blob" | "tree"
 ): string | null {
-  const prefix = githubHrefPrefix(owner, repo, kind);
-  if (!href.startsWith(prefix)) {
+  const hrefPrefix = githubHrefPrefix(owner, repo, kind);
+  const requestedRefPrefix = `${hrefPrefix}${ref}/`;
+  if (href.startsWith(requestedRefPrefix)) {
+    return href.slice(requestedRefPrefix.length) || null;
+  }
+  if (ref !== "HEAD" || !href.startsWith(hrefPrefix)) {
     return null;
   }
-  const [, ...pathParts] = href.slice(prefix.length).split("/");
-  const path = pathParts.join("/");
-  return path || null;
+  return (
+    href.slice(hrefPrefix.length).match(GITHUB_COMMIT_PATH_RE)?.[1] ?? null
+  );
 }
 
 function decodeHtmlAttribute(value: string): string {
@@ -935,13 +1464,14 @@ function githubSkillRootsFromHtml(
   html: string,
   owner: string,
   repo: string,
+  ref: string,
   subpath: string
 ): string[] {
   const prefix = `${subpath.replace(TRAILING_SLASH_RE, "")}/`;
   const roots = new Set<string>();
   for (const match of html.matchAll(HTML_HREF_RE)) {
     const href = decodeHtmlAttribute(match[1] ?? "");
-    const fullPath = githubPathFromHref(href, owner, repo, "tree");
+    const fullPath = githubPathFromHref(href, owner, repo, ref, "tree");
     if (!fullPath?.startsWith(prefix)) {
       continue;
     }
@@ -959,18 +1489,19 @@ function githubExactRootHtmlPaths(
   html: string,
   owner: string,
   repo: string,
+  ref: string,
   root: string
 ): { blobs: string[]; trees: string[] } {
-  const rootPrefix = `${root.replace(TRAILING_SLASH_RE, "")}/`;
+  const rootPrefix = root ? `${root.replace(TRAILING_SLASH_RE, "")}/` : "";
   const blobs = new Set<string>();
   const trees = new Set<string>();
   for (const match of html.matchAll(HTML_HREF_RE)) {
     const href = decodeHtmlAttribute(match[1] ?? "");
-    const blobPath = githubPathFromHref(href, owner, repo, "blob");
+    const blobPath = githubPathFromHref(href, owner, repo, ref, "blob");
     if (blobPath?.startsWith(rootPrefix)) {
       blobs.add(blobPath);
     }
-    const treePath = githubPathFromHref(href, owner, repo, "tree");
+    const treePath = githubPathFromHref(href, owner, repo, ref, "tree");
     if (treePath?.startsWith(rootPrefix) && treePath !== root) {
       trees.add(treePath);
     }
@@ -989,7 +1520,7 @@ async function materializeExactGithubRootFromHtml(
   seen = new Set<string>()
 ): Promise<boolean> {
   if (seen.has(root)) {
-    return false;
+    return true;
   }
   seen.add(root);
   const response = await fetcher(githubTreePageUrl(owner, repo, ref, root));
@@ -997,14 +1528,19 @@ async function materializeExactGithubRootFromHtml(
     return false;
   }
   const { blobs, trees } = githubExactRootHtmlPaths(
-    await response.text(),
+    await response.clone().text(),
     owner,
     repo,
+    ref,
     root
   );
+  const skillFilePath = root ? `${root}/${SKILL_FILE_NAME}` : SKILL_FILE_NAME;
+  if (root === baseRoot && !blobs.includes(skillFilePath)) {
+    return false;
+  }
   for (const blob of blobs) {
     const targetPath = assertInsideDirectory(
-      join(sourceDir, stripGithubPrefix(blob, `${baseRoot}/`)),
+      join(sourceDir, stripGithubPrefix(blob, baseRoot ? `${baseRoot}/` : "")),
       sourceDir,
       "Remote file path escapes source directory"
     );
@@ -1028,7 +1564,7 @@ async function materializeExactGithubRootFromHtml(
       )
     )
   );
-  return blobs.length > 0 || nested.some(Boolean);
+  return (blobs.length > 0 || trees.length > 0) && nested.every(Boolean);
 }
 
 async function writeGithubSkillMarkdownFiles(
@@ -1077,9 +1613,10 @@ async function materializeGithubSourceFromHtml(
     return null;
   }
   let roots = githubSkillRootsFromHtml(
-    await response.text(),
+    await response.clone().text(),
     owner,
     repo,
+    ref,
     listingPath
   );
   if (requestedSkillName) {
@@ -1093,8 +1630,8 @@ async function materializeGithubSourceFromHtml(
       githubSkillNameCache
     );
     const exactRoot = exactGithubRoot(roots, requestedRoot);
-    roots = exactRoot ? [exactRoot] : [];
-    if (exactRoot) {
+    roots = exactRoot === null ? [] : [exactRoot];
+    if (exactRoot !== null) {
       onExactRootResolved?.(exactRoot);
     }
   }
@@ -1115,12 +1652,20 @@ async function materializeGithubSourceFromHtml(
 
 async function fetchGithubTree(
   fetcher: SkillFetch,
-  url: string
+  url: string,
+  cachedEtag?: string
 ): Promise<Response> {
-  const response = await fetcher(url);
+  const headers: Record<string, string> = {
+    Accept: "application/vnd.github+json",
+  };
+  if (cachedEtag) {
+    headers["If-None-Match"] = cachedEtag;
+  }
+  const response = await fetcher(url, { headers });
   const token = process.env.GITHUB_TOKEN ?? process.env.GH_TOKEN;
   if (
     response.ok ||
+    response.status === 304 ||
     !(response.status === 403 || response.status === 429) ||
     !token
   ) {
@@ -1128,10 +1673,90 @@ async function fetchGithubTree(
   }
   return fetcher(url, {
     headers: {
+      ...headers,
       Authorization: `Bearer ${token}`,
-      Accept: "application/vnd.github+json",
     },
   });
+}
+
+export async function fetchGithubRepoTreeSnapshot(
+  paths: SkillsManagerPaths,
+  owner: string,
+  repo: string,
+  ref: string,
+  fetcher: SkillFetch = fetch,
+  cacheSession?: GithubRepoTreeCacheSession
+): Promise<GithubRepoTreeSnapshot> {
+  const cache = cacheSession?.cache ?? readGithubRepoTreeCache(paths);
+  const key = githubTreeCacheKey(owner, repo, ref);
+  const cached = cache.entries[key];
+  const treeUrl = `https://api.github.com/repos/${owner}/${repo}/git/trees/${encodeURIComponent(ref)}?recursive=1`;
+  const response = await fetchGithubTree(fetcher, treeUrl, cached?.etag);
+  if (response.status === 304 && cached) {
+    const nextCache = writeGithubRepoTreeCache(paths, {
+      version: GITHUB_TREE_CACHE_VERSION,
+      entries: {
+        ...cache.entries,
+        [key]: { ...cached, fetchedAt: new Date().toISOString() },
+      },
+    });
+    if (cacheSession) {
+      cacheSession.cache = nextCache;
+    }
+    return {
+      tree: cached.tree,
+      etag: cached.etag,
+      revision: cached.revision,
+      fromCache: true,
+      stale: false,
+    };
+  }
+  if (cached && (response.status === 403 || response.status === 429)) {
+    return {
+      tree: cached.tree,
+      etag: cached.etag,
+      revision: cached.revision,
+      fromCache: true,
+      stale: true,
+    };
+  }
+  if (!response.ok) {
+    throw new Error(`GitHub tree fetch failed: ${response.status}`);
+  }
+  const payload: unknown = await response.clone().json();
+  if (!(isRecord(payload) && Array.isArray(payload.tree))) {
+    throw new Error("GitHub tree fetch failed: invalid response");
+  }
+  if (payload.truncated === true) {
+    throw new Error("GitHub tree fetch failed: truncated response");
+  }
+  const parsedTree = payload.tree.map(parseGithubTreeItem);
+  if (parsedTree.some((item) => item === null)) {
+    throw new Error("GitHub tree fetch failed: invalid response");
+  }
+  const tree = parsedTree as GitHubTreeItem[];
+  const revision =
+    isRecord(payload) && typeof payload.sha === "string"
+      ? payload.sha
+      : undefined;
+  const etag = response.headers.get("etag") ?? cached?.etag;
+  const nextCache: GithubRepoTreeCache = {
+    version: GITHUB_TREE_CACHE_VERSION,
+    entries: {
+      ...cache.entries,
+      [key]: {
+        ...(etag ? { etag } : {}),
+        fetchedAt: new Date().toISOString(),
+        ...(revision ? { revision } : {}),
+        tree,
+      },
+    },
+  };
+  const persistedCache = writeGithubRepoTreeCache(paths, nextCache);
+  if (cacheSession) {
+    cacheSession.cache = persistedCache;
+  }
+  return { tree, etag, revision, fromCache: false, stale: false };
 }
 
 function normalizeMaterializeOptions(
@@ -1151,8 +1776,11 @@ export async function materializeResolvedSkillSource(
   const {
     requestedSkillName,
     exactSubpath = false,
+    skipSkillsShSnapshots = false,
     onExactSourceResolved,
+    onGithubTreeResolved,
     githubSkillNameCache,
+    githubTreeCacheSession,
   } = normalizeMaterializeOptions(requestedSkillNameOrOptions);
   const sourceDir = assertInsideDirectory(
     join(paths.cacheDir, "direct-source", resolved.identity.id),
@@ -1161,6 +1789,7 @@ export async function materializeResolvedSkillSource(
   );
   rmSync(sourceDir, { recursive: true, force: true });
   mkdirSync(sourceDir, { recursive: true });
+  let githubTreeFailure: Error | undefined;
 
   if (
     resolved.identity.type === "github" &&
@@ -1168,14 +1797,18 @@ export async function materializeResolvedSkillSource(
     resolved.identity.repo
   ) {
     const { owner, repo, ref = "HEAD", subpath = "" } = resolved.identity;
-    const treeUrl = `https://api.github.com/repos/${owner}/${repo}/git/trees/${encodeURIComponent(ref)}?recursive=1`;
-    const response = await fetchGithubTree(fetcher, treeUrl);
-    if (response.ok) {
-      const payload: unknown = await response.json();
-      const tree =
-        isRecord(payload) && Array.isArray(payload.tree)
-          ? (payload.tree.filter(isRecord) as GitHubTreeItem[])
-          : [];
+    try {
+      const githubTreeSnapshot = await fetchGithubRepoTreeSnapshot(
+        paths,
+        owner,
+        repo,
+        ref,
+        fetcher,
+        githubTreeCacheSession
+      );
+      const { tree, stale } = githubTreeSnapshot;
+      const materializeRef = githubTreeSnapshot.revision ?? ref;
+      onGithubTreeResolved?.(githubTreeSnapshot);
       const prefix = subpath ? `${subpath}/` : "";
       const blobItems = tree.filter(isGitHubBlobItem);
       const skillRoots = new Set(
@@ -1191,7 +1824,7 @@ export async function materializeResolvedSkillSource(
               fetcher,
               owner,
               repo,
-              ref,
+              materializeRef,
               blobItems,
               requestedSkillName,
               skillRoots,
@@ -1199,17 +1832,62 @@ export async function materializeResolvedSkillSource(
             )
           : null;
         const exactRoot = exactGithubRoot(skillRoots, requestedRoot);
+        if (stale) {
+          if (
+            !(
+              exactRoot !== null &&
+              (await materializeExactGithubRootFromHtml(
+                fetcher,
+                owner,
+                repo,
+                ref,
+                sourceDir,
+                exactRoot
+              ))
+            )
+          ) {
+            throw new Error(
+              "Unable to verify current GitHub skill files from stale tree metadata."
+            );
+          }
+          onExactSourceResolved?.(
+            sourceIdentityForGithubSkillRoot(resolved, exactRoot)
+          );
+          return sourceDir;
+        }
+        const rootsToWrite =
+          requestedRoot === null ? [...skillRoots] : [requestedRoot];
+        let relativePrefix = prefix;
+        if (requestedRoot !== null) {
+          relativePrefix = requestedRoot ? `${requestedRoot}/` : "";
+        }
+        const snapshotRoots = skipSkillsShSnapshots
+          ? new Set<string>()
+          : await writeGithubSkillSnapshotFiles(
+              paths,
+              fetcher,
+              owner,
+              repo,
+              ref,
+              sourceDir,
+              tree,
+              rootsToWrite,
+              relativePrefix
+            );
+        const rawRoots = rootsToWrite.filter(
+          (root) => !snapshotRoots.has(root)
+        );
         await writeGithubSkillFiles(
           fetcher,
           owner,
           repo,
-          ref,
+          materializeRef,
           sourceDir,
-          blobItems,
-          requestedRoot ? [requestedRoot] : [...skillRoots],
-          requestedRoot ? `${requestedRoot}/` : prefix
+          tree,
+          rawRoots,
+          relativePrefix
         );
-        if (exactRoot) {
+        if (exactRoot !== null) {
           onExactSourceResolved?.(
             sourceIdentityForGithubSkillRoot(resolved, exactRoot)
           );
@@ -1221,29 +1899,76 @@ export async function materializeResolvedSkillSource(
             fetcher,
             owner,
             repo,
-            ref,
+            materializeRef,
             blobItems,
             requestedName,
             undefined,
             githubSkillNameCache
           )
         : null;
-      if (matchedRoot) {
+      if (matchedRoot !== null) {
+        if (stale) {
+          if (
+            !(await materializeExactGithubRootFromHtml(
+              fetcher,
+              owner,
+              repo,
+              ref,
+              sourceDir,
+              matchedRoot
+            ))
+          ) {
+            throw new Error(
+              "Unable to verify current GitHub skill files from stale tree metadata."
+            );
+          }
+          onExactSourceResolved?.(
+            sourceIdentityForGithubSkillRoot(resolved, matchedRoot)
+          );
+          return sourceDir;
+        }
+        const snapshotRoots = skipSkillsShSnapshots
+          ? new Set<string>()
+          : await writeGithubSkillSnapshotFiles(
+              paths,
+              fetcher,
+              owner,
+              repo,
+              ref,
+              sourceDir,
+              tree,
+              [matchedRoot],
+              matchedRoot ? `${matchedRoot}/` : ""
+            );
+        const rawRoots = snapshotRoots.has(matchedRoot) ? [] : [matchedRoot];
         await writeGithubSkillFiles(
           fetcher,
           owner,
           repo,
-          ref,
+          materializeRef,
           sourceDir,
-          blobItems,
-          [matchedRoot],
-          `${matchedRoot}/`
+          tree,
+          rawRoots,
+          matchedRoot ? `${matchedRoot}/` : ""
         );
         onExactSourceResolved?.(
           sourceIdentityForGithubSkillRoot(resolved, matchedRoot)
         );
         return sourceDir;
       }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      if (!message.startsWith("GitHub tree fetch failed:")) {
+        throw error;
+      }
+      if (
+        message === "GitHub tree fetch failed: 403" ||
+        message === "GitHub tree fetch failed: 429"
+      ) {
+        githubTreeFailure =
+          error instanceof Error ? error : new Error(String(error));
+      }
+      // Fall back to GitHub HTML when the API tree is unavailable.
     }
     if (exactSubpath && subpath) {
       const htmlExactRoot = await materializeExactGithubRootFromHtml(
@@ -1284,11 +2009,22 @@ export async function materializeResolvedSkillSource(
   if (!resolved.rawUrl) {
     throw new Error("Remote source did not resolve to SKILL.md.");
   }
-  await writeResponseFile(
-    fetcher,
-    resolved.rawUrl,
-    join(sourceDir, SKILL_FILE_NAME)
-  );
+  try {
+    await writeResponseFile(
+      fetcher,
+      resolved.rawUrl,
+      join(sourceDir, SKILL_FILE_NAME)
+    );
+  } catch (error) {
+    if (
+      githubTreeFailure &&
+      error instanceof Error &&
+      error.message === "Fetch failed: 404"
+    ) {
+      throw githubTreeFailure;
+    }
+    throw error;
+  }
   if (resolved.identity.type === "github") {
     onExactSourceResolved?.(
       sourceIdentityForGithubSkillRoot(
@@ -1352,8 +2088,8 @@ export async function fetchSkillsShSearchCache(
   }
   const contentType = response.headers.get("content-type") ?? "";
   const skills = contentType.includes("json")
-    ? skillsFromJsonPayload(await response.json())
-    : skillsFromHtml(await response.text());
+    ? skillsFromJsonPayload(await response.clone().json())
+    : skillsFromHtml(await response.clone().text());
   return {
     version: SEARCH_CACHE_VERSION,
     fetchedAt: new Date().toISOString(),
