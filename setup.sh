@@ -177,6 +177,9 @@ done
 
 echo ""
 
+link_file "$SCRIPT_DIR/AGENTS.global.md" "$PI_AGENT_DIR/AGENTS.md" "AGENTS.md"
+echo ""
+
 link_file "$SCRIPT_DIR/keybindings.json" "$PI_AGENT_DIR/keybindings.json" "keybindings.json"
 echo ""
 

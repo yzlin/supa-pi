@@ -93,7 +93,7 @@ Run `/skill` or `/skill list` in a custom UI session to open the first-slice Ski
 
 Each language folder includes coding-style, patterns, security, and testing guidance.
 
-The root agent protocol and common workflow rules include guidance adapted from `karpathy-guidelines`, licensed under MIT: https://github.com/multica-ai/andrej-karpathy-skills/blob/main/skills/karpathy-guidelines/SKILL.md
+The global agent protocol and common workflow rules include guidance adapted from `karpathy-guidelines`, licensed under MIT: https://github.com/multica-ai/andrej-karpathy-skills/blob/main/skills/karpathy-guidelines/SKILL.md
 
 ## Repository layout
 
@@ -106,6 +106,8 @@ The root agent protocol and common workflow rules include guidance adapted from 
 ├── skills/
 ├── themes/
 ├── docs/
+├── AGENTS.md
+├── AGENTS.global.md
 ├── keybindings.json
 ├── package.json
 └── setup.sh
@@ -125,7 +127,7 @@ cd ~/dev/yzlin/supa-pi
 
 1. create `~/.pi/agent` and `~/.pi/agent/settings.json` if missing
 2. install companion Pi packages with `pi install`
-3. symlink this repo's `keybindings.json`, `agents/`, `prompts/`, and `rules/` into the live Pi agent directory
+3. symlink this repo's `AGENTS.global.md` as `~/.pi/agent/AGENTS.md`, plus `keybindings.json`, `agents/`, `prompts/`, and `rules/` into the live Pi agent directory
 
 After setup, restart Pi to pick up the changes.
 

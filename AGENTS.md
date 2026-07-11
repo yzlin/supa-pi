@@ -1,51 +1,18 @@
 # AGENTS.md
 
-## Agent Protocol
+## Project
 
-- Guardrails: use `trash` for deletes.
-- Bugs: add regression test when it fits.
-- Editor: `zed <path>`.
-- Prefer end-to-end verify; if blocked, say what’s missing.
-- Before non-trivial coding: state assumptions, material ambiguities, and done criteria.
-- Style: telegraph. Drop filler/grammar. Min tokens (global AGENTS + replies).
-- Smallest change that solves task; no drive-by refactors.
-- Follow YAGNI: do not add abstractions, options, or future-proofing unless needed now.
-- Prefer one-line or smallest-diff solutions when they fully solve the task.
-- Every changed line must trace to the user request.
-- No speculative flexibility, config, or abstractions unless required by the task or existing pattern.
+- This repository is the source for Ethan's Pi agent harness; `~/.pi/agent` is the live configuration.
+- Read `CONTEXT.md` before changing product language, setup behavior, extension registration, licensing notes, or durable context docs.
+- Read the matching entries in `CONTEXT-MAP.md` before changing a documented subsystem.
+- Use Bun for package scripts and tests.
 
-## Docs
+## Extensions
 
-- Start: discover relevant docs before coding; use `docs_list` first when available, otherwise use the local docs-list command or equivalent file search.
-- Open docs whose summaries or `read_when` hints match the task.
-- Follow links until domain makes sense.
-- Keep notes short; update docs when behavior/API changes (no ship w/o docs).
-- Add `read_when` hints on cross-cutting docs.
+- Read `extensions/AGENTS.md` before changing files under `extensions/`.
+- Keep `package.json -> pi.extensions` and extension documentation aligned with active runtime registration.
 
-## Critical Thinking
+## Validation
 
-- Fix root cause (not band-aid).
-- Unsure: read more code; if still stuck, ask w/ short options.
-- If multiple materially different interpretations exist, do not choose silently; ask or list options.
-- Conflicts: call out; pick safer path.
-- Unrecognized changes: assume other agent; keep going; focus your changes. If it causes issues, stop + ask user.
-- Leave breadcrumb notes in thread.
-
-## Evidence baseline
-
-- Verify code, files, flags, and current behavior before fixing or recommending from memory.
-- Do not invent citations, URLs, file references, or facts.
-- If a claim is uncertain or unverified, say so explicitly.
-- Distinguish clearly between verified facts, informed inferences, and hypotheses.
-- For factual claims about the codebase, prefer grounding in actual files.
-- For factual claims about external tools/libraries, prefer official docs or directly cited sources.
-
-## Tools
-
-### edit
-
-- Do not use Python scripts to edit files. Use the built-in `edit` tool for targeted file changes.
-
-### trash
-
-- Move files to Trash: `trash …` (system command).
+- Run targeted tests for changed behavior.
+- Run `bun run check` before finishing code changes.
