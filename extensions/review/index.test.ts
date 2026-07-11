@@ -91,14 +91,20 @@ const EMPTY_SUMMARY_REVIEW_REPORT = `## Review Scope
 ## Reviewer Coverage
 - code-reviewer: used / not used`;
 
+type TerminalInputHandler = (
+  data: string
+) => { consume?: boolean; data?: string } | undefined;
+
 function createMockCtx(
   branchEntries: SessionEntry[] = [],
   options: {
     idle?: boolean;
     hasUI?: boolean;
+    mode?: "tui" | "rpc" | "json" | "print";
     select?: (message: string, items: string[]) => Promise<string | null>;
     editor?: (message: string, value: string) => Promise<string | null>;
     custom?: <T>(renderer: unknown) => Promise<T>;
+    onTerminalInput?: (handler: TerminalInputHandler) => () => void;
     cwd?: string;
   } = {}
 ) {
@@ -117,6 +123,7 @@ function createMockCtx(
     ctx: {
       cwd: options.cwd ?? process.cwd(),
       hasUI: options.hasUI ?? true,
+      mode: options.mode ?? (options.hasUI === false ? "print" : "tui"),
       isIdle: () => options.idle ?? true,
       signal: undefined,
       modelRegistry: {
@@ -136,6 +143,7 @@ function createMockCtx(
         notify(message: string, level: string) {
           notifications.push({ message, level });
         },
+        onTerminalInput: options.onTerminalInput ?? (() => () => undefined),
         setStatus(key: string, text: string | undefined) {
           statuses.push({ key, text });
         },
@@ -580,6 +588,7 @@ function installAsyncReviewManager(options: {
   completeAfterMs?: number;
 }) {
   const records = new Map<string, Record<string, unknown>>();
+  let abortCount = 0;
   let nextAgentId = 0;
 
   (globalThis as Record<PropertyKey, unknown>)[
@@ -617,8 +626,14 @@ function installAsyncReviewManager(options: {
       return records.get(id);
     },
     abort() {
+      abortCount += 1;
       return true;
     },
+  };
+
+  return {
+    abortCount: () => abortCount,
+    spawnCount: () => records.size,
   };
 }
 
@@ -1097,6 +1112,49 @@ describe.serial("review workflow progress", () => {
 });
 
 describe.serial("review direct targets", () => {
+  it("cancels a running review when Escape is pressed", async () => {
+    let handleTerminalInput: TerminalInputHandler | undefined;
+    let terminalInputUnsubscribed = false;
+    const runtime = createMockPiRuntime((_command, args) => {
+      if (args.join(" ") === "status --porcelain --untracked-files=all") {
+        return { stdout: " M extensions/review/index.ts\n", code: 0 };
+      }
+      return { stdout: "", code: 0 };
+    });
+    const manager = installAsyncReviewManager({ completeAfterMs: 650 });
+    const { ctx, notifications, widgets } = createMockCtx([], {
+      onTerminalInput(handler) {
+        handleTerminalInput = handler;
+        return () => {
+          terminalInputUnsubscribed = true;
+        };
+      },
+    });
+
+    reviewExtension(runtime.pi as never);
+    const review = runtime.commands
+      .get("review")
+      ?.handler("uncommitted --reviewers code-reviewer", ctx as never);
+    while (manager.spawnCount() === 0) {
+      await new Promise((resolve) => setTimeout(resolve, 1));
+    }
+    const terminalInputResult = handleTerminalInput?.("\u001B");
+    await review;
+
+    expect(getReviewReportMessages(runtime)).toEqual([]);
+    expect(manager.abortCount()).toBe(1);
+    expect(terminalInputResult).toEqual({ consume: true });
+    expect(notifications).toContainEqual({
+      message: "Review cancelled",
+      level: "info",
+    });
+    expect(widgets.at(-1)).toEqual({
+      key: "review-progress",
+      content: undefined,
+    });
+    expect(terminalInputUnsubscribed).toBe(true);
+  });
+
   it("requires a direct target and reviewer mode in headless review", async () => {
     const runtime = createMockPiRuntime();
     const { ctx, notifications } = createMockCtx([], {

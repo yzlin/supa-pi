@@ -51,7 +51,9 @@ import {
   Container,
   fuzzyFilter,
   Input,
+  Key,
   Markdown,
+  matchesKey,
   type SelectItem,
   SelectList,
   Spacer,
@@ -1742,6 +1744,27 @@ export default function reviewExtension(pi: ExtensionAPI) {
       );
     }
 
+    const reviewController = new AbortController();
+    function abortReview(): void {
+      reviewController.abort();
+    }
+
+    if (ctx.signal?.aborted) {
+      abortReview();
+    } else {
+      ctx.signal?.addEventListener("abort", abortReview, { once: true });
+    }
+
+    let unsubscribeTerminalInput: (() => void) | undefined;
+    if (ctx.mode === "tui") {
+      unsubscribeTerminalInput = ctx.ui.onTerminalInput((data) => {
+        if (matchesKey(data, Key.escape)) {
+          abortReview();
+          return { consume: true };
+        }
+        return;
+      });
+    }
     const progressPublisher = createReviewProgressPublisher(ctx);
     let result: Awaited<ReturnType<typeof runReviewWorkflow>>;
     try {
@@ -1752,10 +1775,20 @@ export default function reviewExtension(pi: ExtensionAPI) {
         reviewers,
         verifierModel,
         projectGuidelines,
-        signal: ctx.signal,
+        signal: reviewController.signal,
         onProgress: progressPublisher?.publish,
       });
+    } catch (error) {
+      if (reviewController.signal.aborted) {
+        if (ctx.hasUI !== false) {
+          ctx.ui.notify("Review cancelled", "info");
+        }
+        return false;
+      }
+      throw error;
     } finally {
+      ctx.signal?.removeEventListener("abort", abortReview);
+      unsubscribeTerminalInput?.();
       progressPublisher?.clear();
     }
 
