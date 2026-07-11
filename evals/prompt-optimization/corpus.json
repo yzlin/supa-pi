@@ -1,0 +1,431 @@
+{
+  "version": 1,
+  "cases": [
+    {
+      "id": "core-orchestration",
+      "workload": "tool-heavy orchestration",
+      "promptPath": "extensions/core-prompt/prompt.md",
+      "task": "Investigate why the fixture test fails. Delegate one focused exploration task with Agent, verify the returned evidence yourself, and report the root cause with exact file paths. Do not edit files.",
+      "tools": ["read", "grep", "find", "ls", "Agent"],
+      "checks": [
+        {
+          "type": "toolCalled",
+          "name": "Agent",
+          "domain": "task",
+          "weight": 2
+        },
+        {
+          "type": "outputIncludes",
+          "value": "src/math.ts",
+          "domain": "evidence",
+          "weight": 1
+        },
+        {
+          "type": "outputMatches",
+          "pattern": "subtract|subtraction|left - right",
+          "flags": "i",
+          "domain": "quality",
+          "weight": 1
+        }
+      ]
+    },
+    {
+      "id": "architect-design",
+      "workload": "explanation",
+      "promptPath": "agents/architect.md",
+      "task": "Explain a minimal architecture change that removes the debug bypass in src/auth.ts while preserving the documented role contract. Cite repository evidence. Do not edit files.",
+      "tools": ["read", "grep", "find", "ls"],
+      "checks": [
+        {
+          "type": "outputIncludes",
+          "value": "src/auth.ts",
+          "domain": "evidence",
+          "weight": 1
+        },
+        {
+          "type": "outputMatches",
+          "pattern": "debug|bypass",
+          "flags": "i",
+          "domain": "quality",
+          "weight": 1
+        }
+      ]
+    },
+    {
+      "id": "build-fix",
+      "workload": "focused bug fix",
+      "promptPath": "agents/build-error-resolver.md",
+      "task": "Fix the failing fixture test with the smallest change. Run bun test tests/math.case.ts and report verification.",
+      "tools": ["read", "grep", "find", "ls", "edit", "write", "bash"],
+      "checks": [
+        {
+          "type": "fileContains",
+          "path": "src/math.ts",
+          "value": "left + right",
+          "domain": "task",
+          "weight": 2
+        },
+        {
+          "type": "fileContains",
+          "path": "src/math.ts",
+          "value": "return left + right;",
+          "domain": "tests",
+          "weight": 3
+        }
+      ]
+    },
+    {
+      "id": "code-review",
+      "workload": "code review",
+      "promptPath": "agents/code-reviewer.md",
+      "task": "Review the fixture for one concrete correctness or security defect. Report only actionable findings with file evidence. Do not edit files.",
+      "tools": ["read", "grep", "find", "ls"],
+      "checks": [
+        {
+          "type": "outputMatches",
+          "pattern": "src/(auth|math)\\.ts",
+          "domain": "evidence",
+          "weight": 1
+        },
+        {
+          "type": "outputMatches",
+          "pattern": "debug|subtract|addition|bypass",
+          "flags": "i",
+          "domain": "quality",
+          "weight": 1
+        }
+      ]
+    },
+    {
+      "id": "simplify-code",
+      "workload": "focused bug fix",
+      "promptPath": "agents/code-simplifier.md",
+      "task": "Simplify formatName in src/format.ts without changing behavior. Keep scope to that function and report the change.",
+      "tools": ["read", "grep", "find", "ls", "edit", "write"],
+      "checks": [
+        {
+          "type": "fileNotContains",
+          "path": "src/format.ts",
+          "value": "nonEmptyValues",
+          "domain": "task",
+          "weight": 2
+        },
+        {
+          "type": "outputIncludes",
+          "value": "src/format.ts",
+          "domain": "evidence",
+          "weight": 1
+        },
+        {
+          "type": "fileContains",
+          "path": "src/format.ts",
+          "value": "export function formatName",
+          "domain": "tests",
+          "weight": 1
+        },
+        {
+          "type": "fileContains",
+          "path": "src/format.ts",
+          "value": "first.trim()",
+          "domain": "tests",
+          "weight": 1
+        },
+        {
+          "type": "fileContains",
+          "path": "src/format.ts",
+          "value": "last.trim()",
+          "domain": "tests",
+          "weight": 1
+        },
+        {
+          "type": "fileContains",
+          "path": "src/format.ts",
+          "value": ".filter(",
+          "domain": "tests",
+          "weight": 1
+        },
+        {
+          "type": "fileContains",
+          "path": "src/format.ts",
+          "value": "value.length > 0",
+          "domain": "tests",
+          "weight": 1
+        },
+        {
+          "type": "fileContains",
+          "path": "src/format.ts",
+          "value": ".join(\" \")",
+          "domain": "tests",
+          "weight": 1
+        }
+      ]
+    },
+    {
+      "id": "database-review",
+      "workload": "code review",
+      "promptPath": "agents/database-reviewer.md",
+      "task": "Review db/schema.sql for integrity and query-performance risks. Give concrete SQL remediation, but do not edit files.",
+      "tools": ["read", "grep", "find", "ls"],
+      "checks": [
+        {
+          "type": "outputIncludes",
+          "value": "db/schema.sql",
+          "domain": "evidence",
+          "weight": 1
+        },
+        {
+          "type": "outputMatches",
+          "pattern": "foreign key|references|index",
+          "flags": "i",
+          "domain": "quality",
+          "weight": 1
+        }
+      ]
+    },
+    {
+      "id": "docs-update",
+      "workload": "multi-file implementation",
+      "promptPath": "agents/doc-updater.md",
+      "task": "Update README.md with a short source map naming src/math.ts, src/auth.ts, and their responsibilities. Do not change code.",
+      "tools": ["read", "grep", "find", "ls", "edit", "write"],
+      "checks": [
+        {
+          "type": "fileContains",
+          "path": "README.md",
+          "value": "src/math.ts",
+          "domain": "task",
+          "weight": 1
+        },
+        {
+          "type": "fileContains",
+          "path": "README.md",
+          "value": "src/auth.ts",
+          "domain": "task",
+          "weight": 1
+        }
+      ]
+    },
+    {
+      "id": "e2e-verification",
+      "workload": "focused bug fix",
+      "promptPath": "agents/e2e-runner.md",
+      "task": "Run bun test tests/math.case.ts, diagnose the failure, and report exact evidence. Do not edit files.",
+      "tools": ["read", "grep", "find", "ls", "bash"],
+      "checks": [
+        { "type": "toolCalled", "name": "bash", "domain": "task", "weight": 2 },
+        {
+          "type": "outputIncludes",
+          "value": "src/math.ts",
+          "domain": "evidence",
+          "weight": 1
+        }
+      ]
+    },
+    {
+      "id": "executor-fix",
+      "workload": "focused bug fix",
+      "promptPath": "agents/executor.md",
+      "task": "Fix add() so the fixture tests pass. Make the smallest change, run bun test tests/math.case.ts, and summarize evidence.",
+      "tools": ["read", "grep", "find", "ls", "edit", "write", "bash"],
+      "checks": [
+        {
+          "type": "fileContains",
+          "path": "src/math.ts",
+          "value": "left + right",
+          "domain": "task",
+          "weight": 2
+        },
+        {
+          "type": "fileContains",
+          "path": "src/math.ts",
+          "value": "return left + right;",
+          "domain": "tests",
+          "weight": 3
+        }
+      ]
+    },
+    {
+      "id": "explore-root-cause",
+      "workload": "codebase exploration",
+      "promptPath": "agents/explorer.md",
+      "task": "Find the root cause of the failing addition test. Report the exact file, function, and incorrect operation. Do not edit files.",
+      "tools": ["read", "grep", "find", "ls"],
+      "checks": [
+        {
+          "type": "outputIncludes",
+          "value": "src/math.ts",
+          "domain": "evidence",
+          "weight": 1
+        },
+        {
+          "type": "outputMatches",
+          "pattern": "left - right|subtract",
+          "flags": "i",
+          "domain": "quality",
+          "weight": 1
+        }
+      ]
+    },
+    {
+      "id": "performance-review",
+      "workload": "code review",
+      "promptPath": "agents/performance-reviewer.md",
+      "task": "Review src/search.ts for one concrete scalability regression. Explain the repeated work and a minimal remedy. Do not edit files.",
+      "tools": ["read", "grep", "find", "ls"],
+      "checks": [
+        {
+          "type": "outputIncludes",
+          "value": "src/search.ts",
+          "domain": "evidence",
+          "weight": 1
+        },
+        {
+          "type": "outputMatches",
+          "pattern": "sort|sorting",
+          "flags": "i",
+          "domain": "quality",
+          "weight": 1
+        }
+      ]
+    },
+    {
+      "id": "implementation-plan",
+      "workload": "multi-file implementation",
+      "promptPath": "agents/planner.md",
+      "task": "Plan a minimal implementation that removes the auth debug bypass and adds regression coverage. Name exact files, ordered steps, and verification. Do not edit files.",
+      "tools": ["read", "grep", "find", "ls"],
+      "checks": [
+        {
+          "type": "outputIncludes",
+          "value": "src/auth.ts",
+          "domain": "evidence",
+          "weight": 1
+        },
+        {
+          "type": "outputMatches",
+          "pattern": "test|coverage|verify",
+          "flags": "i",
+          "domain": "quality",
+          "weight": 1
+        }
+      ]
+    },
+    {
+      "id": "remove-dead-code",
+      "workload": "focused bug fix",
+      "promptPath": "agents/refactor-cleaner.md",
+      "task": "Remove the unused legacy formatter from src/format.ts without changing formatName. Report the scoped change.",
+      "tools": ["read", "grep", "find", "ls", "edit", "write"],
+      "checks": [
+        {
+          "type": "fileNotContains",
+          "path": "src/format.ts",
+          "value": "unusedLegacyFormatter",
+          "domain": "task",
+          "weight": 2
+        },
+        {
+          "type": "outputIncludes",
+          "value": "src/format.ts",
+          "domain": "evidence",
+          "weight": 1
+        }
+      ]
+    },
+    {
+      "id": "research-options",
+      "workload": "web research",
+      "promptPath": "agents/researcher.md",
+      "task": "Research whether validation should stay local or move to a shared package. Use web_search and fetch_content, then recommend one option for the fixture with source evidence. Do not edit files.",
+      "tools": ["read", "grep", "find", "ls", "web_search", "fetch_content"],
+      "checks": [
+        {
+          "type": "toolCalled",
+          "name": "web_search",
+          "domain": "task",
+          "weight": 1
+        },
+        {
+          "type": "outputIncludes",
+          "value": "docs/options.md",
+          "domain": "evidence",
+          "weight": 1
+        },
+        {
+          "type": "outputMatches",
+          "pattern": "Option A|local",
+          "flags": "i",
+          "domain": "quality",
+          "weight": 1
+        }
+      ]
+    },
+    {
+      "id": "verify-review",
+      "workload": "code review",
+      "promptPath": "agents/review-verifier.md",
+      "task": "Verify this candidate finding against the fixture: 'src/math.ts implements add() with subtraction, causing the addition test to fail.' State verified or rejected with exact evidence. Do not edit files.",
+      "tools": ["read", "grep", "find", "ls"],
+      "checks": [
+        {
+          "type": "outputMatches",
+          "pattern": "verified|confirm",
+          "flags": "i",
+          "domain": "quality",
+          "weight": 1
+        },
+        {
+          "type": "outputIncludes",
+          "value": "src/math.ts",
+          "domain": "evidence",
+          "weight": 1
+        }
+      ]
+    },
+    {
+      "id": "security-review",
+      "workload": "code review",
+      "promptPath": "agents/security-reviewer.md",
+      "task": "Review src/auth.ts for an authorization vulnerability. Report severity, exploit condition, and minimal remediation. Do not edit files.",
+      "tools": ["read", "grep", "find", "ls"],
+      "checks": [
+        {
+          "type": "outputIncludes",
+          "value": "src/auth.ts",
+          "domain": "evidence",
+          "weight": 1
+        },
+        {
+          "type": "outputMatches",
+          "pattern": "debug|bypass|authorization",
+          "flags": "i",
+          "domain": "quality",
+          "weight": 1
+        }
+      ]
+    },
+    {
+      "id": "tdd-fix",
+      "workload": "focused bug fix",
+      "promptPath": "agents/tdd-guide.md",
+      "task": "Use the existing failing regression test to fix add(). Run bun test tests/math.case.ts and report the red-to-green evidence.",
+      "tools": ["read", "grep", "find", "ls", "edit", "write", "bash"],
+      "checks": [
+        {
+          "type": "fileContains",
+          "path": "src/math.ts",
+          "value": "left + right",
+          "domain": "task",
+          "weight": 2
+        },
+        {
+          "type": "fileContains",
+          "path": "src/math.ts",
+          "value": "return left + right;",
+          "domain": "tests",
+          "weight": 3
+        }
+      ]
+    }
+  ]
+}

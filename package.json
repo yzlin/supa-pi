@@ -46,6 +46,8 @@
   "scripts": {
     "check": "biome check .",
     "check:write": "biome check --write .",
+    "eval:prompts": "bun scripts/eval-prompts.ts",
+    "eval:prompts:test": "bun test evals/prompt-optimization",
     "format": "biome format --write .",
     "lint": "biome lint .",
     "lint:fix": "biome lint --write .",
