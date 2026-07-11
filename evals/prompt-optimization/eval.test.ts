@@ -430,6 +430,14 @@ describe("scoreRun and aggregateVariants", () => {
     );
 
     expect(aggregate.scoreDelta).toBe(0.25);
+    expect(aggregate.baselineMetrics).toMatchObject({
+      inputTokens: 100,
+      latencyMs: 500,
+    });
+    expect(aggregate.candidateMetrics).toMatchObject({
+      inputTokens: 80,
+      latencyMs: 400,
+    });
     expect(aggregate.inputTokenDelta).toBe(-20);
     expect(aggregate.latencyMsDelta).toBe(-100);
   });

@@ -1,6 +1,6 @@
 # Prompt optimization evals
 
-Paired live-model benchmark for SupaPi prompt changes. It compares committed `HEAD` prompt text with the current working-tree prompt text without checking out, stashing, or resetting files.
+Paired live-model benchmark for SupaPi prompt and reasoning-effort changes. Prompt mode compares committed `HEAD` prompt text with current working-tree text. Reasoning mode compares two thinking levels against identical working-tree prompt bytes. Neither mode checks out, stashes, or resets files.
 
 ## Run
 
@@ -16,8 +16,11 @@ bun run eval:prompts
 # Better variance estimate
 bun run eval:prompts -- --repetitions 3
 
-# Compare reasoning effort while holding everything else fixed
-bun run eval:prompts -- --thinking medium --repetitions 3
+# Compare reasoning effort while holding model and prompt bytes fixed
+bun run eval:prompts -- --thinking high --candidate-thinking medium --repetitions 3
+
+# Compare a route-specific subset; --case is repeatable
+bun run eval:prompts -- --model openai-codex/gpt-5.6-terra --thinking low --candidate-thinking medium --case docs-update --case e2e-verification --repetitions 3
 
 # Select another model
 bun run eval:prompts -- --model openai-codex/gpt-5.6-sol
@@ -33,11 +36,19 @@ Live runs consume provider quota and can take several minutes. Prompts, fixture 
 
 ## What is compared
 
+Prompt mode (default):
+
 - **Baseline:** exact bytes from `git show <captured-HEAD>:<prompt-path>`.
 - **Candidate:** exact bytes from the same path in the working tree.
 - **Held constant:** fixture, task, tools, model, reasoning effort, timeout, max turns, and deterministic checks.
-- **Isolation:** every variant/repetition gets a fresh temporary copy of the fixture.
-- **Core route:** a pinned production-like Pi base prompt is shared by both variants before appending the evaluated core prompt.
+
+Reasoning mode (`--candidate-thinking <level>`):
+
+- **Baseline:** working-tree prompt bytes with `--thinking <level>`.
+- **Candidate:** identical working-tree prompt bytes with `--candidate-thinking <level>`.
+- **Held constant:** prompt, fixture, task, tools, model, timeout, max turns, and deterministic checks.
+
+Both modes isolate every variant/repetition in a fresh temporary fixture copy and a fresh Pi UUIDv7 session. The session ID supplies the Codex `prompt_cache_key` and WebSocket request identity used by the TUI; each Codex WebSocket session is closed after its arm completes. The core route shares one pinned production-like Pi base prompt before appending the evaluated core prompt.
 
 The fixed corpus covers explanation, focused bug fixing, multi-file implementation, exploration, review, offline web-research behavior, and tool-heavy orchestration. It includes every prompt currently optimized under `agents/*.md` plus `extensions/core-prompt/prompt.md`. A full run fails before model calls when a changed prompt lacks corpus coverage.
 
@@ -52,7 +63,7 @@ Deterministic checks score four independent domains:
 - `evidence` — required paths/facts in the answer
 - `quality` — task-specific deterministic output criteria
 
-Efficiency is reported separately, not folded into quality:
+Efficiency is reported separately, not folded into quality. Summaries include each arm's absolute averages and candidate-minus-baseline deltas:
 
 - input, output, reasoning, cache-read, and cache-write tokens
 - provider cost
@@ -77,7 +88,7 @@ Ignored artifacts are written to:
   runs/<case>-<variant>-r<repetition>.json
 ```
 
-`manifest.json` pins the `HEAD` commit, candidate diff hash, corpus hash, prompt hashes, selected cases, model, reasoning effort, repetitions, and limits. Artifacts exclude credentials, provider headers, environment values, and hidden reasoning text.
+`manifest.json` pins the `HEAD` commit, candidate diff hash, corpus hash, prompt hashes, comparison kind and arms, selected cases, model, reasoning effort, repetitions, and limits. Artifacts exclude credentials, provider headers, environment values, and hidden reasoning text.
 
 Interpret deltas as **candidate minus baseline**:
 

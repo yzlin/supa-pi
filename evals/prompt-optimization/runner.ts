@@ -27,11 +27,13 @@ import type {
   ThinkingLevel,
 } from "@earendil-works/pi-agent-core";
 import { agentLoop } from "@earendil-works/pi-agent-core";
+import { closeOpenAICodexWebSocketSessions } from "@earendil-works/pi-ai/api/openai-codex-responses";
 import type { Api, Model } from "@earendil-works/pi-ai/compat";
 import {
   convertToLlm,
   createCodingTools,
   createReadOnlyTools,
+  SessionManager,
 } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
 
@@ -56,6 +58,7 @@ export interface RunRecord {
   promptPath: string;
   variant: EvalVariant;
   repetition: number;
+  sessionId: string;
   model: string;
   responseModel?: string;
   thinking: ThinkingLevel;
@@ -267,6 +270,7 @@ export async function runVariant(
   options: RunVariantOptions
 ): Promise<RunRecord> {
   const workspace = await mkdtemp(join(tmpdir(), "supa-pi-prompt-eval-"));
+  const sessionId = SessionManager.inMemory().getSessionId();
   await copyFixture(options.fixturePath, workspace);
   const tools = createTools(workspace, options.evalCase.tools);
   const context: AgentContext = {
@@ -302,6 +306,8 @@ export async function runVariant(
       {
         model: options.model,
         reasoning: options.thinking === "off" ? undefined : options.thinking,
+        sessionId,
+        transport: "auto",
         convertToLlm: (messages) => convertToLlm(messages),
         getApiKey: options.getApiKey,
         beforeToolCall: async ({ toolCall, args }) => {
@@ -368,6 +374,7 @@ export async function runVariant(
   } finally {
     clearTimeout(timeout);
     metrics.latencyMs = Math.round(performance.now() - startedAt);
+    closeOpenAICodexWebSocketSessions(sessionId);
   }
 
   const { failedToolKeys: _failedToolKeys, ...publicMetrics } =
@@ -393,6 +400,7 @@ export async function runVariant(
       promptPath: options.evalCase.promptPath,
       variant: options.variant,
       repetition: options.repetition,
+      sessionId,
       model: `${options.model.provider}/${options.model.id}`,
       responseModel,
       thinking: options.thinking,

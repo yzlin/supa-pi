@@ -116,6 +116,8 @@ export interface AggregateDelta {
   baselineScore: number;
   candidateScore: number;
   scoreDelta: number;
+  baselineMetrics: RunMetrics;
+  candidateMetrics: RunMetrics;
   inputTokenDelta: number;
   outputTokenDelta: number;
   reasoningTokenDelta: number;
@@ -535,6 +537,25 @@ function average(
   );
 }
 
+function averageMetrics(records: VariantRecord[]): RunMetrics {
+  const metric = (select: (metrics: RunMetrics) => number): number =>
+    average(records, (record) => select(record.metrics));
+  return {
+    inputTokens: metric((metrics) => metrics.inputTokens),
+    outputTokens: metric((metrics) => metrics.outputTokens),
+    reasoningTokens: metric((metrics) => metrics.reasoningTokens),
+    cacheReadTokens: metric((metrics) => metrics.cacheReadTokens),
+    cacheWriteTokens: metric((metrics) => metrics.cacheWriteTokens),
+    costUsd: metric((metrics) => metrics.costUsd),
+    latencyMs: metric((metrics) => metrics.latencyMs),
+    turns: metric((metrics) => metrics.turns),
+    toolCalls: metric((metrics) => metrics.toolCalls),
+    toolErrors: metric((metrics) => metrics.toolErrors),
+    recoveredToolErrors: metric((metrics) => metrics.recoveredToolErrors),
+    retries: metric((metrics) => metrics.retries),
+  };
+}
+
 export function aggregateVariants(
   baseline: VariantRecord[],
   candidate: VariantRecord[]
@@ -550,9 +571,10 @@ export function aggregateVariants(
   );
   const baselineScore = average(baseline, (record) => record.score);
   const candidateScore = average(candidate, (record) => record.score);
-  const metricDelta = (select: (metrics: RunMetrics) => number): number =>
-    average(candidate, (record) => select(record.metrics)) -
-    average(baseline, (record) => select(record.metrics));
+  const baselineMetrics = averageMetrics(baseline);
+  const candidateMetrics = averageMetrics(candidate);
+  const metricDelta = (key: keyof RunMetrics): number =>
+    candidateMetrics[key] - baselineMetrics[key];
 
   return {
     baselinePassRate,
@@ -561,15 +583,17 @@ export function aggregateVariants(
     baselineScore,
     candidateScore,
     scoreDelta: candidateScore - baselineScore,
-    inputTokenDelta: metricDelta((metrics) => metrics.inputTokens),
-    outputTokenDelta: metricDelta((metrics) => metrics.outputTokens),
-    reasoningTokenDelta: metricDelta((metrics) => metrics.reasoningTokens),
-    cacheReadTokenDelta: metricDelta((metrics) => metrics.cacheReadTokens),
-    cacheWriteTokenDelta: metricDelta((metrics) => metrics.cacheWriteTokens),
-    latencyMsDelta: metricDelta((metrics) => metrics.latencyMs),
-    toolCallDelta: metricDelta((metrics) => metrics.toolCalls),
-    turnDelta: metricDelta((metrics) => metrics.turns),
-    retryDelta: metricDelta((metrics) => metrics.retries),
-    costUsdDelta: metricDelta((metrics) => metrics.costUsd),
+    baselineMetrics,
+    candidateMetrics,
+    inputTokenDelta: metricDelta("inputTokens"),
+    outputTokenDelta: metricDelta("outputTokens"),
+    reasoningTokenDelta: metricDelta("reasoningTokens"),
+    cacheReadTokenDelta: metricDelta("cacheReadTokens"),
+    cacheWriteTokenDelta: metricDelta("cacheWriteTokens"),
+    latencyMsDelta: metricDelta("latencyMs"),
+    toolCallDelta: metricDelta("toolCalls"),
+    turnDelta: metricDelta("turns"),
+    retryDelta: metricDelta("retries"),
+    costUsdDelta: metricDelta("costUsd"),
   };
 }

@@ -18,6 +18,8 @@ const fixturePath = resolve(
   "fixtures/sample-project"
 );
 const modelRegistry = ModelRegistry.inMemory(AuthStorage.create());
+const UUID_V7_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 
 function createMessage(
   model: Model<Api>,
@@ -105,6 +107,7 @@ describe("runVariant", () => {
       ],
     };
 
+    let observedSessionId: string | undefined;
     const result = await runVariant({
       evalCase,
       variant: "candidate",
@@ -117,10 +120,15 @@ describe("runVariant", () => {
       timeoutMs: 5000,
       maxTurns: 3,
       getApiKey: () => Promise.resolve("test-key"),
-      streamFn: (selectedModel) => createSuccessfulStream(selectedModel),
+      streamFn: (selectedModel, _context, options) => {
+        observedSessionId = options?.sessionId;
+        return createSuccessfulStream(selectedModel);
+      },
     });
 
     expect(result.completed).toBe(true);
+    expect(result.sessionId).toBe(observedSessionId);
+    expect(result.sessionId).toMatch(UUID_V7_PATTERN);
     expect(result.score.overall).toBe(1);
     expect(result.output).toContain("src/math.ts");
     expect(result.metrics).toMatchObject({

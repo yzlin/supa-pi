@@ -28,14 +28,45 @@ const DEFAULT_TIMEOUT_MS = 300_000;
 const DEFAULT_MAX_TURNS = 20;
 
 interface CliOptions {
-  caseId?: string;
+  caseIds: string[];
   help: boolean;
   model: string;
   thinking: ThinkingLevel;
+  candidateThinking?: ThinkingLevel;
   repetitions: number;
   timeoutMs: number;
   maxTurns: number;
 }
+
+interface VariantConfig {
+  promptContent: string;
+  promptSha256: string;
+  thinking: ThinkingLevel;
+}
+
+type ComparisonKind = "prompt" | "reasoning";
+type PromptSource = "head" | "working-tree";
+
+interface Comparison {
+  kind: ComparisonKind;
+  baseline: { thinking: ThinkingLevel; promptSource: PromptSource };
+  candidate: { thinking: ThinkingLevel; promptSource: PromptSource };
+}
+
+interface ReasoningModelSupport {
+  reasoning: boolean;
+  thinkingLevelMap?: Partial<Record<ThinkingLevel, string | null>>;
+}
+
+const THINKING_LEVELS: ThinkingLevel[] = [
+  "off",
+  "minimal",
+  "low",
+  "medium",
+  "high",
+  "xhigh",
+  "max",
+];
 
 interface EvalSummary {
   aggregate: AggregateDelta;
@@ -52,6 +83,7 @@ function parsePositiveInteger(value: string | undefined, flag: string): number {
 
 export function parseCliOptions(args: string[]): CliOptions {
   const options: CliOptions = {
+    caseIds: [],
     help: false,
     model: DEFAULT_MODEL,
     thinking: DEFAULT_THINKING,
@@ -59,16 +91,6 @@ export function parseCliOptions(args: string[]): CliOptions {
     timeoutMs: DEFAULT_TIMEOUT_MS,
     maxTurns: DEFAULT_MAX_TURNS,
   };
-  const levels: ThinkingLevel[] = [
-    "off",
-    "minimal",
-    "low",
-    "medium",
-    "high",
-    "xhigh",
-    "max",
-  ];
-
   for (let index = 0; index < args.length; index += 1) {
     const flag = args[index];
     const value = args[index + 1];
@@ -77,7 +99,9 @@ export function parseCliOptions(args: string[]): CliOptions {
         if (!value) {
           throw new Error("--case requires an id");
         }
-        options.caseId = value;
+        if (!options.caseIds.includes(value)) {
+          options.caseIds.push(value);
+        }
         index += 1;
         break;
       case "--model":
@@ -88,10 +112,21 @@ export function parseCliOptions(args: string[]): CliOptions {
         index += 1;
         break;
       case "--thinking":
-        if (!levels.includes(value as ThinkingLevel)) {
-          throw new Error(`--thinking must be one of: ${levels.join(", ")}`);
+        if (!THINKING_LEVELS.includes(value as ThinkingLevel)) {
+          throw new Error(
+            `--thinking must be one of: ${THINKING_LEVELS.join(", ")}`
+          );
         }
         options.thinking = value as ThinkingLevel;
+        index += 1;
+        break;
+      case "--candidate-thinking":
+        if (!THINKING_LEVELS.includes(value as ThinkingLevel)) {
+          throw new Error(
+            `--candidate-thinking must be one of: ${THINKING_LEVELS.join(", ")}`
+          );
+        }
+        options.candidateThinking = value as ThinkingLevel;
         index += 1;
         break;
       case "--repetitions":
@@ -114,7 +149,44 @@ export function parseCliOptions(args: string[]): CliOptions {
     }
   }
 
+  if (options.candidateThinking === options.thinking) {
+    throw new Error("reasoning comparison requires different thinking levels");
+  }
+
   return options;
+}
+
+export function createVariantConfigs(
+  pair: PromptPair,
+  options: Pick<CliOptions, "thinking" | "candidateThinking">
+): Record<EvalVariant, VariantConfig> {
+  if (options.candidateThinking) {
+    return {
+      baseline: {
+        promptContent: pair.candidate.content,
+        promptSha256: pair.candidate.sha256,
+        thinking: options.thinking,
+      },
+      candidate: {
+        promptContent: pair.candidate.content,
+        promptSha256: pair.candidate.sha256,
+        thinking: options.candidateThinking,
+      },
+    };
+  }
+
+  return {
+    baseline: {
+      promptContent: pair.baseline.content,
+      promptSha256: pair.baseline.sha256,
+      thinking: options.thinking,
+    },
+    candidate: {
+      promptContent: pair.candidate.content,
+      promptSha256: pair.candidate.sha256,
+      thinking: options.thinking,
+    },
+  };
 }
 
 async function gitOutput(
@@ -217,27 +289,81 @@ function signed(value: number, digits = 2): string {
   return `${value >= 0 ? "+" : ""}${value.toFixed(digits)}`;
 }
 
-function summaryMarkdown(summary: EvalSummary): string {
+export function createComparison(options: CliOptions): Comparison {
+  return {
+    kind: options.candidateThinking ? "reasoning" : "prompt",
+    baseline: {
+      thinking: options.thinking,
+      promptSource: options.candidateThinking ? "working-tree" : "head",
+    },
+    candidate: {
+      thinking: options.candidateThinking ?? options.thinking,
+      promptSource: "working-tree",
+    },
+  };
+}
+
+export function validateReasoningComparison(
+  model: ReasoningModelSupport,
+  comparison: Comparison
+): void {
+  if (comparison.kind !== "reasoning") {
+    return;
+  }
+  if (!model.reasoning) {
+    throw new Error("selected model does not support reasoning");
+  }
+
+  const baselineLevel = comparison.baseline.thinking;
+  const candidateLevel = comparison.candidate.thinking;
+  const baselineEffort = model.thinkingLevelMap?.[baselineLevel];
+  const candidateEffort = model.thinkingLevelMap?.[candidateLevel];
+  if (baselineEffort === null) {
+    throw new Error(
+      `selected model does not support baseline thinking level: ${baselineLevel}`
+    );
+  }
+  if (candidateEffort === null) {
+    throw new Error(
+      `selected model does not support candidate thinking level: ${candidateLevel}`
+    );
+  }
+  if (
+    typeof baselineEffort === "string" &&
+    baselineEffort === candidateEffort
+  ) {
+    throw new Error(
+      `${baselineLevel} and ${candidateLevel} map to the same provider effort`
+    );
+  }
+}
+
+function summaryMarkdown(summary: EvalSummary, comparison: Comparison): string {
   const aggregate = summary.aggregate;
+  const baseline = aggregate.baselineMetrics;
+  const candidate = aggregate.candidateMetrics;
+  const title = comparison.kind === "reasoning" ? "Reasoning" : "Prompt";
+  const baselineLabel = `Baseline (${comparison.baseline.thinking})`;
+  const candidateLabel = `Candidate (${comparison.candidate.thinking})`;
   const lines = [
-    "# Prompt eval summary",
+    `# ${title} eval summary`,
     "",
     "Candidate minus baseline. Positive quality/pass deltas are better; negative latency/token/cost deltas are better.",
     "",
-    "| Metric | Baseline | Candidate | Delta |",
+    `| Metric | ${baselineLabel} | ${candidateLabel} | Delta |`,
     "| --- | ---: | ---: | ---: |",
     `| Pass rate | ${(aggregate.baselinePassRate * 100).toFixed(1)}% | ${(aggregate.candidatePassRate * 100).toFixed(1)}% | ${signed(aggregate.passRateDelta * 100, 1)} pp |`,
     `| Deterministic score | ${aggregate.baselineScore.toFixed(3)} | ${aggregate.candidateScore.toFixed(3)} | ${signed(aggregate.scoreDelta, 3)} |`,
-    `| Input tokens | — | — | ${signed(aggregate.inputTokenDelta, 0)} |`,
-    `| Output tokens | — | — | ${signed(aggregate.outputTokenDelta, 0)} |`,
-    `| Reasoning tokens | — | — | ${signed(aggregate.reasoningTokenDelta, 0)} |`,
-    `| Cache read tokens | — | — | ${signed(aggregate.cacheReadTokenDelta, 0)} |`,
-    `| Cache write tokens | — | — | ${signed(aggregate.cacheWriteTokenDelta, 0)} |`,
-    `| Latency | — | — | ${signed(aggregate.latencyMsDelta, 0)} ms |`,
-    `| Tool calls | — | — | ${signed(aggregate.toolCallDelta, 1)} |`,
-    `| Turns | — | — | ${signed(aggregate.turnDelta, 1)} |`,
-    `| Retries | — | — | ${signed(aggregate.retryDelta, 1)} |`,
-    `| Cost | — | — | ${signed(aggregate.costUsdDelta, 4)} USD |`,
+    `| Input tokens | ${baseline.inputTokens.toFixed(0)} | ${candidate.inputTokens.toFixed(0)} | ${signed(aggregate.inputTokenDelta, 0)} |`,
+    `| Output tokens | ${baseline.outputTokens.toFixed(0)} | ${candidate.outputTokens.toFixed(0)} | ${signed(aggregate.outputTokenDelta, 0)} |`,
+    `| Reasoning tokens | ${baseline.reasoningTokens.toFixed(0)} | ${candidate.reasoningTokens.toFixed(0)} | ${signed(aggregate.reasoningTokenDelta, 0)} |`,
+    `| Cache read tokens | ${baseline.cacheReadTokens.toFixed(0)} | ${candidate.cacheReadTokens.toFixed(0)} | ${signed(aggregate.cacheReadTokenDelta, 0)} |`,
+    `| Cache write tokens | ${baseline.cacheWriteTokens.toFixed(0)} | ${candidate.cacheWriteTokens.toFixed(0)} | ${signed(aggregate.cacheWriteTokenDelta, 0)} |`,
+    `| Latency | ${baseline.latencyMs.toFixed(0)} ms | ${candidate.latencyMs.toFixed(0)} ms | ${signed(aggregate.latencyMsDelta, 0)} ms |`,
+    `| Tool calls | ${baseline.toolCalls.toFixed(1)} | ${candidate.toolCalls.toFixed(1)} | ${signed(aggregate.toolCallDelta, 1)} |`,
+    `| Turns | ${baseline.turns.toFixed(1)} | ${candidate.turns.toFixed(1)} | ${signed(aggregate.turnDelta, 1)} |`,
+    `| Retries | ${baseline.retries.toFixed(1)} | ${candidate.retries.toFixed(1)} | ${signed(aggregate.retryDelta, 1)} |`,
+    `| Cost | ${baseline.costUsd.toFixed(4)} USD | ${candidate.costUsd.toFixed(4)} USD | ${signed(aggregate.costUsdDelta, 4)} USD |`,
     "",
     "## Per case",
     "",
@@ -267,7 +393,7 @@ export async function main(): Promise<void> {
   const options = parseCliOptions(process.argv.slice(2));
   if (options.help) {
     process.stdout.write(
-      "Usage: bun run eval:prompts -- [options]\n\nOptions:\n  --case <id>\n  --model <provider/model>\n  --thinking <level>\n  --repetitions <count>\n  --timeout-ms <milliseconds>\n  --max-turns <count>\n"
+      "Usage: bun run eval:prompts -- [options]\n\nOptions:\n  --case <id> (repeatable)\n  --model <provider/model>\n  --thinking <level>\n  --candidate-thinking <level>\n  --repetitions <count>\n  --timeout-ms <milliseconds>\n  --max-turns <count>\n"
     );
     return;
   }
@@ -278,15 +404,29 @@ export async function main(): Promise<void> {
   const corpusContent = await readFile(corpusPath, "utf8");
   const corpusSha256 = createHash("sha256").update(corpusContent).digest("hex");
   const corpus = parseCorpus(JSON.parse(corpusContent));
-  const selectedCases = options.caseId
-    ? corpus.cases.filter((evalCase) => evalCase.id === options.caseId)
-    : corpus.cases;
-  if (selectedCases.length === 0) {
-    throw new Error(`unknown eval case: ${options.caseId}`);
+  const casesById = new Map(
+    corpus.cases.map((evalCase) => [evalCase.id, evalCase])
+  );
+  const unknownCaseIds = options.caseIds.filter(
+    (caseId) => !casesById.has(caseId)
+  );
+  if (unknownCaseIds.length > 0) {
+    throw new Error(`unknown eval case: ${unknownCaseIds.join(", ")}`);
   }
-  if (!options.caseId) {
+  const selectedCases =
+    options.caseIds.length > 0
+      ? options.caseIds.map((caseId) => {
+          const evalCase = casesById.get(caseId);
+          if (!evalCase) {
+            throw new Error(`unknown eval case: ${caseId}`);
+          }
+          return evalCase;
+        })
+      : corpus.cases;
+  if (options.caseIds.length === 0) {
     assertCorpusCoverage(corpus, await changedPromptPaths(repositoryRoot));
   }
+  const comparison = createComparison(options);
   const startedFromHead = (
     await gitOutput(repositoryRoot, ["rev-parse", "HEAD"])
   ).trim();
@@ -309,22 +449,28 @@ export async function main(): Promise<void> {
   if (resolvedModel.error || !resolvedModel.model) {
     throw new Error(resolvedModel.error ?? `model not found: ${options.model}`);
   }
+  validateReasoningComparison(resolvedModel.model, comparison);
   const auth = await modelRegistry.getApiKeyAndHeaders(resolvedModel.model);
-  if (!auth.ok) {
+  if (auth.ok === false) {
     throw new Error(auth.error);
   }
 
   const promptPairs = new Map<string, PromptPair>();
+  const variantConfigs = new Map<string, Record<EvalVariant, VariantConfig>>();
   for (const path of new Set(
     selectedCases.map((evalCase) => evalCase.promptPath)
   )) {
     const pair = await loadPromptPair(repositoryRoot, path, startedFromHead);
-    if (pair.baseline.sha256 === pair.candidate.sha256) {
+    if (
+      comparison.kind === "prompt" &&
+      pair.baseline.sha256 === pair.candidate.sha256
+    ) {
       throw new Error(
         `prompt is unchanged between HEAD and working tree: ${path}`
       );
     }
     promptPairs.set(path, pair);
+    variantConfigs.set(path, createVariantConfigs(pair, options));
   }
 
   const totalCalls = selectedCases.length * options.repetitions * 2;
@@ -342,6 +488,10 @@ export async function main(): Promise<void> {
     if (!pair) {
       throw new Error(`missing prompt pair: ${evalCase.promptPath}`);
     }
+    const configs = variantConfigs.get(evalCase.promptPath);
+    if (!configs) {
+      throw new Error(`missing variant configs: ${evalCase.promptPath}`);
+    }
     for (
       let repetition = 1;
       repetition <= options.repetitions;
@@ -355,17 +505,17 @@ export async function main(): Promise<void> {
         process.stdout.write(
           `[${records.length + 1}/${totalCalls}] ${evalCase.id} ${variant} r${repetition}\n`
         );
-        const snapshot = pair[variant];
+        const config = configs[variant];
         records.push(
           await runVariant({
             evalCase,
             variant,
             repetition,
-            promptContent: snapshot.content,
-            promptSha256: snapshot.sha256,
+            promptContent: config.promptContent,
+            promptSha256: config.promptSha256,
             fixturePath,
             model: resolvedModel.model,
-            thinking: options.thinking,
+            thinking: config.thinking,
             timeoutMs: options.timeoutMs,
             maxTurns: options.maxTurns,
             getApiKey: (provider) =>
@@ -407,18 +557,18 @@ export async function main(): Promise<void> {
     `${timestamp}-${startedFromHead.slice(0, 8)}`
   );
   await mkdir(join(outputDirectory, "runs"), { recursive: true });
-  for (const [path, pair] of promptPairs) {
+  for (const [path, configs] of variantConfigs) {
     await writePromptSnapshot(
       outputDirectory,
       "baseline",
       path,
-      pair.baseline.content
+      configs.baseline.promptContent
     );
     await writePromptSnapshot(
       outputDirectory,
       "candidate",
       path,
-      pair.candidate.content
+      configs.candidate.promptContent
     );
   }
   for (const record of records) {
@@ -440,20 +590,22 @@ export async function main(): Promise<void> {
     coreEvalBasePromptSha256: createHash("sha256")
       .update(CORE_EVAL_BASE_PROMPT)
       .digest("hex"),
-    partial: Boolean(options.caseId),
+    partial: options.caseIds.length > 0,
     selectedCases: selectedCases.map((evalCase) => evalCase.id),
     model: `${resolvedModel.model.provider}/${resolvedModel.model.id}`,
     thinking: options.thinking,
+    candidateThinking: options.candidateThinking,
+    comparison,
     repetitions: options.repetitions,
     timeoutMs: options.timeoutMs,
     maxTurns: options.maxTurns,
     completedAt: new Date().toISOString(),
     promptHashes: Object.fromEntries(
-      [...promptPairs].map(([path, pair]) => [
+      [...variantConfigs].map(([path, configs]) => [
         path,
         {
-          baseline: pair.baseline.sha256,
-          candidate: pair.candidate.sha256,
+          baseline: configs.baseline.promptSha256,
+          candidate: configs.candidate.promptSha256,
         },
       ])
     ),
@@ -467,11 +619,14 @@ export async function main(): Promise<void> {
       join(outputDirectory, "summary.json"),
       `${JSON.stringify(summary, null, 2)}\n`
     ),
-    writeFile(join(outputDirectory, "summary.md"), summaryMarkdown(summary)),
+    writeFile(
+      join(outputDirectory, "summary.md"),
+      summaryMarkdown(summary, comparison)
+    ),
   ]);
 
   process.stdout.write(
-    `\n${summaryMarkdown(summary)}\nArtifacts: ${outputDirectory}\n`
+    `\n${summaryMarkdown(summary, comparison)}\nArtifacts: ${outputDirectory}\n`
   );
 }
 
