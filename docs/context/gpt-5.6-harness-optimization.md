@@ -70,12 +70,12 @@ The v1 runner intentionally uses the low-level Pi `agentLoop` rather than the fu
 
 OpenAI recommends preserving the previous reasoning setting as a baseline, then testing the same setting and one level lower. It describes `medium` as a balanced starting point and reserves `xhigh` and `max` for workloads where evals prove a quality gain.
 
-Current repository and live configuration are aggressive:
+Current repository and live configuration now use route-specific effort:
 
 - `setup.sh` creates first-run settings with `defaultThinkingLevel: "high"`.
-- The observed live `~/.pi/agent/settings.json` uses `defaultThinkingLevel: "xhigh"`.
-- Most files under `agents/` explicitly select `thinking: high`.
-- `agents/explorer.md` does not select a level, so it may inherit the global default.
+- The live `~/.pi/agent/settings.json` uses `defaultThinkingLevel: "high"` after the main-session benchmark below.
+- `agents/build-error-resolver.md`, `agents/executor.md`, `agents/refactor-cleaner.md`, and `agents/tdd-guide.md` select `thinking: medium` after route-specific benchmarks.
+- `agents/doc-updater.md`, `agents/e2e-runner.md`, and `agents/explorer.md` select `thinking: low`; higher-risk Sol agents remain at `high`.
 
 Candidate evaluation matrix:
 
@@ -94,12 +94,17 @@ Candidate evaluation matrix:
 A route-aware three-repetition benchmark ran on 2026-07-11 with identical working-tree prompt hashes in both arms:
 
 - **Sol, `high` versus `medium`** — `core-orchestration`, `executor-fix`, and `build-fix` remained at 100% pass rate and 1.000 deterministic score. Medium used 872 fewer input tokens (12%), 94 fewer output tokens (19%), 55 fewer reasoning tokens (49%), 2.5 seconds less latency (11%), and $0.0072 less per-run average cost (14%). Local artifact: `.pi/evals/2026-07-11T12-48-11-221Z-29cca1e8/`.
-- **Terra, `low` versus `medium`** — `docs-update` and `e2e-verification` remained at 100% pass rate and 1.000 deterministic score. Medium used 965 more input tokens (24%), 31 more reasoning tokens (23%), and $0.0032 more per-run average cost (18%) while saving 1.0 second latency (4%). Keep low for these tested routes. Local artifact: `.pi/evals/2026-07-11T12-52-53-824Z-29cca1e8/`.
+- **Terra, `low` versus `medium`** — `docs-update` and `e2e-verification` remained at 100% pass rate and 1.000 deterministic score. Medium used 965 more input tokens (24%), 31 more reasoning tokens (23%), and $0.0032 more per-run average cost (18%) while saving 1.0 second latency (4%). `doc-updater` and `e2e-runner` therefore use low. Local artifact: `.pi/evals/2026-07-11T12-52-53-824Z-29cca1e8/`.
 - **Luna, `low` versus `medium`** — `explore-root-cause` remained at 100% pass rate and 1.000 deterministic score. Medium used 279 fewer input tokens (8%), 13 fewer output tokens (4%), 18 more reasoning tokens (113%), 2.3 seconds less latency (23%), and $0.0004 less per-run average cost (8%). The first run was invalid because the low-level runner omitted the TUI's UUIDv7 session identity; Luna rejected requests without that routing contract. Local valid artifact: `.pi/evals/2026-07-11T14-56-53-424Z-29cca1e8/`.
 
-These small deterministic fixtures support testing Sol medium more broadly and leave Luna low versus medium inconclusive on one simple exploration case; they do not justify a global default change. No runtime thinking defaults changed in this benchmark phase.
+A second route-aware three-repetition benchmark ran on 2026-07-11:
 
-Start with `xhigh` versus `high`, then `high` versus `medium`; do not change all workers at once.
+- **Sol, `xhigh` versus `high`** — `core-orchestration` remained at 100% pass rate and 1.000 deterministic score. High used 913 fewer input tokens (15%), 115 fewer output tokens (13%), 94 fewer reasoning tokens (28%), 2.2 seconds less latency (9%), and $0.0078 less per-run average cost (14%). The live main-session default moved from `xhigh` to `high`; the repository setup default was already `high`. Local artifact: `.pi/evals/2026-07-11T15-05-17-108Z-a1d57cf9/`.
+- **Sol, `high` versus `medium`** — `remove-dead-code` and `tdd-fix` remained at 100% pass rate and 1.000 deterministic score. Medium saved 1.6 and 2.7 seconds respectively; TDD also used 62 fewer reasoning tokens and cost $0.0018 less per run. `simplify-code` was inconclusive because both arms frequently missed one deterministic completion invariant, so `code-simplifier` stayed at high. `refactor-cleaner` and `tdd-guide` moved to medium. Local artifact: `.pi/evals/2026-07-11T15-11-21-183Z-a1d57cf9/`.
+
+Together with the initial `executor-fix` and `build-fix` results, these fixtures justify medium for the four selected deterministic workers. They still do not justify a global `medium` default or lower effort for planning, architecture, research, security, database, or review routes.
+
+Continue comparing one route cohort at a time; do not change all workers at once.
 
 ### 3. Reduce repeated prompt instructions
 
@@ -158,13 +163,12 @@ By contrast, `/execute` and `/goal` ask workers to emit strict JSON as text and 
 
 ### 7. Align model and transport documentation
 
-Current durable and generated defaults still partly disagree:
+Current durable and generated defaults mostly agree:
 
-- `setup.sh` defaults to GPT-5.6 Sol, `high`, and `transport: "auto"`.
-- Agent definitions mostly target GPT-5.6.
-- The observed live settings use GPT-5.6 Sol, `xhigh`, and `transport: "auto"`.
-- `rules/common/performance.md` still recommends GPT-5.3 Codex Spark and GPT-5.4.
-- `extensions/fast` and the observed live Fast Mode allowlist only name `openai-codex/gpt-5.5`.
+- `setup.sh` and live settings use GPT-5.6 Sol, `high`, and `transport: "auto"`.
+- Agent definitions use GPT-5.6 with route-specific thinking levels.
+- `rules/common/performance.md` documents the measured GPT-5.6 routing strategy.
+- `extensions/fast` and the observed live Fast Mode allowlist still only name `openai-codex/gpt-5.5`.
 
 Pi documents `auto` as its transport default. Preserve `auto` unless an SSE or WebSocket benchmark demonstrates a better choice.
 

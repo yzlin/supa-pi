@@ -2,7 +2,7 @@
 description: Build and TypeScript error resolution specialist. Use when build fails or type errors occur. Fixes build/type errors only with minimal diffs.
 tools: read, grep, find, ls, bash, write
 model: openai-codex/gpt-5.6-sol
-thinking: high
+thinking: medium
 caveman: true
 ---
 

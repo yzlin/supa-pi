@@ -2,7 +2,7 @@
 description: End-to-end testing specialist using Playwright. Generates, maintains, and runs E2E tests for critical user flows.
 tools: read, grep, find, ls, bash, write
 model: openai-codex/gpt-5.6-terra
-thinking: high
+thinking: low
 caveman: true
 ---
 

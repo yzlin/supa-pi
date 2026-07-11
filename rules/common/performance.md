@@ -32,20 +32,14 @@ For non-trivial features or suspected regressions, check for:
 
 ## Model Selection Strategy
 
-**gpt-5.3-codex-spark** (lightweight, fast, cost-efficient):
-- Lightweight agents with frequent invocation
-- Pair programming and code generation
-- Worker agents in multi-agent systems
+Use measured GPT-5.6 routes:
 
-**gpt-5.4** (best coding model, default):
-- Main development work
-- Orchestrating multi-agent workflows
-- Complex coding tasks
+- **gpt-5.6-luna, low**: codebase exploration
+- **gpt-5.6-terra, low**: documentation and E2E verification
+- **gpt-5.6-sol, medium**: validated execution, build-fix, dead-code cleanup, and TDD workers
+- **gpt-5.6-sol, high**: main sessions, planning, architecture, research, and high-risk reviews
 
-**gpt-5.4 with xhigh reasoning** (deepest reasoning):
-- Complex architectural decisions
-- Maximum reasoning requirements
-- Research and analysis tasks
+Use `xhigh`, `max`, or Pro mode only when a route-specific eval proves a quality gain. Preserve `transport: "auto"` unless a benchmark proves otherwise.
 
 ## Context Window Management
 
