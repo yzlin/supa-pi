@@ -273,7 +273,7 @@ export async function runReviewWorkflow(
     status: WorkflowProgressStatus = "running",
     summary?: string
   ) => {
-    const envelope = withReviewAgentProgressSnippets(
+    const envelope = toReviewProgressDisplayEnvelope(
       progress.getEnvelope(status)
     );
     input.onProgress?.({
@@ -365,7 +365,7 @@ export async function runReviewWorkflow(
     };
   } catch (error) {
     const failure = progress.error(error);
-    const envelope = withReviewAgentProgressSnippets(failure.envelope);
+    const envelope = toReviewProgressDisplayEnvelope(failure.envelope);
     input.onProgress?.({
       envelope,
       text: formatReviewWorkflowProgress(envelope, failure.summary),
@@ -374,13 +374,22 @@ export async function runReviewWorkflow(
   }
 }
 
+function toReviewProgressDisplayEnvelope(
+  envelope: WorkflowProgressEnvelope
+): WorkflowProgressEnvelope {
+  return {
+    ...withReviewAgentProgressSnippets(envelope),
+    agents: [],
+    logs: [],
+  };
+}
+
 function formatReviewWorkflowProgress(
   envelope: WorkflowProgressEnvelope,
   summary?: string
 ): string {
-  const lines = summary
-    ? [summary, "", formatWorkflowProgress(envelope)]
-    : [formatWorkflowProgress(envelope)];
+  const progress = formatWorkflowProgress(envelope);
+  const lines = summary ? [summary, "", progress] : [progress];
   if (envelope.error) {
     lines.push(`error: ${envelope.error}`);
   }

@@ -905,6 +905,18 @@ describe.serial("review workflow progress", () => {
     expect(result.report).toContain("Changed guard rejects valid input");
   });
 
+  it("omits redundant active-agent and log rows from progress", async () => {
+    installStreamingReviewManager();
+
+    const progress = await runProgressPreviewWorkflow();
+
+    expect(progress.some((text) => text.includes("\n  active:"))).toBe(false);
+    expect(progress.some((text) => text.includes("\n  log:"))).toBe(false);
+    expect(
+      progress.some((text) => text.includes("Review change as code-reviewer"))
+    ).toBe(true);
+  });
+
   it("creates and streams an output file for direct-spawned review agents", async () => {
     const records = installStreamingReviewManager();
 
@@ -1216,6 +1228,13 @@ describe.serial("review direct targets", () => {
     expect(
       widgets.some((widget) => widget.options?.placement === "aboveEditor")
     ).toBe(true);
+    const renderedProgress = widgets.flatMap((widget) => widget.content ?? []);
+    expect(renderedProgress.some((line) => line.startsWith("  active:"))).toBe(
+      false
+    );
+    expect(renderedProgress.some((line) => line.startsWith("  log:"))).toBe(
+      false
+    );
     expect(widgets.at(-1)).toEqual({
       key: "review-progress",
       content: undefined,
