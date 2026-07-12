@@ -38,7 +38,7 @@ Editor schema help ships at `extensions/fast/configuration_schema.json`. It is t
   "$schema": "../extensions/fast/configuration_schema.json",
   "enabled": true,
   "warned": true,
-  "allowlist": ["openai-codex/gpt-5.5"]
+  "allowlist": ["openai-codex/gpt-5.5", "openai-codex/gpt-5.6-sol"]
 }
 ```
 
@@ -74,6 +74,8 @@ Fast Mode only patches provider payloads when all of these are true:
 - the payload does not already contain `service_tier` or `serviceTier`
 
 When those checks pass, the extension returns a patched payload with `service_tier: "priority"` from the `before_provider_request` hook.
+
+An authenticated `openai-codex` ChatGPT-backend probe completed successfully with GPT-5.6 Sol and the priority field enabled through the config allowlist on 2026-07-11. This proves that the backend accepts the request contract. GPT-5.6 Sol remains config-opt-in until a representative benchmark proves enough latency benefit to justify built-in priority-tier cost.
 
 ## Limitations
 

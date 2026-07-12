@@ -159,7 +159,7 @@ Pi exposes `getActiveTools()` and `setActiveTools()`. Automatic intent-based pru
 
 `extensions/review/workflow.ts` provides the strongest local pattern: a closed TypeBox schema, a dedicated `structured_output` tool, validation, and one repair attempt.
 
-By contrast, `/execute` and `/goal` ask workers to emit strict JSON as text and parse it with `JSON.parse`. Native structured tools should improve reliability and reduce formatting retries for executor results and other machine-consumed contracts.
+`/execute` now dispatches executor work through `extensions/execute/executor-workflow.ts`. Its `execute_tasks` tool uses the pi-subagents workflow runtime to inject a closed native schema, rejects assistant-text JSON, limits each round to four tasks, preserves settled sibling outcomes, and makes exactly one report-only repair with the tool-less `executor-output-repair` agent after a missing structured submission. Repaired reports return `needs_verification` and require independent orchestrator checks before task completion. Hard per-agent deadlines and bounded cleanup limit retained work. The main session continues to own pi-task and checkpoint state. `/goal` still asks workers for strict JSON text, so it remains the next machine-consumed contract to evaluate.
 
 ### 7. Align model and transport documentation
 
@@ -168,11 +168,11 @@ Current durable and generated defaults mostly agree:
 - `setup.sh` and live settings use GPT-5.6 Sol, `high`, and `transport: "auto"`.
 - Agent definitions use GPT-5.6 with route-specific thinking levels.
 - `rules/common/performance.md` documents the measured GPT-5.6 routing strategy.
-- `extensions/fast` and the observed live Fast Mode allowlist still only name `openai-codex/gpt-5.5`.
+- `extensions/fast` keeps `openai-codex/gpt-5.5` built in; live config opts `openai-codex/gpt-5.6-sol` in after request-contract validation.
 
 Pi documents `auto` as its transport default. Preserve `auto` unless an SSE or WebSocket benchmark demonstrates a better choice.
 
-Fast Mode is currently unsupported for the selected GPT-5.6 Sol model by metadata or allowlist. Validate that the Codex backend accepts priority service tier for GPT-5.6 before adding it; otherwise disable the mode to avoid misleading status.
+The installed Codex adapter serializes `service_tier: "priority"` for GPT-5.6 Sol. On 2026-07-11, an authenticated ChatGPT-backend probe completed successfully with that field enabled through the config allowlist, proving request-contract acceptance. The private backend does not publicly guarantee scheduling behavior, so GPT-5.6 Sol remains config-opt-in until a representative latency-and-cost benchmark justifies built-in support.
 
 ### 8. Tune verbosity by workflow
 
@@ -201,13 +201,12 @@ The active provider is `openai-codex` through the ChatGPT backend. Do not assume
 
 ## Recommended order
 
-1. Add eval and usage telemetry.
-2. Compare lower reasoning levels.
-3. Slim core and agent prompts.
-4. Align stale model, setup, transport, and Fast Mode guidance.
-5. Add structured executor outputs.
-6. Evaluate explicit tool profiles.
-7. Consider upstream persisted reasoning, cache controls, Pro mode, or Programmatic Tool Calling.
+Items 1-5 are implemented for the measured routes. Continue with:
+
+1. Evaluate explicit tool profiles.
+2. Measure prompt-cache economics by workflow.
+3. Evaluate native structured output for `/goal`.
+4. Consider upstream persisted reasoning, cache controls, Pro mode, or Programmatic Tool Calling.
 
 ## Sources
 
@@ -216,6 +215,7 @@ Official OpenAI documentation, accessed 2026-07-11:
 - [Using GPT-5.6](https://developers.openai.com/api/docs/guides/latest-model)
 - [Reasoning models](https://developers.openai.com/api/docs/guides/reasoning)
 - [Prompt caching](https://developers.openai.com/api/docs/guides/prompt-caching)
+- [Priority processing](https://openai.com/api-priority-processing/)
 - [Programmatic Tool Calling](https://developers.openai.com/api/docs/guides/tools-programmatic-tool-calling)
 
 Relevant repository evidence:
