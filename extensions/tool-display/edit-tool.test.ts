@@ -139,23 +139,24 @@ describe("editTool mutation queue", () => {
 	test("rejects excessive same-path queue depth", async () => {
 		const dir = tempDir();
 		const path = join(dir, "backpressure.txt");
+		const canonicalizeContext = { cache: new Map([[path, path]]), realpathAttempts: 0 };
 		let releaseFirst!: () => void;
 		let first!: Promise<void>;
 		const firstStarted = new Promise<void>((resolveStarted) => {
 			first = withFileMutationQueue([path], () => new Promise<void>((resolve) => {
 				releaseFirst = resolve;
 				resolveStarted();
-			}));
+			}), undefined, canonicalizeContext);
 		});
 		await firstStarted;
 		const queued = [first];
 		for (let i = 0; i < 49; i++) {
-			queued.push(withFileMutationQueue([path], async () => undefined));
+			queued.push(withFileMutationQueue([path], async () => undefined, undefined, canonicalizeContext));
 		}
 		await new Promise((resolve) => setTimeout(resolve, 0));
 
 		try {
-			await withFileMutationQueue([path], async () => undefined);
+			await withFileMutationQueue([path], async () => undefined, undefined, canonicalizeContext);
 			throw new Error("expected queue depth rejection");
 		} catch (error: any) {
 			expect(error.message).toContain("exceeds maximum depth");

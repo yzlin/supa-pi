@@ -183,7 +183,8 @@ describe("tool-display renderers", () => {
     ).toBe("+1 / -1 (rewrote file) line 1");
     expect(
       renderFinalDiffResult({ content: [], details }, { expanded: true }, theme)
-      .text
+        .render(80)
+        .join("\n")
     ).toContain("▌new");
   });
 
