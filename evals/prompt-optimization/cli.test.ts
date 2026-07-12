@@ -5,6 +5,8 @@ import {
   createVariantConfigs,
   parseCliOptions,
   validateReasoningComparison,
+  validateServiceTierComparison,
+  validateServiceTierEvidence,
 } from "./cli";
 
 describe("parseCliOptions", () => {
@@ -36,6 +38,34 @@ describe("parseCliOptions", () => {
     });
   });
 
+  it("parses a service-tier comparison", () => {
+    const options = parseCliOptions([
+      "--compare-service-tier",
+      "--thinking",
+      "medium",
+      "--repetitions",
+      "4",
+    ]);
+
+    expect(options).toMatchObject({
+      compareServiceTier: true,
+      thinking: "medium",
+    });
+    expect(createComparison(options)).toEqual({
+      kind: "service-tier",
+      baseline: {
+        thinking: "medium",
+        promptSource: "working-tree",
+        serviceTier: "default",
+      },
+      candidate: {
+        thinking: "medium",
+        promptSource: "working-tree",
+        serviceTier: "priority",
+      },
+    });
+  });
+
   it("rejects identical reasoning levels", () => {
     expect(() =>
       parseCliOptions([
@@ -51,6 +81,40 @@ describe("parseCliOptions", () => {
     expect(() => parseCliOptions(["--candidate-thinking"])).toThrow(
       "--candidate-thinking must be one of:"
     );
+  });
+
+  it("rejects odd service-tier repetitions", () => {
+    expect(() =>
+      parseCliOptions(["--compare-service-tier", "--repetitions", "3"])
+    ).toThrow("requires an even repetition count");
+  });
+
+  it("rejects combined reasoning and service-tier comparisons", () => {
+    expect(() =>
+      parseCliOptions([
+        "--compare-service-tier",
+        "--thinking",
+        "high",
+        "--candidate-thinking",
+        "medium",
+      ])
+    ).toThrow("cannot combine");
+  });
+
+  it("limits service-tier comparison to Codex Responses models", () => {
+    const comparison = createComparison(
+      parseCliOptions(["--compare-service-tier", "--repetitions", "4"])
+    );
+
+    expect(() =>
+      validateServiceTierComparison({ api: "openai-responses" }, comparison)
+    ).toThrow("requires an openai-codex Responses model");
+    expect(() =>
+      validateServiceTierComparison(
+        { api: "openai-codex-responses" },
+        comparison
+      )
+    ).not.toThrow();
   });
 
   it("describes reasoning arms for artifact manifests", () => {
@@ -97,6 +161,70 @@ describe("parseCliOptions", () => {
   });
 });
 
+describe("validateServiceTierEvidence", () => {
+  const comparison = createComparison(
+    parseCliOptions(["--compare-service-tier", "--repetitions", "4"])
+  );
+
+  it("accepts observed default and priority payload arms", () => {
+    expect(() =>
+      validateServiceTierEvidence(
+        [
+          {
+            caseId: "case-a",
+            variant: "baseline",
+            repetition: 1,
+            payloadServiceTier: "absent",
+          },
+          {
+            caseId: "case-a",
+            variant: "candidate",
+            repetition: 1,
+            payloadServiceTier: "priority",
+          },
+        ],
+        comparison
+      )
+    ).not.toThrow();
+  });
+
+  it.each([
+    undefined,
+    "absent",
+    "mixed",
+  ])("rejects candidate payload evidence: %s", (payloadServiceTier) => {
+    expect(() =>
+      validateServiceTierEvidence(
+        [
+          {
+            caseId: "case-a",
+            variant: "candidate",
+            repetition: 2,
+            payloadServiceTier,
+          },
+        ],
+        comparison
+      )
+    ).toThrow("invalid service-tier payload evidence for case-a candidate r2");
+  });
+
+  it("rejects a priority baseline payload", () => {
+    expect(() =>
+      validateServiceTierEvidence(
+        [
+          {
+            caseId: "case-a",
+            variant: "baseline",
+            repetition: 3,
+            payloadServiceTier: "priority",
+          },
+        ],
+        comparison
+      )
+    ).toThrow("expected absent, got priority");
+  });
+});
+
 describe("createVariantConfigs", () => {
   const promptPair = {
     baseline: { content: "HEAD bytes\n", sha256: "head-hash" },
@@ -118,6 +246,28 @@ describe("createVariantConfigs", () => {
         promptContent: "working-tree bytes",
         promptSha256: "working-hash",
         thinking: "high",
+      },
+    });
+  });
+
+  it("uses identical working-tree prompts and effort in service-tier mode", () => {
+    expect(
+      createVariantConfigs(promptPair, {
+        thinking: "medium",
+        compareServiceTier: true,
+      })
+    ).toEqual({
+      baseline: {
+        promptContent: "working-tree bytes",
+        promptSha256: "working-hash",
+        thinking: "medium",
+        serviceTier: "default",
+      },
+      candidate: {
+        promptContent: "working-tree bytes",
+        promptSha256: "working-hash",
+        thinking: "medium",
+        serviceTier: "priority",
       },
     });
   });

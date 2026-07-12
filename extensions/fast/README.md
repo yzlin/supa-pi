@@ -75,7 +75,9 @@ Fast Mode only patches provider payloads when all of these are true:
 
 When those checks pass, the extension returns a patched payload with `service_tier: "priority"` from the `before_provider_request` hook.
 
-An authenticated `openai-codex` ChatGPT-backend probe completed successfully with GPT-5.6 Sol and the priority field enabled through the config allowlist on 2026-07-11. This proves that the backend accepts the request contract. GPT-5.6 Sol remains config-opt-in until a representative benchmark proves enough latency benefit to justify built-in priority-tier cost.
+An authenticated `openai-codex` ChatGPT-backend probe completed successfully with GPT-5.6 Sol and the priority field enabled through the config allowlist on 2026-07-11. This proves that the backend accepts the request contract.
+
+An order-balanced four-repetition paired benchmark on 2026-07-12 found equal quality but route-dependent latency: priority was 36.5% faster for core orchestration and 15.6% slower for executor fixing, while costing 81% and 100% more. A clean low-effort exploration rerun was 19.6% faster at 98% higher cost, but production exploration uses Luna rather than Sol. GPT-5.6 Sol therefore remains outside the built-in allowlist and was removed from live config. See `docs/context/gpt-5.6-harness-optimization.md` for artifacts, exclusion notes, and methodology.
 
 ## Limitations
 

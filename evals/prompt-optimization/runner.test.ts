@@ -140,6 +140,52 @@ describe("runVariant", () => {
     });
   });
 
+  it("forwards and records priority service tier", async () => {
+    const model = modelRegistry.find("openai", "gpt-4o");
+    if (!model) {
+      throw new Error("test model is unavailable");
+    }
+    let observedServiceTier: string | undefined;
+    const result = await runVariant({
+      evalCase: {
+        id: "priority-run",
+        workload: "explanation",
+        promptPath: "extensions/core-prompt/prompt.md",
+        task: "Explain the defect.",
+        tools: [],
+        checks: [
+          {
+            type: "outputIncludes",
+            value: "src/math.ts",
+            domain: "evidence",
+            weight: 1,
+          },
+        ],
+      },
+      variant: "candidate",
+      repetition: 1,
+      promptContent: "Be evidence driven.",
+      promptSha256: "candidate-hash",
+      fixturePath,
+      model,
+      thinking: "medium",
+      serviceTier: "priority",
+      timeoutMs: 5000,
+      maxTurns: 3,
+      getApiKey: () => Promise.resolve("test-key"),
+      streamFn: (selectedModel, _context, options) => {
+        observedServiceTier = (options as { serviceTier?: string })
+          ?.serviceTier;
+        options?.onPayload?.({ service_tier: "priority" }, selectedModel);
+        return createSuccessfulStream(selectedModel);
+      },
+    });
+
+    expect(observedServiceTier).toBe("priority");
+    expect(result.serviceTier).toBe("priority");
+    expect(result.payloadServiceTier).toBe("priority");
+  });
+
   it("executes fixture-bound tools and records the trajectory", async () => {
     const model = modelRegistry.find("openai", "gpt-4o");
     if (!model) {

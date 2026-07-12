@@ -33,6 +33,7 @@ interface CliOptions {
   model: string;
   thinking: ThinkingLevel;
   candidateThinking?: ThinkingLevel;
+  compareServiceTier: boolean;
   repetitions: number;
   timeoutMs: number;
   maxTurns: number;
@@ -42,15 +43,22 @@ interface VariantConfig {
   promptContent: string;
   promptSha256: string;
   thinking: ThinkingLevel;
+  serviceTier?: "default" | "priority";
 }
 
-type ComparisonKind = "prompt" | "reasoning";
+type ComparisonKind = "prompt" | "reasoning" | "service-tier";
 type PromptSource = "head" | "working-tree";
+
+interface ComparisonArm {
+  thinking: ThinkingLevel;
+  promptSource: PromptSource;
+  serviceTier?: "default" | "priority";
+}
 
 interface Comparison {
   kind: ComparisonKind;
-  baseline: { thinking: ThinkingLevel; promptSource: PromptSource };
-  candidate: { thinking: ThinkingLevel; promptSource: PromptSource };
+  baseline: ComparisonArm;
+  candidate: ComparisonArm;
 }
 
 interface ReasoningModelSupport {
@@ -87,6 +95,7 @@ export function parseCliOptions(args: string[]): CliOptions {
     help: false,
     model: DEFAULT_MODEL,
     thinking: DEFAULT_THINKING,
+    compareServiceTier: false,
     repetitions: 1,
     timeoutMs: DEFAULT_TIMEOUT_MS,
     maxTurns: DEFAULT_MAX_TURNS,
@@ -120,6 +129,9 @@ export function parseCliOptions(args: string[]): CliOptions {
         options.thinking = value as ThinkingLevel;
         index += 1;
         break;
+      case "--compare-service-tier":
+        options.compareServiceTier = true;
+        break;
       case "--candidate-thinking":
         if (!THINKING_LEVELS.includes(value as ThinkingLevel)) {
           throw new Error(
@@ -152,14 +164,41 @@ export function parseCliOptions(args: string[]): CliOptions {
   if (options.candidateThinking === options.thinking) {
     throw new Error("reasoning comparison requires different thinking levels");
   }
+  if (options.compareServiceTier && options.candidateThinking) {
+    throw new Error("cannot combine reasoning and service-tier comparisons");
+  }
+  if (options.compareServiceTier && options.repetitions % 2 !== 0) {
+    throw new Error(
+      "service-tier comparison requires an even repetition count to balance arm ordering"
+    );
+  }
 
   return options;
 }
 
 export function createVariantConfigs(
   pair: PromptPair,
-  options: Pick<CliOptions, "thinking" | "candidateThinking">
+  options: Pick<CliOptions, "thinking" | "candidateThinking"> & {
+    compareServiceTier?: boolean;
+  }
 ): Record<EvalVariant, VariantConfig> {
+  if (options.compareServiceTier) {
+    return {
+      baseline: {
+        promptContent: pair.candidate.content,
+        promptSha256: pair.candidate.sha256,
+        thinking: options.thinking,
+        serviceTier: "default",
+      },
+      candidate: {
+        promptContent: pair.candidate.content,
+        promptSha256: pair.candidate.sha256,
+        thinking: options.thinking,
+        serviceTier: "priority",
+      },
+    };
+  }
+
   if (options.candidateThinking) {
     return {
       baseline: {
@@ -290,6 +329,22 @@ function signed(value: number, digits = 2): string {
 }
 
 export function createComparison(options: CliOptions): Comparison {
+  if (options.compareServiceTier) {
+    return {
+      kind: "service-tier",
+      baseline: {
+        thinking: options.thinking,
+        promptSource: "working-tree",
+        serviceTier: "default",
+      },
+      candidate: {
+        thinking: options.thinking,
+        promptSource: "working-tree",
+        serviceTier: "priority",
+      },
+    };
+  }
+
   return {
     kind: options.candidateThinking ? "reasoning" : "prompt",
     baseline: {
@@ -301,6 +356,40 @@ export function createComparison(options: CliOptions): Comparison {
       promptSource: "working-tree",
     },
   };
+}
+
+export function validateServiceTierComparison(
+  model: { api?: string },
+  comparison: Comparison
+): void {
+  if (comparison.kind !== "service-tier") {
+    return;
+  }
+  if (model.api !== "openai-codex-responses") {
+    throw new Error(
+      "service-tier comparison currently requires an openai-codex Responses model"
+    );
+  }
+}
+
+export function validateServiceTierEvidence(
+  records: readonly Pick<
+    RunRecord,
+    "caseId" | "variant" | "repetition" | "payloadServiceTier"
+  >[],
+  comparison: Comparison
+): void {
+  if (comparison.kind !== "service-tier") {
+    return;
+  }
+  for (const record of records) {
+    const expected = record.variant === "candidate" ? "priority" : "absent";
+    if (record.payloadServiceTier !== expected) {
+      throw new Error(
+        `invalid service-tier payload evidence for ${record.caseId} ${record.variant} r${record.repetition}: expected ${expected}, got ${record.payloadServiceTier ?? "missing"}`
+      );
+    }
+  }
 }
 
 export function validateReasoningComparison(
@@ -342,9 +431,20 @@ function summaryMarkdown(summary: EvalSummary, comparison: Comparison): string {
   const aggregate = summary.aggregate;
   const baseline = aggregate.baselineMetrics;
   const candidate = aggregate.candidateMetrics;
-  const title = comparison.kind === "reasoning" ? "Reasoning" : "Prompt";
-  const baselineLabel = `Baseline (${comparison.baseline.thinking})`;
-  const candidateLabel = `Candidate (${comparison.candidate.thinking})`;
+  let title = "Prompt";
+  if (comparison.kind === "reasoning") {
+    title = "Reasoning";
+  } else if (comparison.kind === "service-tier") {
+    title = "Service tier";
+  }
+  const baselineLabel =
+    comparison.kind === "service-tier"
+      ? `Baseline (${comparison.baseline.serviceTier})`
+      : `Baseline (${comparison.baseline.thinking})`;
+  const candidateLabel =
+    comparison.kind === "service-tier"
+      ? `Candidate (${comparison.candidate.serviceTier})`
+      : `Candidate (${comparison.candidate.thinking})`;
   const lines = [
     `# ${title} eval summary`,
     "",
@@ -393,7 +493,7 @@ export async function main(): Promise<void> {
   const options = parseCliOptions(process.argv.slice(2));
   if (options.help) {
     process.stdout.write(
-      "Usage: bun run eval:prompts -- [options]\n\nOptions:\n  --case <id> (repeatable)\n  --model <provider/model>\n  --thinking <level>\n  --candidate-thinking <level>\n  --repetitions <count>\n  --timeout-ms <milliseconds>\n  --max-turns <count>\n"
+      "Usage: bun run eval:prompts -- [options]\n\nOptions:\n  --case <id> (repeatable)\n  --model <provider/model>\n  --thinking <level>\n  --candidate-thinking <level>\n  --compare-service-tier\n  --repetitions <count>\n  --timeout-ms <milliseconds>\n  --max-turns <count>\n"
     );
     return;
   }
@@ -450,6 +550,7 @@ export async function main(): Promise<void> {
     throw new Error(resolvedModel.error ?? `model not found: ${options.model}`);
   }
   validateReasoningComparison(resolvedModel.model, comparison);
+  validateServiceTierComparison(resolvedModel.model, comparison);
   const auth = await modelRegistry.getApiKeyAndHeaders(resolvedModel.model);
   if (auth.ok === false) {
     throw new Error(auth.error);
@@ -516,6 +617,7 @@ export async function main(): Promise<void> {
             fixturePath,
             model: resolvedModel.model,
             thinking: config.thinking,
+            ...(config.serviceTier ? { serviceTier: config.serviceTier } : {}),
             timeoutMs: options.timeoutMs,
             maxTurns: options.maxTurns,
             getApiKey: (provider) =>
@@ -549,6 +651,7 @@ export async function main(): Promise<void> {
       "repository prompts, HEAD, or eval corpus changed during the run; discard results and rerun"
     );
   }
+  validateServiceTierEvidence(records, comparison);
   const timestamp = new Date().toISOString().replaceAll(/[:.]/g, "-");
   const outputDirectory = join(
     repositoryRoot,
@@ -595,6 +698,7 @@ export async function main(): Promise<void> {
     model: `${resolvedModel.model.provider}/${resolvedModel.model.id}`,
     thinking: options.thinking,
     candidateThinking: options.candidateThinking,
+    compareServiceTier: options.compareServiceTier,
     comparison,
     repetitions: options.repetitions,
     timeoutMs: options.timeoutMs,

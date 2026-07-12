@@ -62,7 +62,7 @@ Record at least:
 
 Use the same tasks to compare one change at a time.
 
-The repository now provides `bun run eval:prompts`. Its default prompt mode compares exact `HEAD` prompt bytes with working-tree prompt bytes. Reasoning mode uses `--thinking <baseline>` with `--candidate-thinking <candidate>` to compare identical working-tree prompt bytes at two effort levels. Both modes run variants against fresh copies of a fixed fixture, apply deterministic task/test/evidence/quality checks, and record absolute per-arm usage plus candidate-minus-baseline deltas under `.pi/evals/`. The committed corpus covers all seven workload classes and every optimized `agents/*.md` prompt plus `extensions/core-prompt/prompt.md`. Repeat `--case` to evaluate a route-specific subset. See `evals/prompt-optimization/README.md` for commands, scoring semantics, cost warnings, and limitations.
+The repository now provides `bun run eval:prompts`. Its default prompt mode compares exact `HEAD` prompt bytes with working-tree prompt bytes. Reasoning mode uses `--thinking <baseline>` with `--candidate-thinking <candidate>` to compare identical working-tree prompt bytes at two effort levels. Service-tier mode uses `--compare-service-tier` to compare default versus priority with identical working-tree prompt bytes, model, effort, fixture, and tools. All modes run variants against fresh copies of a fixed fixture, apply deterministic task/test/evidence/quality checks, and record absolute per-arm usage plus candidate-minus-baseline deltas under `.pi/evals/`. The committed corpus covers all seven workload classes and every optimized `agents/*.md` prompt plus `extensions/core-prompt/prompt.md`. Repeat `--case` to evaluate a route-specific subset. See `evals/prompt-optimization/README.md` for commands, scoring semantics, cost warnings, and limitations.
 
 The v1 runner intentionally uses the low-level Pi `agentLoop` rather than the full interactive extension stack. This isolates prompt text from live settings, context files, skills, retries, and unrelated extension behavior. Each arm still receives a fresh Pi UUIDv7 session ID because the Codex backend uses the TUI-style session identity for `prompt_cache_key` and WebSocket model routing; the runner closes that arm's WebSocket session after completion. The core route appends each variant to the same pinned production-like Pi base prompt. Workspace tools reject path escapes, arbitrary shell commands are blocked, and the test command is simulated from immutable harness logic instead of executing model-written code. Use a later sandboxed full-session parity suite when evaluating extension behavior or executable third-party tasks.
 
@@ -168,11 +168,15 @@ Current durable and generated defaults mostly agree:
 - `setup.sh` and live settings use GPT-5.6 Sol, `high`, and `transport: "auto"`.
 - Agent definitions use GPT-5.6 with route-specific thinking levels.
 - `rules/common/performance.md` documents the measured GPT-5.6 routing strategy.
-- `extensions/fast` keeps `openai-codex/gpt-5.5` built in; live config opts `openai-codex/gpt-5.6-sol` in after request-contract validation.
+- `extensions/fast` keeps `openai-codex/gpt-5.5` built in; GPT-5.6 Sol is absent from both the built-in and live config allowlists after measured priority-tier results.
 
 Pi documents `auto` as its transport default. Preserve `auto` unless an SSE or WebSocket benchmark demonstrates a better choice.
 
-The installed Codex adapter serializes `service_tier: "priority"` for GPT-5.6 Sol. On 2026-07-11, an authenticated ChatGPT-backend probe completed successfully with that field enabled through the config allowlist, proving request-contract acceptance. The private backend does not publicly guarantee scheduling behavior, so GPT-5.6 Sol remains config-opt-in until a representative latency-and-cost benchmark justifies built-in support.
+The installed Codex adapter serializes `service_tier: "priority"` for GPT-5.6 Sol. On 2026-07-11, an authenticated ChatGPT-backend probe completed successfully with that field enabled through the config allowlist, proving request-contract acceptance.
+
+A paired, order-balanced four-repetition benchmark on 2026-07-12 held model, prompt bytes, reasoning, fixtures, and tools constant. All retained arms passed at score 1.000, and every candidate payload recorded `service_tier: "priority"`. Priority was 36.5% faster for core orchestration at high effort but 15.6% slower for executor fixing at medium effort, while costing 81% and 100% more. A clean low-effort exploration rerun was 19.6% faster at 98% higher cost, but production exploration routes use Luna rather than Sol. An earlier balanced exploration cohort was excluded after one priority WebSocket closed normally before its answer completed. Result: the latency benefit is route-dependent, regresses the executor route, and nearly doubles cost. Keep GPT-5.6 Sol out of the built-in allowlist and remove it from live config. Users can still opt in explicitly for workloads they benchmark themselves.
+
+Retained artifacts: `.pi/evals/2026-07-12T13-42-50-849Z-aec2ddaf/`, `.pi/evals/2026-07-12T13-45-15-679Z-aec2ddaf/`, and `.pi/evals/2026-07-12T13-48-37-962Z-aec2ddaf/`. Excluded transport-failure cohort: `.pi/evals/2026-07-12T13-47-04-519Z-aec2ddaf/`.
 
 ### 8. Tune verbosity by workflow
 

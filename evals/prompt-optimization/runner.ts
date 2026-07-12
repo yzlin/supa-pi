@@ -21,13 +21,17 @@ import {
 
 import type {
   AgentContext,
+  AgentLoopConfig,
   AgentMessage,
   AgentTool,
   StreamFn,
   ThinkingLevel,
 } from "@earendil-works/pi-agent-core";
 import { agentLoop } from "@earendil-works/pi-agent-core";
-import { closeOpenAICodexWebSocketSessions } from "@earendil-works/pi-ai/api/openai-codex-responses";
+import {
+  closeOpenAICodexWebSocketSessions,
+  stream,
+} from "@earendil-works/pi-ai/api/openai-codex-responses";
 import type { Api, Model } from "@earendil-works/pi-ai/compat";
 import {
   convertToLlm,
@@ -50,7 +54,19 @@ import {
 
 const LEADING_AT_PATTERN = /^@/;
 
+const codexServiceTierStream: StreamFn = (model, context, options) => {
+  const serviceTierOptions = options as typeof options & {
+    serviceTier?: "priority";
+  };
+  return stream(model as never, context, {
+    ...options,
+    reasoningEffort: options?.reasoning,
+    serviceTier: serviceTierOptions.serviceTier,
+  } as never);
+};
+
 export type EvalVariant = "baseline" | "candidate";
+export type EvalServiceTier = "default" | "priority";
 
 export interface RunRecord {
   caseId: string;
@@ -62,6 +78,8 @@ export interface RunRecord {
   model: string;
   responseModel?: string;
   thinking: ThinkingLevel;
+  serviceTier: EvalServiceTier;
+  payloadServiceTier?: string;
   promptSha256: string;
   output: string;
   stopReason?: string;
@@ -83,6 +101,7 @@ export interface RunVariantOptions {
   fixturePath: string;
   model: Model<Api>;
   thinking: ThinkingLevel;
+  serviceTier?: EvalServiceTier;
   timeoutMs: number;
   maxTurns: number;
   getApiKey: (provider: string) => Promise<string | undefined>;
@@ -298,9 +317,11 @@ export async function runVariant(
   let observedTurns = 0;
   const toolCalls: ToolCallRecord[] = [];
   const pendingToolCalls = new Map<string, ToolCallRecord>();
+  const serviceTier = options.serviceTier ?? "default";
+  const payloadServiceTiers = new Set<string>();
 
   try {
-    const stream = agentLoop(
+    const eventStream = agentLoop(
       [prompt],
       context,
       {
@@ -308,6 +329,15 @@ export async function runVariant(
         reasoning: options.thinking === "off" ? undefined : options.thinking,
         sessionId,
         transport: "auto",
+        ...(serviceTier === "priority" ? { serviceTier: "priority" } : {}),
+        onPayload(payload) {
+          const candidate = payload as Record<string, unknown> | null;
+          payloadServiceTiers.add(
+            typeof candidate?.service_tier === "string"
+              ? candidate.service_tier
+              : "absent"
+          );
+        },
         convertToLlm: (messages) => convertToLlm(messages),
         getApiKey: options.getApiKey,
         beforeToolCall: async ({ toolCall, args }) => {
@@ -330,12 +360,13 @@ export async function runVariant(
           return;
         },
         shouldStopAfterTurn: () => observedTurns >= options.maxTurns,
-      },
+      } as AgentLoopConfig & { serviceTier?: "priority" },
       controller.signal,
-      options.streamFn
+      options.streamFn ??
+        (options.serviceTier ? codexServiceTierStream : undefined)
     );
 
-    for await (const event of stream) {
+    for await (const event of eventStream) {
       if (event.type === "tool_execution_start") {
         const call = { name: event.toolName, args: event.args };
         pendingToolCalls.set(event.toolCallId, call);
@@ -394,6 +425,12 @@ export async function runVariant(
       score.domains.quality,
     ].filter((value): value is number => value !== null);
     const testScore = score.domains.tests;
+    let payloadServiceTier: string | undefined;
+    if (payloadServiceTiers.size === 1) {
+      [payloadServiceTier] = payloadServiceTiers;
+    } else if (payloadServiceTiers.size > 1) {
+      payloadServiceTier = "mixed";
+    }
     return {
       caseId: options.evalCase.id,
       workload: options.evalCase.workload,
@@ -404,6 +441,8 @@ export async function runVariant(
       model: `${options.model.provider}/${options.model.id}`,
       responseModel,
       thinking: options.thinking,
+      serviceTier,
+      payloadServiceTier,
       promptSha256: options.promptSha256,
       output,
       stopReason,

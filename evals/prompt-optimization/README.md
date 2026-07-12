@@ -1,6 +1,6 @@
 # Prompt optimization evals
 
-Paired live-model benchmark for SupaPi prompt and reasoning-effort changes. Prompt mode compares committed `HEAD` prompt text with current working-tree text. Reasoning mode compares two thinking levels against identical working-tree prompt bytes. Neither mode checks out, stashes, or resets files.
+Paired live-model benchmark for SupaPi prompt, reasoning-effort, and service-tier changes. Prompt mode compares committed `HEAD` prompt text with current working-tree text. Reasoning mode compares two thinking levels against identical working-tree prompt bytes. Service-tier mode compares default and priority requests against identical working-tree prompt bytes. No mode checks out, stashes, or resets files.
 
 ## Run
 
@@ -18,6 +18,9 @@ bun run eval:prompts -- --repetitions 3
 
 # Compare reasoning effort while holding model and prompt bytes fixed
 bun run eval:prompts -- --thinking high --candidate-thinking medium --repetitions 3
+
+# Compare default versus priority service tier
+bun run eval:prompts -- --compare-service-tier --thinking high --case core-orchestration --repetitions 4
 
 # Compare a route-specific subset; --case is repeatable
 bun run eval:prompts -- --model openai-codex/gpt-5.6-terra --thinking low --candidate-thinking medium --case docs-update --case e2e-verification --repetitions 3
@@ -48,7 +51,15 @@ Reasoning mode (`--candidate-thinking <level>`):
 - **Candidate:** identical working-tree prompt bytes with `--candidate-thinking <level>`.
 - **Held constant:** prompt, fixture, task, tools, model, timeout, max turns, and deterministic checks.
 
-Both modes isolate every variant/repetition in a fresh temporary fixture copy and a fresh Pi UUIDv7 session. The session ID supplies the Codex `prompt_cache_key` and WebSocket request identity used by the TUI; each Codex WebSocket session is closed after its arm completes. The core route shares one pinned production-like Pi base prompt before appending the evaluated core prompt.
+Service-tier mode (`--compare-service-tier`) currently requires an `openai-codex` Responses model:
+
+- **Baseline:** identical working-tree prompt bytes with no priority request (`default`).
+- **Candidate:** identical working-tree prompt bytes with `serviceTier: "priority"`.
+- **Held constant:** prompt, fixture, task, tools, model, reasoning effort, timeout, max turns, and deterministic checks.
+- **Recorded evidence:** requested arm and the outgoing provider payload's `service_tier` value (`absent` for baseline, `priority` for candidate). The run fails if any payload differs. The private ChatGPT backend's raw response tier is not exposed; Codex normalizes requested priority for pricing.
+- **Ordering:** repetitions must be even so each arm runs first equally often within every case.
+
+All modes isolate every variant/repetition in a fresh temporary fixture copy and a fresh Pi UUIDv7 session. The session ID supplies the Codex `prompt_cache_key` and WebSocket request identity used by the TUI; each Codex WebSocket session is closed after its arm completes. The core route shares one pinned production-like Pi base prompt before appending the evaluated core prompt.
 
 The fixed corpus covers explanation, focused bug fixing, multi-file implementation, exploration, review, offline web-research behavior, and tool-heavy orchestration. It includes every prompt currently optimized under `agents/*.md` plus `extensions/core-prompt/prompt.md`. A full run fails before model calls when a changed prompt lacks corpus coverage.
 
@@ -71,7 +82,7 @@ Efficiency is reported separately, not folded into quality. Summaries include ea
 - turns and tool calls
 - tool errors and recoveries
 - retries (reserved as zero for the direct-loop v1 runner)
-- requested model, response model, reasoning effort, route, and stop reason
+- requested model, response model, reasoning effort, service-tier arm/payload, route, and stop reason
 
 No LLM judge is used in v1. The model-visible `bun test tests/math.case.ts` command is a deterministic simulator backed by immutable harness logic; it never executes model-written code. File tools are confined to the temporary workspace, and arbitrary shell commands are blocked.
 
@@ -88,7 +99,7 @@ Ignored artifacts are written to:
   runs/<case>-<variant>-r<repetition>.json
 ```
 
-`manifest.json` pins the `HEAD` commit, candidate diff hash, corpus hash, prompt hashes, comparison kind and arms, selected cases, model, reasoning effort, repetitions, and limits. Artifacts exclude credentials, provider headers, environment values, and hidden reasoning text.
+`manifest.json` pins the `HEAD` commit, candidate diff hash, corpus hash, prompt hashes, comparison kind and arms, selected cases, model, reasoning effort, service-tier mode, repetitions, and limits. Artifacts exclude credentials, provider headers, environment values, and hidden reasoning text.
 
 Interpret deltas as **candidate minus baseline**:
 
