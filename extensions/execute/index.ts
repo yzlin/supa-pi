@@ -8,6 +8,7 @@ import {
   EXECUTE_INVOCATION_PREAMBLE,
   EXECUTE_SYNTHESIS_MESSAGE,
 } from "./constants";
+import { registerExecutorWorkflowTool } from "./executor-workflow";
 import { registerExecuteCheckpointTool } from "./tools";
 
 interface MessageLike {
@@ -95,6 +96,7 @@ function getLastExecutionBriefFromSession(
 
 export default function executeExtension(pi: ExtensionAPI): void {
   registerExecuteCheckpointTool(pi);
+  registerExecutorWorkflowTool(pi);
 
   pi.registerCommand(EXECUTE_COMMAND_NAME, {
     description:

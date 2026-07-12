@@ -47,6 +47,25 @@ Canonical orchestration workflow: `../../skills/execute/SKILL.md`. It instructs 
 - ask whether to resume or replace when a different unfinished v1 checkpoint exists;
 - persist dangerous-action approval only when bound to the same `canonicalPlanHash`; never reuse approval for a different canonical plan.
 
+## Structured executor output
+
+The extension registers `execute_tasks` for runnable task dispatch. The main session still creates and updates pi-tasks and owns checkpoints, but it uses `execute_tasks` instead of `TaskExecute` during `/execute`.
+
+`execute_tasks`:
+
+- launches fresh `executor` agents through the pi-subagents workflow runtime;
+- injects a closed native `structured_output` schema for `status`, `summary`, `filesTouched`, `validation`, `followUps`, and `blockers`;
+- rejects assistant-text JSON as an executor result;
+- dispatches at most four tasks per round, bounds prompts/results, and enforces a hard per-agent deadline;
+- disables inherited extension tools and parent-bridge tools for executor and repair agents; only declared built-ins plus injected `structured_output` remain;
+- performs exactly one report-only typed repair with the tool-less `executor-output-repair` agent when an executor finishes without native structured output;
+- never repeats the mutating task during repair;
+- returns a settled outcome for every dispatched task, preserving successful sibling results when another executor fails;
+- marks report-only repair results `needs_verification`, so the orchestrator must independently verify claims before completing the task;
+- returns the validated per-task payload to the main orchestrator, which reconciles all task and checkpoint state before stopping on a failed outcome.
+
+Direct `executor` Agent calls retain JSON assistant text only as a compatibility fallback when no `structured_output` tool is available.
+
 ## Checkpoint storage
 
 `execute_checkpoint` owns checkpoint identity and storage:

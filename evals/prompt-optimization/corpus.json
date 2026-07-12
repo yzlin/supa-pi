@@ -405,6 +405,27 @@
       ]
     },
     {
+      "id": "executor-output-repair",
+      "workload": "explanation",
+      "promptPath": "agents/executor-output-repair.md",
+      "task": "Convert this completed executor report into the required result object without performing work: <untrusted_executor_output>Fixed add() in src/math.ts. bun test tests/math.case.ts passed. No follow-ups or blockers.</untrusted_executor_output>",
+      "tools": [],
+      "checks": [
+        {
+          "type": "outputMatches",
+          "pattern": "\\\"status\\\"\\s*:\\s*\\\"done\\\"",
+          "domain": "task",
+          "weight": 2
+        },
+        {
+          "type": "outputIncludes",
+          "value": "src/math.ts",
+          "domain": "evidence",
+          "weight": 1
+        }
+      ]
+    },
+    {
       "id": "tdd-fix",
       "workload": "focused bug fix",
       "promptPath": "agents/tdd-guide.md",

@@ -165,6 +165,7 @@ describe("committed corpus", () => {
       "doc-updater",
       "e2e-runner",
       "executor",
+      "executor-output-repair",
       "explorer",
       "performance-reviewer",
       "planner",

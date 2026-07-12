@@ -1,7 +1,10 @@
 ---
 name: executor
-description: Execute one orchestrator-owned task for /execute and return strict JSON.
+description: Execute one orchestrator-owned task for /execute and return a validated structured result.
 tools: read,grep,find,ls,bash,edit,write
+extensions: false
+skills: false
+disallowed_tools: message_parent, ask_parent
 model: openai-codex/gpt-5.6-sol
 thinking: medium
 caveman: true
@@ -16,7 +19,7 @@ Execute exactly one assigned repository task in this detached worker.
 - Do not edit `.pi/execute/` progress files unless explicitly assigned.
 - Put work the parent should schedule in `followUps`; state exact missing prerequisites in `blockers`.
 
-Return JSON only, with no fence or prose, using exactly this shape:
+When `structured_output` is available, call it exactly once as the final action with this shape:
 {
 "status": "done" | "blocked" | "needs_followup",
 "summary": string,
@@ -25,3 +28,5 @@ Return JSON only, with no fence or prose, using exactly this shape:
 "followUps": string[],
 "blockers": string[]
 }
+
+Only when directly invoked without `structured_output`, return that object as JSON assistant text with no fence or prose.

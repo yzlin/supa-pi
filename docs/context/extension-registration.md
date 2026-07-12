@@ -31,9 +31,11 @@ Do not describe `extensions/om` as active runtime behavior unless package regist
 - the generic `fast` UI status key
 - a provider-payload hook that adds `service_tier: "priority"`
 
-The provider hook only patches payloads when Fast Mode is enabled, the selected model supports Fast Mode, and the payload does not already set `service_tier` or `serviceTier`. Model support comes from metadata `fastMode: true`, the built-in allowlist, or the config allowlist.
+The provider hook only patches payloads when Fast Mode is enabled, the selected model supports Fast Mode, and the payload does not already set `service_tier` or `serviceTier`. Model support comes from metadata `fastMode: true`, the built-in allowlist (`openai-codex/gpt-5.5`), or the config allowlist. The live config opts GPT-5.6 Sol in after request-contract validation; repository defaults do not opt it in without a latency benchmark.
 
 Fast Mode persists global state and additive exact-match model support in `~/.pi/agent/fast-mode.json`. The config requires boolean `enabled` and array `allowlist` of canonical `provider/id` strings; invalid config fails fast. Writes preserve unknown top-level keys and the existing allowlist. Status notifications report the support source (`model`, `built-in allowlist`, `config allowlist`, or `unsupported`). Config changes are not live-reloaded.
+
+`extensions/execute` is active. It registers `/execute`, `execute_checkpoint`, and `execute_tasks`. The main session owns pi-task and checkpoint state; `execute_tasks` launches at most four bounded executor agents per round through the pi-subagents workflow runtime with a compact closed native structured-output schema, settled per-task outcomes, hard agent deadlines, eventual session disposal, no inherited extension/parent-bridge tools, and at most one report-only repair by the tool-less `executor-output-repair` agent. Repaired reports return `needs_verification` and cannot complete a task without independent orchestrator checks.
 
 ## Tool ownership and registration order
 
