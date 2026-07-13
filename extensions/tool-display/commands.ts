@@ -94,7 +94,7 @@ function buildShowMessage(ctx: ExtensionCommandContext): string {
     `tools.write.enabled: ${formatBoolean(config.tools.write.enabled)}`,
     `output.read: ${config.output.read.mode}, collapsed=${formatBoolean(config.output.read.collapsed)}, previewLines=${config.output.read.previewLines}`,
     `output.search: ${config.output.search.mode}, collapsed=${formatBoolean(config.output.search.collapsed)}, previewLines=${config.output.search.previewLines}`,
-    `output.bash: ${config.output.bash.mode}, collapsed=${formatBoolean(config.output.bash.collapsed)}, previewLines=${config.output.bash.previewLines}, rtkHints=${formatBoolean(config.output.bash.rtkHints)}`,
+    `output.bash: enabled=${formatBoolean(config.output.bash.enabled)}, ${config.output.bash.mode}, collapsed=${formatBoolean(config.output.bash.collapsed)}, previewLines=${config.output.bash.previewLines}, rtkHints=${formatBoolean(config.output.bash.rtkHints)}`,
     `diff: enabled=${formatBoolean(config.diff.enabled)}, collapsed=${formatBoolean(config.diff.collapsed)}, previewLines=${config.diff.previewLines}`,
   ].join("\n");
 }

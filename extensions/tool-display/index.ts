@@ -5,16 +5,25 @@ import {
   createReadTool,
   createWriteTool,
   type ExtensionAPI,
+  type ExtensionContext,
+  type WriteToolInput,
 } from "@earendil-works/pi-coding-agent";
-import { Text } from "@earendil-works/pi-tui";
+import type { Component } from "@earendil-works/pi-tui";
 
 import { registerToolDisplayCommands } from "./commands";
 import { loadToolDisplayConfig } from "./config";
 import { editTool, resolveToCwd, withFileMutationQueue } from "./edit-tool";
 import {
+  cleanupToolDisplayTimers,
+  composeReasonedTool,
+  type OwnedToolName,
+  renderOwnedToolCall,
+  renderOwnedToolResult,
+  toolResultBody,
+} from "./presentation";
+import {
   createToolDisplayReadDetails,
   getToolDisplayReadErrorMessage,
-  isToolDisplayReadDetails,
   normalizeSkillFilePaths,
   readFullReadText,
   resolveFullReadPath,
@@ -22,20 +31,26 @@ import {
 import {
   capturePreviousWriteContent,
   createWriteDiffDetails,
-  renderCompactFindCall,
   renderCompactFindResult,
-  renderCompactGrepCall,
   renderCompactGrepResult,
-  renderCompactLsCall,
   renderCompactLsResult,
-  renderCompactReadCall,
   renderCompactReadResult,
-  renderEditCall,
   renderFinalDiffResult,
-  renderWriteCall,
 } from "./renderers";
 
-const SESSION_EVENTS = ["session_start", "session_switch"] as const;
+const REASONING_DESCRIPTION =
+  "State short present-tense intent, maximum 12 words, without restating target";
+
+function reasoningGuideline(name: OwnedToolName): string {
+  return `Give ${name} a short present-tense reasoning goal without repeating its target`;
+}
+
+function expandedBody(
+  expanded: boolean,
+  render: () => Component
+): Component | undefined {
+  return expanded ? toolResultBody(render(), true) : undefined;
+}
 
 export default function toolDisplayExtension(pi: ExtensionAPI): void {
   registerToolDisplayCommands(pi);
@@ -49,6 +64,7 @@ export default function toolDisplayExtension(pi: ExtensionAPI): void {
   let skillFilePaths = new Set<string>();
 
   function reloadSession(nextCwd: string): void {
+    cleanupToolDisplayTimers("file");
     cwd = nextCwd;
     config = loadToolDisplayConfig(cwd);
     readTool = createReadTool(cwd);
@@ -58,229 +74,314 @@ export default function toolDisplayExtension(pi: ExtensionAPI): void {
     writeTool = createWriteTool(cwd);
   }
 
-  for (const eventName of SESSION_EVENTS) {
-    pi.on(eventName, (_event, ctx) => {
+  pi.on("session_start", (_event, ctx) => {
+    reloadSession(ctx.cwd);
+  });
+  Reflect.apply(pi.on, pi, [
+    "session_switch",
+    (_event: { type: "session_switch" }, ctx: ExtensionContext) => {
       reloadSession(ctx.cwd);
-    });
-  }
+    },
+  ]);
+  pi.on("session_shutdown", () => {
+    cleanupToolDisplayTimers("file");
+  });
 
   pi.on("before_agent_start", async (event) => {
     skillFilePaths = await normalizeSkillFilePaths(
-      event.systemPromptOptions.skills
+      event.systemPromptOptions.skills ?? []
     );
   });
 
   if (config.tools.read.enabled) {
-    pi.registerTool({
-      ...readTool,
-      async execute(toolCallId, params, signal, onUpdate, ctx) {
-        if (!config.tools.read.fullRead.enabled) {
-          return readTool.execute(toolCallId, params, signal, onUpdate, ctx);
-        }
-
-        const fullReadMatch = await resolveFullReadPath(
-          params.path,
-          cwd,
-          config.tools.read.fullRead.targets,
-          skillFilePaths
-        );
-
-        if (!fullReadMatch) {
-          return readTool.execute(toolCallId, params, signal, onUpdate, ctx);
-        }
-
-        try {
-          const result = await readFullReadText(fullReadMatch, params);
-          return {
-            content: [{ type: "text", text: result.content }],
-            details: result.details,
-          };
-        } catch (error) {
-          return {
-            content: [
-              {
-                type: "text",
-                text: getToolDisplayReadErrorMessage(error),
-              },
-            ],
-            isError: true,
-            details: createToolDisplayReadDetails(
-              fullReadMatch.path,
-              fullReadMatch.target.name,
-              0,
-              params
-            ),
-          };
-        }
-      },
-
-      renderCall(args, theme) {
-        return renderCompactReadCall(args, theme);
-      },
-
-      renderResult(result, renderContext, theme, _context) {
-        if (isToolDisplayReadDetails(result.details)) {
-          const details = result.details.toolDisplay;
-          const ignored: string[] = [];
-
-          if (details.ignoredOffset !== undefined) {
-            ignored.push(`offset=${details.ignoredOffset}`);
+    const definition = composeReasonedTool(
+      {
+        ...readTool,
+        renderShell: "self" as const,
+        promptGuidelines: ["Use read to examine files instead of cat or sed"],
+        async execute(toolCallId, params, signal, onUpdate, _ctx) {
+          if (!config.tools.read.fullRead.enabled) {
+            return readTool.execute(toolCallId, params, signal, onUpdate);
           }
-
-          if (details.ignoredLimit !== undefined) {
-            ignored.push(`limit=${details.ignoredLimit}`);
-          }
-
-          const suffix = ignored.length
-            ? `; ignored ${ignored.join(", ")}`
-            : "";
-          const status = result.isError ? "error" : "success";
-          return new Text(
-            theme.fg(
-              status,
-              `full read ${details.targetName} (${details.bytes} bytes${suffix})`
-            ),
-            0,
-            0
+          const fullReadMatch = await resolveFullReadPath(
+            params.path,
+            cwd,
+            config.tools.read.fullRead.targets,
+            skillFilePaths
           );
-        }
-
-        return renderCompactReadResult(
-          result,
-          renderContext,
-          theme,
-          config.output.read
-        );
+          if (!fullReadMatch) {
+            return readTool.execute(toolCallId, params, signal, onUpdate);
+          }
+          try {
+            const result = await readFullReadText(fullReadMatch, params);
+            return {
+              content: [{ type: "text" as const, text: result.content }],
+              details: result.details,
+            };
+          } catch (error) {
+            return {
+              content: [
+                {
+                  type: "text" as const,
+                  text: getToolDisplayReadErrorMessage(error),
+                },
+              ],
+              isError: true,
+              details: createToolDisplayReadDetails(
+                fullReadMatch.path,
+                fullReadMatch.target.name,
+                0,
+                params
+              ),
+            };
+          }
+        },
+        renderCall(args, theme, context) {
+          return renderOwnedToolCall("read", args, theme, context);
+        },
+        renderResult(result, options, theme, context) {
+          const expanded =
+            options.expanded || config.output.read.mode === "expanded";
+          return renderOwnedToolResult(
+            "read",
+            result,
+            options,
+            theme,
+            context,
+            expandedBody(expanded, () =>
+              renderCompactReadResult(
+                result,
+                { ...options, expanded: true },
+                theme,
+                config.output.read
+              )
+            )
+          );
+        },
       },
-    });
+      {
+        reasoningDescription: REASONING_DESCRIPTION,
+        promptGuidelines: [reasoningGuideline("read")],
+      }
+    );
+    pi.registerTool(definition);
   }
 
   if (config.tools.search.enabled) {
-    pi.registerTool({
-      ...grepTool,
-      execute(toolCallId, params, signal, onUpdate, ctx) {
-        return grepTool.execute(toolCallId, params, signal, onUpdate, ctx);
-      },
-      renderCall(args, theme) {
-        return renderCompactGrepCall(args, theme);
-      },
-      renderResult(result, renderContext, theme) {
-        return renderCompactGrepResult(
-          result,
-          renderContext,
-          theme,
-          config.output.search
-        );
-      },
-    });
-
-    pi.registerTool({
-      ...findTool,
-      execute(toolCallId, params, signal, onUpdate, ctx) {
-        return findTool.execute(toolCallId, params, signal, onUpdate, ctx);
-      },
-      renderCall(args, theme) {
-        return renderCompactFindCall(args, theme);
-      },
-      renderResult(result, renderContext, theme) {
-        return renderCompactFindResult(
-          result,
-          renderContext,
-          theme,
-          config.output.search
-        );
-      },
-    });
-
-    pi.registerTool({
-      ...lsTool,
-      execute(toolCallId, params, signal, onUpdate, ctx) {
-        return lsTool.execute(toolCallId, params, signal, onUpdate, ctx);
-      },
-      renderCall(args, theme) {
-        return renderCompactLsCall(args, theme);
-      },
-      renderResult(result, renderContext, theme) {
-        return renderCompactLsResult(
-          result,
-          renderContext,
-          theme,
-          config.output.search
-        );
-      },
-    });
+    const registrations = [
+      composeReasonedTool(
+        {
+          ...grepTool,
+          renderShell: "self" as const,
+          renderCall: (args, theme, context) =>
+            renderOwnedToolCall("grep", args, theme, context),
+          renderResult: (result, options, theme, context) =>
+            renderOwnedToolResult(
+              "grep",
+              result,
+              options,
+              theme,
+              context,
+              expandedBody(
+                options.expanded || config.output.search.mode === "expanded",
+                () =>
+                  renderCompactGrepResult(
+                    result,
+                    { ...options, expanded: true },
+                    theme,
+                    config.output.search
+                  )
+              )
+            ),
+        },
+        {
+          reasoningDescription: REASONING_DESCRIPTION,
+          promptGuidelines: [reasoningGuideline("grep")],
+        }
+      ),
+      composeReasonedTool(
+        {
+          ...findTool,
+          renderShell: "self" as const,
+          renderCall: (args, theme, context) =>
+            renderOwnedToolCall("find", args, theme, context),
+          renderResult: (result, options, theme, context) =>
+            renderOwnedToolResult(
+              "find",
+              result,
+              options,
+              theme,
+              context,
+              expandedBody(
+                options.expanded || config.output.search.mode === "expanded",
+                () =>
+                  renderCompactFindResult(
+                    result,
+                    { ...options, expanded: true },
+                    theme,
+                    config.output.search
+                  )
+              )
+            ),
+        },
+        {
+          reasoningDescription: REASONING_DESCRIPTION,
+          promptGuidelines: [reasoningGuideline("find")],
+        }
+      ),
+      composeReasonedTool(
+        {
+          ...lsTool,
+          renderShell: "self" as const,
+          renderCall: (args, theme, context) =>
+            renderOwnedToolCall("ls", args, theme, context),
+          renderResult: (result, options, theme, context) =>
+            renderOwnedToolResult(
+              "ls",
+              result,
+              options,
+              theme,
+              context,
+              expandedBody(
+                options.expanded || config.output.search.mode === "expanded",
+                () =>
+                  renderCompactLsResult(
+                    result,
+                    { ...options, expanded: true },
+                    theme,
+                    config.output.search
+                  )
+              )
+            ),
+        },
+        {
+          reasoningDescription: REASONING_DESCRIPTION,
+          promptGuidelines: [reasoningGuideline("ls")],
+        }
+      ),
+    ];
+    for (const definition of registrations) {
+      pi.registerTool(definition);
+    }
   }
 
   if (config.tools.edit.enabled) {
-    pi.registerTool({
-      ...editTool,
-      renderShell: "default",
-      execute(toolCallId, params, signal, onUpdate, ctx) {
-        const activeCwd = ctx?.cwd ?? cwd;
-        return editTool.execute(toolCallId, params, signal, onUpdate, {
-          ...ctx,
-          cwd: activeCwd,
-          toolDisplayAllowPatchAdd: config.tools.write.enabled === true,
-        });
-      },
-      renderCall(args, theme) {
-        return renderEditCall(args, theme);
-      },
-      renderResult(result, renderContext, theme) {
-        return renderFinalDiffResult(result, renderContext, theme, config.diff);
-      },
-    });
+    pi.registerTool(
+      composeReasonedTool(
+        {
+          ...editTool,
+          renderShell: "self" as const,
+          execute(toolCallId, params, signal, onUpdate, ctx: ExtensionContext) {
+            const activeCwd = ctx.cwd ?? cwd;
+            return editTool.execute(toolCallId, params, signal, onUpdate, {
+              ...ctx,
+              cwd: activeCwd,
+              toolDisplayAllowPatchAdd: config.tools.write.enabled === true,
+            });
+          },
+          renderCall(args, theme, context) {
+            return renderOwnedToolCall("edit", args, theme, context);
+          },
+          renderResult(result, options, theme, context) {
+            const expanded =
+              options.expanded || config.diff.collapsed === false;
+            return renderOwnedToolResult(
+              "edit",
+              result,
+              options,
+              theme,
+              context,
+              expandedBody(expanded, () =>
+                renderFinalDiffResult(
+                  result,
+                  { ...options, expanded: true },
+                  theme,
+                  config.diff
+                )
+              )
+            );
+          },
+        },
+        {
+          reasoningDescription: REASONING_DESCRIPTION,
+          promptGuidelines: [reasoningGuideline("edit")],
+        }
+      )
+    );
   }
 
   if (config.tools.write.enabled) {
-    pi.registerTool({
-      ...writeTool,
-      renderShell: "default",
-      async execute(toolCallId, params, signal, onUpdate, ctx) {
-        const activeCwd = ctx?.cwd ?? cwd;
-        const targetPath = resolveToCwd(activeCwd, params.path);
-        const activeWriteTool = createWriteTool(activeCwd);
-        const result = await withFileMutationQueue(
-          [targetPath],
-          async () => {
-            const previous = await capturePreviousWriteContent(
-              activeCwd,
-              targetPath
+    pi.registerTool(
+      composeReasonedTool(
+        {
+          ...writeTool,
+          renderShell: "self" as const,
+          execute(
+            toolCallId,
+            params: WriteToolInput,
+            signal,
+            onUpdate,
+            ctx: ExtensionContext
+          ) {
+            const activeCwd = ctx.cwd ?? cwd;
+            const targetPath = resolveToCwd(activeCwd, params.path);
+            const activeWriteTool = createWriteTool(activeCwd);
+            return withFileMutationQueue(
+              [targetPath],
+              async () => {
+                const previous = await capturePreviousWriteContent(
+                  activeCwd,
+                  targetPath
+                );
+                const result = await activeWriteTool.execute(
+                  toolCallId,
+                  params,
+                  signal,
+                  onUpdate
+                );
+                if ((result as { isError?: boolean }).isError) {
+                  return result;
+                }
+                return {
+                  ...result,
+                  details: createWriteDiffDetails(
+                    params.path,
+                    params.content,
+                    previous
+                  ),
+                };
+              },
+              signal
             );
-            const result = await activeWriteTool.execute(
-              toolCallId,
-              params,
-              signal,
-              onUpdate,
-              {
-                ...ctx,
-                cwd: activeCwd,
-              }
-            );
-
-            if (result.isError) {
-              return result;
-            }
-
-            return {
-              ...result,
-              details: createWriteDiffDetails(
-                params.path,
-                params.content,
-                previous
-              ),
-            };
           },
-          signal
-        );
-        return result;
-      },
-      renderCall(args, theme) {
-        return renderWriteCall(args, theme);
-      },
-      renderResult(result, renderContext, theme) {
-        return renderFinalDiffResult(result, renderContext, theme, config.diff);
-      },
-    });
+          renderCall(args, theme, context) {
+            return renderOwnedToolCall("write", args, theme, context);
+          },
+          renderResult(result, options, theme, context) {
+            const expanded =
+              options.expanded || config.diff.collapsed === false;
+            return renderOwnedToolResult(
+              "write",
+              result,
+              options,
+              theme,
+              context,
+              expandedBody(expanded, () =>
+                renderFinalDiffResult(
+                  result,
+                  { ...options, expanded: true },
+                  theme,
+                  config.diff
+                )
+              )
+            );
+          },
+        },
+        {
+          reasoningDescription: REASONING_DESCRIPTION,
+          promptGuidelines: [reasoningGuideline("write")],
+        }
+      )
+    );
   }
 }

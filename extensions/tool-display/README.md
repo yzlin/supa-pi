@@ -44,6 +44,7 @@ Shape:
     "read": { "mode": "compact", "collapsed": true, "previewLines": 20 },
     "search": { "mode": "compact", "collapsed": true, "previewLines": 20 },
     "bash": {
+      "enabled": true,
       "mode": "compact",
       "collapsed": true,
       "previewLines": 20,
@@ -111,11 +112,11 @@ Matching behavior and safety:
 
 ## Renderers
 
-Tool-display v1 registers compact renderers for `read`, `grep`, `find`, `ls`, `edit`, and `write` when their config flags are enabled. `search.enabled` owns `grep`/`find`/`ls` together.
+Tool-display registers reasoned, self-framed renderers for `read`, `grep`, `find`, `ls`, `edit`, and `write` when their config flags are enabled. `search.enabled` owns `grep`/`find`/`ls` together. Pending and settled tools use stable two-row presentation, Pi theme pending/success/error backgrounds, width-aware emoji and tail-preserving truncation, and elapsed time. Tool icons and names use Tidy-style theme groups: accent for read/search tools, warning for edit/write, and `thinkingXhigh` for RTK-owned bash. Collapsed reasoning, targets, commands, and summaries collapse whitespace and strip terminal control sequences; expanded output keeps its original line structure. `Ctrl+O` expansion reveals the existing detailed output beneath the two-row summary. Full reads retain their target and pagination-ignored badges.
 
 `edit` renders the final applied diff from tool details. `write` captures previous file content before execution and renders a final diff after success. Final diffs use the standard tool block shell/background, compact summaries by default, expand to unified diffs on narrow terminals, switch to split diffs on wide terminals, color additions/removals, and collapse expanded output to `diff.previewLines` when `diff.collapsed` is true. Split diffs keep path and hunk meta rows compact across the full diff width: unchanged paths render once, while renames/path changes render old-to-new. If previous content cannot be captured safely, `write` falls back to a capped compact summary instead of a diff; previous-content capture is limited to paths inside the workspace.
 
-RTK remains the `bash` owner. Tool-display exports the shared compact bash renderer that RTK imports, but does not register `bash`.
+RTK remains the `bash` owner. Tool-display exports the shared bash presentation that RTK imports, but does not register `bash`. `output.bash.enabled` defaults to `true`; setting it to `false` disables only the shared reasoned presentation and preserves RTK ownership, rewriting, execution, native bash schema, and native renderers.
 
 ## Registration and ownership
 
@@ -129,5 +130,7 @@ Runtime ownership:
 Keep `./extensions/rtk` before `./extensions/tool-display` in `package.json`. RTK owns `bash`; tool-display owns the other tool renderers and read override path.
 
 ## Attribution
+
+The two-row tool presentation is adapted from Mikey O'Brien's [`pi-tidy-tools`](https://github.com/mikeyobrien/pi-tidy-tools), licensed under the MIT license.
 
 The full-read behavior is adapted from the former local `read-patch` extension in this repository. No external upstream source or external license applies to that local code path. The root project license is MIT; keep copied or adapted external materials attributed near their usage.

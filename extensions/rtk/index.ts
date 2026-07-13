@@ -1,13 +1,24 @@
+import type { Static } from "@earendil-works/pi-ai";
 import {
+  type AgentToolResult,
+  type AgentToolUpdateCallback,
   createBashTool,
   type ExtensionAPI,
+  type ExtensionContext,
+  type ToolDefinition,
 } from "@earendil-works/pi-coding-agent";
 
+import type { ToolDisplayBashOutputConfig } from "../tool-display/config";
 import { loadToolDisplayConfig } from "../tool-display/config";
 import {
-  renderCompactBashCall,
-  renderCompactBashResult,
-} from "../tool-display/renderers";
+  cleanupToolDisplayTimers,
+  composeReasonedTool,
+  type PresentationState,
+  renderBashToolCall,
+  renderBashToolResult,
+  toolResultBody,
+} from "../tool-display/presentation";
+import { renderCompactBashResult } from "../tool-display/renderers";
 import { registerRtkCommands } from "./commands";
 import { loadRtkConfig } from "./config";
 import {
@@ -16,49 +27,43 @@ import {
 } from "./output-compaction";
 import { clearRtkBinaryPathCache, resolveRtkCommand } from "./rewrite";
 import { createRtkRuntime } from "./runtime";
+import type { RtkRuntime } from "./types";
 import { createRtkUserBashHandler } from "./user-bash";
 
-function loadRuntimeState(
-  cwd: string,
-  runtime: ReturnType<typeof createRtkRuntime>
-): void {
+const REASONING_DESCRIPTION =
+  "State short present-tense intent, maximum 12 words, without restating target";
+const REASONING_GUIDELINE =
+  "Give bash a short present-tense reasoning goal without repeating its command";
+
+type BashTool = ReturnType<typeof createBashTool>;
+type BashSchema = BashTool["parameters"];
+type BashDetails = Awaited<ReturnType<BashTool["execute"]>>["details"];
+type RtkExecutionTool = ToolDefinition<
+  BashSchema,
+  BashDetails,
+  PresentationState
+>;
+
+function loadRuntimeState(cwd: string, runtime: RtkRuntime): void {
   clearRtkBinaryPathCache();
   runtime.setConfig(loadRtkConfig(cwd));
   runtime.resetSessionState();
   runtime.refreshRtkStatus();
 }
 
-const SESSION_EVENTS = ["session_start", "session_switch"] as const;
-
-type SessionEventName = (typeof SESSION_EVENTS)[number];
-
-function registerSessionHandler(
-  pi: ExtensionAPI,
-  eventName: SessionEventName,
-  runtime: ReturnType<typeof createRtkRuntime>,
-  updateBashTool: (cwd: string) => void
-): void {
-  pi.on(eventName, (_event, ctx) => {
-    loadRuntimeState(ctx.cwd, runtime);
-    updateBashTool(ctx.cwd);
-  });
-}
-
-export default function rtkExtension(pi: ExtensionAPI): void {
-  const runtime = createRtkRuntime(loadRtkConfig(process.cwd()));
-  let bashTool = createBashTool(process.cwd());
-  let toolDisplayConfig = loadToolDisplayConfig(process.cwd());
-
-  for (const eventName of SESSION_EVENTS) {
-    registerSessionHandler(pi, eventName, runtime, (cwd) => {
-      bashTool = createBashTool(cwd);
-      toolDisplayConfig = loadToolDisplayConfig(cwd);
-    });
-  }
-
-  pi.registerTool({
-    ...bashTool,
-    execute(toolCallId, params, signal, onUpdate, ctx) {
+function withRtkExecution(
+  baseTool: BashTool,
+  runtime: RtkRuntime
+): RtkExecutionTool {
+  return {
+    ...baseTool,
+    execute(
+      toolCallId: string,
+      params: Static<BashSchema>,
+      signal: AbortSignal | undefined,
+      onUpdate: AgentToolUpdateCallback<BashDetails> | undefined,
+      ctx: ExtensionContext
+    ): Promise<AgentToolResult<BashDetails>> {
       runtime.metrics.recordRewriteAttempt();
       const resolution = resolveRtkCommand(params.command, {
         config: runtime.getConfig(),
@@ -89,29 +94,104 @@ export default function rtkExtension(pi: ExtensionAPI): void {
         runtime.metrics.startCommand(toolCallId, "bash", resolution.command);
       }
 
-      return bashTool.execute(
+      return baseTool.execute(
         toolCallId,
-        {
-          ...params,
-          command: resolution.command,
-        },
+        { ...params, command: resolution.command },
         signal,
-        onUpdate,
-        ctx
+        onUpdate
       );
     },
-    renderCall(args, theme) {
-      return renderCompactBashCall(args, theme);
+  };
+}
+
+/** Compose RTK-owned execution with optional shared tool-display presentation. */
+export function createRtkBashTool(
+  baseTool: BashTool,
+  runtime: RtkRuntime,
+  getOutputConfig: () => ToolDisplayBashOutputConfig
+) {
+  const rtkTool = withRtkExecution(baseTool, runtime);
+  if (!getOutputConfig().enabled) {
+    return rtkTool;
+  }
+
+  return composeReasonedTool(
+    {
+      ...rtkTool,
+      renderShell: "self" as const,
+      renderCall: (args, theme, context) =>
+        renderBashToolCall(args, theme, context),
+      renderResult: (result, options, theme, context) => {
+        const outputConfig = getOutputConfig();
+        const body =
+          options.expanded || outputConfig.mode === "expanded"
+            ? toolResultBody(
+                renderCompactBashResult(
+                  result,
+                  { ...options, expanded: true },
+                  theme,
+                  outputConfig
+                ),
+                true
+              )
+            : undefined;
+        return renderBashToolResult(result, options, theme, context, body);
+      },
     },
-    renderResult(result, renderContext, theme) {
-      return renderCompactBashResult(
-        result,
-        renderContext,
-        theme,
-        toolDisplayConfig.output.bash
-      );
-    },
+    {
+      reasoningDescription: REASONING_DESCRIPTION,
+      promptGuidelines: [REASONING_GUIDELINE],
+    }
+  );
+}
+
+export default function rtkExtension(pi: ExtensionAPI): void {
+  const runtime = createRtkRuntime(loadRtkConfig(process.cwd()));
+  let toolDisplayConfig = loadToolDisplayConfig(process.cwd());
+  const registeredDefinition = createRtkBashTool(
+    createBashTool(process.cwd()),
+    runtime,
+    () => toolDisplayConfig.output.bash
+  );
+
+  function reloadSession(cwd: string): void {
+    cleanupToolDisplayTimers("rtk");
+    loadRuntimeState(cwd, runtime);
+    toolDisplayConfig = loadToolDisplayConfig(cwd);
+    const nextDefinition = createRtkBashTool(
+      createBashTool(cwd),
+      runtime,
+      () => toolDisplayConfig.output.bash
+    );
+    registeredDefinition.promptGuidelines = undefined;
+    registeredDefinition.renderShell = undefined;
+    registeredDefinition.renderCall = undefined;
+    registeredDefinition.renderResult = undefined;
+    Object.assign(registeredDefinition, nextDefinition);
+  }
+
+  pi.on("session_start", (_event, ctx) => {
+    reloadSession(ctx.cwd);
+    pi.registerTool(registeredDefinition);
   });
+  const sessionSwitchApi = pi as ExtensionAPI & {
+    on(
+      event: "session_switch",
+      handler: (
+        event: { type: "session_switch" },
+        ctx: ExtensionContext
+      ) => void
+    ): void;
+  };
+  sessionSwitchApi.on("session_switch", (_event, ctx) => {
+    reloadSession(ctx.cwd);
+    pi.registerTool(registeredDefinition);
+  });
+  pi.on("session_shutdown", () => {
+    cleanupToolDisplayTimers("rtk");
+  });
+
+  pi.registerTool(registeredDefinition);
 
   pi.on("tool_execution_start", createRtkToolExecutionStartHandler(runtime));
   pi.on("tool_result", createRtkToolResultHandler(runtime));

@@ -41,6 +41,7 @@
       "previewLines": 20
     },
     "bash": {
+      "enabled": true,
       "mode": "compact",
       "collapsed": true,
       "previewLines": 20,

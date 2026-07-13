@@ -49,7 +49,7 @@ describe("tool-display config", () => {
         output: {
           read: { mode: "expanded", collapsed: false, previewLines: 40 },
           search: { mode: "loud", collapsed: "no" },
-          bash: { rtkHints: false },
+          bash: { enabled: false, rtkHints: false },
         },
         diff: {
           enabled: false,
@@ -68,7 +68,7 @@ describe("tool-display config", () => {
       },
       output: {
         read: { mode: "expanded", collapsed: false, previewLines: 40 },
-        bash: { rtkHints: false },
+        bash: { enabled: false, rtkHints: false },
       },
       diff: {
         enabled: false,
@@ -116,6 +116,7 @@ describe("tool-display config", () => {
       )?.enabled
     ).toBe(false);
     expect(config.tools.search.enabled).toBe(true);
+    expect(config.output.bash.enabled).toBe(true);
   });
 
   it("normalizes fullRead targets", () => {

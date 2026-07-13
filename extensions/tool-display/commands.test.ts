@@ -113,7 +113,7 @@ describe("tool-display commands", () => {
       expect(messages[0]).toContain(
         "user-rules | patterns | on | default | 262144 | full | base=~/.pi/agent/rules include=**/*.md"
       );
-      expect(messages[0]).toContain("output.bash: compact");
+      expect(messages[0]).toContain("output.bash: enabled=on, compact");
     } finally {
       rmSync(cwd, { force: true, recursive: true });
     }
@@ -231,6 +231,7 @@ describe("tool-display commands", () => {
       expect(config.tools.read.enabled).toBe(false);
       expect(config.tools.search.enabled).toBe(false);
       expect(config.output.bash.rtkHints).toBe(true);
+      expect(config.output.bash.enabled).toBe(false);
     } finally {
       rmSync(cwd, { force: true, recursive: true });
     }

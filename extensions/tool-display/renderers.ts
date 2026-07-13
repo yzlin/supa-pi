@@ -466,7 +466,7 @@ function collectEditCallPreviewFiles(args: EditCallArgs): string[] {
   return files;
 }
 
-function collectPatchCallPreviewFiles(patch: string): string[] {
+export function collectPatchCallPreviewFiles(patch: string): string[] {
   const lines = patch.replace(/\r\n?/g, "\n").split("\n");
   const endIndex = lines.indexOf("*** End Patch");
   if (

@@ -25,6 +25,9 @@ Default limits:
 - `/rtk` defaults to the stats dashboard; `/rtk stats` opens the same custom TUI view instead of plain notify text
 - stats are **session-only**; switching sessions or clearing stats resets the dashboard
 - token counts in `/rtk stats` are **estimated**, not exact
+- RTK always owns and executes `bash`; when `tool-display.output.bash.enabled` is true it uses the shared reasoned two-line presentation, and when false it retains the native bash schema and renderers
+
+The shared two-row bash presentation is adapted from Mikey O'Brien's [`pi-tidy-tools`](https://github.com/mikeyobrien/pi-tidy-tools), licensed under the MIT license.
 
 ## `/rtk` / `/rtk stats`
 

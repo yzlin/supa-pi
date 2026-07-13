@@ -24,9 +24,6 @@ const toolDisplayIndexSource = readFileSync(
   join(import.meta.dir, "tool-display", "index.ts"),
   "utf8"
 );
-const fullReadSummaryPattern =
-  /full read \$\{details\.targetName\} \(\$\{details\.bytes\} bytes\$\{suffix\}\)/;
-
 type RegisteredTool = Parameters<ExtensionAPI["registerTool"]>[0];
 type EventHandler = (event: unknown, ctx: { cwd: string }) => void;
 
@@ -108,7 +105,7 @@ describe("extension registration compatibility", () => {
       harness.tools
         .filter((tool) => tool.renderShell === "default")
         .map((tool) => tool.name)
-    ).toEqual(["edit", "write"]);
+    ).toEqual([]);
   });
 
   test("edit patch add permission follows current session config", async () => {
@@ -153,14 +150,19 @@ describe("extension registration compatibility", () => {
 
     expect(harness.tools.map((tool) => tool.name)).toEqual(["bash"]);
     expect(rtkIndexSource).toContain("createBashTool");
-    expect(rtkIndexSource).toContain("renderCompactBashCall");
+    expect(rtkIndexSource).toContain("renderBashToolCall");
     expect(rtkIndexSource).toContain("renderCompactBashResult");
     expect(rtkIndexSource).toContain("toolDisplayConfig.output.bash");
     expect(rtkIndexSource).toContain("resolveRtkCommand");
   });
 
-  test("full reads render summary-only tool-display details", () => {
-    expect(toolDisplayIndexSource).toContain("isToolDisplayReadDetails");
-    expect(toolDisplayIndexSource).toMatch(fullReadSummaryPattern);
+  test("full reads render through shared tool-display details", () => {
+    expect(toolDisplayIndexSource).toContain("createToolDisplayReadDetails");
+    expect(
+      readFileSync(
+        join(import.meta.dir, "tool-display", "presentation.ts"),
+        "utf8"
+      )
+    ).toContain("details.toolDisplay?.fullRead");
   });
 });

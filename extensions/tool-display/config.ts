@@ -54,6 +54,7 @@ export interface ToolDisplayPreviewConfig {
 }
 
 export interface ToolDisplayBashOutputConfig extends ToolDisplayPreviewConfig {
+  enabled: boolean;
   rtkHints: boolean;
 }
 
@@ -172,6 +173,7 @@ export const DEFAULT_TOOL_DISPLAY_CONFIG: ToolDisplayConfig = {
       previewLines: 20,
     },
     bash: {
+      enabled: true,
       mode: "compact",
       collapsed: true,
       previewLines: 20,
@@ -427,7 +429,11 @@ function normalizeBashOutputConfig(
 
   const next: Partial<ToolDisplayBashOutputConfig> =
     normalizePreviewConfig(value) ?? {};
+  const enabled = normalizeBoolean(value.enabled);
   const rtkHints = normalizeBoolean(value.rtkHints);
+  if (enabled !== undefined) {
+    next.enabled = enabled;
+  }
   if (rtkHints !== undefined) {
     next.rtkHints = rtkHints;
   }
@@ -812,6 +818,10 @@ export function getToolDisplayPresetConfig(
   if (preset === "off") {
     return {
       ...compact,
+      output: {
+        ...compact.output,
+        bash: { ...compact.output.bash, enabled: false },
+      },
       tools: {
         read: { ...compact.tools.read, enabled: false },
         search: { enabled: false },
@@ -826,6 +836,7 @@ export function getToolDisplayPresetConfig(
       read: { mode: "expanded", collapsed: false, previewLines: 80 },
       search: { mode: "expanded", collapsed: false, previewLines: 80 },
       bash: {
+        enabled: true,
         mode: "expanded",
         collapsed: false,
         previewLines: 80,
