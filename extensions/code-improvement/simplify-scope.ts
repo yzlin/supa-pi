@@ -135,9 +135,7 @@ function checkGitIgnored(
     input: `${paths.join("\0")}\0`,
   });
   if (result.status === 0 || result.status === 1) {
-    return new Set(
-      result.stdout.split("\0").filter((path) => path.length > 0)
-    );
+    return new Set(result.stdout.split("\0").filter((path) => path.length > 0));
   }
 
   state.unavailable = true;

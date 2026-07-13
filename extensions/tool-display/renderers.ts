@@ -429,6 +429,9 @@ export function renderCompactLsResult(
 }
 
 const FILE_LIST_PREVIEW_LIMIT = 5;
+const PATCH_FILE_HEADER_PATTERN = /^\*\*\* (?:Add|Update) File: (.+)$/;
+const UNSUPPORTED_PATCH_HEADER_PATTERN =
+  /^\s*\*\*\* (?!Add File:|Update File:)/;
 
 function formatFileList(files: string[], totalCount = files.length): string {
   if (totalCount <= FILE_LIST_PREVIEW_LIMIT) {
@@ -465,7 +468,7 @@ function collectEditCallPreviewFiles(args: EditCallArgs): string[] {
 
 function collectPatchCallPreviewFiles(patch: string): string[] {
   const lines = patch.replace(/\r\n?/g, "\n").split("\n");
-  const endIndex = lines.findIndex((line) => line === "*** End Patch");
+  const endIndex = lines.indexOf("*** End Patch");
   if (
     lines[0] !== "*** Begin Patch" ||
     endIndex === -1 ||
@@ -485,10 +488,8 @@ function collectPatchCallPreviewFiles(patch: string): string[] {
   }
 
   for (const line of lines.slice(1, endIndex)) {
-    const headerMatch = line.match(/^\*\*\* (?:Add|Update) File: (.+)$/);
-    const unsupportedHeaderMatch = line.match(
-      /^\s*\*\*\* (?!Add File:|Update File:)/
-    );
+    const headerMatch = line.match(PATCH_FILE_HEADER_PATTERN);
+    const unsupportedHeaderMatch = line.match(UNSUPPORTED_PATCH_HEADER_PATTERN);
 
     if (!headerMatch && unsupportedHeaderMatch) {
       return [];
@@ -531,10 +532,15 @@ export function renderEditCall(args: EditCallArgs, theme: ThemeLike): Text {
   }
 
   const files = collectEditCallPreviewFiles(args);
-  const hasTopLevelEdit = args.path !== undefined && args.oldText !== undefined && args.newText !== undefined;
-  const editItems = args.multi ?? (Array.isArray(args.edits) ? args.edits : undefined);
+  const hasTopLevelEdit =
+    args.path !== undefined &&
+    args.oldText !== undefined &&
+    args.newText !== undefined;
+  const editItems =
+    args.multi ?? (Array.isArray(args.edits) ? args.edits : undefined);
   const hasSinglePathEdit = editItems === undefined && args.path !== undefined;
-  const editCount = (editItems?.length ?? 0) + (hasTopLevelEdit || hasSinglePathEdit ? 1 : 0);
+  const editCount =
+    (editItems?.length ?? 0) + (hasTopLevelEdit || hasSinglePathEdit ? 1 : 0);
   const label = editCount > 1 ? `multi ${editCount}` : "edit";
   const target = files.length > 0 ? ` ${formatFileList(files, editCount)}` : "";
 
@@ -1759,7 +1765,9 @@ function firstChangedLine(
 export async function capturePreviousWriteContent(
   cwd: string,
   path: string
-): Promise<{ ok: true; content: string | null } | { ok: false; summary: string }> {
+): Promise<
+  { ok: true; content: string | null } | { ok: false; summary: string }
+> {
   const workspace = resolve(cwd);
   const absolutePath = resolve(workspace, path);
   const relativePath = relative(workspace, absolutePath);
@@ -1776,12 +1784,14 @@ export async function capturePreviousWriteContent(
   }
 
   try {
-    const stats = await stat(absolutePath).catch((error: NodeJS.ErrnoException) => {
-      if (error.code === "ENOENT") {
-        return null;
+    const stats = await stat(absolutePath).catch(
+      (error: NodeJS.ErrnoException) => {
+        if (error.code === "ENOENT") {
+          return null;
+        }
+        throw error;
       }
-      throw error;
-    });
+    );
     if (!stats) {
       return { ok: true, content: null };
     }

@@ -77,10 +77,10 @@ export interface ExecuteCheckpointListResult {
   warnings?: string[];
 }
 
-type CheckpointEntry = {
+interface CheckpointEntry {
   path: string;
   checkpoint: ExecuteCheckpoint;
-};
+}
 
 const FINISHED_CHECKPOINT_STATUSES = new Set([
   "canceled",

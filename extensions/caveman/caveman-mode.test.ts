@@ -116,7 +116,9 @@ function createContext(
   return { ctx, statuses, notifications };
 }
 
-function setupHarness(flags: Record<string, boolean | string | undefined> = {}): {
+function setupHarness(
+  flags: Record<string, boolean | string | undefined> = {}
+): {
   handlers: Map<string, ExtensionEventHandler>;
   eventHandlers: Map<string, ExtensionEventHandler>;
   command: HarnessCommandOptions;

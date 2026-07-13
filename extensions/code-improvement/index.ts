@@ -460,7 +460,7 @@ export default function codeImprovementExtension(pi: ExtensionAPI): void {
   pi.registerCommand("improve-codebase-architecture", {
     description:
       "Read-only architecture review with deepening candidates: /improve-codebase-architecture [scope]",
-    handler: async (args, ctx) => {
+    handler: (args, ctx) => {
       const message = buildImproveCodebaseArchitectureCommandMessage(
         args ?? ""
       );

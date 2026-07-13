@@ -13,7 +13,7 @@ export function buildDiagnoseCommandMessage(args: string): string {
 export default function diagnoseExtension(pi: ExtensionAPI): void {
   pi.registerCommand("diagnose", {
     description: "Diagnose a bug or current session: /diagnose [request]",
-    handler: async (args, ctx) => {
+    handler: (args, ctx) => {
       const message = buildDiagnoseCommandMessage(args ?? "");
 
       if (ctx.isIdle()) {

@@ -355,7 +355,7 @@ export default function questionnaire(pi: ExtensionAPI): void {
 
   pi.registerCommand("questionnaire-stats", {
     description: "Show questionnaire miss and redirect stats for this session",
-    async handler(_args, ctx) {
+    handler(_args, ctx) {
       const logs = getQuestionnaireMissLogs(ctx.sessionManager.getEntries());
       if (logs.length === 0) {
         ctx.ui.notify(

@@ -243,11 +243,20 @@ export default function toolDisplayExtension(pi: ExtensionAPI): void {
         const result = await withFileMutationQueue(
           [targetPath],
           async () => {
-            const previous = await capturePreviousWriteContent(activeCwd, targetPath);
-            const result = await activeWriteTool.execute(toolCallId, params, signal, onUpdate, {
-              ...ctx,
-              cwd: activeCwd,
-            });
+            const previous = await capturePreviousWriteContent(
+              activeCwd,
+              targetPath
+            );
+            const result = await activeWriteTool.execute(
+              toolCallId,
+              params,
+              signal,
+              onUpdate,
+              {
+                ...ctx,
+                cwd: activeCwd,
+              }
+            );
 
             if (result.isError) {
               return result;

@@ -816,7 +816,9 @@ describe("tool-display renderers", () => {
       ok: true,
       content: "old",
     });
-    await expect(capturePreviousWriteContent(cwd, "../outside.txt")).resolves.toEqual({
+    await expect(
+      capturePreviousWriteContent(cwd, "../outside.txt")
+    ).resolves.toEqual({
       ok: false,
       summary: "previous content unavailable: outside workspace",
     });
@@ -1047,7 +1049,12 @@ describe("tool-display renderers", () => {
     ).toBe("multi 3 a.txt, b.txt, c.txt");
     expect(
       renderEditCall(
-        { path: "top.txt", oldText: "old", newText: "new", multi: [{ path: "b.txt" }] },
+        {
+          path: "top.txt",
+          oldText: "old",
+          newText: "new",
+          multi: [{ path: "b.txt" }],
+        },
         theme
       ).text
     ).toBe("multi 2 top.txt, b.txt");
@@ -1101,9 +1108,10 @@ describe("tool-display renderers", () => {
         throw new Error("render walked too far");
       },
     });
-    expect(renderEditCall({ path: "fallback.txt", multi: missingPathMulti }, theme).text).toBe(
-      "multi 100 fallback.txt +95 more"
-    );
+    expect(
+      renderEditCall({ path: "fallback.txt", multi: missingPathMulti }, theme)
+        .text
+    ).toBe("multi 100 fallback.txt +95 more");
     expect(renderEditCall({ patch: "*** Begin Patch" }, theme).text).toBe(
       "patch"
     );
@@ -1298,7 +1306,15 @@ describe("tool-display renderers", () => {
         content: [],
         details: {
           diff: "--- a.txt\n+++ a.txt\n@@ -1,1 +1,1 @@\n-old\n+new",
-          files: ["a.txt", "b.txt", "c.txt", "d.txt", "e.txt", "f.txt", "g.txt"],
+          files: [
+            "a.txt",
+            "b.txt",
+            "c.txt",
+            "d.txt",
+            "e.txt",
+            "f.txt",
+            "g.txt",
+          ],
         },
       },
       {},

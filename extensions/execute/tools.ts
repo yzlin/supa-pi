@@ -43,10 +43,10 @@ const ExecuteCheckpointParams = Type.Object({
   checkpoint: Type.Optional(ExecuteCheckpointSaveSchema),
 });
 
-type CheckpointParams = {
+interface CheckpointParams {
   canonicalPlan?: string;
   planId?: string;
-};
+}
 
 function jsonResult(details: unknown) {
   return {
@@ -102,7 +102,7 @@ export function registerExecuteCheckpointTool(pi: ExtensionAPI): void {
       "Load, save, or list unfinished /execute checkpoint state under .pi/execute/. Use this from the main-session orchestrator only for deterministic checkpoint persistence; it does not manage pi-tasks or orchestration decisions.",
     parameters: ExecuteCheckpointParams,
 
-    async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
+    execute(_toolCallId, params, _signal, _onUpdate, ctx) {
       const cwd = ctx.cwd ?? process.cwd();
 
       try {
@@ -127,11 +127,7 @@ export function registerExecuteCheckpointTool(pi: ExtensionAPI): void {
 
             return jsonResult(
               buildSaveResponse(
-                saveExecuteCheckpoint(
-                  canonicalPlan,
-                  params.checkpoint,
-                  cwd
-                )
+                saveExecuteCheckpoint(canonicalPlan, params.checkpoint, cwd)
               )
             );
           }

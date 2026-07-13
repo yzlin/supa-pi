@@ -4,8 +4,8 @@ import {
   existsSync,
   mkdirSync,
   mkdtempSync,
-  readFileSync,
   readdirSync,
+  readFileSync,
   rmSync,
   writeFileSync,
 } from "node:fs";
@@ -26,6 +26,8 @@ const EXECUTION_BRIEF = [
   "## Verification\n- Test it",
   "## Out of Scope\n- Anything else",
 ].join("\n\n");
+
+const EXECUTE_CHECKPOINT_PATH_PATTERN = /execute-v1-[0-9a-f-]+\.json$/;
 
 function expectExecutionBriefSynthesisRequest(
   content: string | undefined
@@ -450,7 +452,7 @@ describe("execute tools", () => {
       expect(savePayload.created).toBe(true);
       expect(savePayload.status).toBe("running");
       expect(savePayload.taskCount).toBe(1);
-      expect(savePayload.path).toMatch(/execute-v1-[0-9a-f-]+\.json$/);
+      expect(savePayload.path).toMatch(EXECUTE_CHECKPOINT_PATH_PATTERN);
 
       const checkpointPath = savePayload.path as string;
       const written = JSON.parse(readFileSync(checkpointPath, "utf8"));

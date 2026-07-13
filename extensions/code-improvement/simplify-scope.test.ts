@@ -69,9 +69,7 @@ describe("classifySimplifyScopePaths git ignore handling", () => {
     });
 
     expect(result.editableFiles).toContain("src/feature/build/good.ts");
-    expect(result.editableFiles).toContain(
-      "src/feature/build/nested/good.tsx"
-    );
+    expect(result.editableFiles).toContain("src/feature/build/nested/good.tsx");
     expect(result.unsupportedChangedFiles).toEqual([]);
   });
 

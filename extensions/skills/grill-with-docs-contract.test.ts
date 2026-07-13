@@ -3,7 +3,10 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
 function readGrillWithDocsPrompt(): string {
-  return readFileSync(join(process.cwd(), "prompts", "grill-with-docs.md"), "utf8");
+  return readFileSync(
+    join(process.cwd(), "prompts", "grill-with-docs.md"),
+    "utf8"
+  );
 }
 
 function expectPromptToContain(prompt: string, expectedText: string[]): void {

@@ -1,5 +1,11 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { join } from "node:path";
 
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
@@ -38,7 +44,10 @@ function tempDir(): string {
 
 function writeToolDisplayConfig(cwd: string, tools: unknown): void {
   mkdirSync(join(cwd, ".pi"), { recursive: true });
-  writeFileSync(join(cwd, ".pi", "tool-display.json"), JSON.stringify({ tools }));
+  writeFileSync(
+    join(cwd, ".pi", "tool-display.json"),
+    JSON.stringify({ tools })
+  );
 }
 
 function createExtensionHarness() {
