@@ -207,7 +207,10 @@ describe("real Pi ToolExecutionComponent smoke", () => {
     const bash = new ToolExecutionComponent(
       "bash",
       "bash-call",
-      { reasoning: "Stream command", command: "printf one" },
+      {
+        reasoning: "Stream command",
+        command: "printf one\nsleep 20\necho hidden-tail",
+      },
       {},
       bashDefinition,
       ui as never,
@@ -217,10 +220,14 @@ describe("real Pi ToolExecutionComponent smoke", () => {
       { content: [{ type: "text", text: "one" }], isError: false },
       true
     );
-    expect(contentRows(bash, 64)).toHaveLength(3);
-    expect(contentRows(bash, 64).join("\n")).toContain("⚡");
+    const pendingBashRows = contentRows(bash, 64);
+    const pendingBashText = pendingBashRows.join("\n");
+    expect(pendingBashRows).toHaveLength(2);
+    expect(pendingBashText).toContain("⚡");
+    expect(pendingBashText).toContain("printf one (+2 lines)");
+    expect(pendingBashText).not.toContain("hidden-tail");
     expect(
-      contentRows(bash, 64).every((line) =>
+      pendingBashRows.every((line) =>
         line.includes(theme.getBgAnsi("toolPendingBg"))
       )
     ).toBe(true);
@@ -228,9 +235,10 @@ describe("real Pi ToolExecutionComponent smoke", () => {
       { content: [{ type: "text", text: "done" }], isError: false },
       false
     );
-    expect(contentRows(bash, 64)).toHaveLength(2);
+    const settledBashRows = contentRows(bash, 64);
+    expect(settledBashRows).toHaveLength(2);
     expect(
-      contentRows(bash, 64).every((line) =>
+      settledBashRows.every((line) =>
         line.includes(theme.getBgAnsi("toolSuccessBg"))
       )
     ).toBe(true);
@@ -266,7 +274,7 @@ describe("real Pi ToolExecutionComponent smoke", () => {
       {
         reasoning: "Compare\nupstream\ticon\u0007",
         command:
-          "node - <<'NODE'\nconsole.log('\\u001b[31mred\\u001b[0m')\r\nNODE\t\u001b[31munsafe\u001b[0m",
+          "node \u001b[31m- <<'NODE'\u001b[0m\nconsole.log('\\u001b[31mred\\u001b[0m')\r\nNODE\t\u001b[31munsafe\u001b[0m",
       },
       {},
       bashDefinition,
@@ -284,8 +292,8 @@ describe("real Pi ToolExecutionComponent smoke", () => {
     ).toBe(true);
     const plain = rows.map(stripVTControlCharacters);
     expect(plain[0]).toContain("Compare upstream icon");
-    expect(plain[1]).toContain("node - <<'NODE' console.log");
-    expect(plain[1]).toContain("NODE unsafe");
+    expect(plain[1]).toContain("node - <<'NODE' (+2 lines)");
+    expect(plain[1]).not.toContain("unsafe");
   });
 
   test("uses Pi error context and error theme background", () => {

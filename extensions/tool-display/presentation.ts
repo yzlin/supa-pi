@@ -171,6 +171,17 @@ function singleLine(value: string): string {
     .trim();
 }
 
+function bashCommandPreview(value: string): string {
+  const lines = stripVTControlCharacters(value)
+    .split(/\r?\n|\r/gu)
+    .map(singleLine)
+    .filter(Boolean);
+  const firstLine = lines[0] ?? "";
+  return lines.length > 1
+    ? `${firstLine} (+${lines.length - 1} lines)`
+    : firstLine;
+}
+
 /** Add the shared required reasoning field while preserving delegated behavior. */
 export function composeReasonedTool<
   P extends TProperties,
@@ -536,7 +547,7 @@ class HeaderComponent implements Component {
     }
     const target =
       this.name === "bash"
-        ? singleLine(this.args.command ?? "") || "bash command"
+        ? bashCommandPreview(this.args.command ?? "") || "bash command"
         : singleLine(targetFor(this.name, this.args));
     const headline =
       singleLine(this.args.reasoning ?? "") ||
@@ -571,6 +582,7 @@ class ResultComponent implements Component {
   private readonly body: Component | undefined;
   private readonly error: boolean;
   private readonly settled: boolean;
+  private readonly showSummary: boolean;
   private readonly text: string | ((width: number) => string);
   private readonly theme: ThemeLike;
 
@@ -579,19 +591,20 @@ class ResultComponent implements Component {
     theme: ThemeLike,
     error: boolean,
     body?: Component,
-    settled = true
+    settled = true,
+    showSummary = true
   ) {
     this.text = text;
     this.theme = theme;
     this.error = error;
     this.body = body;
     this.settled = settled;
+    this.showSummary = showSummary;
   }
   invalidate(): void {
     this.body?.invalidate();
   }
   render(width: number): string[] {
-    const text = typeof this.text === "function" ? this.text(width) : this.text;
     let bodyLines: string[] | undefined;
     let bodyStart = 0;
     if (this.body instanceof ResultBodyComponent) {
@@ -601,22 +614,25 @@ class ResultComponent implements Component {
     } else {
       bodyLines = this.body?.render(width);
     }
-    const bodyLength = bodyLines ? bodyLines.length - bodyStart : 0;
-    const output = new Array<string>(bodyLength + 1);
-    output[0] = backgroundLine(
-      text,
-      width,
-      this.theme,
-      this.error,
-      this.settled
-    );
-    for (let index = 0; index < bodyLength; index += 1) {
-      output[index + 1] = backgroundLine(
-        bodyLines?.[index + bodyStart] ?? "",
-        width,
-        this.theme,
-        this.error,
-        this.settled
+
+    const output: string[] = [];
+    if (this.showSummary) {
+      const text =
+        typeof this.text === "function" ? this.text(width) : this.text;
+      output.push(
+        backgroundLine(text, width, this.theme, this.error, this.settled)
+      );
+    }
+    const lines = bodyLines ?? [];
+    for (let index = bodyStart; index < lines.length; index += 1) {
+      output.push(
+        backgroundLine(
+          lines[index] ?? "",
+          width,
+          this.theme,
+          this.error,
+          this.settled
+        )
       );
     }
     return output;
@@ -694,7 +710,8 @@ export function renderBashToolResult(
     state.durationMs = durationMs;
     stopTimer(context.state);
   }
-  const command = singleLine(context.args.command ?? "") || "bash command";
+  const command =
+    bashCommandPreview(context.args.command ?? "") || "bash command";
   let status = options.isPartial ? "running" : "done";
   if (error) {
     status = "error";
@@ -712,6 +729,7 @@ export function renderBashToolResult(
     theme,
     error,
     body,
+    !options.isPartial,
     !options.isPartial
   );
 }
