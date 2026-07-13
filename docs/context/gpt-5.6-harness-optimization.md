@@ -6,7 +6,7 @@ read_when:
 
 # GPT-5.6 harness optimization
 
-Snapshot date: 2026-07-11.
+Snapshot date: 2026-07-13.
 
 This note compares current SupaPi behavior with OpenAI's GPT-5.6 guidance. OpenAI's published performance ranges are directional; validate every change against representative SupaPi tasks.
 
@@ -116,14 +116,16 @@ A second pass reduced the 16 files under `agents/` from 74,517 to 39,488 bytes, 
 
 OpenAI reports that leaner prompts improved internal coding-agent eval scores by roughly 10–15% while reducing total tokens by 41–66% and cost by 33–67%. These ranges are directional, not SupaPi measurements.
 
-A prompt diet should retain:
+A prompt diet should state the desired result and acceptance criteria, include only context, output needs, and critical boundaries that materially change the result, and leave the implementation approach open unless the process itself matters. It should retain:
 
 - one compact autonomy and approval policy
 - one routing policy
 - one verification and done contract
 - product-specific behavior that corrects a measured gap
 
-Remove duplicate workflow narration and generic reminders. The agent definitions under `agents/` total more than 2,000 lines, so they should receive the same one-section-at-a-time evaluation.
+Remove duplicate workflow narration and generic reminders. After a later agent addition, `agents/` contains 17 Markdown files and 609 total lines as of 2026-07-13. Continue evaluating agent prompt changes one section at a time.
+
+A three-repetition paired `core-orchestration` benchmark on 2026-07-13 compared the previous intent sentence with a shorter result-first contract covering acceptance criteria, relevant context, output needs, critical boundaries, and process flexibility. Both arms retained a 100% pass rate and 1.000 deterministic score. The candidate used 316 fewer input tokens, 116 fewer output tokens, 54 fewer reasoning tokens, and $0.0056 less per run on average; latency increased by 44 milliseconds. Keep the candidate. Local artifact: `.pi/evals/2026-07-13T11-37-00-048Z-ce333a32/`.
 
 ### 4. Measure prompt-cache economics
 
@@ -205,7 +207,7 @@ The active provider is `openai-codex` through the ChatGPT backend. Do not assume
 
 ## Recommended order
 
-Items 1-5 are implemented for the measured routes. Continue with:
+Items 1-3 are implemented for the measured routes. Sections 4-5 remain the next repository-level experiments. Continue with:
 
 1. Evaluate explicit tool profiles.
 2. Measure prompt-cache economics by workflow.
@@ -214,8 +216,9 @@ Items 1-5 are implemented for the measured routes. Continue with:
 
 ## Sources
 
-Official OpenAI documentation, accessed 2026-07-11:
+Official OpenAI documentation, accessed 2026-07-11 through 2026-07-13:
 
+- [Prompting](https://learn.chatgpt.com/docs/prompting)
 - [Using GPT-5.6](https://developers.openai.com/api/docs/guides/latest-model)
 - [Reasoning models](https://developers.openai.com/api/docs/guides/reasoning)
 - [Prompt caching](https://developers.openai.com/api/docs/guides/prompt-caching)
