@@ -71,12 +71,17 @@ import {
   parseReviewPaths,
   parseReviewTargetArgs,
   type ReviewTarget,
+  tokenizeReviewTargetArgs,
 } from "../shared/review-targets";
 import {
   assertVerifierModelPolicy,
+  DEFAULT_REVIEWER_PANEL,
+  DEFAULT_SYNTHESIZER_MODEL,
+  DEFAULT_VERIFIER_MODEL,
   REVIEW_REPORT_MESSAGE_TYPE,
-  REVIEWER_MODEL_POLICY_MODEL,
   type ReviewerAgent,
+  type ReviewPanelEntry,
+  type ReviewThinkingLevel,
   type ReviewWorkflowProgressUpdate,
   runReviewWorkflow,
 } from "./workflow";
@@ -109,10 +114,16 @@ type DiffReviewTarget = Exclude<ReviewTarget, { type: "folder" }>;
 
 const DEFAULT_REVIEWERS: ReviewerAgent[] = ["code-reviewer"];
 
+function createDefaultReviewerPanel(): ReviewPanelEntry[] {
+  return DEFAULT_REVIEWER_PANEL.map((entry) => ({ ...entry }));
+}
+
 // State persisted across sessions for review configuration.
 let reviewCustomInstructions: string | undefined;
 let reviewSelectedAgents: ReviewerAgent[] = DEFAULT_REVIEWERS;
 let reviewReviewerSelectionMode: ReviewerSelectionMode = "auto";
+let reviewReviewerPanel = createDefaultReviewerPanel();
+let reviewSynthesizerModel = DEFAULT_SYNTHESIZER_MODEL;
 let reviewVerifierModel: string | undefined;
 
 const REVIEW_SETTINGS_TYPE = "review-settings";
@@ -135,11 +146,88 @@ interface ReviewSettingsState {
   customInstructions?: string;
   selectedReviewers?: ReviewerAgent[];
   reviewerSelectionMode?: ReviewerSelectionMode;
+  reviewerPanel?: ReviewPanelEntry[];
+  synthesizerModel?: string;
   verifierModel?: string;
 }
 
 function isReviewerAgent(value: string): value is ReviewerAgent {
   return ALL_REVIEWERS.includes(value as ReviewerAgent);
+}
+
+const REVIEW_THINKING_LEVELS = new Set<ReviewThinkingLevel>([
+  "off",
+  "minimal",
+  "low",
+  "medium",
+  "high",
+  "xhigh",
+]);
+
+function normalizeReviewerPanelSetting(
+  value: readonly ReviewPanelEntry[] | undefined
+): ReviewPanelEntry[] {
+  if (value === undefined) {
+    return createDefaultReviewerPanel();
+  }
+  if (!Array.isArray(value) || value.length < 1) {
+    throw new Error("Reviewer panel must contain 1–4 models.");
+  }
+  const panel: ReviewPanelEntry[] = [];
+  for (const entry of value) {
+    const model = typeof entry?.model === "string" ? entry.model.trim() : "";
+    if (!(model && REVIEW_THINKING_LEVELS.has(entry?.thinkingLevel))) {
+      throw new Error(
+        "Each reviewer panel entry needs a nonblank model and Pi thinking level (off, minimal, low, medium, high, or xhigh)."
+      );
+    }
+    if (!panel.some((existing) => existing.model === model)) {
+      panel.push({ model, thinkingLevel: entry.thinkingLevel });
+    }
+  }
+  if (panel.length === 0) {
+    throw new Error("Reviewer panel must contain at least one distinct model.");
+  }
+  if (panel.length > 4) {
+    throw new Error("Reviewer panel supports at most 4 distinct models.");
+  }
+  return panel;
+}
+
+function parseReviewerPanel(value: string): ReviewPanelEntry[] {
+  const entries = value.split(",").map((raw): ReviewPanelEntry => {
+    const separator = raw.lastIndexOf("=");
+    const model = separator < 0 ? "" : raw.slice(0, separator).trim();
+    const level = separator < 0 ? "" : raw.slice(separator + 1).trim();
+    if (!(model && REVIEW_THINKING_LEVELS.has(level as ReviewThinkingLevel))) {
+      throw new Error(
+        `Invalid reviewer model pair '${raw.trim()}'. Use model=level with level off|minimal|low|medium|high|xhigh.`
+      );
+    }
+    return { model, thinkingLevel: level as ReviewThinkingLevel };
+  });
+  return normalizeReviewerPanelSetting(entries);
+}
+
+function assertReviewModelAvailable(
+  ctx: ExtensionContext,
+  model: string,
+  role: string
+): void {
+  const [provider, ...idParts] = model.split("/");
+  const id = idParts.join("/");
+  if (!(provider && id)) {
+    throw new Error(`Invalid ${role} model '${model}'. Use provider/model.`);
+  }
+  const resolved = ctx.modelRegistry.find(provider, id);
+  if (!resolved) {
+    throw new Error(`${role} model '${model}' is not available.`);
+  }
+  if (!ctx.modelRegistry.hasConfiguredAuth(resolved)) {
+    throw new Error(
+      `${role} model '${model}' is unavailable because authentication is not configured.`
+    );
+  }
 }
 
 function createGitExec(pi: ExtensionAPI): GitExec {
@@ -169,7 +257,22 @@ function getReviewSettings(ctx: ExtensionContext): ReviewSettingsState {
     }
   }
 
-  const verifierModel = state?.verifierModel?.trim();
+  let verifierModel = state?.verifierModel?.trim();
+  let reviewerPanel: ReviewPanelEntry[];
+  try {
+    reviewerPanel = normalizeReviewerPanelSetting(state?.reviewerPanel);
+  } catch {
+    reviewerPanel = createDefaultReviewerPanel();
+  }
+  if (verifierModel) {
+    try {
+      assertVerifierModelPolicy(verifierModel, reviewerPanel);
+    } catch {
+      verifierModel = undefined;
+    }
+  }
+  const synthesizerModel =
+    state?.synthesizerModel?.trim() || DEFAULT_SYNTHESIZER_MODEL;
 
   return {
     customInstructions: state?.customInstructions?.trim() || undefined,
@@ -178,6 +281,8 @@ function getReviewSettings(ctx: ExtensionContext): ReviewSettingsState {
     ),
     reviewerSelectionMode:
       state?.reviewerSelectionMode === "manual" ? "manual" : "auto",
+    reviewerPanel,
+    synthesizerModel,
     verifierModel: verifierModel || undefined,
   };
 }
@@ -187,18 +292,10 @@ function applyReviewSettings(ctx: ExtensionContext) {
   reviewCustomInstructions = state.customInstructions?.trim() || undefined;
   reviewSelectedAgents = state.selectedReviewers ?? DEFAULT_REVIEWERS;
   reviewReviewerSelectionMode = state.reviewerSelectionMode ?? "auto";
+  reviewReviewerPanel = state.reviewerPanel ?? createDefaultReviewerPanel();
+  reviewSynthesizerModel = state.synthesizerModel ?? DEFAULT_SYNTHESIZER_MODEL;
   const verifierModel = state.verifierModel?.trim();
-  if (verifierModel) {
-    try {
-      assertVerifierModelPolicy(verifierModel);
-      assertVerifierModelAvailable(ctx, verifierModel);
-      reviewVerifierModel = verifierModel;
-    } catch {
-      reviewVerifierModel = undefined;
-    }
-    return;
-  }
-  reviewVerifierModel = undefined;
+  reviewVerifierModel = verifierModel || undefined;
 }
 
 // Prompts (adapted from Codex)
@@ -669,11 +766,15 @@ const REVIEW_PRESETS = [
 ] as const;
 
 const TOGGLE_CUSTOM_INSTRUCTIONS_VALUE = "toggleCustomInstructions" as const;
+const SET_REVIEWER_PANEL_VALUE = "setReviewerPanel" as const;
+const SET_SYNTHESIZER_MODEL_VALUE = "setSynthesizerModel" as const;
 const SET_VERIFIER_MODEL_VALUE = "setVerifierModel" as const;
 
 type ReviewPresetValue =
   | (typeof REVIEW_PRESETS)[number]["value"]
   | typeof TOGGLE_CUSTOM_INSTRUCTIONS_VALUE
+  | typeof SET_REVIEWER_PANEL_VALUE
+  | typeof SET_SYNTHESIZER_MODEL_VALUE
   | typeof SET_VERIFIER_MODEL_VALUE;
 
 function persistReviewSettings(pi: ExtensionAPI) {
@@ -681,6 +782,8 @@ function persistReviewSettings(pi: ExtensionAPI) {
     customInstructions: reviewCustomInstructions,
     selectedReviewers: reviewSelectedAgents,
     reviewerSelectionMode: reviewReviewerSelectionMode,
+    reviewerPanel: reviewReviewerPanel,
+    synthesizerModel: reviewSynthesizerModel,
   };
 
   if (reviewVerifierModel) {
@@ -715,11 +818,12 @@ function setReviewVerifierModel(
 ) {
   const normalized = verifierModel.trim();
   if (!normalized) {
+    assertVerifierModelPolicy(DEFAULT_VERIFIER_MODEL, reviewReviewerPanel);
     reviewVerifierModel = undefined;
     persistReviewSettings(pi);
     return;
   }
-  assertVerifierModelPolicy(normalized);
+  assertVerifierModelPolicy(normalized, reviewReviewerPanel);
   assertVerifierModelAvailable(ctx, normalized);
   reviewVerifierModel = normalized;
   persistReviewSettings(pi);
@@ -729,32 +833,17 @@ function assertVerifierModelAvailable(
   ctx: ExtensionContext,
   verifierModel: string
 ) {
-  const [provider, ...idParts] = verifierModel.split("/");
-  const id = idParts.join("/");
-  if (!(provider && id)) {
-    throw new Error(`Invalid review verifier model '${verifierModel}'.`);
-  }
-
-  if (!ctx.modelRegistry.find(provider, id)) {
-    throw new Error(
-      `Review verifier model '${verifierModel}' is not available.`
-    );
-  }
+  assertReviewModelAvailable(ctx, verifierModel, "Review verifier");
 }
 
 function resolveReviewVerifierModel(
+  reviewerPanel: readonly ReviewPanelEntry[],
   explicitModel?: string
-): string | undefined {
-  const normalizedExplicitModel = explicitModel?.trim();
-  if (normalizedExplicitModel) {
-    assertVerifierModelPolicy(normalizedExplicitModel);
-    return normalizedExplicitModel;
-  }
-
-  if (reviewVerifierModel) {
-    assertVerifierModelPolicy(reviewVerifierModel);
-    return reviewVerifierModel;
-  }
+): string {
+  const verifierModel =
+    explicitModel?.trim() || reviewVerifierModel || DEFAULT_VERIFIER_MODEL;
+  assertVerifierModelPolicy(verifierModel, reviewerPanel);
+  return verifierModel;
 }
 
 interface SessionMessageLike {
@@ -1068,11 +1157,21 @@ export default function reviewExtension(pi: ExtensionAPI) {
           description: customInstructionsDescription,
         },
         {
+          value: SET_REVIEWER_PANEL_VALUE,
+          label: "Set reviewer model panel",
+          description: `(${reviewReviewerPanel.map((entry) => `${entry.model}=${entry.thinkingLevel}`).join(", ")})`,
+        },
+        {
+          value: SET_SYNTHESIZER_MODEL_VALUE,
+          label: "Set review synthesizer model",
+          description: `(current: ${reviewSynthesizerModel}; high effort)`,
+        },
+        {
           value: SET_VERIFIER_MODEL_VALUE,
           label: "Set review verifier model",
           description: reviewVerifierModel
             ? `(current override: ${reviewVerifierModel})`
-            : "(using review-verifier agent default)",
+            : `(default: ${DEFAULT_VERIFIER_MODEL}; high effort)`,
         },
       ];
 
@@ -1153,9 +1252,66 @@ export default function reviewExtension(pi: ExtensionAPI) {
         continue;
       }
 
+      if (result === SET_REVIEWER_PANEL_VALUE) {
+        const value = await ctx.ui.editor(
+          "Enter 1–4 reviewer models as model=level, comma-separated:",
+          reviewReviewerPanel
+            .map((entry) => `${entry.model}=${entry.thinkingLevel}`)
+            .join(",")
+        );
+        if (value === null || value === undefined) {
+          continue;
+        }
+        try {
+          const panel = parseReviewerPanel(value);
+          for (const entry of panel) {
+            assertReviewModelAvailable(ctx, entry.model, "Reviewer");
+          }
+          assertVerifierModelPolicy(
+            reviewVerifierModel ?? DEFAULT_VERIFIER_MODEL,
+            panel
+          );
+          reviewReviewerPanel = panel;
+          persistReviewSettings(pi);
+          ctx.ui.notify("Reviewer model panel saved", "info");
+        } catch (error) {
+          ctx.ui.notify(
+            error instanceof Error ? error.message : String(error),
+            "error"
+          );
+        }
+        continue;
+      }
+
+      if (result === SET_SYNTHESIZER_MODEL_VALUE) {
+        const value = await ctx.ui.editor(
+          "Enter synthesizer model (provider/model; thinking fixed high):",
+          reviewSynthesizerModel
+        );
+        if (value === null || value === undefined) {
+          continue;
+        }
+        try {
+          const model = value.trim();
+          if (!model) {
+            throw new Error("Review synthesizer model cannot be blank.");
+          }
+          assertReviewModelAvailable(ctx, model, "Review synthesizer");
+          reviewSynthesizerModel = model;
+          persistReviewSettings(pi);
+          ctx.ui.notify("Review synthesizer model saved", "info");
+        } catch (error) {
+          ctx.ui.notify(
+            error instanceof Error ? error.message : String(error),
+            "error"
+          );
+        }
+        continue;
+      }
+
       if (result === SET_VERIFIER_MODEL_VALUE) {
         const verifierModel = await ctx.ui.editor(
-          `Enter verifier model (must differ from reviewer policy ${REVIEWER_MODEL_POLICY_MODEL}):`,
+          `Enter verifier model (must differ from reviewer panel: ${reviewReviewerPanel.map((entry) => entry.model).join(", ")}):`,
           reviewVerifierModel ?? ""
         );
 
@@ -1695,6 +1851,8 @@ export default function reviewExtension(pi: ExtensionAPI) {
     options?: {
       extraInstruction?: string;
       reviewers?: ReviewerAgent[];
+      reviewerPanel?: ReviewPanelEntry[];
+      synthesizerModel?: string;
       verifierModel?: string;
     }
   ): Promise<boolean> {
@@ -1720,10 +1878,18 @@ export default function reviewExtension(pi: ExtensionAPI) {
     const reviewers = normalizeReviewerSelection(
       options?.reviewers ?? reviewSelectedAgents
     );
-    const verifierModel = options?.verifierModel;
-    if (verifierModel) {
-      assertVerifierModelPolicy(verifierModel);
+    const reviewerPanel = normalizeReviewerPanelSetting(
+      options?.reviewerPanel ?? reviewReviewerPanel
+    );
+    const synthesizerModel =
+      options?.synthesizerModel?.trim() || reviewSynthesizerModel;
+    const verifierModel = options?.verifierModel ?? DEFAULT_VERIFIER_MODEL;
+    for (const entry of reviewerPanel) {
+      assertReviewModelAvailable(ctx, entry.model, "Reviewer");
     }
+    assertReviewModelAvailable(ctx, synthesizerModel, "Review synthesizer");
+    assertVerifierModelPolicy(verifierModel, reviewerPanel);
+    assertVerifierModelAvailable(ctx, verifierModel);
     const selectedReviewers = reviewers
       .map((reviewer) => `  - ${reviewer}`)
       .join("\n");
@@ -1737,12 +1903,14 @@ export default function reviewExtension(pi: ExtensionAPI) {
       invocationPacket += `\n- Additional user-provided review instruction:\n${options.extraInstruction.trim()}`;
     }
 
-    if (ctx.hasUI !== false) {
-      ctx.ui.notify(
-        `Starting review workflow: ${hint} [${reviewers.join(", ")}]`,
-        "info"
-      );
-    }
+    const reviewerRunCount = reviewers.length * reviewerPanel.length;
+    const plannedModels = reviewerPanel
+      .map((entry) => `${entry.model}=${entry.thinkingLevel}`)
+      .join(", ");
+    ctx.ui.notify(
+      `Review plan: initial calls: ${reviewerRunCount} reviewer calls (${reviewers.length} roles × ${reviewerPanel.length} models), plus 2 downstream calls if findings (1 synthesizer + 1 verifier). Possible structured-repair retries: up to ${reviewerRunCount} reviewer retries, plus up to 2 downstream retries when those stages run (1 synthesizer + 1 verifier). Reviewers: ${plannedModels}. Synthesizer: ${synthesizerModel}=high. Verifier: ${verifierModel}=high. Scope: ${hint}.`,
+      "info"
+    );
 
     const reviewController = new AbortController();
     function abortReview(): void {
@@ -1773,6 +1941,8 @@ export default function reviewExtension(pi: ExtensionAPI) {
         scopeHint: hint,
         invocationPacket,
         reviewers,
+        reviewerPanel,
+        synthesizerModel,
         verifierModel,
         projectGuidelines,
         signal: reviewController.signal,
@@ -1800,6 +1970,7 @@ export default function reviewExtension(pi: ExtensionAPI) {
         report: result.report,
         verifier: result.verifier,
         reviewers: result.reviewerOutputs,
+        coverage: result.coverage,
       },
     });
     if (ctx.hasUI !== false) {
@@ -1809,13 +1980,90 @@ export default function reviewExtension(pi: ExtensionAPI) {
   }
 
   function parseArgs(args: string | undefined) {
-    const parsed = parseReviewTargetArgs(args, {
-      parseReviewers: parseReviewerList,
-    });
+    const tokens = tokenizeReviewTargetArgs(args ?? "");
+    const remaining: string[] = [];
+    let reviewerModelsValue: string | undefined;
+    let synthesizerModel: string | undefined;
+
+    for (let index = 0; index < tokens.length; index++) {
+      const token = tokens[index];
+      if (
+        token === "--extra" ||
+        token === "--reviewers" ||
+        token === "--verifier-model"
+      ) {
+        remaining.push(token);
+        const value = tokens[index + 1];
+        if (value !== undefined) {
+          remaining.push(value);
+          index += 1;
+        }
+        continue;
+      }
+      if (token === "--reviewer-models" || token === "--synthesizer-model") {
+        const value = tokens[index + 1];
+        if (!value) {
+          return {
+            target: null,
+            error: `Missing value for ${token}`,
+            extraInstruction: undefined,
+            reviewers: undefined,
+            useAutoReviewers: undefined,
+            verifierModel: undefined,
+            reviewerPanel: undefined,
+            synthesizerModel: undefined,
+          };
+        }
+        if (token === "--reviewer-models") {
+          reviewerModelsValue = value;
+        } else {
+          synthesizerModel = value.trim();
+        }
+        index += 1;
+        continue;
+      }
+      if (token.startsWith("--reviewer-models=")) {
+        reviewerModelsValue = token.slice("--reviewer-models=".length);
+        continue;
+      }
+      if (token.startsWith("--synthesizer-model=")) {
+        synthesizerModel = token.slice("--synthesizer-model=".length).trim();
+        continue;
+      }
+      remaining.push(token);
+    }
+
+    let reviewerPanel: ReviewPanelEntry[] | undefined;
+    try {
+      if (reviewerModelsValue !== undefined) {
+        reviewerPanel = parseReviewerPanel(reviewerModelsValue);
+      }
+      if (synthesizerModel !== undefined && !synthesizerModel) {
+        throw new Error("Review synthesizer model cannot be blank.");
+      }
+    } catch (error) {
+      return {
+        target: null,
+        error: error instanceof Error ? error.message : String(error),
+        extraInstruction: undefined,
+        reviewers: undefined,
+        useAutoReviewers: undefined,
+        verifierModel: undefined,
+        reviewerPanel: undefined,
+        synthesizerModel: undefined,
+      };
+    }
+
+    const parsed = parseReviewTargetArgs(
+      remaining.map((token) => JSON.stringify(token)).join(" "),
+      { parseReviewers: parseReviewerList }
+    );
 
     return {
       ...parsed,
       reviewers: parsed.reviewers as ReviewerAgent[] | undefined,
+      reviewerPanel,
+      synthesizerModel,
     };
   }
 
@@ -1855,17 +2103,8 @@ export default function reviewExtension(pi: ExtensionAPI) {
       const reviewers = parsed.reviewers;
       const useAutoReviewers = parsed.useAutoReviewers ?? false;
       const verifierModel = parsed.verifierModel?.trim() || undefined;
-      if (verifierModel) {
-        try {
-          setReviewVerifierModel(pi, ctx, verifierModel);
-        } catch (error) {
-          ctx.ui.notify(
-            error instanceof Error ? error.message : String(error),
-            "error"
-          );
-          return;
-        }
-      }
+      const reviewerPanel = parsed.reviewerPanel;
+      const synthesizerModel = parsed.synthesizerModel;
 
       const isHeadless = ctx.hasUI === false;
       if (parsed.target) {
@@ -1925,18 +2164,22 @@ export default function reviewExtension(pi: ExtensionAPI) {
           ctx.ui.notify("Review cancelled", "info");
           return;
         }
-        setReviewSelection(
-          pi,
-          reviewerSelection.reviewers,
-          reviewerSelection.selectionMode
-        );
-
-        const resolvedVerifierModel = resolveReviewVerifierModel(verifierModel);
-
         try {
+          const resolvedVerifierModel = resolveReviewVerifierModel(
+            reviewerPanel ?? reviewReviewerPanel,
+            verifierModel
+          );
+          assertVerifierModelAvailable(ctx, resolvedVerifierModel);
+          setReviewSelection(
+            pi,
+            reviewerSelection.reviewers,
+            reviewerSelection.selectionMode
+          );
           await executeReview(ctx, target, {
             extraInstruction,
             reviewers: reviewerSelection.reviewers,
+            reviewerPanel,
+            synthesizerModel,
             verifierModel: resolvedVerifierModel,
           });
         } catch (error) {

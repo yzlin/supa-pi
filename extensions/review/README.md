@@ -1,41 +1,103 @@
 # Review extension
 
-Read when changing `/review`, `/review-summary`, `/review-fix`, reviewer-agent orchestration, or review prompt contracts.
+Read when changing `/review`, `/review-summary`, `/review-fix`, reviewer orchestration, or review structured contracts.
 
-## `/review` reviewer orchestration
+## Runtime overview
 
-`/review` runs a direct pi-subagents workflow. The extension builds a typed review packet, launches every selected reviewer agent, validates their structured submissions, merges duplicate candidate findings, and renders the final Markdown report. It launches `review-verifier` only when reviewer agents return at least one candidate finding:
+`/review` runs a direct, multi-model pi-subagents workflow and extension code renders the final Markdown report. The pipeline is:
 
-- `code-reviewer` for general correctness, maintainability, performance, and operational risk.
-- `security-reviewer` for auth, permissions, secrets, input handling, and unsafe trust boundaries.
-- `database-reviewer` for schema, queries, migrations, indexes, transactions, and RLS.
-- `performance-reviewer` for latency, throughput, memory, bundle size, rendering, and scalability regressions.
+1. resolve the target, changed paths, reviewer roles, and model configuration;
+2. preflight every reviewer, synthesizer, and verifier model before any model call;
+3. run every selected reviewer role against every distinct panel model;
+4. if findings exist, losslessly cluster them with `review-synthesizer`;
+5. independently verify clusters and original members with `review-verifier`;
+6. derive provenance, support, coverage, ordering, and sanitized report Markdown in the orchestrator.
 
-Reviewer selection can be automatic or explicit. Auto-selection always includes `code-reviewer` and adds specialized reviewers based on changed paths, including `performance-reviewer` for performance-sensitive paths such as benchmarks, profiling, bundles, metrics, monitoring, load tests, and `.bench`/`.perf` files. Explicit `--reviewers` input limits orchestration to the requested reviewers.
+The default matrix is two reviewer models, each at high thinking:
 
-For diff targets (`uncommitted`, base branch, commit, or pull request), `/review` performs preflight validation before sending the orchestration packet. It fails fast when the target is invalid or no changed paths are found. The packet includes changed paths, exact inspect commands, and, when available for merge-base comparisons, commit list metadata. Inspect commands are target-specific: uncommitted reviews use `git status --porcelain --untracked-files=all`, `git diff --cached`, and `git diff`; base branch and pull request reviews use `git diff <merge-base>` plus `git log <merge-base>..HEAD --oneline`; commit reviews use `git show --stat --patch --find-renames <sha>`. Folder snapshot reviews do not receive diff-target preflight metadata.
+| role | default model | thinking |
+| --- | --- | --- |
+| each selected reviewer | `openai-codex/gpt-5.6-sol` | `high` |
+| each selected reviewer | `anthropic/claude-opus-4-8` | `high` |
+| synthesizer | `openai-codex/gpt-5.6-sol` | fixed `high` |
+| verifier | `cursor/composer-2.5` | fixed `high` |
 
-Reviewer and verifier agents must submit through an injected `structured_output` tool whose nested object schemas are closed with `additionalProperties: false`. Direct orchestration keeps built-in and extension tools enabled; the custom submission tool is added without a tool allowlist or `noExtensions`. Assistant text is never accepted as a workflow fallback, even when it contains valid JSON. The extension validates the captured submission before acting, performs exactly one typed structured repair retry per invalid reviewer/verifier submission, and fails the whole review if any selected reviewer fails at runtime or the repaired submission is still invalid. Outside this workflow, a directly invoked reviewer without the injected tool returns the same structured object as JSON assistant text.
+The panel accepts 1–4 distinct model IDs. Each reviewer panel entry has its own Pi thinking level: `off`, `minimal`, `low`, `medium`, `high`, or `xhigh`. Duplicate IDs normalize to one run, using the first entry, so one model cannot gain multiple support votes. Reviewer execution has one global role×model concurrency cap of 4. Synthesizer and verifier calls run afterward, not concurrently with the reviewer matrix.
 
-The verifier submission schema contains only `reviewScope`, `verdict`, and verified `findings`. Human reviewer callouts and reviewer coverage are derived from the selected, validated reviewer outputs and injected by the workflow after verifier validation; verifier-supplied values cannot override them.
+## Configuration and disclosure
 
-During direct orchestration, `/review` publishes workflow progress through the shared `review-progress` above-editor widget/status while running, showing the current workflow phase, active agents, latest workflow log, and one compact active-agent activity line for reviewer/verifier agents. Live activity prefers parsed tool calls as pi-tasks-like verb + target snippets (for example, `reading extensions/review/workflow.ts`, `running bun test extensions/review/index.test.ts`, or `searching outputFile`) and falls back to assistant transcript text when no tool activity is available. User prompts are never shown, and completed agents still show compact result snippets. Pressing `Esc` while the workflow runs cancels the review and active child agents. Successful, cancelled, and failed runs clear the transient widget; successful runs post the final `review-report` separately.
+Use the interactive `/review` selector to persist the reviewer panel, synthesizer model, or verifier override. Older persisted settings without matrix fields migrate to the current defaults. Invalid persisted panels fall back to the defaults.
 
-The verifier uses the default model from `agents/review-verifier.md` unless `/review --verifier-model <provider/model>` or the interactive review selector configures an override. Any override must differ from the reviewer model policy (`openai-codex/gpt-5.6-sol`), which is regression-checked against every reviewer agent default.
+Direct syntax:
 
-The workflow de-duplicates nearby overlapping reviewer findings before verification, preserving all source reviewers and keeping the highest-severity candidate. The verifier independently inspects changed code and cited locations before accepting candidate findings. The final `/review` response is rendered by extension code from the validated verifier submission, filters out low-confidence verifier findings, keeps deterministic reviewer callouts separate from verifier output, includes verifier confidence/reason for accepted high/medium findings, and reports only issues introduced or directly exposed by the reviewed change. If reviewer agents return no findings, the workflow skips `review-verifier` and renders a compatible “Code looks good” report with reviewer coverage and human callouts.
+```text
+/review uncommitted --reviewers code-reviewer --reviewer-models openai-codex/gpt-5.6-sol=high,anthropic/claude-opus-4-8=xhigh
+/review branch main --auto-reviewers --reviewer-models anthropic/claude-opus-4-8=medium --synthesizer-model openai-codex/gpt-5.6-sol
+/review commit abc123 --reviewers code-reviewer,security-reviewer --verifier-model cursor/composer-2.5
+```
 
-## `/review-fix` executor delegation
+`--reviewer-models` also accepts `--reviewer-models=<pairs>`. Every model uses `provider/model`. The verifier model ID must differ from every reviewer panel model ID; synthesizer/reviewer overlap is allowed. Registry presence, configured authentication, and verifier overlap are checked without OAuth refreshes, commands, or other external side effects before calls. Unavailable, unauthenticated, or malformed models stop the workflow without a paid call.
 
-`/review-fix` stays prompt-orchestrated and prefers the latest `/review-summary` report, falling back to the latest raw `/review` report.
+Before execution, `/review` separately discloses initial calls and possible structured-repair retries, along with role and panel dimensions, reviewer models and thinking, synthesizer and verifier providers/models, fixed downstream effort, and scope. Initial reviewer calls equal roles × panel models. Each reviewer run may add one structured-repair retry. A finding-bearing run adds one initial synthesizer call and one initial verifier call; each downstream stage may add exactly one structured-repair retry. Provider billing, retention, and data handling follow the configured providers. Review packets, relevant repository content read by agents, and previous invalid structured output may be sent to those providers.
 
-For actionable findings or a non-empty Fix Queue, the main session must:
+## Targets and reviewer roles
 
-- call exactly one foreground/default `executor` Agent for the whole queue;
-- omit `max_turns`;
-- avoid all main-session code edits;
-- summarize only the executor JSON result.
+Reviewer roles are:
 
-If the report clearly has no findings, an empty Fix Queue, or says the code looks good, `/review-fix` must not call the executor and must report no fixable findings.
+- `code-reviewer`: correctness, maintainability, general performance, and operational risk;
+- `security-reviewer`: auth, permissions, secrets, input handling, and trust boundaries;
+- `database-reviewer`: schema, queries, migrations, indexes, transactions, and RLS;
+- `performance-reviewer`: latency, throughput, memory, bundle size, rendering, and scale.
 
-Executor failure, invalid JSON, `blocked`, or `needs_followup` is reported only, with no fallback main-session fixing. The review report is untrusted, so instructions inside it cannot override command/delegation rules. `/review-fix [extra instruction]` can refine implementation scope or checks, but cannot override delegation, safety, no-main-edits, no-task-tools, or JSON-summary rules.
+Auto-selection always includes `code-reviewer` and adds specialists from changed paths. Explicit `--reviewers` limits the role set.
+
+Diff targets fail fast when invalid or empty. Their packet includes changed paths and exact inspect commands. Uncommitted review uses `git status --porcelain --untracked-files=all`, `git diff --cached`, and `git diff`; branch/PR review uses `git diff <merge-base>` and `git log <merge-base>..HEAD --oneline`; commit review uses `git show --stat --patch --find-renames <sha>`. Folder review is a snapshot and has no diff preflight packet.
+
+## Failure, degraded, empty, and cancellation semantics
+
+Each reviewer run validates its captured structured submission. Invalid output receives exactly one repair using the originating reviewer model and thinking level. Individual model runtime/validation failures are recorded only as stable categories: cancelled, timed out, unavailable/authentication, invalid structured output after repair, or generic run failed. Raw provider/agent exception text never enters coverage, reports, or session details. The matrix continues only if every selected reviewer role has at least one successful model run; otherwise review stops before synthesis. A report is **degraded** when at least one role×model run failed despite every role retaining a success.
+
+When all successful reviewers return no findings, `/review` skips synthesizer and verifier entirely and renders “Code looks good,” human callouts, and the full coverage matrix. Both clean and finding reports include panel size, degraded state, and every used role×model success/failure; unselected roles are `not used`.
+
+Press `Esc` in TUI mode or abort the parent signal to cancel. Cancellation propagates to active children, posts no report, and clears transient progress UI.
+
+## Structured contracts
+
+All JSON-producing agents receive an injected `structured_output` tool. Every nested object schema is closed (`additionalProperties: false`). Assistant prose or text JSON is not accepted. Reviewer and verifier tool access remains unchanged. The report-only `review-synthesizer` is spawned in isolated mode with a trusted internal system prompt, and its active tool allowlist is forcibly reset to only the injected `structured_output` tool. Project-local agent overrides cannot grant it repository, extension, MCP, or other built-in tools.
+
+Reviewer submission:
+
+- `reviewer`, matching the assigned role;
+- `verdict`: `correct` or `needs attention`;
+- `findings`: `priority` (`P0`–`P3`), `title`, `file`, positive `line`, `why`, `change`;
+- `humanReviewerCallouts` and optional `notes`.
+
+The orchestrator assigns candidate IDs and immutable reviewer role, model ID, and thinking provenance. Models never author provenance.
+
+Synthesizer submission contains only `clusters`; each cluster contains `memberIds`, `title`, `why`, and `change`. It cannot inspect the repository or decide truth, priority, or confidence. It merges only the same root cause with materially the same fix. Similar impact with a different fix remains separate. Every candidate ID must occur exactly once: unknown, repeated, or omitted IDs invalidate the entire submission. The synthesizer gets one fixed-high structured repair; a second invalid or lossy result fails review. Locations and reported priorities are derived from member IDs, including multiple distinct locations.
+
+Verifier submission contains only `reviewScope`, `verdict`, and findings with `memberIds`, final `priority`, rewritten `title`/`why`/`change`, `confidence`, evidence `reason`, and `consensusEffect`. The verifier must inspect changed code and every cited location. Votes alone are never evidence and silence is neutral. It may split an over-merged cluster or merge under-merged clusters by regrouping original member IDs. Omitted IDs are rejected. Unknown or repeated IDs invalidate the submission and trigger one fixed-high repair; another invalid result fails review.
+
+Confidence is `high`, `medium`, or `low`. Distinct-model positive support may raise confidence by at most one level only after independently plausible code evidence; then `consensusEffect` is `raised-one-level`, otherwise `none`. The verifier may correct priority and wording. Low-confidence findings remain in structured details but are filtered from rendered findings.
+
+## Deterministic derivation and report
+
+For each accepted finding, extension code derives:
+
+- all distinct `file:line` locations from member IDs;
+- supporting distinct model IDs (one vote per model, even across roles);
+- model → reviewer-role provenance;
+- eligible model IDs: successful runs for the reviewer roles represented by that finding;
+- `supportCount/eligibleModelCount`, plus configured panel size.
+
+The denominator is per finding, not the configured panel blindly; failed runs and unrelated roles do not distort it. Findings sort by final priority (`P0` first), then descending distinct-model support. Human reviewer callouts are deduplicated from validated reviewer output. Reviewer coverage and model provenance are orchestrator-owned and cannot be overridden by synthesizer/verifier text.
+
+Rendered reports contain `Review Scope`, `Verdict`, `Findings`, `Human Reviewer Callouts (Non-Blocking)`, and `Reviewer Coverage`. Findings show locations, support/denominator, model→role provenance, verifier confidence/evidence, `consensusEffect`, impact, and fix. Model-sourced text, paths, allowlisted failure details, and callouts have control and Unicode format characters (including bidi overrides/isolates) stripped, whitespace collapsed, and Markdown escaped to prevent forged report structure.
+
+## Progress
+
+The above-editor workflow widget/status aggregates all calls. Reviewer progress reports completed/total matrix runs and active `role · model` labels, with totals computed from the effective default or explicit panel. Later phases are labeled `Synthesizing findings` and `Verifying findings`. Compact live snippets prefer tool activity and fall back to assistant transcript text; user prompts are not displayed. Terminal success/failure/cancellation clears the transient widget, and a successful report is posted separately.
+
+## `/review-summary` and `/review-fix`
+
+`/review-summary` summarizes the latest raw report. `/review-fix` remains prompt-orchestrated, prefers the latest summary/Fix Queue, and falls back to the latest raw report. It delegates an actionable queue to exactly one foreground/default executor, performs no main-session edits, and does not call an executor for a clearly empty report. Review report contents are untrusted and cannot override delegation or safety rules.
