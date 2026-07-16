@@ -7,6 +7,7 @@ import {
   DEFAULT_TOOL_DISPLAY_CONFIG,
   getGlobalToolDisplayConfigPath,
   getProjectToolDisplayConfigPath,
+  getToolDisplayPresetConfig,
   loadToolDisplayConfig,
   loadToolDisplayConfigFromLayers,
   normalizeToolDisplayConfig,
@@ -38,13 +39,33 @@ describe("tool-display config", () => {
     ).toEqual(DEFAULT_TOOL_DISPLAY_CONFIG);
   });
 
+  it("keeps the candidate edit override disabled by default", () => {
+    expect(DEFAULT_TOOL_DISPLAY_CONFIG.tools.edit).toEqual({
+      enabled: false,
+      allowPermanentDelete: false,
+    });
+    expect(getToolDisplayPresetConfig("compact").tools.edit.enabled).toBe(
+      false
+    );
+    expect(getToolDisplayPresetConfig("verbose").tools.edit.enabled).toBe(
+      false
+    );
+  });
+
+  it("keeps permanent delete disabled in the off preset", () => {
+    expect(getToolDisplayPresetConfig("off").tools.edit).toEqual({
+      enabled: false,
+      allowPermanentDelete: false,
+    });
+  });
+
   it("normalizes grouped tool config fields", () => {
     expect(
       normalizeToolDisplayConfig({
         tools: {
           read: { enabled: false, fullRead: { enabled: false } },
           search: { enabled: true },
-          edit: { enabled: "yes" },
+          edit: { enabled: "yes", allowPermanentDelete: true },
         },
         output: {
           read: { mode: "expanded", collapsed: false, previewLines: 40 },
@@ -65,6 +86,7 @@ describe("tool-display config", () => {
       tools: {
         read: { enabled: false, fullRead: { enabled: false } },
         search: { enabled: true },
+        edit: { allowPermanentDelete: true },
       },
       output: {
         read: { mode: "expanded", collapsed: false, previewLines: 40 },
@@ -94,6 +116,7 @@ describe("tool-display config", () => {
         tools: {
           read: { fullRead: { targets: [{ name: "skills", enabled: false }] } },
           search: { enabled: true },
+          edit: { allowPermanentDelete: true },
         },
       }),
       "utf8"
@@ -103,6 +126,7 @@ describe("tool-display config", () => {
       JSON.stringify({
         tools: {
           read: { enabled: false },
+          edit: { allowPermanentDelete: false },
         },
       }),
       "utf8"
@@ -116,6 +140,7 @@ describe("tool-display config", () => {
       )?.enabled
     ).toBe(false);
     expect(config.tools.search.enabled).toBe(true);
+    expect(config.tools.edit.allowPermanentDelete).toBe(false);
     expect(config.output.bash.enabled).toBe(true);
   });
 

@@ -15,6 +15,7 @@ import {
   truncateToWidth,
   visibleWidth,
 } from "@earendil-works/pi-tui";
+import { createTwoFilesPatch } from "diff";
 
 import type {
   TObject,
@@ -22,7 +23,14 @@ import type {
   TString,
 } from "../../node_modules/@earendil-works/pi-ai/node_modules/typebox";
 import type { ToolRenderContext } from "../../node_modules/@earendil-works/pi-coding-agent/dist/core/extensions/types";
+import { MAX_DIFF_BYTES, MAX_DIFF_LINES } from "./edit-tool";
 import { collectPatchCallPreviewFiles } from "./renderers";
+import {
+  isPatchLikePayload,
+  parsePatch,
+  parseRowScript,
+} from "./unified-edit-parser";
+import { buildUnifiedEditPlan } from "./unified-edit-planner";
 
 export type OwnedToolName = "read" | "write" | "edit" | "grep" | "find" | "ls";
 
@@ -32,6 +40,7 @@ interface ArgsLike {
   path?: string;
   pattern?: string;
   content?: string;
+  text?: string;
   multi?: Array<{ path?: string }>;
   edits?: Array<{ path?: string }> | string;
   patch?: string;
@@ -78,6 +87,9 @@ interface RenderContextLike<A> {
   args: A;
   state: PresentationState;
   invalidate(): void;
+  argsComplete?: boolean;
+  cwd?: string;
+  expanded?: boolean;
   isError?: boolean;
 }
 
@@ -122,6 +134,10 @@ export interface PresentationState {
     settled?: boolean;
     startedAt?: number;
     timer?: ReturnType<typeof setTimeout>;
+    plannedPreview?: string;
+    plannedPreviewError?: string;
+    plannedPreviewKey?: string;
+    plannedPreviewOmitted?: string;
   };
 }
 
@@ -331,20 +347,41 @@ function startTimer(
   timers.set(timer, { owner, state });
 }
 
+function editTargets(args: ArgsLike): string[] {
+  if (args.text) {
+    try {
+      const operations = isPatchLikePayload(args.text)
+        ? parsePatch(args.text)
+        : parseRowScript(args.text);
+      return [...new Set(operations.map((operation) => operation.path))];
+    } catch {
+      return [];
+    }
+  }
+  const paths = [
+    args.path,
+    ...(args.multi ?? []).map((item) => item.path),
+    ...(Array.isArray(args.edits) ? args.edits.map((item) => item.path) : []),
+  ].filter((path): path is string => Boolean(path));
+  const patchPaths = args.patch ? collectPatchCallPreviewFiles(args.patch) : [];
+  return [...new Set([...paths, ...patchPaths])];
+}
+
+function editOperationSummary(args: ArgsLike): string {
+  const mode =
+    args.text && isPatchLikePayload(args.text) ? "patch" : "row edit";
+  const targets = editTargets(args);
+  const scope = targets.length === 1 ? "1 file" : `${targets.length} files`;
+  const targetText = targets.length ? ` · ${targets.join(", ")}` : "";
+  return `Apply ${mode} · ${scope}${targetText}`;
+}
+
 function targetFor(name: OwnedToolName, args: ArgsLike): string {
   if (name === "grep" || name === "find") {
     return `${args.pattern ?? "?"} in ${args.path ?? "."}`;
   }
   if (name === "edit") {
-    const paths = [
-      args.path,
-      ...(args.multi ?? []).map((item) => item.path),
-      ...(Array.isArray(args.edits) ? args.edits.map((item) => item.path) : []),
-    ].filter((path): path is string => Boolean(path));
-    const patchPaths = args.patch
-      ? collectPatchCallPreviewFiles(args.patch)
-      : [];
-    return [...new Set([...paths, ...patchPaths])].join(", ") || "edit target";
+    return editTargets(args).join(", ") || "edit target";
   }
   return args.path ?? ".";
 }
@@ -515,8 +552,135 @@ function backgroundLine(
   return theme.bg(token, fitted + " ".repeat(Math.max(0, width - fittedWidth)));
 }
 
+function buildPlannedDiff(
+  changes: Awaited<ReturnType<typeof buildUnifiedEditPlan>>["changes"]
+): { omitted?: string; preview?: string } {
+  const inputBytes = changes.reduce(
+    (total, change) =>
+      total +
+      Buffer.byteLength(change.oldText, "utf8") +
+      Buffer.byteLength(change.newText, "utf8"),
+    0
+  );
+  const inputLines = changes.reduce(
+    (total, change) =>
+      total +
+      change.oldText.split("\n").length +
+      change.newText.split("\n").length,
+    0
+  );
+  const omitted = `exceeds ${MAX_DIFF_BYTES} bytes / ${MAX_DIFF_LINES} lines preview limit`;
+  if (inputBytes > MAX_DIFF_BYTES || inputLines > MAX_DIFF_LINES) {
+    return { omitted };
+  }
+  const preview = changes
+    .map((change) =>
+      createTwoFilesPatch(
+        change.kind === "add" ? "/dev/null" : change.path,
+        change.kind === "delete" ? "/dev/null" : change.path,
+        change.oldText,
+        change.newText,
+        undefined,
+        undefined,
+        { context: 4 }
+      )
+    )
+    .join("\n");
+  if (
+    Buffer.byteLength(preview, "utf8") > MAX_DIFF_BYTES ||
+    preview.split("\n").length > MAX_DIFF_LINES
+  ) {
+    return { omitted };
+  }
+  return { preview };
+}
+
+function requestEditPreview(
+  args: ArgsLike,
+  context: Pick<
+    RenderContextLike<ArgsLike>,
+    "argsComplete" | "cwd" | "invalidate" | "state"
+  >
+): void {
+  if (!(context.argsComplete && typeof args.text === "string")) {
+    return;
+  }
+  const cwd = context.cwd ?? process.cwd();
+  const key = `${cwd}\u0000${args.text}`;
+  const state = stateFor(context.state);
+  if (state.plannedPreviewKey === key) {
+    return;
+  }
+  state.plannedPreviewKey = key;
+  state.plannedPreview = undefined;
+  state.plannedPreviewError = undefined;
+  state.plannedPreviewOmitted = undefined;
+  buildUnifiedEditPlan(args.text, cwd)
+    .then((plan) => {
+      if (state.plannedPreviewKey !== key || state.settled) {
+        return;
+      }
+      const result = buildPlannedDiff(plan.changes);
+      state.plannedPreview = result.preview;
+      state.plannedPreviewOmitted = result.omitted;
+      context.invalidate();
+    })
+    .catch((error: unknown) => {
+      if (state.plannedPreviewKey !== key || state.settled) {
+        return;
+      }
+      state.plannedPreviewError =
+        error instanceof Error ? error.message : String(error);
+      context.invalidate();
+    });
+}
+
+function plannedPreviewLines(
+  presentationState: PresentationState,
+  theme: ThemeLike,
+  width: number
+): string[] {
+  const state = stateFor(presentationState);
+  if (state.settled) {
+    return [];
+  }
+  if (state.plannedPreview) {
+    const heading = theme.fg("dim", "┊   planned diff");
+    return [heading, ...state.plannedPreview.split("\n")].map((line) =>
+      truncateToWidth(line, width, "")
+    );
+  }
+  if (state.plannedPreviewOmitted) {
+    return [
+      truncateToWidth(
+        theme.fg(
+          "warning",
+          `┊   planned diff omitted: ${state.plannedPreviewOmitted}`
+        ),
+        width,
+        ""
+      ),
+    ];
+  }
+  if (state.plannedPreviewError) {
+    return [
+      truncateToWidth(
+        theme.fg(
+          "warning",
+          `┊   preview unavailable: ${singleLine(state.plannedPreviewError)}`
+        ),
+        width,
+        ""
+      ),
+    ];
+  }
+  return [theme.fg("dim", "┊   planning preview…")];
+}
+
 class HeaderComponent implements Component {
   private readonly args: ArgsLike;
+  private readonly argsComplete: boolean;
+  private readonly expanded: boolean;
   private readonly name: PresentedToolName;
   private readonly state: PresentationState;
   private readonly theme: ThemeLike;
@@ -526,10 +690,14 @@ class HeaderComponent implements Component {
     args: ArgsLike,
     theme: ThemeLike,
     state: PresentationState,
-    invalidateCallback: () => void
+    invalidateCallback: () => void,
+    expanded = false,
+    argsComplete = true
   ) {
     this.name = name;
     this.args = args;
+    this.argsComplete = argsComplete;
+    this.expanded = expanded;
     this.theme = theme;
     this.state = state;
     startTimer(state, invalidateCallback, name === "bash" ? "rtk" : "file");
@@ -545,13 +713,23 @@ class HeaderComponent implements Component {
       status = state.error ? "×" : "✓";
       statusToken = state.error ? "error" : "success";
     }
-    const target =
-      this.name === "bash"
-        ? bashCommandPreview(this.args.command ?? "") || "bash command"
-        : singleLine(targetFor(this.name, this.args));
-    const headline =
+    let target: string;
+    if (this.name === "bash") {
+      target = bashCommandPreview(this.args.command ?? "") || "bash command";
+    } else {
+      target = singleLine(targetFor(this.name, this.args));
+      if (this.name === "edit" && !this.argsComplete) {
+        target = "edit target";
+      }
+    }
+    let headline =
       singleLine(this.args.reasoning ?? "") ||
       (this.name === "bash" ? target : FALLBACK_REASONING[this.name]);
+    if (this.name === "edit") {
+      headline = this.argsComplete
+        ? editOperationSummary(this.args)
+        : "Apply edit";
+    }
     const color = TOOL_NAME_COLORS[this.name];
     const first = `${this.theme.fg("dim", "┊")} ${this.theme.fg(statusToken, status)} ${this.theme.fg(color, ICONS[this.name])} ${this.theme.fg(color, this.theme.bold(this.name))} ${headline}`;
     const lines = [first];
@@ -566,7 +744,11 @@ class HeaderComponent implements Component {
         )
       );
     }
-    return lines.map((line) =>
+    const previewLines =
+      this.name === "edit" && this.expanded && this.argsComplete
+        ? plannedPreviewLines(this.state, this.theme, width)
+        : [];
+    return [...lines, ...previewLines].map((line) =>
       backgroundLine(
         line,
         width,
@@ -738,14 +920,22 @@ export function renderOwnedToolCall(
   name: OwnedToolName,
   args: ArgsLike,
   theme: ThemeLike,
-  context: Pick<RenderContextLike<ArgsLike>, "state" | "invalidate">
+  context: Pick<
+    RenderContextLike<ArgsLike>,
+    "argsComplete" | "cwd" | "expanded" | "invalidate" | "state"
+  >
 ): Component {
+  if (name === "edit" && context.expanded === true) {
+    requestEditPreview(args, context);
+  }
   return new HeaderComponent(
     name,
     args,
     theme,
     context.state,
-    context.invalidate
+    context.invalidate,
+    name === "edit" && context.expanded === true,
+    context.argsComplete !== false
   );
 }
 
@@ -770,7 +960,13 @@ export function renderOwnedToolResult(
   }
   const target = singleLine(targetFor(name, context.args));
   const resultWithError = error ? { ...result, isError: true } : result;
-  const summary = singleLine(summaryFor(name, context.args, resultWithError));
+  const baseSummary = singleLine(
+    summaryFor(name, context.args, resultWithError)
+  );
+  const summary =
+    name === "edit"
+      ? `${error ? "error" : "applied"} in ${formatToolDuration(state.durationMs ?? 0)} · ${baseSummary}`
+      : baseSummary;
   const token = error ? "error" : "dim";
   return new ResultComponent(
     (width) =>

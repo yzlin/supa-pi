@@ -87,7 +87,7 @@ describe("extension registration compatibility", () => {
     expect(extensions).not.toContain("./extensions/multi-edit.ts");
   });
 
-  test("tool-display provides default read/search/edit/write tools but not bash", () => {
+  test("tool-display leaves built-in edit and bash available by default", () => {
     const harness = createExtensionHarness();
 
     toolDisplayExtension(harness.api);
@@ -100,6 +100,11 @@ describe("extension registration compatibility", () => {
       "edit",
       "write",
     ]);
+    const edit = harness.tools.find((tool) => tool.name === "edit");
+    expect(Object.keys(edit?.parameters.properties ?? {})).toEqual([
+      "path",
+      "edits",
+    ]);
     expect(harness.tools.map((tool) => tool.name)).not.toContain("bash");
     expect(
       harness.tools
@@ -111,7 +116,10 @@ describe("extension registration compatibility", () => {
   test("edit patch add permission follows current session config", async () => {
     const cwd = tempDir();
     const originalCwd = process.cwd();
-    writeToolDisplayConfig(cwd, { write: { enabled: true } });
+    writeToolDisplayConfig(cwd, {
+      edit: { enabled: true },
+      write: { enabled: true },
+    });
     const harness = createExtensionHarness();
 
     try {
@@ -120,7 +128,10 @@ describe("extension registration compatibility", () => {
     } finally {
       process.chdir(originalCwd);
     }
-    writeToolDisplayConfig(cwd, { write: { enabled: false } });
+    writeToolDisplayConfig(cwd, {
+      edit: { enabled: true },
+      write: { enabled: false },
+    });
     for (const handler of harness.eventHandlers.get("session_switch") ?? []) {
       handler({}, { cwd });
     }
@@ -130,7 +141,7 @@ describe("extension registration compatibility", () => {
       edit?.execute(
         "tool-call-id",
         {
-          patch: `*** Begin Patch
+          text: `*** Begin Patch
 *** Add File: should-not-exist.txt
 +blocked
 *** End Patch`,

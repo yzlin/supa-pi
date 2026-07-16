@@ -19,6 +19,11 @@ export interface ToolDisplayToolConfig {
   enabled: boolean;
 }
 
+export interface ToolDisplayEditConfig extends ToolDisplayToolConfig {
+  /** Permit permanent deletes after an interactive confirmation. */
+  allowPermanentDelete: boolean;
+}
+
 export const TOOL_DISPLAY_FULL_READ_MAX_BYTES = 256 * 1024;
 
 export type ToolDisplayFullReadSource = "registeredSkills" | "patterns";
@@ -72,7 +77,7 @@ export interface ToolDisplayConfig {
   tools: {
     read: ToolDisplayReadConfig;
     search: ToolDisplayToolConfig;
-    edit: ToolDisplayToolConfig;
+    edit: ToolDisplayEditConfig;
     write: ToolDisplayToolConfig;
   };
   output: {
@@ -98,7 +103,7 @@ export interface ToolDisplayConfigLayer {
   tools?: {
     read?: ToolDisplayReadConfigLayer;
     search?: Partial<ToolDisplayToolConfig>;
-    edit?: Partial<ToolDisplayToolConfig>;
+    edit?: Partial<ToolDisplayEditConfig>;
     write?: Partial<ToolDisplayToolConfig>;
   };
   output?: {
@@ -155,7 +160,8 @@ export const DEFAULT_TOOL_DISPLAY_CONFIG: ToolDisplayConfig = {
       enabled: true,
     },
     edit: {
-      enabled: true,
+      enabled: false,
+      allowPermanentDelete: false,
     },
     write: {
       enabled: true,
@@ -248,6 +254,18 @@ function normalizeToolConfig(
 
   const enabled = normalizeBoolean(value.enabled);
   return enabled === undefined ? undefined : { enabled };
+}
+
+function normalizeEditConfig(
+  value: unknown
+): Partial<ToolDisplayEditConfig> | undefined {
+  if (!isPlainObject(value)) {
+    return;
+  }
+  const enabled = normalizeBoolean(value.enabled);
+  const allowPermanentDelete = normalizeBoolean(value.allowPermanentDelete);
+  const next = compactConfigSection({ enabled, allowPermanentDelete });
+  return Object.keys(next).length > 0 ? next : undefined;
 }
 
 function normalizeStringArray(value: unknown): string[] | undefined {
@@ -492,7 +510,7 @@ export function normalizeToolDisplayConfig(
   const tools = isPlainObject(input.tools) ? input.tools : {};
   const read = normalizeReadConfig(tools.read);
   const search = normalizeToolConfig(tools.search);
-  const edit = normalizeToolConfig(tools.edit);
+  const edit = normalizeEditConfig(tools.edit);
   const write = normalizeToolConfig(tools.write);
   const compactTools = compactConfigSection({
     read,
@@ -825,7 +843,7 @@ export function getToolDisplayPresetConfig(
       tools: {
         read: { ...compact.tools.read, enabled: false },
         search: { enabled: false },
-        edit: { enabled: false },
+        edit: { enabled: false, allowPermanentDelete: false },
         write: { enabled: false },
       },
     };

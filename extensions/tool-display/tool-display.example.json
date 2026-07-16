@@ -23,7 +23,8 @@
       "enabled": true
     },
     "edit": {
-      "enabled": true
+      "enabled": false,
+      "allowPermanentDelete": false
     },
     "write": {
       "enabled": true

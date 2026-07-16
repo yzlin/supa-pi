@@ -1,4 +1,7 @@
 import { afterEach, beforeAll, describe, expect, test } from "bun:test";
+import { mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
+import { setTimeout as sleep } from "node:timers/promises";
 import { stripVTControlCharacters } from "node:util";
 
 import { Type } from "@earendil-works/pi-ai";
@@ -22,6 +25,7 @@ import {
   renderOwnedToolResult,
   toolResultBody,
 } from "./presentation";
+import { renderFinalDiffResult } from "./renderers";
 
 const ui = {
   requestRender() {
@@ -294,6 +298,98 @@ describe("real Pi ToolExecutionComponent smoke", () => {
     expect(plain[0]).toContain("Compare upstream icon");
     expect(plain[1]).toContain("node - <<'NODE' (+2 lines)");
     expect(plain[1]).not.toContain("unsafe");
+  });
+
+  test("renders strict edit planned preview then replaces it with final diff", async () => {
+    const cwd = join(
+      import.meta.dir,
+      `.tmp-tui-edit-${Date.now()}-${Math.random()}`
+    );
+    mkdirSync(cwd, { recursive: true });
+    writeFileSync(join(cwd, "target.txt"), "old\n");
+    const schema = Type.Object({ text: Type.String() });
+    const definition: ToolDefinition<
+      typeof schema,
+      {
+        diff?: string;
+        files?: string[];
+        toolDisplay?: { durationMs?: number };
+      },
+      PresentationState
+    > = {
+      name: "edit",
+      label: "edit",
+      description: "fixture",
+      parameters: schema,
+      renderShell: "self",
+      execute: async () => ({ content: [], details: {} }),
+      renderCall: (args, activeTheme, context) =>
+        renderOwnedToolCall("edit", args, activeTheme, context),
+      renderResult: (result, options, activeTheme, context) =>
+        renderOwnedToolResult(
+          "edit",
+          result,
+          options,
+          activeTheme,
+          context,
+          options.expanded
+            ? toolResultBody(
+                renderFinalDiffResult(
+                  result,
+                  { ...options, expanded: true },
+                  activeTheme,
+                  {
+                    collapsed: false,
+                    enabled: true,
+                    previewLines: 20,
+                    viewMode: "unified",
+                  }
+                ),
+                true
+              )
+            : undefined
+        ),
+    };
+    try {
+      const component = new ToolExecutionComponent(
+        "edit",
+        "edit-call",
+        { text: "[target.txt]\n@REPLACE\n-old\n+planned" },
+        {},
+        definition,
+        ui as never,
+        cwd
+      );
+      component.setArgsComplete();
+      component.setExpanded(true);
+      await sleep(30);
+      const planned = contentRows(component, 64);
+      expect(planned.join("\n")).toContain("Apply row edit · 1 file");
+      expect(planned.join("\n")).toContain("planned diff");
+      expectRowsFit(planned, 64);
+
+      component.updateResult(
+        {
+          content: [{ type: "text", text: "done" }],
+          details: {
+            diff: "--- target.txt\n+++ target.txt\n@@ -1 +1 @@\n-old\n+FINAL",
+            files: ["target.txt"],
+            toolDisplay: { durationMs: 50 },
+          },
+          isError: false,
+        },
+        false
+      );
+      const final = contentRows(component, 64);
+      expect(final.join("\n")).toContain("FINAL");
+      expect(final.join("\n")).not.toContain("planned diff");
+      expect(
+        final.every((line) => line.includes(theme.getBgAnsi("toolSuccessBg")))
+      ).toBe(true);
+      expectRowsFit(final, 64);
+    } finally {
+      rmSync(cwd, { force: true, recursive: true });
+    }
   });
 
   test("uses Pi error context and error theme background", () => {

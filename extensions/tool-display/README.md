@@ -37,7 +37,7 @@ Shape:
       }
     },
     "search": { "enabled": true },
-    "edit": { "enabled": true },
+    "edit": { "enabled": false, "allowPermanentDelete": false },
     "write": { "enabled": true }
   },
   "output": {
@@ -110,9 +110,17 @@ Matching behavior and safety:
 - Invalid target entries are ignored during config normalization. Invalid target fields can add warnings, for example invalid `source`, missing `baseDir`, or missing `include`.
 - `/tool-display show` prints target provenance (`default`, `global`, or `project`) and warnings so merged config is visible.
 
+## Unified edit
+
+The candidate local `edit` override defaults off while its live reliability gate is pending, so Pi's built-in `edit` remains available by default. Explicitly set `tools.edit.enabled` to `true` only to opt into evaluation or deliberate local use. When enabled, `edit` has a strict public `{ "text": "..." }` schema with no `reasoning` field. Its local dialect accepts either repeated `[path]` row sections (`@INS.PRE`, `@INS.POST`, `@INS.BEFORE`, `@INS.AFTER`, `@APPEND`, `@REPLACE`, and `@DEL`) or Codex-style `*** Begin Patch` payloads with Add/Update/Delete headers. It does not support moves and does not claim complete upstream compatibility. Pi's `prepareArguments` hook normalizes upstream-compatible raw strings and single `text`/`patch`/`input`/`content` aliases before strict validation. Retired classic, `multi`, and `edits` shapes are rejected; callers should produce `{ text }` directly.
+
+`write` remains a separate, unchanged tool. Patch Add File is accepted only while `write` is enabled. Permanent Delete defaults off. Set `tools.edit.allowPermanentDelete` in global or project config to enable it (project scalar wins); each plan still requires one TUI/RPC confirmation showing the exact paths and complete planned diff. JSON/print modes reject deletes. Planning occurs before mutation, and source snapshots are rechecked under canonical path locks.
+
+Pending expanded edit calls show an asynchronously planned diff; settled rendering always uses actual execution details. Oversized non-delete previews are omitted without blocking an otherwise valid edit. Delete confirmation still requires the complete planned diff and fails before prompting when that diff exceeds the preview ceiling. Inputs, operations, target size, staged content, matcher work, diff output, path canonicalization, and queue depth are bounded. See [ADR: local unified-edit dialect](../../docs/adr/0001-local-unified-edit-dialect.md).
+
 ## Renderers
 
-Tool-display registers reasoned, self-framed renderers for `read`, `grep`, `find`, `ls`, `edit`, and `write` when their config flags are enabled. `search.enabled` owns `grep`/`find`/`ls` together. Pending and settled tools use stable two-row presentation, Pi theme pending/success/error backgrounds, width-aware emoji and tail-preserving truncation, and elapsed time. Tool icons and names use Tidy-style theme groups: accent for read/search tools, warning for edit/write, and `thinkingXhigh` for RTK-owned bash. Collapsed reasoning, targets, commands, and summaries collapse whitespace and strip terminal control sequences; multiline bash commands show their first non-empty line plus the remaining non-empty line count. Partial bash results keep the pending two-row summary instead of repeating the command. Expanded output keeps its original line structure. `Ctrl+O` expansion reveals the existing detailed output beneath the two-row summary. Full reads retain their target and pagination-ignored badges.
+Tool-display registers reasoned, self-framed renderers for `read`, `grep`, `find`, `ls`, and `write` by default. Its `edit` registration follows session config: it installs the candidate override when explicitly enabled and delegates to Pi's built-in edit definition when disabled. `search.enabled` owns `grep`/`find`/`ls` together. Pending and settled tools use stable two-row presentation, Pi theme pending/success/error backgrounds, width-aware emoji and tail-preserving truncation, and elapsed time. Tool icons and names use Tidy-style theme groups: accent for read/search tools, warning for edit/write, and `thinkingXhigh` for RTK-owned bash. Collapsed reasoning, targets, commands, and summaries collapse whitespace and strip terminal control sequences; multiline bash commands show their first non-empty line plus the remaining non-empty line count. Partial bash results keep the pending two-row summary instead of repeating the command. Expanded output keeps its original line structure. `Ctrl+O` expansion reveals the existing detailed output beneath the two-row summary. Full reads retain their target and pagination-ignored badges.
 
 `edit` renders the final applied diff from tool details. `write` captures previous file content before execution and renders a final diff after success. Final diffs use the standard tool block shell/background, compact summaries by default, expand to unified diffs on narrow terminals, switch to split diffs on wide terminals, color additions/removals, and collapse expanded output to `diff.previewLines` when `diff.collapsed` is true. Split diffs keep path and hunk meta rows compact across the full diff width: unchanged paths render once, while renames/path changes render old-to-new. If previous content cannot be captured safely, `write` falls back to a capped compact summary instead of a diff; previous-content capture is limited to paths inside the workspace.
 
@@ -124,7 +132,7 @@ RTK remains the `bash` owner. Tool-display exports the shared bash presentation 
 
 Runtime ownership:
 
-- `tool-display`: `read`, optional `grep`/`find`/`ls`, optional `edit`, optional `write`
+- `tool-display`: `read`, optional `grep`/`find`/`ls`, session-configured candidate-or-built-in `edit` delegation, optional `write`
 - `rtk`: `bash` execution, rewrite, statistics, and compaction metadata
 
 Keep `./extensions/rtk` before `./extensions/tool-display` in `package.json`. RTK owns `bash`; tool-display owns the other tool renderers and read override path.
@@ -133,4 +141,8 @@ Keep `./extensions/rtk` before `./extensions/tool-display` in `package.json`. RT
 
 The two-row tool presentation is adapted from Mikey O'Brien's [`pi-tidy-tools`](https://github.com/mikeyobrien/pi-tidy-tools), licensed under the MIT license.
 
-The full-read behavior is adapted from the former local `read-patch` extension in this repository. No external upstream source or external license applies to that local code path. The root project license is MIT; keep copied or adapted external materials attributed near their usage.
+The full-read behavior is adapted from the former local `read-patch` extension in this repository. No external upstream source or external license applies to that local code path.
+
+The unified-edit parser, planner, matcher, and migration behavior are ported from Armin Ronacher and contributors' [`mitsuhiko/agent-stuff`](https://github.com/mitsuhiko/agent-stuff), `extensions/unified-edit.ts` at commit [`4bce45560fa55ace2f5dc8634a63a2af464ddc8b`](https://github.com/mitsuhiko/agent-stuff/commit/4bce45560fa55ace2f5dc8634a63a2af464ddc8b), under the Apache License 2.0, with local modifications documented in the ADR and `UNIFIED_EDIT_UPSTREAM.md`.
+
+The root project license is MIT; keep copied or adapted external materials attributed near their usage.

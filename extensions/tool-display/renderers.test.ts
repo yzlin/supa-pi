@@ -1121,6 +1121,28 @@ describe("tool-display renderers", () => {
     expect(editRendered.slice(1)).toEqual(writeRendered.slice(1));
   });
 
+  test("renders strict row and patch text targets with unique multi-file counts", () => {
+    expect(
+      renderEditCall(
+        {
+          text: "[a.ts]\n@REPLACE\n-old\n+new\n[b.ts]\n@APPEND\n+tail\n[a.ts]\n@DEL 2",
+        },
+        theme
+      ).text
+    ).toBe("row edit 2 a.ts, b.ts");
+    expect(
+      renderEditCall(
+        {
+          text: "*** Begin Patch\n*** Update File: a.ts\n@@\n-old\n+new\n*** Delete File: b.ts\n*** End Patch",
+        },
+        theme
+      ).text
+    ).toBe("patch 2 a.ts, b.ts");
+    expect(renderEditCall({ text: "[partial.ts]\n@REP" }, theme).text).toBe(
+      "edit"
+    );
+  });
+
   test("renders patch call file preview from headers", () => {
     expectPatchCallText(
       [

@@ -1,4 +1,6 @@
-import { describe, expect, test } from "bun:test";
+import { afterEach, describe, expect, test } from "bun:test";
+import { mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
 
 import { visibleWidth } from "@earendil-works/pi-tui";
@@ -14,6 +16,25 @@ import {
   renderOwnedToolResult,
   toolResultBody,
 } from "./presentation";
+
+const tempDirs: string[] = [];
+
+function tempDir(): string {
+  const dir = join(
+    import.meta.dir,
+    `.tmp-presentation-${Date.now()}-${Math.random()}`
+  );
+  mkdirSync(dir, { recursive: true });
+  tempDirs.push(dir);
+  return dir;
+}
+
+afterEach(() => {
+  cleanupToolDisplayTimers();
+  for (const dir of tempDirs.splice(0)) {
+    rmSync(dir, { force: true, recursive: true });
+  }
+});
 
 const plainTheme = {
   bg: (_token: string, text: string) => text.trimEnd(),
@@ -141,6 +162,138 @@ describe("owned tool presentation", () => {
     );
 
     expect(result.render(120).join(" ")).toContain("2 matches · 2 files");
+  });
+
+  test("plans complete edit args once, rejects stale previews, and final details supersede the plan", async () => {
+    const cwd = tempDir();
+    writeFileSync(join(cwd, "a.txt"), "old a\n");
+    writeFileSync(join(cwd, "b.txt"), "old b\n");
+    const state: PresentationState = {};
+    let invalidations = 0;
+    const context = {
+      argsComplete: true,
+      cwd,
+      expanded: true,
+      invalidate() {
+        invalidations += 1;
+      },
+      state,
+    };
+    const first = renderOwnedToolCall(
+      "edit",
+      { text: "[a.txt]\n@REPLACE\n-old a\n+new a" },
+      plainTheme,
+      context
+    );
+    expect(first.render(100).join("\n")).toContain("planning preview");
+
+    const secondArgs = { text: "[b.txt]\n@REPLACE\n-old b\n+new b" };
+    const second = renderOwnedToolCall("edit", secondArgs, plainTheme, context);
+    await sleep(30);
+    const planned = second.render(100).join("\n");
+    expect(planned).toContain("planned diff");
+    expect(planned).toContain("+++ b.txt");
+    expect(planned).not.toContain("+++ a.txt");
+    expect(invalidations).toBeGreaterThan(0);
+
+    const finalDiff = "--- b.txt\n+++ b.txt\n@@ -1 +1 @@\n-old b\n+FINAL b";
+    const result = renderOwnedToolResult(
+      "edit",
+      {
+        content: [{ type: "text", text: "done" }],
+        details: {
+          diff: finalDiff,
+          files: ["b.txt"],
+          toolDisplay: { durationMs: 1200 },
+        },
+      },
+      {},
+      plainTheme,
+      { ...context, args: secondArgs }
+    );
+    expect(second.render(100).join("\n")).not.toContain("planned diff");
+    expect(result.render(100).join("\n")).toContain("applied in 1s");
+  });
+
+  test("plans edit previews only when expanded", async () => {
+    const cwd = tempDir();
+    writeFileSync(join(cwd, "a.txt"), "old\n");
+    const state: PresentationState = {};
+    const args = { text: "[a.txt]\n@REPLACE\n-old\n+new" };
+    const context = {
+      argsComplete: true,
+      cwd,
+      expanded: false,
+      invalidate() {
+        return;
+      },
+      state,
+    };
+
+    renderOwnedToolCall("edit", args, plainTheme, context);
+    await sleep(10);
+    expect(state.toolDisplayPresentation?.plannedPreviewKey).toBeUndefined();
+
+    const expanded = renderOwnedToolCall("edit", args, plainTheme, {
+      ...context,
+      expanded: true,
+    });
+    await sleep(30);
+    expect(expanded.render(100).join("\n")).toContain("planned diff");
+    expect(state.toolDisplayPresentation?.plannedPreview).toContain("+new");
+  });
+
+  test("omits oversized planned diffs without storing them", async () => {
+    const cwd = tempDir();
+    const lines = [
+      "old",
+      ...Array.from({ length: 3000 }, () => "x".repeat(40)),
+    ];
+    writeFileSync(join(cwd, "large.txt"), `${lines.join("\n")}\n`);
+    const state: PresentationState = {};
+    const call = renderOwnedToolCall(
+      "edit",
+      { text: "[large.txt]\n@DEL 1\n@INS.PRE 1\n+new" },
+      plainTheme,
+      {
+        argsComplete: true,
+        cwd,
+        expanded: true,
+        invalidate() {
+          return;
+        },
+        state,
+      }
+    );
+
+    await sleep(30);
+    expect(state.toolDisplayPresentation?.plannedPreview).toBeUndefined();
+    expect(call.render(160).join("\n")).toContain("planned diff omitted");
+    expect(call.render(160).join("\n")).toContain("preview limit");
+  });
+
+  test("does not parse or plan partial edit arguments", async () => {
+    const state: PresentationState = {};
+    const call = renderOwnedToolCall(
+      "edit",
+      { text: "[partial.ts]\n@REP" },
+      plainTheme,
+      {
+        argsComplete: false,
+        cwd: "/missing",
+        expanded: true,
+        invalidate() {
+          throw new Error("partial preview invalidated");
+        },
+        state,
+      }
+    );
+    await sleep(5);
+    expect(call.render(50)).toEqual([
+      "┊ • ✏️ edit Apply edit",
+      "┊   edit target → <1s",
+    ]);
+    expect(state.toolDisplayPresentation?.plannedPreviewKey).toBeUndefined();
   });
 
   test("uses validated patch headers as single and multi-file edit targets", () => {

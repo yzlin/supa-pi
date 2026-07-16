@@ -14,7 +14,7 @@ Do not describe `extensions/om` as active runtime behavior unless package regist
 
 `read-patch` is retired. Its skill-file full-read behavior now belongs to active `extensions/tool-display`; do not re-add `extensions/read-patch.ts` or `extensions/read-patch/` docs.
 
-`extensions/tool-display` owns `edit`, including batch `multi` edits and Codex-style `patch` payload support. The multi-edit behavior is adapted from Armin Ronacher's `agent-stuff` `extensions/multi-edit.ts` under Apache License 2.0. `extensions/multi-edit.ts` may still exist in the repository, but it is not an active standalone extension unless re-added to `package.json -> pi.extensions`.
+`extensions/tool-display` contains a default-off candidate `edit` override with a strict public `{ text }` schema and no edit reasoning field; its session-aware registration delegates to Pi's built-in edit definition whenever the candidate is disabled, so the built-in contract remains available by default until the documented live reliability gate passes. Its local unified-edit dialect supports selected row operations and Codex Add/Update/Delete patches, but not moves or full upstream compatibility. `prepareArguments` normalizes upstream-compatible raw strings and single text aliases; retired classic, `multi`, and `edits` calls are rejected. `write` remains a separate tool; patch adds require it to be enabled. Permanent delete defaults off and requires config plus exact-plan TUI/RPC confirmation. The implementation is ported from Armin Ronacher and contributors' `mitsuhiko/agent-stuff` `extensions/unified-edit.ts` at commit `4bce45560fa55ace2f5dc8634a63a2af464ddc8b` under Apache License 2.0, with local safety deviations recorded in `docs/adr/0001-local-unified-edit-dialect.md`.
 
 `extensions/obsidian` is active. It loads vault-local `CLAUDE.md` / `CLAUDE.MD` context from configured Obsidian vaults in `~/.pi/agent/obsidian.json`, injects loaded context through provider payload hooks, and exposes `/obsidian status`.
 
@@ -39,7 +39,7 @@ Fast Mode persists global state and additive exact-match model support in `~/.pi
 
 ## Tool ownership and registration order
 
-`extensions/tool-display` owns `read`, `edit`, `write`, and optional compact renderers for `grep`, `find`, and `ls`. Its `edit` tool includes multi-edit behavior; there is no standalone active multi-edit extension entry.
+`extensions/tool-display` owns `read`, `write`, and optional compact renderers for `grep`, `find`, and `ls`. Its strict-text unified `edit` candidate is owned only when explicitly enabled and defaults off pending the live gate; disabled sessions receive Pi's built-in edit definition instead. There is no standalone active multi-edit extension entry.
 
 `extensions/rtk` owns `bash` execution, output rewrite, statistics, and compaction metadata. RTK may reuse tool-display bash rendering helpers, but tool-display must not register `bash`.
 

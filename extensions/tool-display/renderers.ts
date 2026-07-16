@@ -30,6 +30,11 @@ import type {
   ToolDisplayDiffConfig,
   ToolDisplayPreviewConfig,
 } from "./config";
+import {
+  isPatchLikePayload,
+  parsePatch,
+  parseRowScript,
+} from "./unified-edit-parser";
 
 interface ThemeLike {
   fg(token: string, text: string): string;
@@ -71,6 +76,7 @@ interface ToolDisplayEditDetails extends EditToolDetails {
 }
 
 interface EditCallArgs {
+  text?: string;
   edits?: Array<{ path?: string }> | string;
   multi?: Array<{ path?: string }>;
   newText?: string;
@@ -517,6 +523,27 @@ export function collectPatchCallPreviewFiles(patch: string): string[] {
 }
 
 export function renderEditCall(args: EditCallArgs, theme: ThemeLike): Text {
+  if (args.text !== undefined) {
+    if (!args.text) {
+      return new Text(theme.fg("toolTitle", theme.bold("edit")), 0, 0);
+    }
+    try {
+      const patchMode = isPatchLikePayload(args.text);
+      const operations = patchMode
+        ? parsePatch(args.text)
+        : parseRowScript(args.text);
+      const files = [...new Set(operations.map((operation) => operation.path))];
+      const label = patchMode ? "patch" : "row edit";
+      return new Text(
+        theme.fg("toolTitle", theme.bold(`${label} ${files.length}`)) +
+          theme.fg("accent", ` ${formatFileList(files)}`),
+        0,
+        0
+      );
+    } catch {
+      return new Text(theme.fg("toolTitle", theme.bold("edit")), 0, 0);
+    }
+  }
   if (args.patch) {
     const files = collectPatchCallPreviewFiles(args.patch);
     if (files.length === 0) {

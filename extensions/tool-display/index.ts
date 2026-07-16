@@ -1,4 +1,5 @@
 import {
+  createEditToolDefinition,
   createFindTool,
   createGrepTool,
   createLsTool,
@@ -72,6 +73,7 @@ export default function toolDisplayExtension(pi: ExtensionAPI): void {
     findTool = createFindTool(cwd);
     lsTool = createLsTool(cwd);
     writeTool = createWriteTool(cwd);
+    registerEditTool();
   }
 
   pi.on("session_start", (_event, ctx) => {
@@ -265,50 +267,78 @@ export default function toolDisplayExtension(pi: ExtensionAPI): void {
     }
   }
 
-  if (config.tools.edit.enabled) {
-    pi.registerTool(
-      composeReasonedTool(
-        {
-          ...editTool,
-          renderShell: "self" as const,
-          execute(toolCallId, params, signal, onUpdate, ctx: ExtensionContext) {
-            const activeCwd = ctx.cwd ?? cwd;
-            return editTool.execute(toolCallId, params, signal, onUpdate, {
-              ...ctx,
-              cwd: activeCwd,
-              toolDisplayAllowPatchAdd: config.tools.write.enabled === true,
-            });
+  function registerEditTool(): void {
+    if (!config.tools.edit.enabled) {
+      pi.registerTool(createEditToolDefinition(cwd));
+      return;
+    }
+    pi.registerTool({
+      ...editTool,
+      renderShell: "self" as const,
+      async execute(
+        toolCallId,
+        params,
+        signal,
+        onUpdate,
+        ctx: ExtensionContext
+      ) {
+        const startedAt = Date.now();
+        const activeCwd = ctx.cwd ?? cwd;
+        const result = await editTool.execute(
+          toolCallId,
+          params,
+          signal,
+          onUpdate,
+          {
+            ...ctx,
+            cwd: activeCwd,
+            toolDisplayAllowPatchAdd: config.tools.write.enabled === true,
+            toolDisplayAllowPermanentDelete:
+              config.tools.edit.allowPermanentDelete === true,
+          }
+        );
+        return {
+          ...result,
+          details: {
+            ...(result.details ?? {}),
+            toolDisplay: {
+              ...((result.details as { toolDisplay?: object } | undefined)
+                ?.toolDisplay ?? {}),
+              durationMs: Date.now() - startedAt,
+            },
           },
-          renderCall(args, theme, context) {
-            return renderOwnedToolCall("edit", args, theme, context);
-          },
-          renderResult(result, options, theme, context) {
-            const expanded =
-              options.expanded || config.diff.collapsed === false;
-            return renderOwnedToolResult(
-              "edit",
+        };
+      },
+      renderCall(args, theme, context) {
+        return renderOwnedToolCall(
+          "edit",
+          args as never,
+          theme,
+          context as never
+        );
+      },
+      renderResult(result, options, theme, context) {
+        const expanded = options.expanded || config.diff.collapsed === false;
+        return renderOwnedToolResult(
+          "edit",
+          result,
+          options,
+          theme,
+          context as never,
+          expandedBody(expanded, () =>
+            renderFinalDiffResult(
               result,
-              options,
+              { ...options, expanded: true },
               theme,
-              context,
-              expandedBody(expanded, () =>
-                renderFinalDiffResult(
-                  result,
-                  { ...options, expanded: true },
-                  theme,
-                  config.diff
-                )
-              )
-            );
-          },
-        },
-        {
-          reasoningDescription: REASONING_DESCRIPTION,
-          promptGuidelines: [reasoningGuideline("edit")],
-        }
-      )
-    );
+              config.diff
+            )
+          )
+        );
+      },
+    });
   }
+
+  registerEditTool();
 
   if (config.tools.write.enabled) {
     pi.registerTool(
