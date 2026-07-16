@@ -134,15 +134,17 @@ function createMockCtx(
     content: string[] | undefined;
     options?: { placement?: "aboveEditor" | "belowEditor" };
   }> = [];
+  const editorTexts: string[] = [];
 
   return {
     notifications,
     statuses,
     widgets,
+    editorTexts,
     ctx: {
       cwd: options.cwd ?? process.cwd(),
       hasUI: options.hasUI ?? true,
-      mode: options.mode ?? (options.hasUI === false ? "print" : "tui"),
+      mode: options.mode ?? (options.hasUI === false ? "print" : "rpc"),
       isIdle: () => options.idle ?? true,
       signal: undefined,
       modelRegistry: {
@@ -167,6 +169,9 @@ function createMockCtx(
       ui: {
         notify(message: string, level: string) {
           notifications.push({ message, level });
+        },
+        setEditorText(text: string) {
+          editorTexts.push(text);
         },
         onTerminalInput: options.onTerminalInput ?? (() => () => undefined),
         setStatus(key: string, text: string | undefined) {
@@ -197,10 +202,16 @@ function createMockCtx(
 function createMockPiRuntime(
   exec?: (
     command: string,
-    args: string[]
+    args: string[],
+    options?: { signal?: AbortSignal }
   ) =>
-    | { stdout: string; code: number; stderr?: string }
-    | Promise<{ stdout: string; code: number; stderr?: string }>
+    | { stdout: string; code: number; stderr?: string; killed?: boolean }
+    | Promise<{
+        stdout: string;
+        code: number;
+        stderr?: string;
+        killed?: boolean;
+      }>
 ) {
   const commands = new Map<
     string,
@@ -215,7 +226,15 @@ function createMockPiRuntime(
   }> = [];
   const appendedEntries: Array<{ type: string; data: unknown }> = [];
   const messageRenderers = new Map<string, (message: unknown) => unknown>();
-  const execCalls: Array<{ command: string; args: string[] }> = [];
+  const eventHandlers = new Map<
+    string,
+    (event: unknown, ctx: unknown) => Promise<unknown> | unknown
+  >();
+  const execCalls: Array<{
+    command: string;
+    args: string[];
+    options?: { signal?: AbortSignal };
+  }> = [];
   const agentSpawnCalls: Array<{
     type: string;
     prompt: string;
@@ -285,14 +304,24 @@ function createMockPiRuntime(
     sentUserMessages,
     sentMessages,
     messageRenderers,
+    eventHandlers,
     execCalls,
     agentSpawnCalls,
     synthesizerSessions,
     pi: {
-      async exec(command: string, args: string[]) {
-        execCalls.push({ command, args });
+      async exec(
+        command: string,
+        args: string[],
+        options?: { signal?: AbortSignal }
+      ) {
+        execCalls.push({ command, args, options });
         return (
-          (await exec?.(command, args)) ?? { stdout: "", stderr: "", code: 0 }
+          (await exec?.(command, args, options)) ?? {
+            stdout: "",
+            stderr: "",
+            code: 0,
+            killed: false,
+          }
         );
       },
       registerCommand(
@@ -309,8 +338,11 @@ function createMockPiRuntime(
       ) {
         messageRenderers.set(customType, renderer);
       },
-      on() {
-        /* noop */
+      on(
+        event: string,
+        handler: (event: unknown, ctx: unknown) => Promise<unknown> | unknown
+      ) {
+        eventHandlers.set(event, handler);
       },
       appendEntry(type: string, data: unknown) {
         appendedEntries.push({ type, data });
@@ -1346,18 +1378,270 @@ describe.serial("review workflow progress", () => {
   });
 });
 
+function createChangedReviewRuntime() {
+  return createMockPiRuntime((_command, args) => {
+    if (args.join(" ") === "status --porcelain --untracked-files=all") {
+      return { stdout: " M extensions/review/index.ts\n", code: 0 };
+    }
+    return { stdout: "", code: 0 };
+  });
+}
+
+async function waitUntil(condition: () => boolean): Promise<void> {
+  while (!condition()) {
+    await new Promise((resolve) => setTimeout(resolve, 1));
+  }
+}
+
 describe.serial("review direct targets", () => {
-  it("cancels a running review when Escape is pressed", async () => {
+  it("returns from a TUI review command while the workflow keeps running", async () => {
+    let handleTerminalInput: TerminalInputHandler | undefined;
+    const runtime = createChangedReviewRuntime();
+    const manager = installAsyncReviewManager({ completeAfterMs: 650 });
+    const { ctx } = createMockCtx([], {
+      mode: "tui",
+      onTerminalInput(handler) {
+        handleTerminalInput = handler;
+        return () => undefined;
+      },
+    });
+
+    reviewExtension(runtime.pi as never);
+    let commandSettled = false;
+    const command = Promise.resolve(
+      runtime.commands
+        .get("review")
+        ?.handler("uncommitted --reviewers code-reviewer", ctx as never)
+    ).then(() => {
+      commandSettled = true;
+    });
+
+    await waitUntil(() => manager.spawnCount() > 0);
+    await Promise.resolve();
+
+    try {
+      expect(commandSettled).toBe(true);
+    } finally {
+      handleTerminalInput?.("\u001B");
+      await command;
+    }
+  });
+
+  it("holds interactive prompts in the editor while a review runs", async () => {
+    const runtime = createChangedReviewRuntime();
+    const manager = installAsyncReviewManager({ completeAfterMs: 650 });
+    const { ctx, editorTexts, notifications } = createMockCtx([], {
+      mode: "tui",
+    });
+
+    reviewExtension(runtime.pi as never);
+    await runtime.commands
+      .get("review")
+      ?.handler("uncommitted --reviewers code-reviewer", ctx as never);
+    await waitUntil(() => manager.spawnCount() > 0);
+
+    const result = await runtime.eventHandlers.get("input")?.(
+      { source: "interactive", text: "change the implementation" },
+      ctx
+    );
+
+    expect(result).toEqual({ action: "handled" });
+    expect(editorTexts).toEqual(["change the implementation"]);
+    expect(notifications).toContainEqual({
+      message:
+        "Review is still running. Prompt kept in the editor; submit it after the review finishes.",
+      level: "info",
+    });
+
+    const extensionResult = await runtime.eventHandlers.get("input")?.(
+      { source: "extension", text: "execute invocation packet" },
+      ctx
+    );
+    expect(extensionResult).toEqual({ action: "continue" });
+    expect(editorTexts).toEqual(["change the implementation"]);
+    expect(notifications).toContainEqual({
+      message: "Review cancelled so agent work can start.",
+      level: "info",
+    });
+    expect(manager.abortCount()).toBeGreaterThanOrEqual(1);
+    await runtime.eventHandlers.get("session_shutdown")?.({}, ctx);
+  });
+
+  it("cancels a detached review and continues interactive prompts with images", async () => {
+    const runtime = createChangedReviewRuntime();
+    const manager = installAsyncReviewManager({ completeAfterMs: 650 });
+    const { ctx, editorTexts, notifications } = createMockCtx([], {
+      mode: "tui",
+    });
+
+    reviewExtension(runtime.pi as never);
+    await runtime.commands
+      .get("review")
+      ?.handler("uncommitted --reviewers code-reviewer", ctx as never);
+    await waitUntil(() => manager.spawnCount() > 0);
+
+    const images = [
+      { type: "image", data: "encoded-image", mimeType: "image/png" },
+    ];
+    const result = await runtime.eventHandlers.get("input")?.(
+      { source: "interactive", text: "inspect this image", images },
+      ctx
+    );
+
+    expect(result).toEqual({ action: "continue" });
+    expect(editorTexts).toEqual([]);
+    expect(notifications).toContainEqual({
+      message: "Review cancelled so agent work can start.",
+      level: "info",
+    });
+    expect(manager.abortCount()).toBeGreaterThanOrEqual(1);
+    await runtime.eventHandlers.get("user_bash")?.(
+      {
+        type: "user_bash",
+        command: "true",
+        excludeFromContext: false,
+      },
+      ctx
+    );
+    expect(
+      notifications.filter(({ message }) =>
+        message.includes("Review cancelled")
+      )
+    ).toHaveLength(1);
+  });
+
+  it("cancels and settles a detached review before user bash proceeds", async () => {
+    const runtime = createChangedReviewRuntime();
+    const manager = installAsyncReviewManager({ completeAfterMs: 80 });
+    const { ctx } = createMockCtx([], { mode: "tui" });
+
+    reviewExtension(runtime.pi as never);
+    await runtime.commands
+      .get("review")
+      ?.handler("uncommitted --reviewers code-reviewer", ctx as never);
+    await waitUntil(() => manager.spawnCount() > 0);
+
+    let bashAllowed = false;
+    const userBash = Promise.resolve(
+      runtime.eventHandlers.get("user_bash")?.(
+        {
+          type: "user_bash",
+          command: "touch changed",
+          excludeFromContext: false,
+        },
+        ctx
+      )
+    ).then(() => {
+      bashAllowed = true;
+    });
+
+    await Promise.resolve();
+    expect(manager.abortCount()).toBeGreaterThanOrEqual(1);
+    expect(bashAllowed).toBe(false);
+
+    await userBash;
+    expect(bashAllowed).toBe(true);
+    expect(getReviewReportMessages(runtime)).toEqual([]);
+  });
+
+  it("keeps headless review commands in the foreground", async () => {
+    const runtime = createChangedReviewRuntime();
+    const manager = installAsyncReviewManager({ completeAfterMs: 25 });
+    const { ctx } = createMockCtx([], { hasUI: false, mode: "print" });
+    let commandSettled = false;
+
+    reviewExtension(runtime.pi as never);
+    const command = Promise.resolve(
+      runtime.commands
+        .get("review")
+        ?.handler("uncommitted --reviewers code-reviewer", ctx as never)
+    ).then(() => {
+      commandSettled = true;
+    });
+    await waitUntil(() => manager.spawnCount() > 0);
+
+    expect(commandSettled).toBe(false);
+    await command;
+    expect(getReviewReportMessages(runtime)).toHaveLength(1);
+  });
+
+  it("aborts a detached review on session shutdown without posting a report", async () => {
+    const runtime = createChangedReviewRuntime();
+    const manager = installAsyncReviewManager({ completeAfterMs: 650 });
+    const { ctx } = createMockCtx([], { mode: "tui" });
+
+    reviewExtension(runtime.pi as never);
+    await runtime.commands
+      .get("review")
+      ?.handler("uncommitted --reviewers code-reviewer", ctx as never);
+    await waitUntil(() => manager.spawnCount() > 0);
+
+    await runtime.eventHandlers.get("session_shutdown")?.({}, ctx);
+
+    expect(manager.abortCount()).toBeGreaterThanOrEqual(1);
+    expect(getReviewReportMessages(runtime)).toEqual([]);
+  });
+
+  it("cancels an in-flight preflight subprocess before spawning a reviewer", async () => {
     let handleTerminalInput: TerminalInputHandler | undefined;
     let terminalInputUnsubscribed = false;
-    const runtime = createMockPiRuntime((_command, args) => {
+    let preflightStarted = false;
+    let preflightAborted = false;
+    const runtime = createMockPiRuntime(async (_command, args, options) => {
       if (args.join(" ") === "status --porcelain --untracked-files=all") {
-        return { stdout: " M extensions/review/index.ts\n", code: 0 };
+        preflightStarted = true;
+        return await new Promise((resolve) => {
+          options?.signal?.addEventListener(
+            "abort",
+            () => {
+              preflightAborted = true;
+              resolve({ stdout: "", code: 0, killed: true });
+            },
+            { once: true }
+          );
+        });
       }
       return { stdout: "", code: 0 };
     });
     const manager = installAsyncReviewManager({ completeAfterMs: 650 });
+    const { ctx, notifications } = createMockCtx([], {
+      mode: "tui",
+      onTerminalInput(handler) {
+        handleTerminalInput = handler;
+        return () => {
+          terminalInputUnsubscribed = true;
+        };
+      },
+    });
+
+    reviewExtension(runtime.pi as never);
+    await runtime.commands
+      .get("review")
+      ?.handler("uncommitted --reviewers code-reviewer", ctx as never);
+
+    await waitUntil(() => preflightStarted);
+    expect(handleTerminalInput).toBeDefined();
+    const terminalInputResult = handleTerminalInput?.("\u001B");
+    await waitUntil(() => terminalInputUnsubscribed);
+
+    expect(terminalInputResult).toEqual({ consume: false });
+    expect(preflightAborted).toBe(true);
+    expect(manager.spawnCount()).toBe(0);
+    expect(getReviewReportMessages(runtime)).toEqual([]);
+    expect(notifications).toContainEqual({
+      message: "Review cancelled",
+      level: "info",
+    });
+  });
+
+  it("cancels a running review without trapping Escape from a management overlay", async () => {
+    let handleTerminalInput: TerminalInputHandler | undefined;
+    let terminalInputUnsubscribed = false;
+    let managementOverlayOpen = true;
+    const runtime = createChangedReviewRuntime();
+    const manager = installAsyncReviewManager({ completeAfterMs: 650 });
     const { ctx, notifications, widgets } = createMockCtx([], {
+      mode: "tui",
       onTerminalInput(handler) {
         handleTerminalInput = handler;
         return () => {
@@ -1370,16 +1654,21 @@ describe.serial("review direct targets", () => {
     const review = runtime.commands
       .get("review")
       ?.handler("uncommitted --reviewers code-reviewer", ctx as never);
-    while (manager.spawnCount() === 0) {
-      await new Promise((resolve) => setTimeout(resolve, 1));
-    }
+    await waitUntil(() => manager.spawnCount() > 0);
     const terminalInputResult = handleTerminalInput?.("\u001B");
+    if (!terminalInputResult?.consume && managementOverlayOpen) {
+      managementOverlayOpen = false;
+    }
     await review;
+    await waitUntil(() =>
+      notifications.some(({ message }) => message === "Review cancelled")
+    );
 
     expect(getReviewReportMessages(runtime)).toEqual([]);
     expect(manager.abortCount()).toBeGreaterThanOrEqual(1);
     expect(manager.abortCount()).toBeLessThanOrEqual(manager.spawnCount());
-    expect(terminalInputResult).toEqual({ consume: true });
+    expect(terminalInputResult).toEqual({ consume: false });
+    expect(managementOverlayOpen).toBe(false);
     expect(notifications).toContainEqual({
       message: "Review cancelled",
       level: "info",

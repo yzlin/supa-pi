@@ -50,7 +50,7 @@ function createCtx(
     ctx: {
       cwd: process.cwd(),
       hasUI: true,
-      mode: "tui",
+      mode: "rpc",
       isIdle: () => true,
       signal: undefined,
       modelRegistry: {

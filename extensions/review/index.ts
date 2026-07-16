@@ -230,9 +230,14 @@ function assertReviewModelAvailable(
   }
 }
 
-function createGitExec(pi: ExtensionAPI): GitExec {
-  return (args) =>
-    pi.exec("git", args) as Promise<{ stdout: string; code: number }>;
+function createGitExec(pi: ExtensionAPI, signal?: AbortSignal): GitExec {
+  return async (args) => {
+    const result = await pi.exec("git", args, { signal });
+    if (signal?.aborted || result.killed) {
+      throw new DOMException("Review cancelled", "AbortError");
+    }
+    return result;
+  };
 }
 
 function normalizeReviewerSelection(
@@ -360,9 +365,10 @@ async function loadProjectReviewGuidelines(
  */
 async function getMergeBase(
   pi: ExtensionAPI,
-  branch: string
+  branch: string,
+  signal?: AbortSignal
 ): Promise<string | null> {
-  return await getSharedMergeBase(createGitExec(pi), branch);
+  return await getSharedMergeBase(createGitExec(pi, signal), branch);
 }
 
 /**
@@ -533,14 +539,15 @@ async function getDefaultBranch(pi: ExtensionAPI): Promise<string> {
  */
 async function buildReviewPrompt(
   pi: ExtensionAPI,
-  target: ReviewTarget
+  target: ReviewTarget,
+  signal?: AbortSignal
 ): Promise<string> {
   switch (target.type) {
     case "uncommitted":
       return UNCOMMITTED_PROMPT;
 
     case "baseBranch": {
-      const mergeBase = await getMergeBase(pi, target.branch);
+      const mergeBase = await getMergeBase(pi, target.branch, signal);
       const basePrompt = mergeBase
         ? BASE_BRANCH_PROMPT_WITH_MERGE_BASE.replace(
             /{baseBranch}/g,
@@ -560,7 +567,7 @@ async function buildReviewPrompt(
       return COMMIT_PROMPT.replace("{sha}", target.sha);
 
     case "pullRequest": {
-      const mergeBase = await getMergeBase(pi, target.baseBranch);
+      const mergeBase = await getMergeBase(pi, target.baseBranch, signal);
       const basePrompt = mergeBase
         ? PULL_REQUEST_PROMPT.replace(/{prNumber}/g, String(target.prNumber))
             .replace(/{title}/g, target.title)
@@ -622,7 +629,8 @@ interface ReviewPreflightMetadata {
 async function getValidatedChangedPaths(
   ctx: ExtensionCommandContext,
   target: DiffReviewTarget,
-  gitExec: GitExec
+  gitExec: GitExec,
+  signal?: AbortSignal
 ): Promise<string[] | null> {
   try {
     const changedPaths = await getChangedPathsOrThrow(target, gitExec);
@@ -630,25 +638,36 @@ async function getValidatedChangedPaths(
       return changedPaths;
     }
   } catch (error) {
+    if (signal?.aborted) {
+      return null;
+    }
     const detail =
       error instanceof GitChangedPathsError ? `: git ${error.command}` : "";
     ctx.ui.notify(`Could not resolve changed paths${detail}`, "error");
     return null;
   }
 
-  ctx.ui.notify("No changed paths found for review target", "error");
+  if (!signal?.aborted) {
+    ctx.ui.notify("No changed paths found for review target", "error");
+  }
   return null;
 }
 
 async function getReviewPreflightMetadata(
   pi: ExtensionAPI,
   ctx: ExtensionCommandContext,
-  target: DiffReviewTarget
+  target: DiffReviewTarget,
+  signal?: AbortSignal
 ): Promise<ReviewPreflightMetadata | null> {
-  const gitExec = createGitExec(pi);
+  const gitExec = createGitExec(pi, signal);
 
   if (target.type === "uncommitted") {
-    const changedPaths = await getValidatedChangedPaths(ctx, target, gitExec);
+    const changedPaths = await getValidatedChangedPaths(
+      ctx,
+      target,
+      gitExec,
+      signal
+    );
     if (!changedPaths) {
       return null;
     }
@@ -670,7 +689,12 @@ async function getReviewPreflightMetadata(
       return null;
     }
 
-    const changedPaths = await getValidatedChangedPaths(ctx, target, gitExec);
+    const changedPaths = await getValidatedChangedPaths(
+      ctx,
+      target,
+      gitExec,
+      signal
+    );
     if (!changedPaths) {
       return null;
     }
@@ -683,13 +707,20 @@ async function getReviewPreflightMetadata(
 
   const branch =
     target.type === "baseBranch" ? target.branch : target.baseBranch;
-  const mergeBase = await getMergeBase(pi, branch);
+  const mergeBase = await getMergeBase(pi, branch, signal);
   if (!mergeBase) {
-    ctx.ui.notify(`Could not resolve merge base for '${branch}'`, "error");
+    if (!signal?.aborted) {
+      ctx.ui.notify(`Could not resolve merge base for '${branch}'`, "error");
+    }
     return null;
   }
 
-  const changedPaths = await getValidatedChangedPaths(ctx, target, gitExec);
+  const changedPaths = await getValidatedChangedPaths(
+    ctx,
+    target,
+    gitExec,
+    signal
+  );
   if (!changedPaths) {
     return null;
   }
@@ -1002,6 +1033,12 @@ function dispatchFollowUpMessage(
 }
 
 export default function reviewExtension(pi: ExtensionAPI) {
+  let activeReview:
+    | { controller: AbortController; promise: Promise<void> }
+    | undefined;
+  const cancellationAlreadyNotified = new WeakSet<AbortController>();
+  let sessionShuttingDown = false;
+
   pi.registerMessageRenderer<{ report?: string }>(
     REVIEW_REPORT_MESSAGE_TYPE,
     (message) =>
@@ -1012,6 +1049,45 @@ export default function reviewExtension(pi: ExtensionAPI) {
         getMarkdownTheme()
       )
   );
+
+  pi.on("input", (event, ctx) => {
+    const review = activeReview;
+    if (!review) {
+      return;
+    }
+
+    if (event.source === "interactive" && !event.images?.length) {
+      ctx.ui.setEditorText(event.text);
+      ctx.ui.notify(
+        "Review is still running. Prompt kept in the editor; submit it after the review finishes.",
+        "info"
+      );
+      return { action: "handled" };
+    }
+
+    cancellationAlreadyNotified.add(review.controller);
+    review.controller.abort();
+    ctx.ui.notify("Review cancelled so agent work can start.", "info");
+    return { action: "continue" };
+  });
+
+  async function abortAndSettleActiveReview(): Promise<void> {
+    const review = activeReview;
+    if (!review) {
+      return;
+    }
+
+    review.controller.abort();
+    await review.promise;
+  }
+
+  pi.on("user_bash", abortAndSettleActiveReview);
+
+  pi.on("session_shutdown", async () => {
+    sessionShuttingDown = true;
+    await abortAndSettleActiveReview();
+  });
+
   async function ensureGithubCliReady(ctx: ExtensionContext): Promise<boolean> {
     const ghVersion = await pi.exec("gh", ["--version"]);
     if (ghVersion.code !== 0) {
@@ -1854,65 +1930,19 @@ export default function reviewExtension(pi: ExtensionAPI) {
       reviewerPanel?: ReviewPanelEntry[];
       synthesizerModel?: string;
       verifierModel?: string;
-    }
+    },
+    reviewController = new AbortController()
   ): Promise<boolean> {
-    let metadataPacket = "";
-    if (target.type !== "folder") {
-      const preflightMetadata = await getReviewPreflightMetadata(
-        pi,
-        ctx,
-        target
-      );
-      if (!preflightMetadata) {
-        return false;
+    function notifyCancellation(): void {
+      if (
+        ctx.hasUI !== false &&
+        !sessionShuttingDown &&
+        !cancellationAlreadyNotified.has(reviewController)
+      ) {
+        ctx.ui.notify("Review cancelled", "info");
       }
-      metadataPacket = `\n${formatReviewPreflightMetadata(
-        preflightMetadata,
-        target
-      )}`;
     }
 
-    const prompt = await buildReviewPrompt(pi, target);
-    const hint = getUserFacingHint(target);
-    const projectGuidelines = await loadProjectReviewGuidelines(ctx.cwd);
-    const reviewers = normalizeReviewerSelection(
-      options?.reviewers ?? reviewSelectedAgents
-    );
-    const reviewerPanel = normalizeReviewerPanelSetting(
-      options?.reviewerPanel ?? reviewReviewerPanel
-    );
-    const synthesizerModel =
-      options?.synthesizerModel?.trim() || reviewSynthesizerModel;
-    const verifierModel = options?.verifierModel ?? DEFAULT_VERIFIER_MODEL;
-    for (const entry of reviewerPanel) {
-      assertReviewModelAvailable(ctx, entry.model, "Reviewer");
-    }
-    assertReviewModelAvailable(ctx, synthesizerModel, "Review synthesizer");
-    assertVerifierModelPolicy(verifierModel, reviewerPanel);
-    assertVerifierModelAvailable(ctx, verifierModel);
-    const selectedReviewers = reviewers
-      .map((reviewer) => `  - ${reviewer}`)
-      .join("\n");
-    let invocationPacket = `${REVIEW_INVOCATION_PREAMBLE}\n- Scope: ${hint}\n- Selected reviewers:\n${selectedReviewers}${metadataPacket}\n- Diff/snapshot instruction:\n${prompt}`;
-
-    if (reviewCustomInstructions) {
-      invocationPacket += `\n- Shared custom review instructions:\n${reviewCustomInstructions}`;
-    }
-
-    if (options?.extraInstruction?.trim()) {
-      invocationPacket += `\n- Additional user-provided review instruction:\n${options.extraInstruction.trim()}`;
-    }
-
-    const reviewerRunCount = reviewers.length * reviewerPanel.length;
-    const plannedModels = reviewerPanel
-      .map((entry) => `${entry.model}=${entry.thinkingLevel}`)
-      .join(", ");
-    ctx.ui.notify(
-      `Review plan: initial calls: ${reviewerRunCount} reviewer calls (${reviewers.length} roles × ${reviewerPanel.length} models), plus 2 downstream calls if findings (1 synthesizer + 1 verifier). Possible structured-repair retries: up to ${reviewerRunCount} reviewer retries, plus up to 2 downstream retries when those stages run (1 synthesizer + 1 verifier). Reviewers: ${plannedModels}. Synthesizer: ${synthesizerModel}=high. Verifier: ${verifierModel}=high. Scope: ${hint}.`,
-      "info"
-    );
-
-    const reviewController = new AbortController();
     function abortReview(): void {
       reviewController.abort();
     }
@@ -1923,60 +1953,171 @@ export default function reviewExtension(pi: ExtensionAPI) {
       ctx.signal?.addEventListener("abort", abortReview, { once: true });
     }
 
-    let unsubscribeTerminalInput: (() => void) | undefined;
-    if (ctx.mode === "tui") {
-      unsubscribeTerminalInput = ctx.ui.onTerminalInput((data) => {
-        if (matchesKey(data, Key.escape)) {
-          abortReview();
-          return { consume: true };
-        }
-        return;
-      });
-    }
-    const progressPublisher = createReviewProgressPublisher(ctx);
-    let result: Awaited<ReturnType<typeof runReviewWorkflow>>;
     try {
-      result = await runReviewWorkflow(pi, ctx, {
-        cwd: ctx.cwd,
-        scopeHint: hint,
-        invocationPacket,
-        reviewers,
-        reviewerPanel,
-        synthesizerModel,
-        verifierModel,
-        projectGuidelines,
-        signal: reviewController.signal,
-        onProgress: progressPublisher?.publish,
+      if (reviewController.signal.aborted) {
+        notifyCancellation();
+        return false;
+      }
+
+      let metadataPacket = "";
+      if (target.type !== "folder") {
+        const preflightMetadata = await getReviewPreflightMetadata(
+          pi,
+          ctx,
+          target,
+          reviewController.signal
+        );
+        if (reviewController.signal.aborted) {
+          notifyCancellation();
+          return false;
+        }
+        if (!preflightMetadata) {
+          return false;
+        }
+        metadataPacket = `\n${formatReviewPreflightMetadata(
+          preflightMetadata,
+          target
+        )}`;
+      }
+
+      const prompt = await buildReviewPrompt(
+        pi,
+        target,
+        reviewController.signal
+      );
+      if (reviewController.signal.aborted) {
+        notifyCancellation();
+        return false;
+      }
+      const hint = getUserFacingHint(target);
+      const projectGuidelines = await loadProjectReviewGuidelines(ctx.cwd);
+      if (reviewController.signal.aborted) {
+        notifyCancellation();
+        return false;
+      }
+      const reviewers = normalizeReviewerSelection(
+        options?.reviewers ?? reviewSelectedAgents
+      );
+      const reviewerPanel = normalizeReviewerPanelSetting(
+        options?.reviewerPanel ?? reviewReviewerPanel
+      );
+      const synthesizerModel =
+        options?.synthesizerModel?.trim() || reviewSynthesizerModel;
+      const verifierModel = options?.verifierModel ?? DEFAULT_VERIFIER_MODEL;
+      for (const entry of reviewerPanel) {
+        assertReviewModelAvailable(ctx, entry.model, "Reviewer");
+      }
+      assertReviewModelAvailable(ctx, synthesizerModel, "Review synthesizer");
+      assertVerifierModelPolicy(verifierModel, reviewerPanel);
+      assertVerifierModelAvailable(ctx, verifierModel);
+      const selectedReviewers = reviewers
+        .map((reviewer) => `  - ${reviewer}`)
+        .join("\n");
+      let invocationPacket = `${REVIEW_INVOCATION_PREAMBLE}\n- Scope: ${hint}\n- Selected reviewers:\n${selectedReviewers}${metadataPacket}\n- Diff/snapshot instruction:\n${prompt}`;
+
+      if (reviewCustomInstructions) {
+        invocationPacket += `\n- Shared custom review instructions:\n${reviewCustomInstructions}`;
+      }
+
+      if (options?.extraInstruction?.trim()) {
+        invocationPacket += `\n- Additional user-provided review instruction:\n${options.extraInstruction.trim()}`;
+      }
+
+      const reviewerRunCount = reviewers.length * reviewerPanel.length;
+      const plannedModels = reviewerPanel
+        .map((entry) => `${entry.model}=${entry.thinkingLevel}`)
+        .join(", ");
+      ctx.ui.notify(
+        `Review plan: initial calls: ${reviewerRunCount} reviewer calls (${reviewers.length} roles × ${reviewerPanel.length} models), plus 2 downstream calls if findings (1 synthesizer + 1 verifier). Possible structured-repair retries: up to ${reviewerRunCount} reviewer retries, plus up to 2 downstream retries when those stages run (1 synthesizer + 1 verifier). Reviewers: ${plannedModels}. Synthesizer: ${synthesizerModel}=high. Verifier: ${verifierModel}=high. Scope: ${hint}.`,
+        "info"
+      );
+
+      const progressPublisher = createReviewProgressPublisher(ctx);
+      let result: Awaited<ReturnType<typeof runReviewWorkflow>>;
+      try {
+        result = await runReviewWorkflow(pi, ctx, {
+          cwd: ctx.cwd,
+          scopeHint: hint,
+          invocationPacket,
+          reviewers,
+          reviewerPanel,
+          synthesizerModel,
+          verifierModel,
+          projectGuidelines,
+          signal: reviewController.signal,
+          onProgress: progressPublisher?.publish,
+        });
+      } catch (error) {
+        if (reviewController.signal.aborted) {
+          notifyCancellation();
+          return false;
+        }
+        throw error;
+      } finally {
+        progressPublisher?.clear();
+      }
+
+      if (reviewController.signal.aborted || sessionShuttingDown) {
+        return false;
+      }
+
+      pi.sendMessage({
+        customType: REVIEW_REPORT_MESSAGE_TYPE,
+        content: result.report,
+        display: true,
+        details: {
+          report: result.report,
+          verifier: result.verifier,
+          reviewers: result.reviewerOutputs,
+          coverage: result.coverage,
+        },
       });
+      if (ctx.hasUI !== false) {
+        ctx.ui.notify("Review workflow complete", "info");
+      }
+      return true;
     } catch (error) {
       if (reviewController.signal.aborted) {
-        if (ctx.hasUI !== false) {
-          ctx.ui.notify("Review cancelled", "info");
-        }
+        notifyCancellation();
         return false;
       }
       throw error;
     } finally {
       ctx.signal?.removeEventListener("abort", abortReview);
-      unsubscribeTerminalInput?.();
-      progressPublisher?.clear();
     }
+  }
 
-    pi.sendMessage({
-      customType: REVIEW_REPORT_MESSAGE_TYPE,
-      content: result.report,
-      display: true,
-      details: {
-        report: result.report,
-        verifier: result.verifier,
-        reviewers: result.reviewerOutputs,
-        coverage: result.coverage,
-      },
+  function startInteractiveReview(
+    ctx: ExtensionCommandContext,
+    target: ReviewTarget,
+    options: NonNullable<Parameters<typeof executeReview>[2]>
+  ): void {
+    const controller = new AbortController();
+    const unsubscribeTerminalInput = ctx.ui.onTerminalInput((data) => {
+      if (matchesKey(data, Key.escape)) {
+        controller.abort();
+      }
+      // Let focused management overlays handle the same Escape keypress.
+      return { consume: false };
     });
-    if (ctx.hasUI !== false) {
-      ctx.ui.notify("Review workflow complete", "info");
-    }
-    return true;
+    const promise = executeReview(ctx, target, options, controller)
+      .then(() => undefined)
+      .catch((error) => {
+        if (!(controller.signal.aborted || sessionShuttingDown)) {
+          ctx.ui.notify(
+            error instanceof Error ? error.message : String(error),
+            "error"
+          );
+        }
+      })
+      .finally(() => {
+        unsubscribeTerminalInput?.();
+        if (activeReview?.controller === controller) {
+          activeReview = undefined;
+        }
+      });
+
+    activeReview = { controller, promise };
   }
 
   function parseArgs(args: string | undefined) {
@@ -2082,6 +2223,14 @@ export default function reviewExtension(pi: ExtensionAPI) {
     description:
       "Review code changes (PR, uncommitted, branch, commit, or folder)",
     handler: async (args, ctx) => {
+      if (ctx.mode === "tui" && activeReview) {
+        ctx.ui.notify(
+          "A review is already running. Press Escape to cancel it.",
+          "warning"
+        );
+        return;
+      }
+
       applyReviewSettings(ctx);
 
       // Check if we're in a git repository
@@ -2175,13 +2324,18 @@ export default function reviewExtension(pi: ExtensionAPI) {
             reviewerSelection.reviewers,
             reviewerSelection.selectionMode
           );
-          await executeReview(ctx, target, {
+          const reviewOptions = {
             extraInstruction,
             reviewers: reviewerSelection.reviewers,
             reviewerPanel,
             synthesizerModel,
             verifierModel: resolvedVerifierModel,
-          });
+          };
+          if (ctx.mode === "tui") {
+            startInteractiveReview(ctx, target, reviewOptions);
+          } else {
+            await executeReview(ctx, target, reviewOptions);
+          }
         } catch (error) {
           ctx.ui.notify(
             error instanceof Error ? error.message : String(error),

@@ -59,7 +59,7 @@ Each reviewer run validates its captured structured submission. Invalid output r
 
 When all successful reviewers return no findings, `/review` skips synthesizer and verifier entirely and renders “Code looks good,” human callouts, and the full coverage matrix. Both clean and finding reports include panel size, degraded state, and every used role×model success/failure; unselected roles are `not used`.
 
-Press `Esc` in TUI mode or abort the parent signal to cancel. Cancellation propagates to active children, posts no report, and clears transient progress UI.
+Press `Esc` in TUI mode or abort the parent signal to cancel, including while review preflight is still running. Cancellation terminates in-flight preflight Git commands, propagates to active children, posts no report, and clears transient progress UI.
 
 ## Structured contracts
 
@@ -97,6 +97,8 @@ Rendered reports contain `Review Scope`, `Verdict`, `Findings`, `Human Reviewer 
 ## Progress
 
 The above-editor workflow widget/status aggregates all calls. Reviewer progress reports completed/total matrix runs and active `role · model` labels, with totals computed from the effective default or explicit panel. Later phases are labeled `Synthesizing findings` and `Verifying findings`. Compact live snippets prefer tool activity and fall back to assistant transcript text; user prompts are not displayed. Terminal success/failure/cancellation clears the transient widget, and a successful report is posted separately.
+
+In TUI mode, `/review` returns control to Pi after target/reviewer resolution and runs the workflow as one managed extension-local job. Management-only extension commands, including `/agents`, therefore remain available while reviewers run. A second `/review` is rejected until the active run settles. Ordinary text-only interactive prompts are not sent concurrently; their text is restored to the editor for submission after the review finishes. Because editor restoration cannot preserve attachments, an interactive prompt containing images instead cancels the active review and proceeds unchanged. If an extension command starts a main-agent turn, the active review is cancelled first and the agent work proceeds. User `!`/`!!` bash commands also cancel and settle the active review before shell execution starts. Escape still reaches a focused management overlay after cancelling the review, so the same keypress can dismiss that overlay. Headless review commands remain foreground operations. Session shutdown aborts and waits for the detached run so an old extension instance cannot publish a late report.
 
 ## `/review-summary` and `/review-fix`
 
