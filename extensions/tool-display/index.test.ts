@@ -3,9 +3,18 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import type {
+  createEditToolDefinition,
+  ExtensionAPI,
+} from "@earendil-works/pi-coding-agent";
 
 import toolDisplayExtension from "./index";
+
+const plainTheme = {
+  bg: (_token: string, text: string) => text.trimEnd(),
+  bold: (text: string) => text,
+  fg: (_token: string, text: string) => text,
+};
 
 const tempDirs: string[] = [];
 afterEach(() => {
@@ -64,11 +73,63 @@ describe("tool-display registration", () => {
       expect(Object.keys(tool.parameters.properties)[0]).toBe("reasoning");
       expect(tool.parameters.required?.[0]).toBe("reasoning");
     }
-    const edit = tools.find((tool) => tool.name === "edit");
+    const edit = tools.find((tool) => tool.name === "edit") as
+      | ReturnType<typeof createEditToolDefinition>
+      | undefined;
     expect(Object.keys(edit?.parameters.properties ?? {})).toEqual([
       "path",
       "edits",
     ]);
+    expect(edit?.renderShell).toBe("self");
+    expect(edit?.renderCall).toBeFunction();
+    expect(edit?.renderResult).toBeFunction();
+
+    const args = {
+      path: "a.ts",
+      edits: [{ oldText: "old", newText: "new" }],
+    };
+    const state = {};
+    const context = {
+      args,
+      argsComplete: true,
+      cwd: process.cwd(),
+      invalidate() {
+        return;
+      },
+      state,
+    };
+    const call = edit?.renderCall?.(
+      args,
+      plainTheme as never,
+      context as never
+    );
+    const result = {
+      content: [{ type: "text" as const, text: "Successfully replaced." }],
+      details: {
+        diff: "--- a.ts\n+++ a.ts\n@@ -1 +1 @@\n-old\n+new",
+        patch: "--- a.ts\n+++ a.ts\n@@ -1 +1 @@\n-old\n+new",
+      },
+    };
+    const compact = edit?.renderResult?.(
+      result,
+      { expanded: false, isPartial: false },
+      plainTheme as never,
+      context as never
+    );
+    expect(call?.render(100).join("\n")).toContain(
+      "✏️ edit Apply row edit · 1 file · a.ts"
+    );
+    expect(compact?.render(100).join("\n")).toContain("a.ts → applied in");
+    expect(compact?.render(100).join("\n")).not.toContain("-old");
+
+    const expanded = edit?.renderResult?.(
+      result,
+      { expanded: true, isPartial: false },
+      plainTheme as never,
+      context as never
+    );
+    expect(expanded?.render(100).join("\n")).toContain("old");
+    expect(expanded?.render(100).join("\n")).toContain("new");
     expect(handlers.has("session_shutdown")).toBe(true);
   });
 

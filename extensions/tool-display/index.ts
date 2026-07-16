@@ -269,7 +269,37 @@ export default function toolDisplayExtension(pi: ExtensionAPI): void {
 
   function registerEditTool(): void {
     if (!config.tools.edit.enabled) {
-      pi.registerTool(createEditToolDefinition(cwd));
+      const builtInEditTool = createEditToolDefinition(cwd);
+      pi.registerTool({
+        ...builtInEditTool,
+        renderShell: "self" as const,
+        renderCall(args, theme, context) {
+          return renderOwnedToolCall(
+            "edit",
+            args as never,
+            theme,
+            context as never
+          );
+        },
+        renderResult(result, options, theme, context) {
+          const expanded = options.expanded || config.diff.collapsed === false;
+          return renderOwnedToolResult(
+            "edit",
+            result,
+            options,
+            theme,
+            context as never,
+            expandedBody(expanded, () =>
+              renderFinalDiffResult(
+                result,
+                { ...options, expanded: true },
+                theme,
+                config.diff
+              )
+            )
+          );
+        },
+      });
       return;
     }
     pi.registerTool({

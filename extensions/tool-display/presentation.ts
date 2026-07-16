@@ -745,7 +745,10 @@ class HeaderComponent implements Component {
       );
     }
     const previewLines =
-      this.name === "edit" && this.expanded && this.argsComplete
+      this.name === "edit" &&
+      this.expanded &&
+      this.argsComplete &&
+      typeof this.args.text === "string"
         ? plannedPreviewLines(this.state, this.theme, width)
         : [];
     return [...lines, ...previewLines].map((line) =>
