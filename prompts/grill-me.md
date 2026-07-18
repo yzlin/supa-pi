@@ -1,11 +1,9 @@
 ---
-description: Stress-test a plan or design by asking one relentless question at a time
-argument-hint: "[plan or design]"
+description: Stress-test a plan or design through the explicit grill-me wrapper
+argument-hint: "<plan>"
 ---
 
-Use the `grill-me` skill behavior as canonical.
+Use the `grill-me` wrapper skill as canonical for this explicit command.
 
-Interview me relentlessly about this plan or design until we reach shared understanding.
-
-Plan/design to grill:
+Plan or design:
 $@

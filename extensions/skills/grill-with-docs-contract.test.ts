@@ -2,71 +2,75 @@ import { describe, expect, it } from "bun:test";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
-function readGrillWithDocsPrompt(): string {
-  return readFileSync(
-    join(process.cwd(), "prompts", "grill-with-docs.md"),
-    "utf8"
-  );
+function readRepositoryFile(...segments: string[]): string {
+  return readFileSync(join(process.cwd(), ...segments), "utf8");
 }
 
-function expectPromptToContain(prompt: string, expectedText: string[]): void {
-  for (const text of expectedText) {
-    expect(prompt).toContain(text);
-  }
-}
+describe("grill-with-docs wrapper contract", () => {
+  it("is explicit, discoverable, and composes the canonical skills", () => {
+    const skill = readRepositoryFile("skills", "grill-with-docs", "SKILL.md");
 
-describe("grill-with-docs prompt contract", () => {
-  it("is a prompt-only command that composes grill-me with context-docs", () => {
-    const prompt = readGrillWithDocsPrompt();
-
-    expectPromptToContain(prompt, [
-      "description:",
-      'argument-hint: "-- <plan>"',
-      "Command syntax: `/grill-with-docs -- <plan>`",
-      "Use the `grill-me` skill behavior as canonical.",
-      "Also use the `context-docs` skill behavior for durable project context.",
-    ]);
+    expect(skill).toContain("Explicit /grill-with-docs wrapper");
+    expect(skill).toContain("Use only when the user invokes /grill-with-docs");
+    expect(skill).toContain(
+      "Load and follow the `grilling` skill as the canonical interview primitive."
+    );
+    expect(skill).toContain(
+      "Load and follow the `context-docs` skill as the canonical durable-context contract."
+    );
+    expect(skill).not.toContain("disable-model-invocation");
+    expect(skill).not.toContain("exactly one single-select question per call");
+    expect(skill).not.toContain("## Risk Taxonomy");
   });
 
-  it("requires docs-first preflight and only targeted code lookup", () => {
-    const prompt = readGrillWithDocsPrompt();
+  it("owns docs-first targeting and targeted code verification", () => {
+    const skill = readRepositoryFile("skills", "grill-with-docs", "SKILL.md");
 
-    expectPromptToContain(prompt, [
-      "Docs-first preflight: read existing context docs before grilling",
+    for (const text of [
+      "docs-first preflight",
       "`CONTEXT.md`, `CONTEXT-MAP.md`, and relevant ADRs",
-      "Inspect code only for targeted verification or resolvable questions",
-      "If multiple contexts could apply and the target is ambiguous, ask one target-selection question before grilling.",
-    ]);
+      "Inspect code only for targeted verification",
+      "ask exactly one target-selection question before grilling",
+    ]) {
+      expect(skill).toContain(text);
+    }
   });
 
-  it("keeps grill-me interview and final gate semantics", () => {
-    const prompt = readGrillWithDocsPrompt();
+  it("drafts without writes, then immediately writes only qualifying docs after lock", () => {
+    const skill = readRepositoryFile("skills", "grill-with-docs", "SKILL.md");
 
-    expectPromptToContain(prompt, [
-      "Ask one question at a time.",
-      "Use questionnaire rules inherited from `grill-me`.",
-      "`Lock plan, stop here`",
-      "`Keep grilling`",
-      "The only final gate options are exactly `Lock plan, stop here` and `Keep grilling`.",
-      "The final gate must not ask to implement, proceed, or start coding.",
-    ]);
-    expect(prompt).not.toContain("Yes, implement this contract");
-    expect(prompt).not.toContain("implement this contract");
-  });
-
-  it("drafts docs during the interview but writes only allowed artifacts after lock", () => {
-    const prompt = readGrillWithDocsPrompt();
-
-    expectPromptToContain(prompt, [
-      "Draft durable docs during the interview, but do not write files before the final lock.",
-      "If the user chooses `Lock plan, stop here`, write the drafted docs immediately.",
+    for (const text of [
+      "Draft durable content during the interview",
+      "do not write any file before",
+      "immediately write any qualifying drafted content",
       "`CONTEXT.md`",
       "`CONTEXT-MAP.md`",
-      "ADRs",
-      "Do not write any other durable artifacts.",
-      "`CONTEXT.md` may contain domain/product facts, canonical language, constraints, and open questions.",
-      "Create or update an ADR only when all are true: the decision is hard to reverse, surprising without context, and records a real tradeoff.",
-      "If there is no durable content, write nothing and explain why.",
-    ]);
+      "qualifying ADRs",
+      "narrow allowed-write list overrides the broader destinations available in normal `context-docs` workflows",
+      "Continue to follow all other `context-docs` requirements, including its context and ADR semantics",
+      "domain or product facts, canonical language, constraints, and open questions",
+      "hard to reverse, surprising without context, and records a real tradeoff",
+      "If the interview produces no durable content, write nothing",
+      "`Lock plan, stop here`",
+      "`Keep grilling`",
+    ]) {
+      expect(skill).toContain(text);
+    }
+  });
+});
+
+describe("grill-with-docs prompt contract", () => {
+  it("uses simple plan syntax and delegates only to its wrapper", () => {
+    const prompt = readRepositoryFile("prompts", "grill-with-docs.md");
+
+    expect(prompt).toContain('argument-hint: "<plan>"');
+    expect(prompt).toContain(
+      "Use the `grill-with-docs` wrapper skill as canonical for this explicit command."
+    );
+    expect(prompt).toContain("$@");
+    expect(prompt).not.toContain(" -- ");
+    expect(prompt).not.toContain("`grilling` skill");
+    expect(prompt).not.toContain("CONTEXT.md");
+    expect(prompt).not.toContain("questionnaire");
   });
 });

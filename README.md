@@ -24,7 +24,7 @@ Documented extensions in this repo include:
 - **`@yzlin/pieditor`** — npm-installed Pi package for editor UX improvements like `@` file picking, shell completions, raw paste, and command remapping; installed by `setup.sh`
 - **`extensions/init-deep`** — deterministic `/init-deep` command flow for generating hierarchical `AGENTS.md`
 - **`extensions/questionnaire`** — active structured clarification tool with bounded schema, single/multi-question TUI flows, preview notes, validation, and locally documented rpiv divergences in `docs/context/questionnaire.md`
-- **`extensions/context-docs`** — deterministic `/context-setup`, `/context-note`, `/adr`, `/context-review`, and `/context-grill` workflows for durable project context docs
+- **`extensions/context-docs`** — deterministic `/context-setup`, `/context-note`, `/adr`, and `/context-review` workflows for durable project context docs; canonical workflow behavior lives in `skills/context-docs/SKILL.md`
 - **`extensions/docs-list`** — `docs_list` tool for discovering project markdown docs before coding; backed by the same implementation as the `docs-list` CLI
 - **`extensions/code-improvement`** — scoped `/simplify` code-simplifier delegation with strict target grammar, `--extra` guidance, `--yes` consent bypass for large/PR scopes, hard file allowlists, and `/improve-codebase-architecture` read-only architecture review workflow
 - **`extensions/review`** — interactive current-session `/review` workflow with `/review-summary` and `/review-fix` follow-ups plus reviewer-agent orchestration; adapted in part from `@earendil-works/pi-review`
@@ -70,7 +70,9 @@ See `package.json` for the full registration list.
 
 ## Included skills
 
-`skills/` includes locally curated skills authored in this repo plus selected imports from Vercel agent-skills at commit `ce3e64e468f8fa09a2d075d102771838061fdac0`. Current imported-and-curated snapshots include `composition-patterns`, `react-best-practices`, `react-native-skills`, and `react-view-transitions`. Local workflow skills include `grill-me` for natural-language adversarial design review triggers like "grill me" or "stress-test this plan", and `context-docs` for durable `CONTEXT.md`, `CONTEXT-MAP.md`, ADR, `/context-review`, and `/context-grill` workflows.
+`skills/` includes locally curated skills authored in this repo plus selected imports from Vercel agent-skills at commit `ce3e64e468f8fa09a2d075d102771838061fdac0`. Current imported-and-curated snapshots include `composition-patterns`, `react-best-practices`, `react-native-skills`, and `react-view-transitions`.
+
+Local durable-doc behavior is canonical in `skills/context-docs/SKILL.md`. It owns `/context-setup`, `/context-note`, `/adr`, and `/context-review` while preserving broad product/domain `CONTEXT.md` content, real `CONTEXT-MAP.md` boundaries, and full ADR semantics. The shared `grilling` skill owns adversarial interviews, including natural-language triggers. `grill-me` and `grill-with-docs` are thin wrappers used only by their explicit commands: `/grill-me <plan>` and `/grill-with-docs <plan>`. The latter performs a docs-first preflight, drafts only `CONTEXT.md`, `CONTEXT-MAP.md`, or qualifying ADR changes, and writes them only after the user locks the plan.
 
 Run `/skill` or `/skill list` in a custom UI session to open the first-slice Skills Manager. It shows managed and bundled/read-only skills, supports filtering, and includes a preview pane with current action hints. In degraded or non-custom UI sessions, the same commands fall back to the simple text list. `/skill` commands show a Pi-like animated foreground activity widget while they load, search, install, update, or remove skills, then clear it before any follow-up prompt or notification. Existing `/skill search`, `/skill install`, `/skill update`, and `/skill remove` commands keep their previous prompt-based behavior. GitHub skill installs attempt authenticated skills.sh snapshots before falling back to immutable GitHub files. `/skill update` batches GitHub checks by repo with cached tree metadata, skips skills.sh snapshots, and materializes changed files from immutable GitHub content. When GitHub tree checks are rate-limited, cached trees locate known skills while current skill files still determine update status.
 
@@ -78,7 +80,9 @@ Run `/skill` or `/skill list` in a custom UI session to open the first-slice Ski
 
 `prompts/to-prd.md` is adapted from Matt Pocock's `to-prd` skill: https://github.com/mattpocock/skills/blob/main/skills/engineering/to-prd/SKILL.md
 
-`extensions/context-docs/prompt.md` is bundled with the context-docs extension and documents the Matt-compatible `CONTEXT.md`/`CONTEXT-MAP.md` scaffold, ADR shape, `/context-review` extraction rules, and `/context-grill` behavior.
+`extensions/context-docs/prompt.md` is the narrow runtime envelope for the canonical context-docs skill; it does not duplicate command behavior.
+
+The local grilling, wrapper, and domain-modeling guidance is adapted—not copied verbatim—from Matt Pocock's MIT-licensed [`skills`](https://github.com/mattpocock/skills) repository at commit [`9603c1cc8118d08bc1b3bf34cf714f62178dea3b`](https://github.com/mattpocock/skills/tree/9603c1cc8118d08bc1b3bf34cf714f62178dea3b), specifically `skills/productivity/grilling`, `skills/productivity/grill-me`, `skills/engineering/grill-with-docs`, and `skills/engineering/domain-modeling`.
 
 `extensions/code-improvement/IMPROVE-CODEBASE-ARCHITECTURE.md` plus its uppercase support docs (`LANGUAGE.md`, `DEEPENING.md`, and `INTERFACE-DESIGN.md`) adapt Matt Pocock's `improve-codebase-architecture` workflow, licensed under the MIT License, from https://github.com/mattpocock/skills/blob/main/skills/engineering/improve-codebase-architecture/SKILL.md
 

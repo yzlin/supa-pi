@@ -168,12 +168,11 @@ describe("context-docs parsing", () => {
 });
 
 describe("context-docs command registration", () => {
-  it("registers all public commands", () => {
+  it("registers exactly the public commands", () => {
     const harness = createHarness();
 
     expect([...harness.commands.keys()].sort()).toEqual([
       "adr",
-      "context-grill",
       "context-note",
       "context-review",
       "context-setup",
@@ -286,7 +285,7 @@ describe("context-docs completions", () => {
 
   it("stops completing after freeform instruction separator", () => {
     const completions = getContextDocsArgumentCompletions(
-      "context-grill",
+      "context-review",
       "-- architecture",
       process.cwd()
     );
@@ -317,6 +316,9 @@ describe("context-docs natural-language interception", () => {
       command: "context-note",
       instruction: "ADRs capture tradeoffs",
     });
+    expect(
+      matchNaturalLanguageInput("context grill: auth boundaries")
+    ).toBeNull();
     expect(matchNaturalLanguageInput("please write an adr")).toBeNull();
     expect(matchNaturalLanguageInput("Remember Bun.")).toBeNull();
     expect(matchNaturalLanguageInput("/adr -- Decide")).toBeNull();
@@ -735,57 +737,42 @@ describe("context-docs prompt", () => {
     );
   });
 
-  it("includes Matt-compatible context scaffold guidance", () => {
-    const message = buildPromptMessage("context-setup", "-- Refresh docs");
-
-    expect(message).toContain("/context-setup guidance");
-    expect(message).toContain("CONTEXT.md");
-    expect(message).toContain("CONTEXT-MAP.md");
-    expect(message).not.toContain("/context-review extraction rules");
-    expect(message).not.toContain("/context-grill behavior");
-  });
-
-  it("states strict context-doc scope boundaries", () => {
-    const message = buildPromptMessage("context-setup", "-- Refresh docs");
-
-    expect(message).toContain(
-      "`CONTEXT.md`: the human-readable domain/product context entrypoint."
-    );
-    expect(message).toContain(
-      "`CONTEXT-MAP.md`: the map of real durable-context boundaries"
-    );
-    expect(message).toContain(
-      "Keep setup focused on scaffold and map boundaries."
-    );
-    expect(message).not.toContain(
-      "agent conventions, written to the managed `AGENTS.md`, not `CONTEXT.md`"
-    );
-    expect(message).not.toContain(
-      "Update `CONTEXT-MAP.md` only for real durable-context boundaries"
-    );
-  });
-
-  it("includes only review extraction rules for context-review", () => {
-    const message = buildPromptMessage(
+  it("delegates canonical workflow behavior to the context-docs skill", () => {
+    const setupMessage = buildPromptMessage("context-setup", "-- Refresh docs");
+    const reviewMessage = buildPromptMessage(
       "context-review",
       "--scope all -- Find stale context"
     );
 
-    expect(message).toContain("/context-review extraction rules");
-    expect(message).toContain("Do not extract:");
-    expect(message).not.toContain("/context-grill behavior");
-    expect(message).not.toContain("Ask exactly one high-leverage question");
+    for (const message of [setupMessage, reviewMessage]) {
+      expect(message).toContain(
+        "Use the canonical `context-docs` skill for all shared and command-specific workflow behavior."
+      );
+      expect(message).not.toContain("/context-setup guidance");
+      expect(message).not.toContain("/context-review extraction rules");
+      expect(message).not.toContain("/context-grill behavior");
+    }
   });
 
-  it("includes only grill behavior rules for context-grill", () => {
-    const message = buildPromptMessage(
-      "context-grill",
-      "--depth deep -- Clarify auth context"
-    );
+  it("appends each canonical runtime-envelope rule exactly once", () => {
+    const message = buildPromptMessage("context-setup", "-- Refresh docs");
+    const envelopeRules = [
+      "Treat the resolved command input as authoritative.",
+      "Keep all work inside the resolved target root.",
+      "Do not create, modify, schedule, or manage pi-tasks.",
+      "Never put secrets, credentials, tokens, private keys, or raw sensitive data in durable docs.",
+      "Preserve existing structure and conventions; make the smallest safe edits.",
+      "Use the canonical `context-docs` skill for all shared and command-specific workflow behavior.",
+      "Summarize files read and changed, decisions captured, open questions, and validation performed.",
+    ];
 
-    expect(message).toContain("/context-grill behavior");
-    expect(message).toContain("Ask exactly one high-leverage question");
-    expect(message).not.toContain("/context-review extraction rules");
-    expect(message).not.toContain("Do not extract:");
+    expect(message).toContain("Resolved command input:");
+    expect(message.split("# Context Docs Runtime Envelope")).toHaveLength(2);
+    for (const rule of envelopeRules) {
+      expect(message.split(rule)).toHaveLength(2);
+    }
+    expect(message).not.toContain("Command rules:");
+    expect(message).not.toContain("## Product purpose");
+    expect(message).not.toContain("## Alternatives considered");
   });
 });

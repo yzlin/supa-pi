@@ -5,10 +5,9 @@ export type ContextDocsCommand =
   | "context-setup"
   | "context-note"
   | "adr"
-  | "context-review"
-  | "context-grill";
+  | "context-review";
 
-export type ContextDocsWorkflow = "setup" | "note" | "adr" | "review" | "grill";
+export type ContextDocsWorkflow = "setup" | "note" | "adr" | "review";
 
 export interface ContextDocsCommandInput {
   command: ContextDocsCommand;
@@ -23,8 +22,6 @@ export interface ContextDocsCommandInput {
     tags?: string[];
     status?: string;
     scope?: string;
-    topic?: string;
-    depth?: string;
   };
 }
 
@@ -43,7 +40,6 @@ const WORKFLOWS: Record<ContextDocsCommand, ContextDocsWorkflow> = {
   "context-note": "note",
   adr: "adr",
   "context-review": "review",
-  "context-grill": "grill",
 };
 
 const ALLOWED_FLAGS: Record<ContextDocsCommand, Set<string>> = {
@@ -51,17 +47,9 @@ const ALLOWED_FLAGS: Record<ContextDocsCommand, Set<string>> = {
   "context-note": new Set(["--title", "--tags"]),
   adr: new Set(["--title", "--status"]),
   "context-review": new Set(["--dry-run", "--scope"]),
-  "context-grill": new Set(["--topic", "--depth"]),
 };
 
-const VALUE_FLAGS = new Set([
-  "--title",
-  "--tags",
-  "--status",
-  "--scope",
-  "--topic",
-  "--depth",
-]);
+const VALUE_FLAGS = new Set(["--title", "--tags", "--status", "--scope"]);
 
 const ADR_STATUSES = new Set([
   "proposed",
@@ -71,7 +59,6 @@ const ADR_STATUSES = new Set([
   "rejected",
 ]);
 const REVIEW_SCOPES = new Set(["current", "all"]);
-const GRILL_DEPTHS = new Set(["light", "standard", "deep"]);
 const WHITESPACE_PATTERN = /\s/;
 
 function tokenizeArgs(
@@ -233,18 +220,6 @@ function assignOption(
         return { ok: false, error: "--scope must be one of: current, all." };
       }
       input.options.scope = value;
-      return { ok: true };
-    case "--topic":
-      input.options.topic = value;
-      return { ok: true };
-    case "--depth":
-      if (!GRILL_DEPTHS.has(value)) {
-        return {
-          ok: false,
-          error: "--depth must be one of: light, standard, deep.",
-        };
-      }
-      input.options.depth = value;
       return { ok: true };
     default:
       return { ok: false, error: `Unknown flag: ${flag}` };
