@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it } from "bun:test";
 import { spawnSync } from "node:child_process";
 import {
+  mkdirSync,
   mkdtempSync,
   readFileSync,
   rmSync,
@@ -11,6 +12,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { changedPromptPaths } from "./cli";
 import {
   aggregateVariants,
   CORE_EVAL_BASE_PROMPT,
@@ -20,6 +22,7 @@ import {
   parseCorpus,
   reduceRunEvent,
   scoreRun,
+  snapshotWorkspace,
 } from "./index";
 
 const temporaryDirectories: string[] = [];
@@ -68,6 +71,56 @@ describe("parseCorpus", () => {
     });
 
     expect(corpus.cases[0]?.id).toBe("explain");
+  });
+
+  it("accepts the diagnose skill prompt", () => {
+    const corpus = parseCorpus({
+      version: 1,
+      cases: [
+        {
+          id: "diagnose",
+          workload: "focused bug fix",
+          promptPath: "skills/diagnose/SKILL.md",
+          task: "Diagnose the failure.",
+          tools: ["read"],
+          checks: [
+            {
+              type: "outputIncludes",
+              value: "evidence",
+              domain: "evidence",
+              weight: 1,
+            },
+          ],
+        },
+      ],
+    });
+
+    expect(corpus.cases[0]?.promptPath).toBe("skills/diagnose/SKILL.md");
+  });
+
+  it("rejects other skill prompts", () => {
+    expect(() =>
+      parseCorpus({
+        version: 1,
+        cases: [
+          {
+            id: "other-skill",
+            workload: "explanation",
+            promptPath: "skills/other/SKILL.md",
+            task: "Explain.",
+            tools: ["read"],
+            checks: [
+              {
+                type: "outputIncludes",
+                value: "evidence",
+                domain: "evidence",
+                weight: 1,
+              },
+            ],
+          },
+        ],
+      })
+    ).toThrow("promptPath must target a SupaPi prompt");
   });
 
   it("rejects duplicate case ids", () => {
@@ -137,7 +190,7 @@ describe("parseCorpus", () => {
 });
 
 describe("committed corpus", () => {
-  it("covers all seven target workloads and every changed prompt", () => {
+  it("covers all seven target workloads and all current prompt targets", () => {
     const corpus = parseCorpus(
       JSON.parse(readFileSync(join(moduleDirectory, "corpus.json"), "utf8"))
     );
@@ -175,7 +228,162 @@ describe("committed corpus", () => {
       "security-reviewer",
       "tdd-guide",
     ].map((path) => (path.endsWith(".md") ? path : `agents/${path}.md`));
+    expectedPaths.push("skills/diagnose/SKILL.md");
     expect(coveredPaths).toEqual(new Set(expectedPaths));
+  });
+
+  it("has exactly five diagnose cases with deterministic safety checks", () => {
+    const corpus = parseCorpus(
+      JSON.parse(readFileSync(join(moduleDirectory, "corpus.json"), "utf8"))
+    );
+    const diagnoseCases = corpus.cases.filter(
+      (evalCase) => evalCase.promptPath === "skills/diagnose/SKILL.md"
+    );
+
+    expect(diagnoseCases.map((evalCase) => evalCase.id)).toEqual([
+      "diagnose-exact-anchor",
+      "diagnose-incomplete-no-fix",
+      "diagnose-proven-gate-approved",
+      "diagnose-private-probe-design",
+      "diagnose-fix-it-stop",
+    ]);
+    expect(
+      diagnoseCases.every((evalCase) =>
+        evalCase.checks.some(
+          (check) => check.domain === "task" || check.domain === "tests"
+        )
+      )
+    ).toBe(true);
+
+    const caseById = new Map(
+      diagnoseCases.map((evalCase) => [evalCase.id, evalCase])
+    );
+    const gateCaseIds = [
+      "diagnose-proven-gate-approved",
+      "diagnose-fix-it-stop",
+    ];
+    for (const id of gateCaseIds) {
+      const evalCase = caseById.get(id);
+      expect(evalCase?.tools).toContain("questionnaire");
+      expect(evalCase?.checks).toContainEqual(
+        expect.objectContaining({
+          type: "questionnaireGate",
+          domain: "task",
+        })
+      );
+    }
+    const approvedCase = caseById.get("diagnose-proven-gate-approved");
+    expect(approvedCase?.questionnaireResponse).toBe("Approve scoped fix");
+    expect(approvedCase?.checks).toContainEqual(
+      expect.objectContaining({
+        type: "toolCalledAfter",
+        name: "edit",
+        after: "questionnaire",
+        domain: "tests",
+      })
+    );
+    expect(approvedCase?.checks).toContainEqual(
+      expect.objectContaining({
+        type: "toolCalledAfter",
+        name: "bash",
+        after: "edit",
+        args: { command: "bun test tests/math.case.ts" },
+        domain: "tests",
+      })
+    );
+    expect(approvedCase?.checks).toContainEqual(
+      expect.objectContaining({
+        type: "workspaceChangesOnly",
+        paths: ["src/math.ts"],
+        domain: "tests",
+      })
+    );
+    expect(caseById.get("diagnose-exact-anchor")?.checks).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          type: "outputIncludes",
+          value: "Diagnosis: Incomplete",
+          domain: "task",
+        }),
+        expect.objectContaining({
+          type: "outputIncludes",
+          value: "Fix: Not attempted",
+          domain: "task",
+        }),
+        expect.objectContaining({
+          type: "toolNotCalled",
+          name: "questionnaire",
+          domain: "tests",
+        }),
+        expect.objectContaining({
+          type: "outputMatches",
+          domain: "tests",
+        }),
+      ])
+    );
+    const stopCase = caseById.get("diagnose-fix-it-stop");
+    expect(stopCase?.questionnaireResponse).toBe("Stop and clean probes");
+    expect(stopCase?.checks).toContainEqual(
+      expect.objectContaining({ type: "workspaceUnchanged", domain: "tests" })
+    );
+    for (const evalCase of diagnoseCases.filter(
+      (candidate) => candidate.questionnaireResponse !== "Approve scoped fix"
+    )) {
+      expect(evalCase.checks).toContainEqual(
+        expect.objectContaining({
+          type: "workspaceUnchanged",
+          domain: "tests",
+        })
+      );
+    }
+
+    expect(
+      caseById
+        .get("diagnose-incomplete-no-fix")
+        ?.checks.some(
+          (check) => check.type === "outputMatches" && check.domain === "tests"
+        )
+    ).toBe(true);
+    expect(
+      caseById
+        .get("diagnose-private-probe-design")
+        ?.checks.some(
+          (check) =>
+            check.type === "outputMatches" &&
+            check.domain === "tests" &&
+            check.pattern.includes("DIAG_FAKE_TOKEN_7f3a91_RAW")
+        )
+    ).toBe(true);
+  });
+});
+
+describe("changedPromptPaths", () => {
+  it("discovers only core, agent, and diagnose skill prompt changes", async () => {
+    const repository = createTemporaryDirectory();
+    run(repository, "git", ["init"]);
+    run(repository, "git", ["config", "user.email", "eval@example.com"]);
+    run(repository, "git", ["config", "user.name", "Eval Test"]);
+    const paths = [
+      "agents/explorer.md",
+      "extensions/core-prompt/prompt.md",
+      "skills/diagnose/SKILL.md",
+      "skills/other/SKILL.md",
+    ];
+    for (const path of paths) {
+      mkdirSync(join(repository, path, ".."), { recursive: true });
+      writeFileSync(join(repository, path), "baseline\n");
+    }
+    run(repository, "git", ["add", "."]);
+    run(repository, "git", ["commit", "-m", "baseline"]);
+    for (const path of paths) {
+      writeFileSync(join(repository, path), "candidate\n");
+    }
+
+    expect(await changedPromptPaths(repository)).toEqual([
+      "agents/explorer.md",
+      "extensions/core-prompt/prompt.md",
+      "skills/diagnose/SKILL.md",
+    ]);
   });
 });
 
@@ -247,6 +455,16 @@ describe("composePrompt", () => {
     expect(prompt).toContain("You are a SupaPi subagent.");
     expect(prompt).toContain("# Explorer\nRead only.");
     expect(prompt).not.toContain("description: Explore");
+  });
+
+  it("strips diagnose skill frontmatter while retaining its body", () => {
+    const prompt = composePrompt(
+      "skills/diagnose/SKILL.md",
+      "---\nname: diagnose\ndescription: Diagnose failures\n---\n\n# Diagnose\nReproduce first."
+    );
+
+    expect(prompt).toContain("# Diagnose\nReproduce first.");
+    expect(prompt).not.toContain("name: diagnose");
   });
 });
 
@@ -346,6 +564,126 @@ describe("scoreRun and aggregateVariants", () => {
     });
   });
 
+  it("detects any workspace mutation instead of trusting preserved substrings", async () => {
+    const workspace = createTemporaryDirectory();
+    writeFileSync(join(workspace, "artifact.txt"), "original line\n");
+    const initialWorkspaceSnapshot = await snapshotWorkspace(workspace);
+    writeFileSync(
+      join(workspace, "artifact.txt"),
+      "original line\nappended mutation\n"
+    );
+    writeFileSync(join(workspace, "extra.txt"), "new file\n");
+
+    const result = await scoreRun(
+      { output: "done", workspace, initialWorkspaceSnapshot, toolCalls: [] },
+      [
+        {
+          type: "workspaceUnchanged",
+          domain: "tests",
+          weight: 1,
+        },
+      ]
+    );
+
+    expect(result.overall).toBe(0);
+    expect(result.checks[0]?.evidence).toBe("workspace changed");
+  });
+
+  it("rejects fix edits before the questionnaire even when another edit follows", async () => {
+    const result = await scoreRun(
+      {
+        output: "done",
+        workspace: createTemporaryDirectory(),
+        toolCalls: [
+          { name: "edit", args: { path: "src/math.ts" }, assistantTurn: 0 },
+          {
+            name: "questionnaire",
+            args: { questions: [] },
+            assistantTurn: 1,
+            questionnaireResponse: "Approve scoped fix",
+          },
+          { name: "edit", args: { path: "src/math.ts" }, assistantTurn: 2 },
+        ],
+      },
+      [
+        {
+          type: "toolCalledAfter",
+          name: "edit",
+          after: "questionnaire",
+          domain: "tests",
+          weight: 1,
+        },
+      ]
+    );
+
+    expect(result.overall).toBe(0);
+  });
+
+  it("rejects an edit in the same assistant turn as successful approval", async () => {
+    const result = await scoreRun(
+      {
+        output: "done",
+        workspace: createTemporaryDirectory(),
+        toolCalls: [
+          {
+            name: "questionnaire",
+            args: { questions: [] },
+            assistantTurn: 0,
+            isError: false,
+            questionnaireResponse: "Approve scoped fix",
+          },
+          {
+            name: "edit",
+            args: { path: "src/math.ts" },
+            assistantTurn: 0,
+            isError: false,
+          },
+        ],
+      },
+      [
+        {
+          type: "toolCalledAfter",
+          name: "edit",
+          after: "questionnaire",
+          domain: "tests",
+          weight: 1,
+        },
+      ]
+    );
+
+    expect(result.overall).toBe(0);
+  });
+
+  it("rejects errored exact verification commands", async () => {
+    const result = await scoreRun(
+      {
+        output: "Fix: Verified",
+        workspace: createTemporaryDirectory(),
+        toolCalls: [
+          { name: "edit", args: {}, assistantTurn: 0, isError: false },
+          {
+            name: "bash",
+            args: { command: "bun test tests/math.case.ts" },
+            assistantTurn: 1,
+            isError: true,
+          },
+        ],
+      },
+      [
+        {
+          type: "toolCalledAfter",
+          name: "bash",
+          after: "edit",
+          args: { command: "bun test tests/math.case.ts" },
+          domain: "tests",
+          weight: 1,
+        },
+      ]
+    );
+
+    expect(result.overall).toBe(0);
+  });
+
   it("reports missing artifacts instead of treating them as infrastructure errors", async () => {
     const result = await scoreRun(
       {
@@ -373,7 +711,9 @@ describe("scoreRun and aggregateVariants", () => {
       {
         output: "Evidence: src/math.ts subtracts.",
         workspace: createTemporaryDirectory(),
-        toolCalls: [{ name: "read", args: { path: "src/math.ts" } }],
+        toolCalls: [
+          { name: "read", args: { path: "src/math.ts" }, assistantTurn: 0 },
+        ],
       },
       [
         {

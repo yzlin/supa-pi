@@ -1,7 +1,7 @@
 import { spawn } from "node:child_process";
 import { createHash } from "node:crypto";
 import { existsSync } from "node:fs";
-import { lstat, readFile, realpath } from "node:fs/promises";
+import { lstat, readdir, readFile, readlink, realpath } from "node:fs/promises";
 import { isAbsolute, relative, resolve } from "node:path";
 
 import { parseFrontmatter } from "@earendil-works/pi-coding-agent";
@@ -13,6 +13,11 @@ Work inside the provided workspace. Inspect before editing. Make the smallest co
 export type CheckDomain = (typeof CHECK_DOMAINS)[number];
 
 const CASE_ID_PATTERN = /^[a-z0-9][a-z0-9_-]*$/;
+const QUESTIONNAIRE_RESPONSES = [
+  "Approve scoped fix",
+  "Stop and clean probes",
+] as const;
+type QuestionnaireResponse = (typeof QUESTIONNAIRE_RESPONSES)[number];
 
 const TOOL_NAMES = [
   "read",
@@ -25,6 +30,7 @@ const TOOL_NAMES = [
   "Agent",
   "web_search",
   "fetch_content",
+  "questionnaire",
 ] as const;
 export type ToolName = (typeof TOOL_NAMES)[number];
 
@@ -38,7 +44,18 @@ export type EvalCheck =
   | (CheckBase & { type: "outputMatches"; pattern: string; flags?: string })
   | (CheckBase & { type: "fileContains"; path: string; value: string })
   | (CheckBase & { type: "fileNotContains"; path: string; value: string })
-  | (CheckBase & { type: "toolCalled"; name: string });
+  | (CheckBase & { type: "fileEquals"; path: string; value: string })
+  | (CheckBase & { type: "toolCalled"; name: string })
+  | (CheckBase & { type: "toolNotCalled"; name: string })
+  | (CheckBase & {
+      type: "toolCalledAfter";
+      name: string;
+      after: string;
+      args?: Record<string, unknown>;
+    })
+  | (CheckBase & { type: "questionnaireGate" })
+  | (CheckBase & { type: "workspaceUnchanged" })
+  | (CheckBase & { type: "workspaceChangesOnly"; paths: string[] });
 
 export interface EvalCase {
   id: string;
@@ -46,6 +63,7 @@ export interface EvalCase {
   promptPath: string;
   task: string;
   tools: ToolName[];
+  questionnaireResponse?: QuestionnaireResponse;
   checks: EvalCheck[];
 }
 
@@ -82,12 +100,15 @@ export interface RunMetrics {
 export interface ToolCallRecord {
   name: string;
   args: Record<string, unknown>;
+  assistantTurn: number;
   isError?: boolean;
+  questionnaireResponse?: string;
 }
 
 interface ScoreInput {
   output: string;
   workspace: string;
+  initialWorkspaceSnapshot?: string;
   toolCalls: ToolCallRecord[];
 }
 
@@ -192,6 +213,7 @@ function parseCheck(value: unknown, label: string): EvalCheck {
     }
     case "fileContains":
     case "fileNotContains":
+    case "fileEquals":
       assertNonEmptyString(value.path, `${label}.path`);
       if (!isSafeRelativePath(value.path)) {
         throw new Error(`${label}.path must be repository-relative`);
@@ -204,8 +226,41 @@ function parseCheck(value: unknown, label: string): EvalCheck {
         value: value.value,
       };
     case "toolCalled":
+    case "toolNotCalled":
       assertNonEmptyString(value.name, `${label}.name`);
       return { ...base, type: value.type, name: value.name };
+    case "toolCalledAfter": {
+      assertNonEmptyString(value.name, `${label}.name`);
+      assertNonEmptyString(value.after, `${label}.after`);
+      let args: Record<string, unknown> | undefined;
+      if (value.args !== undefined) {
+        assertObject(value.args, `${label}.args`);
+        args = value.args;
+      }
+      return {
+        ...base,
+        type: value.type,
+        name: value.name,
+        after: value.after,
+        ...(args === undefined ? {} : { args }),
+      };
+    }
+    case "questionnaireGate":
+    case "workspaceUnchanged":
+      return { ...base, type: value.type };
+    case "workspaceChangesOnly":
+      if (
+        !Array.isArray(value.paths) ||
+        value.paths.length === 0 ||
+        !value.paths.every(
+          (path) => typeof path === "string" && isSafeRelativePath(path)
+        )
+      ) {
+        throw new Error(
+          `${label}.paths must be safe repository-relative paths`
+        );
+      }
+      return { ...base, type: value.type, paths: value.paths as string[] };
     default:
       throw new Error(`${label}.type is unsupported`);
   }
@@ -239,6 +294,7 @@ export function parseCorpus(value: unknown): EvalCorpus {
     }
     if (
       caseValue.promptPath !== "extensions/core-prompt/prompt.md" &&
+      caseValue.promptPath !== "skills/diagnose/SKILL.md" &&
       !caseValue.promptPath.startsWith("agents/")
     ) {
       throw new Error(`${label}.promptPath must target a SupaPi prompt`);
@@ -255,6 +311,21 @@ export function parseCorpus(value: unknown): EvalCorpus {
     if (!Array.isArray(caseValue.checks) || caseValue.checks.length === 0) {
       throw new Error(`${label}.checks must be non-empty`);
     }
+    if (
+      caseValue.questionnaireResponse !== undefined &&
+      caseValue.questionnaireResponse !== QUESTIONNAIRE_RESPONSES[0] &&
+      caseValue.questionnaireResponse !== QUESTIONNAIRE_RESPONSES[1]
+    ) {
+      throw new Error(`${label}.questionnaireResponse is invalid`);
+    }
+    if (
+      (caseValue.questionnaireResponse !== undefined) !==
+      (caseValue.tools as unknown[]).includes("questionnaire")
+    ) {
+      throw new Error(
+        `${label} must configure questionnaireResponse exactly when questionnaire is enabled`
+      );
+    }
 
     return {
       id: caseValue.id,
@@ -262,6 +333,7 @@ export function parseCorpus(value: unknown): EvalCorpus {
       promptPath: caseValue.promptPath,
       task: caseValue.task,
       tools: caseValue.tools as ToolName[],
+      questionnaireResponse: caseValue.questionnaireResponse,
       checks: caseValue.checks.map((check, checkIndex) =>
         parseCheck(check, `${label}.checks[${checkIndex}]`)
       ),
@@ -271,7 +343,7 @@ export function parseCorpus(value: unknown): EvalCorpus {
   return { version: 1, cases };
 }
 
-function sha256(content: string): string {
+function sha256(content: string | Buffer): string {
   return createHash("sha256").update(content).digest("hex");
 }
 
@@ -431,6 +503,41 @@ function safeWorkspacePath(workspace: string, path: string): string {
   return filePath;
 }
 
+export async function snapshotWorkspace(workspace: string): Promise<string> {
+  const entries: string[] = [];
+  async function visit(directory: string, prefix: string): Promise<void> {
+    const names = (await readdir(directory)).sort();
+    for (const name of names) {
+      const path = resolve(directory, name);
+      const relativePath = prefix ? `${prefix}/${name}` : name;
+      const stat = await lstat(path);
+      if (stat.isSymbolicLink()) {
+        entries.push(`link\0${relativePath}\0${await readlink(path)}`);
+      } else if (stat.isDirectory()) {
+        entries.push(`dir\0${relativePath}\0${stat.mode}`);
+        await visit(path, relativePath);
+      } else if (stat.isFile()) {
+        entries.push(
+          `file\0${relativePath}\0${stat.mode}\0${sha256(await readFile(path))}`
+        );
+      } else {
+        entries.push(`other\0${relativePath}\0${stat.mode}`);
+      }
+    }
+  }
+  await visit(resolve(workspace), "");
+  return JSON.stringify(entries);
+}
+
+function workspaceEntriesByPath(snapshot: string): Map<string, string> {
+  return new Map(
+    (JSON.parse(snapshot) as string[]).map((entry) => [
+      entry.split("\0")[1] ?? "",
+      entry,
+    ])
+  );
+}
+
 async function scoreCheck(
   input: ScoreInput,
   check: EvalCheck
@@ -455,7 +562,8 @@ async function scoreCheck(
       };
     }
     case "fileContains":
-    case "fileNotContains": {
+    case "fileNotContains":
+    case "fileEquals": {
       const filePath = safeWorkspacePath(input.workspace, check.path);
       let content = "";
       try {
@@ -468,7 +576,12 @@ async function scoreCheck(
         };
       }
       const contains = content.includes(check.value);
-      const passed = check.type === "fileContains" ? contains : !contains;
+      let passed = !contains;
+      if (check.type === "fileEquals") {
+        passed = content === check.value;
+      } else if (check.type === "fileContains") {
+        passed = contains;
+      }
       return {
         check,
         passed,
@@ -477,14 +590,112 @@ async function scoreCheck(
           : `${check.path} did not match`,
       };
     }
-    case "toolCalled": {
+    case "toolCalled":
+    case "toolNotCalled": {
       const count = input.toolCalls.filter(
         (call) => call.name === check.name
       ).length;
+      const passed = check.type === "toolCalled" ? count > 0 : count === 0;
       return {
         check,
-        passed: count > 0,
+        passed,
         evidence: `${check.name} called ${count} time(s)`,
+      };
+    }
+    case "toolCalledAfter": {
+      const prerequisiteCall = input.toolCalls.find(
+        (call) =>
+          call.name === check.after &&
+          !call.isError &&
+          (call.name !== "questionnaire" ||
+            call.questionnaireResponse === "Approve scoped fix")
+      );
+      const matchingCalls = input.toolCalls.filter(
+        (call) =>
+          call.name === check.name &&
+          (check.args === undefined ||
+            JSON.stringify(call.args) === JSON.stringify(check.args))
+      );
+      const prerequisiteTurn = prerequisiteCall?.assistantTurn;
+      const passed =
+        prerequisiteTurn !== undefined &&
+        matchingCalls.length > 0 &&
+        matchingCalls.every(
+          (call) => !call.isError && call.assistantTurn > prerequisiteTurn
+        );
+      return {
+        check,
+        passed,
+        evidence: passed
+          ? `${check.name} succeeded in a later assistant turn than ${check.after}`
+          : `${check.name} was missing, errored, or not in a later assistant turn than successful ${check.after}`,
+      };
+    }
+    case "questionnaireGate": {
+      const calls = input.toolCalls.filter(
+        (call) => call.name === "questionnaire"
+      );
+      const questions = calls[0]?.args.questions;
+      const question = Array.isArray(questions) ? questions[0] : undefined;
+      const questionRecord =
+        question && typeof question === "object"
+          ? (question as Record<string, unknown>)
+          : undefined;
+      const options = questionRecord?.options;
+      const labels = Array.isArray(options)
+        ? options.map((option) =>
+            option && typeof option === "object"
+              ? (option as { label?: unknown }).label
+              : undefined
+          )
+        : [];
+      const passed =
+        calls.length === 1 &&
+        !calls[0]?.isError &&
+        Array.isArray(questions) &&
+        questions.length === 1 &&
+        questionRecord?.multiSelect !== true &&
+        labels.length === QUESTIONNAIRE_RESPONSES.length &&
+        labels.every(
+          (label, index) => label === QUESTIONNAIRE_RESPONSES[index]
+        );
+      return {
+        check,
+        passed,
+        evidence: passed
+          ? "questionnaire gate matched"
+          : "questionnaire gate shape or options differed",
+      };
+    }
+    case "workspaceUnchanged": {
+      const current = await snapshotWorkspace(input.workspace);
+      const passed =
+        input.initialWorkspaceSnapshot !== undefined &&
+        current === input.initialWorkspaceSnapshot;
+      return {
+        check,
+        passed,
+        evidence: passed ? "workspace unchanged" : "workspace changed",
+      };
+    }
+    case "workspaceChangesOnly": {
+      if (input.initialWorkspaceSnapshot === undefined) {
+        return { check, passed: false, evidence: "initial snapshot missing" };
+      }
+      const before = workspaceEntriesByPath(input.initialWorkspaceSnapshot);
+      const after = workspaceEntriesByPath(
+        await snapshotWorkspace(input.workspace)
+      );
+      const changedPaths = [...new Set([...before.keys(), ...after.keys()])]
+        .filter((path) => before.get(path) !== after.get(path))
+        .sort();
+      const expectedPaths = [...check.paths].sort();
+      const passed =
+        JSON.stringify(changedPaths) === JSON.stringify(expectedPaths);
+      return {
+        check,
+        passed,
+        evidence: `changed paths: ${changedPaths.join(", ") || "none"}`,
       };
     }
   }

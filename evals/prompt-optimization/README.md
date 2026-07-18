@@ -10,7 +10,7 @@ Authentication comes from the normal Pi auth store (`~/.pi/agent/auth.json`) or 
 # Cheap smoke: two live calls
 bun run eval:prompts -- --case explore-root-cause
 
-# Full corpus: 34 live calls at one repetition
+# Full corpus: 46 live calls at one repetition
 bun run eval:prompts
 
 # Better variance estimate
@@ -61,9 +61,9 @@ Service-tier mode (`--compare-service-tier`) currently requires an `openai-codex
 
 All modes isolate every variant/repetition in a fresh temporary fixture copy and a fresh Pi UUIDv7 session. The session ID supplies the Codex `prompt_cache_key` and WebSocket request identity used by the TUI; each Codex WebSocket session is closed after its arm completes. The core route shares one pinned production-like Pi base prompt before appending the evaluated core prompt.
 
-The fixed corpus covers explanation, focused bug fixing, multi-file implementation, exploration, review, offline web-research behavior, and tool-heavy orchestration. It includes every prompt currently optimized under `agents/*.md` plus `extensions/core-prompt/prompt.md`. A full run fails before model calls when a changed prompt lacks corpus coverage.
+The fixed corpus covers explanation, focused bug fixing, multi-file implementation, exploration, review, offline web-research behavior, and tool-heavy orchestration. Prompt paths are limited to `extensions/core-prompt/prompt.md`, `agents/*.md`, and exactly `skills/diagnose/SKILL.md`; other skills are rejected. The committed corpus includes every core and agent prompt plus five Diagnose cases covering exact anchoring, incomplete diagnosis, both deterministic post-Proven questionnaire responses, privacy-preserving probe design, and refusal to treat “fix it” as approval. Gate checks require one successful single-select approval with exactly the production options in an earlier assistant turn than every scoped edit, and no workspace mutation after stop. `Fix: Verified` additionally requires a successful exact `bun test tests/math.case.ts` call in a later assistant turn than the edit. Every Diagnose no-edit case compares an exact pre/post workspace snapshot rather than trusting preserved file substrings. A full run fails before model calls when a changed supported prompt lacks corpus coverage, including a changed diagnose skill.
 
-This is a prompt-only comparison. It does not compare unrelated code changes or load the full interactive Pi extension stack. Agent frontmatter is stripped; the selected model, reasoning level, and tool set come from the eval configuration so prompt quality is not confounded with runtime changes. The run aborts if `HEAD`, tracked candidate changes, or the corpus changes while calls are in progress.
+This is a prompt-only comparison. It does not compare unrelated code changes or load the full interactive Pi extension stack. Agent and diagnose-skill frontmatter is stripped; the selected model, reasoning level, and tool set come from the eval configuration so prompt quality is not confounded with runtime changes. The run aborts if `HEAD`, tracked candidate changes, or the corpus changes while calls are in progress.
 
 ## Scoring and telemetry
 
@@ -84,7 +84,7 @@ Efficiency is reported separately, not folded into quality. Summaries include ea
 - retries (reserved as zero for the direct-loop v1 runner)
 - requested model, response model, reasoning effort, service-tier arm/payload, route, and stop reason
 
-No LLM judge is used in v1. The model-visible `bun test tests/math.case.ts` command is a deterministic simulator backed by immutable harness logic; it never executes model-written code. File tools are confined to the temporary workspace, and arbitrary shell commands are blocked.
+No LLM judge is used in v1. Diagnose refusal/no-unauthorized-fix behavior, mandatory-gate reporting, and sensitive-literal exclusion are deterministic task/tests-domain safety checks. The model-visible `bun test tests/math.case.ts` command is a deterministic simulator backed by immutable harness logic; it never executes model-written code. File tools are confined to the temporary workspace, and arbitrary shell commands are blocked.
 
 ## Artifacts
 

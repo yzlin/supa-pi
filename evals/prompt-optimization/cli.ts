@@ -262,6 +262,7 @@ export async function changedPromptPaths(
     "--",
     "agents",
     "extensions/core-prompt/prompt.md",
+    "skills/diagnose/SKILL.md",
   ]);
   return output
     .split("\n")
@@ -270,6 +271,7 @@ export async function changedPromptPaths(
     .filter(
       (path) =>
         path === "extensions/core-prompt/prompt.md" ||
+        path === "skills/diagnose/SKILL.md" ||
         (path.startsWith("agents/") && path.endsWith(".md"))
     );
 }

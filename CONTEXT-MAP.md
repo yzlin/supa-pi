@@ -24,6 +24,7 @@
 - `extensions/caveman/README.md` — read before changing `/caveman`, caveman-mode persistence, or generic extension status behavior.
 - `extensions/fast/README.md` and `docs/context/extension-registration.md` — read before changing `/fast`, `--fast`, Fast Mode persistence, provider payload patching, model `fastMode: true` metadata, or Fast Mode status rendering.
 - `extensions/code-improvement/SIMPLIFY.md` and `docs/context/code-improvement.md` — read before changing `/simplify` behavior, scoped simplify boundaries, or code-simplifier delegation.
+- `extensions/diagnose/README.md` and `skills/diagnose/SKILL.md` — read before changing `/diagnose`, its evidence-first diagnosis contract, temporary probe consent, or the explicit post-Proven fix gate.
 - `extensions/code-improvement/IMPROVE-CODEBASE-ARCHITECTURE.md` — read before changing `/improve-codebase-architecture` architecture review behavior.
 - `extensions/context-docs/README.md` — read before changing `/context-setup`, `/context-note`, `/adr`, `/context-review`, or `/context-grill` behavior.
 - `extensions/execute/README.md` — read before changing `/execute`, Execution Brief reuse/synthesis, or execute orchestration behavior.

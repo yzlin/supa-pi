@@ -76,6 +76,27 @@ function createSuccessfulStream(model: Model<Api>) {
   );
 }
 
+function createQuestionnaireToolCall(id: string, multiSelect?: boolean) {
+  return {
+    type: "toolCall" as const,
+    id,
+    name: "questionnaire",
+    arguments: {
+      questions: [
+        {
+          id: "fix-gate",
+          prompt: "Apply the scoped fix?",
+          options: [
+            { value: "approve", label: "Approve scoped fix" },
+            { value: "stop", label: "Stop and clean probes" },
+          ],
+          ...(multiSelect === undefined ? {} : { multiSelect }),
+        },
+      ],
+    },
+  };
+}
+
 describe("workspace containment", () => {
   it("rejects POSIX and Windows traversal paths", () => {
     expect(isContainedRelativePath("../secret", "/")).toBe(false);
@@ -252,10 +273,252 @@ describe("runVariant", () => {
       {
         name: "read",
         args: { path: "src/math.ts" },
+        assistantTurn: 1,
         isError: false,
       },
     ]);
     expect(result.metrics).toMatchObject({ turns: 2, toolCalls: 1 });
+  });
+
+  it("supplies approval through one exact questionnaire gate before editing", async () => {
+    const model = modelRegistry.find("openai", "gpt-4o");
+    if (!model) {
+      throw new Error("test model is unavailable");
+    }
+    let providerCall = 0;
+    const result = await runVariant({
+      evalCase: {
+        id: "questionnaire-approve",
+        workload: "focused bug fix",
+        promptPath: "skills/diagnose/SKILL.md",
+        task: "Use the required fix gate.",
+        tools: ["questionnaire", "edit", "bash"],
+        questionnaireResponse: "Approve scoped fix",
+        checks: [
+          { type: "questionnaireGate", domain: "task", weight: 1 },
+          {
+            type: "toolCalledAfter",
+            name: "edit",
+            after: "questionnaire",
+            domain: "tests",
+            weight: 1,
+          },
+          {
+            type: "toolCalledAfter",
+            name: "bash",
+            after: "edit",
+            args: { command: "bun test tests/math.case.ts" },
+            domain: "tests",
+            weight: 1,
+          },
+          {
+            type: "workspaceChangesOnly",
+            paths: ["src/math.ts"],
+            domain: "tests",
+            weight: 1,
+          },
+        ],
+      },
+      variant: "candidate",
+      repetition: 1,
+      promptContent: "---\nname: diagnose\n---\nGate fixes.",
+      promptSha256: "candidate-hash",
+      fixturePath,
+      model,
+      thinking: "medium",
+      timeoutMs: 5000,
+      maxTurns: 4,
+      getApiKey: () => Promise.resolve("test-key"),
+      streamFn: (selectedModel) => {
+        providerCall += 1;
+        if (providerCall === 1) {
+          return createMessageStream(
+            createMessage(
+              selectedModel,
+              [createQuestionnaireToolCall("questionnaire-1")],
+              "toolUse"
+            )
+          );
+        }
+        if (providerCall === 2) {
+          return createMessageStream(
+            createMessage(
+              selectedModel,
+              [
+                {
+                  type: "toolCall",
+                  id: "edit-1",
+                  name: "edit",
+                  arguments: {
+                    path: "src/math.ts",
+                    oldText: "return left - right;",
+                    newText: "return left + right;",
+                  },
+                },
+              ],
+              "toolUse"
+            )
+          );
+        }
+        if (providerCall === 3) {
+          return createMessageStream(
+            createMessage(
+              selectedModel,
+              [
+                {
+                  type: "toolCall",
+                  id: "bash-1",
+                  name: "bash",
+                  arguments: { command: "bun test tests/math.case.ts" },
+                },
+              ],
+              "toolUse"
+            )
+          );
+        }
+        return createMessageStream(
+          createMessage(selectedModel, [
+            { type: "text", text: "Diagnosis: Proven\nFix: Verified" },
+          ])
+        );
+      },
+    });
+
+    expect(result.score.overall).toBe(1);
+    expect(result.toolCalls.map((call) => call.name)).toEqual([
+      "questionnaire",
+      "edit",
+      "bash",
+    ]);
+    expect(result.toolCalls.map((call) => call.assistantTurn)).toEqual([
+      1, 2, 3,
+    ]);
+  });
+
+  it("rejects questionnaire approval and edit from the same assistant turn", async () => {
+    const model = modelRegistry.find("openai", "gpt-4o");
+    if (!model) {
+      throw new Error("test model is unavailable");
+    }
+    let providerCall = 0;
+    const result = await runVariant({
+      evalCase: {
+        id: "questionnaire-same-turn",
+        workload: "focused bug fix",
+        promptPath: "skills/diagnose/SKILL.md",
+        task: "Use the required fix gate.",
+        tools: ["questionnaire", "edit"],
+        questionnaireResponse: "Approve scoped fix",
+        checks: [
+          {
+            type: "toolCalledAfter",
+            name: "edit",
+            after: "questionnaire",
+            domain: "tests",
+            weight: 1,
+          },
+        ],
+      },
+      variant: "candidate",
+      repetition: 1,
+      promptContent: "---\nname: diagnose\n---\nGate fixes.",
+      promptSha256: "candidate-hash",
+      fixturePath,
+      model,
+      thinking: "medium",
+      timeoutMs: 5000,
+      maxTurns: 2,
+      getApiKey: () => Promise.resolve("test-key"),
+      streamFn: (selectedModel) => {
+        providerCall += 1;
+        if (providerCall === 1) {
+          return createMessageStream(
+            createMessage(
+              selectedModel,
+              [
+                createQuestionnaireToolCall("questionnaire-same-turn-1"),
+                {
+                  type: "toolCall",
+                  id: "edit-same-turn-1",
+                  name: "edit",
+                  arguments: {
+                    path: "src/math.ts",
+                    oldText: "return left - right;",
+                    newText: "return left + right;",
+                  },
+                },
+              ],
+              "toolUse"
+            )
+          );
+        }
+        return createMessageStream(
+          createMessage(selectedModel, [{ type: "text", text: "done" }])
+        );
+      },
+    });
+
+    expect(result.score.overall).toBe(0);
+    expect(result.toolCalls.map((call) => call.assistantTurn)).toEqual([1, 1]);
+  });
+
+  it("supplies the stop response without allowing workspace edits", async () => {
+    const model = modelRegistry.find("openai", "gpt-4o");
+    if (!model) {
+      throw new Error("test model is unavailable");
+    }
+    let providerCall = 0;
+    const result = await runVariant({
+      evalCase: {
+        id: "questionnaire-stop",
+        workload: "focused bug fix",
+        promptPath: "skills/diagnose/SKILL.md",
+        task: "Use the required fix gate.",
+        tools: ["questionnaire", "edit", "write"],
+        questionnaireResponse: "Stop and clean probes",
+        checks: [
+          { type: "questionnaireGate", domain: "task", weight: 1 },
+          { type: "toolNotCalled", name: "edit", domain: "tests", weight: 1 },
+          {
+            type: "workspaceUnchanged",
+            domain: "tests",
+            weight: 1,
+          },
+        ],
+      },
+      variant: "candidate",
+      repetition: 1,
+      promptContent: "---\nname: diagnose\n---\nGate fixes.",
+      promptSha256: "candidate-hash",
+      fixturePath,
+      model,
+      thinking: "medium",
+      timeoutMs: 5000,
+      maxTurns: 3,
+      getApiKey: () => Promise.resolve("test-key"),
+      streamFn: (selectedModel) => {
+        providerCall += 1;
+        if (providerCall === 1) {
+          return createMessageStream(
+            createMessage(
+              selectedModel,
+              [createQuestionnaireToolCall("questionnaire-stop-1", false)],
+              "toolUse"
+            )
+          );
+        }
+        return createMessageStream(
+          createMessage(selectedModel, [
+            { type: "text", text: "Diagnosis: Proven\nFix: Not attempted" },
+          ])
+        );
+      },
+    });
+
+    expect(result.score.overall).toBe(1);
+    expect(result.toolCalls.map((call) => call.name)).toEqual([
+      "questionnaire",
+    ]);
   });
 
   it("blocks model file access outside the temporary workspace", async () => {

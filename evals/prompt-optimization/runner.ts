@@ -49,6 +49,7 @@ import {
   reduceRunEvent,
   type ScoreResult,
   scoreRun,
+  snapshotWorkspace,
   type ToolCallRecord,
 } from "./index";
 
@@ -196,6 +197,76 @@ const webSearchTool: AgentTool = {
   },
 };
 
+const questionnaireSchema = Type.Object({
+  questions: Type.Array(
+    Type.Object({
+      id: Type.String(),
+      label: Type.Optional(Type.String()),
+      prompt: Type.String(),
+      options: Type.Array(
+        Type.Object({
+          value: Type.String(),
+          label: Type.String(),
+          description: Type.Optional(Type.String()),
+        })
+      ),
+      multiSelect: Type.Optional(Type.Boolean()),
+    })
+  ),
+});
+
+function createQuestionnaireTool(
+  response: NonNullable<EvalCase["questionnaireResponse"]>
+): AgentTool<typeof questionnaireSchema> {
+  return {
+    name: "questionnaire",
+    label: "Questionnaire",
+    description:
+      "Ask the user structured questions. This eval supplies a deterministic user selection.",
+    parameters: questionnaireSchema,
+    execute(_toolCallId, params) {
+      const question = params.questions[0];
+      const option = question?.options.find(
+        (candidate) => candidate.label === response
+      );
+      if (!(question && option)) {
+        return Promise.resolve({
+          content: [
+            {
+              type: "text" as const,
+              text: "Questionnaire rejected: required supplied option missing.",
+            },
+          ],
+          details: { cancelled: true },
+          isError: true,
+        });
+      }
+      return Promise.resolve({
+        content: [
+          {
+            type: "text" as const,
+            text: `${question.label ?? question.id}: ${option.label}`,
+          },
+        ],
+        details: {
+          cancelled: false,
+          answers: [
+            {
+              kind: "option",
+              id: question.id,
+              value: option.value,
+              label: option.label,
+              wasCustom: false,
+              index: question.options.indexOf(option) + 1,
+            },
+          ],
+          answersByQuestion: { [question.id]: option.value },
+        },
+      });
+    },
+  };
+}
+
 const fetchContentTool: AgentTool = {
   name: "fetch_content",
   label: "Fetch content",
@@ -258,7 +329,8 @@ async function isSafeWorkspacePath(
   return isWithinDirectory(workspacePath, await realpath(existingAncestor));
 }
 
-function createTools(workspace: string, names: EvalCase["tools"]): AgentTool[] {
+function createTools(workspace: string, evalCase: EvalCase): AgentTool[] {
+  const names = evalCase.tools;
   const builtInsByName = new Map(
     [
       ...createCodingTools(workspace, {
@@ -273,7 +345,10 @@ function createTools(workspace: string, names: EvalCase["tools"]): AgentTool[] {
   const extras = [agentTool, webSearchTool, fetchContentTool].filter((tool) =>
     names.includes(tool.name as EvalCase["tools"][number])
   );
-  return [...builtIns, ...extras];
+  const questionnaireTools = evalCase.questionnaireResponse
+    ? [createQuestionnaireTool(evalCase.questionnaireResponse)]
+    : [];
+  return [...builtIns, ...extras, ...questionnaireTools];
 }
 
 function textFromAssistantMessage(message: {
@@ -291,7 +366,8 @@ export async function runVariant(
   const workspace = await mkdtemp(join(tmpdir(), "supa-pi-prompt-eval-"));
   const sessionId = SessionManager.inMemory().getSessionId();
   await copyFixture(options.fixturePath, workspace);
-  const tools = createTools(workspace, options.evalCase.tools);
+  const initialWorkspaceSnapshot = await snapshotWorkspace(workspace);
+  const tools = createTools(workspace, options.evalCase);
   const context: AgentContext = {
     systemPrompt: [
       composePrompt(options.evalCase.promptPath, options.promptContent),
@@ -368,15 +444,30 @@ export async function runVariant(
 
     for await (const event of eventStream) {
       if (event.type === "tool_execution_start") {
-        const call = { name: event.toolName, args: event.args };
+        const call = {
+          name: event.toolName,
+          args: event.args,
+          assistantTurn: observedTurns,
+        };
         pendingToolCalls.set(event.toolCallId, call);
       }
       if (event.type === "tool_execution_end") {
         const call = pendingToolCalls.get(event.toolCallId) ?? {
           name: event.toolName,
           args: {},
+          assistantTurn: observedTurns,
         };
-        const completedCall = { ...call, isError: event.isError };
+        const questionnaireResponse =
+          call.name === "questionnaire"
+            ? (event.result?.details?.answers?.[0]?.label as unknown)
+            : undefined;
+        const completedCall = {
+          ...call,
+          isError: event.isError,
+          ...(typeof questionnaireResponse === "string"
+            ? { questionnaireResponse }
+            : {}),
+        };
         toolCalls.push(completedCall);
         pendingToolCalls.delete(event.toolCallId);
         metrics = reduceRunEvent(metrics, {
@@ -414,7 +505,7 @@ export async function runVariant(
     };
   try {
     const score = await scoreRun(
-      { output, workspace, toolCalls },
+      { output, workspace, initialWorkspaceSnapshot, toolCalls },
       options.evalCase.checks
     );
     const completed =
