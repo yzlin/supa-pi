@@ -1,4 +1,4 @@
-import { describe, expect, it } from "bun:test";
+import { afterAll, beforeAll, describe, expect, it } from "bun:test";
 import {
   mkdirSync,
   mkdtempSync,
@@ -38,6 +38,26 @@ interface SessionEntry {
 const TEST_REVIEWER_MODEL = "test/reviewer";
 const TEST_SYNTHESIZER_MODEL = "test/synthesizer";
 const TEST_VERIFIER_MODEL = "test/verifier";
+const TEST_ROOT = mkdtempSync(
+  path.join(tmpdir(), "supa-pi-review-regression-")
+);
+const TEST_PROJECT_CWD = path.join(TEST_ROOT, "project");
+const ORIGINAL_HOME = process.env.HOME;
+
+beforeAll(() => {
+  mkdirSync(path.join(TEST_PROJECT_CWD, ".pi"), { recursive: true });
+  process.env.HOME = path.join(TEST_ROOT, "home");
+});
+
+afterAll(() => {
+  if (ORIGINAL_HOME === undefined) {
+    delete process.env.HOME;
+  } else {
+    process.env.HOME = ORIGINAL_HOME;
+  }
+  rmSync(TEST_ROOT, { recursive: true, force: true });
+});
+
 const SINGLE_MODEL_WORKFLOW = {
   reviewerPanel: [
     { model: TEST_REVIEWER_MODEL, thinkingLevel: "high" as const },
@@ -142,7 +162,7 @@ function createMockCtx(
     widgets,
     editorTexts,
     ctx: {
-      cwd: options.cwd ?? process.cwd(),
+      cwd: options.cwd ?? TEST_PROJECT_CWD,
       hasUI: options.hasUI ?? true,
       mode: options.mode ?? (options.hasUI === false ? "print" : "rpc"),
       isIdle: () => options.idle ?? true,
@@ -2152,16 +2172,18 @@ describe.serial("review direct targets", () => {
     (
       ctx as unknown as {
         modelRegistry: {
-          find: () => undefined;
+          find: (provider: string, id: string) => unknown;
           hasConfiguredAuth: () => boolean;
         };
       }
     ).modelRegistry = {
-      find() {
-        return;
+      find(provider: string, id: string) {
+        return `${provider}/${id}` === "missing/model"
+          ? undefined
+          : { provider, id };
       },
       hasConfiguredAuth() {
-        return false;
+        return true;
       },
     };
 
@@ -2174,45 +2196,12 @@ describe.serial("review direct targets", () => {
       ctx as never
     );
 
-    expect(runtime.appendedEntries).toEqual([]);
+    expect(runtime.appendedEntries).toHaveLength(0);
     expect(notifications).toContainEqual({
       message: "Review verifier model 'missing/model' is not available.",
       level: "error",
     });
     expect(getReviewReportMessages(runtime)).toEqual([]);
-  });
-
-  it("clears the persisted verifier model when the settings editor is blank", async () => {
-    const runtime = createMockPiRuntime();
-    const customResults = ["setVerifierModel", null];
-    const { ctx, notifications } = createMockCtx(
-      [
-        {
-          type: "custom",
-          customType: "review-settings",
-          data: { verifierModel: TEST_VERIFIER_MODEL },
-        },
-      ],
-      {
-        custom: async () => customResults.shift() as never,
-        editor: async () => "   ",
-      }
-    );
-
-    reviewExtension(runtime.pi as never);
-    const handler = runtime.commands.get("review")?.handler;
-
-    expect(handler).toBeDefined();
-    await handler?.("", ctx as never);
-
-    expect(runtime.appendedEntries).toContainEqual({
-      type: "review-settings",
-      data: expect.not.objectContaining({ verifierModel: expect.any(String) }),
-    });
-    expect(notifications).toContainEqual({
-      message: "Review verifier model cleared",
-      level: "info",
-    });
   });
 
   it("rejects verifier findings missing verifier opinion fields", async () => {

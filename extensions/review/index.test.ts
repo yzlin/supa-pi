@@ -1,9 +1,19 @@
-import { describe, expect, it } from "bun:test";
-import { readFileSync } from "node:fs";
+import { afterAll, beforeAll, describe, expect, it } from "bun:test";
+import { promises as fs, readFileSync } from "node:fs";
+import os from "node:os";
 import path from "node:path";
 
 import { Markdown } from "@earendil-works/pi-tui";
 
+import {
+  approveProjectReviewConfig,
+  getGlobalReviewConfigPath,
+  getProjectReviewConfigPath,
+  getReviewTrustPath,
+  isProjectReviewConfigApproved,
+  resolveReviewConfig,
+  writeReviewConfigField,
+} from "./config";
 import reviewExtension from "./index";
 import {
   assertVerifierModelPolicy,
@@ -35,6 +45,27 @@ const TEST_PANEL: ReviewPanelEntry[] = [
 ];
 const TEST_SYNTHESIZER = "test/synth";
 const TEST_VERIFIER = "test/verify";
+const MODEL_CONTROL_OR_FORMAT_RE = /[\p{Cc}\p{Cf}]/u;
+let testRoot = "";
+let testProjectCwd = "";
+let originalHome: string | undefined;
+
+beforeAll(async () => {
+  testRoot = await fs.mkdtemp(path.join(os.tmpdir(), "supa-pi-review-tests-"));
+  testProjectCwd = path.join(testRoot, "project");
+  await fs.mkdir(path.join(testProjectCwd, ".pi"), { recursive: true });
+  originalHome = process.env.HOME;
+  process.env.HOME = path.join(testRoot, "home");
+});
+
+afterAll(async () => {
+  if (originalHome === undefined) {
+    delete process.env.HOME;
+  } else {
+    process.env.HOME = originalHome;
+  }
+  await fs.rm(testRoot, { recursive: true, force: true });
+});
 
 function createCtx(
   entries: SessionEntry[] = [],
@@ -48,7 +79,7 @@ function createCtx(
     statuses,
     widgets,
     ctx: {
-      cwd: process.cwd(),
+      cwd: testProjectCwd,
       hasUI: true,
       mode: "rpc",
       isIdle: () => true,
@@ -79,6 +110,7 @@ function createCtx(
         select: async () => null,
         editor: async () => null,
         custom: async () => null,
+        confirm: async (_title: string, _message: string) => false,
       },
     },
   };
@@ -325,6 +357,668 @@ function reports(runtime: ReturnType<typeof createRuntime>) {
     ({ message }) => message.customType === REVIEW_REPORT_MESSAGE_TYPE
   );
 }
+
+async function withReviewConfigSandbox(
+  run: (cwd: string) => Promise<void>
+): Promise<void> {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "supa-pi-review-"));
+  const oldHome = process.env.HOME;
+  process.env.HOME = path.join(root, "home");
+  const cwd = path.join(root, "project");
+  await fs.mkdir(path.join(cwd, ".pi"), { recursive: true });
+  try {
+    await run(cwd);
+  } finally {
+    if (oldHome === undefined) {
+      delete process.env.HOME;
+    } else {
+      process.env.HOME = oldHome;
+    }
+    await fs.rm(root, { recursive: true, force: true });
+  }
+}
+
+describe.serial("review model config", () => {
+  it("layers each field as flags, project, global, then defaults", async () => {
+    await withReviewConfigSandbox(async (cwd) => {
+      await writeReviewConfigField(
+        getGlobalReviewConfigPath(),
+        "reviewerPanel",
+        [{ model: "global/reviewer", thinkingLevel: "low" }]
+      );
+      await writeReviewConfigField(
+        getGlobalReviewConfigPath(),
+        "synthesizerModel",
+        "global/synth"
+      );
+      const projectPath = await getProjectReviewConfigPath(cwd);
+      await writeReviewConfigField(
+        projectPath,
+        "verifierModel",
+        "project/verify"
+      );
+
+      const layered = await resolveReviewConfig(cwd);
+      expect(layered.effective).toEqual({
+        reviewerPanel: [{ model: "global/reviewer", thinkingLevel: "low" }],
+        synthesizerModel: "global/synth",
+        verifierModel: "project/verify",
+      });
+      const explicit = await resolveReviewConfig(cwd, {
+        synthesizerModel: "flag/synth",
+      });
+      expect(explicit.effective.synthesizerModel).toBe("flag/synth");
+      expect(explicit.effective.verifierModel).toBe("project/verify");
+    });
+  });
+
+  it("blank clearing reveals lower layers and removes an empty config file", async () => {
+    await withReviewConfigSandbox(async (cwd) => {
+      const globalPath = getGlobalReviewConfigPath();
+      const projectPath = await getProjectReviewConfigPath(cwd);
+      await writeReviewConfigField(
+        globalPath,
+        "synthesizerModel",
+        "global/synth"
+      );
+      await writeReviewConfigField(
+        projectPath,
+        "synthesizerModel",
+        "project/synth"
+      );
+      await writeReviewConfigField(projectPath, "synthesizerModel", undefined);
+
+      expect((await resolveReviewConfig(cwd)).effective.synthesizerModel).toBe(
+        "global/synth"
+      );
+      expect(await fs.stat(projectPath).catch(() => null)).toBeNull();
+    });
+  });
+
+  it("identifies invalid files and fields and rejects final verifier conflicts", async () => {
+    await withReviewConfigSandbox(async (cwd) => {
+      const projectPath = await getProjectReviewConfigPath(cwd);
+      await fs.writeFile(projectPath, '{"accidentalBehavior":true}');
+      await expect(resolveReviewConfig(cwd)).rejects.toThrow(
+        `${projectPath} field 'accidentalBehavior'`
+      );
+      await fs.writeFile(
+        projectPath,
+        JSON.stringify({
+          reviewerPanel: [{ model: "same/model", thinkingLevel: "high" }],
+          verifierModel: "same/model",
+        })
+      );
+      await expect(resolveReviewConfig(cwd)).rejects.toThrow(
+        "field 'verifierModel'"
+      );
+      await fs.writeFile(
+        projectPath,
+        JSON.stringify({ synthesizerModel: "provider/model\nspoof" })
+      );
+      await expect(resolveReviewConfig(cwd)).rejects.toThrow(
+        "without whitespace"
+      );
+      for (const unsafeModel of [
+        "provider/model\u001b",
+        "provider/model\u202e",
+      ]) {
+        await fs.writeFile(
+          projectPath,
+          JSON.stringify({ synthesizerModel: unsafeModel })
+        );
+        await expect(resolveReviewConfig(cwd)).rejects.toThrow(
+          "control, or Unicode format characters"
+        );
+      }
+    });
+  });
+
+  it("reports malformed project config from the interactive selector without model calls", async () => {
+    await withReviewConfigSandbox(async (cwd) => {
+      const projectPath = await getProjectReviewConfigPath(cwd);
+      await fs.writeFile(projectPath, '{"synthesizerModel":');
+      const calls = installManager();
+      const runtime = changedFilesRuntime();
+      const { ctx, notifications } = createCtx();
+      ctx.cwd = cwd;
+      reviewExtension(runtime.pi as never);
+
+      await expect(
+        runtime.commands.get("review")?.handler("", ctx as never)
+      ).resolves.toBeUndefined();
+
+      expect(calls).toHaveLength(0);
+      expect(notifications).toHaveLength(1);
+      expect(notifications[0]).toEqual({
+        message: expect.stringContaining(
+          `Invalid review config ${projectPath} field '$': malformed JSON (`
+        ),
+        level: "error",
+      });
+    });
+  });
+
+  it("rejects unsafe invocation model IDs without rendering controls or making calls", async () => {
+    await withReviewConfigSandbox(async (cwd) => {
+      for (const args of [
+        "uncommitted --reviewers code-reviewer --synthesizer-model test/model\u001b",
+        "uncommitted --reviewers code-reviewer --verifier-model test/model\u202e",
+      ]) {
+        const calls = installManager();
+        const runtime = changedFilesRuntime();
+        const { ctx, notifications } = createCtx();
+        ctx.cwd = cwd;
+        reviewExtension(runtime.pi as never);
+
+        await runtime.commands.get("review")?.handler(args, ctx as never);
+
+        expect(calls).toHaveLength(0);
+        expect(
+          notifications.some(({ message }) =>
+            message.includes("control, or Unicode format characters")
+          )
+        ).toBe(true);
+        expect(
+          notifications.every(
+            ({ message }) => !MODEL_CONTROL_OR_FORMAT_RE.test(message)
+          )
+        ).toBe(true);
+      }
+    });
+  });
+
+  it("approves exact canonical project path/hash and requires reapproval after changes", async () => {
+    await withReviewConfigSandbox(async (cwd) => {
+      const projectPath = await getProjectReviewConfigPath(cwd);
+      await writeReviewConfigField(
+        projectPath,
+        "synthesizerModel",
+        "one/model"
+      );
+      const first = (await resolveReviewConfig(cwd)).project;
+      expect(await isProjectReviewConfigApproved(first)).toBe(false);
+      await approveProjectReviewConfig(first);
+      expect(await isProjectReviewConfigApproved(first)).toBe(true);
+
+      await writeReviewConfigField(
+        projectPath,
+        "synthesizerModel",
+        "two/model"
+      );
+      const changed = (await resolveReviewConfig(cwd)).project;
+      expect(await isProjectReviewConfigApproved(changed)).toBe(false);
+      await fs.writeFile(
+        projectPath,
+        JSON.stringify({ synthesizerModel: "three/model" })
+      );
+      await expect(approveProjectReviewConfig(changed)).rejects.toThrow(
+        "changed before approval"
+      );
+      const trust = JSON.parse(await fs.readFile(getReviewTrustPath(), "utf8"));
+      expect(JSON.stringify(trust)).not.toContain("one/model");
+    });
+  });
+
+  it("rejects project writes through a symlinked .pi directory", async () => {
+    await withReviewConfigSandbox(async (cwd) => {
+      const globalPath = getGlobalReviewConfigPath();
+      await writeReviewConfigField(
+        globalPath,
+        "synthesizerModel",
+        "global/original"
+      );
+      await fs.rm(path.join(cwd, ".pi"), { recursive: true });
+      await fs.mkdir(path.dirname(globalPath), { recursive: true });
+      await fs.symlink(path.dirname(globalPath), path.join(cwd, ".pi"));
+
+      await expect(
+        writeReviewConfigField(
+          await getProjectReviewConfigPath(cwd),
+          "synthesizerModel",
+          "project/escaped"
+        )
+      ).rejects.toThrow("symlinked directory");
+      expect(JSON.parse(await fs.readFile(globalPath, "utf8"))).toEqual({
+        synthesizerModel: "global/original",
+      });
+    });
+  });
+
+  it("preserves distinct fields written concurrently to one config", async () => {
+    await withReviewConfigSandbox(async (cwd) => {
+      const projectPath = await getProjectReviewConfigPath(cwd);
+      await Promise.all([
+        writeReviewConfigField(
+          projectPath,
+          "synthesizerModel",
+          "project/synth"
+        ),
+        writeReviewConfigField(projectPath, "verifierModel", "project/verify"),
+      ]);
+
+      expect(JSON.parse(await fs.readFile(projectPath, "utf8"))).toEqual({
+        synthesizerModel: "project/synth",
+        verifierModel: "project/verify",
+      });
+    });
+  });
+
+  it("preserves concurrent approvals for distinct projects", async () => {
+    await withReviewConfigSandbox(async (cwd) => {
+      const projects = [cwd, `${cwd}-two`];
+      await fs.mkdir(path.join(projects[1], ".pi"), { recursive: true });
+      const layers = await Promise.all(
+        projects.map(async (project, index) => {
+          await writeReviewConfigField(
+            await getProjectReviewConfigPath(project),
+            "synthesizerModel",
+            `project/model-${index}`
+          );
+          return (await resolveReviewConfig(project)).project;
+        })
+      );
+
+      await Promise.all(layers.map(approveProjectReviewConfig));
+      expect(
+        await Promise.all(layers.map(isProjectReviewConfigApproved))
+      ).toEqual([true, true]);
+    });
+  });
+
+  it("lets a direct verifier flag repair a stored cross-layer conflict", async () => {
+    await withReviewConfigSandbox(async (cwd) => {
+      await writeReviewConfigField(
+        getGlobalReviewConfigPath(),
+        "reviewerPanel",
+        [{ model: TEST_VERIFIER, thinkingLevel: "high" }]
+      );
+      await writeReviewConfigField(
+        await getProjectReviewConfigPath(cwd),
+        "verifierModel",
+        TEST_VERIFIER
+      );
+      await expect(resolveReviewConfig(cwd)).rejects.toThrow("conflicts");
+
+      const calls = installManager();
+      const runtime = changedFilesRuntime();
+      const { ctx, notifications } = createCtx();
+      ctx.cwd = cwd;
+      ctx.ui.confirm = async () => true;
+      reviewExtension(runtime.pi as never);
+      await runtime.commands
+        .get("review")
+        ?.handler(
+          "uncommitted --reviewers code-reviewer --verifier-model test/repaired",
+          ctx as never
+        );
+
+      expect(calls.map(({ model }) => model)).toEqual([TEST_VERIFIER]);
+      expect(notifications.some(({ level }) => level === "error")).toBe(false);
+    });
+  });
+
+  it("keeps model configuration reachable for a cross-layer conflict", async () => {
+    await withReviewConfigSandbox(async (cwd) => {
+      await writeReviewConfigField(
+        getGlobalReviewConfigPath(),
+        "reviewerPanel",
+        [{ model: TEST_VERIFIER, thinkingLevel: "high" }]
+      );
+      await writeReviewConfigField(
+        await getProjectReviewConfigPath(cwd),
+        "verifierModel",
+        TEST_VERIFIER
+      );
+      const runtime = changedFilesRuntime();
+      const { ctx } = createCtx();
+      ctx.cwd = cwd;
+      const selections = ["configureReviewModels", null];
+      let editorPrompt = "";
+      ctx.ui.custom = async () => selections.shift() as never;
+      ctx.ui.select = async () => "Set project verifier model";
+      ctx.ui.editor = ((prompt: string) => {
+        editorPrompt = prompt;
+        return Promise.resolve("test/repaired");
+      }) as never;
+      reviewExtension(runtime.pi as never);
+
+      await runtime.commands.get("review")?.handler("", ctx as never);
+
+      expect(editorPrompt).toBe(
+        `Enter project verifier model (provider/model; blank clears):\nCurrent: ${TEST_VERIFIER}`
+      );
+      expect((await resolveReviewConfig(cwd)).effective.verifierModel).toBe(
+        "test/repaired"
+      );
+    });
+  });
+
+  it("fails closed headlessly for an unapproved project hash with zero calls", async () => {
+    await withReviewConfigSandbox(async (cwd) => {
+      await writeReviewConfigField(
+        await getProjectReviewConfigPath(cwd),
+        "synthesizerModel",
+        TEST_SYNTHESIZER
+      );
+      const calls = installManager();
+      const runtime = changedFilesRuntime();
+      const { ctx, notifications } = createCtx();
+      ctx.cwd = cwd;
+      ctx.hasUI = false;
+      reviewExtension(runtime.pi as never);
+      await runtime.commands
+        .get("review")
+        ?.handler("uncommitted --reviewers code-reviewer", ctx as never);
+
+      expect(calls).toHaveLength(0);
+      expect(
+        notifications.some(({ message }) => message.includes("unapproved"))
+      ).toBe(true);
+    });
+  });
+
+  it("allows a fully masked unapproved project config headlessly without writing trust", async () => {
+    await withReviewConfigSandbox(async (cwd) => {
+      const projectPath = await getProjectReviewConfigPath(cwd);
+      await writeReviewConfigField(projectPath, "reviewerPanel", [
+        { model: "project/reviewer", thinkingLevel: "high" },
+      ]);
+      await writeReviewConfigField(
+        projectPath,
+        "synthesizerModel",
+        "project/synth"
+      );
+      await writeReviewConfigField(
+        projectPath,
+        "verifierModel",
+        "project/verify"
+      );
+      const calls = installManager();
+      const runtime = changedFilesRuntime();
+      const { ctx, notifications } = createCtx();
+      ctx.cwd = cwd;
+      ctx.hasUI = false;
+      reviewExtension(runtime.pi as never);
+
+      await runtime.commands
+        .get("review")
+        ?.handler(
+          "uncommitted --reviewers code-reviewer --reviewer-models test/flag-reviewer=high --synthesizer-model test/flag-synth --verifier-model test/flag-verify",
+          ctx as never
+        );
+
+      expect(calls).toHaveLength(1);
+      expect(notifications.some(({ level }) => level === "error")).toBe(false);
+      expect(
+        await isProjectReviewConfigApproved(
+          (await resolveReviewConfig(cwd)).project
+        )
+      ).toBe(false);
+      await expect(fs.readFile(getReviewTrustPath(), "utf8")).rejects.toThrow();
+    });
+  });
+
+  it("fails closed headlessly when an unapproved project field is only partially masked", async () => {
+    await withReviewConfigSandbox(async (cwd) => {
+      const projectPath = await getProjectReviewConfigPath(cwd);
+      await writeReviewConfigField(
+        projectPath,
+        "synthesizerModel",
+        "project/synth"
+      );
+      await writeReviewConfigField(
+        projectPath,
+        "verifierModel",
+        "project/verify"
+      );
+      const calls = installManager();
+      const runtime = changedFilesRuntime();
+      const { ctx, notifications } = createCtx();
+      ctx.cwd = cwd;
+      ctx.hasUI = false;
+      reviewExtension(runtime.pi as never);
+
+      await runtime.commands
+        .get("review")
+        ?.handler(
+          "uncommitted --reviewers code-reviewer --synthesizer-model test/flag-synth",
+          ctx as never
+        );
+
+      expect(calls).toHaveLength(0);
+      expect(
+        notifications.some(({ message }) => message.includes("unapproved"))
+      ).toBe(true);
+      expect(
+        await isProjectReviewConfigApproved(
+          (await resolveReviewConfig(cwd)).project
+        )
+      ).toBe(false);
+    });
+  });
+
+  it("keeps partial-mask interactive consent one-shot and later headless review blocked", async () => {
+    await withReviewConfigSandbox(async (cwd) => {
+      const projectPath = await getProjectReviewConfigPath(cwd);
+      await writeReviewConfigField(projectPath, "reviewerPanel", [
+        { model: "project/hidden-reviewer", thinkingLevel: "high" },
+      ]);
+      await writeReviewConfigField(
+        projectPath,
+        "verifierModel",
+        "project/disclosed-verifier"
+      );
+      const calls = installManager();
+      const runtime = changedFilesRuntime();
+      const { ctx, notifications } = createCtx();
+      ctx.cwd = cwd;
+      let disclosure = "";
+      ctx.ui.confirm = (_title: string, message: string) => {
+        disclosure = message;
+        return Promise.resolve(true);
+      };
+      reviewExtension(runtime.pi as never);
+
+      await runtime.commands
+        .get("review")
+        ?.handler(
+          "uncommitted --reviewers code-reviewer --reviewer-models test/flag-reviewer=high",
+          ctx as never
+        );
+
+      expect(calls).toHaveLength(1);
+      expect(disclosure).toContain("reviewer test/flag-reviewer");
+      expect(disclosure).toContain("verifier project/disclosed-verifier");
+      expect(disclosure).not.toContain("project/hidden-reviewer");
+      expect(
+        await isProjectReviewConfigApproved(
+          (await resolveReviewConfig(cwd)).project
+        )
+      ).toBe(false);
+
+      ctx.hasUI = false;
+      await runtime.commands
+        .get("review")
+        ?.handler("uncommitted --reviewers code-reviewer", ctx as never);
+
+      expect(calls).toHaveLength(1);
+      expect(
+        notifications.some(({ message }) => message.includes("unapproved"))
+      ).toBe(true);
+      expect(
+        await isProjectReviewConfigApproved(
+          (await resolveReviewConfig(cwd)).project
+        )
+      ).toBe(false);
+    });
+  });
+
+  it("shows exact effective models for consent and selector project saves approve", async () => {
+    await withReviewConfigSandbox(async (cwd) => {
+      const projectPath = await getProjectReviewConfigPath(cwd);
+      await writeReviewConfigField(
+        projectPath,
+        "synthesizerModel",
+        TEST_SYNTHESIZER
+      );
+      const calls = installManager();
+      const runtime = changedFilesRuntime();
+      const { ctx } = createCtx();
+      ctx.cwd = cwd;
+      let disclosure = "";
+      ctx.ui.confirm = (_title: string, message: string) => {
+        disclosure = message;
+        return Promise.resolve(true);
+      };
+      reviewExtension(runtime.pi as never);
+      await runtime.commands
+        .get("review")
+        ?.handler("uncommitted --reviewers code-reviewer", ctx as never);
+      expect(calls).toHaveLength(DEFAULT_REVIEWER_PANEL.length);
+      expect(disclosure).toContain(`synthesizer ${TEST_SYNTHESIZER}`);
+      expect(disclosure).toContain("provider: test");
+      expect(
+        await isProjectReviewConfigApproved(
+          (await resolveReviewConfig(cwd)).project
+        )
+      ).toBe(true);
+
+      await writeReviewConfigField(
+        projectPath,
+        "synthesizerModel",
+        "test/changed"
+      );
+      expect(
+        await isProjectReviewConfigApproved(
+          (await resolveReviewConfig(cwd)).project
+        )
+      ).toBe(false);
+      const selectorRuntime = createRuntime();
+      const selectorCtx = createCtx().ctx;
+      selectorCtx.cwd = cwd;
+      const selections = [
+        "configureReviewModels",
+        "configureReviewModels",
+        null,
+      ];
+      const modelSelections = [
+        "Set global verifier model",
+        "Set project synthesizer model",
+      ];
+      const editorPrompts: string[] = [];
+      selectorCtx.ui.custom = async () => selections.shift() as never;
+      selectorCtx.ui.select = ((_title: string, options: string[]) => {
+        const selection = modelSelections.shift();
+        expect(options).toContain(selection);
+        return Promise.resolve(selection);
+      }) as never;
+      selectorCtx.ui.editor = ((prompt: string) => {
+        editorPrompts.push(prompt);
+        return Promise.resolve(
+          editorPrompts.length === 1 ? null : "test/saved"
+        );
+      }) as never;
+      reviewExtension(selectorRuntime.pi as never);
+      await selectorRuntime.commands
+        .get("review")
+        ?.handler("", selectorCtx as never);
+      expect(
+        await isProjectReviewConfigApproved(
+          (await resolveReviewConfig(cwd)).project
+        )
+      ).toBe(true);
+      expect(editorPrompts).toEqual([
+        `Enter global verifier model (provider/model; blank clears):\nDefault: ${DEFAULT_VERIFIER_MODEL}`,
+        "Enter project synthesizer model (provider/model; blank clears):\nCurrent: test/changed",
+      ]);
+    });
+  });
+
+  it("leaves a selector write unapproved when untouched project fields are not confirmed", async () => {
+    await withReviewConfigSandbox(async (cwd) => {
+      const projectPath = await getProjectReviewConfigPath(cwd);
+      await writeReviewConfigField(
+        projectPath,
+        "synthesizerModel",
+        "test/existing-synth"
+      );
+      await writeReviewConfigField(
+        projectPath,
+        "verifierModel",
+        "test/existing-verifier"
+      );
+      const runtime = createRuntime();
+      const { ctx, notifications } = createCtx();
+      ctx.cwd = cwd;
+      const selections = ["configureReviewModels", null];
+      ctx.ui.custom = async () => selections.shift() as never;
+      ctx.ui.select = async () => "Set project synthesizer model";
+      ctx.ui.editor = async () => "test/saved-synth";
+      let disclosure = "";
+      ctx.ui.confirm = (_title: string, message: string) => {
+        disclosure = message;
+        return Promise.resolve(false);
+      };
+      reviewExtension(runtime.pi as never);
+
+      await runtime.commands.get("review")?.handler("", ctx as never);
+
+      const resolved = await resolveReviewConfig(cwd);
+      expect(resolved.project.config.synthesizerModel).toBe("test/saved-synth");
+      expect(resolved.project.config.verifierModel).toBe(
+        "test/existing-verifier"
+      );
+      expect(await isProjectReviewConfigApproved(resolved.project)).toBe(false);
+      expect(disclosure).toContain("synthesizer test/saved-synth");
+      expect(disclosure).toContain("verifier test/existing-verifier");
+      expect(
+        notifications.some(({ message }) =>
+          message.includes("project models remain unapproved")
+        )
+      ).toBe(true);
+    });
+  });
+
+  it("does not persist trust when direct flags mask project model fields", async () => {
+    await withReviewConfigSandbox(async (cwd) => {
+      const projectPath = await getProjectReviewConfigPath(cwd);
+      await writeReviewConfigField(projectPath, "reviewerPanel", [
+        { model: "project/reviewer", thinkingLevel: "high" },
+      ]);
+      await writeReviewConfigField(
+        projectPath,
+        "synthesizerModel",
+        "project/synth"
+      );
+      await writeReviewConfigField(
+        projectPath,
+        "verifierModel",
+        "project/verify"
+      );
+      const calls = installManager();
+      const runtime = changedFilesRuntime();
+      const { ctx } = createCtx();
+      ctx.cwd = cwd;
+      ctx.ui.confirm = async () => true;
+      reviewExtension(runtime.pi as never);
+
+      await runtime.commands
+        .get("review")
+        ?.handler(
+          "uncommitted --reviewers code-reviewer --reviewer-models test/flag-reviewer=high --synthesizer-model test/flag-synth --verifier-model test/flag-verify",
+          ctx as never
+        );
+
+      expect(calls).toHaveLength(1);
+      expect(
+        await isProjectReviewConfigApproved(
+          (await resolveReviewConfig(cwd)).project
+        )
+      ).toBe(false);
+    });
+  });
+});
 
 describe.serial("multi-model review orchestration", () => {
   it("uses the default two-model panel with per-model thinking and accurate progress totals", async () => {
@@ -1188,39 +1882,33 @@ describe.serial("/review command settings and disclosure", () => {
     }
   });
 
-  it("resolves an interactively changed verifier after opening the selector", async () => {
+  it("ignores legacy model settings while retaining unrelated settings", async () => {
     const calls = installManager();
     const runtime = changedFilesRuntime();
-    const { ctx, notifications } = createCtx(
-      [
-        {
-          type: "custom",
-          customType: "review-settings",
-          data: { verifierModel: "missing/verifier" },
+    const { ctx } = createCtx([
+      {
+        type: "custom",
+        customType: "review-settings",
+        data: {
+          customInstructions: "legacy focus",
+          selectedReviewers: ["code-reviewer"],
+          reviewerPanel: [{ model: "missing/model", thinkingLevel: "high" }],
+          synthesizerModel: "missing/model",
+          verifierModel: "missing/model",
         },
-      ],
-      (model) => model !== "missing/verifier"
-    );
-    const selections = ["setVerifierModel", "uncommitted"];
-    ctx.ui.custom = async () => selections.shift() as never;
-    ctx.ui.editor = async () => TEST_VERIFIER;
-    ctx.ui.select = async () => "General only";
+      },
+    ]);
     reviewExtension(runtime.pi as never);
 
-    await runtime.commands.get("review")?.handler("", ctx as never);
+    await runtime.commands
+      .get("review")
+      ?.handler("uncommitted --reviewers code-reviewer", ctx as never);
 
     expect(calls).toHaveLength(DEFAULT_REVIEWER_PANEL.length);
-    expect(
-      notifications.some(({ message }) =>
-        message.includes(`Verifier: ${TEST_VERIFIER}=high`)
-      )
-    ).toBe(true);
-    expect(
-      notifications.some(
-        ({ message, level }) =>
-          level === "error" && message.includes("missing/verifier")
-      )
-    ).toBe(false);
+    expect(calls[0]?.prompt).toContain("legacy focus");
+    expect(runtime.appendedEntries.at(-1)?.data).not.toHaveProperty(
+      "reviewerPanel"
+    );
   });
 
   it("resolves invocation-only verifier overrides against the CLI reviewer panel", async () => {
@@ -1346,12 +2034,11 @@ describe.serial("/review command settings and disclosure", () => {
         .map((call) => call.model)
         .sort()
     ).toEqual(DEFAULT_REVIEWER_PANEL.map((entry) => entry.model).sort());
-    expect(
-      runtime.appendedEntries.some(
-        ({ data }) =>
-          (data as { reviewerPanel?: unknown }).reviewerPanel !== undefined
-      )
-    ).toBe(true);
+    expect(runtime.appendedEntries.at(-1)?.data).toEqual({
+      customInstructions: undefined,
+      selectedReviewers: ["security-reviewer"],
+      reviewerSelectionMode: "manual",
+    });
   });
 
   it("rejects unavailable CLI models before paid calls", async () => {
@@ -1369,51 +2056,9 @@ describe.serial("/review command settings and disclosure", () => {
         ctx as never
       );
     expect(calls).toHaveLength(0);
+    expect(runtime.appendedEntries).toHaveLength(0);
     expect(
       notifications.some(({ message }) => message.includes("not available"))
-    ).toBe(true);
-  });
-
-  it("rejects saving a reviewer panel that overlaps the effective default verifier", async () => {
-    const runtime = createRuntime();
-    const { ctx, notifications } = createCtx();
-    const selections = ["setReviewerPanel", null];
-    ctx.ui.custom = async () => selections.shift() as never;
-    ctx.ui.editor = async () => `${DEFAULT_VERIFIER_MODEL}=high`;
-    reviewExtension(runtime.pi as never);
-
-    await runtime.commands.get("review")?.handler("", ctx as never);
-
-    expect(runtime.appendedEntries).toEqual([]);
-    expect(
-      notifications.some(({ message }) => message.includes("conflicts"))
-    ).toBe(true);
-  });
-
-  it("rejects clearing an override when the panel contains the default verifier", async () => {
-    const runtime = createRuntime();
-    const { ctx, notifications } = createCtx([
-      {
-        type: "custom",
-        customType: "review-settings",
-        data: {
-          reviewerPanel: [
-            { model: DEFAULT_VERIFIER_MODEL, thinkingLevel: "high" },
-          ],
-          verifierModel: TEST_VERIFIER,
-        },
-      },
-    ]);
-    const selections = ["setVerifierModel", null];
-    ctx.ui.custom = async () => selections.shift() as never;
-    ctx.ui.editor = async () => "   ";
-    reviewExtension(runtime.pi as never);
-
-    await runtime.commands.get("review")?.handler("", ctx as never);
-
-    expect(runtime.appendedEntries).toEqual([]);
-    expect(
-      notifications.some(({ message }) => message.includes("conflicts"))
     ).toBe(true);
   });
 

@@ -26,7 +26,30 @@ The panel accepts 1–4 distinct model IDs. Each reviewer panel entry has its ow
 
 ## Configuration and disclosure
 
-Use the interactive `/review` selector to persist the reviewer panel, synthesizer model, or verifier override. Older persisted settings without matrix fields migrate to the current defaults. Invalid persisted panels fall back to the defaults.
+Review model routing uses dedicated optional JSON files:
+
+- global: `~/.pi/agent/review.json`
+- project: `<cwd>/.pi/review.json` (the cwd is canonicalized)
+
+Each file may contain any subset of the three fields, which layer independently. Precedence per field is direct command flag, project config, global config, then the built-in defaults shown above. Both files are re-read before opening the interactive selector and before every review; there is no watcher.
+
+```json
+{
+  "$schema": "/path/to/supa-pi/extensions/review/review.schema.json",
+  "reviewerPanel": [
+    { "model": "openai-codex/gpt-5.6-sol", "thinkingLevel": "high" },
+    { "model": "anthropic/claude-opus-4-8", "thinkingLevel": "high" }
+  ],
+  "synthesizerModel": "openai-codex/gpt-5.6-sol",
+  "verifierModel": "cursor/composer-2.5"
+}
+```
+
+The selector's **Configure review models** submenu has separate global/project actions for each field. The editor prompt shows that layer's current value—or its inherited/built-in default when unset—on a second line. Blank input clears only that layer's field, revealing the lower layer; a config file is removed when no model fields remain. Writes are atomic, serialize each config file's read/merge/write transaction across processes, and preserve allowed metadata such as `$schema`. Runtime validation is strict: malformed JSON, invalid fields, unknown behavioral keys, malformed panels/models, model IDs containing Unicode control or format characters, or a final verifier/panel conflict identifies the file/field and stops before model calls. Model registry/authentication preflight still follows config validation.
+
+Project config is repository-controlled. Pi hashes the exact config content together with its canonical path and stores only path/hash approvals in the machine-local `~/.pi/agent/review-trust.json` (editor schema: `review-trust.schema.json`). Global config needs no approval. A manual/shared project file or changed hash prompts interactively with the exact effective reviewer, synthesizer, and verifier models/providers before calls. Declining stops the review. Headless/non-interactive review fails closed for an unapproved hash unless direct flags explicitly override every model field present in that file. Fully masked runs proceed one-shot without persisting trust. Interactive partially masked runs can also proceed after effective-model confirmation, but remain one-shot because masked project values were not disclosed; later flag-free or headless runs still require approval. Saving project config through the selector normally approves the resulting hash. When editing one field of an unapproved project file that contains other model fields, the write remains saved but requires exact-model confirmation before its whole-file hash is approved; declining leaves it unapproved. Later content changes require approval again.
+
+Legacy `review-settings` session fields `reviewerPanel`, `synthesizerModel`, and `verifierModel` are ignored and disappear on the next settings write. Unrelated `customInstructions`, `selectedReviewers`, and `reviewerSelectionMode` continue loading and persisting. Direct model flags are invocation-only and never write either config file.
 
 Direct syntax:
 

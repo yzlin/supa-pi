@@ -74,6 +74,17 @@ import {
   tokenizeReviewTargetArgs,
 } from "../shared/review-targets";
 import {
+  approveProjectReviewConfig,
+  type EffectiveReviewModels,
+  getGlobalReviewConfigPath,
+  getProjectReviewConfigPath,
+  isProjectReviewConfigApproved,
+  resolveReviewConfig,
+  resolveReviewConfigForEditing,
+  validateReviewConfig,
+  writeReviewConfigField,
+} from "./config";
+import {
   assertVerifierModelPolicy,
   DEFAULT_REVIEWER_PANEL,
   DEFAULT_SYNTHESIZER_MODEL,
@@ -118,13 +129,10 @@ function createDefaultReviewerPanel(): ReviewPanelEntry[] {
   return DEFAULT_REVIEWER_PANEL.map((entry) => ({ ...entry }));
 }
 
-// State persisted across sessions for review configuration.
+// Unrelated review preferences remain session-persisted. Model routing is file-configured.
 let reviewCustomInstructions: string | undefined;
 let reviewSelectedAgents: ReviewerAgent[] = DEFAULT_REVIEWERS;
 let reviewReviewerSelectionMode: ReviewerSelectionMode = "auto";
-let reviewReviewerPanel = createDefaultReviewerPanel();
-let reviewSynthesizerModel = DEFAULT_SYNTHESIZER_MODEL;
-let reviewVerifierModel: string | undefined;
 
 const REVIEW_SETTINGS_TYPE = "review-settings";
 const GH_SETUP_INSTRUCTIONS =
@@ -141,11 +149,17 @@ const REVIEW_FIX_INVOCATION_PREAMBLE = [
 ].join("\n");
 const REVIEW_INVOCATION_PREAMBLE =
   "Use the `review-orchestration` skill behavior as canonical.\n\nReview invocation packet:";
+const MODEL_CONTROL_OR_FORMAT_RE = /[\p{Cc}\p{Cf}]+/gu;
+
+function sanitizeModelForUi(model: string): string {
+  return model.replace(MODEL_CONTROL_OR_FORMAT_RE, "");
+}
 
 interface ReviewSettingsState {
   customInstructions?: string;
   selectedReviewers?: ReviewerAgent[];
   reviewerSelectionMode?: ReviewerSelectionMode;
+  // Legacy model fields are intentionally ignored and omitted on the next write.
   reviewerPanel?: ReviewPanelEntry[];
   synthesizerModel?: string;
   verifierModel?: string;
@@ -201,7 +215,7 @@ function parseReviewerPanel(value: string): ReviewPanelEntry[] {
     const level = separator < 0 ? "" : raw.slice(separator + 1).trim();
     if (!(model && REVIEW_THINKING_LEVELS.has(level as ReviewThinkingLevel))) {
       throw new Error(
-        `Invalid reviewer model pair '${raw.trim()}'. Use model=level with level off|minimal|low|medium|high|xhigh.`
+        `Invalid reviewer model pair '${sanitizeModelForUi(raw.trim())}'. Use model=level with level off|minimal|low|medium|high|xhigh.`
       );
     }
     return { model, thinkingLevel: level as ReviewThinkingLevel };
@@ -262,23 +276,6 @@ function getReviewSettings(ctx: ExtensionContext): ReviewSettingsState {
     }
   }
 
-  let verifierModel = state?.verifierModel?.trim();
-  let reviewerPanel: ReviewPanelEntry[];
-  try {
-    reviewerPanel = normalizeReviewerPanelSetting(state?.reviewerPanel);
-  } catch {
-    reviewerPanel = createDefaultReviewerPanel();
-  }
-  if (verifierModel) {
-    try {
-      assertVerifierModelPolicy(verifierModel, reviewerPanel);
-    } catch {
-      verifierModel = undefined;
-    }
-  }
-  const synthesizerModel =
-    state?.synthesizerModel?.trim() || DEFAULT_SYNTHESIZER_MODEL;
-
   return {
     customInstructions: state?.customInstructions?.trim() || undefined,
     selectedReviewers: normalizeReviewerSelection(
@@ -286,9 +283,6 @@ function getReviewSettings(ctx: ExtensionContext): ReviewSettingsState {
     ),
     reviewerSelectionMode:
       state?.reviewerSelectionMode === "manual" ? "manual" : "auto",
-    reviewerPanel,
-    synthesizerModel,
-    verifierModel: verifierModel || undefined,
   };
 }
 
@@ -297,10 +291,6 @@ function applyReviewSettings(ctx: ExtensionContext) {
   reviewCustomInstructions = state.customInstructions?.trim() || undefined;
   reviewSelectedAgents = state.selectedReviewers ?? DEFAULT_REVIEWERS;
   reviewReviewerSelectionMode = state.reviewerSelectionMode ?? "auto";
-  reviewReviewerPanel = state.reviewerPanel ?? createDefaultReviewerPanel();
-  reviewSynthesizerModel = state.synthesizerModel ?? DEFAULT_SYNTHESIZER_MODEL;
-  const verifierModel = state.verifierModel?.trim();
-  reviewVerifierModel = verifierModel || undefined;
 }
 
 // Prompts (adapted from Codex)
@@ -797,30 +787,71 @@ const REVIEW_PRESETS = [
 ] as const;
 
 const TOGGLE_CUSTOM_INSTRUCTIONS_VALUE = "toggleCustomInstructions" as const;
-const SET_REVIEWER_PANEL_VALUE = "setReviewerPanel" as const;
-const SET_SYNTHESIZER_MODEL_VALUE = "setSynthesizerModel" as const;
-const SET_VERIFIER_MODEL_VALUE = "setVerifierModel" as const;
+const CONFIGURE_REVIEW_MODELS_VALUE = "configureReviewModels" as const;
+const CAMEL_CASE_BOUNDARY = /([A-Z])/g;
+const MODEL_CONFIG_ACTIONS = [
+  "globalReviewerPanel",
+  "projectReviewerPanel",
+  "globalSynthesizerModel",
+  "projectSynthesizerModel",
+  "globalVerifierModel",
+  "projectVerifierModel",
+] as const;
+const MODEL_CONFIG_FIELDS = [
+  "reviewerPanel",
+  "synthesizerModel",
+  "verifierModel",
+] as const;
+type ModelConfigAction = (typeof MODEL_CONFIG_ACTIONS)[number];
+type ModelConfigField = (typeof MODEL_CONFIG_FIELDS)[number];
+
+function modelConfigField(action: ModelConfigAction): ModelConfigField {
+  if (action.endsWith("ReviewerPanel")) {
+    return "reviewerPanel";
+  }
+  if (action.endsWith("SynthesizerModel")) {
+    return "synthesizerModel";
+  }
+  return "verifierModel";
+}
+
+function modelConfigActionLabel(action: ModelConfigAction): string {
+  const scope = action.startsWith("project") ? "project" : "global";
+  const field = modelConfigField(action)
+    .replace(CAMEL_CASE_BOUNDARY, " $1")
+    .toLowerCase();
+  return `Set ${scope} ${field}`;
+}
+
+function formatModelConfigValue(value: ReviewPanelEntry[] | string): string {
+  return Array.isArray(value)
+    ? value.map((entry) => `${entry.model}=${entry.thinkingLevel}`).join(", ")
+    : value;
+}
+
+function builtInModelConfigValue(
+  field: ModelConfigField
+): ReviewPanelEntry[] | string {
+  if (field === "reviewerPanel") {
+    return [...DEFAULT_REVIEWER_PANEL];
+  }
+  return field === "synthesizerModel"
+    ? DEFAULT_SYNTHESIZER_MODEL
+    : DEFAULT_VERIFIER_MODEL;
+}
 
 type ReviewPresetValue =
   | (typeof REVIEW_PRESETS)[number]["value"]
   | typeof TOGGLE_CUSTOM_INSTRUCTIONS_VALUE
-  | typeof SET_REVIEWER_PANEL_VALUE
-  | typeof SET_SYNTHESIZER_MODEL_VALUE
-  | typeof SET_VERIFIER_MODEL_VALUE;
+  | typeof CONFIGURE_REVIEW_MODELS_VALUE
+  | ModelConfigAction;
 
 function persistReviewSettings(pi: ExtensionAPI) {
   const settings: ReviewSettingsState = {
     customInstructions: reviewCustomInstructions,
     selectedReviewers: reviewSelectedAgents,
     reviewerSelectionMode: reviewReviewerSelectionMode,
-    reviewerPanel: reviewReviewerPanel,
-    synthesizerModel: reviewSynthesizerModel,
   };
-
-  if (reviewVerifierModel) {
-    settings.verifierModel = reviewVerifierModel;
-  }
-
   pi.appendEntry(REVIEW_SETTINGS_TYPE, settings);
 }
 
@@ -842,39 +873,40 @@ function setReviewCustomInstructions(
   persistReviewSettings(pi);
 }
 
-function setReviewVerifierModel(
-  pi: ExtensionAPI,
+function assertEffectiveReviewModelsAvailable(
   ctx: ExtensionContext,
-  verifierModel: string
-) {
-  const normalized = verifierModel.trim();
-  if (!normalized) {
-    assertVerifierModelPolicy(DEFAULT_VERIFIER_MODEL, reviewReviewerPanel);
-    reviewVerifierModel = undefined;
-    persistReviewSettings(pi);
-    return;
+  models: EffectiveReviewModels
+): void {
+  for (const entry of models.reviewerPanel) {
+    assertReviewModelAvailable(ctx, entry.model, "Reviewer");
   }
-  assertVerifierModelPolicy(normalized, reviewReviewerPanel);
-  assertVerifierModelAvailable(ctx, normalized);
-  reviewVerifierModel = normalized;
-  persistReviewSettings(pi);
+  assertReviewModelAvailable(
+    ctx,
+    models.synthesizerModel,
+    "Review synthesizer"
+  );
+  assertVerifierModelPolicy(models.verifierModel, models.reviewerPanel);
+  assertReviewModelAvailable(ctx, models.verifierModel, "Review verifier");
 }
 
-function assertVerifierModelAvailable(
-  ctx: ExtensionContext,
-  verifierModel: string
-) {
-  assertReviewModelAvailable(ctx, verifierModel, "Review verifier");
-}
-
-function resolveReviewVerifierModel(
-  reviewerPanel: readonly ReviewPanelEntry[],
-  explicitModel?: string
+function formatModelDisclosure(
+  role: string,
+  model: string,
+  thinkingLevel: ReviewThinkingLevel
 ): string {
-  const verifierModel =
-    explicitModel?.trim() || reviewVerifierModel || DEFAULT_VERIFIER_MODEL;
-  assertVerifierModelPolicy(verifierModel, reviewerPanel);
-  return verifierModel;
+  const safeModel = sanitizeModelForUi(model);
+  const provider = safeModel.split("/")[0];
+  return `${role} ${safeModel} (${thinkingLevel}) [provider: ${provider}]`;
+}
+
+function formatEffectiveModelDisclosure(models: EffectiveReviewModels): string {
+  return [
+    ...models.reviewerPanel.map((entry) =>
+      formatModelDisclosure("reviewer", entry.model, entry.thinkingLevel)
+    ),
+    formatModelDisclosure("synthesizer", models.synthesizerModel, "high"),
+    formatModelDisclosure("verifier", models.verifierModel, "high"),
+  ].join("\n");
 }
 
 interface SessionMessageLike {
@@ -1207,6 +1239,9 @@ export default function reviewExtension(pi: ExtensionAPI) {
   async function showReviewSelector(
     ctx: ExtensionContext
   ): Promise<ReviewTarget | null> {
+    // Config is deliberately re-read immediately before opening the selector.
+    // Keep cross-layer conflicts editable while retaining strict per-file parsing.
+    let resolvedConfig = await resolveReviewConfigForEditing(ctx.cwd);
     // Determine smart default (but keep the list order stable)
     const smartDefault = await getSmartDefault();
     const presetItems: SelectItem[] = REVIEW_PRESETS.map((preset) => ({
@@ -1233,25 +1268,13 @@ export default function reviewExtension(pi: ExtensionAPI) {
           description: customInstructionsDescription,
         },
         {
-          value: SET_REVIEWER_PANEL_VALUE,
-          label: "Set reviewer model panel",
-          description: `(${reviewReviewerPanel.map((entry) => `${entry.model}=${entry.thinkingLevel}`).join(", ")})`,
-        },
-        {
-          value: SET_SYNTHESIZER_MODEL_VALUE,
-          label: "Set review synthesizer model",
-          description: `(current: ${reviewSynthesizerModel}; high effort)`,
-        },
-        {
-          value: SET_VERIFIER_MODEL_VALUE,
-          label: "Set review verifier model",
-          description: reviewVerifierModel
-            ? `(current override: ${reviewVerifierModel})`
-            : `(default: ${DEFAULT_VERIFIER_MODEL}; high effort)`,
+          value: CONFIGURE_REVIEW_MODELS_VALUE,
+          label: "Configure review models",
+          description: "(global and project defaults)",
         },
       ];
 
-      const result = await ctx.ui.custom<ReviewPresetValue | null>(
+      let result = await ctx.ui.custom<ReviewPresetValue | null>(
         (tui, theme, _kb, done) => {
           const container = new Container();
           container.addChild(
@@ -1328,82 +1351,146 @@ export default function reviewExtension(pi: ExtensionAPI) {
         continue;
       }
 
-      if (result === SET_REVIEWER_PANEL_VALUE) {
+      if (result === CONFIGURE_REVIEW_MODELS_VALUE) {
+        const actionLabels = MODEL_CONFIG_ACTIONS.map(modelConfigActionLabel);
+        const selectedLabel = await ctx.ui.select(
+          "Configure review models:",
+          actionLabels
+        );
+        const selectedAction =
+          MODEL_CONFIG_ACTIONS[actionLabels.indexOf(selectedLabel ?? "")];
+        if (!selectedAction) {
+          continue;
+        }
+        result = selectedAction;
+      }
+
+      if (MODEL_CONFIG_ACTIONS.includes(result as ModelConfigAction)) {
+        const action = result as ModelConfigAction;
+        const project = action.startsWith("project");
+        const field = modelConfigField(action);
+        const layer = project ? resolvedConfig.project : resolvedConfig.global;
+        const current = layer.config[field];
+        const fallback = project
+          ? resolvedConfig.effective[field]
+          : builtInModelConfigValue(field);
+        const initial = Array.isArray(current)
+          ? current
+              .map((entry) => `${entry.model}=${entry.thinkingLevel}`)
+              .join(",")
+          : (current ?? "");
+        const instruction =
+          field === "reviewerPanel"
+            ? `Enter ${project ? "project" : "global"} reviewer models as model=level, comma-separated (blank clears):`
+            : `Enter ${project ? "project" : "global"} ${field === "synthesizerModel" ? "synthesizer" : "verifier"} model (provider/model; blank clears):`;
         const value = await ctx.ui.editor(
-          "Enter 1–4 reviewer models as model=level, comma-separated:",
-          reviewReviewerPanel
-            .map((entry) => `${entry.model}=${entry.thinkingLevel}`)
-            .join(",")
+          `${instruction}\n${current === undefined ? "Default" : "Current"}: ${formatModelConfigValue(current ?? fallback)}`,
+          initial
         );
         if (value === null || value === undefined) {
           continue;
         }
         try {
-          const panel = parseReviewerPanel(value);
-          for (const entry of panel) {
+          const normalized = value.trim();
+          let fieldValue: ReviewPanelEntry[] | string | undefined;
+          if (!normalized) {
+            fieldValue = undefined;
+          } else if (field === "reviewerPanel") {
+            fieldValue = parseReviewerPanel(normalized);
+          } else {
+            fieldValue = normalized;
+          }
+          const file = project
+            ? await getProjectReviewConfigPath(ctx.cwd)
+            : getGlobalReviewConfigPath();
+          const priorProjectApproved = project
+            ? await isProjectReviewConfigApproved(layer)
+            : true;
+          const hasOtherUnapprovedProjectFields =
+            project &&
+            !priorProjectApproved &&
+            MODEL_CONFIG_FIELDS.some(
+              (candidate) =>
+                candidate !== field && layer.config[candidate] !== undefined
+            );
+          const changedConfig = { ...layer.config, [field]: fieldValue };
+          if (fieldValue === undefined) {
+            delete changedConfig[field];
+          }
+          const globalConfig = project
+            ? resolvedConfig.global.config
+            : changedConfig;
+          const projectConfig = project
+            ? changedConfig
+            : resolvedConfig.project.config;
+          const prospectivePanel =
+            projectConfig.reviewerPanel ??
+            globalConfig.reviewerPanel ??
+            DEFAULT_REVIEWER_PANEL;
+          const prospectiveSynthesizer =
+            projectConfig.synthesizerModel ??
+            globalConfig.synthesizerModel ??
+            DEFAULT_SYNTHESIZER_MODEL;
+          const prospectiveVerifier =
+            projectConfig.verifierModel ??
+            globalConfig.verifierModel ??
+            DEFAULT_VERIFIER_MODEL;
+          validateReviewConfig(
+            {
+              reviewerPanel: prospectivePanel,
+              synthesizerModel: prospectiveSynthesizer,
+              verifierModel: prospectiveVerifier,
+            },
+            "<effective review configuration>"
+          );
+          for (const entry of prospectivePanel) {
             assertReviewModelAvailable(ctx, entry.model, "Reviewer");
           }
-          assertVerifierModelPolicy(
-            reviewVerifierModel ?? DEFAULT_VERIFIER_MODEL,
-            panel
+          assertReviewModelAvailable(
+            ctx,
+            prospectiveSynthesizer,
+            "Review synthesizer"
           );
-          reviewReviewerPanel = panel;
-          persistReviewSettings(pi);
-          ctx.ui.notify("Reviewer model panel saved", "info");
-        } catch (error) {
-          ctx.ui.notify(
-            error instanceof Error ? error.message : String(error),
-            "error"
+          assertReviewModelAvailable(
+            ctx,
+            prospectiveVerifier,
+            "Review verifier"
           );
-        }
-        continue;
-      }
-
-      if (result === SET_SYNTHESIZER_MODEL_VALUE) {
-        const value = await ctx.ui.editor(
-          "Enter synthesizer model (provider/model; thinking fixed high):",
-          reviewSynthesizerModel
-        );
-        if (value === null || value === undefined) {
-          continue;
-        }
-        try {
-          const model = value.trim();
-          if (!model) {
-            throw new Error("Review synthesizer model cannot be blank.");
+          const written = await writeReviewConfigField(file, field, fieldValue);
+          resolvedConfig = await resolveReviewConfig(ctx.cwd);
+          const effective = resolvedConfig.effective;
+          assertEffectiveReviewModelsAvailable(ctx, effective);
+          const untouchedProjectFieldsChangedDuringWrite =
+            project &&
+            MODEL_CONFIG_FIELDS.some(
+              (candidate) =>
+                candidate !== field &&
+                JSON.stringify(layer.config[candidate]) !==
+                  JSON.stringify(written.config[candidate])
+            );
+          let projectApprovalDeclined = false;
+          if (project && written.hash) {
+            let approveWrittenConfig = true;
+            if (
+              hasOtherUnapprovedProjectFields ||
+              untouchedProjectFieldsChangedDuringWrite
+            ) {
+              approveWrittenConfig = await ctx.ui.confirm(
+                "Approve project review models?",
+                `Project config: ${written.path}\nExact effective models/providers:\n${formatEffectiveModelDisclosure(effective)}`
+              );
+            }
+            if (approveWrittenConfig) {
+              await approveProjectReviewConfig(written);
+            } else {
+              projectApprovalDeclined = true;
+            }
           }
-          assertReviewModelAvailable(ctx, model, "Review synthesizer");
-          reviewSynthesizerModel = model;
-          persistReviewSettings(pi);
-          ctx.ui.notify("Review synthesizer model saved", "info");
-        } catch (error) {
           ctx.ui.notify(
-            error instanceof Error ? error.message : String(error),
-            "error"
-          );
-        }
-        continue;
-      }
-
-      if (result === SET_VERIFIER_MODEL_VALUE) {
-        const verifierModel = await ctx.ui.editor(
-          `Enter verifier model (must differ from reviewer panel: ${reviewReviewerPanel.map((entry) => entry.model).join(", ")}):`,
-          reviewVerifierModel ?? ""
-        );
-
-        if (verifierModel === null || verifierModel === undefined) {
-          ctx.ui.notify("Review verifier model not changed", "info");
-          continue;
-        }
-
-        try {
-          const cleared = !verifierModel.trim();
-          setReviewVerifierModel(pi, ctx, verifierModel);
-          ctx.ui.notify(
-            cleared
-              ? "Review verifier model cleared"
-              : "Review verifier model saved",
-            "info"
+            projectApprovalDeclined
+              ? `Project review ${field} ${normalized ? "saved" : "cleared"}, but project models remain unapproved`
+              : `${project ? "Project" : "Global"} review ${field} ${normalized ? "saved" : "cleared"}`,
+            projectApprovalDeclined ? "warning" : "info"
           );
         } catch (error) {
           ctx.ui.notify(
@@ -1998,18 +2085,52 @@ export default function reviewExtension(pi: ExtensionAPI) {
       const reviewers = normalizeReviewerSelection(
         options?.reviewers ?? reviewSelectedAgents
       );
-      const reviewerPanel = normalizeReviewerPanelSetting(
-        options?.reviewerPanel ?? reviewReviewerPanel
-      );
-      const synthesizerModel =
-        options?.synthesizerModel?.trim() || reviewSynthesizerModel;
-      const verifierModel = options?.verifierModel ?? DEFAULT_VERIFIER_MODEL;
-      for (const entry of reviewerPanel) {
-        assertReviewModelAvailable(ctx, entry.model, "Reviewer");
+      // No watcher: every review resolves both files again, then applies invocation flags.
+      const resolvedConfig = await resolveReviewConfig(ctx.cwd, {
+        reviewerPanel: options?.reviewerPanel,
+        synthesizerModel: options?.synthesizerModel?.trim() || undefined,
+        verifierModel: options?.verifierModel?.trim() || undefined,
+      });
+      const { reviewerPanel, synthesizerModel, verifierModel } =
+        resolvedConfig.effective;
+      if (!(await isProjectReviewConfigApproved(resolvedConfig.project))) {
+        const projectConfig = resolvedConfig.project.config;
+        const projectFieldOverrides = [
+          ["reviewerPanel", options?.reviewerPanel],
+          ["synthesizerModel", options?.synthesizerModel],
+          ["verifierModel", options?.verifierModel],
+        ] as const;
+        const projectConfigHasMaskedFields = projectFieldOverrides.some(
+          ([field, override]) =>
+            projectConfig[field] !== undefined && override !== undefined
+        );
+        const projectConfigFullyMaskedByFlags = projectFieldOverrides.every(
+          ([field, override]) =>
+            projectConfig[field] === undefined || override !== undefined
+        );
+        if (!projectConfigFullyMaskedByFlags) {
+          if (ctx.hasUI === false) {
+            throw new Error(
+              `Project review config ${resolvedConfig.project.path} has an unapproved content hash. Run interactive /review to inspect and approve it.`
+            );
+          }
+          const approved = await ctx.ui.confirm(
+            "Approve project review models?",
+            `Project config: ${resolvedConfig.project.path}\nExact effective models/providers:\n${formatEffectiveModelDisclosure(resolvedConfig.effective)}`
+          );
+          if (!approved) {
+            throw new Error(
+              "Project review config was not approved; no model calls were made."
+            );
+          }
+          // A flag-masked project field was not disclosed. Consent is one-shot so
+          // that the undisclosed whole-file hash cannot become durable trust.
+          if (!projectConfigHasMaskedFields) {
+            await approveProjectReviewConfig(resolvedConfig.project);
+          }
+        }
       }
-      assertReviewModelAvailable(ctx, synthesizerModel, "Review synthesizer");
-      assertVerifierModelPolicy(verifierModel, reviewerPanel);
-      assertVerifierModelAvailable(ctx, verifierModel);
+      assertEffectiveReviewModelsAvailable(ctx, resolvedConfig.effective);
       const selectedReviewers = reviewers
         .map((reviewer) => `  - ${reviewer}`)
         .join("\n");
@@ -2025,10 +2146,12 @@ export default function reviewExtension(pi: ExtensionAPI) {
 
       const reviewerRunCount = reviewers.length * reviewerPanel.length;
       const plannedModels = reviewerPanel
-        .map((entry) => `${entry.model}=${entry.thinkingLevel}`)
+        .map(
+          (entry) => `${sanitizeModelForUi(entry.model)}=${entry.thinkingLevel}`
+        )
         .join(", ");
       ctx.ui.notify(
-        `Review plan: initial calls: ${reviewerRunCount} reviewer calls (${reviewers.length} roles × ${reviewerPanel.length} models), plus 2 downstream calls if findings (1 synthesizer + 1 verifier). Possible structured-repair retries: up to ${reviewerRunCount} reviewer retries, plus up to 2 downstream retries when those stages run (1 synthesizer + 1 verifier). Reviewers: ${plannedModels}. Synthesizer: ${synthesizerModel}=high. Verifier: ${verifierModel}=high. Scope: ${hint}.`,
+        `Review plan: initial calls: ${reviewerRunCount} reviewer calls (${reviewers.length} roles × ${reviewerPanel.length} models), plus 2 downstream calls if findings (1 synthesizer + 1 verifier). Possible structured-repair retries: up to ${reviewerRunCount} reviewer retries, plus up to 2 downstream retries when those stages run (1 synthesizer + 1 verifier). Reviewers: ${plannedModels}. Synthesizer: ${sanitizeModelForUi(synthesizerModel)}=high. Verifier: ${sanitizeModelForUi(verifierModel)}=high. Scope: ${hint}.`,
         "info"
       );
 
@@ -2233,14 +2356,7 @@ export default function reviewExtension(pi: ExtensionAPI) {
 
       applyReviewSettings(ctx);
 
-      // Check if we're in a git repository
-      const { code } = await pi.exec("git", ["rev-parse", "--git-dir"]);
-      if (code !== 0) {
-        ctx.ui.notify("Not a git repository", "error");
-        return;
-      }
-
-      // Try to parse direct arguments
+      // Parse invocation overrides before validating the effective model bundle.
       let target: ReviewTarget | null = null;
       let fromSelector = false;
       const parsed = parseArgs(args);
@@ -2254,6 +2370,32 @@ export default function reviewExtension(pi: ExtensionAPI) {
       const verifierModel = parsed.verifierModel?.trim() || undefined;
       const reviewerPanel = parsed.reviewerPanel;
       const synthesizerModel = parsed.synthesizerModel;
+
+      let modelsPreflighted = false;
+      if (parsed.target) {
+        try {
+          const resolved = await resolveReviewConfig(ctx.cwd, {
+            reviewerPanel,
+            synthesizerModel,
+            verifierModel,
+          });
+          assertEffectiveReviewModelsAvailable(ctx, resolved.effective);
+          modelsPreflighted = true;
+        } catch (error) {
+          ctx.ui.notify(
+            error instanceof Error ? error.message : String(error),
+            "error"
+          );
+          return;
+        }
+      }
+
+      // Check if we're in a git repository
+      const { code } = await pi.exec("git", ["rev-parse", "--git-dir"]);
+      if (code !== 0) {
+        ctx.ui.notify("Not a git repository", "error");
+        return;
+      }
 
       const isHeadless = ctx.hasUI === false;
       if (parsed.target) {
@@ -2295,7 +2437,15 @@ export default function reviewExtension(pi: ExtensionAPI) {
 
       while (true) {
         if (!target && fromSelector) {
-          target = await showReviewSelector(ctx);
+          try {
+            target = await showReviewSelector(ctx);
+          } catch (error) {
+            ctx.ui.notify(
+              error instanceof Error ? error.message : String(error),
+              "error"
+            );
+            return;
+          }
         }
 
         if (!target) {
@@ -2314,11 +2464,14 @@ export default function reviewExtension(pi: ExtensionAPI) {
           return;
         }
         try {
-          const resolvedVerifierModel = resolveReviewVerifierModel(
-            reviewerPanel ?? reviewReviewerPanel,
-            verifierModel
-          );
-          assertVerifierModelAvailable(ctx, resolvedVerifierModel);
+          if (!modelsPreflighted) {
+            const resolved = await resolveReviewConfig(ctx.cwd, {
+              reviewerPanel,
+              synthesizerModel,
+              verifierModel,
+            });
+            assertEffectiveReviewModelsAvailable(ctx, resolved.effective);
+          }
           setReviewSelection(
             pi,
             reviewerSelection.reviewers,
@@ -2329,7 +2482,7 @@ export default function reviewExtension(pi: ExtensionAPI) {
             reviewers: reviewerSelection.reviewers,
             reviewerPanel,
             synthesizerModel,
-            verifierModel: resolvedVerifierModel,
+            verifierModel,
           };
           if (ctx.mode === "tui") {
             startInteractiveReview(ctx, target, reviewOptions);

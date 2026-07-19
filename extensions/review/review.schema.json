@@ -1,0 +1,41 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://supa-pi.local/schemas/review.schema.json",
+  "title": "SupaPi review model configuration",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "$schema": { "type": "string" },
+    "reviewerPanel": {
+      "description": "Reviewer model IDs must be unique; runtime validation enforces uniqueness by the model property.",
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 4,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["model", "thinkingLevel"],
+        "properties": {
+          "model": {
+            "type": "string",
+            "description": "provider/model with no whitespace, Unicode control, or Unicode format characters",
+            "pattern": "^(?!.*[\\p{Cc}\\p{Cf}])[^\\s/]+/[^\\s]+$"
+          },
+          "thinkingLevel": {
+            "enum": ["off", "minimal", "low", "medium", "high", "xhigh"]
+          }
+        }
+      }
+    },
+    "synthesizerModel": {
+      "type": "string",
+      "description": "provider/model with no whitespace, Unicode control, or Unicode format characters",
+      "pattern": "^(?!.*[\\p{Cc}\\p{Cf}])[^\\s/]+/[^\\s]+$"
+    },
+    "verifierModel": {
+      "type": "string",
+      "description": "provider/model with no whitespace, Unicode control, or Unicode format characters",
+      "pattern": "^(?!.*[\\p{Cc}\\p{Cf}])[^\\s/]+/[^\\s]+$"
+    }
+  }
+}
