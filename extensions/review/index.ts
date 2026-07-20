@@ -51,9 +51,7 @@ import {
   Container,
   fuzzyFilter,
   Input,
-  Key,
   Markdown,
-  matchesKey,
   type SelectItem,
   SelectList,
   Spacer,
@@ -2216,13 +2214,6 @@ export default function reviewExtension(pi: ExtensionAPI) {
     options: NonNullable<Parameters<typeof executeReview>[2]>
   ): void {
     const controller = new AbortController();
-    const unsubscribeTerminalInput = ctx.ui.onTerminalInput((data) => {
-      if (matchesKey(data, Key.escape)) {
-        controller.abort();
-      }
-      // Let focused management overlays handle the same Escape keypress.
-      return { consume: false };
-    });
     const promise = executeReview(ctx, target, options, controller)
       .then(() => undefined)
       .catch((error) => {
@@ -2234,7 +2225,6 @@ export default function reviewExtension(pi: ExtensionAPI) {
         }
       })
       .finally(() => {
-        unsubscribeTerminalInput?.();
         if (activeReview?.controller === controller) {
           activeReview = undefined;
         }
@@ -2346,9 +2336,18 @@ export default function reviewExtension(pi: ExtensionAPI) {
     description:
       "Review code changes (PR, uncommitted, branch, commit, or folder)",
     handler: async (args, ctx) => {
+      if (args.trim() === "cancel") {
+        if (!activeReview) {
+          ctx.ui.notify("No review is running.", "info");
+          return;
+        }
+        await abortAndSettleActiveReview();
+        return;
+      }
+
       if (ctx.mode === "tui" && activeReview) {
         ctx.ui.notify(
-          "A review is already running. Press Escape to cancel it.",
+          "A review is already running. Run /review cancel to cancel it.",
           "warning"
         );
         return;

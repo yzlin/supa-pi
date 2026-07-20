@@ -1415,16 +1415,9 @@ async function waitUntil(condition: () => boolean): Promise<void> {
 
 describe.serial("review direct targets", () => {
   it("returns from a TUI review command while the workflow keeps running", async () => {
-    let handleTerminalInput: TerminalInputHandler | undefined;
     const runtime = createChangedReviewRuntime();
     const manager = installAsyncReviewManager({ completeAfterMs: 650 });
-    const { ctx } = createMockCtx([], {
-      mode: "tui",
-      onTerminalInput(handler) {
-        handleTerminalInput = handler;
-        return () => undefined;
-      },
-    });
+    const { ctx } = createMockCtx([], { mode: "tui" });
 
     reviewExtension(runtime.pi as never);
     let commandSettled = false;
@@ -1442,8 +1435,8 @@ describe.serial("review direct targets", () => {
     try {
       expect(commandSettled).toBe(true);
     } finally {
-      handleTerminalInput?.("\u001B");
       await command;
+      await runtime.eventHandlers.get("session_shutdown")?.({}, ctx);
     }
   });
 
@@ -1603,8 +1596,6 @@ describe.serial("review direct targets", () => {
   });
 
   it("cancels an in-flight preflight subprocess before spawning a reviewer", async () => {
-    let handleTerminalInput: TerminalInputHandler | undefined;
-    let terminalInputUnsubscribed = false;
     let preflightStarted = false;
     let preflightAborted = false;
     const runtime = createMockPiRuntime(async (_command, args, options) => {
@@ -1624,15 +1615,7 @@ describe.serial("review direct targets", () => {
       return { stdout: "", code: 0 };
     });
     const manager = installAsyncReviewManager({ completeAfterMs: 650 });
-    const { ctx, notifications } = createMockCtx([], {
-      mode: "tui",
-      onTerminalInput(handler) {
-        handleTerminalInput = handler;
-        return () => {
-          terminalInputUnsubscribed = true;
-        };
-      },
-    });
+    const { ctx, notifications } = createMockCtx([], { mode: "tui" });
 
     reviewExtension(runtime.pi as never);
     await runtime.commands
@@ -1640,56 +1623,48 @@ describe.serial("review direct targets", () => {
       ?.handler("uncommitted --reviewers code-reviewer", ctx as never);
 
     await waitUntil(() => preflightStarted);
-    expect(handleTerminalInput).toBeDefined();
-    const terminalInputResult = handleTerminalInput?.("\u001B");
-    await waitUntil(() => terminalInputUnsubscribed);
+    try {
+      await runtime.commands.get("review")?.handler("cancel", ctx as never);
 
-    expect(terminalInputResult).toEqual({ consume: false });
-    expect(preflightAborted).toBe(true);
-    expect(manager.spawnCount()).toBe(0);
-    expect(getReviewReportMessages(runtime)).toEqual([]);
-    expect(notifications).toContainEqual({
-      message: "Review cancelled",
-      level: "info",
-    });
+      expect(preflightAborted).toBe(true);
+      expect(manager.spawnCount()).toBe(0);
+      expect(getReviewReportMessages(runtime)).toEqual([]);
+      expect(notifications).toContainEqual({
+        message: "Review cancelled",
+        level: "info",
+      });
+    } finally {
+      await runtime.eventHandlers.get("session_shutdown")?.({}, ctx);
+    }
   });
 
-  it("cancels a running review without trapping Escape from a management overlay", async () => {
+  it("keeps a running review alive when Escape closes the settings overlay", async () => {
     let handleTerminalInput: TerminalInputHandler | undefined;
-    let terminalInputUnsubscribed = false;
-    let managementOverlayOpen = true;
     const runtime = createChangedReviewRuntime();
-    const manager = installAsyncReviewManager({ completeAfterMs: 650 });
+    const manager = installAsyncReviewManager({ completeAfterMs: 25 });
     const { ctx, notifications, widgets } = createMockCtx([], {
       mode: "tui",
       onTerminalInput(handler) {
         handleTerminalInput = handler;
-        return () => {
-          terminalInputUnsubscribed = true;
-        };
+        return () => undefined;
       },
     });
 
     reviewExtension(runtime.pi as never);
-    const review = runtime.commands
+    await runtime.commands
       .get("review")
       ?.handler("uncommitted --reviewers code-reviewer", ctx as never);
     await waitUntil(() => manager.spawnCount() > 0);
-    const terminalInputResult = handleTerminalInput?.("\u001B");
-    if (!terminalInputResult?.consume && managementOverlayOpen) {
-      managementOverlayOpen = false;
-    }
-    await review;
-    await waitUntil(() =>
-      notifications.some(({ message }) => message === "Review cancelled")
-    );
 
-    expect(getReviewReportMessages(runtime)).toEqual([]);
-    expect(manager.abortCount()).toBeGreaterThanOrEqual(1);
-    expect(manager.abortCount()).toBeLessThanOrEqual(manager.spawnCount());
-    expect(terminalInputResult).toEqual({ consume: false });
-    expect(managementOverlayOpen).toBe(false);
-    expect(notifications).toContainEqual({
+    const settingsOverlayOpen =
+      handleTerminalInput?.("\u001B")?.consume === true;
+    await waitUntil(() => getReviewReportMessages(runtime).length > 0);
+
+    expect(handleTerminalInput).toBeUndefined();
+    expect(settingsOverlayOpen).toBe(false);
+    expect(manager.abortCount()).toBe(0);
+    expect(getReviewReportMessages(runtime)).toHaveLength(1);
+    expect(notifications).not.toContainEqual({
       message: "Review cancelled",
       level: "info",
     });
@@ -1697,7 +1672,32 @@ describe.serial("review direct targets", () => {
       key: "review-progress",
       content: undefined,
     });
-    expect(terminalInputUnsubscribed).toBe(true);
+  });
+
+  it("explicitly cancels and settles a running review", async () => {
+    const runtime = createChangedReviewRuntime();
+    const manager = installAsyncReviewManager({ completeAfterMs: 650 });
+    const { ctx, notifications } = createMockCtx([], { mode: "tui" });
+
+    reviewExtension(runtime.pi as never);
+    await runtime.commands
+      .get("review")
+      ?.handler("uncommitted --reviewers code-reviewer", ctx as never);
+    await waitUntil(() => manager.spawnCount() > 0);
+
+    try {
+      await runtime.commands.get("review")?.handler("cancel", ctx as never);
+
+      expect(manager.abortCount()).toBeGreaterThanOrEqual(1);
+      expect(manager.abortCount()).toBeLessThanOrEqual(manager.spawnCount());
+      expect(getReviewReportMessages(runtime)).toEqual([]);
+      expect(notifications).toContainEqual({
+        message: "Review cancelled",
+        level: "info",
+      });
+    } finally {
+      await runtime.eventHandlers.get("session_shutdown")?.({}, ctx);
+    }
   });
 
   it("requires a direct target and reviewer mode in headless review", async () => {
