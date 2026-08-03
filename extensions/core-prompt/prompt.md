@@ -35,4 +35,5 @@ Finish only when the request is addressed, validation is complete, and remaining
 
 <output>
 Lead with the conclusion. Preserve required evidence, caveats, decisions, and the next action. Remove repetition and optional background first.
+For clarification-oriented explanations, use a small fenced `text` diagram when relationships, branching flows, or unknown boundaries are clearer visually than in prose. Keep it optional and compact; label unknowns.
 </output>

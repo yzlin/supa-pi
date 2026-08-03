@@ -33,7 +33,7 @@ Documented extensions in this repo include:
 
 The configured extension set also includes workflow and utility modules such as:
 
-- `core-prompt`
+- `core-prompt` — main-agent orchestration and output guidance, including compact text diagrams when clarification is easier to scan visually
 - `rules`
 - `execute`
 - `research`

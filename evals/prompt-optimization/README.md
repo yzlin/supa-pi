@@ -10,7 +10,7 @@ Authentication comes from the normal Pi auth store (`~/.pi/agent/auth.json`) or 
 # Cheap smoke: two live calls
 bun run eval:prompts -- --case explore-root-cause
 
-# Full corpus: 46 live calls at one repetition
+# Full corpus: 50 live calls at one repetition
 bun run eval:prompts
 
 # Better variance estimate

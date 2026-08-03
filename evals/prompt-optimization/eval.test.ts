@@ -41,6 +41,16 @@ function run(cwd: string, command: string, args: string[]): void {
   }
 }
 
+function scoreOutput(
+  output: string,
+  checks: Parameters<typeof scoreRun>[1]
+): ReturnType<typeof scoreRun> {
+  return scoreRun(
+    { output, workspace: createTemporaryDirectory(), toolCalls: [] },
+    checks
+  );
+}
+
 afterEach(() => {
   for (const directory of temporaryDirectories.splice(0)) {
     rmSync(directory, { force: true, recursive: true });
@@ -230,6 +240,508 @@ describe("committed corpus", () => {
     ].map((path) => (path.endsWith(".md") ? path : `agents/${path}.md`));
     expectedPaths.push("skills/diagnose/SKILL.md");
     expect(coveredPaths).toEqual(new Set(expectedPaths));
+  });
+
+  it("binds diagram uncertainty to the context-store branch in either order", async () => {
+    const corpus = parseCorpus(
+      JSON.parse(readFileSync(join(moduleDirectory, "corpus.json"), "utf8"))
+    );
+    const checks = corpus.cases.find(
+      (evalCase) => evalCase.id === "core-clarification-diagram"
+    )?.checks;
+    if (!checks) {
+      throw new Error("core clarification diagram case is missing");
+    }
+
+    const outputs = [
+      "```text\nRequest → LLM → MCP\n├→ Context Store (may be stale)\n└→ Live tools\n```",
+      "```text\nRequest → LLM → MCP\n├→ Stored context (may be stale)\n└→ Live tools\n```",
+      "```text\nUser → LLM → MCP\n├→ Live tools\n└→ Context Store (unknown)\n```",
+      "```text\nRequest -> LLM -> MCP\n|-- Context Store (might be stale)\n`-- Live tools\n```",
+      "```text\nRequest\n↓\nLLM\n↓\nMCP\n├── Context Store (could be stale)\n└── Live tools\n```",
+      "```text\nUser\n|\nv\nLLM\n|\nv\nMCP\n|-- Live tools\n`-- Context Store (staleness unknown)\n```",
+      "```text\nRequest → LLM → MCP\n├→ Context Store (possibly stale)\n└→ Live tools\n```",
+      "```text\nRequest\n↓\nLLM\n↓\nMCP\n├── Context Store (potentially stale)\n└── Live tools\n```",
+      "```text\nRequest → LLM → MCP\n├→ Live tools\n└→ Context Store (may contain stale information)\n```",
+      "```text\nRequest → LLM → MCP\n├→ Context Store (may be outdated)\n└→ Runtime tools\n```",
+      "```text\nRequest → LLM → MCP\n├→ Runtime tools\n└→ Context Store (may be out of date)\n```",
+      "```text\nRequest → LLM → MCP\n├→ Context Store (may not be current)\n└→ Live tools\n```",
+      "```text\nRequest → LLM → MCP\n├→ Live tools\n└→ Context Store (may contain old data)\n```",
+      "```text\nRequest → LLM → MCP\n│\n├→ Context Store (may be stale)\n│\n└→ Live tools\n```",
+      "```text\nRequest → LLM → MCP\n├→ Context Store (freshness is unknown)\n└→ Live verification tools\n```",
+      "```text\nRequest → LLM → MCP\n├→ Context Store (may be stale)\n└→ Runtime action tools\n```",
+      "```text\nRequest → LLM → MCP\n├→ Live action tools\n└→ Context Store (unknown freshness)\n```",
+      "```text\nRequest → LLM → MCP\n├→ Context Store (not guaranteed current)\n└→ Live tools\n```",
+      "```text\nRequest → LLM → MCP\n├→ Live tools\n└→ Context Store (freshness not guaranteed)\n```",
+      "```text\nRequest → LLM → MCP gateway\n├→ Context Store (may be stale)\n└→ Live tools\n```",
+      "```text\nRequest\n↓\nLLM\n↓\nMCP gateway\n├── Live tools\n└── Context Store (freshness is unknown)\n```",
+      "```text\nRequest → LLM → MCP\n├→ Context Store (may be stale)\n└→ Live tools (verify)\n```",
+      "```text\nRequest → LLM → MCP\n├→ Context Store (may be stale)\n└→ Runtime tools (act)\n```",
+      "```text\nRequest → LLM → MCP\n├→ Context Store (can be stale)\n└→ Live tools\n```",
+      "```text\nRequest → LLM → MCP\n├→ Stored context (not necessarily current)\n└→ Live tools\n```",
+      "```text\nRequest → LLM → MCP\n├→ Context Store (freshness: unknown)\n└→ Live tools\n```",
+      "```text\nRequest → LLM → MCP\n├→ Stored context (can be stale)\n└→ Live tools\n```",
+      "```text\nRequest → LLM → MCP\n├→ Context Store (not necessarily current)\n└→ Live tools\n```",
+      "```text\nRequest → LLM → MCP\n├→ Stored context (freshness: unknown)\n└→ Live tools\n```",
+    ];
+    for (const output of outputs) {
+      const result = await scoreOutput(output, checks);
+      expect(result.overall).toBe(1);
+    }
+
+    const misplacedUncertainty = await scoreOutput(
+      "```text\nRequest → LLM → MCP\n├→ Context Store\n└→ Live tools (unknown/stale)\n```",
+      checks
+    );
+    expect(misplacedUncertainty.overall).toBe(0);
+
+    const misplacedAcceptedParaphrase = await scoreOutput(
+      "```text\nRequest → LLM → MCP\n├→ Context Store\n└→ Runtime tools (old data)\n```",
+      checks
+    );
+    expect(misplacedAcceptedParaphrase.overall).toBe(0);
+
+    const invalidDiagrams = [
+      "```text\nRequest → LLM → MCP\n├→ Context Store (not stale)\n└→ Live tools\n```",
+      "```text\nRequest → LLM → MCP\n├→ Stored context (not current)\n└→ Live tools\n```",
+      "```text\nRequest → LLM → MCP\n├→ Context Store (not current)\n└→ Live tools\n```",
+      "```text\nRequest → LLM → MCP\n├→ Context Store (old data)\n└→ Runtime tools\n```",
+      "```text\nRequest → LLM → MCP\n├→ Context Store (definitely stale)\n└→ Live tools\n```",
+      "```text\n├→ Context Store (may be stale)\n└→ Live tools\nRequest → LLM → MCP\n```",
+      "```text\nRequest -> LLM -> MCP -> Context Store (stale) -> Live tools\n```",
+      "```text\nRequest -> LLM -> MCP\n|-- Context Store (stale)\nLive tools\n```",
+      "```text\nRequest\n↓\nLLM\n↓\nMCP\n├── Context Store\n└── Live tools (unknown)\n```",
+      "```text\nRequest\n↓\nLLM\n↓\nMCP\nContext Store (stale)\nLive tools\n```",
+      "```text\nRequest → LLM → MCP\nOther System:\n├→ Context Store (may be stale)\n└→ Live tools\n```",
+      "```text\nRequest → LLM → MCP\nOther System:\n├→ Stored context (may be stale)\n└→ Live tools\n```",
+      "```text\nRequest → LLM → MCP\n├→ Context Store (owner unknown)\n└→ Live tools\n```",
+      "```text\nRequest → LLM → MCP\n├→ Context Store (may be stale but is definitely current)\n└→ Live tools\n```",
+      "```text\nRequest → LLM → MCP\n├→ Context Store (may be stale and remains fresh)\n└→ Runtime tools\n```",
+      "```text\nRequest → LLM → MCP\n├→ Context Store (may be stale)\n└→ Live production verification tools\n```",
+      "```text\nRequest → LLM → MCP\nOther System:\n├→ Context Store (may be stale)\n└→ Live verification tools\n```",
+      "```text\nRequest → LLM → MCP gateway\nOther System:\n├→ Context Store (may be stale)\n└→ Live tools\n```",
+      "```text\nRequest → LLM → MCP gateway → Router\n├→ Context Store (may be stale)\n└→ Live tools\n```",
+      "```text\nRequest → LLM → MCP\n├→ Context Store (may be stale)\n└→ No live tools\n```",
+      "```text\nRequest → LLM → MCP\n├→ Context Store (may be stale)\n└→ Live tools unavailable\n```",
+      "```text\nRequest → LLM → MCP\n├→ Context Store (may be stale)\n└→ Live tools are disabled\n```",
+      "```text\nRequest → LLM → MCP\n├→ Context Store (may be stale)\n└→ Live tools (cannot verify or act)\n```",
+      "```text\nRequest → LLM → MCP\n├→ Context Store (may be stale)\n└→ Runtime tools (unable to verify or act)\n```",
+      "```text\nRequest → LLM → MCP\n├→ Context Store (may be stale)\n└→ Live tools (not usable)\n```",
+    ];
+    for (const output of invalidDiagrams) {
+      const result = await scoreOutput(output, checks);
+      expect(result.overall).toBe(0);
+    }
+
+    const passingDiagram =
+      "```text\nRequest → LLM → MCP gateway\n├→ Stored context (may be stale)\n└→ Live tools\n```";
+    const freshnessContradictions = [
+      `The stored context is definitely current.\n${passingDiagram}`,
+      `${passingDiagram}\nThe stored context is definitely current.`,
+      `The stored context is guaranteed current.\n${passingDiagram}`,
+      `${passingDiagram}\nThe stored context is guaranteed current.`,
+      `The context store is always current.\n${passingDiagram}`,
+      `${passingDiagram}\nThe context store is always current.`,
+      `The stored context is guaranteed fresh.\n${passingDiagram}`,
+      `${passingDiagram}\nThe context store is always fresh.`,
+      `The context store remains fresh.\n${passingDiagram}`,
+      `${passingDiagram}\nThe context store is certainly fresh.`,
+      `${passingDiagram}\nThe stored context is up to date.`,
+      `The context store remains up to date.\n${passingDiagram}`,
+    ];
+    for (const output of freshnessContradictions) {
+      const result = await scoreOutput(output, checks);
+      expect(result.overall).toBe(0);
+    }
+
+    const unavailableLiveTools = [
+      `Live tools are unavailable.\n${passingDiagram}`,
+      `${passingDiagram}\nLive tools are unavailable.`,
+      `Runtime tools are disabled.\n${passingDiagram}`,
+      `${passingDiagram}\nLive tools cannot verify or act.`,
+      `Runtime action tools are unable to act and verify.\n${passingDiagram}`,
+    ];
+    for (const output of unavailableLiveTools) {
+      const result = await scoreOutput(output, checks);
+      expect(result.overall).toBe(0);
+    }
+
+    const unrelatedFreshness = [
+      `${passingDiagram}\nThe current request still needs live verification.`,
+      `Fresh live-tool results can verify the answer.\n${passingDiagram}`,
+      `No live tools would make verification impossible.\n${passingDiagram}`,
+      `If live tools are unavailable, verification would be impossible.\n${passingDiagram}`,
+      `${passingDiagram}\nWhether runtime tools are disabled depends on deployment.`,
+      `${passingDiagram}\nKeep the current docs up to date.`,
+    ];
+    for (const output of unrelatedFreshness) {
+      const result = await scoreOutput(output, checks);
+      expect(result.overall).toBe(1);
+    }
+  });
+
+  it("rejects write authorization and requires denial of file modification", async () => {
+    const corpus = parseCorpus(
+      JSON.parse(readFileSync(join(moduleDirectory, "corpus.json"), "utf8"))
+    );
+    const checks = corpus.cases.find(
+      (evalCase) => evalCase.id === "core-simple-clarification"
+    )?.checks;
+    if (!checks) {
+      throw new Error("core simple clarification case is missing");
+    }
+
+    const counterexample = await scoreOutput(
+      "Tools may inspect and write files, but may not change permissions.",
+      checks
+    );
+    expect(counterexample.overall).toBeLessThan(1);
+    expect(
+      counterexample.checks.slice(0, 2).map((check) => check.passed)
+    ).toEqual([false, false]);
+
+    const ownershipOnlyDenial = await scoreOutput(
+      "Tools may inspect files but cannot change ownership of files.",
+      checks
+    );
+    expect(ownershipOnlyDenial.overall).toBeLessThan(1);
+    expect(
+      ownershipOnlyDenial.checks.slice(0, 2).map((check) => check.passed)
+    ).toEqual([true, false]);
+
+    const negatedProhibitions = [
+      "Tools may inspect files but does not prevent them from modifying files.",
+      "Tools may inspect files but does not prohibit modifying files.",
+      "Tools may inspect files but does not prohibit modification of files.",
+    ];
+    for (const output of negatedProhibitions) {
+      const result = await scoreOutput(output, checks);
+      expect(result.overall).toBeLessThan(1);
+      expect(result.checks[1]?.passed).toBe(false);
+    }
+
+    const negatedDenialClaims = [
+      "Read-only access lets tools inspect files, but it does not mean they cannot modify them.",
+      "Read-only access lets tools inspect files, but it doesn't mean they cannot modify them.",
+      "Read-only access lets tools inspect files, but it doesn’t mean they cannot modify them.",
+      "Read-only access lets tools inspect files, but it is not true that they cannot modify them.",
+      "Tools may inspect files, but that does not mean changes cannot be saved.",
+      "Tools can inspect files, but it doesn't mean they can't make changes.",
+    ];
+    for (const output of negatedDenialClaims) {
+      const result = await scoreOutput(output, checks);
+      expect(result.overall).toBeLessThan(1);
+      expect(result.checks[1]?.passed).toBe(false);
+    }
+
+    const authorizedWrite = await scoreOutput(
+      "Tools may inspect and write files, but may not modify them.",
+      checks
+    );
+    expect(authorizedWrite.overall).toBeLessThan(1);
+    expect(
+      authorizedWrite.checks.slice(0, 2).map((check) => check.passed)
+    ).toEqual([false, true]);
+
+    const equivalentWriteGrants = [
+      "Tools may inspect files but may not modify them; they may overwrite files.",
+      "Tools may inspect files but may not modify them; overwriting files is allowed.",
+      "Tools may inspect files but may not modify them; they may replace the contents of files.",
+      "Tools may inspect files but may not modify them; writing is allowed.",
+      "Tools may inspect files but may not modify them; editing files is allowed.",
+      "Tools may inspect files but may not modify them; they are allowed to write files.",
+      "Tools may inspect files but may not modify them; writing files remains allowed.",
+      "Read-only access permits tools to inspect files and prohibits file modification; writing files remains allowed.",
+      "Tools may inspect files but may not modify them; they are permitted to write files.",
+      "Tools may inspect files but may not modify them; they are authorized to write files.",
+      "Tools may inspect files but may not modify them; go ahead and write files.",
+      "Tools may inspect files but may not modify them; feel free to edit files.",
+      "Tools may inspect files but may not modify them; modifications are permitted.",
+      "Tools may inspect files but may not modify them; writes are authorized.",
+      "Tools may inspect files but may not modify them; they can change files.",
+      "Tools may inspect files but may not modify them; however, they can alter files.",
+      "Tools may inspect files but may not modify them; altering files is allowed.",
+      "Tools may inspect files but may not modify them; they are authorized to alter files.",
+      "Tools may inspect files but may not modify them; they have permission to write files.",
+      "Tools may inspect files but may not modify them; write access is enabled.",
+      "Tools may inspect files but may not modify them; they have write access.",
+      "Tools may inspect files but may not modify them; they have file permission to edit files.",
+      "Tools may inspect files but may not modify them; file write access is granted.",
+      "Tools may inspect files but may not modify them; write access remains enabled.",
+      "Tools may inspect files but may not modify them; write access stays enabled.",
+      "Tools may inspect files but may not modify them; write access remains available.",
+      "Tools can inspect files but cannot modify them; write access still exists.",
+      "Tools may inspect files but may not modify them; edit access exists.",
+      "Tools may inspect files but may not modify them; change capability continues to exist.",
+      "Tools may inspect files but may not modify them; file write capability remains present.",
+      "Tools may inspect files but may not modify them; file edit access continues to be granted.",
+      "Tools may inspect files but may not modify them; writing files is possible.",
+      "Tools may inspect files but may not modify them; they are able to write files.",
+      "Tools may inspect files but may not modify them; writing files is possible unless necessary.",
+      "Tools may inspect files but may not modify them; write files when necessary.",
+      "Tools may inspect files but may not modify them; edit files if necessary.",
+      "Tools may inspect files but may not modify them; tools write files when necessary.",
+      "Tools may inspect files but may not modify them; write files only if necessary.",
+      "Tools may inspect files but may not modify them; tools retain editing rights.",
+      "Tools may inspect files but may not modify them; tools retain write privileges.",
+      "Tools may inspect files but may not modify them; tools have change rights.",
+      "Tools may inspect files but may not modify them; tools keep modification privileges.",
+      "Tools may inspect files but may not modify them; tools retain update rights.",
+      "Tools can inspect files but can't make changes; however, they can write files.",
+      "Tools may inspect files but cannot modify them; deletion is allowed.",
+      "Tools may inspect files but cannot modify them; they can delete files.",
+      "Tools may inspect files but cannot modify them; removal is permitted.",
+      "Tools may inspect files but cannot modify them; they are authorized to rename files.",
+      "Tools may inspect files but cannot modify them; go ahead and create files.",
+      "Tools may inspect files but cannot modify them; tools retain creation rights.",
+      "Tools may inspect files but cannot modify them; changes can still be made by the agent.",
+      "Tools may inspect files but cannot modify them; the agent is free to delete them.",
+      "Tools may inspect files but cannot modify them; they are free to delete them.",
+      "Tools may inspect files without changing them; editing files is allowed.",
+      "Tools may inspect files but changes cannot be saved; write access still exists.",
+    ];
+    for (const output of equivalentWriteGrants) {
+      const result = await scoreOutput(output, checks);
+      expect(result.overall).toBeLessThan(1);
+      expect(result.checks.slice(0, 2).map((check) => check.passed)).toEqual([
+        false,
+        true,
+      ]);
+    }
+
+    const alternateSubjectDenials = [
+      "Tools may inspect files, but users cannot modify them.",
+      "Tools may inspect files, but developers may not modify them.",
+      "Tools may inspect files, but owners cannot modify them.",
+      "Tools may inspect files, but users cannot alter them.",
+      "Tools may inspect files, but users may inspect files without changing them.",
+      "Tools can inspect files, but users can't make changes.",
+    ];
+    for (const output of alternateSubjectDenials) {
+      const result = await scoreOutput(output, checks);
+      expect(result.overall).toBeLessThan(1);
+      expect(result.checks.slice(0, 2).map((check) => check.passed)).toEqual([
+        true,
+        false,
+      ]);
+    }
+
+    const conditionalDenials = [
+      "Tools may inspect files but cannot modify them unless necessary.",
+      "Yes, tools may inspect files but cannot modify them, unless necessary.",
+      "Read-only access lets tools inspect files, but they may not edit them except in emergencies.",
+      "Tools may inspect files but are not allowed to modify them if necessary.",
+      "Tools may inspect files but cannot write to them when emergencies occur.",
+      "Tools may inspect files but cannot edit them only if necessary.",
+      "Read-only access lets tools inspect files but prevents them from editing them unless necessary.",
+      "Read-only access lets tools inspect files; editing them is prohibited except in emergencies.",
+      "Read-only access lets tools inspect files but prohibits file modification except in emergencies.",
+      "Tools may inspect files but have no write access unless explicitly authorized.",
+      "Tools may inspect files but have no edit access except with authorization.",
+      "Tools may inspect files but have no change access if approved.",
+      "Tools may inspect files but have no update access when authorized.",
+      "Tools may inspect files but cannot modify them without approval.",
+      "Tools may inspect files but may not modify them without authorization.",
+      "Tools may inspect files but aren't allowed to modify them by default.",
+      "Tools may inspect files but may not edit them under normal circumstances.",
+      "Tools may inspect files but are generally not permitted to update them.",
+      "Tools may inspect files but lack write permission unless explicitly authorized.",
+      "Tools may inspect files but have no file write permission except with authorization.",
+      "Tools may inspect files but cannot alter them unless necessary.",
+      "Tools can inspect files but can't make changes unless necessary.",
+      "Tools may inspect files without changing them unless necessary.",
+      "Read-only access lets tools inspect files without modifying them if approved.",
+      "Tools may inspect files but cannot save changes unless approved.",
+      "Tools may inspect files but changes cannot be persisted except with authorization.",
+    ];
+    for (const output of conditionalDenials) {
+      const result = await scoreOutput(output, checks);
+      expect(result.overall).toBeLessThan(1);
+      expect(result.checks[1]?.passed).toBe(false);
+    }
+
+    const explicitlyAuthorizedAnswers = [
+      "Tools may inspect files but have no write access; write access is granted with authorization.",
+      "Tools may inspect files but cannot alter them; they are authorized to alter files.",
+    ];
+    for (const output of explicitlyAuthorizedAnswers) {
+      const result = await scoreOutput(output, checks);
+      expect(result.overall).toBeLessThan(1);
+      expect(result.checks[0]?.passed).toBe(false);
+    }
+
+    const multipleSentences = [
+      "Yes. Tools may inspect files but may not modify them.",
+      "Yes! Tools may inspect files but may not modify them.",
+      "Tools may inspect files but may not modify them. 100% read-only.",
+      "Yes.Tools may inspect files but may not modify them.",
+    ];
+    for (const output of multipleSentences) {
+      const result = await scoreOutput(output, checks);
+      expect(result.overall).toBeLessThan(1);
+      expect(result.checks[2]?.passed).toBe(false);
+    }
+
+    const advisoryDenials = [
+      "Tools may inspect files but should not modify them.",
+      "Tools may inspect files but shouldn't edit them.",
+      "Tools may inspect files but shouldn’t write to them.",
+      "Tools may inspect files but should not change them.",
+      "Tools may inspect files but should not update them.",
+      "Tools may inspect files but should not delete them.",
+      "Tools may inspect files but should not create them.",
+      "Tools may inspect files but should not rename them.",
+      "Tools may inspect files but should not alter them.",
+      "Tools may inspect files but should not save changes.",
+      "Tools can inspect files but should not make changes.",
+    ];
+    for (const output of advisoryDenials) {
+      const result = await scoreOutput(output, checks);
+      expect(result.overall).toBeLessThan(1);
+      expect(result.checks[1]?.passed).toBe(false);
+    }
+
+    const propositionNegations = [
+      "No, tools may inspect files but may not modify them.",
+      "No—tools may inspect files but may not modify them.",
+      "It is false that tools may inspect files but may not modify them.",
+      "It isn't true that tools may inspect files but may not modify them.",
+      "That is false: tools may inspect files but may not modify them.",
+      "False, tools may inspect files but may not modify them.",
+    ];
+    for (const output of propositionNegations) {
+      const result = await scoreOutput(output, checks);
+      expect(result.overall).toBe(0);
+    }
+
+    const validAnswers = [
+      "Tools may inspect files but may not modify them.",
+      "Yes, tools may inspect files but may not modify them.",
+      "Files can be read but not written.",
+      "Files can be inspected but cannot be written.",
+      "Files may be viewed but may not be modified.",
+      "Files are readable but not writable.",
+      "Tools may inspect files but cannot overwrite them.",
+      "Tools may inspect files but cannot modify them.",
+      "Tools may inspect files but can't modify them.",
+      "Tools may inspect files but can’t modify them.",
+      "Tools may inspect files but can't write to them.",
+      "Tools may inspect files but can't edit them.",
+      "Yes, tools can inspect files but cannot make changes to them.",
+      "Tools may inspect files but may not make changes to files.",
+      "Tools may inspect files but cannot make modifications to them.",
+      "Tools can view files but can't make any changes to them.",
+      "Tools may inspect files but may not make any modifications to them.",
+      "Tools may inspect files without changing them.",
+      "Tools can read files without editing them.",
+      "Read-only access lets tools inspect files without modifying them.",
+      "Read-only access permits tools to view files without altering them.",
+      "Yes, tools can view files, but they cannot change them.",
+      "Tools are allowed to view files but may not modify them.",
+      "Tools have viewing access but cannot edit files.",
+      "Tools may inspect files but cannot alter them.",
+      "Read-only access permits tools to inspect files and prohibits alterations to files.",
+      "The tools may inspect files, but read-only access does not allow them to modify files.",
+      "Read-only access lets tools inspect files, but they do not have permission to modify them.",
+      "Read-only access lets tools inspect files, but they cannot change them.",
+      "Tools can inspect files, but they do not have permission to modify them.",
+      "Tools may inspect files but are not allowed to modify them.",
+      "Tools may inspect files but aren't allowed to modify them.",
+      "Tools may inspect files but aren’t allowed to modify them.",
+      "The agent may inspect files but isn't permitted to edit them.",
+      "The agent may inspect files but isn’t permitted to edit them.",
+      "Tools may inspect files but are not permitted to edit them.",
+      "Tools may inspect files but are not authorized to change them.",
+      "Tools may inspect files but are not allowed to update them.",
+      "Tools may inspect files but are not permitted to write to them.",
+      "Yes—read-only access allows tools to inspect files, not modify them.",
+      "Read-only access permits tools to inspect files and prohibits modifying them.",
+      "Read-only access can permit tools to inspect files and prohibit modifying them.",
+      "Read-only access permits tools to inspect files and prohibits file modification.",
+      "Read-only access permits tools to inspect files and prohibits modification of files.",
+      "Tools may inspect files, but file modification is prohibited.",
+      "Read-only access permits tools to inspect files and prohibits modifications to files.",
+      "Read-only rules permit tools to inspect files but forbid editing them.",
+      "Read-only access permits tools to inspect files but forbids writing to them.",
+      "Yes—read-only access allows tools to inspect files but prevents them from modifying files.",
+      "Read-only access allows tools to inspect files but prevents tools from writing to files.",
+      "Read-only access lets tools inspect files but prevents them from editing them.",
+      "Read-only access permits tools to inspect files but prevents them from changing files.",
+      "Read-only access allows tools to inspect files but prevents tools from updating them.",
+      "Read-only access permits tools to inspect files; modifying them is not allowed",
+      "Read-only access permits tools to inspect files; editing them is disallowed",
+      "Read-only access permits tools to inspect files; writing to them is prohibited",
+      "Tools have permission to inspect files but lack permission to modify them.",
+      "Tools may inspect files but have no write access.",
+      "Tools can inspect files, but they lack write permission.",
+      "Tools may inspect files but lack file write permission.",
+      "Tools may inspect files but have no write permission.",
+      "Tools may inspect files but have no file write permission.",
+      "Tools may inspect files but no write access exists.",
+      "Tools may inspect files but write access does not exist.",
+      "Tools may inspect files but file edit capability no longer exists.",
+      "Read-only access lets tools inspect files, with no edit access.",
+      "Tools can inspect files but have no change access.",
+      "Tools may inspect files but lack modify access.",
+      "Tools are allowed to inspect files but may not modify them.",
+      "Tools are permitted to read files but have no write access.",
+      "The agent is authorized to inspect files but cannot modify them.",
+      "Tools have read access but no write access.",
+      "Tools have inspection access but cannot edit files.",
+      "Tools may inspect files but may not modify them—read-only access.",
+      "Yes, tools can inspect files, but any changes cannot be saved.",
+      "Tools may inspect files but cannot save changes to files.",
+      "Yes, tools can inspect files without making changes.",
+      "Yes, tools can inspect files, but they can't make changes.",
+      "The agent may inspect files but is unable to persist file modifications.",
+      "Tools may inspect files but file changes cannot be persisted.",
+      "Read-only access lets tools inspect files, but modifications to files may not be saved.",
+    ];
+    for (const output of validAnswers) {
+      const result = await scoreOutput(output, checks);
+      expect(result.overall).toBe(1);
+    }
+
+    const passiveCounterexamples = [
+      "Files cannot be read but not written.",
+      "Files can be written.",
+      "Files can be read but not written unless approved.",
+      "Files are readable but not writable if locked.",
+      "Files can be read but not written; tools may overwrite files.",
+    ];
+    for (const output of passiveCounterexamples) {
+      const result = await scoreOutput(output, checks);
+      expect(result.overall).toBeLessThan(1);
+    }
+
+    const negatedInspectionGrants = [
+      "Read-only access does not allow tools to inspect files, but tools may not modify them.",
+      "Read-only access doesn't allow tools to inspect files, but tools may not modify them.",
+      "Read-only access doesn’t allow tools to inspect files, but tools may not modify them.",
+      "Tools do not have permission to inspect files, but may not modify them.",
+      "Tools don't have permission to inspect files, but may not modify them.",
+      "Tools don’t have permission to inspect files, but may not modify them.",
+      "Tools are not allowed to inspect files but may not modify them.",
+      "Tools cannot view files and may not modify them.",
+      "Read-only access does not allow tools to view files, but tools may not modify them.",
+      "Tools have no read access and may not modify files.",
+    ];
+    for (const output of negatedInspectionGrants) {
+      const result = await scoreOutput(output, checks);
+      expect(result.overall).toBeLessThan(1);
+      expect(result.checks[0]?.passed).toBe(false);
+    }
+
+    const negatedNominalProhibitions = [
+      "Tools may inspect files, but file modification is not prohibited.",
+      "Read-only access permits tools to inspect files, but modifications to files are not forbidden.",
+      "Tools may inspect files, but file modification is prohibited unless approved.",
+    ];
+    for (const output of negatedNominalProhibitions) {
+      const result = await scoreOutput(output, checks);
+      expect(result.overall).toBeLessThan(1);
+      expect(result.checks[1]?.passed).toBe(false);
+    }
   });
 
   it("has exactly five diagnose cases with deterministic safety checks", () => {
