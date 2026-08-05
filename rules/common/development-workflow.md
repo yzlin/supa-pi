@@ -4,7 +4,7 @@
 
 The Feature Implementation Workflow describes the development pipeline: research, planning, TDD, code review, and then committing to git.
 
-Scale this workflow to task size. For trivial or local edits, use judgment and keep the loop light: inspect → patch → targeted verify. For non-trivial implementation, define success criteria before coding, such as `step → verify: check`.
+Scale this workflow to task size. For trivial or local edits, use judgment and keep the loop light: inspect → patch → targeted verify. For non-trivial implementation, define success criteria before coding, such as `step → verify: check`. For phased work, each phase must leave a usable, verified end-to-end path; do not trade working behavior for unfinished layers.
 
 ## Feature Implementation Workflow
 

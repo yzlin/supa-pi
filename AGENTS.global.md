@@ -25,6 +25,7 @@
 ## Critical Thinking
 
 - Fix root cause (not band-aid).
+- Repo-owned contracts: remove obsolete paths; no indefinite compatibility layers. Runtime, external, or persisted-state compatibility needs a stated reason and removal trigger.
 - Unsure: read more code; if still stuck, ask w/ short options.
 - If multiple materially different interpretations exist, do not choose silently; ask or list options.
 - Conflicts: call out; pick safer path.
