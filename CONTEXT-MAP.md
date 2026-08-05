@@ -28,7 +28,7 @@
 - `extensions/code-improvement/IMPROVE-CODEBASE-ARCHITECTURE.md` — read before changing `/improve-codebase-architecture` architecture review behavior.
 - `skills/context-docs/SKILL.md` and `extensions/context-docs/README.md` — read before changing `/context-setup`, `/context-note`, `/adr`, or `/context-review`; the skill canonically owns shared and command-specific behavior while the extension supplies the runtime envelope.
 - `skills/grilling/SKILL.md` — read before changing natural-language adversarial interviews or the shared grilling contract.
-- `skills/grill-me/SKILL.md`, `skills/grill-with-docs/SKILL.md`, and their matching files under `prompts/` — read before changing explicit `/grill-me <plan>` or `/grill-with-docs <plan>` behavior. Both command skills are thin wrappers; the docs wrapper permits only lock-gated, qualifying changes to `CONTEXT.md`, `CONTEXT-MAP.md`, and ADRs.
+- `skills/grill-me/SKILL.md` and `prompts/grill-me.md` — read before changing explicit `/grill-me <plan>` behavior. The command skill is a thin wrapper that permits only lock-gated, qualifying changes to `CONTEXT.md`, `CONTEXT-MAP.md`, and ADRs.
 - `extensions/execute/README.md` — read before changing `/execute`, Execution Brief reuse/synthesis, or execute orchestration behavior.
 - `extensions/goal/README.md` — read before changing `/goal`, goal task mode, goal checkpoint behavior, goal status rendering, or Goal Extension registration.
 - `extensions/init-deep/README.md` — read before changing `/init-deep` AGENTS.md generation behavior.
