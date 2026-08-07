@@ -30,6 +30,7 @@ The repository is optimized for local workflow quality and maintainable agent be
 - Keep extension boundaries isolated. Extensions under `extensions/` should not import from sibling extensions unless explicitly refactored into shared non-extension code.
 - Prefer small, durable Markdown context over chat-only decisions.
 - Develop anywhere, but treat `~/.pi/agent` as the live Pi config location described by setup docs.
+- Pi 0.84 or newer owns regular/fullscreen viewport composition. SupaPi defaults newly created settings to fullscreen, supports both modes, and does not rewrite existing TUI-mode preferences.
 - Do not document secrets, credentials, tokens, private keys, or raw sensitive logs.
 - Root project license is MIT. Copied or adapted upstream materials must carry source and license notices in durable docs or README entries.
 

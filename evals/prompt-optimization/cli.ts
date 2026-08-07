@@ -6,8 +6,8 @@ import { fileURLToPath } from "node:url";
 
 import type { ThinkingLevel } from "@earendil-works/pi-agent-core";
 import {
-  AuthStorage,
   ModelRegistry,
+  ModelRuntime,
   resolveCliModel,
 } from "@earendil-works/pi-coding-agent";
 
@@ -541,12 +541,12 @@ export async function main(): Promise<void> {
     .update(candidateDiff)
     .digest("hex");
 
-  const authStorage = AuthStorage.create();
-  const modelRegistry = ModelRegistry.create(authStorage);
+  const modelRuntime = await ModelRuntime.create();
+  const modelRegistry = new ModelRegistry(modelRuntime);
   const resolvedModel = resolveCliModel({
     cliModel: options.model,
     cliThinking: options.thinking,
-    modelRegistry,
+    modelRuntime,
   });
   if (resolvedModel.error || !resolvedModel.model) {
     throw new Error(resolvedModel.error ?? `model not found: ${options.model}`);

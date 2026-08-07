@@ -9,6 +9,7 @@
 ## Architecture decisions
 
 - `docs/adr/` — proposed, accepted, superseded, deprecated, or rejected tradeoff decisions.
+- `docs/adr/0002-use-pi-fullscreen.md` — read before changing Pi version support, setup TUI defaults, fullscreen/regular compatibility, or pieditor viewport ownership.
 
 ## Context notes
 
@@ -33,7 +34,7 @@
 - `extensions/goal/README.md` — read before changing `/goal`, goal task mode, goal checkpoint behavior, goal status rendering, or Goal Extension registration.
 - `extensions/init-deep/README.md` — read before changing `/init-deep` AGENTS.md generation behavior.
 - `extensions/lsp/README.md` — read before changing the LSP tool or `/lsp` command behavior.
-- `@yzlin/pieditor` — external npm-installed Pi package for editor UX behavior; `setup.sh` installs it via `npm:@yzlin/pieditor`.
+- `@yzlin/pieditor` — external npm-installed Pi package for editor UX behavior; `setup.sh` requires the compositor-free 2.0.0 release via `npm:@yzlin/pieditor@2.0.0`. Pi 0.84+ owns regular/fullscreen viewport composition; read `docs/adr/0002-use-pi-fullscreen.md` before adding editor-surface coordination.
 - `docs/context/questionnaire.md` — read before changing `extensions/questionnaire/*` behavior.
 - `extensions/tool-display/README.md` — read before changing tool renderer ownership, config, skill-file `read` override behavior, tool-display metadata, or RTK full-skill-read compaction exemptions.
 - `extensions/rtk/README.md` — read before changing output compaction, `bash` ownership, or `/rtk` behavior.

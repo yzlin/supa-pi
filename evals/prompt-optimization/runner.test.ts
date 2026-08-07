@@ -8,7 +8,7 @@ import {
   createAssistantMessageEventStream,
   type Model,
 } from "@earendil-works/pi-ai/compat";
-import { AuthStorage, ModelRegistry } from "@earendil-works/pi-coding-agent";
+import { ModelRegistry, ModelRuntime } from "@earendil-works/pi-coding-agent";
 
 import type { EvalCase } from "./index";
 import { isContainedRelativePath, runVariant } from "./runner";
@@ -17,7 +17,7 @@ const fixturePath = resolve(
   fileURLToPath(new URL(".", import.meta.url)),
   "fixtures/sample-project"
 );
-const modelRegistry = ModelRegistry.inMemory(AuthStorage.create());
+const modelRegistry = new ModelRegistry(await ModelRuntime.create());
 const UUID_V7_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 

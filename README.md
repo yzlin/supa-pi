@@ -21,7 +21,7 @@ Documented extensions in this repo include:
 - **`extensions/om`** — disabled Observational Memory extension code for branch-local memory restore, observer/reflector passes, and `/om` admin commands; present in the repo but not registered in `package.json -> pi.extensions`
 - **`extensions/rtk`** — output compaction and `/rtk stats` dashboard; owns `bash` execution, rewrite, and stats
 - **`extensions/caveman`** — standalone `/caveman` mode with per-session persistence and generic extension status
-- **`@yzlin/pieditor`** — npm-installed Pi package for editor UX improvements like `@` file picking, shell completions, raw paste, and command remapping; installed by `setup.sh`
+- **`@yzlin/pieditor` 2.0.0** — required compositor-free npm package for editor UX improvements like `@` file picking, shell completions, raw paste, and command remapping; installed by `setup.sh`
 - **`extensions/init-deep`** — deterministic `/init-deep` command flow for generating hierarchical `AGENTS.md`
 - **`extensions/questionnaire`** — active structured clarification tool with bounded schema, single/multi-question TUI flows, preview notes, validation, and locally documented rpiv divergences in `docs/context/questionnaire.md`
 - **`extensions/context-docs`** — deterministic `/context-setup`, `/context-note`, `/adr`, and `/context-review` workflows for durable project context docs; canonical workflow behavior lives in `skills/context-docs/SKILL.md`
@@ -133,18 +133,21 @@ cd ~/dev/yzlin/supa-pi
 2. install companion Pi packages with `pi install`
 3. symlink this repo's `AGENTS.global.md` as `~/.pi/agent/AGENTS.md`, plus `keybindings.json`, `agents/`, `prompts/`, and `rules/` into the live Pi agent directory
 
+Fresh setup uses Pi's official fullscreen TUI by default. Existing `settings.json` files are left untouched; existing users can select fullscreen via `/settings` or start Pi with `--tui-mode fullscreen`. Both regular and fullscreen modes are supported.
+
 After setup, restart Pi to pick up the changes.
 
 ## Companion packages installed by setup
 
-The setup script installs these Pi packages if they are not already present. It no longer installs `pi-skill-palette`; uninstall that global package yourself if it is still present from an older setup.
+The setup script installs or reconciles these Pi packages. It no longer installs `pi-skill-palette`; uninstall that global package yourself if it is still present from an older setup.
 
+- `npm:@yzlin/pieditor@2.0.0` — exact required compositor-free release
 - `@yzlin/pi-subagents`
 - `pi-mcp-adapter`
 - `pi-rewind`
 - `pi-web-access`
+- `@plannotator/pi-extension`
 - `glimpseui`
-- `pi-claude-bridge`
 - `pi-anycopy`
 - `pi-token-burden`
 - `@tintinweb/pi-tasks`
@@ -164,11 +167,11 @@ The setup script installs these Pi packages if they are not already present. It 
   - `bun run check:write`
 - This repo uses Bun (`bun.lock` present)
 - Peer dependencies include:
-  - `@earendil-works/pi-coding-agent` (`>=0.80.6`)
-  - `@earendil-works/pi-ai` (`>=0.80.6`)
-  - `@earendil-works/pi-tui` (`>=0.80.6`)
+  - `@earendil-works/pi-coding-agent` (`>=0.84.0`)
+  - `@earendil-works/pi-ai` (`>=0.84.0`)
+  - `@earendil-works/pi-tui` (`>=0.84.0`)
   - `typebox` (`^1.1.34`)
-- Pi version policy: consumers must provide Pi `0.80.6` or newer. Local development pins `@earendil-works/pi-agent-core`, `@earendil-works/pi-ai`, `@earendil-works/pi-coding-agent`, and `@earendil-works/pi-tui` together at exactly `0.80.6`; upgrade that set together and regenerate `bun.lock`.
+- Pi version policy: consumers must provide Pi `0.84.0` or newer. Local development pins `@earendil-works/pi-agent-core`, `@earendil-works/pi-ai`, `@earendil-works/pi-coding-agent`, and `@earendil-works/pi-tui` together at exactly `0.84.0`; upgrade that set together and regenerate `bun.lock`.
 
 ## When to use this repo
 

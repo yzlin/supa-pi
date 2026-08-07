@@ -1,10 +1,6 @@
-import { beforeEach, describe, expect, it } from "bun:test";
+import { describe, expect, it } from "bun:test";
 
 import { visibleWidth } from "@earendil-works/pi-tui";
-import {
-  clearReplacementSurfaceLeases,
-  getActiveReplacementLeaseDiagnostics,
-} from "@yzlin/pieditor/replacement-surface-lease";
 
 import questionnaire, {
   CUSTOM_OPTION_LABEL,
@@ -111,70 +107,93 @@ function executeQuestionnaireWithCustom(
   });
 }
 
-beforeEach(() => {
-  clearReplacementSurfaceLeases();
-});
+describe("questionnaire custom UI execution", () => {
+  it("executes the custom UI component and returns the selected answer", async () => {
+    let customCalls = 0;
+    const result = await executeQuestionnaireWithCustom((renderFactory) => {
+      customCalls++;
+      let submitted: unknown;
+      const component = (
+        renderFactory as (
+          tui: { requestRender(): void },
+          theme: typeof PLAIN_THEME,
+          keybindings: unknown,
+          done: (value: unknown) => void
+        ) => {
+          render(width: number): string[];
+          handleInput(data: string): void;
+        }
+      )(
+        {
+          requestRender() {
+            // Rendering is asserted synchronously in this custom UI harness.
+          },
+        },
+        PLAIN_THEME,
+        {},
+        (value) => {
+          submitted = value;
+        }
+      );
 
-describe("questionnaire replacement lease", () => {
-  it("releases the scoped replacement lease after successful submit", async () => {
-    await executeQuestionnaireWithCustom(() => {
-      expect(getActiveReplacementLeaseDiagnostics()).toEqual([
-        { owner: "questionnaire", id: "custom-ui" },
-      ]);
-      return {
-        questions: [],
+      expect(component.render(80).join("\n")).toContain("Which format?");
+      component.handleInput("\r");
+      return submitted;
+    });
+
+    expect(customCalls).toBe(1);
+    expect(result).toMatchObject({
+      details: {
+        cancelled: false,
         answers: [
           {
             kind: "option",
             id: "format",
             value: "json",
             label: "JSON",
-            wasCustom: false,
-            index: 1,
           },
         ],
-        cancelled: false,
-      };
+      },
     });
-
-    expect(getActiveReplacementLeaseDiagnostics()).toEqual([]);
   });
 
-  it("releases the scoped replacement lease after cancellation", async () => {
-    await executeQuestionnaireWithCustom(() => {
-      expect(getActiveReplacementLeaseDiagnostics()).toHaveLength(1);
-      return { questions: [], answers: [], cancelled: true };
-    });
-
-    expect(getActiveReplacementLeaseDiagnostics()).toEqual([]);
-  });
-
-  it("releases the scoped replacement lease when custom UI throws", async () => {
+  it("propagates errors thrown by the custom UI", async () => {
     await expect(
       executeQuestionnaireWithCustom(() => {
-        expect(getActiveReplacementLeaseDiagnostics()).toHaveLength(1);
         throw new Error("custom UI failed");
       })
     ).rejects.toThrow("custom UI failed");
-
-    expect(getActiveReplacementLeaseDiagnostics()).toEqual([]);
   });
 
-  it("does not acquire a replacement lease for validation errors", async () => {
+  it("returns validation errors without opening the custom UI", async () => {
     const tool = registerQuestionnaireTool();
-    await tool.execute("tool-call", { questions: [] }, undefined, undefined, {
-      hasUI: true,
-      ui: {
-        custom() {
-          throw new Error("custom UI should not open");
+    const result = await tool.execute(
+      "tool-call",
+      { questions: [] },
+      undefined,
+      undefined,
+      {
+        hasUI: true,
+        ui: {
+          custom() {
+            throw new Error("custom UI should not open");
+          },
+          notify() {
+            return;
+          },
         },
-        notify() {
-          return;
+      }
+    );
+
+    expect(result).toMatchObject({
+      details: {
+        cancelled: true,
+        error: {
+          valid: false,
+          issues: [{ code: "question_count" }],
         },
       },
     });
-
-    expect(getActiveReplacementLeaseDiagnostics()).toEqual([]);
   });
 });
 

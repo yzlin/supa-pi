@@ -55,16 +55,9 @@ Answer variants:
 
 Cancelled or invalid runs return text content plus `details.cancelled: true`; validation errors also include `details.error` with issue objects.
 
-## Pieditor replacement lease integration
+## Custom UI composition
 
-When the questionnaire opens its custom TUI through `ctx.ui.custom`, it loads `@yzlin/pieditor/replacement-surface-lease` and wraps that UI in pieditor's replacement-surface lease with owner `questionnaire` and id `custom-ui`. If the pieditor package is unavailable, questionnaire still opens normally without a lease.
-
-Effects:
-
-- The lease is acquired only after validation passes; validation errors return the cancelled error envelope without opening UI.
-- The lease releases after submit, cancellation, or thrown custom UI errors.
-- While active, pieditor fixed editor mode stands down: it does not reserve or repaint the fixed editor cluster, draw the root scrollbar, or consume fixed-editor scroll/mouse/selection input.
-- Diagnostics are visible through `/pieditor fixed-editor status` as `replacement leases: 1 (questionnaire)` while the questionnaire UI is open.
+Questionnaire opens its TUI directly through `ctx.ui.custom` after validation passes. Pi owns regular and fullscreen rendering composition, so the extension does not wrap or replace the rendering surface. Validation errors return the cancelled error envelope without opening the custom UI.
 
 ## Keyboard behavior
 

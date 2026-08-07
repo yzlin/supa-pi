@@ -4,7 +4,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PI_AGENT_DIR="$HOME/.pi/agent"
 PI_PACKAGES=(
-  "npm:@yzlin/pieditor"
+  "npm:@yzlin/pieditor@2.0.0"
   "npm:@yzlin/pi-subagents"
   "npm:pi-mcp-adapter"
   "npm:pi-rewind"
@@ -150,6 +150,7 @@ EOF
   ],
   "enableSkillCommands": true,
   "hideThinkingBlock": false,
+  "tuiMode": "fullscreen",
   "theme": "amp-gruvbox-dark-hard",
   "transport": "auto",
   "npmCommand": [
@@ -172,7 +173,7 @@ fi
 # Install packages
 echo "Installing packages..."
 for package in "${PI_PACKAGES[@]}"; do
-  pi install "$package" 2>/dev/null || echo "  $package already installed"
+  pi install "$package"
 done
 
 echo ""

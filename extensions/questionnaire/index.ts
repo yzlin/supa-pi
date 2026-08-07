@@ -12,10 +12,6 @@ import {
   Text,
   truncateToWidth,
 } from "@earendil-works/pi-tui";
-import type {
-  ReplacementLeaseModule,
-  ReplacementSurface,
-} from "@yzlin/pieditor/replacement-surface-lease";
 import { Type } from "typebox";
 
 import { routeQuestionnaireKey } from "./keys";
@@ -45,30 +41,6 @@ import {
 
 const CLARIFICATION_TRIGGER_REGEX =
   /\b(could you|can you|would you|do you want|would you prefer|do you prefer|which|what should|should i|any preference|please clarify|confirm)\b/i;
-
-const FALLBACK_REPLACEMENT_LEASE_MODULE: ReplacementLeaseModule = {
-  hasReplacementLeaseCompositor: () => false,
-  withReplacementSurfaceLease: (_options, run) => run(),
-};
-
-let replacementLeaseModulePromise: Promise<ReplacementLeaseModule> | null =
-  null;
-
-function loadReplacementLeaseModule(): Promise<ReplacementLeaseModule> {
-  replacementLeaseModulePromise ??= import(
-    "@yzlin/pieditor/replacement-surface-lease"
-  )
-    .then((module) => module as ReplacementLeaseModule)
-    .catch(() => FALLBACK_REPLACEMENT_LEASE_MODULE);
-
-  return replacementLeaseModulePromise;
-}
-
-const QUESTIONNAIRE_REPLACEMENT_OWNER = "questionnaire";
-const QUESTIONNAIRE_REPLACEMENT_SURFACE_ID = "custom-ui";
-const QUESTIONNAIRE_REPLACEMENT_SURFACE: ReplacementSurface = {
-  render: () => [],
-};
 
 export type {
   Answer,
@@ -355,14 +327,14 @@ export default function questionnaire(pi: ExtensionAPI): void {
 
   pi.registerCommand("questionnaire-stats", {
     description: "Show questionnaire miss and redirect stats for this session",
-    handler(_args, ctx) {
+    handler(_args, ctx): Promise<void> {
       const logs = getQuestionnaireMissLogs(ctx.sessionManager.getEntries());
       if (logs.length === 0) {
         ctx.ui.notify(
           "No questionnaire misses logged in this session.",
           "info"
         );
-        return;
+        return Promise.resolve();
       }
 
       const sourceCounts = {
@@ -413,6 +385,7 @@ export default function questionnaire(pi: ExtensionAPI): void {
         content: `Questionnaire stats\n\nTotal misses: ${logs.length}\nAuto-redirected: ${autoRedirected}\nRepeated after redirect: ${redirectedAlready}\n\nBy source:\n- interactive: ${sourceCounts.interactive}\n- rpc: ${sourceCounts.rpc}\n- extension: ${sourceCounts.extension}\n- unknown: ${sourceCounts.unknown}\n\nRecent misses:\n${recent.join("\n")}`,
         display: true,
       });
+      return Promise.resolve();
     },
   });
 
@@ -448,202 +421,162 @@ export default function questionnaire(pi: ExtensionAPI): void {
       }
 
       const questions = validation.questions.map(normalizeQuestion);
-      const replacementLeaseModule = await loadReplacementLeaseModule();
-      const shouldUseFixedReplacement =
-        replacementLeaseModule.hasReplacementLeaseCompositor();
-      let replacementComponent: {
-        render(width: number): string[];
-        invalidate(): void;
-        handleInput?(data: string): void;
-        dispose?(): void;
-      } | null = null;
-      const replacementSurface: ReplacementSurface = {
-        render: (width) => replacementComponent?.render(width) ?? [],
-      };
+      const result = await ctx.ui.custom<QuestionnaireResult>(
+        (tui, theme, _kb, done) => {
+          let state = createQuestionnaireRuntimeState();
+          let cachedLines: string[] | undefined;
 
-      const result = await replacementLeaseModule.withReplacementSurfaceLease(
-        {
-          owner: QUESTIONNAIRE_REPLACEMENT_OWNER,
-          id: QUESTIONNAIRE_REPLACEMENT_SURFACE_ID,
-          target: shouldUseFixedReplacement
-            ? replacementSurface
-            : QUESTIONNAIRE_REPLACEMENT_SURFACE,
-        },
-        () =>
-          ctx.ui.custom<QuestionnaireResult>((tui, theme, _kb, done) => {
-            let state = createQuestionnaireRuntimeState();
-            let cachedLines: string[] | undefined;
+          const editorTheme: EditorTheme = {
+            borderColor: (s) => theme.fg("accent", s),
+            selectList: {
+              selectedPrefix: (t) => theme.fg("accent", t),
+              selectedText: (t) => theme.fg("accent", t),
+              description: (t) => theme.fg("muted", t),
+              scrollInfo: (t) => theme.fg("dim", t),
+              noMatch: (t) => theme.fg("warning", t),
+            },
+          };
+          const editor = new Editor(tui, editorTheme);
 
-            const editorTheme: EditorTheme = {
-              borderColor: (s) => theme.fg("accent", s),
-              selectList: {
-                selectedPrefix: (t) => theme.fg("accent", t),
-                selectedText: (t) => theme.fg("accent", t),
-                description: (t) => theme.fg("muted", t),
-                scrollInfo: (t) => theme.fg("dim", t),
-                noMatch: (t) => theme.fg("warning", t),
-              },
-            };
-            const editor = new Editor(tui, editorTheme);
+          function refresh() {
+            cachedLines = undefined;
+            tui.requestRender();
+          }
 
-            function refresh() {
-              cachedLines = undefined;
-              tui.requestRender();
+          function submit(cancelled: boolean) {
+            done({
+              questions,
+              answers: Array.from(state.answers.values()),
+              cancelled,
+            });
+          }
+
+          function currentQuestion(): Question | undefined {
+            return questions[state.currentTab];
+          }
+
+          function questionHasPreview(question: Question | undefined): boolean {
+            return (
+              question?.options.some(
+                (option) => option.preview !== undefined
+              ) === true
+            );
+          }
+
+          function canUsePreview(): boolean {
+            const question = currentQuestion();
+            return questionHasPreview(question);
+          }
+
+          function canUsePreviewNotes(): boolean {
+            const question = currentQuestion();
+            return (
+              question !== undefined &&
+              question.multiSelect !== true &&
+              questionHasPreview(question)
+            );
+          }
+
+          function currentOptions(): RenderOption[] {
+            const question = currentQuestion();
+            return question ? getRenderOptions(question) : [];
+          }
+
+          function applyEffect(
+            effect: ReturnType<typeof reduceQuestionnaireRuntime>["effect"]
+          ) {
+            if (effect.type === "submit") {
+              submit(effect.cancelled);
+              return;
             }
-
-            function submit(cancelled: boolean) {
-              done({
-                questions,
-                answers: Array.from(state.answers.values()),
-                cancelled,
-              });
+            if (effect.type === "startInput" || effect.type === "clearInput") {
+              editor.setText("");
             }
-
-            function currentQuestion(): Question | undefined {
-              return questions[state.currentTab];
+            if (effect.type === "startNote") {
+              editor.setText(state.noteDrafts.get(effect.questionId) ?? "");
             }
-
-            function questionHasPreview(
-              question: Question | undefined
-            ): boolean {
-              return (
-                question?.options.some(
-                  (option) => option.preview !== undefined
-                ) === true
-              );
+            if (effect.type !== "none") {
+              refresh();
             }
+          }
 
-            function canUsePreview(): boolean {
-              const question = currentQuestion();
-              return questionHasPreview(question);
-            }
+          function dispatch(
+            action: Parameters<typeof reduceQuestionnaireRuntime>[1]
+          ) {
+            const reduced = reduceQuestionnaireRuntime(
+              state,
+              action,
+              questions
+            );
+            state = reduced.state;
+            applyEffect(reduced.effect);
+          }
 
-            function canUsePreviewNotes(): boolean {
-              const question = currentQuestion();
-              return (
-                question !== undefined &&
-                question.multiSelect !== true &&
-                questionHasPreview(question)
-              );
-            }
-
-            function currentOptions(): RenderOption[] {
-              const question = currentQuestion();
-              return question ? getRenderOptions(question) : [];
-            }
-
-            function applyEffect(
-              effect: ReturnType<typeof reduceQuestionnaireRuntime>["effect"]
-            ) {
-              if (effect.type === "submit") {
-                submit(effect.cancelled);
-                return;
-              }
-              if (
-                effect.type === "startInput" ||
-                effect.type === "clearInput"
-              ) {
-                editor.setText("");
-              }
-              if (effect.type === "startNote") {
-                editor.setText(state.noteDrafts.get(effect.questionId) ?? "");
-              }
-              if (effect.type !== "none") {
-                refresh();
-              }
-            }
-
-            function dispatch(
-              action: Parameters<typeof reduceQuestionnaireRuntime>[1]
-            ) {
-              const reduced = reduceQuestionnaireRuntime(
-                state,
-                action,
-                questions
-              );
-              state = reduced.state;
-              applyEffect(reduced.effect);
-            }
-
-            editor.onSubmit = (value) => {
-              if (state.notesMode && state.noteQuestionId) {
-                dispatch({
-                  type: "saveNoteDraft",
-                  questionId: state.noteQuestionId,
-                  value,
-                });
-                return;
-              }
-              if (!state.inputQuestionId) {
-                return;
-              }
+          editor.onSubmit = (value) => {
+            if (state.notesMode && state.noteQuestionId) {
               dispatch({
-                type: "saveCustomAnswer",
-                questionId: state.inputQuestionId,
+                type: "saveNoteDraft",
+                questionId: state.noteQuestionId,
                 value,
               });
-            };
-
-            function handleInput(data: string) {
-              const action = routeQuestionnaireKey({
-                data,
-                state,
-                questions,
-                options: currentOptions(),
-                allAnswered: isAllAnswered(questions, state.answers),
-                previewNotesEnabled: canUsePreviewNotes(),
-              });
-
-              if (!action) {
-                return;
-              }
-              if (action.type === "editor") {
-                editor.handleInput(data);
-                refresh();
-                return;
-              }
-              dispatch(action);
+              return;
             }
+            if (!state.inputQuestionId) {
+              return;
+            }
+            dispatch({
+              type: "saveCustomAnswer",
+              questionId: state.inputQuestionId,
+              value,
+            });
+          };
 
-            function render(width: number): string[] {
-              if (cachedLines) {
-                return cachedLines;
-              }
+          function handleInput(data: string) {
+            const action = routeQuestionnaireKey({
+              data,
+              state,
+              questions,
+              options: currentOptions(),
+              allAnswered: isAllAnswered(questions, state.answers),
+              previewNotesEnabled: canUsePreviewNotes(),
+            });
 
-              cachedLines = renderQuestionnaireRuntime({
-                width,
-                theme,
-                questions,
-                state,
-                options: currentOptions(),
-                editor,
-                previewEnabled: canUsePreview(),
-              });
+            if (!action) {
+              return;
+            }
+            if (action.type === "editor") {
+              editor.handleInput(data);
+              refresh();
+              return;
+            }
+            dispatch(action);
+          }
+
+          function render(width: number): string[] {
+            if (cachedLines) {
               return cachedLines;
             }
 
-            const component = {
-              render,
-              invalidate: () => {
-                cachedLines = undefined;
-              },
-              handleInput,
-            };
+            cachedLines = renderQuestionnaireRuntime({
+              width,
+              theme,
+              questions,
+              state,
+              options: currentOptions(),
+              editor,
+              previewEnabled: canUsePreview(),
+            });
+            return cachedLines;
+          }
 
-            if (!shouldUseFixedReplacement) {
-              return component;
-            }
-
-            replacementComponent = component;
-            return {
-              render: () => [],
-              invalidate: component.invalidate,
-              handleInput: component.handleInput,
-              dispose: () => {
-                replacementComponent = null;
-              },
-            };
-          })
+          return {
+            render,
+            invalidate: () => {
+              cachedLines = undefined;
+            },
+            handleInput,
+          };
+        }
       );
 
       return createQuestionnaireEnvelope({ ...result, questions });
