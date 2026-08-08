@@ -80,6 +80,8 @@ Run `/skill` or `/skill list` in a custom UI session to open the first-slice Ski
 
 `prompts/to-prd.md` is adapted from Matt Pocock's `to-prd` skill: https://github.com/mattpocock/skills/blob/main/skills/engineering/to-prd/SKILL.md
 
+`prompts/wait-what.md` adapts Matt Pocock's MIT-licensed [`skills/productivity/wait-what/SKILL.md`](https://github.com/mattpocock/skills/blob/84fdeffd12f2ee307994d1eb6feb48173b6e0502/skills/productivity/wait-what/SKILL.md) at commit `84fdeffd12f2ee307994d1eb6feb48173b6e0502`.
+
 `extensions/context-docs/prompt.md` is the narrow runtime envelope for the canonical context-docs skill; it does not duplicate command behavior.
 
 The local grilling, wrapper, and domain-modeling guidance is adapted—not copied verbatim—from Matt Pocock's MIT-licensed [`skills`](https://github.com/mattpocock/skills) repository at commit [`9603c1cc8118d08bc1b3bf34cf714f62178dea3b`](https://github.com/mattpocock/skills/tree/9603c1cc8118d08bc1b3bf34cf714f62178dea3b), specifically `skills/productivity/grilling`, `skills/productivity/grill-me`, `skills/engineering/grill-with-docs`, and `skills/engineering/domain-modeling`.
