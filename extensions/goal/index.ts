@@ -684,7 +684,7 @@ export default function goalExtension(pi: ExtensionAPI): void {
 
   pi.registerMessageRenderer?.<GoalEventDetails>(
     GOAL_MESSAGE_TYPE,
-    (message, _opts, theme) => {
+    (message, { outputPad }, theme) => {
       const details = message.details;
       if (!details) {
         return;
@@ -692,7 +692,7 @@ export default function goalExtension(pi: ExtensionAPI): void {
       const suffix = details.status ? ` (${details.status})` : "";
       return new Text(
         `${theme.fg("toolTitle", "goal:")} ${details.title}${suffix}${details.body ? ` — ${details.body}` : ""}`,
-        0,
+        outputPad,
         0
       );
     }

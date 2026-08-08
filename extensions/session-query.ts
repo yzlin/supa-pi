@@ -11,7 +11,6 @@
  */
 
 import type { Message } from "@earendil-works/pi-ai";
-import { complete } from "@earendil-works/pi-ai/compat";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import {
   convertToLlm,
@@ -22,8 +21,6 @@ import {
 } from "@earendil-works/pi-coding-agent";
 import { Container, Markdown, Spacer, Text } from "@earendil-works/pi-tui";
 import { Type } from "typebox";
-
-import { getModelAuthOrThrow } from "./llm-auth";
 
 const TOP_LEVEL_REGEX_1 = /\*\*Query:\*\* (.+?)\n\n---\n\n([\s\S]+)/;
 
@@ -123,18 +120,31 @@ export default function (pi: ExtensionAPI) {
       const conversationText = serializeConversation(llmMessages);
 
       // Determine the model to use: prefer the queried session's own model,
-      // fall back to the current session's model.
-      let queryModel = ctx.model;
+      // but never escape the current session's model scope.
+      const scopedModels = ctx.scopedModels ?? [];
+      const currentScopedModel = scopedModels.find(
+        ({ model: scopedModel }) =>
+          scopedModel.provider === ctx.model?.provider &&
+          scopedModel.id === ctx.model.id
+      )?.model;
+      let queryModel =
+        scopedModels.length > 0
+          ? (currentScopedModel ?? scopedModels[0]?.model)
+          : ctx.model;
       const modelChanges = branch.filter(
         (entry): entry is SessionEntry & { type: "model_change" } =>
           entry.type === "model_change"
       );
       if (modelChanges.length > 0) {
         const lastChange = modelChanges.at(-1)!;
-        const sessionModel = ctx.modelRegistry.find(
-          lastChange.provider,
-          lastChange.modelId
-        );
+        const sessionModel =
+          scopedModels.length > 0
+            ? scopedModels.find(
+                ({ model: scopedModel }) =>
+                  scopedModel.provider === lastChange.provider &&
+                  scopedModel.id === lastChange.modelId
+              )?.model
+            : ctx.modelRegistry.find(lastChange.provider, lastChange.modelId);
         if (sessionModel) {
           queryModel = sessionModel;
         }
@@ -145,11 +155,6 @@ export default function (pi: ExtensionAPI) {
       }
 
       try {
-        const { apiKey, headers } = await getModelAuthOrThrow(
-          ctx.modelRegistry,
-          queryModel
-        );
-
         const userMessage: Message = {
           role: "user",
           content: [
@@ -161,10 +166,10 @@ export default function (pi: ExtensionAPI) {
           timestamp: Date.now(),
         };
 
-        const response = await complete(
+        const response = await ctx.modelRegistry.complete(
           queryModel,
           { systemPrompt: QUERY_SYSTEM_PROMPT, messages: [userMessage] },
-          { apiKey, headers, signal }
+          { signal }
         );
 
         if (response.stopReason === "aborted") {

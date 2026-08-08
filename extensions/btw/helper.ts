@@ -10,6 +10,11 @@ export interface ResolveModelResult {
   error?: string;
 }
 
+interface ScopedModelEntry {
+  model: { provider: string; id: string };
+  thinkingLevel?: string;
+}
+
 /**
  * Parse /btw args.
  * Supports an optional leading -model provider/modelId flag.
@@ -36,7 +41,8 @@ export function resolveModelAndThinking(
   modelRegistry: { find: (provider: string, modelId: string) => unknown },
   currentModel: unknown,
   currentThinkingLevel: string,
-  params: { model?: string }
+  params: { model?: string },
+  scopedModels: readonly ScopedModelEntry[] = []
 ): ResolveModelResult {
   if (!params.model) {
     return { model: currentModel, thinkingLevel: currentThinkingLevel };
@@ -50,10 +56,25 @@ export function resolveModelAndThinking(
     };
   }
 
-  const resolvedModel = modelRegistry.find(
-    params.model.slice(0, slashIdx),
-    params.model.slice(slashIdx + 1)
-  );
+  const provider = params.model.slice(0, slashIdx);
+  const modelId = params.model.slice(slashIdx + 1);
+  if (scopedModels.length > 0) {
+    const scoped = scopedModels.find(
+      ({ model }) => model.provider === provider && model.id === modelId
+    );
+    if (!scoped) {
+      return {
+        thinkingLevel: currentThinkingLevel,
+        error: `Model ${params.model} is outside the current model scope`,
+      };
+    }
+    return {
+      model: scoped.model,
+      thinkingLevel: scoped.thinkingLevel ?? currentThinkingLevel,
+    };
+  }
+
+  const resolvedModel = modelRegistry.find(provider, modelId);
 
   if (!resolvedModel) {
     return {

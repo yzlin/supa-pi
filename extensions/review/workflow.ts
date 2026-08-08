@@ -1437,6 +1437,18 @@ function resolveRequestedModel(
     throw new Error(`Invalid review workflow model override '${model}'.`);
   }
 
+  const scopedModels = ctx.scopedModels ?? [];
+  if (
+    scopedModels.length > 0 &&
+    !scopedModels.some(
+      ({ model: scoped }) => scoped.provider === provider && scoped.id === id
+    )
+  ) {
+    throw new Error(
+      `Review workflow model '${model}' is outside the current model scope.`
+    );
+  }
+
   const resolved = ctx.modelRegistry.find(provider, id) as
     | ModelLike
     | undefined;

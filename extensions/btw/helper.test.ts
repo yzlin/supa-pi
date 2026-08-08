@@ -59,6 +59,37 @@ describe("resolveModelAndThinking", () => {
     expect(result.error).toBeUndefined();
   });
 
+  it("uses the scoped model and pinned thinking level", () => {
+    const scopedModel = {
+      provider: "anthropic",
+      id: "claude-haiku-4-5",
+    };
+    const result = resolveModelAndThinking(
+      modelRegistry,
+      currentModel,
+      "medium",
+      { model: "anthropic/claude-haiku-4-5" },
+      [{ model: scopedModel, thinkingLevel: "high" }]
+    );
+
+    expect(result).toEqual({ model: scopedModel, thinkingLevel: "high" });
+  });
+
+  it("rejects overrides outside the current model scope", () => {
+    const result = resolveModelAndThinking(
+      modelRegistry,
+      currentModel,
+      "medium",
+      { model: "anthropic/claude-haiku-4-5" },
+      [{ model: currentModel }]
+    );
+
+    expect(result.model).toBeUndefined();
+    expect(result.error).toBe(
+      "Model anthropic/claude-haiku-4-5 is outside the current model scope"
+    );
+  });
+
   it("fails fast on invalid model format", () => {
     const result = resolveModelAndThinking(modelRegistry, currentModel, "low", {
       model: "haiku",

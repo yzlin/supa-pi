@@ -84,12 +84,15 @@ export default function (pi: ExtensionAPI) {
   // --- Shared rendering logic for btw results ---
   function renderBtwResult(
     r: SingleResult,
-    theme: unknown
+    theme: unknown,
+    outputPad = 1
   ): InstanceType<typeof Box> {
     const icon =
       r.exitCode === 0 ? theme.fg("success", "✓") : theme.fg("error", "✗");
 
-    const box = new Box(1, 1, (t: string) => theme.bg("customMessageBg", t));
+    const box = new Box(outputPad, 1, (t: string) =>
+      theme.bg("customMessageBg", t)
+    );
 
     // Single merged header: ✓ btw: <task>
     box.addChild(
@@ -139,12 +142,12 @@ export default function (pi: ExtensionAPI) {
   // --- Custom message renderer: always shows full markdown output ---
   pi.registerMessageRenderer<BtwMessageDetails>(
     BTW_MESSAGE_TYPE,
-    (message, _opts, theme) => {
+    (message, { outputPad }, theme) => {
       const details = message.details;
       if (!details?.result) {
         return;
       }
-      return renderBtwResult(details.result, theme);
+      return renderBtwResult(details.result, theme, outputPad);
     }
   );
 
@@ -172,7 +175,8 @@ export default function (pi: ExtensionAPI) {
         ctx.modelRegistry,
         ctx.model,
         pi.getThinkingLevel(),
-        { model: modelOpt }
+        { model: modelOpt },
+        ctx.scopedModels
       );
 
       if (modelError) {

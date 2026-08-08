@@ -231,6 +231,17 @@ function assertReviewModelAvailable(
   if (!(provider && id)) {
     throw new Error(`Invalid ${role} model '${model}'. Use provider/model.`);
   }
+  const scopedModels = ctx.scopedModels ?? [];
+  if (
+    scopedModels.length > 0 &&
+    !scopedModels.some(
+      ({ model: scoped }) => scoped.provider === provider && scoped.id === id
+    )
+  ) {
+    throw new Error(
+      `${role} model '${model}' is outside the current model scope.`
+    );
+  }
   const resolved = ctx.modelRegistry.find(provider, id);
   if (!resolved) {
     throw new Error(`${role} model '${model}' is not available.`);
@@ -1071,10 +1082,10 @@ export default function reviewExtension(pi: ExtensionAPI) {
 
   pi.registerMessageRenderer<{ report?: string }>(
     REVIEW_REPORT_MESSAGE_TYPE,
-    (message) =>
+    (message, { outputPad }) =>
       new Markdown(
         String(message.details?.report ?? message.content ?? ""),
-        0,
+        outputPad,
         0,
         getMarkdownTheme()
       )

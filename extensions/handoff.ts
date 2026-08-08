@@ -10,7 +10,6 @@
  *
  * Usage:
  *   /handoff now implement this for teams as well
- *   /handoff -model anthropic/claude-haiku-4-5 check other places that need this fix
  *
  * The generated handoff document is saved to the OS temp directory and included
  * in the new-session prompt for immediate use.
@@ -24,11 +23,11 @@ import { join } from "node:path";
 
 import type { AgentMessage } from "@earendil-works/pi-agent-core";
 import type { Api, Message, Model } from "@earendil-works/pi-ai";
-import { complete } from "@earendil-works/pi-ai/compat";
 import type {
   ExtensionAPI,
   ExtensionCommandContext,
   ExtensionContext,
+  ModelRegistry,
   SessionEntry,
 } from "@earendil-works/pi-coding-agent";
 import {
@@ -38,9 +37,7 @@ import {
 } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
 
-import { getModelAuthOrThrow } from "./llm-auth";
-
-const TOP_LEVEL_REGEX_1 = /(?:^|\s)-model\s+(\S+)/;
+const TOP_LEVEL_REGEX_1 = /^\s*-model(?:\s|$)/;
 
 const CONTEXT_SUMMARY_SYSTEM_PROMPT = `You are a context transfer assistant. Given a conversation history and the user's goal for a new thread, generate a focused handoff document that:
 
@@ -90,8 +87,7 @@ We've been working on X. Key decisions:
  */
 async function generateContextSummary(
   model: Model<Api>,
-  apiKey: string | undefined,
-  headers: Record<string, string> | undefined,
+  modelRegistry: ModelRegistry,
   messages: AgentMessage[],
   goal: string,
   signal?: AbortSignal
@@ -109,10 +105,10 @@ async function generateContextSummary(
     timestamp: Date.now(),
   };
 
-  const response = await complete(
+  const response = await modelRegistry.complete(
     model,
     { systemPrompt: CONTEXT_SUMMARY_SYSTEM_PROMPT, messages: [userMessage] },
-    { apiKey, headers, signal }
+    { signal }
   );
 
   if (response.stopReason === "aborted") {
@@ -197,45 +193,66 @@ interface HandoffOptions {
   model?: string;
 }
 
-/**
- * Apply -model options after a session switch.
- * For -model, applies the model directly.
- */
+function resolveHandoffModel(
+  ctx: ExtensionContext,
+  requestedModel: string
+):
+  | { model: Model<Api>; thinkingLevel?: ExtensionContext["thinkingLevel"] }
+  | string {
+  const slashIdx = requestedModel.indexOf("/");
+  if (slashIdx <= 0 || slashIdx === requestedModel.length - 1) {
+    return `Handoff: invalid model format "${requestedModel}", expected provider/modelId`;
+  }
+
+  const provider = requestedModel.slice(0, slashIdx);
+  const modelId = requestedModel.slice(slashIdx + 1);
+  const scopedModels = ctx.scopedModels ?? [];
+  const scoped = scopedModels.find(
+    ({ model: scopedModel }) =>
+      scopedModel.provider === provider && scopedModel.id === modelId
+  );
+  if (scopedModels.length > 0 && !scoped) {
+    return `Handoff: model ${requestedModel} is outside the current model scope`;
+  }
+
+  const model = scoped?.model ?? ctx.modelRegistry.find(provider, modelId);
+  if (!model) {
+    return `Handoff: unknown model ${requestedModel}`;
+  }
+
+  return { model, thinkingLevel: scoped?.thinkingLevel };
+}
+
 async function applyHandoffOptions(
   pi: ExtensionAPI,
   ctx: ExtensionContext,
   options?: HandoffOptions
-): Promise<void> {
-  if (!options) {
-    return;
+): Promise<boolean> {
+  const requestedModel = options?.model;
+  if (!requestedModel) {
+    return true;
   }
 
-  if (options.model) {
-    // Parse "provider/modelId" format
-    const slashIdx = options.model.indexOf("/");
-    if (slashIdx > 0) {
-      const provider = options.model.slice(0, slashIdx);
-      const modelId = options.model.slice(slashIdx + 1);
-      const model = ctx.modelRegistry.find(provider, modelId);
-      if (model) {
-        await pi.setModel(model);
-      } else if (ctx.hasUI) {
-        ctx.ui.notify(`Handoff: unknown model ${options.model}`, "warning");
-      }
-    } else if (ctx.hasUI) {
-      ctx.ui.notify(
-        `Handoff: invalid model format "${options.model}", expected provider/modelId`,
-        "warning"
-      );
+  const resolved = resolveHandoffModel(ctx, requestedModel);
+  if (typeof resolved === "string") {
+    if (ctx.hasUI) {
+      ctx.ui.notify(resolved, "warning");
     }
+    return false;
   }
+
+  const changed = await pi.setModel(resolved.model);
+  if (changed && resolved.thinkingLevel) {
+    pi.setThinkingLevel(resolved.thinkingLevel);
+  }
+  return changed;
 }
 
 /**
  * Core handoff logic. Returns an error string on failure, or undefined on success.
  */
 async function performHandoff(
-  pi: ExtensionAPI,
+  _pi: ExtensionAPI,
   ctx: ExtensionContext,
   goal: string,
   _pendingHandoff: {
@@ -261,6 +278,13 @@ async function performHandoff(
     return "No model selected.";
   }
 
+  if (options?.model) {
+    const resolved = resolveHandoffModel(ctx, options.model);
+    if (typeof resolved === "string") {
+      return resolved;
+    }
+  }
+
   const branch = ctx.sessionManager.getBranch();
   const messages = branch
     .filter(
@@ -284,16 +308,11 @@ async function performHandoff(
     );
     loader.onAbort = () => done(null);
 
-    const doGenerate = async () => {
+    const doGenerate = () => {
       const model = ctx.model as Model<Api>;
-      const { apiKey, headers } = await getModelAuthOrThrow(
-        ctx.modelRegistry,
-        model
-      );
       return generateContextSummary(
         model,
-        apiKey,
-        headers,
+        ctx.modelRegistry,
         messages,
         goal,
         loader.signal
@@ -331,16 +350,15 @@ async function performHandoff(
   const finalPrompt = buildHandoffPrompt(goal, handoffPath, currentSessionFile);
 
   if (!fromTool && "newSession" in ctx) {
-    // Command path: full reset via ctx.newSession()
+    // Command path: full reset via ctx.newSession(). Model overrides are rejected
+    // by the command handler because the replacement context has no model setter.
     const cmdCtx = ctx as ExtensionCommandContext;
-    const newSessionResult = await cmdCtx.newSession({
+    await cmdCtx.newSession({
       parentSession: currentSessionFile,
+      withSession: async (replacementCtx) => {
+        await replacementCtx.sendUserMessage(finalPrompt);
+      },
     });
-    if (newSessionResult.cancelled) {
-      return;
-    }
-    await applyHandoffOptions(pi, ctx, options);
-    pi.sendUserMessage(finalPrompt);
   } else {
     // Tool path: defer session switch to agent_end handler.
     // We can't call ctx.newSession() from tool context (only ExtensionCommandContext
@@ -430,22 +448,30 @@ export default function (pi: ExtensionAPI) {
     const { prompt, parentSession, options } = pendingHandoff;
     pendingHandoff = null;
 
-    // Record timestamp BEFORE switching - all old messages have timestamps
-    // before this, all new messages will have timestamps after.
-    handoffTimestamp = Date.now();
-
-    // Low-level session switch: creates new session file, resets entries.
-    // This does NOT clear agent.state.messages (we handle that via context event).
-    (ctx.sessionManager as unknown as SessionManagerWithNewSession).newSession({
-      parentSession,
-    });
-
-    // Defer sendUserMessage to the next macrotask to ensure the old agent
-    // loop's _runLoop cleanup has fully completed (isStreaming reset,
-    // runningPrompt resolved). Without this, we'd have two concurrent
+    // Defer the model change and session switch to the next macrotask to ensure
+    // the old agent loop's _runLoop cleanup has fully completed (isStreaming
+    // reset, runningPrompt resolved). Without this, we'd have two concurrent
     // _runLoop instances with conflicting state.
     setTimeout(async () => {
-      await applyHandoffOptions(pi, ctx, options);
+      if (!(await applyHandoffOptions(pi, ctx, options))) {
+        if (ctx.hasUI) {
+          ctx.ui.notify(
+            "Handoff aborted because the requested model could not be applied.",
+            "error"
+          );
+        }
+        return;
+      }
+
+      // Record timestamp BEFORE switching - all old messages have timestamps
+      // before this, all new messages will have timestamps after.
+      handoffTimestamp = Date.now();
+
+      // Low-level session switch: creates new session file, resets entries.
+      // This does NOT clear agent.state.messages (we handle that via context event).
+      (
+        ctx.sessionManager as unknown as SessionManagerWithNewSession
+      ).newSession({ parentSession });
       pi.sendUserMessage(prompt);
     }, 0);
   });
@@ -487,34 +513,28 @@ export default function (pi: ExtensionAPI) {
 
   // /handoff command
   pi.registerCommand("handoff", {
-    description:
-      "Transfer context to a new focused session (-model <provider/id>)",
+    description: "Transfer context to a new focused session",
     handler: async (args, ctx) => {
-      // Parse optional -model flags from args
-      const options: HandoffOptions = {};
-      let remaining = args;
-
-      const modelMatch = remaining.match(TOP_LEVEL_REGEX_1);
-      if (modelMatch) {
-        options.model = modelMatch[1];
-        remaining = remaining.replace(modelMatch[0], " ");
-      }
-
-      const goal = remaining.trim();
-      if (!goal) {
-        ctx.ui.notify("Usage: /handoff [-model <provider/id>] <goal>", "error");
+      if (TOP_LEVEL_REGEX_1.test(args)) {
+        ctx.ui.notify(
+          "/handoff does not support -model; use /handoff <goal>",
+          "error"
+        );
         return;
       }
 
-      const hasOptions = !!options.model;
+      const goal = args.trim();
+      if (!goal) {
+        ctx.ui.notify("Usage: /handoff <goal>", "error");
+        return;
+      }
+
       const error = await performHandoff(
         pi,
         ctx,
         goal,
         pendingHandoff,
-        setPendingHandoff,
-        false,
-        hasOptions ? options : undefined
+        setPendingHandoff
       );
       if (error) {
         ctx.ui.notify(error, "error");
@@ -568,7 +588,7 @@ export default function (pi: ExtensionAPI) {
               "Handoff initiated. The session will switch after the current turn completes.",
           },
         ],
-        details: null,
+        details: error ? { error: true } : null,
       };
     },
   });

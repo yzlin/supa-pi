@@ -84,6 +84,10 @@ function createCtx(
       mode: "rpc",
       isIdle: () => true,
       signal: undefined,
+      scopedModels: [] as Array<{
+        model: { provider: string; id: string };
+        thinkingLevel?: string;
+      }>,
       modelRegistry: {
         find(provider: string, id: string) {
           return available(`${provider}/${id}`) ? { provider, id } : undefined;
@@ -304,7 +308,13 @@ function createRuntime(
     options?: unknown;
   }> = [];
   const sentUserMessages: Array<{ content: string; options?: unknown }> = [];
-  const renderers = new Map<string, (message: unknown) => unknown>();
+  const renderers = new Map<
+    string,
+    (
+      message: unknown,
+      options: { expanded: boolean; outputPad: number }
+    ) => unknown
+  >();
   return {
     commands,
     appendedEntries,
@@ -323,7 +333,10 @@ function createRuntime(
       },
       registerMessageRenderer(
         type: string,
-        renderer: (message: unknown) => unknown
+        renderer: (
+          message: unknown,
+          options: { expanded: boolean; outputPad: number }
+        ) => unknown
       ) {
         renderers.set(type, renderer);
       },
@@ -1748,6 +1761,21 @@ describe.serial("multi-model review orchestration", () => {
     ).toHaveLength(2);
   });
 
+  it("rejects models outside the current session scope before calls", async () => {
+    const calls = installManager();
+    const { ctx } = createCtx();
+    ctx.scopedModels = [
+      { model: { provider: "test", id: "alpha" } },
+      { model: { provider: "test", id: "synth" } },
+      { model: { provider: "test", id: "verify" } },
+    ];
+
+    await expect(
+      runReviewWorkflow({} as never, ctx as never, workflowInput())
+    ).rejects.toThrow("outside the current model scope");
+    expect(calls).toEqual([]);
+  });
+
   it("rejects registered models without configured authentication before calls", async () => {
     const calls = installManager();
     const { ctx } = createCtx();
@@ -2072,9 +2100,10 @@ describe.serial("/review command settings and disclosure", () => {
     ]);
     reviewExtension(runtime.pi as never);
     expect(
-      runtime.renderers.get(REVIEW_REPORT_MESSAGE_TYPE)?.({
-        content: "## report",
-      })
+      runtime.renderers.get(REVIEW_REPORT_MESSAGE_TYPE)?.(
+        { content: "## report" },
+        { expanded: false, outputPad: 1 }
+      )
     ).toBeInstanceOf(Markdown);
     await runtime.commands
       .get("review-fix")

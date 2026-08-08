@@ -245,7 +245,13 @@ function createMockPiRuntime(
     options?: unknown;
   }> = [];
   const appendedEntries: Array<{ type: string; data: unknown }> = [];
-  const messageRenderers = new Map<string, (message: unknown) => unknown>();
+  const messageRenderers = new Map<
+    string,
+    (
+      message: unknown,
+      options: { expanded: boolean; outputPad: number }
+    ) => unknown
+  >();
   const eventHandlers = new Map<
     string,
     (event: unknown, ctx: unknown) => Promise<unknown> | unknown
@@ -354,7 +360,10 @@ function createMockPiRuntime(
       },
       registerMessageRenderer(
         customType: string,
-        renderer: (message: unknown) => unknown
+        renderer: (
+          message: unknown,
+          options: { expanded: boolean; outputPad: number }
+        ) => unknown
       ) {
         messageRenderers.set(customType, renderer);
       },
@@ -2921,10 +2930,13 @@ describe("review report rendering", () => {
 
     expect(renderer).toBeDefined();
     expect(
-      renderer?.({
-        content: "## Plain fallback",
-        details: { report: "## Markdown report" },
-      })
+      renderer?.(
+        {
+          content: "## Plain fallback",
+          details: { report: "## Markdown report" },
+        },
+        { expanded: false, outputPad: 1 }
+      )
     ).toBeInstanceOf(Markdown);
   });
 });
