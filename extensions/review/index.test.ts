@@ -2087,13 +2087,20 @@ describe.serial("/review command settings and disclosure", () => {
     await runtime.commands
       .get("review-fix")
       ?.handler("keep scope", ctx as never);
-    expect(runtime.sentUserMessages[0]?.content).toContain(
+    const message = String(runtime.sentUserMessages[0]?.content);
+    expect(message).toContain(
       "Use the `review-fix` skill behavior as canonical."
     );
-    expect(runtime.sentUserMessages[0]?.content).toContain(
-      "<untrusted_review_report>"
+    expect(message).not.toContain("<untrusted_review_report>");
+    expect(message).toContain(
+      "Report delivery: already present in active model context; not duplicated here."
     );
-    expect(runtime.sentUserMessages[0]?.content).toContain("keep scope");
+    expect(message).toContain(
+      "<untrusted_review_fix_context>\n## Verdict\n- needs attention\n\n## Findings\n- finding\n\n## Fix Queue\n1. fix\n</untrusted_review_fix_context>"
+    );
+    expect(message).not.toContain("Human Reviewer Callouts");
+    expect(message).not.toContain("Reviewer Coverage");
+    expect(message).toContain("keep scope");
   });
 });
 

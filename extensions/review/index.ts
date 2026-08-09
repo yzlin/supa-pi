@@ -35,6 +35,7 @@
  * Note: PR review requires a clean working tree (no uncommitted changes to tracked files).
  */
 
+import { createHash } from "node:crypto";
 import { promises as fs } from "node:fs";
 import path from "node:path";
 
@@ -42,6 +43,7 @@ import type {
   ExtensionAPI,
   ExtensionCommandContext,
   ExtensionContext,
+  SessionEntry,
 } from "@earendil-works/pi-coding-agent";
 import {
   DynamicBorder,
@@ -137,11 +139,16 @@ const PR_CHECKOUT_BLOCKED_BY_PENDING_CHANGES_MESSAGE =
   "Cannot checkout PR: you have uncommitted changes. Please commit or stash them first.";
 const REVIEW_FIX_SOURCE_DESCRIPTION =
   "latest review summary/Fix Queue when present; otherwise latest raw review report fallback.";
+const REVIEW_FIX_CONTEXT_REFERENCE =
+  "Report delivery: already present in active model context; not duplicated here.";
+const REVIEW_FIX_REPORT_REFERENCE_RE =
+  /Report reference SHA-256: ([a-f0-9]{64})/;
 const REVIEW_FIX_INVOCATION_PREAMBLE = [
   "Use the `review-fix` skill behavior as canonical.",
   "",
   "Review-fix invocation packet:",
   `- Source: ${REVIEW_FIX_SOURCE_DESCRIPTION}`,
+  `- ${REVIEW_FIX_CONTEXT_REFERENCE}`,
 ].join("\n");
 const REVIEW_INVOCATION_PREAMBLE =
   "Use the `review-orchestration` skill behavior as canonical.\n\nReview invocation packet:";
@@ -956,40 +963,78 @@ function normalizedIncludes(text: string, needle: string): boolean {
   return text.toLowerCase().includes(needle.toLowerCase());
 }
 
+function extractReviewReport(entry: SessionEntry): string {
+  if (entry.type === "message") {
+    const message = entry.message as SessionMessageLike;
+    return message.role === "assistant"
+      ? extractTextContent(message.content)
+      : "";
+  }
+
+  if (
+    (entry.type === "custom" || entry.type === "custom_message") &&
+    (entry as { customType?: string }).customType === REVIEW_REPORT_MESSAGE_TYPE
+  ) {
+    const customEntry = entry as {
+      content?: string;
+      data?: { report?: string };
+      details?: { report?: string };
+    };
+    return (
+      customEntry.content ??
+      customEntry.data?.report ??
+      customEntry.details?.report ??
+      ""
+    );
+  }
+
+  return "";
+}
+
+function hashReviewReport(reviewReport: string): string {
+  return createHash("sha256").update(reviewReport).digest("hex");
+}
+
+function extractReviewFixContext(reviewReport: string): string {
+  return ["Verdict", "Findings", "Fix Queue"]
+    .map((heading) => {
+      const start = reviewReport.indexOf(`## ${heading}`);
+      if (start < 0) {
+        return "";
+      }
+      const end = reviewReport.indexOf("\n## ", start + heading.length + 3);
+      return reviewReport.slice(start, end < 0 ? undefined : end).trim();
+    })
+    .filter(Boolean)
+    .join("\n\n");
+}
+
+function getReviewReportByHash(
+  ctx: ExtensionContext,
+  expectedHash: string
+): string {
+  const branch = ctx.sessionManager.getBranch();
+  for (let index = branch.length - 1; index >= 0; index--) {
+    const reviewReport = extractReviewReport(branch[index]);
+    if (
+      looksLikeReviewReport(reviewReport) &&
+      hashReviewReport(reviewReport) === expectedHash
+    ) {
+      return reviewReport;
+    }
+  }
+  return "";
+}
+
 function getLatestReviewReport(
-  ctx: ExtensionCommandContext,
+  ctx: ExtensionContext,
   options: { preferSummary?: boolean; excludeSummary?: boolean } = {}
 ): string {
   const branch = ctx.sessionManager.getBranch();
   let fallback = "";
 
   for (let i = branch.length - 1; i >= 0; i--) {
-    const entry = branch[i];
-    let text = "";
-    if (entry?.type === "message") {
-      const message = entry.message as SessionMessageLike;
-      if (message.role !== "assistant") {
-        continue;
-      }
-      text = extractTextContent(message.content);
-    } else if (
-      (entry?.type === "custom" || entry?.type === "custom_message") &&
-      (entry as { customType?: string }).customType ===
-        REVIEW_REPORT_MESSAGE_TYPE
-    ) {
-      const customEntry = entry as {
-        content?: string;
-        data?: { report?: string };
-        details?: { report?: string };
-      };
-      text =
-        customEntry.content ??
-        customEntry.data?.report ??
-        customEntry.details?.report ??
-        "";
-    } else {
-      continue;
-    }
+    const text = extractReviewReport(branch[i]);
 
     if (!looksLikeReviewReport(text)) {
       continue;
@@ -1045,7 +1090,8 @@ function buildReviewFixMessage(
   reviewReport: string,
   extraInstruction?: string
 ): string {
-  let message = `${REVIEW_FIX_INVOCATION_PREAMBLE}\n\n<untrusted_review_report>\n${reviewReport}\n</untrusted_review_report>`;
+  const reviewFixContext = extractReviewFixContext(reviewReport);
+  let message = `${REVIEW_FIX_INVOCATION_PREAMBLE}\n- Report reference SHA-256: ${hashReviewReport(reviewReport)}\n\n<untrusted_review_fix_context>\n${reviewFixContext}\n</untrusted_review_fix_context>`;
   const trimmedExtraInstruction = extraInstruction?.trim();
 
   if (trimmedExtraInstruction) {
@@ -1087,6 +1133,55 @@ export default function reviewExtension(pi: ExtensionAPI) {
         getMarkdownTheme()
       )
   );
+
+  pi.on("context", (event, ctx) => {
+    const lastUserMessageIndex = event.messages.findLastIndex(
+      (message) => message.role === "user"
+    );
+    const userMessage = event.messages[lastUserMessageIndex];
+    if (userMessage?.role !== "user") {
+      return;
+    }
+
+    const userText = extractTextContent(userMessage.content);
+    if (!userText.includes(REVIEW_FIX_CONTEXT_REFERENCE)) {
+      return;
+    }
+    const reportHash = userText.match(REVIEW_FIX_REPORT_REFERENCE_RE)?.[1];
+    if (!reportHash) {
+      return;
+    }
+
+    const reviewReport = getReviewReportByHash(ctx, reportHash);
+    if (!reviewReport) {
+      return;
+    }
+
+    const latestReviewReport = getLatestReviewReport(ctx, {
+      preferSummary: true,
+    });
+    const reportAlreadyUnambiguous =
+      latestReviewReport === reviewReport &&
+      event.messages.some((message) =>
+        extractTextContent((message as SessionMessageLike).content).includes(
+          reviewReport
+        )
+      );
+    if (reportAlreadyUnambiguous) {
+      return;
+    }
+
+    const reportBlock = `<untrusted_review_report>\n${reviewReport}\n</untrusted_review_report>`;
+    const messages = [...event.messages];
+    messages[lastUserMessageIndex] = {
+      ...userMessage,
+      content:
+        typeof userMessage.content === "string"
+          ? `${userMessage.content}\n\n${reportBlock}`
+          : [...userMessage.content, { type: "text", text: reportBlock }],
+    };
+    return { messages };
+  });
 
   pi.on("input", (event, ctx) => {
     const review = activeReview;

@@ -3012,19 +3012,44 @@ describe("review follow-up helpers", () => {
       "Use the `review-fix` skill behavior as canonical.",
       "Review-fix invocation packet:",
       "Source: latest review summary/Fix Queue when present; otherwise latest raw review report fallback.",
+      "Report delivery: already present in active model context; not duplicated here.",
+      "<untrusted_review_fix_context>",
+      "## Verdict\n- needs attention",
       "SUMMARY finding",
-      "<untrusted_review_report>",
-      "</untrusted_review_report>",
+      "## Fix Queue\n1. Fix it",
+      "</untrusted_review_fix_context>",
     ]) {
       expect(message).toContain(expectedText);
     }
 
-    for (const forbiddenText of ["<review_report>", "</review_report>"]) {
+    for (const forbiddenText of [
+      "## Review Scope",
+      "Human Reviewer Callouts",
+      "Reviewer Coverage",
+      "<review_report>",
+      "</review_report>",
+      "<untrusted_review_report>",
+      "</untrusted_review_report>",
+    ]) {
       expect(message).not.toContain(forbiddenText);
     }
+
+    const contextResult = await runtime.eventHandlers.get("context")?.(
+      {
+        messages: [
+          {
+            role: "assistant",
+            content: [{ type: "text", text: SUMMARY_REVIEW_REPORT }],
+          },
+          { role: "user", content: message },
+        ],
+      },
+      ctx
+    );
+    expect(contextResult).toBeUndefined();
   });
 
-  it("falls back to the latest raw report for /review-fix when no summary exists", async () => {
+  it("restores the latest raw report when compaction removed it from active context", async () => {
     const runtime = createMockPiRuntime();
     const { ctx } = createMockCtx([
       {
@@ -3041,9 +3066,92 @@ describe("review follow-up helpers", () => {
 
     const message = String(runtime.sentUserMessages[0]?.content);
     expect(message).toContain("RAW finding");
+    expect(message).toContain("<untrusted_review_fix_context>");
+    expect(message).not.toContain("Human Reviewer Callouts");
+    expect(message).not.toContain("Reviewer Coverage");
+    expect(message).not.toContain("<untrusted_review_report>");
     expect(message).toContain(
       "Source: latest review summary/Fix Queue when present; otherwise latest raw review report fallback."
     );
+
+    const contextResult = await runtime.eventHandlers.get("context")?.(
+      { messages: [{ role: "user", content: message }] },
+      ctx
+    );
+    expect(JSON.stringify(contextResult)).toContain("RAW finding");
+    expect(JSON.stringify(contextResult)).toContain(
+      "<untrusted_review_report>"
+    );
+  });
+
+  it("keeps a queued /review-fix bound to its selected report", async () => {
+    const runtime = createMockPiRuntime();
+    const branchEntries: SessionEntry[] = [
+      {
+        type: "message",
+        message: { role: "assistant", content: RAW_REVIEW_REPORT },
+      },
+    ];
+    const { ctx } = createMockCtx(branchEntries, { idle: false });
+
+    reviewExtension(runtime.pi as never);
+    const handler = runtime.commands.get("review-fix")?.handler;
+
+    expect(handler).toBeDefined();
+    await handler?.("", ctx as never);
+    branchEntries.push({
+      type: "message",
+      message: { role: "assistant", content: SUMMARY_REVIEW_REPORT },
+    });
+
+    const message = String(runtime.sentUserMessages[0]?.content);
+    const contextResult = await runtime.eventHandlers.get("context")?.(
+      {
+        messages: [
+          {
+            role: "assistant",
+            content: [{ type: "text", text: RAW_REVIEW_REPORT }],
+          },
+          {
+            role: "assistant",
+            content: [{ type: "text", text: SUMMARY_REVIEW_REPORT }],
+          },
+          { role: "user", content: message },
+        ],
+      },
+      ctx
+    );
+    const restoredUserMessage = JSON.stringify(
+      (contextResult as { messages?: unknown[] })?.messages?.at(-1)
+    );
+    expect(restoredUserMessage).toContain("RAW finding");
+    expect(restoredUserMessage).not.toContain("SUMMARY finding");
+  });
+
+  it("restores a plain custom report that is absent from model context", async () => {
+    const runtime = createMockPiRuntime();
+    const { ctx } = createMockCtx([
+      {
+        type: "custom",
+        customType: REVIEW_REPORT_MESSAGE_TYPE,
+        data: { report: RAW_REVIEW_REPORT },
+      },
+    ]);
+
+    reviewExtension(runtime.pi as never);
+    const handler = runtime.commands.get("review-fix")?.handler;
+
+    expect(handler).toBeDefined();
+    await handler?.("", ctx as never);
+
+    const message = String(runtime.sentUserMessages[0]?.content);
+    expect(message).toContain("RAW finding");
+    expect(message).toContain("<untrusted_review_fix_context>");
+    const contextResult = await runtime.eventHandlers.get("context")?.(
+      { messages: [{ role: "user", content: message }] },
+      ctx
+    );
+    expect(JSON.stringify(contextResult)).toContain("RAW finding");
   });
 
   it("queues /review-fix from review-report custom_message entries", async () => {
@@ -3067,6 +3175,9 @@ describe("review follow-up helpers", () => {
     expect(String(runtime.sentUserMessages[0]?.content)).toContain(
       "SUMMARY finding"
     );
+    expect(String(runtime.sentUserMessages[0]?.content)).toContain(
+      "Report delivery: already present in active model context; not duplicated here."
+    );
   });
 
   it("instructs /review-fix not to call executor for empty findings", async () => {
@@ -3089,6 +3200,10 @@ describe("review follow-up helpers", () => {
       "Use the `review-fix` skill behavior as canonical."
     );
     expect(message).toContain("code looks good");
+    expect(message).toContain("<untrusted_review_fix_context>");
+    expect(message).toContain(
+      "Report delivery: already present in active model context; not duplicated here."
+    );
   });
 
   it("keeps /review-fix extra instructions subordinate to delegation rules", async () => {
