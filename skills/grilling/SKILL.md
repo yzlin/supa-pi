@@ -14,6 +14,12 @@ Use this as the single canonical interview primitive for plans, decisions, and i
 - The user owns every decision. Give clear recommendations and tradeoffs, but never silently decide for them.
 - Do not act on the plan or make implementation changes before the user confirms the final lock.
 
+## Domain Modeling Composition
+
+Load and follow `domain-modeling` only when the interview exposes explicit domain signals: fuzzy or disputed terms, domain claims that need scenario testing, code and durable docs conflict, ownership, integration, lifecycle, or trust boundaries are unclear, or there is possible ADR candidacy. Do not load it for every interview.
+
+Use its completed packet to guide subsequent interview questions while preserving the canonical interview contract and final lock behavior below. Do not persist the packet; when durable writing is requested, hand it to `context-docs`.
+
 ## Interview Contract
 
 - Ask exactly one question at a time.

@@ -30,6 +30,23 @@ describe("grilling skill contract", () => {
     }
   });
 
+  it("conditionally composes domain modeling without making it always-on", () => {
+    const skill = readRepositoryFile("skills", "grilling", "SKILL.md");
+
+    for (const text of [
+      "Load and follow `domain-modeling` only when",
+      "fuzzy or disputed terms",
+      "domain claims that need scenario testing",
+      "code and durable docs conflict",
+      "ownership, integration, lifecycle, or trust boundaries are unclear",
+      "possible ADR candidacy",
+      "Use its completed packet to guide subsequent interview questions",
+    ]) {
+      expect(skill).toContain(text);
+    }
+    expect(skill).toContain("Do not load it for every interview");
+  });
+
   it("keeps the final gate stop-only and never implementation-oriented", () => {
     const skill = readRepositoryFile("skills", "grilling", "SKILL.md");
 
@@ -43,6 +60,41 @@ describe("grilling skill contract", () => {
       "must not include any implement/proceed/start-coding wording or option"
     );
     expect(skill).not.toContain("Yes, implement this contract");
+  });
+});
+
+describe("context-docs composition contract", () => {
+  it("delegates semantic analysis only for explicit domain signals", () => {
+    const skill = readRepositoryFile("skills", "context-docs", "SKILL.md");
+
+    for (const text of [
+      "Delegate semantic analysis to `domain-modeling`",
+      "vocabulary",
+      "scenario-dependent domain claims",
+      "code and durable docs contradict",
+      "real ownership, integration, lifecycle, or trust boundaries",
+      "possible ADR candidacy",
+      "completed domain-modeling packet",
+      "consume it without invoking `domain-modeling` again",
+      "sole persistence authority",
+    ]) {
+      expect(skill).toContain(text);
+    }
+  });
+
+  it("persists canonical terms and handles canonical ADR results", () => {
+    const skill = readRepositoryFile("skills", "context-docs", "SKILL.md");
+
+    for (const text of [
+      "canonical term, its concise definition, and its `_Avoid_` aliases",
+      "all three canonical results are `yes`",
+      "any result is `unknown`",
+      "ask one focused question",
+      "any result is `no`",
+      "refuse to write the ADR and explain why",
+    ]) {
+      expect(skill).toContain(text);
+    }
   });
 });
 
@@ -89,12 +141,31 @@ describe("grill-me wrapper contract", () => {
       "narrow allowed-write list overrides the broader destinations available in normal `context-docs` workflows",
       "Continue to follow all other `context-docs` requirements, including its context and ADR semantics",
       "domain or product facts, canonical language, constraints, and open questions",
-      "hard to reverse, surprising without context, and records a real tradeoff",
+      "ADR qualification through the canonical `context-docs` and `domain-modeling` skills",
+      "Do not duplicate the ADR qualification gate here",
       "If the interview produces no durable content, write nothing",
       "`Lock plan, stop here`",
       "`Keep grilling`",
     ]) {
       expect(skill).toContain(text);
+    }
+  });
+});
+
+describe("semantic ownership contract", () => {
+  it("keeps literal ADR criteria solely in domain-modeling", () => {
+    const contextDocs = readRepositoryFile(
+      "skills",
+      "context-docs",
+      "SKILL.md"
+    );
+    const grilling = readRepositoryFile("skills", "grilling", "SKILL.md");
+    const grillMe = readRepositoryFile("skills", "grill-me", "SKILL.md");
+
+    for (const skill of [contextDocs, grilling, grillMe]) {
+      expect(skill).not.toContain("hard to reverse");
+      expect(skill).not.toContain("surprising without context");
+      expect(skill).not.toContain("real tradeoff");
     }
   });
 });

@@ -12,6 +12,8 @@ The repository is optimized for local workflow quality and maintainable agent be
 - **Command** — a slash-command interface exposed by an Extension.
 - **Agent** — a specialized subagent definition under `agents/` used for delegated work.
 - **Skill** — reusable task-specific instructions under `skills/` or imported skill locations.
+- **Domain-modeling skill** — reusable canonical semantic primitive under `skills/domain-modeling/` that owns terminology sharpening, scenario testing, contradiction discovery, boundary analysis, and ADR-candidacy assessment.
+- **Context-docs workflow** — sole owner of durable-context routing, formats, commands, and persistence; it consumes completed domain-modeling packets without delegating them back.
 - **Rule pack** — coding, testing, security, or workflow guidance under `rules/`.
 - **Prompt template** — durable prompt text under `prompts/` or an extension-local prompt file.
 - **Setup script** — `setup.sh`, which prepares the live Pi agent environment.
@@ -33,6 +35,7 @@ The repository is optimized for local workflow quality and maintainable agent be
 - Pi 0.84 or newer owns regular/fullscreen viewport composition. SupaPi defaults newly created settings to fullscreen, supports both modes, and does not rewrite existing TUI-mode preferences.
 - Do not document secrets, credentials, tokens, private keys, or raw sensitive logs.
 - Root project license is MIT. Copied or adapted upstream materials must carry source and license notices in durable docs or README entries.
+- Domain modeling is skill composition, not a command or production runtime registration; grilling invokes it only when explicit domain signals arise.
 
 ## Open questions
 

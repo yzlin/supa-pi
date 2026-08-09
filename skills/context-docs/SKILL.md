@@ -28,13 +28,9 @@ Preserve existing style, filenames, numbering, frontmatter, and stronger local c
 
 ## Domain modeling
 
-For every workflow:
+`domain-modeling` is the sole semantic owner. Delegate semantic analysis to `domain-modeling` when the evidence includes vocabulary that needs sharpening, scenario-dependent domain claims, code and durable docs contradict, real ownership, integration, lifecycle, or trust boundaries, or possible ADR candidacy. Do not invoke it for ordinary documentation work without one of those signals.
 
-- Challenge glossary entries that conflict with existing terms.
-- Sharpen fuzzy or overloaded language and propose one canonical term and definition.
-- Test domain claims with concrete scenarios using real actors, actions, boundaries, and outcomes.
-- Cross-check claims against code and durable docs when possible; surface contradictions rather than silently choosing one account.
-- Ask a focused question only when missing information materially changes the durable record.
+If another skill hands context-docs a completed domain-modeling packet, consume it without invoking `domain-modeling` again. Context-docs remains the sole persistence authority: classify and route the packet, ask only questions needed for an accurate durable record, and perform any permitted writes. Persist each resolved glossary entry with its canonical term, its concise definition, and its `_Avoid_` aliases; preserve unknowns rather than inventing certainty.
 
 ## Setup
 
@@ -113,7 +109,7 @@ Use the full format:
 ## Alternatives considered
 ```
 
-Capture the tradeoff and rationale, not a generic essay. Default status to `proposed`. Use the current date, mark unknown facts explicitly, and preserve context, decision, consequences, and alternatives. If rationale is missing, ask one focused question before writing an accepted ADR. When one ADR replaces another, update both safely when possible.
+Capture the tradeoff and rationale, not a generic essay. Default status to `proposed`. Use the current date, mark unknown facts explicitly, and preserve context, decision, consequences, and alternatives. Use the ADR-candidacy results supplied by `domain-modeling`: when all three canonical results are `yes`, writing is permitted; when any result is `unknown`, ask one focused question for the missing evidence; when any result is `no`, refuse to write the ADR and explain why. If rationale is missing, ask one focused question before writing an accepted ADR. When one ADR replaces another, update both safely when possible.
 
 ## Review extraction
 

@@ -32,5 +32,5 @@ This narrow allowed-write list overrides the broader destinations available in n
 - Do not write other durable artifacts.
 - Continue to follow all other `context-docs` requirements, including its context and ADR semantics.
 - `CONTEXT.md` may contain domain or product facts, canonical language, constraints, and open questions.
-- Create or update an ADR only when the decision is hard to reverse, surprising without context, and records a real tradeoff.
+- Obtain ADR qualification through the canonical `context-docs` and `domain-modeling` skills. Do not duplicate the ADR qualification gate here.
 - If the interview produces no durable content, write nothing and explain why.

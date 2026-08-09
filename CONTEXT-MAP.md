@@ -5,6 +5,7 @@
 - `CONTEXT.md` — read before changing product language, extension registration, setup behavior, licensing notes, or durable context docs.
 - `AGENTS.md` — read before coding in this repo; contains project workflow, docs, verification, and deletion guardrails.
 - `extensions/AGENTS.md` — read before changing any Extension under `extensions/`; contains extension-boundary and validation rules.
+- `skills/domain-modeling/SKILL.md` — read before changing domain terminology, scenario testing, contradiction handling, boundary analysis, ADR candidacy, or domain-modeling composition with other skills.
 
 ## Architecture decisions
 

@@ -11,7 +11,9 @@ The extension is registered in `package.json -> pi.extensions` as `./extensions/
 
 ## Workflow ownership
 
-`skills/context-docs/SKILL.md` is the canonical source for shared and command-specific workflow behavior. `extensions/context-docs/prompt.md` and the runtime handoff in `extensions/context-docs/index.ts` contain only the execution envelope and direct the agent to that skill.
+`skills/context-docs/SKILL.md` is the canonical source for shared and command-specific workflow behavior. It alone owns durable-context routing, formats, commands, and persistence. `extensions/context-docs/prompt.md` and the runtime handoff in `extensions/context-docs/index.ts` contain only the execution envelope and direct the agent to that skill.
+
+`skills/domain-modeling/SKILL.md` is the reusable canonical semantic primitive for terminology, scenarios, contradictions, boundaries, and ADR candidacy. Context-docs consumes its completed packets without delegating them back, preventing a loop while retaining sole persistence ownership. Domain-modeling adds no command or production runtime registration.
 
 The workflows preserve Matt-compatible files while keeping SupaPi's broad `CONTEXT.md` semantics:
 
