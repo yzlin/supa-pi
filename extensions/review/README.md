@@ -13,14 +13,13 @@ Read when changing `/review`, `/review-summary`, `/review-fix`, reviewer orchest
 5. independently verify clusters and original members with `review-verifier`;
 6. derive provenance, support, coverage, ordering, and sanitized report Markdown in the orchestrator.
 
-The default matrix is two reviewer models, each at high thinking:
+The default matrix uses one reviewer model at high thinking:
 
 | role | default model | thinking |
 | --- | --- | --- |
 | each selected reviewer | `openai-codex/gpt-5.6-sol` | `high` |
-| each selected reviewer | `anthropic/claude-opus-4-8` | `high` |
 | synthesizer | `openai-codex/gpt-5.6-sol` | fixed `high` |
-| verifier | `cursor/composer-2.5` | fixed `high` |
+| verifier | `openai-codex/gpt-5.6-sol` | fixed `high` |
 
 The panel accepts 1–4 distinct model IDs. Each reviewer panel entry has its own Pi thinking level: `off`, `minimal`, `low`, `medium`, `high`, or `xhigh`. Duplicate IDs normalize to one run, using the first entry, so one model cannot gain multiple support votes. Reviewer execution has one global role×model concurrency cap of 4. Synthesizer and verifier calls run afterward, not concurrently with the reviewer matrix.
 
@@ -37,15 +36,14 @@ Each file may contain any subset of the three fields, which layer independently.
 {
   "$schema": "/path/to/supa-pi/extensions/review/review.schema.json",
   "reviewerPanel": [
-    { "model": "openai-codex/gpt-5.6-sol", "thinkingLevel": "high" },
-    { "model": "anthropic/claude-opus-4-8", "thinkingLevel": "high" }
+    { "model": "openai-codex/gpt-5.6-sol", "thinkingLevel": "high" }
   ],
   "synthesizerModel": "openai-codex/gpt-5.6-sol",
-  "verifierModel": "cursor/composer-2.5"
+  "verifierModel": "openai-codex/gpt-5.6-sol"
 }
 ```
 
-The selector's **Configure review models** submenu has separate global/project actions for each field. The editor prompt shows that layer's current value—or its inherited/built-in default when unset—on a second line. Blank input clears only that layer's field, revealing the lower layer; a config file is removed when no model fields remain. Writes are atomic, serialize each config file's read/merge/write transaction across processes, and preserve allowed metadata such as `$schema`. Runtime validation is strict: malformed JSON, invalid fields, unknown behavioral keys, malformed panels/models, model IDs containing Unicode control or format characters, or a final verifier/panel conflict identifies the file/field and stops before model calls. Model registry/authentication preflight still follows config validation.
+The selector's **Configure review models** submenu has separate global/project actions for each field. The editor prompt shows that layer's current value—or its inherited/built-in default when unset—on a second line. Blank input clears only that layer's field, revealing the lower layer; a config file is removed when no model fields remain. Writes are atomic, serialize each config file's read/merge/write transaction across processes, and preserve allowed metadata such as `$schema`. Runtime validation is strict: malformed JSON, invalid fields, unknown behavioral keys, malformed panels/models, or model IDs containing Unicode control or format characters identify the file/field and stop before model calls. Model registry/authentication preflight still follows config validation.
 
 Project config is repository-controlled. Pi hashes the exact config content together with its canonical path and stores only path/hash approvals in the machine-local `~/.pi/agent/review-trust.json` (editor schema: `review-trust.schema.json`). Global config needs no approval. A manual/shared project file or changed hash prompts interactively with the exact effective reviewer, synthesizer, and verifier models/providers before calls. Declining stops the review. Headless/non-interactive review fails closed for an unapproved hash unless direct flags explicitly override every model field present in that file. Fully masked runs proceed one-shot without persisting trust. Interactive partially masked runs can also proceed after effective-model confirmation, but remain one-shot because masked project values were not disclosed; later flag-free or headless runs still require approval. Saving project config through the selector normally approves the resulting hash. When editing one field of an unapproved project file that contains other model fields, the write remains saved but requires exact-model confirmation before its whole-file hash is approved; declining leaves it unapproved. Later content changes require approval again.
 
@@ -59,7 +57,7 @@ Direct syntax:
 /review commit abc123 --reviewers code-reviewer,security-reviewer --verifier-model cursor/composer-2.5
 ```
 
-`--reviewer-models` also accepts `--reviewer-models=<pairs>`. Every model uses `provider/model`. The verifier model ID must differ from every reviewer panel model ID; synthesizer/reviewer overlap is allowed. Registry presence, configured authentication, current session model scope, and verifier overlap are checked without OAuth refreshes, commands, or other external side effects before calls. When `ctx.scopedModels` is non-empty, every reviewer, synthesizer, and verifier model must be in that scope; an empty scope keeps all available models usable. Unavailable, out-of-scope, unauthenticated, or malformed models stop the workflow without a paid call.
+`--reviewer-models` also accepts `--reviewer-models=<pairs>`. Every model uses `provider/model`. Reviewer, synthesizer, and verifier model IDs may overlap. Registry presence, configured authentication, and current session model scope are checked without OAuth refreshes, commands, or other external side effects before calls. When `ctx.scopedModels` is non-empty, every reviewer, synthesizer, and verifier model must be in that scope; an empty scope keeps all available models usable. Unavailable, out-of-scope, unauthenticated, or malformed models stop the workflow without a paid call.
 
 Before execution, `/review` separately discloses initial calls and possible structured-repair retries, along with role and panel dimensions, reviewer models and thinking, synthesizer and verifier providers/models, fixed downstream effort, and scope. Initial reviewer calls equal roles × panel models. Each reviewer run may add one structured-repair retry. A finding-bearing run adds one initial synthesizer call and one initial verifier call; each downstream stage may add exactly one structured-repair retry. Provider billing, retention, and data handling follow the configured providers. Review packets, relevant repository content read by agents, and previous invalid structured output may be sent to those providers.
 

@@ -13,8 +13,6 @@ import { Markdown } from "@earendil-works/pi-tui";
 
 import reviewExtension from "./index";
 import {
-  assertVerifierModelPolicy,
-  DEFAULT_REVIEWER_PANEL,
   DEFAULT_VERIFIER_MODEL,
   REVIEW_REPORT_MESSAGE_TYPE,
   REVIEWER_MODEL_POLICY_MODEL,
@@ -1956,10 +1954,10 @@ describe.serial("review direct targets", () => {
       (call) => call.type === "review-verifier"
     );
     expect(verifierSpawn?.options.model).toEqual({
-      provider: "cursor",
-      id: "composer-2.5",
+      provider: "openai-codex",
+      id: "gpt-5.6-sol",
     });
-    expect(DEFAULT_VERIFIER_MODEL).toBe("cursor/composer-2.5");
+    expect(DEFAULT_VERIFIER_MODEL).toBe("openai-codex/gpt-5.6-sol");
     expect(getReviewProgressMessages(runtime)).toHaveLength(0);
     expect(getReviewReportMessages(runtime)).toHaveLength(1);
   });
@@ -1979,7 +1977,6 @@ describe.serial("review direct targets", () => {
       ?.handler("uncommitted --reviewers code-reviewer", ctx as never);
 
     expect(runtime.agentSpawnCalls.map((call) => call.type)).toEqual([
-      "code-reviewer",
       "code-reviewer",
       "review-synthesizer",
       "review-verifier",
@@ -2106,7 +2103,7 @@ describe.serial("review direct targets", () => {
     }
   });
 
-  it("keeps the review-verifier agent default distinct from reviewer policy", () => {
+  it("keeps the review-verifier agent default aligned with reviewer policy", () => {
     const verifierAgent = readFileSync(
       path.join(process.cwd(), "agents/review-verifier.md"),
       "utf8"
@@ -2115,9 +2112,7 @@ describe.serial("review direct targets", () => {
 
     expect(defaultModel).toBeTruthy();
     expect(defaultModel).toBe(DEFAULT_VERIFIER_MODEL);
-    expect(DEFAULT_REVIEWER_PANEL.map((entry) => entry.model)).not.toContain(
-      defaultModel
-    );
+    expect(defaultModel).toBe(REVIEWER_MODEL_POLICY_MODEL);
   });
 
   it("keeps reviewer agent defaults aligned with reviewer model policy", () => {
@@ -2130,12 +2125,6 @@ describe.serial("review direct targets", () => {
 
       expect(defaultModel).toBe(REVIEWER_MODEL_POLICY_MODEL);
     }
-  });
-
-  it("rejects a reviewer panel model as a verifier override", () => {
-    expect(() =>
-      assertVerifierModelPolicy(REVIEWER_MODEL_POLICY_MODEL)
-    ).toThrow("conflicts with reviewer panel model ID");
   });
 
   it("uses direct verifier model overrides without persisting them", async () => {
@@ -2342,7 +2331,7 @@ describe.serial("review direct targets", () => {
     );
     expect(verifierPrompt).toContain("Synthesized clusters:");
     expect(verifierPrompt).toContain("Original member findings:");
-    expect(verifierPrompt.match(/"candidateId": "candidate-/g)).toHaveLength(4);
+    expect(verifierPrompt.match(/"candidateId": "candidate-/g)).toHaveLength(2);
     expect(verifierPrompt).toContain('"memberIds": [');
     expect(verifierPrompt).toContain('"priority": "P1"');
     expect(verifierPrompt).toContain('"title": "Duplicate candidate risk"');
@@ -2353,7 +2342,7 @@ describe.serial("review direct targets", () => {
     expect(report).toContain(
       "- Locations: `src/duplicate.ts:7`, `src/duplicate.ts:9`"
     );
-    expect(report).toContain("- Support: 2/2 eligible successful models");
+    expect(report).toContain("- Support: 1/1 eligible successful models");
     expect(report).toContain("code-reviewer, security-reviewer");
     expect(report).not.toContain("verifier callout should be ignored");
   });
@@ -2577,7 +2566,7 @@ describe.serial("review direct targets", () => {
       notifications.some(
         (entry) =>
           entry.message.startsWith("Review plan:") &&
-          entry.message.includes("1 roles × 2 models")
+          entry.message.includes("1 role × 1 model")
       )
     ).toBe(true);
   });

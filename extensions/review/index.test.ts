@@ -16,7 +16,6 @@ import {
 } from "./config";
 import reviewExtension from "./index";
 import {
-  assertVerifierModelPolicy,
   DEFAULT_REVIEWER_PANEL,
   DEFAULT_SYNTHESIZER_MODEL,
   DEFAULT_VERIFIER_MODEL,
@@ -448,7 +447,7 @@ describe.serial("review model config", () => {
     });
   });
 
-  it("identifies invalid files and fields and rejects final verifier conflicts", async () => {
+  it("identifies invalid files and fields while allowing verifier overlap", async () => {
     await withReviewConfigSandbox(async (cwd) => {
       const projectPath = await getProjectReviewConfigPath(cwd);
       await fs.writeFile(projectPath, '{"accidentalBehavior":true}');
@@ -462,8 +461,8 @@ describe.serial("review model config", () => {
           verifierModel: "same/model",
         })
       );
-      await expect(resolveReviewConfig(cwd)).rejects.toThrow(
-        "field 'verifierModel'"
+      expect((await resolveReviewConfig(cwd)).effective.verifierModel).toBe(
+        "same/model"
       );
       await fs.writeFile(
         projectPath,
@@ -639,7 +638,7 @@ describe.serial("review model config", () => {
     });
   });
 
-  it("lets a direct verifier flag repair a stored cross-layer conflict", async () => {
+  it("allows reviewer and verifier overlap across config layers", async () => {
     await withReviewConfigSandbox(async (cwd) => {
       await writeReviewConfigField(
         getGlobalReviewConfigPath(),
@@ -651,7 +650,12 @@ describe.serial("review model config", () => {
         "verifierModel",
         TEST_VERIFIER
       );
-      await expect(resolveReviewConfig(cwd)).rejects.toThrow("conflicts");
+      expect((await resolveReviewConfig(cwd)).effective).toEqual(
+        expect.objectContaining({
+          reviewerPanel: [{ model: TEST_VERIFIER, thinkingLevel: "high" }],
+          verifierModel: TEST_VERIFIER,
+        })
+      );
 
       const calls = installManager();
       const runtime = changedFilesRuntime();
@@ -661,49 +665,10 @@ describe.serial("review model config", () => {
       reviewExtension(runtime.pi as never);
       await runtime.commands
         .get("review")
-        ?.handler(
-          "uncommitted --reviewers code-reviewer --verifier-model test/repaired",
-          ctx as never
-        );
+        ?.handler("uncommitted --reviewers code-reviewer", ctx as never);
 
       expect(calls.map(({ model }) => model)).toEqual([TEST_VERIFIER]);
       expect(notifications.some(({ level }) => level === "error")).toBe(false);
-    });
-  });
-
-  it("keeps model configuration reachable for a cross-layer conflict", async () => {
-    await withReviewConfigSandbox(async (cwd) => {
-      await writeReviewConfigField(
-        getGlobalReviewConfigPath(),
-        "reviewerPanel",
-        [{ model: TEST_VERIFIER, thinkingLevel: "high" }]
-      );
-      await writeReviewConfigField(
-        await getProjectReviewConfigPath(cwd),
-        "verifierModel",
-        TEST_VERIFIER
-      );
-      const runtime = changedFilesRuntime();
-      const { ctx } = createCtx();
-      ctx.cwd = cwd;
-      const selections = ["configureReviewModels", null];
-      let editorPrompt = "";
-      ctx.ui.custom = async () => selections.shift() as never;
-      ctx.ui.select = async () => "Set project verifier model";
-      ctx.ui.editor = ((prompt: string) => {
-        editorPrompt = prompt;
-        return Promise.resolve("test/repaired");
-      }) as never;
-      reviewExtension(runtime.pi as never);
-
-      await runtime.commands.get("review")?.handler("", ctx as never);
-
-      expect(editorPrompt).toBe(
-        `Enter project verifier model (provider/model; blank clears):\nCurrent: ${TEST_VERIFIER}`
-      );
-      expect((await resolveReviewConfig(cwd)).effective.verifierModel).toBe(
-        "test/repaired"
-      );
     });
   });
 
@@ -1034,7 +999,7 @@ describe.serial("review model config", () => {
 });
 
 describe.serial("multi-model review orchestration", () => {
-  it("uses the default two-model panel with per-model thinking and accurate progress totals", async () => {
+  it("uses the default model with configured thinking and accurate progress totals", async () => {
     const calls = installManager();
     const { ctx } = createCtx();
     const progress: ReviewWorkflowProgressUpdate[] = [];
@@ -1052,13 +1017,13 @@ describe.serial("multi-model review orchestration", () => {
         .sort()
     ).toEqual(
       DEFAULT_REVIEWER_PANEL.map(
-        (entry) => `code-reviewer:${entry.model}=high`
+        (entry) => `code-reviewer:${entry.model}=${entry.thinkingLevel}`
       ).sort()
     );
-    expect(result.coverage.configuredPanelSize).toBe(2);
-    expect(result.coverage.callPlan.reviewerRuns).toHaveLength(2);
+    expect(result.coverage.configuredPanelSize).toBe(1);
+    expect(result.coverage.callPlan.reviewerRuns).toHaveLength(1);
     expect(progress.every(({ text }) => !text.includes("/4"))).toBe(true);
-    expect(progress.at(-1)?.text).toContain("Reviewers 2/2");
+    expect(progress.at(-1)?.text).toContain("Reviewers 1/1");
     for (const { envelope } of progress) {
       const reviewerLabels = envelope.agentCalls
         .map((call) => call.label)
@@ -1070,21 +1035,31 @@ describe.serial("multi-model review orchestration", () => {
     }
   });
 
-  it("preflights reviewer, synthesizer, verifier availability and overlap before any call", async () => {
-    for (const input of [
-      workflowInput({ verifierModel: "test/alpha" }),
-      workflowInput({ synthesizerModel: "missing/model" }),
-    ]) {
-      const calls = installManager();
-      const { ctx } = createCtx([], (model) => model !== "missing/model");
-      await expect(
-        runReviewWorkflow({} as never, ctx as never, input as never)
-      ).rejects.toThrow();
-      expect(calls).toHaveLength(0);
-    }
-    expect(() => assertVerifierModelPolicy("test/alpha", TEST_PANEL)).toThrow(
-      "conflicts"
-    );
+  it("preflights model availability and allows verifier overlap", async () => {
+    const unavailableCalls = installManager();
+    const unavailableContext = createCtx(
+      [],
+      (model) => model !== "missing/model"
+    ).ctx;
+    await expect(
+      runReviewWorkflow(
+        {} as never,
+        unavailableContext as never,
+        workflowInput({ synthesizerModel: "missing/model" }) as never
+      )
+    ).rejects.toThrow();
+    expect(unavailableCalls).toHaveLength(0);
+
+    const overlapCalls = installManager();
+    const { ctx } = createCtx();
+    await expect(
+      runReviewWorkflow(
+        {} as never,
+        ctx as never,
+        workflowInput({ verifierModel: "test/alpha" }) as never
+      )
+    ).resolves.toBeDefined();
+    expect(overlapCalls).not.toHaveLength(0);
   });
 
   it("caps role×model reviewer execution globally at four", async () => {
@@ -1448,9 +1423,11 @@ describe.serial("multi-model review orchestration", () => {
       "review-synthesizer",
       "review-verifier",
     ]);
-    expect(
-      calls.find((call) => call.type === "review-verifier")?.thinking
-    ).toBe("high");
+    const verifierCall = calls.find((call) => call.type === "review-verifier");
+    expect(verifierCall?.thinking).toBe("high");
+    expect(verifierCall?.prompt).toContain(
+      'consensusEffect "raised-one-level"'
+    );
     expect(
       progress.some((text) => text.includes("Synthesizing findings"))
     ).toBe(true);
@@ -1753,12 +1730,19 @@ describe.serial("multi-model review orchestration", () => {
     await expect(
       runReviewWorkflow({} as never, ctx as never, {
         ...workflowInput(),
-        reviewerPanel: [TEST_PANEL[0]],
+        reviewerPanel: DEFAULT_REVIEWER_PANEL,
       })
     ).rejects.toThrow("invalid structured output after one structured repair");
-    expect(
-      calls.filter((call) => call.type === "review-verifier")
-    ).toHaveLength(2);
+    const verifierCalls = calls.filter(
+      (call) => call.type === "review-verifier"
+    );
+    expect(verifierCalls).toHaveLength(2);
+    expect(verifierCalls[0]?.prompt).toContain(
+      'consensusEffect must be "none"'
+    );
+    expect(verifierCalls[0]?.prompt).not.toContain(
+      "may raise confidence by at most one level"
+    );
   });
 
   it("rejects models outside the current session scope before calls", async () => {
@@ -1854,9 +1838,9 @@ describe.serial("/review command settings and disclosure", () => {
     expect(
       notifications.some(
         ({ message }) =>
-          message.includes("initial calls: 2 reviewer calls") &&
+          message.includes("initial calls: 1 reviewer call") &&
           message.includes(
-            "Possible structured-repair retries: up to 2 reviewer retries, plus up to 2 downstream retries when those stages run"
+            "Possible structured-repair retries: up to 1 reviewer retry, plus up to 2 downstream retries when those stages run"
           ) &&
           message.includes(`Synthesizer: ${DEFAULT_SYNTHESIZER_MODEL}=high`) &&
           message.includes(`Verifier: ${DEFAULT_VERIFIER_MODEL}=high`)
@@ -1968,7 +1952,7 @@ describe.serial("/review command settings and disclosure", () => {
     });
   });
 
-  it("rejects a verifier override that conflicts with the CLI reviewer panel", async () => {
+  it("allows a verifier override matching the CLI reviewer panel", async () => {
     const calls = installManager();
     const runtime = changedFilesRuntime();
     const { ctx, notifications } = createCtx();
@@ -1981,16 +1965,11 @@ describe.serial("/review command settings and disclosure", () => {
         ctx as never
       );
 
-    expect(calls).toHaveLength(0);
-    expect(
-      notifications.some(
-        ({ message, level }) =>
-          level === "error" && message.includes("conflicts with reviewer panel")
-      )
-    ).toBe(true);
+    expect(calls.map(({ model }) => model)).toEqual([TEST_VERIFIER]);
+    expect(notifications.some(({ level }) => level === "error")).toBe(false);
   });
 
-  it("migrates a legacy verifier override that conflicts with the default panel", async () => {
+  it("ignores a legacy verifier override matching the default panel", async () => {
     const calls = installManager();
     const runtime = changedFilesRuntime();
     const { ctx, notifications } = createCtx([

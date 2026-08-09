@@ -78,12 +78,10 @@ import {
   getProjectReviewConfigPath,
   isProjectReviewConfigApproved,
   resolveReviewConfig,
-  resolveReviewConfigForEditing,
   validateReviewConfig,
   writeReviewConfigField,
 } from "./config";
 import {
-  assertVerifierModelPolicy,
   DEFAULT_REVIEWER_PANEL,
   DEFAULT_SYNTHESIZER_MODEL,
   DEFAULT_VERIFIER_MODEL,
@@ -894,7 +892,6 @@ function assertEffectiveReviewModelsAvailable(
     models.synthesizerModel,
     "Review synthesizer"
   );
-  assertVerifierModelPolicy(models.verifierModel, models.reviewerPanel);
   assertReviewModelAvailable(ctx, models.verifierModel, "Review verifier");
 }
 
@@ -1249,8 +1246,7 @@ export default function reviewExtension(pi: ExtensionAPI) {
     ctx: ExtensionContext
   ): Promise<ReviewTarget | null> {
     // Config is deliberately re-read immediately before opening the selector.
-    // Keep cross-layer conflicts editable while retaining strict per-file parsing.
-    let resolvedConfig = await resolveReviewConfigForEditing(ctx.cwd);
+    let resolvedConfig = await resolveReviewConfig(ctx.cwd);
     // Determine smart default (but keep the list order stable)
     const smartDefault = await getSmartDefault();
     const presetItems: SelectItem[] = REVIEW_PRESETS.map((preset) => ({
@@ -2154,13 +2150,18 @@ export default function reviewExtension(pi: ExtensionAPI) {
       }
 
       const reviewerRunCount = reviewers.length * reviewerPanel.length;
+      const reviewerCallLabel = reviewerRunCount === 1 ? "call" : "calls";
+      const reviewerRetryLabel = reviewerRunCount === 1 ? "retry" : "retries";
+      const reviewerRoleLabel = reviewers.length === 1 ? "role" : "roles";
+      const reviewerModelLabel =
+        reviewerPanel.length === 1 ? "model" : "models";
       const plannedModels = reviewerPanel
         .map(
           (entry) => `${sanitizeModelForUi(entry.model)}=${entry.thinkingLevel}`
         )
         .join(", ");
       ctx.ui.notify(
-        `Review plan: initial calls: ${reviewerRunCount} reviewer calls (${reviewers.length} roles × ${reviewerPanel.length} models), plus 2 downstream calls if findings (1 synthesizer + 1 verifier). Possible structured-repair retries: up to ${reviewerRunCount} reviewer retries, plus up to 2 downstream retries when those stages run (1 synthesizer + 1 verifier). Reviewers: ${plannedModels}. Synthesizer: ${sanitizeModelForUi(synthesizerModel)}=high. Verifier: ${sanitizeModelForUi(verifierModel)}=high. Scope: ${hint}.`,
+        `Review plan: initial calls: ${reviewerRunCount} reviewer ${reviewerCallLabel} (${reviewers.length} ${reviewerRoleLabel} × ${reviewerPanel.length} ${reviewerModelLabel}), plus 2 downstream calls if findings (1 synthesizer + 1 verifier). Possible structured-repair retries: up to ${reviewerRunCount} reviewer ${reviewerRetryLabel}, plus up to 2 downstream retries when those stages run (1 synthesizer + 1 verifier). Reviewers: ${plannedModels}. Synthesizer: ${sanitizeModelForUi(synthesizerModel)}=high. Verifier: ${sanitizeModelForUi(verifierModel)}=high. Scope: ${hint}.`,
         "info"
       );
 

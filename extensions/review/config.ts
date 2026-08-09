@@ -4,7 +4,6 @@ import os from "node:os";
 import path from "node:path";
 
 import {
-  assertVerifierModelPolicy,
   DEFAULT_REVIEWER_PANEL,
   DEFAULT_SYNTHESIZER_MODEL,
   DEFAULT_VERIFIER_MODEL,
@@ -172,17 +171,6 @@ export function validateReviewConfig(
       "verifierModel"
     );
   }
-  if (config.reviewerPanel && config.verifierModel) {
-    try {
-      assertVerifierModelPolicy(config.verifierModel, config.reviewerPanel);
-    } catch (error) {
-      fail(
-        file,
-        "verifierModel",
-        error instanceof Error ? error.message : String(error)
-      );
-    }
-  }
   return config;
 }
 
@@ -251,14 +239,6 @@ async function loadReviewConfig(
       DEFAULT_VERIFIER_MODEL,
   };
   return { global, project, effective };
-}
-
-export async function resolveReviewConfigForEditing(
-  cwd: string
-): Promise<ResolvedReviewConfig> {
-  // Each file is still parsed and validated strictly. Only a cross-layer
-  // effective-bundle conflict is deferred so the selector can repair it.
-  return await loadReviewConfig(cwd, {});
 }
 
 export async function resolveReviewConfig(
