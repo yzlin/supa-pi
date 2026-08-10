@@ -42,6 +42,7 @@ import {
 import { Type } from "typebox";
 
 import {
+  type AssistantMessageRecord,
   composePrompt,
   createEmptyMetrics,
   type EvalCase,
@@ -91,6 +92,7 @@ export interface RunRecord {
   score: ScoreResult;
   metrics: RunMetrics;
   toolCalls: ToolCallRecord[];
+  assistantMessages: AssistantMessageRecord[];
 }
 
 export interface RunVariantOptions {
@@ -351,10 +353,10 @@ function createTools(workspace: string, evalCase: EvalCase): AgentTool[] {
   return [...builtIns, ...extras, ...questionnaireTools];
 }
 
-function textFromAssistantMessage(message: {
-  content?: Array<{ type?: string; text?: string }>;
-}): string {
-  return (message.content ?? [])
+function textFromContent(
+  content: Array<{ type?: string; text?: string }> | undefined
+): string {
+  return (content ?? [])
     .filter((part) => part.type === "text" && typeof part.text === "string")
     .map((part) => part.text)
     .join("\n");
@@ -392,6 +394,7 @@ export async function runVariant(
   let responseModel: string | undefined;
   let observedTurns = 0;
   const toolCalls: ToolCallRecord[] = [];
+  const assistantMessages: AssistantMessageRecord[] = [];
   const pendingToolCalls = new Map<string, ToolCallRecord>();
   const serviceTier = options.serviceTier ?? "default";
   const payloadServiceTiers = new Set<string>();
@@ -461,9 +464,11 @@ export async function runVariant(
           call.name === "questionnaire"
             ? (event.result?.details?.answers?.[0]?.label as unknown)
             : undefined;
+        const resultText = textFromContent(event.result?.content);
         const completedCall = {
           ...call,
           isError: event.isError,
+          ...(resultText ? { resultText } : {}),
           ...(typeof questionnaireResponse === "string"
             ? { questionnaireResponse }
             : {}),
@@ -482,9 +487,10 @@ export async function runVariant(
       }
       if (event.type === "message_end" && event.message.role === "assistant") {
         observedTurns += 1;
-        const text = textFromAssistantMessage(event.message);
+        const text = textFromContent(event.message.content);
         if (text) {
           output = text;
+          assistantMessages.push({ text, assistantTurn: observedTurns });
         }
         stopReason = event.message.stopReason;
         error = event.message.errorMessage;
@@ -505,7 +511,13 @@ export async function runVariant(
     };
   try {
     const score = await scoreRun(
-      { output, workspace, initialWorkspaceSnapshot, toolCalls },
+      {
+        output,
+        workspace,
+        initialWorkspaceSnapshot,
+        toolCalls,
+        assistantMessages,
+      },
       options.evalCase.checks
     );
     const completed =
@@ -547,6 +559,7 @@ export async function runVariant(
       score,
       metrics: publicMetrics,
       toolCalls,
+      assistantMessages,
     };
   } finally {
     await rm(workspace, { force: true, recursive: true });

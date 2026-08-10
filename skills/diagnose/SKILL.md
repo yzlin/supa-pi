@@ -11,13 +11,14 @@ Use this heavy protocol only after a `/diagnose` invocation or an explicit reque
 
 Diagnose first. An explicit Diagnose invocation asks for diagnosis, not a fix. The words “fix it,” the invocation itself, or prior permission to investigate never preapprove a fix.
 
-Adapted for Pi from Matt Pocock's `diagnose` skill (MIT), https://github.com/mattpocock/skills/tree/main/skills/engineering/diagnose, and LegendApp's `diagnose` skill (MIT), source reviewed at commit `5a4be517989496d0bc59520a93976360dd1bff51`, https://github.com/LegendApp/legend-skills/tree/main/diagnose.
+Adapted for Pi from Matt Pocock's earlier `diagnose` skill (MIT), pinned before its rename at commit `694fa30311e02c2639942308513555e61ee84a6f`: https://github.com/mattpocock/skills/blob/694fa30311e02c2639942308513555e61ee84a6f/skills/engineering/diagnose/SKILL.md. Its current successor, `diagnosing-bugs`, was reviewed at commit `84fdeffd12f2ee307994d1eb6feb48173b6e0502`: https://github.com/mattpocock/skills/tree/84fdeffd12f2ee307994d1eb6feb48173b6e0502/skills/engineering/diagnosing-bugs. Also adapted from LegendApp's `diagnose` skill (MIT), source reviewed at commit `5a4be517989496d0bc59520a93976360dd1bff51`: https://github.com/LegendApp/legend-skills/tree/main/diagnose.
 
 ## Non-negotiable contract
 
 - Evidence precedes remedies. Do not edit production behavior while diagnosing.
 - Establish the **exact anchor**: the precise observed symptom, expected result, trigger/input, environment/version, and code or system boundary under investigation. Do not substitute a nearby failure.
 - If the failure is already observable, attempt a clean reproduction first, before adding instrumentation or changing conditions.
+- Before causal reasoning, establish one red-capable feedback-loop command that has already been run and catches the exact anchored symptom. Without one, do not generate or rank causal candidates from source inspection; user-supplied candidates may only frame the next loop or probe design.
 - Build the smallest complete set of ranked, falsifiable causal candidates. “Complete” means it covers the plausible causes supported by current evidence; do not force an arbitrary count or include vague possibilities.
 - Minimise progressively only when each reduction improves evidence by making the signal faster, sharper, more repeatable, or more discriminating. Preserve the original scenario as a revalidation control.
 - Choose the smallest set of probes that discriminates among the live candidates. Every probe must state the prediction that would support or falsify candidates.
@@ -31,9 +32,18 @@ Read the repository's governing docs, domain vocabulary, and ADRs. Record the ex
 
 When the symptom is already observable, reproduce it cleanly first with existing tests, commands, logs, traces, UI state, or metrics. Prefer the narrowest real seam that still exhibits the exact symptom. Capture the command/input, environment, observed output, and run identifier or timestamp. Never expose secrets or raw sensitive data.
 
-For a deterministic issue, repeat enough to reject a one-off. For a flaky issue, run a fixed-count baseline under fixed conditions and record successes/failures as counts. Preserve the same workload, environment, sampling window, and stopping rule for later intervention and control runs; do not silently stop when a favorable result appears.
+Phase 1 is complete only when you can name **one command** that you have **already run**, with redacted invocation and output, and that is:
 
-If clean reproduction is impossible, say exactly why. Existing redacted artifacts can support candidates, but absence of a reproducible causal signal limits the result to `Incomplete`.
+- **Red-capable** — drives the real bug path and asserts the exact anchored symptom;
+- **Deterministic** — returns the same verdict, or a pinned high reproduction rate for a flaky issue;
+- **Fast** — seconds where practical, with unrelated setup removed;
+- **Agent-runnable** — runs unattended; for the human-in-the-loop fallback, collect the user's allowlisted observation in a separate turn, create the script's private mode-`700` handoff directory from a strictly validated unique Diagnose run ID, provide its derived concrete observation path literally to Pi's `write` tool (never shell interpolation), invoke the script with that run ID, and let the script remove the handoff after consumption.
+
+Treat this loop as a diagnostic tool: tighten it until its signal is faster, sharper, and more repeatable. See [references/reproduction-loops.md](references/reproduction-loops.md) for the construction ladder, flaky discovery amplification, and the human-in-the-loop fallback.
+
+For a deterministic issue, repeat enough to reject a one-off. For a flaky issue, first raise the reproduction rate enough to investigate by repeating or parallelising the trigger, adding controlled stress, narrowing timing windows, or injecting temporary sleeps. Then run a predeclared fixed-count baseline under fixed conditions and record successes/failures as counts. Preserve the same workload, environment, sampling window, and stopping rule for later intervention and control runs; do not silently stop when a favorable result appears.
+
+If no red-capable loop can be built, say exactly why and list what was tried. Ask for the missing environment access, a redacted captured artifact, or approval for temporary production instrumentation as applicable. Existing redacted artifacts and user-supplied candidates may guide the next loop or probe design, but absence of a reproducible causal signal limits the result to `Incomplete`. Do not generate or rank causal candidates from source inspection without the loop.
 
 ## 2. Candidate model and minimisation
 
@@ -43,6 +53,12 @@ Create the smallest complete falsifiable candidate set. For each candidate recor
 - evidence for and against;
 - a prediction unique enough to distinguish it;
 - the least invasive observation or intervention that tests it.
+
+Show the ranked candidate table in the main thread before probing; do not block if the user is absent:
+
+```text
+Candidate | Evidence for/against | Prediction | Discriminating probe
+```
 
 Use progressive minimisation only when it improves the evidence. At each step retain the last known reproducer and compare the reduced case with it. A smaller example that changes the symptom, drops the relevant boundary, or merely becomes convenient is not progress.
 
@@ -121,6 +137,8 @@ After approval:
 5. Only after verification, remove all agent-added probes and temporary state and retain redacted evidence needed for the report.
 
 If verification fails, set `Fix: Failed`, reverse only agent-owned fix edits (do not discard user work or unrelated changes), keep approved probes, incorporate the new evidence, and rerank the candidates in the main thread. A materially different remedy must pass the post-Proven gate again. Stop after three materially different failed fix attempts, clean the probes and temporary state, and preserve only redacted artifacts.
+
+After `Fix: Verified`, ask what would have prevented the bug. If the evidence shows an architectural cause such as no honest test seam, hidden coupling, or tangled callers, suggest `/improve-codebase-architecture` as a separate follow-up with those specifics. Do not expand the approved fix or make this recommendation before verification.
 
 ## 7. Report
 

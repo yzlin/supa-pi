@@ -13,6 +13,8 @@ Read when changing `/review`, `/review-summary`, `/review-fix`, reviewer orchest
 5. independently verify clusters and original members with `review-verifier`;
 6. derive provenance, support, coverage, ordering, and sanitized report Markdown in the orchestrator.
 
+Reviewer and verifier agents retain extension inheritance, while the report-only `review-synthesizer` disables it explicitly. The synthesizer uses only the workflow-injected `structured_output` tool; extension-enabled nested-session manager ownership is enforced by `pi-subagents` lifecycle regression coverage.
+
 The default matrix uses one reviewer model at high thinking:
 
 | role | default model | thinking |

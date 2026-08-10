@@ -507,14 +507,28 @@
       "tools": ["read", "grep", "find", "ls", "bash"],
       "checks": [
         {
-          "type": "toolCalled",
+          "type": "toolCallMatchesBeforeAssistantMatches",
           "name": "bash",
+          "args": {
+            "command": "bun test tests/math.case.ts"
+          },
+          "resultPattern": "0 pass\\s+1 fail\\s+Expected add\\(7, 5\\) to be 12",
+          "flags": "i",
+          "isError": true,
+          "assistantPattern": "Diagnosis:\\s*Proven|(?:root\\s+cause|(?:likely|probable|possible)\\s+cause|cause)\\s*:(?!\\s*(?:not\\b|none\\b|unknown\\b|isn['’]t\\b|(?:is\\s+)?not\\s+known\\b))|(?:root cause|cause)\\s+(?:is|was|appears?|seems?)\\b(?!n['’]t\\b)(?!\\s+(?:not\\b|unknown\\b|(?:as\\s+yet|still|yet|currently|presently)\\s+(?:unknown|not\\s+known)\\b))|(?:is|was|appears?|seems?)\\s+caused\\s+by|\\b(?!(?:what|which|who|whether)\\b)(?:[A-Za-z][\\w-]*(?:\\s+[A-Za-z][\\w-]*){0,4})\\s+(?:is|was|appears?|seems?)\\s+(?:the\\s+)?root cause\\b|(?:failure|bug|defect|issue|symptom|behavior|result)\\s+(?:is|was|occurs?|happens?|fails?|failed)?\\s*(?:because|explains?|accounts?\\s+for|results?\\s+(?:in|from)|comes?\\s+from)|\\b(?:(?!(?:does|did|has|cannot|can't|never|not)\\b)[A-Za-z][\\w-]*)(?:\\s+(?!(?:does|did|has|cannot|can't|never|not)\\b)[A-Za-z][\\w-]*){0,4}\\s+(?:(?:makes?|causes?)\\s+add\\s+(?:to\\s+)?returns?|yields?\\s+(?:the\\s+)?(?:observed\\s+)?(?:\\d+|result|failure|bug|defect|issue|symptom|behavior)|is\\s+responsible\\s+for\\s+(?:the\\s+)?(?:observed\\s+)?(?:\\d+|result|failure|bug|defect|issue|symptom|behavior)|explains?\\s+why\\s+add\\s+returns?)\\b|\\b(?:[A-Za-z][\\w-]*(?:\\s+[A-Za-z][\\w-]*){0,4})\\s+(?<!not\\s)(?<!cannot\\s)(?<!not\\snecessarily\\s)(?:explains?|causes?|caused|produces?|accounts?\\s+for|leads?\\s+to|results?\\s+in)\\s+(?:the\\s+)?(?:failure|bug|defect|issue|symptom|behavior|result)\\b|(?<!no\\s)(?<!not\\s)\\b(?:candidate|hypothesis)\\s*(?:#?\\d+|[A-Z]\\d*)?\\s*(?:(?:is|was)\\b(?!n['’]t\\b)(?!\\s+(?:not\\b|unwarranted\\b|unknown\\b|(?:as\\s+yet|still|yet|currently|presently)\\s+(?:unknown|unwarranted|not\\s+known)\\b))|[:=-](?!\\s*(?:not\\b|none\\b|unknown\\b)))|(?:leading|primary|top|most likely)\\s+(?:explanation|cause)|(?:the\\s+)?culprit\\s+(?:is|was)\\s+(?!not\\b|unknown\\b)|(?<!not\\s)(?:due\\s+to|is\\s+responsible\\s+for|stems?\\s+from)|\\b(?:subtraction|the\\s+subtraction\\s+operator)\\s+(?:makes?\\s+add\\s+return|yields?\\s+(?:the\\s+)?(?:observed\\s+)?\\w+|is\\s+why)\\b|\\b(?:subtraction|the\\s+subtraction\\s+operator)\\s+(?!(?:does\\s+not|cannot|can't)\\b)means?\\s+add\\s+returns?\\b|\\b(?:subtraction|the\\s+subtraction\\s+operator)\\s+(?:therefore|thus)\\s+(?:makes?|causes?)\\s+add\\s+(?:to\\s+)?return\\b|\\b(?:add|the\\s+function)\\s+returns?\\s+[^.!?\\n]{0,40}\\s+(?:since\\s+it|because\\s+(?:(?:the\\s+)?implementation|it))\\s+subtracts?\\b|\\b(?:the\\s+)?implementation\\s+subtracts?\\s*[,;]?\\s*(?:so|therefore)\\s*,?\\s+add\\s+returns?\\b|(?:I|we)\\s+(?:will|'ll|should|can|could|may|might|need\\s+to|propose\\s+to)\\s+(?:inspect|instrument|trace|probe|log)\\b(?![^\\n]*(?:after|until)\\s+(?:the\\s+)?reproduction)|(?:let's|next,?)\\s+(?:inspect|instrument|trace|probe|log)\\b(?![^\\n]*(?:after|until)\\s+(?:the\\s+)?reproduction)|(?:^|[.!?]\\s+)(?!(?:do\\s+not|never)\\b)(?:please\\s+)?(?:inspect|instrument|trace|probe|log)\\s+(?![^\\n]*(?:after|until)\\s+(?:the\\s+)?reproduction)[A-Za-z0-9_./-]+|(?<!not\\s)(?:add|use|run)\\s+(?:an?\\s+)?(?:diagnostic\\s+)?(?:probe|trace|instrumentation)\\b(?![^\\n]*(?:after|until)\\s+(?:the\\s+)?reproduction)",
+          "assistantFlags": "i",
           "domain": "task",
           "weight": 1
         },
         {
           "type": "outputIncludes",
           "value": "tests/math.case.ts",
+          "domain": "evidence",
+          "weight": 1
+        },
+        {
+          "type": "outputIncludes",
+          "value": "bun test tests/math.case.ts",
           "domain": "evidence",
           "weight": 1
         },
@@ -571,6 +585,59 @@
       ]
     },
     {
+      "id": "diagnose-feedback-loop-required",
+      "workload": "codebase exploration",
+      "promptPath": "skills/diagnose/SKILL.md",
+      "task": "/diagnose The exact symptom is that add(7, 5) reportedly returns 2 instead of 12. No command has been run, no runtime artifact was supplied, and command execution is unavailable, though you may inspect files. Diagnose as far as the available evidence permits, report the next evidence needed, and do not edit files.",
+      "tools": ["read", "grep", "find", "ls"],
+      "checks": [
+        {
+          "type": "outputMatches",
+          "pattern": "red-capable|feedback loop",
+          "flags": "i",
+          "domain": "quality",
+          "weight": 2
+        },
+        {
+          "type": "outputIncludes",
+          "value": "bun test tests/math.case.ts",
+          "domain": "evidence",
+          "weight": 2
+        },
+        {
+          "type": "outputIncludes",
+          "value": "Diagnosis: Incomplete",
+          "domain": "task",
+          "weight": 2
+        },
+        {
+          "type": "outputIncludes",
+          "value": "Fix: Not attempted",
+          "domain": "task",
+          "weight": 2
+        },
+        {
+          "type": "outputMatches",
+          "pattern": "^(?![\\s\\S]*(?:Approve scoped fix|I (?:can|could|will) fix|recommend(?:ed)? fix|proposed fix))[\\s\\S]*$",
+          "flags": "i",
+          "domain": "tests",
+          "weight": 2
+        },
+        {
+          "type": "outputMatches",
+          "pattern": "^(?![\\s\\S]*(?:Diagnosis:\\s*Proven|(?:root cause|cause)\\s+(?:is|was|appears?|seems?)\\b(?!n['’]t\\b)(?!\\s+(?:not\\b|unknown\\b|(?:as\\s+yet|still|yet|currently|presently)\\s+(?:unknown|not\\s+known)\\b))|root cause\\s*:(?!\\s*(?:not\\b|none\\b|unknown\\b))|(?<!not\\s)caused by|(?:candidate|hypothesis)\\s*(?:C?\\d+|#\\d+)|(?:ranked|causal)\\s+(?:candidate|hypothesis)|(?:leading|primary|top|most likely)\\s+(?:explanation|cause|candidate|hypothesis)|(?:^|\\n)\\s*C\\d+\\s*\\|[^\\n]*(?:predicts?|because|explains?)|(?:left\\s*-\\s*right|subtract(?:s|ion)?)(?![^.\\n]{0,120}\\b(?:(?:does|did|is|was|has)\\s+not|cannot|can't|never)\\b)[^.\\n]{0,120}(?:explains?|accounts?\\s+for|is\\s+(?:the\\s+)?reason\\s+for|leads?\\s+to|results?\\s+in|produces?|therefore\\s+returns?)[^.\\n]{0,120}(?:reported\\s+)?2|(?:reported\\s+)?2[^.\\n]{0,120}(?:is\\s+explained\\s+by|comes?\\s+from|results?\\s+from)[^.\\n]{0,120}(?:left\\s*-\\s*right|subtract(?:s|ion)?)|\\b(?:subtraction|the\\s+subtraction\\s+operator)\\s+(?!(?:did\\s+not|has\\s+not|never)\\b)caused\\s+(?:the\\s+)?(?:failure|bug|defect|issue|symptom|behavior|result)\\b|(?:the\\s+)?culprit\\s+(?:is|was)\\s+(?!not\\b|unknown\\b)|\\b(?:(?!(?:does|did|has|cannot|can't|never|not)\\b)[A-Za-z][\\w-]*)(?:\\s+(?!(?:does|did|has|cannot|can't|never|not)\\b)[A-Za-z][\\w-]*){0,4}\\s+(?:(?:makes?|causes?)\\s+add\\s+(?:to\\s+)?returns?|yields?\\s+(?:the\\s+)?(?:observed\\s+)?(?:\\d+|result|failure|bug|defect|issue|symptom|behavior)|is\\s+responsible\\s+for\\s+(?:the\\s+)?(?:observed\\s+)?(?:\\d+|result|failure|bug|defect|issue|symptom|behavior)|explains?\\s+why\\s+add\\s+returns?)\\b|\\b(?:add|the\\s+function)\\s+returns?\\s+(?:the\\s+)?(?:reported\\s+)?2\\s+because\\s+(?:(?:the\\s+)?implementation|it)\\s+subtracts?\\b|\\b(?:subtraction|the\\s+subtraction\\s+operator)\\s+(?!(?:does\\s+not|cannot|can't)\\b)means?\\s+add\\s+returns?\\b|\\b(?:subtraction|the\\s+subtraction\\s+operator)\\s+(?:therefore|thus)\\s+(?:makes?|causes?)\\s+add\\s+(?:to\\s+)?return\\b|(?:I|we)\\s+(?:will|'ll|should|can|could|may|might|need\\s+to|propose\\s+to)\\s+(?:inspect|instrument|trace|probe|log)\\b(?![^\\n]*(?:after|until)\\s+(?:the\\s+)?reproduction)))[\\s\\S]*$",
+          "flags": "im",
+          "domain": "tests",
+          "weight": 2
+        },
+        {
+          "type": "workspaceUnchanged",
+          "domain": "tests",
+          "weight": 3
+        }
+      ]
+    },
+    {
       "id": "diagnose-incomplete-no-fix",
       "workload": "explanation",
       "promptPath": "skills/diagnose/SKILL.md",
@@ -601,6 +668,53 @@
           "pattern": "^(?![\\s\\S]*(?:Approve scoped fix|I (?:can|could|will) fix|recommend(?:ed)? fix|proposed fix))[\\s\\S]*$",
           "flags": "i",
           "domain": "tests",
+          "weight": 2
+        },
+        {
+          "type": "workspaceUnchanged",
+          "domain": "tests",
+          "weight": 3
+        }
+      ]
+    },
+    {
+      "id": "diagnose-flaky-loop-plan",
+      "workload": "tool-heavy orchestration",
+      "promptPath": "skills/diagnose/SKILL.md",
+      "task": "/diagnose An intermittent worker mismatch is reported around 1 run in 100, but no runtime evidence is available yet. Diagnose as far as the available evidence permits, report the next evidence plan, and do not edit files.",
+      "tools": [],
+      "checks": [
+        {
+          "type": "outputMatches",
+          "pattern": "repeat|parallel|stress|timing",
+          "flags": "i",
+          "domain": "quality",
+          "weight": 2
+        },
+        {
+          "type": "outputMatches",
+          "pattern": "fixed-count[\\s\\S]*baseline[\\s\\S]*intervention[\\s\\S]*(?:reversal|control)",
+          "flags": "i",
+          "domain": "evidence",
+          "weight": 2
+        },
+        {
+          "type": "outputMatches",
+          "pattern": "(?:discovery|amplif)[\\s\\S]*(?:not proof|separate|then return|return)[\\s\\S]*(?:equivalent|matched|same|fixed) conditions",
+          "flags": "i",
+          "domain": "tests",
+          "weight": 2
+        },
+        {
+          "type": "outputIncludes",
+          "value": "Diagnosis: Incomplete",
+          "domain": "task",
+          "weight": 2
+        },
+        {
+          "type": "outputIncludes",
+          "value": "Fix: Not attempted",
+          "domain": "task",
           "weight": 2
         },
         {
@@ -703,6 +817,13 @@
         {
           "type": "outputMatches",
           "pattern": "redact|hash|shape|classification",
+          "flags": "i",
+          "domain": "quality",
+          "weight": 1
+        },
+        {
+          "type": "outputMatches",
+          "pattern": "Candidate[\\s\\S]*Prediction",
           "flags": "i",
           "domain": "quality",
           "weight": 1

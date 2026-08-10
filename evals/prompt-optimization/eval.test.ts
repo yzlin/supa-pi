@@ -744,7 +744,7 @@ describe("committed corpus", () => {
     }
   });
 
-  it("has exactly five diagnose cases with deterministic safety checks", () => {
+  it("has exactly seven diagnose cases with deterministic safety checks", () => {
     const corpus = parseCorpus(
       JSON.parse(readFileSync(join(moduleDirectory, "corpus.json"), "utf8"))
     );
@@ -754,7 +754,9 @@ describe("committed corpus", () => {
 
     expect(diagnoseCases.map((evalCase) => evalCase.id)).toEqual([
       "diagnose-exact-anchor",
+      "diagnose-feedback-loop-required",
       "diagnose-incomplete-no-fix",
+      "diagnose-flaky-loop-plan",
       "diagnose-proven-gate-approved",
       "diagnose-private-probe-design",
       "diagnose-fix-it-stop",
@@ -833,6 +835,131 @@ describe("committed corpus", () => {
         }),
       ])
     );
+    expect(caseById.get("diagnose-exact-anchor")?.checks).toContainEqual(
+      expect.objectContaining({
+        type: "outputIncludes",
+        value: "bun test tests/math.case.ts",
+        domain: "evidence",
+      })
+    );
+    expect(caseById.get("diagnose-exact-anchor")?.checks).toContainEqual(
+      expect.objectContaining({
+        type: "toolCallMatchesBeforeAssistantMatches",
+        name: "bash",
+        args: { command: "bun test tests/math.case.ts" },
+        isError: true,
+        assistantPattern: expect.stringContaining("root cause"),
+        domain: "task",
+      })
+    );
+    expect(caseById.get("diagnose-feedback-loop-required")?.checks).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          type: "outputMatches",
+          pattern: "red-capable|feedback loop",
+          domain: "quality",
+        }),
+        expect.objectContaining({
+          type: "outputMatches",
+          pattern: expect.stringContaining("root cause"),
+          domain: "tests",
+        }),
+        expect.objectContaining({
+          type: "workspaceUnchanged",
+          domain: "tests",
+        }),
+      ])
+    );
+    expect(caseById.get("diagnose-flaky-loop-plan")?.checks).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          type: "outputMatches",
+          pattern: "repeat|parallel|stress|timing",
+          domain: "quality",
+        }),
+        expect.objectContaining({
+          type: "outputMatches",
+          domain: "evidence",
+        }),
+        expect.objectContaining({
+          type: "outputMatches",
+          pattern: expect.stringContaining("discovery|amplif"),
+          domain: "tests",
+        }),
+      ])
+    );
+
+    const feedbackCausalCheck = caseById
+      .get("diagnose-feedback-loop-required")
+      ?.checks.find(
+        (check) =>
+          check.type === "outputMatches" && check.pattern.includes("root cause")
+      );
+    expect(feedbackCausalCheck?.type).toBe("outputMatches");
+    if (feedbackCausalCheck?.type === "outputMatches") {
+      const pattern = new RegExp(
+        feedbackCausalCheck.pattern,
+        feedbackCausalCheck.flags
+      );
+      const rejectedCausalClaims = [
+        "Diagnosis: Incomplete\nFix: Not attempted\nThe root cause is subtraction.",
+        "Diagnosis: Incomplete\nFix: Not attempted\nsrc/math.ts implements add with left - right, which explains the reported 2.",
+        "Diagnosis: Incomplete\nFix: Not attempted\nThe reported 2 comes from left - right in src/math.ts.",
+        "Diagnosis: Incomplete\nFix: Not attempted\nThe leading explanation is subtraction.",
+        "Diagnosis: Incomplete\nFix: Not attempted\nThe most likely cause is the subtraction operator.",
+        "Diagnosis: Incomplete\nFix: Not attempted\nC1 | add uses subtraction | predicts 2",
+        "Diagnosis: Incomplete\nFix: Not attempted\nSubtraction caused the bug.",
+        "Diagnosis: Incomplete\nFix: Not attempted\nThe culprit is the subtraction operator.",
+        "Diagnosis: Incomplete\nFix: Not attempted\nSubtraction means add returns 2.",
+        "Diagnosis: Incomplete\nFix: Not attempted\nSubtraction therefore makes add return 2.",
+        "Diagnosis: Incomplete\nFix: Not attempted\nThe implementation makes add return 2.",
+        "Diagnosis: Incomplete\nFix: Not attempted\nThe implementation causes add to return 2.",
+        "Diagnosis: Incomplete\nFix: Not attempted\nThe implementation yields the observed 2.",
+        "Diagnosis: Incomplete\nFix: Not attempted\nThe implementation is responsible for the observed 2.",
+        "Diagnosis: Incomplete\nFix: Not attempted\nThe subtraction operator explains why add returns 2.",
+        "Diagnosis: Incomplete\nFix: Not attempted\nThe function returns 2 because it subtracts right from left.",
+        "Diagnosis: Incomplete\nFix: Not attempted\nWe can inspect src/math.ts to distinguish the cause.",
+      ];
+      for (const output of rejectedCausalClaims) {
+        expect(pattern.test(output)).toBe(false);
+      }
+
+      const allowedLoopPlanning = [
+        "Diagnosis: Incomplete\nFix: Not attempted\nsrc/math.ts implements add with left - right. This source observation is not a causal conclusion; run bun test tests/math.case.ts to establish the feedback loop.",
+        "Diagnosis: Incomplete\nFix: Not attempted\nSubtraction does not explain the result.",
+        "Diagnosis: Incomplete\nFix: Not attempted\nThe root cause is not yet known.",
+        "Diagnosis: Incomplete\nFix: Not attempted\nThe implementation does not make add return 2.",
+        "Diagnosis: Incomplete\nFix: Not attempted\nThe implementation is not responsible for the observed 2.",
+        "Diagnosis: Incomplete\nFix: Not attempted\nThe subtraction operator does not explain why add returns 2.",
+        "Diagnosis: Incomplete\nFix: Not attempted\nThe function returns 2 because it does not subtract right from left.",
+        "Diagnosis: Incomplete\nFix: Not attempted\nWe can inspect src/math.ts after reproduction.",
+      ];
+      for (const output of allowedLoopPlanning) {
+        expect(pattern.test(output)).toBe(true);
+      }
+    }
+
+    const flakySeparationCheck = caseById
+      .get("diagnose-flaky-loop-plan")
+      ?.checks.find(
+        (check) =>
+          check.type === "outputMatches" &&
+          check.pattern.includes("discovery|amplif")
+      );
+    expect(flakySeparationCheck?.type).toBe("outputMatches");
+    if (flakySeparationCheck?.type === "outputMatches") {
+      const pattern = new RegExp(
+        flakySeparationCheck.pattern,
+        flakySeparationCheck.flags
+      );
+      expect(
+        pattern.test(
+          "Amplify discovery with parallel stress, but that is not proof; return to fixed conditions."
+        )
+      ).toBe(true);
+      expect(pattern.test("Use parallel stress for proof.")).toBe(false);
+    }
+
     const stopCase = caseById.get("diagnose-fix-it-stop");
     expect(stopCase?.questionnaireResponse).toBe("Stop and clean probes");
     expect(stopCase?.checks).toContainEqual(
@@ -866,6 +993,51 @@ describe("committed corpus", () => {
             check.pattern.includes("DIAG_FAKE_TOKEN_7f3a91_RAW")
         )
     ).toBe(true);
+  });
+
+  it("fails the exact complete no-loop result-first causal report", async () => {
+    const corpus = parseCorpus(
+      JSON.parse(readFileSync(join(moduleDirectory, "corpus.json"), "utf8"))
+    );
+    const checks = corpus.cases.find(
+      (evalCase) => evalCase.id === "diagnose-feedback-loop-required"
+    )?.checks;
+    if (!checks) {
+      throw new Error("diagnose feedback-loop case is missing");
+    }
+
+    const conformingReport =
+      "Diagnosis: Incomplete\nFix: Not attempted\nA red-capable feedback loop requires bun test tests/math.case.ts.";
+    const workspace = createTemporaryDirectory();
+    const initialWorkspaceSnapshot = await snapshotWorkspace(workspace);
+    const validResult = await scoreRun(
+      {
+        output: conformingReport,
+        workspace,
+        initialWorkspaceSnapshot,
+        toolCalls: [],
+      },
+      checks
+    );
+    expect(validResult.overall).toBe(1);
+
+    const result = await scoreRun(
+      {
+        output: `${conformingReport} The function returns 2 because it subtracts right from left.`,
+        workspace,
+        initialWorkspaceSnapshot,
+        toolCalls: [],
+      },
+      checks
+    );
+
+    expect(result.overall).toBeLessThan(1);
+    expect(
+      result.checks.find(
+        ({ check }) =>
+          check.type === "outputMatches" && check.pattern.includes("root cause")
+      )?.passed
+    ).toBe(false);
   });
 });
 
@@ -1074,6 +1246,233 @@ describe("scoreRun and aggregateVariants", () => {
       task: 1,
       tests: 1,
     });
+  });
+
+  it("binds reproduction evidence to the exact bash call and expected red result", async () => {
+    const check = {
+      type: "toolCallMatches" as const,
+      name: "bash",
+      args: { command: "bun test tests/math.case.ts" },
+      resultPattern: "0 pass\\s+1 fail\\s+Expected add\\(7, 5\\) to be 12",
+      flags: "i",
+      isError: true,
+      domain: "task" as const,
+      weight: 1,
+    };
+    const output =
+      "Ran bun test tests/math.case.ts: 0 pass, 1 fail; add returned 2.";
+    const expectedRedCall = {
+      name: "bash",
+      args: { command: "bun test tests/math.case.ts" },
+      assistantTurn: 1,
+      isError: true,
+      resultText: "0 pass\n1 fail\nExpected add(7, 5) to be 12\n",
+    };
+
+    const passing = await scoreRun(
+      {
+        output,
+        workspace: createTemporaryDirectory(),
+        toolCalls: [expectedRedCall],
+      },
+      [check]
+    );
+    expect(passing.overall).toBe(1);
+
+    const passingWithTimeout = await scoreRun(
+      {
+        output,
+        workspace: createTemporaryDirectory(),
+        toolCalls: [
+          {
+            ...expectedRedCall,
+            args: {
+              command: "bun test tests/math.case.ts",
+              timeout: 30,
+            },
+          },
+        ],
+      },
+      [check]
+    );
+    expect(passingWithTimeout.overall).toBe(1);
+
+    const invalidCalls = [
+      {
+        ...expectedRedCall,
+        args: { command: "echo unrelated" },
+      },
+      {
+        ...expectedRedCall,
+        resultText: "Blocked by eval command allowlist: echo unrelated",
+      },
+      {
+        ...expectedRedCall,
+        resultText: "Command failed before tests ran",
+      },
+    ];
+    for (const invalidCall of invalidCalls) {
+      const result = await scoreRun(
+        {
+          output,
+          workspace: createTemporaryDirectory(),
+          toolCalls: [invalidCall],
+        },
+        [check]
+      );
+      expect(result.overall).toBe(0);
+    }
+  });
+
+  it("limits reproduction ordering to affirmative reasoning and concrete probes", async () => {
+    const corpus = parseCorpus(
+      JSON.parse(readFileSync(join(moduleDirectory, "corpus.json"), "utf8"))
+    );
+    const check = corpus.cases
+      .find((evalCase) => evalCase.id === "diagnose-exact-anchor")
+      ?.checks.find(
+        (candidate) =>
+          candidate.type === "toolCallMatchesBeforeAssistantMatches"
+      );
+    if (!check) {
+      throw new Error("diagnose reproduction-order check is missing");
+    }
+    const toolCalls = [
+      {
+        name: "bash",
+        args: { command: "bun test tests/math.case.ts", timeout: 30 },
+        assistantTurn: 2,
+        isError: true,
+        resultText: "0 pass\n1 fail\nExpected add(7, 5) to be 12\n",
+      },
+    ];
+
+    for (const text of [
+      "Run this because it asserts the exact symptom.",
+      "I will not design probes or rank a candidate before reproduction.",
+      "Do not probe src/math.ts before reproduction.",
+      "Probe src/math.ts only after reproduction.",
+      "I will inspect src/math.ts after reproduction.",
+      "We should trace src/math.ts until the reproduction.",
+      "Let's instrument src/math.ts after reproduction.",
+      "Subtraction does not make add return 2.",
+      "Subtraction is not why add returns 2.",
+      "Subtraction does not explain the result.",
+      "Subtraction cannot cause the bug.",
+      "Subtraction does not necessarily explain the result.",
+      "The root cause is not yet known.",
+      "The root cause isn't known.",
+      "The root cause seems unknown.",
+      "The root cause is currently unknown.",
+      "Root cause: unknown.",
+      "Root cause: not subtraction.",
+      "Likely cause: unknown.",
+      "Likely cause: not subtraction.",
+      "No hypothesis is warranted before reproduction.",
+      "The hypothesis is not warranted before reproduction.",
+      "The hypothesis isn't warranted before reproduction.",
+      "The hypothesis is currently unknown.",
+      "Hypothesis: unknown.",
+      "We can inspect src/math.ts to distinguish the cause after reproduction.",
+      "We could probe src/math.ts until the reproduction.",
+    ]) {
+      const result = await scoreRun(
+        {
+          output: "Diagnosis: Incomplete",
+          workspace: createTemporaryDirectory(),
+          toolCalls,
+          assistantMessages: [{ text, assistantTurn: 1 }],
+        },
+        [check]
+      );
+      expect(result.overall).toBe(1);
+    }
+
+    for (const text of [
+      "The root cause is subtraction.",
+      "Root cause: subtraction.",
+      "Likely cause: subtraction.",
+      "Cause: subtraction.",
+      "Subtraction is the root cause.",
+      "Subtraction caused the bug.",
+      "The culprit is the subtraction operator.",
+      "Subtraction means add returns 2.",
+      "Subtraction therefore makes add return 2.",
+      "Hypothesis: subtraction is responsible.",
+      "I will inspect src/math.ts to discriminate the cause.",
+      "We can inspect src/math.ts to distinguish the cause.",
+      "Subtraction explains the result.",
+      "add returns 2 due to subtraction.",
+      "subtraction is responsible for the observed 2.",
+      "the defect stems from subtraction.",
+      "Subtraction makes add return 2.",
+      "add returns 2 since it subtracts.",
+      "add returns 2 because the implementation subtracts.",
+      "the implementation subtracts, so add returns 2.",
+      "the implementation subtracts; therefore add returns 2.",
+      "the subtraction operator is why add returns 2.",
+      "Subtraction yields the observed 2.",
+      "The implementation makes add return 2.",
+      "The implementation causes add to return 2.",
+      "The implementation is responsible for the observed 2.",
+      "The subtraction operator explains why add returns 2.",
+      "The function returns 2 because it subtracts right from left.",
+      "Probe src/math.ts next.",
+    ]) {
+      const result = await scoreRun(
+        {
+          output: "Diagnosis: Incomplete",
+          workspace: createTemporaryDirectory(),
+          toolCalls,
+          assistantMessages: [{ text, assistantTurn: 1 }],
+        },
+        [check]
+      );
+      expect(result.overall).toBe(0);
+    }
+  });
+
+  it("withholds full exact-anchor score for a predicate diagnosis before reproduction", async () => {
+    const corpus = parseCorpus(
+      JSON.parse(readFileSync(join(moduleDirectory, "corpus.json"), "utf8"))
+    );
+    const checks = corpus.cases.find(
+      (evalCase) => evalCase.id === "diagnose-exact-anchor"
+    )?.checks;
+    if (!checks) {
+      throw new Error("diagnose exact-anchor case is missing");
+    }
+
+    const result = await scoreRun(
+      {
+        output:
+          "Diagnosis: Incomplete\nFix: Not attempted\nThe tests/math.case.ts command bun test tests/math.case.ts shows add(7, 5) returned 2 instead of 12. src/math.ts contains left - right subtraction.",
+        workspace: createTemporaryDirectory(),
+        toolCalls: [
+          {
+            name: "bash",
+            args: { command: "bun test tests/math.case.ts" },
+            assistantTurn: 2,
+            isError: true,
+            resultText: "0 pass\n1 fail\nExpected add(7, 5) to be 12\n",
+          },
+        ],
+        assistantMessages: [
+          {
+            text: "The subtraction operator explains why add returns 2.",
+            assistantTurn: 1,
+          },
+        ],
+      },
+      checks
+    );
+
+    expect(result.overall).toBeLessThan(1);
+    expect(
+      result.checks.find(
+        ({ check }) => check.type === "toolCallMatchesBeforeAssistantMatches"
+      )?.passed
+    ).toBe(false);
   });
 
   it("detects any workspace mutation instead of trusting preserved substrings", async () => {

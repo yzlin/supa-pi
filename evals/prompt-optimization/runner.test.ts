@@ -270,14 +270,180 @@ describe("runVariant", () => {
 
     expect(result.completed).toBe(true);
     expect(result.toolCalls).toEqual([
-      {
+      expect.objectContaining({
         name: "read",
         args: { path: "src/math.ts" },
         assistantTurn: 1,
         isError: false,
-      },
+        resultText: expect.stringContaining("return left - right;"),
+      }),
     ]);
     expect(result.metrics).toMatchObject({ turns: 2, toolCalls: 1 });
+  });
+
+  it("records an expected red bash result for exact reproduction scoring", async () => {
+    const model = modelRegistry.find("openai", "gpt-4o");
+    if (!model) {
+      throw new Error("test model is unavailable");
+    }
+    let providerCall = 0;
+    const result = await runVariant({
+      evalCase: {
+        id: "exact-red-reproduction",
+        workload: "codebase exploration",
+        promptPath: "skills/diagnose/SKILL.md",
+        task: "Reproduce the exact failure.",
+        tools: ["bash"],
+        checks: [
+          {
+            type: "toolCallMatchesBeforeAssistantMatches",
+            name: "bash",
+            args: { command: "bun test tests/math.case.ts" },
+            resultPattern:
+              "0 pass\\s+1 fail\\s+Expected add\\(7, 5\\) to be 12",
+            isError: true,
+            assistantPattern: "root cause|candidate|hypothesis|probe",
+            assistantFlags: "i",
+            domain: "task",
+            weight: 1,
+          },
+        ],
+      },
+      variant: "candidate",
+      repetition: 1,
+      promptContent: "---\nname: diagnose\n---\nReproduce first.",
+      promptSha256: "candidate-hash",
+      fixturePath,
+      model,
+      thinking: "medium",
+      timeoutMs: 5000,
+      maxTurns: 2,
+      getApiKey: () => Promise.resolve("test-key"),
+      streamFn: (selectedModel) => {
+        providerCall += 1;
+        if (providerCall === 1) {
+          return createMessageStream(
+            createMessage(
+              selectedModel,
+              [
+                {
+                  type: "toolCall",
+                  id: "bash-red-1",
+                  name: "bash",
+                  arguments: { command: "bun test tests/math.case.ts" },
+                },
+              ],
+              "toolUse"
+            )
+          );
+        }
+        return createMessageStream(
+          createMessage(selectedModel, [
+            { type: "text", text: "Diagnosis: Incomplete" },
+          ])
+        );
+      },
+    });
+
+    expect(result.score.overall).toBe(1);
+    expect(result.toolCalls).toContainEqual(
+      expect.objectContaining({
+        name: "bash",
+        isError: true,
+        resultText: expect.stringContaining("Expected add(7, 5) to be 12"),
+      })
+    );
+  });
+
+  it("rejects causal reasoning before the matching red reproduction", async () => {
+    const model = modelRegistry.find("openai", "gpt-4o");
+    if (!model) {
+      throw new Error("test model is unavailable");
+    }
+    let providerCall = 0;
+    const result = await runVariant({
+      evalCase: {
+        id: "reproduction-before-reasoning",
+        workload: "codebase exploration",
+        promptPath: "skills/diagnose/SKILL.md",
+        task: "Reproduce before causal reasoning.",
+        tools: ["bash"],
+        checks: [
+          {
+            type: "toolCallMatchesBeforeAssistantMatches",
+            name: "bash",
+            args: { command: "bun test tests/math.case.ts" },
+            resultPattern:
+              "0 pass\\s+1 fail\\s+Expected add\\(7, 5\\) to be 12",
+            isError: true,
+            assistantPattern: "root cause|candidate|hypothesis|probe",
+            assistantFlags: "i",
+            domain: "task",
+            weight: 1,
+          },
+        ],
+      },
+      variant: "candidate",
+      repetition: 1,
+      promptContent: "---\nname: diagnose\n---\nReproduce first.",
+      promptSha256: "candidate-hash",
+      fixturePath,
+      model,
+      thinking: "medium",
+      timeoutMs: 5000,
+      maxTurns: 3,
+      getApiKey: () => Promise.resolve("test-key"),
+      streamFn: (selectedModel) => {
+        providerCall += 1;
+        if (providerCall === 1) {
+          return createMessageStream(
+            createMessage(
+              selectedModel,
+              [
+                { type: "text", text: "The root cause is subtraction." },
+                {
+                  type: "toolCall",
+                  id: "bash-preliminary-1",
+                  name: "bash",
+                  arguments: { command: "pwd" },
+                },
+              ],
+              "toolUse"
+            )
+          );
+        }
+        if (providerCall === 2) {
+          return createMessageStream(
+            createMessage(
+              selectedModel,
+              [
+                {
+                  type: "toolCall",
+                  id: "bash-red-2",
+                  name: "bash",
+                  arguments: { command: "bun test tests/math.case.ts" },
+                },
+              ],
+              "toolUse"
+            )
+          );
+        }
+        return createMessageStream(
+          createMessage(selectedModel, [
+            { type: "text", text: "Diagnosis: Incomplete" },
+          ])
+        );
+      },
+    });
+
+    expect(result.score.overall).toBe(0);
+    expect(result.assistantMessages).toEqual([
+      { text: "The root cause is subtraction.", assistantTurn: 1 },
+      { text: "Diagnosis: Incomplete", assistantTurn: 3 },
+    ]);
+    expect(result.score.checks[0]?.evidence).toContain(
+      "preceded matching bash call"
+    );
   });
 
   it("supplies approval through one exact questionnaire gate before editing", async () => {

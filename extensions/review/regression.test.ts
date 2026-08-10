@@ -68,6 +68,7 @@ const UNSAFE_BIDI_CONTROL_PATTERN = /[\u202e\u2066-\u2069]/u;
 const ANSI_ESCAPE_CHARACTER = String.fromCharCode(27);
 const AGENT_FRONTMATTER_PATTERN = /^---\n([\s\S]*?)\n---/;
 const AGENT_CAVEMAN_FALSE_PATTERN = /^caveman:\s*false$/m;
+const AGENT_EXTENSIONS_FALSE_PATTERN = /^extensions:\s*false$/m;
 const FORGED_BULLET_LINE_PATTERN = /^- forged bullet$/m;
 const REVIEWER_AGENT_NAMES = [
   "code-reviewer",
@@ -76,6 +77,10 @@ const REVIEWER_AGENT_NAMES = [
   "performance-reviewer",
 ] as const;
 const REVIEW_JSON_AGENT_NAMES = [
+  ...REVIEWER_AGENT_NAMES,
+  "review-verifier",
+] as const;
+const EXTENSION_ENABLED_REVIEW_AGENT_NAMES = [
   ...REVIEWER_AGENT_NAMES,
   "review-verifier",
 ] as const;
@@ -1962,7 +1967,7 @@ describe.serial("review direct targets", () => {
     expect(getReviewReportMessages(runtime)).toHaveLength(1);
   });
 
-  it("captures closed-schema reviewer and verifier tools without disabling extensions", async () => {
+  it("captures closed-schema tools without overriding agent extension policy", async () => {
     const runtime = createMockPiRuntime((_command, args) => {
       if (args.join(" ") === "status --porcelain --untracked-files=all") {
         return { stdout: " M src/change.ts\n", code: 0 };
@@ -2084,6 +2089,28 @@ describe.serial("review direct targets", () => {
       const frontmatter = agentMarkdown.match(AGENT_FRONTMATTER_PATTERN)?.[1];
 
       expect(frontmatter).toMatch(AGENT_CAVEMAN_FALSE_PATTERN);
+    }
+  });
+
+  it("isolates only the report-only synthesizer from extensions", () => {
+    const synthesizerMarkdown = readFileSync(
+      path.join(process.cwd(), "agents", "review-synthesizer.md"),
+      "utf8"
+    );
+    const synthesizerFrontmatter = synthesizerMarkdown.match(
+      AGENT_FRONTMATTER_PATTERN
+    )?.[1];
+
+    expect(synthesizerFrontmatter).toMatch(AGENT_EXTENSIONS_FALSE_PATTERN);
+
+    for (const agentName of EXTENSION_ENABLED_REVIEW_AGENT_NAMES) {
+      const agentMarkdown = readFileSync(
+        path.join(process.cwd(), "agents", `${agentName}.md`),
+        "utf8"
+      );
+      const frontmatter = agentMarkdown.match(AGENT_FRONTMATTER_PATTERN)?.[1];
+
+      expect(frontmatter).not.toMatch(AGENT_EXTENSIONS_FALSE_PATTERN);
     }
   });
 

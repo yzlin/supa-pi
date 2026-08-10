@@ -3,6 +3,7 @@ import { createHash } from "node:crypto";
 import { existsSync } from "node:fs";
 import { lstat, readdir, readFile, readlink, realpath } from "node:fs/promises";
 import { isAbsolute, relative, resolve } from "node:path";
+import { isDeepStrictEqual } from "node:util";
 
 import { parseFrontmatter } from "@earendil-works/pi-coding-agent";
 
@@ -39,6 +40,14 @@ interface CheckBase {
   weight: number;
 }
 
+interface ToolCallMatchCheck extends CheckBase {
+  name: string;
+  args: Record<string, unknown>;
+  resultPattern: string;
+  flags?: string;
+  isError: boolean;
+}
+
 export type EvalCheck =
   | (CheckBase & { type: "outputIncludes"; value: string })
   | (CheckBase & { type: "outputMatches"; pattern: string; flags?: string })
@@ -47,6 +56,12 @@ export type EvalCheck =
   | (CheckBase & { type: "fileEquals"; path: string; value: string })
   | (CheckBase & { type: "toolCalled"; name: string })
   | (CheckBase & { type: "toolNotCalled"; name: string })
+  | (ToolCallMatchCheck & { type: "toolCallMatches" })
+  | (ToolCallMatchCheck & {
+      type: "toolCallMatchesBeforeAssistantMatches";
+      assistantPattern: string;
+      assistantFlags?: string;
+    })
   | (CheckBase & {
       type: "toolCalledAfter";
       name: string;
@@ -102,7 +117,13 @@ export interface ToolCallRecord {
   args: Record<string, unknown>;
   assistantTurn: number;
   isError?: boolean;
+  resultText?: string;
   questionnaireResponse?: string;
+}
+
+export interface AssistantMessageRecord {
+  text: string;
+  assistantTurn: number;
 }
 
 interface ScoreInput {
@@ -110,6 +131,7 @@ interface ScoreInput {
   workspace: string;
   initialWorkspaceSnapshot?: string;
   toolCalls: ToolCallRecord[];
+  assistantMessages?: AssistantMessageRecord[];
 }
 
 export interface CheckResult {
@@ -229,6 +251,50 @@ function parseCheck(value: unknown, label: string): EvalCheck {
     case "toolNotCalled":
       assertNonEmptyString(value.name, `${label}.name`);
       return { ...base, type: value.type, name: value.name };
+    case "toolCallMatches":
+    case "toolCallMatchesBeforeAssistantMatches": {
+      assertNonEmptyString(value.name, `${label}.name`);
+      assertObject(value.args, `${label}.args`);
+      assertNonEmptyString(value.resultPattern, `${label}.resultPattern`);
+      if (value.flags !== undefined && typeof value.flags !== "string") {
+        throw new Error(`${label}.flags must be a string`);
+      }
+      if (typeof value.isError !== "boolean") {
+        throw new Error(`${label}.isError must be a boolean`);
+      }
+      new RegExp(value.resultPattern, value.flags as string | undefined);
+      const parsedMatch = {
+        ...base,
+        name: value.name,
+        args: value.args,
+        resultPattern: value.resultPattern,
+        flags: value.flags as string | undefined,
+        isError: value.isError,
+      };
+      if (value.type === "toolCallMatchesBeforeAssistantMatches") {
+        assertNonEmptyString(
+          value.assistantPattern,
+          `${label}.assistantPattern`
+        );
+        if (
+          value.assistantFlags !== undefined &&
+          typeof value.assistantFlags !== "string"
+        ) {
+          throw new Error(`${label}.assistantFlags must be a string`);
+        }
+        new RegExp(
+          value.assistantPattern,
+          value.assistantFlags as string | undefined
+        );
+        return {
+          ...parsedMatch,
+          type: value.type,
+          assistantPattern: value.assistantPattern,
+          assistantFlags: value.assistantFlags as string | undefined,
+        };
+      }
+      return { ...parsedMatch, type: value.type };
+    }
     case "toolCalledAfter": {
       assertNonEmptyString(value.name, `${label}.name`);
       assertNonEmptyString(value.after, `${label}.after`);
@@ -538,6 +604,16 @@ function workspaceEntriesByPath(snapshot: string): Map<string, string> {
   );
 }
 
+function includesRequiredArgs(
+  recorded: Record<string, unknown>,
+  required: Record<string, unknown>
+): boolean {
+  return Object.entries(required).every(
+    ([key, value]) =>
+      Object.hasOwn(recorded, key) && isDeepStrictEqual(recorded[key], value)
+  );
+}
+
 async function scoreCheck(
   input: ScoreInput,
   check: EvalCheck
@@ -600,6 +676,51 @@ async function scoreCheck(
         check,
         passed,
         evidence: `${check.name} called ${count} time(s)`,
+      };
+    }
+    case "toolCallMatches":
+    case "toolCallMatchesBeforeAssistantMatches": {
+      const matchingCalls = input.toolCalls.filter(
+        (call) =>
+          call.name === check.name &&
+          includesRequiredArgs(call.args, check.args) &&
+          call.isError === check.isError &&
+          typeof call.resultText === "string" &&
+          new RegExp(check.resultPattern, check.flags).test(call.resultText)
+      );
+      if (check.type === "toolCallMatchesBeforeAssistantMatches") {
+        const firstMatchingTurn = Math.min(
+          ...matchingCalls.map((call) => call.assistantTurn)
+        );
+        const prematureMessage = (input.assistantMessages ?? []).find(
+          (message) =>
+            message.assistantTurn <= firstMatchingTurn &&
+            new RegExp(check.assistantPattern, check.assistantFlags).test(
+              message.text
+            )
+        );
+        const hasAssistantTrajectory = input.assistantMessages !== undefined;
+        const passed =
+          matchingCalls.length > 0 &&
+          hasAssistantTrajectory &&
+          !prematureMessage;
+        let evidence = `${check.name} exact successful/expected result was missing`;
+        if (passed) {
+          evidence = `${check.name} matched before causal reasoning or diagnostic probes`;
+        } else if (!hasAssistantTrajectory) {
+          evidence = "assistant message trajectory was missing";
+        } else if (prematureMessage) {
+          evidence = `assistant reasoning or probe preceded matching ${check.name} call`;
+        }
+        return { check, passed, evidence };
+      }
+      const passed = matchingCalls.length > 0;
+      return {
+        check,
+        passed,
+        evidence: passed
+          ? `${check.name} matched required arguments and exact result`
+          : `${check.name} exact successful/expected result was missing`,
       };
     }
     case "toolCalledAfter": {

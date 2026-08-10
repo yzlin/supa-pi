@@ -3,6 +3,7 @@ description: Losslessly clusters multi-model reviewer findings without inspectin
 tools: none
 model: openai-codex/gpt-5.6-sol
 thinking: high
+extensions: false
 caveman: false
 ---
 
