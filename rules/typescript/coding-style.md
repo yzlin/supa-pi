@@ -9,6 +9,24 @@ paths:
 
 > This file extends [common/coding-style.md](../common/coding-style.md) with TypeScript/JavaScript specific content.
 
+## Tailwind Class Composition
+
+- Keep static `className` values as plain strings
+- Do not interpolate conditional classes inside template literals
+- When `tailwind-variants` is installed, import and use its `cn()` for simple conditional classes and caller-provided `className` merging
+- Prefer `tv()` for named, reusable, or compound component variants
+- Without `tailwind-variants`, use the project's existing `cn()` utility
+
+```tsx
+import { cn } from 'tailwind-variants'
+
+className={cn(
+  'bg-background',
+  isActive ? 'text-blue' : 'text-black',
+  className
+)}
+```
+
 ## Immutability
 
 Use spread operator for immutable updates:
