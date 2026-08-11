@@ -33,6 +33,7 @@
       "./extensions/lsp",
       "./extensions/skills",
       "./extensions/obsidian",
+      "./extensions/notify.ts",
       "./extensions/no-sleep.ts",
       "./extensions/whimsical",
       "./extensions/fast"
