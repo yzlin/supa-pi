@@ -12,7 +12,7 @@ When documenting active capabilities, prefer `package.json` over directory prese
 
 Do not describe `extensions/om` as active runtime behavior unless package registration changes.
 
-`extensions/notify.ts` is active. It sends an OSC 777 desktop notification after `agent_end` and is supported by terminals including Ghostty, iTerm2, WezTerm, and rxvt-unicode. It is copied from original author Armin Ronacher's `mitsuhiko/agent-stuff` [`extensions/notify.ts`](https://github.com/mitsuhiko/agent-stuff/blob/main/extensions/notify.ts) under Apache License 2.0; the local file adds attribution and repository-only formatting/lint changes without changing behavior.
+`extensions/notify.ts` is active and sends a desktop notification after `agent_end`. On macOS in Ghostty, it uses Ghostty-targeted AppleScript because direct OSC notifications fail in the live setup, then falls back to OSC 777 if AppleScript fails. Elsewhere, it uses OSC 777, supported by terminals including Ghostty, iTerm2, WezTerm, and rxvt-unicode. It is copied from original author Armin Ronacher's `mitsuhiko/agent-stuff` [`extensions/notify.ts`](https://github.com/mitsuhiko/agent-stuff/blob/main/extensions/notify.ts) under Apache License 2.0; the local file adds attribution, repository formatting/lint changes, and the macOS Ghostty delivery path.
 
 `read-patch` is retired. Its skill-file full-read behavior now belongs to active `extensions/tool-display`; do not re-add `extensions/read-patch.ts` or `extensions/read-patch/` docs.
 
