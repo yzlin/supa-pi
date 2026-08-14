@@ -12,7 +12,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { changedPromptPaths } from "./cli";
+import { changedPromptPaths, snapshotPromptCandidates } from "./cli";
 import {
   aggregateVariants,
   CORE_EVAL_BASE_PROMPT,
@@ -83,21 +83,25 @@ describe("parseCorpus", () => {
     expect(corpus.cases[0]?.id).toBe("explain");
   });
 
-  it("accepts the diagnose skill prompt", () => {
+  it.each([
+    "diagnose",
+    "showing-me",
+  ])("accepts the %s skill prompt", (skillName) => {
+    const promptPath = `skills/${skillName}/SKILL.md`;
     const corpus = parseCorpus({
       version: 1,
       cases: [
         {
-          id: "diagnose",
-          workload: "focused bug fix",
-          promptPath: "skills/diagnose/SKILL.md",
-          task: "Diagnose the failure.",
-          tools: ["read"],
+          id: skillName,
+          workload: "explanation",
+          promptPath,
+          task: "Explain the topic.",
+          tools: [],
           checks: [
             {
               type: "outputIncludes",
-              value: "evidence",
-              domain: "evidence",
+              value: "topic",
+              domain: "quality",
               weight: 1,
             },
           ],
@@ -105,10 +109,10 @@ describe("parseCorpus", () => {
       ],
     });
 
-    expect(corpus.cases[0]?.promptPath).toBe("skills/diagnose/SKILL.md");
+    expect(corpus.cases[0]?.promptPath).toBe(promptPath);
   });
 
-  it("rejects other skill prompts", () => {
+  it("rejects unlisted skill prompts", () => {
     expect(() =>
       parseCorpus({
         version: 1,
@@ -238,8 +242,74 @@ describe("committed corpus", () => {
       "security-reviewer",
       "tdd-guide",
     ].map((path) => (path.endsWith(".md") ? path : `agents/${path}.md`));
-    expectedPaths.push("skills/diagnose/SKILL.md");
+    expectedPaths.push(
+      "skills/diagnose/SKILL.md",
+      "skills/showing-me/SKILL.md"
+    );
     expect(coveredPaths).toEqual(new Set(expectedPaths));
+  });
+
+  it("accepts focused show-me output shapes", async () => {
+    const corpus = parseCorpus(
+      JSON.parse(readFileSync(join(moduleDirectory, "corpus.json"), "utf8"))
+    );
+    const outputs = new Map([
+      [
+        "show-me-runtime-call-tree",
+        "```text\nsubmitForm\n  createSession\n    persistPrompt\n    launchAgent\n  navigateToSession\n```",
+      ],
+      [
+        "show-me-simple-no-visual",
+        "A cache hit returns the cached result immediately.",
+      ],
+      [
+        "show-me-focused-component-diff",
+        "```diff\n <SessionPage>\n   <SessionToolbar>\n+    <RunSkillButton />\n   <SessionTimeline>\n```",
+      ],
+    ]);
+
+    for (const [id, output] of outputs) {
+      const checks = corpus.cases.find(
+        (evalCase) => evalCase.id === id
+      )?.checks;
+      if (!checks) {
+        throw new Error(`${id} case is missing`);
+      }
+      expect((await scoreOutput(output, checks)).overall).toBe(1);
+    }
+
+    const invalidOutputs = [
+      [
+        "show-me-runtime-call-tree",
+        "```text\nsubmitForm createSession persistPrompt launchAgent navigateToSession\n```",
+      ],
+      [
+        "show-me-simple-no-visual",
+        "A cache hit returns the cached result. This avoids recomputing.",
+      ],
+      [
+        "show-me-simple-no-visual",
+        "A cache hit returns the cached result immediately.\nThis avoids recomputing.",
+      ],
+      [
+        "show-me-simple-no-visual",
+        "- A cache hit returns the cached result immediately.",
+      ],
+      [
+        "show-me-focused-component-diff",
+        "```diff\n SessionPage SessionToolbar\n+ RunSkillButton\n SessionTimeline\n```",
+      ],
+    ] as const;
+
+    for (const [id, output] of invalidOutputs) {
+      const checks = corpus.cases.find(
+        (evalCase) => evalCase.id === id
+      )?.checks;
+      if (!checks) {
+        throw new Error(`${id} case is missing`);
+      }
+      expect((await scoreOutput(output, checks)).overall).toBeLessThan(1);
+    }
   });
 
   it("binds diagram uncertainty to the context-store branch in either order", async () => {
@@ -1042,7 +1112,7 @@ describe("committed corpus", () => {
 });
 
 describe("changedPromptPaths", () => {
-  it("discovers only core, agent, and diagnose skill prompt changes", async () => {
+  it("discovers only supported prompt changes", async () => {
     const repository = createTemporaryDirectory();
     run(repository, "git", ["init"]);
     run(repository, "git", ["config", "user.email", "eval@example.com"]);
@@ -1051,6 +1121,7 @@ describe("changedPromptPaths", () => {
       "agents/explorer.md",
       "extensions/core-prompt/prompt.md",
       "skills/diagnose/SKILL.md",
+      "skills/showing-me/SKILL.md",
       "skills/other/SKILL.md",
     ];
     for (const path of paths) {
@@ -1067,11 +1138,101 @@ describe("changedPromptPaths", () => {
       "agents/explorer.md",
       "extensions/core-prompt/prompt.md",
       "skills/diagnose/SKILL.md",
+      "skills/showing-me/SKILL.md",
+    ]);
+  });
+
+  it("discovers a newly added supported prompt", async () => {
+    const repository = createTemporaryDirectory();
+    run(repository, "git", ["init"]);
+    run(repository, "git", ["config", "user.email", "eval@example.com"]);
+    run(repository, "git", ["config", "user.name", "Eval Test"]);
+    writeFileSync(join(repository, "README.md"), "fixture\n");
+    run(repository, "git", ["add", "README.md"]);
+    run(repository, "git", ["commit", "-m", "baseline"]);
+    mkdirSync(join(repository, "skills/showing-me"), { recursive: true });
+    writeFileSync(
+      join(repository, "skills/showing-me/SKILL.md"),
+      "candidate\n"
+    );
+
+    expect(await changedPromptPaths(repository)).toEqual([
+      "skills/showing-me/SKILL.md",
     ]);
   });
 });
 
+describe("snapshotPromptCandidates", () => {
+  it("tracks untracked path lists, existence, and content", async () => {
+    const repository = createTemporaryDirectory();
+    const promptPath = "skills/showing-me/SKILL.md";
+    mkdirSync(join(repository, "skills/showing-me"), { recursive: true });
+    writeFileSync(join(repository, promptPath), "candidate\n");
+
+    const initial = await snapshotPromptCandidates(repository, [promptPath]);
+    writeFileSync(join(repository, promptPath), "changed\n");
+    expect(await snapshotPromptCandidates(repository, [promptPath])).not.toBe(
+      initial
+    );
+
+    rmSync(join(repository, promptPath));
+    expect(await snapshotPromptCandidates(repository, [promptPath])).not.toBe(
+      initial
+    );
+
+    writeFileSync(join(repository, promptPath), "candidate\n");
+    expect(
+      await snapshotPromptCandidates(repository, [
+        promptPath,
+        "skills/missing/SKILL.md",
+      ])
+    ).not.toBe(initial);
+  });
+});
+
 describe("loadPromptPair", () => {
+  it("uses an empty baseline for a newly added prompt", async () => {
+    const repository = createTemporaryDirectory();
+    run(repository, "git", ["init"]);
+    run(repository, "git", ["config", "user.email", "eval@example.com"]);
+    run(repository, "git", ["config", "user.name", "Eval Test"]);
+    writeFileSync(join(repository, "README.md"), "fixture\n");
+    run(repository, "git", ["add", "README.md"]);
+    run(repository, "git", ["commit", "-m", "baseline"]);
+    mkdirSync(join(repository, "skills/showing-me"), { recursive: true });
+    writeFileSync(
+      join(repository, "skills/showing-me/SKILL.md"),
+      "---\nname: showing-me\n---\n\n# Show Me\n"
+    );
+
+    const pair = await loadPromptPair(repository, "skills/showing-me/SKILL.md");
+
+    expect(pair.baseline.content).toBe("");
+    expect(pair.candidate.content).toContain("# Show Me");
+  });
+
+  it("rejects baseline blob failures when the tree path exists", async () => {
+    const repository = createTemporaryDirectory();
+    run(repository, "git", ["init"]);
+    run(repository, "git", ["config", "user.email", "eval@example.com"]);
+    run(repository, "git", ["config", "user.name", "Eval Test"]);
+    writeFileSync(join(repository, "prompt.md"), "baseline\n");
+    run(repository, "git", ["add", "prompt.md"]);
+    run(repository, "git", ["commit", "-m", "baseline"]);
+    const blob = spawnSync("git", ["rev-parse", "HEAD:prompt.md"], {
+      cwd: repository,
+    })
+      .stdout.toString()
+      .trim();
+    rmSync(
+      join(repository, ".git", "objects", blob.slice(0, 2), blob.slice(2))
+    );
+
+    await expect(loadPromptPair(repository, "prompt.md")).rejects.toThrow(
+      "cannot read HEAD:prompt.md"
+    );
+  });
+
   it("reads exact HEAD and working-tree prompt bytes without moving HEAD", async () => {
     const repository = createTemporaryDirectory();
     run(repository, "git", ["init"]);

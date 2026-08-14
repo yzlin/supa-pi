@@ -76,6 +76,68 @@
       ]
     },
     {
+      "id": "show-me-runtime-call-tree",
+      "workload": "explanation",
+      "promptPath": "skills/showing-me/SKILL.md",
+      "task": "Use Show Me to explain what happens when a form is submitted: submitForm calls createSession; createSession calls persistPrompt and then launchAgent; submitForm then calls navigateToSession. Do not inspect or edit files.",
+      "tools": [],
+      "checks": [
+        {
+          "type": "outputMatches",
+          "pattern": "```(?:text)?\\s*submitForm[^\\r\\n]*\\r?\\n[ \\t]{2,}createSession[^\\r\\n]*\\r?\\n[ \\t]{4,}persistPrompt[^\\r\\n]*\\r?\\n[ \\t]{4,}launchAgent[^\\r\\n]*\\r?\\n[ \\t]{2,}navigateToSession[^\\r\\n]*(?:\\r?\\n)?```",
+          "flags": "i",
+          "domain": "task",
+          "weight": 2
+        },
+        {
+          "type": "outputMatches",
+          "pattern": "^(?![\\s\\S]*```(?:mermaid|html))(?=[\\s\\S]{1,800}$)[\\s\\S]+$",
+          "flags": "i",
+          "domain": "quality",
+          "weight": 1
+        }
+      ]
+    },
+    {
+      "id": "show-me-simple-no-visual",
+      "workload": "explanation",
+      "promptPath": "skills/showing-me/SKILL.md",
+      "task": "Use Show Me to explain what happens on a cache hit: the cached result is returned immediately. Do not inspect or edit files.",
+      "tools": [],
+      "checks": [
+        {
+          "type": "outputMatches",
+          "pattern": "^(?![\\s\\S]*```)(?![\\s\\S]*[\\r\\n])(?!\\s*(?:[-*#]|\\d+[.)])\\s)(?![\\s\\S]*(?:→|->|├|└|flowchart|sequenceDiagram))(?![\\s\\S]*[.!?][\\\"')\\]]*\\s+\\S)(?=[\\s\\S]{1,240}$)[\\s\\S]*cache[\\s\\S]*return[\\s\\S]*$",
+          "flags": "i",
+          "domain": "quality",
+          "weight": 1
+        }
+      ]
+    },
+    {
+      "id": "show-me-focused-component-diff",
+      "workload": "explanation",
+      "promptPath": "skills/showing-me/SKILL.md",
+      "task": "Use show-me to show one change to an existing component shape. SessionPage already contains SessionToolbar and SessionTimeline. Add RunSkillButton under SessionToolbar; nothing else changes. Keep prose brief. Do not inspect or edit files.",
+      "tools": [],
+      "checks": [
+        {
+          "type": "outputMatches",
+          "pattern": "```diff[^\\r\\n]*\\r?\\n[ \\t]*<SessionPage>[^\\r\\n]*\\r?\\n[ \\t]{2,}<SessionToolbar>[^\\r\\n]*\\r?\\n\\+[ \\t]{4,}<RunSkillButton[^\\r\\n]*\\r?\\n[ \\t]{2,}<SessionTimeline>[^\\r\\n]*(?:\\r?\\n)?```",
+          "flags": "i",
+          "domain": "task",
+          "weight": 2
+        },
+        {
+          "type": "outputMatches",
+          "pattern": "^(?![\\s\\S]*```mermaid)(?=[\\s\\S]{1,800}$)[\\s\\S]+$",
+          "flags": "i",
+          "domain": "quality",
+          "weight": 1
+        }
+      ]
+    },
+    {
       "id": "architect-design",
       "workload": "explanation",
       "promptPath": "agents/architect.md",

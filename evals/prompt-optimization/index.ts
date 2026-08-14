@@ -361,6 +361,7 @@ export function parseCorpus(value: unknown): EvalCorpus {
     if (
       caseValue.promptPath !== "extensions/core-prompt/prompt.md" &&
       caseValue.promptPath !== "skills/diagnose/SKILL.md" &&
+      caseValue.promptPath !== "skills/showing-me/SKILL.md" &&
       !caseValue.promptPath.startsWith("agents/")
     ) {
       throw new Error(`${label}.promptPath must target a SupaPi prompt`);
@@ -463,13 +464,36 @@ export async function loadPromptPair(
     }),
     readFile(candidatePath, "utf8"),
   ]);
-  const baselineContent = Buffer.concat(baselineOutput).toString("utf8");
   const baselineError = Buffer.concat(baselineErrors).toString("utf8");
   if (baselineExitCode !== 0) {
-    throw new Error(
-      `cannot read ${baselineRevision}:${promptPath}: ${baselineError.trim() || "git show failed"}`
+    const treeProcess = spawn(
+      "git",
+      ["ls-tree", "--name-only", baselineRevision, "--", promptPath],
+      {
+        cwd: repositoryRoot,
+        stdio: ["ignore", "pipe", "ignore"],
+      }
     );
+    const treeOutput: Buffer[] = [];
+    treeProcess.stdout.on("data", (chunk: Buffer) => treeOutput.push(chunk));
+    const treeExitCode = await new Promise<number | null>(
+      (resolveExit, reject) => {
+        treeProcess.once("error", reject);
+        treeProcess.once("close", resolveExit);
+      }
+    );
+    const baselinePathExists =
+      Buffer.concat(treeOutput).toString("utf8").trim().length > 0;
+    if (treeExitCode !== 0 || baselinePathExists) {
+      throw new Error(
+        `cannot read ${baselineRevision}:${promptPath}: ${baselineError.trim() || "git show failed"}`
+      );
+    }
   }
+  const baselineContent =
+    baselineExitCode === 0
+      ? Buffer.concat(baselineOutput).toString("utf8")
+      : "";
 
   return {
     baseline: { content: baselineContent, sha256: sha256(baselineContent) },

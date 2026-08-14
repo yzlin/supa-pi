@@ -1,6 +1,6 @@
 import { spawn } from "node:child_process";
 import { createHash } from "node:crypto";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { lstat, mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -252,28 +252,79 @@ async function gitOutput(
   return output;
 }
 
+export async function snapshotPromptCandidates(
+  repositoryRoot: string,
+  promptPaths: string[]
+): Promise<string> {
+  const states = await Promise.all(
+    [...new Set(promptPaths)].sort().map(async (promptPath) => {
+      const candidatePath = resolve(repositoryRoot, promptPath);
+      try {
+        const stat = await lstat(candidatePath);
+        if (!stat.isFile()) {
+          return { path: promptPath, state: "not-regular-file" };
+        }
+        const content = await readFile(candidatePath);
+        return {
+          path: promptPath,
+          state: "file",
+          sha256: createHash("sha256").update(content).digest("hex"),
+        };
+      } catch (error) {
+        if (
+          typeof error === "object" &&
+          error !== null &&
+          "code" in error &&
+          error.code === "ENOENT"
+        ) {
+          return { path: promptPath, state: "missing" };
+        }
+        throw error;
+      }
+    })
+  );
+  return createHash("sha256").update(JSON.stringify(states)).digest("hex");
+}
+
 export async function changedPromptPaths(
   repositoryRoot: string
 ): Promise<string[]> {
-  const output = await gitOutput(repositoryRoot, [
-    "diff",
-    "--name-only",
-    "HEAD",
-    "--",
-    "agents",
+  const supportedFiles = [
     "extensions/core-prompt/prompt.md",
     "skills/diagnose/SKILL.md",
+    "skills/showing-me/SKILL.md",
+  ];
+  const pathspecs = ["agents", ...supportedFiles];
+  const outputs = await Promise.all([
+    gitOutput(repositoryRoot, [
+      "diff",
+      "--name-only",
+      "HEAD",
+      "--",
+      ...pathspecs,
+    ]),
+    gitOutput(repositoryRoot, [
+      "ls-files",
+      "--others",
+      "--exclude-standard",
+      "--",
+      ...pathspecs,
+    ]),
   ]);
-  return output
-    .split("\n")
-    .map((path) => path.trim())
-    .filter(Boolean)
-    .filter(
-      (path) =>
-        path === "extensions/core-prompt/prompt.md" ||
-        path === "skills/diagnose/SKILL.md" ||
-        (path.startsWith("agents/") && path.endsWith(".md"))
-    );
+  return [
+    ...new Set(
+      outputs
+        .join("\n")
+        .split("\n")
+        .map((path) => path.trim())
+        .filter(Boolean)
+        .filter(
+          (path) =>
+            supportedFiles.includes(path) ||
+            (path.startsWith("agents/") && path.endsWith(".md"))
+        )
+    ),
+  ].sort();
 }
 
 function assertCorpusCoverage(
@@ -528,6 +579,9 @@ export async function main(): Promise<void> {
   if (options.caseIds.length === 0) {
     assertCorpusCoverage(corpus, await changedPromptPaths(repositoryRoot));
   }
+  const selectedPromptPaths = [
+    ...new Set(selectedCases.map((evalCase) => evalCase.promptPath)),
+  ].sort();
   const comparison = createComparison(options);
   const startedFromHead = (
     await gitOutput(repositoryRoot, ["rev-parse", "HEAD"])
@@ -540,6 +594,10 @@ export async function main(): Promise<void> {
   const candidateDiffSha256 = createHash("sha256")
     .update(candidateDiff)
     .digest("hex");
+  const candidatePromptStateSha256 = await snapshotPromptCandidates(
+    repositoryRoot,
+    selectedPromptPaths
+  );
 
   const modelRuntime = await ModelRuntime.create();
   const modelRegistry = new ModelRegistry(modelRuntime);
@@ -560,9 +618,7 @@ export async function main(): Promise<void> {
 
   const promptPairs = new Map<string, PromptPair>();
   const variantConfigs = new Map<string, Record<EvalVariant, VariantConfig>>();
-  for (const path of new Set(
-    selectedCases.map((evalCase) => evalCase.promptPath)
-  )) {
+  for (const path of selectedPromptPaths) {
     const pair = await loadPromptPair(repositoryRoot, path, startedFromHead);
     if (
       comparison.kind === "prompt" &&
@@ -644,10 +700,15 @@ export async function main(): Promise<void> {
   const endedAtCorpusSha256 = createHash("sha256")
     .update(await readFile(corpusPath, "utf8"))
     .digest("hex");
+  const endedAtPromptStateSha256 = await snapshotPromptCandidates(
+    repositoryRoot,
+    selectedPromptPaths
+  );
   if (
     endedAtHead !== startedFromHead ||
     endedAtDiffSha256 !== candidateDiffSha256 ||
-    endedAtCorpusSha256 !== corpusSha256
+    endedAtCorpusSha256 !== corpusSha256 ||
+    endedAtPromptStateSha256 !== candidatePromptStateSha256
   ) {
     throw new Error(
       "repository prompts, HEAD, or eval corpus changed during the run; discard results and rerun"
@@ -691,6 +752,7 @@ export async function main(): Promise<void> {
     schemaVersion: 1,
     startedFromHead,
     candidateDiffSha256,
+    candidatePromptStateSha256,
     corpusSha256,
     coreEvalBasePromptSha256: createHash("sha256")
       .update(CORE_EVAL_BASE_PROMPT)

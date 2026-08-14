@@ -1,65 +1,37 @@
 ---
 name: architecture-diagrams
-description: Create architecture diagrams (C4, sequence, data flow, etc.) in Mermaid syntax for architectural assessments and system design tasks.
+description: Create focused Mermaid architecture diagrams for assessments and system design tasks, using only the views needed to answer the question.
 ---
 
 # Architecture Diagrams
 
 ## Trigger Conditions
+
 - Architectural assessment requested
 - New system design task
 - C4 diagrams needed
-- "diagram", "architecture", "system design" mentioned
+- "diagram", "architecture", or "system design" mentioned
 
-## Required Diagrams
+## Selection
 
-For every architectural assessment, create the following diagrams using Mermaid syntax:
+Choose the smallest diagram set that answers the question. Start with one diagram. Add another only when it shows a distinct boundary, flow, or decision that the first cannot.
 
-### 1. System Context Diagram
+| Question | Diagram |
+| --- | --- |
+| Where does the system sit? | System context |
+| Which modules own what? | Component |
+| Where does it run? | Deployment |
+| How does information move? | Data flow |
+| In what order do calls happen? | Sequence |
+| How does state change? | State |
+| How is persisted data related? | Entity relationship |
+| Where are trust boundaries? | Security architecture |
 
-- Show the system boundary
-- Identify all external actors (users, systems, services)
-- Show high-level interactions between the system and external entities
-- Provide clear explanation of the system's place in the broader ecosystem
+## Guidance
 
-### 2. Component Diagram
-
-- Identify all major components/modules
-- Show component relationships and dependencies
-- Include component responsibilities
-- Highlight communication patterns between components
-- Explain the purpose and responsibility of each component
-
-### 3. Deployment Diagram
-
-- Show the physical/logical deployment architecture
-- Include infrastructure components (servers, containers, databases, queues, etc.)
-- Specify deployment environments (dev, staging, production)
-- Show network boundaries and security zones
-- Explain deployment strategy and infrastructure choices
-
-### 4. Data Flow Diagram
-
-- Illustrate how data moves through the system
-- Show data stores and data transformations
-- Identify data sources and sinks
-- Include data validation and processing points
-- Explain data handling, transformation, and storage strategies
-
-### 5. Sequence Diagram
-
-- Show key user journeys or system workflows
-- Illustrate interaction sequences between components
-- Include timing and ordering of operations
-- Show request/response flows
-- Explain the flow of operations for critical use cases
-
-### 6. Other Relevant Diagrams (as needed)
-
-Based on the specific requirements, include additional diagrams such as:
-
-- Entity Relationship Diagrams (ERD) for data models
-- State diagrams for complex stateful components
-- Network diagrams for complex networking requirements
-- Security architecture diagrams
-- Integration architecture diagrams
+- Ground every node and edge in inspected evidence; label unknown or proposed elements.
+- Keep labels concrete and diagrams focused on the current decision.
+- Put a short explanation before each diagram.
+- Omit decorative infrastructure, actors, and flows.
+- Do not repeat the same relationships across multiple diagram types.
+- If a text tree or pseudocode is clearer, render it directly instead of Mermaid.
