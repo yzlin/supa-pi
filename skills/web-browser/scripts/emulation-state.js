@@ -7,9 +7,10 @@ import {
 } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
+
 import { applyDevicePreset, resolveDevicePreset } from "./devices.js";
 
-const HOME = process.env["HOME"] || homedir();
+const HOME = process.env.HOME || homedir();
 const BROWSER_ROOT = join(HOME, ".cache", "agent-web", "browser");
 const EMULATION_STATE_FILE = join(BROWSER_ROOT, "emulation.json");
 
@@ -20,12 +21,17 @@ function ensureStateDir() {
 }
 
 export function readEmulationPreference() {
-  if (!existsSync(EMULATION_STATE_FILE)) return null;
+  if (!existsSync(EMULATION_STATE_FILE)) {
+    return null;
+  }
   try {
     const data = JSON.parse(readFileSync(EMULATION_STATE_FILE, "utf8"));
-    if (!data || typeof data !== "object") return null;
-    if (typeof data.device !== "string" || data.device.length === 0)
+    if (!data || typeof data !== "object") {
       return null;
+    }
+    if (typeof data.device !== "string" || data.device.length === 0) {
+      return null;
+    }
     return {
       device: data.device.toLowerCase(),
       landscape: data.landscape === true,
@@ -56,7 +62,9 @@ export function clearEmulationPreference() {
 
 export async function applyActiveEmulation(cdp, sessionId) {
   const preference = readEmulationPreference();
-  if (!preference) return null;
+  if (!preference) {
+    return null;
+  }
 
   const preset = resolveDevicePreset(preference.device);
   if (!preset) {

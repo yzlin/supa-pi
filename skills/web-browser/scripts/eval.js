@@ -4,7 +4,11 @@ import { connect } from "./cdp.js";
 import { applyActiveEmulation } from "./emulation-state.js";
 
 const DEBUG = process.env.DEBUG === "1";
-const log = DEBUG ? (...args) => console.error("[debug]", ...args) : () => {};
+const log = DEBUG
+  ? (...args) => console.error("[debug]", ...args)
+  : () => {
+      // Debug logging disabled.
+    };
 
 function isSyntaxError(error) {
   return error?.message?.startsWith("SyntaxError");
@@ -26,7 +30,7 @@ if (!code) {
 const globalTimeout = setTimeout(() => {
   console.error("✗ Global timeout exceeded (45s)");
   process.exit(1);
-}, 45000);
+}, 45_000);
 
 try {
   log("connecting...");
@@ -53,7 +57,9 @@ try {
     const expression = `(async () => { return (${code}); })()`;
     result = await cdp.evaluate(sessionId, expression);
   } catch (e) {
-    if (!isSyntaxError(e)) throw e;
+    if (!isSyntaxError(e)) {
+      throw e;
+    }
     log("falling back to console-style statement evaluation...");
     result = await cdp.evaluateRepl(sessionId, code);
   }
@@ -61,7 +67,9 @@ try {
   log("formatting result...");
   if (Array.isArray(result)) {
     for (let i = 0; i < result.length; i++) {
-      if (i > 0) console.log("");
+      if (i > 0) {
+        console.log("");
+      }
       for (const [key, value] of Object.entries(result[i])) {
         console.log(`${key}: ${value}`);
       }

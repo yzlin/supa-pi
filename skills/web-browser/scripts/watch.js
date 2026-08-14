@@ -9,6 +9,7 @@ import {
 } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
+
 import { connect } from "./cdp.js";
 
 const LOG_ROOT = join(homedir(), ".cache/agent-web/logs");
@@ -42,7 +43,9 @@ function safeFileName(value) {
 }
 
 function compactStack(stackTrace) {
-  if (!stackTrace || !Array.isArray(stackTrace.callFrames)) return null;
+  if (!(stackTrace && Array.isArray(stackTrace.callFrames))) {
+    return null;
+  }
   return stackTrace.callFrames.slice(0, 8).map((frame) => ({
     functionName: frame.functionName || null,
     url: frame.url || null,
@@ -52,8 +55,10 @@ function compactStack(stackTrace) {
 }
 
 function serializeRemoteObject(obj) {
-  if (!obj || typeof obj !== "object") return obj;
-  const value = Object.prototype.hasOwnProperty.call(obj, "value")
+  if (!obj || typeof obj !== "object") {
+    return obj;
+  }
+  const value = Object.hasOwn(obj, "value")
     ? obj.value
     : obj.unserializableValue || obj.description || null;
   return {
@@ -88,11 +93,15 @@ const sessionToTarget = new Map();
 
 function getStreamForTarget(targetId) {
   const state = targetState.get(targetId);
-  if (state?.stream) return state.stream;
+  if (state?.stream) {
+    return state.stream;
+  }
   const filename = `${safeFileName(targetId)}.jsonl`;
   const filepath = join(dateDir, filename);
   const stream = createWriteStream(filepath, { flags: "a" });
-  if (state) state.stream = stream;
+  if (state) {
+    state.stream = stream;
+  }
   return stream;
 }
 
@@ -114,8 +123,12 @@ async function enableSession(cdp, sessionId) {
 }
 
 async function attachToTarget(cdp, targetInfo) {
-  if (targetInfo.type !== "page") return;
-  if (targetState.has(targetInfo.targetId)) return;
+  if (targetInfo.type !== "page") {
+    return;
+  }
+  if (targetState.has(targetInfo.targetId)) {
+    return;
+  }
 
   const { sessionId } = await cdp.send("Target.attachToTarget", {
     targetId: targetInfo.targetId,
@@ -152,9 +165,13 @@ async function main() {
   cdp.on("Target.targetDestroyed", (params) => {
     const targetId = params.targetId;
     const state = targetState.get(targetId);
-    if (state?.stream) state.stream.end();
+    if (state?.stream) {
+      state.stream.end();
+    }
     targetState.delete(targetId);
-    if (state?.sessionId) sessionToTarget.delete(state.sessionId);
+    if (state?.sessionId) {
+      sessionToTarget.delete(state.sessionId);
+    }
   });
 
   cdp.on("Target.targetInfoChanged", (params) => {
@@ -173,7 +190,9 @@ async function main() {
 
   cdp.on("Runtime.consoleAPICalled", (params, sessionId) => {
     const targetId = sessionToTarget.get(sessionId);
-    if (!targetId) return;
+    if (!targetId) {
+      return;
+    }
     writeLog(targetId, {
       type: "console",
       level: params.type || null,
@@ -184,7 +203,9 @@ async function main() {
 
   cdp.on("Runtime.exceptionThrown", (params, sessionId) => {
     const targetId = sessionToTarget.get(sessionId);
-    if (!targetId) return;
+    if (!targetId) {
+      return;
+    }
     const details = params.exceptionDetails || {};
     writeLog(targetId, {
       type: "exception",
@@ -199,7 +220,9 @@ async function main() {
 
   cdp.on("Log.entryAdded", (params, sessionId) => {
     const targetId = sessionToTarget.get(sessionId);
-    if (!targetId) return;
+    if (!targetId) {
+      return;
+    }
     const entry = params.entry || {};
     writeLog(targetId, {
       type: "log",
@@ -213,7 +236,9 @@ async function main() {
 
   cdp.on("Network.requestWillBeSent", (params, sessionId) => {
     const targetId = sessionToTarget.get(sessionId);
-    if (!targetId) return;
+    if (!targetId) {
+      return;
+    }
     const request = params.request || {};
     writeLog(targetId, {
       type: "network.request",
@@ -228,7 +253,9 @@ async function main() {
 
   cdp.on("Network.responseReceived", (params, sessionId) => {
     const targetId = sessionToTarget.get(sessionId);
-    if (!targetId) return;
+    if (!targetId) {
+      return;
+    }
     const response = params.response || {};
     writeLog(targetId, {
       type: "network.response",
@@ -244,7 +271,9 @@ async function main() {
 
   cdp.on("Network.loadingFailed", (params, sessionId) => {
     const targetId = sessionToTarget.get(sessionId);
-    if (!targetId) return;
+    if (!targetId) {
+      return;
+    }
     writeLog(targetId, {
       type: "network.failure",
       requestId: params.requestId,

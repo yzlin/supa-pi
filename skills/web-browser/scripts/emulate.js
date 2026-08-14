@@ -13,7 +13,11 @@ import {
 } from "./emulation-state.js";
 
 const DEBUG = process.env.DEBUG === "1";
-const log = DEBUG ? (...args) => console.error("[debug]", ...args) : () => {};
+const log = DEBUG
+  ? (...values) => console.error("[debug]", ...values)
+  : () => {
+      // Debug logging disabled.
+    };
 
 const args = process.argv.slice(2);
 const landscape = args.includes("--landscape");
@@ -21,8 +25,7 @@ const reset = args.includes("--reset");
 const list = args.includes("--list");
 
 let deviceName = null;
-for (let i = 0; i < args.length; i++) {
-  const arg = args[i];
+for (const arg of args) {
   if (arg === "--landscape" || arg === "--reset" || arg === "--list") {
     continue;
   }
@@ -54,7 +57,7 @@ if (reset && landscape) {
   process.exit(1);
 }
 
-if ((reset && deviceName) || (!reset && !deviceName)) {
+if ((reset && deviceName) || !(reset || deviceName)) {
   console.log("Usage: emulate.js <device> [--landscape]");
   console.log("       emulate.js --reset");
   console.log("       emulate.js --list");
@@ -67,7 +70,7 @@ if ((reset && deviceName) || (!reset && !deviceName)) {
 }
 
 const preset = reset ? null : resolveDevicePreset(deviceName);
-if (!reset && !preset) {
+if (!(reset || preset)) {
   console.error(`✗ Unknown device preset: ${deviceName}`);
   console.error("  Available presets:");
   for (const item of listDevicePresets()) {
@@ -80,7 +83,7 @@ if (!reset && !preset) {
 const globalTimeout = setTimeout(() => {
   console.error("✗ Global timeout exceeded (20s)");
   process.exit(1);
-}, 20000);
+}, 20_000);
 
 try {
   log("connecting...");

@@ -3,6 +3,7 @@
 import { writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+
 import { connect } from "./cdp.js";
 import {
   applyDevicePreset,
@@ -13,7 +14,11 @@ import {
 import { applyActiveEmulation } from "./emulation-state.js";
 
 const DEBUG = process.env.DEBUG === "1";
-const log = DEBUG ? (...args) => console.error("[debug]", ...args) : () => {};
+const log = DEBUG
+  ? (...values) => console.error("[debug]", ...values)
+  : () => {
+      // Debug logging disabled.
+    };
 
 function printUsage() {
   console.log(
@@ -86,7 +91,7 @@ if (deviceName && !preset) {
 const globalTimeout = setTimeout(() => {
   console.error("✗ Global timeout exceeded (30s)");
   process.exit(1);
-}, 30000);
+}, 30_000);
 
 let cdp = null;
 
@@ -126,7 +131,7 @@ try {
         "Page.getLayoutMetrics",
         {},
         sessionId,
-        10000
+        10_000
       );
       const contentSize = metrics.cssContentSize || metrics.contentSize;
 
@@ -155,7 +160,7 @@ try {
       "Page.captureScreenshot",
       params,
       sessionId,
-      fullPage ? 20000 : 10000
+      fullPage ? 20_000 : 10_000
     );
 
     const timestamp = new Date().toISOString().replace(/[:.]/g, "-");

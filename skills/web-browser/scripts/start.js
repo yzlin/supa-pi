@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { spawn, execSync } from "node:child_process";
+import { execSync, spawn } from "node:child_process";
 import {
   existsSync,
   mkdirSync,
@@ -15,7 +15,7 @@ import { fileURLToPath } from "node:url";
 const DEBUG_HOST = process.env.BROWSER_DEBUG_HOST || "localhost";
 const DEBUG_PORT = Number(process.env.BROWSER_DEBUG_PORT || 9222);
 
-if (!Number.isInteger(DEBUG_PORT) || DEBUG_PORT < 1 || DEBUG_PORT > 65535) {
+if (!Number.isInteger(DEBUG_PORT) || DEBUG_PORT < 1 || DEBUG_PORT > 65_535) {
   console.error("✗ Invalid BROWSER_DEBUG_PORT (expected 1-65535)");
   process.exit(1);
 }
@@ -47,7 +47,7 @@ if (unknownArgs.length > 0) {
   process.exit(1);
 }
 
-const HOME = process.env["HOME"] || homedir();
+const HOME = process.env.HOME || homedir();
 const CACHE_ROOT = join(HOME, ".cache", "agent-web");
 const BROWSER_ROOT = join(CACHE_ROOT, "browser");
 const FRESH_PROFILE_DIR = join(BROWSER_ROOT, "fresh-profile");
@@ -64,7 +64,9 @@ function ensureDir(path) {
 }
 
 function isProcessAlive(pid) {
-  if (!pid || typeof pid !== "number") return false;
+  if (!pid || typeof pid !== "number") {
+    return false;
+  }
   try {
     process.kill(pid, 0);
     return true;
@@ -74,7 +76,9 @@ function isProcessAlive(pid) {
 }
 
 function readState() {
-  if (!existsSync(STATE_FILE)) return null;
+  if (!existsSync(STATE_FILE)) {
+    return null;
+  }
   try {
     return JSON.parse(readFileSync(STATE_FILE, "utf8"));
   } catch {

@@ -4,7 +4,11 @@ import { connect } from "./cdp.js";
 import { applyActiveEmulation } from "./emulation-state.js";
 
 const DEBUG = process.env.DEBUG === "1";
-const log = DEBUG ? (...args) => console.error("[debug]", ...args) : () => {};
+const log = DEBUG
+  ? (...args) => console.error("[debug]", ...args)
+  : () => {
+      // Debug logging disabled.
+    };
 
 const message = process.argv.slice(2).join(" ");
 if (!message) {
@@ -18,7 +22,7 @@ if (!message) {
 const globalTimeout = setTimeout(() => {
   console.error("✗ Global timeout exceeded (5m)");
   process.exit(1);
-}, 300000);
+}, 300_000);
 
 const PICK_SCRIPT = `(message) => {
   if (!message) throw new Error("pick() requires a message parameter");
@@ -139,12 +143,14 @@ try {
 
   log("waiting for user pick...");
   const expression = `(${PICK_SCRIPT})(${JSON.stringify(message)})`;
-  const result = await cdp.evaluate(sessionId, expression, 300000);
+  const result = await cdp.evaluate(sessionId, expression, 300_000);
 
   log("formatting result...");
   if (Array.isArray(result)) {
     for (let i = 0; i < result.length; i++) {
-      if (i > 0) console.log("");
+      if (i > 0) {
+        console.log("");
+      }
       for (const [key, value] of Object.entries(result[i])) {
         console.log(`${key}: ${value}`);
       }

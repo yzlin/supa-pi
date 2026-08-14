@@ -45,10 +45,14 @@ export function listDevicePresets() {
 }
 
 export function resolveDevicePreset(name) {
-  if (!name) return null;
+  if (!name) {
+    return null;
+  }
   const normalized = String(name).toLowerCase();
   const preset = DEVICE_PRESETS[normalized];
-  if (!preset) return null;
+  if (!preset) {
+    return null;
+  }
   return { id: normalized, ...preset };
 }
 

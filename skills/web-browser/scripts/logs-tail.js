@@ -10,17 +10,22 @@ import {
 import { homedir } from "node:os";
 import { join } from "node:path";
 
+const DATE_DIR_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 const LOG_ROOT = join(homedir(), ".cache/agent-web/logs");
 
 function findLatestFile() {
-  if (!existsSync(LOG_ROOT)) return null;
+  if (!existsSync(LOG_ROOT)) {
+    return null;
+  }
   const dirs = readdirSync(LOG_ROOT)
-    .filter((name) => /^\d{4}-\d{2}-\d{2}$/.test(name))
+    .filter((name) => DATE_DIR_PATTERN.test(name))
     .map((name) => join(LOG_ROOT, name))
     .filter((path) => statSafe(path)?.isDirectory())
     .sort();
-  if (dirs.length === 0) return null;
-  const latestDir = dirs[dirs.length - 1];
+  if (dirs.length === 0) {
+    return null;
+  }
+  const latestDir = dirs.at(-1);
   const files = readdirSync(latestDir)
     .filter((name) => name.endsWith(".jsonl"))
     .map((name) => join(latestDir, name))
@@ -39,7 +44,7 @@ function statSafe(path) {
 
 const argIndex = process.argv.indexOf("--file");
 const filePath =
-  argIndex !== -1 ? process.argv[argIndex + 1] : findLatestFile();
+  argIndex === -1 ? findLatestFile() : process.argv[argIndex + 1];
 const follow = process.argv.includes("--follow");
 
 if (!filePath) {
@@ -48,17 +53,25 @@ if (!filePath) {
 }
 
 function readAll() {
-  if (!existsSync(filePath)) return;
+  if (!existsSync(filePath)) {
+    return;
+  }
   const data = readFileSync(filePath, "utf8");
-  if (data.length > 0) process.stdout.write(data);
+  if (data.length > 0) {
+    process.stdout.write(data);
+  }
 }
 
 let offset = 0;
 
 function readNew() {
-  if (!existsSync(filePath)) return;
+  if (!existsSync(filePath)) {
+    return;
+  }
   const data = readFileSync(filePath, "utf8");
-  if (data.length <= offset) return;
+  if (data.length <= offset) {
+    return;
+  }
   const chunk = data.slice(offset);
   offset = data.length;
   process.stdout.write(chunk);
@@ -66,7 +79,9 @@ function readNew() {
 
 try {
   readAll();
-  if (!follow) process.exit(0);
+  if (!follow) {
+    process.exit(0);
+  }
   offset = statSafe(filePath)?.size || 0;
   watch(filePath, { persistent: true }, () => readNew());
   console.log(`✓ tailing ${filePath}`);

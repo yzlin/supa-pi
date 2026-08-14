@@ -15,7 +15,11 @@ import { connect } from "./cdp.js";
 import { applyActiveEmulation } from "./emulation-state.js";
 
 const DEBUG = process.env.DEBUG === "1";
-const log = DEBUG ? (...args) => console.error("[debug]", ...args) : () => {};
+const log = DEBUG
+  ? (...args) => console.error("[debug]", ...args)
+  : () => {
+      // Debug logging disabled.
+    };
 
 const reject = process.argv.includes("--reject");
 const mode = reject ? "reject" : "accept";
@@ -293,7 +297,7 @@ function collectFrames(frameTree, frames = []) {
 const globalTimeout = setTimeout(() => {
   console.error("✗ Global timeout exceeded (30s)");
   process.exit(1);
-}, 30000);
+}, 30_000);
 
 try {
   log("connecting...");
@@ -331,8 +335,12 @@ try {
       const frames = collectFrames(frameTree);
 
       for (const frame of frames) {
-        if (frame.url === "about:blank" || frame.url.startsWith("javascript:"))
+        if (
+          frame.url === "about:blank" ||
+          frame.url.startsWith("javascript:")
+        ) {
           continue;
+        }
         if (
           frame.url.includes("sp_message") ||
           frame.url.includes("consent") ||

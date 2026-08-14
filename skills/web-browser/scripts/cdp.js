@@ -16,16 +16,20 @@ function exceptionMessage(result) {
 }
 
 function remoteObjectValue(remoteObject) {
-  if (!remoteObject) return undefined;
-  if ("value" in remoteObject) return remoteObject.value;
+  if (!remoteObject) {
+    return;
+  }
+  if ("value" in remoteObject) {
+    return remoteObject.value;
+  }
 
   switch (remoteObject.unserializableValue) {
     case "NaN":
-      return NaN;
+      return Number.NaN;
     case "Infinity":
-      return Infinity;
+      return Number.POSITIVE_INFINITY;
     case "-Infinity":
-      return -Infinity;
+      return Number.NEGATIVE_INFINITY;
     case "-0":
       return -0;
   }
@@ -34,7 +38,7 @@ function remoteObjectValue(remoteObject) {
     return BigInt(remoteObject.unserializableValue.slice(0, -1));
   }
 
-  return undefined;
+  return;
 }
 
 export async function connect(timeout = 5000) {
@@ -112,7 +116,9 @@ class CDP {
 
   off(method, handler) {
     const handlers = this.eventHandlers.get(method);
-    if (!handlers) return;
+    if (!handlers) {
+      return;
+    }
     handlers.delete(handler);
     if (handlers.size === 0) {
       this.eventHandlers.delete(method);
@@ -121,7 +127,9 @@ class CDP {
 
   emit(method, params, sessionId) {
     const handlers = this.eventHandlers.get(method);
-    if (!handlers || handlers.size === 0) return;
+    if (!handlers || handlers.size === 0) {
+      return;
+    }
     for (const handler of handlers) {
       try {
         handler(params, sessionId);
@@ -131,11 +139,13 @@ class CDP {
     }
   }
 
-  send(method, params = {}, sessionId = null, timeout = 10000) {
+  send(method, params = {}, sessionId = null, timeout = 10_000) {
     return new Promise((resolve, reject) => {
       const msgId = ++this.id;
       const msg = { id: msgId, method, params };
-      if (sessionId) msg.sessionId = sessionId;
+      if (sessionId) {
+        msg.sessionId = sessionId;
+      }
 
       const timeoutId = setTimeout(() => {
         this.callbacks.delete(msgId);
@@ -170,7 +180,7 @@ class CDP {
     return sessionId;
   }
 
-  async evaluate(sessionId, expression, timeout = 30000) {
+  async evaluate(sessionId, expression, timeout = 30_000) {
     const result = await this.send(
       "Runtime.evaluate",
       {
@@ -188,7 +198,7 @@ class CDP {
     return result.result?.value;
   }
 
-  async evaluateRepl(sessionId, expression, timeout = 30000) {
+  async evaluateRepl(sessionId, expression, timeout = 30_000) {
     const objectGroup = `agent-eval-${Date.now()}-${Math.random()}`;
 
     try {
@@ -251,11 +261,13 @@ class CDP {
         { objectGroup },
         sessionId,
         1000
-      ).catch(() => {});
+      ).catch(() => {
+        // Releasing an already-closed object group is safe to ignore.
+      });
     }
   }
 
-  async screenshot(sessionId, timeout = 10000) {
+  async screenshot(sessionId, timeout = 10_000) {
     const { data } = await this.send(
       "Page.captureScreenshot",
       { format: "png" },
@@ -265,7 +277,7 @@ class CDP {
     return Buffer.from(data, "base64");
   }
 
-  async navigate(sessionId, url, timeout = 30000) {
+  async navigate(sessionId, url, timeout = 30_000) {
     await this.send("Page.navigate", { url }, sessionId, timeout);
   }
 
@@ -274,7 +286,7 @@ class CDP {
     return frameTree;
   }
 
-  async evaluateInFrame(sessionId, frameId, expression, timeout = 30000) {
+  async evaluateInFrame(sessionId, frameId, expression, timeout = 30_000) {
     // Create isolated world for the frame
     const { executionContextId } = await this.send(
       "Page.createIsolatedWorld",

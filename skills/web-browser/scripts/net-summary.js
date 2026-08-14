@@ -4,6 +4,7 @@ import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 
+const DATE_DIR_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 const LOG_ROOT = join(homedir(), ".cache/agent-web/logs");
 
 function statSafe(path) {
@@ -15,14 +16,18 @@ function statSafe(path) {
 }
 
 function findLatestFile() {
-  if (!existsSync(LOG_ROOT)) return null;
+  if (!existsSync(LOG_ROOT)) {
+    return null;
+  }
   const dirs = readdirSync(LOG_ROOT)
-    .filter((name) => /^\d{4}-\d{2}-\d{2}$/.test(name))
+    .filter((name) => DATE_DIR_PATTERN.test(name))
     .map((name) => join(LOG_ROOT, name))
     .filter((path) => statSafe(path)?.isDirectory())
     .sort();
-  if (dirs.length === 0) return null;
-  const latestDir = dirs[dirs.length - 1];
+  if (dirs.length === 0) {
+    return null;
+  }
+  const latestDir = dirs.at(-1);
   const files = readdirSync(latestDir)
     .filter((name) => name.endsWith(".jsonl"))
     .map((name) => join(latestDir, name))
@@ -33,7 +38,7 @@ function findLatestFile() {
 
 const argIndex = process.argv.indexOf("--file");
 const filePath =
-  argIndex !== -1 ? process.argv[argIndex + 1] : findLatestFile();
+  argIndex === -1 ? findLatestFile() : process.argv[argIndex + 1];
 
 if (!filePath) {
   console.error("✗ No log file found");

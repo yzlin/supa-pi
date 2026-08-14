@@ -4,7 +4,11 @@ import { connect } from "./cdp.js";
 import { applyActiveEmulation } from "./emulation-state.js";
 
 const DEBUG = process.env.DEBUG === "1";
-const log = DEBUG ? (...args) => console.error("[debug]", ...args) : () => {};
+const log = DEBUG
+  ? (...args) => console.error("[debug]", ...args)
+  : () => {
+      // Debug logging disabled.
+    };
 
 const url = process.argv[2];
 const newTab = process.argv[3] === "--new";
@@ -21,7 +25,7 @@ if (!url) {
 const globalTimeout = setTimeout(() => {
   console.error("✗ Global timeout exceeded (45s)");
   process.exit(1);
-}, 45000);
+}, 45_000);
 
 try {
   log("connecting...");
