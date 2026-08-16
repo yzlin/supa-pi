@@ -57,6 +57,7 @@ import {
 import {
   createSkillsInstallPickerComponent,
   createSkillsManagerComponent,
+  SKILLS_MANAGER_OVERLAY_OPTIONS,
 } from "./ui";
 
 const EXTENSION_DIR = dirname(fileURLToPath(import.meta.url));
@@ -279,22 +280,17 @@ async function showSkillsManager(
     return;
   }
   await ctx.ui.custom<void>(
-    (_tui, theme, _kb, done) =>
+    (tui, theme, _kb, done) =>
       createSkillsManagerComponent({
         inventory,
         initialQuery,
         theme,
         done: () => done(undefined),
+        hostTui: tui,
       }),
     {
       overlay: true,
-      overlayOptions: {
-        anchor: "center",
-        width: "90%",
-        minWidth: 64,
-        maxHeight: "95%",
-        margin: 1,
-      },
+      overlayOptions: SKILLS_MANAGER_OVERLAY_OPTIONS,
     }
   );
 }

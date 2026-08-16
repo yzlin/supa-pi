@@ -1,5 +1,11 @@
 import { describe, expect, it } from "bun:test";
 
+import {
+  type Component,
+  type Terminal,
+  TuiAltScreen,
+} from "@earendil-works/pi-tui";
+
 import type { ManagedSkillEntry } from "./core";
 import { buildSkillInventoryModel } from "./model";
 import {
@@ -9,6 +15,7 @@ import {
   reduceSkillsInstallPickerState,
   renderSkillsInstallPicker,
   renderSkillsManager,
+  SKILLS_MANAGER_OVERLAY_OPTIONS,
 } from "./ui";
 
 function managedSkill(
@@ -99,6 +106,60 @@ interface NavigationTestComponent {
   readonly state: { readonly selectedIndex: number };
   handleInput(data: string): void;
 }
+
+class TestTerminal implements Terminal {
+  readonly columns = 100;
+  readonly rows = 40;
+  readonly kittyProtocolActive = false;
+  onInput?: (data: string) => void;
+
+  start(onInput: (data: string) => void): void {
+    this.onInput = onInput;
+  }
+
+  stop(): void {
+    // Test terminal has no resources.
+  }
+  drainInput(): Promise<void> {
+    return Promise.resolve();
+  }
+  write(): void {
+    // Test ignores terminal output.
+  }
+  moveBy(): void {
+    // Test does not emulate cursor movement.
+  }
+  hideCursor(): void {
+    // Test does not emulate cursor visibility.
+  }
+  showCursor(): void {
+    // Test does not emulate cursor visibility.
+  }
+  clearLine(): void {
+    // Test does not emulate screen clearing.
+  }
+  clearFromCursor(): void {
+    // Test does not emulate screen clearing.
+  }
+  clearScreen(): void {
+    // Test does not emulate screen clearing.
+  }
+  setTitle(): void {
+    // Test ignores terminal title changes.
+  }
+  setProgress(): void {
+    // Test ignores terminal progress changes.
+  }
+}
+
+const transcript: Component = {
+  invalidate() {
+    // Static test transcript has no cache.
+  },
+  render() {
+    return Array.from({ length: 100 }, (_, index) => `transcript-${index}`);
+  },
+};
 
 function expectPageShortcutHelp(text: string): void {
   expect(text).toContain("ctrl+b/ctrl+f page");
@@ -323,7 +384,7 @@ describe("skills manager UI", () => {
     expect(lines.at(-1)).toContain("<border:╰");
   });
 
-  it("clips long inventory before the preview and keeps the selected skill visible", () => {
+  it("scrolls the real inventory viewport instead of swapping in a deep selected row", () => {
     const lines = renderSkillsManager(
       inventoryWithManyBundled(40),
       {
@@ -337,7 +398,11 @@ describe("skills manager UI", () => {
     );
     const text = lines.join("\n");
 
-    expect(text).toContain("<dim:…>");
+    expect(text).toContain("<dim:Filter:> <dim:(none)>");
+    expect(lines[5]).toContain("<dim:Bundled/read-only (40)>");
+    expect(text).not.toContain("<dim:Managed (1)>");
+    expect(text).not.toContain("bundled-0");
+    expect(text).toContain("bundled-38");
     expect(text).toContain("<accent:›> <bold:bundled-39>");
     expect(text.indexOf("<dim:Preview>")).toBeGreaterThan(
       text.indexOf("<accent:›> <bold:bundled-39>")
@@ -345,6 +410,120 @@ describe("skills manager UI", () => {
     expect(text).toContain("<dim:↑/k ↓/j navigate");
     expectPageShortcutHelp(text);
     expect(lines.at(-1)).toContain("<border:╰");
+  });
+
+  it("uses edge-follow scrolling and viewport-height page navigation", () => {
+    const component = createSkillsManagerComponent({
+      inventory: inventoryWithManyBundled(40),
+      done: () => undefined,
+    });
+
+    component.render();
+    for (let index = 0; index < 13; index += 1) {
+      component.handleInput("j");
+      component.render();
+    }
+    expect(component.inventoryScrollView.scrollTop).toBe(0);
+
+    component.handleInput("j");
+    component.render();
+    expect(component.inventoryScrollView.scrollTop).toBe(1);
+
+    component.handleInput("k");
+    component.render();
+    expect(component.inventoryScrollView.scrollTop).toBe(1);
+
+    const paged = createSkillsManagerComponent({
+      inventory: inventoryWithManyBundled(40),
+      done: () => undefined,
+    });
+    paged.render();
+    paged.handleInput(LEGACY_PAGE_DOWN);
+    expect(paged.state.selectedIndex).toBe(17);
+    paged.handleInput(LEGACY_PAGE_UP);
+    expect(paged.state.selectedIndex).toBe(0);
+  });
+
+  it.each([
+    ["missing", undefined],
+    ["wrong shape", []],
+  ])("fails clearly when fullscreen listener storage is %s", (_description, inputListeners) => {
+    const unsupportedHost = {
+      mode: "fullscreen",
+      addInputListener: () => () => undefined,
+      inputListeners,
+    } as unknown as TuiAltScreen;
+
+    expect(() =>
+      createSkillsManagerComponent({
+        inventory: inventoryWithManyBundled(40),
+        done: () => undefined,
+        hostTui: unsupportedHost,
+      })
+    ).toThrow(
+      "Skills fullscreen wheel routing requires @earendil-works/pi-tui 0.84.0"
+    );
+  });
+
+  it.each([
+    ["SGR", "\u001b[<65;12;8M", "\u001b[<64;12;40M"],
+    ["legacy X10", "\u001b[Ma,(", "\u001b[M`,H"],
+  ])("routes %s wheel input by inventory pointer bounds on the host terminal path", (_protocol, insideWheelDown, outsideWheelUp) => {
+    const terminal = new TestTerminal();
+    const tui = new TuiAltScreen(terminal);
+    tui.addChild(transcript);
+    const component = createSkillsManagerComponent({
+      inventory: inventoryWithManyBundled(40),
+      done: () => undefined,
+      hostTui: tui,
+    });
+    tui.showOverlay(component, SKILLS_MANAGER_OVERLAY_OPTIONS);
+    tui.start();
+    tui.renderNow();
+    const transcriptScrollTop = tui.viewportTop;
+    const selectedIndex = component.state.selectedIndex;
+
+    terminal.onInput?.(insideWheelDown);
+
+    expect(component.inventoryScrollView.scrollTop).toBe(1);
+    expect(component.state.selectedIndex).toBe(selectedIndex);
+    expect(tui.viewportTop).toBe(transcriptScrollTop);
+
+    terminal.onInput?.(outsideWheelUp);
+
+    expect(component.inventoryScrollView.scrollTop).toBe(1);
+    expect(component.state.selectedIndex).toBe(selectedIndex);
+    expect(tui.viewportTop).toBe(transcriptScrollTop - 1);
+    component.dispose();
+    tui.stop();
+  });
+
+  it("handles wheel input without changing selection or preview", () => {
+    const component = createSkillsManagerComponent({
+      inventory: inventoryWithManyBundled(40),
+      done: () => undefined,
+    });
+    component.render();
+
+    component.handleInput("\u001b[<65;12;8M");
+    const text = component.render().join("\n");
+
+    expect(component.inventoryScrollView.scrollTop).toBe(1);
+    expect(component.state.selectedIndex).toBe(0);
+    expect(text).toContain("Managed skill");
+    expect(text).toContain("Filter: (none)");
+    expect(text.split("\n")[5]).toContain("Managed (1)");
+    expect(text).toContain("Bundled/read-only (40)");
+    expect(text.match(/…/g)?.length).toBeGreaterThanOrEqual(1);
+
+    for (let index = 0; index < 4; index += 1) {
+      component.handleInput("\u001b[<65;12;8M");
+    }
+    expect(component.render()[5]).toContain("Bundled/read-only (40)");
+
+    component.handleInput("\u001b[M\u0060!!");
+    expect(component.inventoryScrollView.scrollTop).toBe(4);
+    expect(component.state.selectedIndex).toBe(0);
   });
 
   it("keeps readable modal output without theme colors", () => {
