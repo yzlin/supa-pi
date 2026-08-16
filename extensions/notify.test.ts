@@ -1,5 +1,4 @@
 import { describe, expect, it, mock } from "bun:test";
-import { EventEmitter } from "node:events";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
@@ -10,28 +9,23 @@ import notifyExtension from "./notify";
 type TestRuntime = NonNullable<Parameters<typeof notifyExtension>[1]>;
 
 const oscNotification = "\u001b]777;notify;π;Finished\u0007";
-
-const createChild = () =>
-  Object.assign(new EventEmitter(), { unref: mock(() => undefined) });
+const shownResult = JSON.stringify({ result: { shown: true } });
+const createContext = () => ({
+  ui: { notify: mock(() => undefined) },
+});
+type TestContext = ReturnType<typeof createContext>;
 
 const createRuntime = (overrides: Partial<TestRuntime> = {}): TestRuntime => ({
-  platform: "darwin",
-  termProgram: "ghostty",
-  notifierDirectory: "/cache/pi-agent-notifier",
-  compileId: "test",
-  environment: { PATH: "/bin" },
-  exists: mock(() => true),
-  mkdir: mock(() => undefined),
-  rename: mock(() => undefined),
-  remove: mock(() => undefined),
-  spawn: mock(() => createChild()),
-  spawnSync: mock(() => ({ status: 0 })),
+  environment: {},
+  execFile: mock((_command, _args, callback) => callback(null, shownResult)),
   write: mock(() => undefined),
   ...overrides,
 });
 
 const registerAgentEnd = (runtime: TestRuntime) => {
-  let handler: ((event: { messages?: unknown[] }) => void) | undefined;
+  let handler:
+    | ((event: { messages?: unknown[] }, ctx?: TestContext) => void)
+    | undefined;
   const pi = {
     on(event: string, callback: typeof handler) {
       if (event === "agent_end") {
@@ -45,6 +39,19 @@ const registerAgentEnd = (runtime: TestRuntime) => {
   return handler!;
 };
 
+const expectHerdrFailure = (runtime: TestRuntime) => {
+  const handler = registerAgentEnd(runtime);
+  const context = createContext();
+
+  handler({ messages: [{ role: "assistant", content: "Finished" }] }, context);
+
+  expect(runtime.write).not.toHaveBeenCalled();
+  expect(context.ui.notify).toHaveBeenCalledWith(
+    "Desktop notification failed.",
+    "warning"
+  );
+};
+
 describe("notify extension", () => {
   it("is registered in package.json", () => {
     const packageJson = JSON.parse(
@@ -54,155 +61,145 @@ describe("notify extension", () => {
     expect(packageJson.pi.extensions).toContain("./extensions/notify.ts");
   });
 
-  it("uses a cached app named Pi agent on macOS", () => {
-    const child = createChild();
-    let appExists = false;
-    const runtime = createRuntime({
-      exists: mock(() => appExists),
-      rename: mock(() => {
-        appExists = true;
-      }),
-      spawn: mock(() => child),
-    });
+  it("uses Herdr's notification API inside a Herdr pane", () => {
+    const runtime = createRuntime({ environment: { HERDR_ENV: "1" } });
     const handler = registerAgentEnd(runtime);
 
     handler({ messages: [{ role: "assistant", content: "Finished" }] });
 
-    expect(runtime.mkdir).toHaveBeenCalledWith("/cache/pi-agent-notifier", {
-      recursive: true,
-      mode: 0o700,
-    });
-    expect(runtime.spawnSync).toHaveBeenCalledWith(
-      "/usr/bin/osacompile",
+    expect(runtime.execFile).toHaveBeenCalledWith(
+      "herdr",
+      ["notification", "show", "π", "--body", "Finished", "--sound", "none"],
+      expect.any(Function)
+    );
+    expect(runtime.write).not.toHaveBeenCalled();
+  });
+
+  it("handles empty assistant output through Herdr", () => {
+    const runtime = createRuntime({ environment: { HERDR_ENV: "1" } });
+    const handler = registerAgentEnd(runtime);
+
+    handler({ messages: [] });
+
+    expect(runtime.execFile).toHaveBeenCalledWith(
+      "herdr",
       [
-        "-o",
-        "/cache/pi-agent-notifier/.compile-test/Pi agent.app",
-        "-e",
-        expect.stringContaining("display notification"),
+        "notification",
+        "show",
+        "Ready for input",
+        "--body",
+        "",
+        "--sound",
+        "none",
       ],
-      { stdio: "ignore" }
+      expect.any(Function)
     );
-    expect(runtime.rename).toHaveBeenCalledWith(
-      "/cache/pi-agent-notifier/.compile-test/Pi agent.app",
-      "/cache/pi-agent-notifier/Pi agent.app"
-    );
-    expect(runtime.remove).toHaveBeenCalledWith(
-      "/cache/pi-agent-notifier/.compile-test",
-      { recursive: true, force: true }
-    );
-    expect(runtime.spawn).toHaveBeenCalledWith(
-      "/cache/pi-agent-notifier/Pi agent.app/Contents/MacOS/applet",
-      [],
-      {
-        stdio: "ignore",
-        env: {
-          PATH: "/bin",
-          PI_AGENT_NOTIFICATION_TITLE: "π",
-          PI_AGENT_NOTIFICATION_BODY: "Finished",
-        },
-      }
-    );
-    child.emit("close", 0);
-    expect(runtime.write).not.toHaveBeenCalled();
   });
 
-  it("uses an app published by another process after a compile race", () => {
-    let existsChecks = 0;
-    const runtime = createRuntime({
-      exists: mock(() => {
-        existsChecks += 1;
-        return existsChecks > 1;
-      }),
-      rename: mock(() => {
-        throw new Error("destination exists");
-      }),
-    });
+  it("normalizes rich assistant content for Herdr", () => {
+    const runtime = createRuntime({ environment: { HERDR_ENV: "1" } });
     const handler = registerAgentEnd(runtime);
 
-    handler({ messages: [{ role: "assistant", content: "Finished" }] });
+    handler({
+      messages: [
+        {
+          role: "assistant",
+          content: [
+            {
+              type: "text",
+              text: "# Done\n\n[details](https://example.com) with **bold** and `code`",
+            },
+            { type: "toolCall" },
+          ],
+        },
+      ],
+    });
 
-    expect(runtime.spawn).toHaveBeenCalledTimes(1);
-    expect(runtime.write).not.toHaveBeenCalled();
+    expect(runtime.execFile).toHaveBeenCalledWith(
+      "herdr",
+      [
+        "notification",
+        "show",
+        "π",
+        "--body",
+        "Done details with bold and code",
+        "--sound",
+        "none",
+      ],
+      expect.any(Function)
+    );
   });
 
-  it("keeps concurrent notification payloads isolated", () => {
-    const children = [createChild(), createChild()];
-    const spawn = mock(
-      (
-        _command: string,
-        _args: string[],
-        _options: { stdio: "ignore"; env?: NodeJS.ProcessEnv }
-      ) => children.shift()!
-    );
-    const handler = registerAgentEnd(createRuntime({ spawn }));
+  it("keeps concurrent Herdr notification payloads isolated", () => {
+    const runtime = createRuntime({ environment: { HERDR_ENV: "1" } });
+    const handler = registerAgentEnd(runtime);
 
     handler({ messages: [{ role: "assistant", content: "First" }] });
     handler({ messages: [{ role: "assistant", content: "Second" }] });
 
-    expect(spawn.mock.calls[0]?.[2]?.env?.PI_AGENT_NOTIFICATION_BODY).toBe(
-      "First"
+    expect(runtime.execFile).toHaveBeenNthCalledWith(
+      1,
+      "herdr",
+      ["notification", "show", "π", "--body", "First", "--sound", "none"],
+      expect.any(Function)
     );
-    expect(spawn.mock.calls[1]?.[2]?.env?.PI_AGENT_NOTIFICATION_BODY).toBe(
-      "Second"
+    expect(runtime.execFile).toHaveBeenNthCalledWith(
+      2,
+      "herdr",
+      ["notification", "show", "π", "--body", "Second", "--sound", "none"],
+      expect.any(Function)
     );
   });
 
-  it("falls back to OSC 777 when the app cannot be compiled", () => {
+  it("reports when Herdr does not confirm delivery", () => {
     const runtime = createRuntime({
-      exists: mock(() => false),
-      spawnSync: mock(() => ({ status: 1 })),
+      environment: { HERDR_ENV: "1" },
+      execFile: mock((_command, _args, callback) =>
+        callback(null, JSON.stringify({ result: { shown: false } }))
+      ),
     });
-    const handler = registerAgentEnd(runtime);
 
-    handler({ messages: [{ role: "assistant", content: "Finished" }] });
-
-    expect(runtime.write).toHaveBeenCalledWith(oscNotification);
+    expectHerdrFailure(runtime);
   });
 
-  it("falls back to OSC 777 when app setup throws", () => {
+  it("reports when Herdr returns malformed output", () => {
     const runtime = createRuntime({
-      mkdir: mock(() => {
-        throw new Error("permission denied");
+      environment: { HERDR_ENV: "1" },
+      execFile: mock((_command, _args, callback) => callback(null, "not json")),
+    });
+
+    expectHerdrFailure(runtime);
+  });
+
+  it("reports when the Herdr command fails", () => {
+    const runtime = createRuntime({
+      environment: { HERDR_ENV: "1" },
+      execFile: mock((_command, _args, callback) =>
+        callback(new Error("herdr unavailable"), "")
+      ),
+    });
+
+    expectHerdrFailure(runtime);
+  });
+
+  it("reports when the Herdr command throws", () => {
+    const runtime = createRuntime({
+      environment: { HERDR_ENV: "1" },
+      execFile: mock(() => {
+        throw new Error("herdr unavailable");
       }),
     });
-    const handler = registerAgentEnd(runtime);
 
-    handler({ messages: [{ role: "assistant", content: "Finished" }] });
-
-    expect(runtime.write).toHaveBeenCalledWith(oscNotification);
+    expectHerdrFailure(runtime);
   });
 
-  it("falls back to OSC 777 when the app fails to launch", () => {
-    const child = createChild();
-    const runtime = createRuntime({ spawn: mock(() => child) });
-    const handler = registerAgentEnd(runtime);
-
-    handler({ messages: [{ role: "assistant", content: "Finished" }] });
-    child.emit("error", new Error("spawn failed"));
-
-    expect(runtime.write).toHaveBeenCalledTimes(1);
-    expect(runtime.write).toHaveBeenCalledWith(oscNotification);
-  });
-
-  it("falls back to OSC 777 when the app exits unsuccessfully", () => {
-    const child = createChild();
-    const runtime = createRuntime({ spawn: mock(() => child) });
-    const handler = registerAgentEnd(runtime);
-
-    handler({ messages: [{ role: "assistant", content: "Finished" }] });
-    child.emit("close", 1);
-
-    expect(runtime.write).toHaveBeenCalledTimes(1);
-    expect(runtime.write).toHaveBeenCalledWith(oscNotification);
-  });
-
-  it("keeps OSC 777 elsewhere", () => {
-    const runtime = createRuntime({ platform: "linux" });
+  it("uses OSC 777 outside Herdr", () => {
+    const runtime = createRuntime();
     const handler = registerAgentEnd(runtime);
 
     handler({ messages: [{ role: "assistant", content: "Finished" }] });
 
-    expect(runtime.spawn).not.toHaveBeenCalled();
+    expect(runtime.execFile).not.toHaveBeenCalled();
     expect(runtime.write).toHaveBeenCalledWith(oscNotification);
   });
 });
