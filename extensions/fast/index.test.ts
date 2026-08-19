@@ -179,7 +179,7 @@ describe("fast mode", () => {
     expect(readGlobalConfig()).toEqual({
       enabled: false,
       warned: true,
-      allowlist: ["openai-codex/gpt-5.5"],
+      allowlist: [],
     });
     expect(statuses).toEqual([
       { key: FAST_MODE_STATUS_KEY, text: FAST_MODE_STATUS_TEXT },
@@ -286,7 +286,7 @@ describe("fast mode", () => {
     expect(readGlobalConfig()).toEqual({
       enabled: true,
       warned: false,
-      allowlist: ["openai-codex/gpt-5.5"],
+      allowlist: [],
     });
   });
 
@@ -426,6 +426,29 @@ describe("fast mode", () => {
         id: "new-model",
       })
     ).toEqual({ service_tier: "priority" });
+  });
+
+  it("supports current Codex Fast model IDs", () => {
+    for (const id of [
+      "gpt-5.4",
+      "gpt-5.5",
+      "gpt-5.6-luna",
+      "gpt-5.6-sol",
+      "gpt-5.6-terra",
+    ]) {
+      expect(
+        applyFastModeToPayload({}, true, { provider: "openai-codex", id })
+      ).toEqual({ service_tier: "priority" });
+    }
+
+    for (const model of [
+      { provider: "openai-codex", id: "gpt-5.3-codex-spark" },
+      { provider: "openai-codex", id: "gpt-5.4-mini" },
+      { provider: "openai-codex", id: "gpt-5.6" },
+      { provider: "openai", id: "gpt-5.6-sol" },
+    ]) {
+      expect(applyFastModeToPayload({}, true, model)).toBeUndefined();
+    }
   });
 
   it("derives model capability from structural fastMode true and local allowlist", () => {

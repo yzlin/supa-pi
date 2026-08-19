@@ -33,7 +33,7 @@ Do not describe `extensions/om` as active runtime behavior unless package regist
 - the generic `fast` UI status key
 - a provider-payload hook that adds `service_tier: "priority"`
 
-The provider hook only patches payloads when Fast Mode is enabled, the selected model supports Fast Mode, and the payload does not already set `service_tier` or `serviceTier`. Model support comes from metadata `fastMode: true`, the built-in allowlist (`openai-codex/gpt-5.5`), or the config allowlist. The live config opts GPT-5.6 Sol in after request-contract validation; repository defaults do not opt it in without a latency benchmark.
+The provider hook only patches payloads when Fast Mode is enabled, the selected model supports Fast Mode, and the payload does not already set `service_tier` or `serviceTier`. Model support comes from metadata `fastMode: true`, the built-in allowlist, or the config allowlist. The built-in allowlist follows the current Codex Fast-capable models exposed by Pi: `openai-codex/gpt-5.4`, `openai-codex/gpt-5.5`, and `openai-codex/gpt-5.6-{luna,sol,terra}`. GPT-5.4 Mini and GPT-5.3 Codex Spark remain unsupported. Fast enablement stays a separate persisted user choice.
 
 Fast Mode persists global state and additive exact-match model support in `~/.pi/agent/fast-mode.json`. The config requires boolean `enabled` and array `allowlist` of canonical `provider/id` strings; invalid config fails fast. Writes preserve unknown top-level keys and the existing allowlist. Status notifications report the support source (`model`, `built-in allowlist`, `config allowlist`, or `unsupported`). Config changes are not live-reloaded.
 

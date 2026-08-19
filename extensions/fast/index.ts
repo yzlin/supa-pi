@@ -39,8 +39,13 @@ interface FastModel {
   provider?: string;
 }
 
-const BUILT_IN_FAST_MODE_ALLOWLIST = ["openai-codex/gpt-5.5"] as const;
-const FAST_MODE_ALLOWLIST: Set<string> = new Set(BUILT_IN_FAST_MODE_ALLOWLIST);
+const BUILT_IN_FAST_MODE_ALLOWLIST = new Set<string>([
+  "openai-codex/gpt-5.4",
+  "openai-codex/gpt-5.5",
+  "openai-codex/gpt-5.6-luna",
+  "openai-codex/gpt-5.6-sol",
+  "openai-codex/gpt-5.6-terra",
+]);
 const CANONICAL_MODEL_ID_REGEX = /^[^/\s]+\/[^/\s]+$/;
 
 type FastModeSupportSource =
@@ -81,7 +86,7 @@ function getFastModeSupportSource(model: unknown): FastModeSupportSource {
   }
 
   const modelIds = getCanonicalModelIds(candidate);
-  if (modelIds.some((id) => FAST_MODE_ALLOWLIST.has(id))) {
+  if (modelIds.some((id) => BUILT_IN_FAST_MODE_ALLOWLIST.has(id))) {
     return "built-in allowlist";
   }
   if (modelIds.some((id) => configFastModeAllowlist.has(id))) {
@@ -212,9 +217,7 @@ function writeFastModeConfigFile(
 ): void {
   const configPath = getGlobalFastModeConfigPath(homeDir);
   const existingConfig = readFastModeConfigForWrite(configPath);
-  const allowlist = existingConfig?.allowlist ?? [
-    ...BUILT_IN_FAST_MODE_ALLOWLIST,
-  ];
+  const allowlist = existingConfig?.allowlist ?? [];
   const nextConfig = {
     ...(existingConfig?.extra ?? {}),
     enabled: state.enabled,

@@ -170,13 +170,13 @@ Current durable and generated defaults mostly agree:
 - `setup.sh` and live settings use GPT-5.6 Sol, `high`, and `transport: "auto"`.
 - Agent definitions use GPT-5.6 with route-specific thinking levels.
 - `rules/common/performance.md` documents the measured GPT-5.6 routing strategy.
-- `extensions/fast` keeps `openai-codex/gpt-5.5` built in; GPT-5.6 Sol is absent from both the built-in and live config allowlists after measured priority-tier results.
+- `extensions/fast` recognizes the current Codex Fast-capable models exposed by Pi, including the GPT-5.6 Luna, Sol, and Terra variants; the persisted enabled state controls whether supported requests use the priority tier.
 
 Pi documents `auto` as its transport default. Preserve `auto` unless an SSE or WebSocket benchmark demonstrates a better choice.
 
 The installed Codex adapter serializes `service_tier: "priority"` for GPT-5.6 Sol. On 2026-07-11, an authenticated ChatGPT-backend probe completed successfully with that field enabled through the config allowlist, proving request-contract acceptance.
 
-A paired, order-balanced four-repetition benchmark on 2026-07-12 held model, prompt bytes, reasoning, fixtures, and tools constant. All retained arms passed at score 1.000, and every candidate payload recorded `service_tier: "priority"`. Priority was 36.5% faster for core orchestration at high effort but 15.6% slower for executor fixing at medium effort, while costing 81% and 100% more. A clean low-effort exploration rerun was 19.6% faster at 98% higher cost, but production exploration routes use Luna rather than Sol. An earlier balanced exploration cohort was excluded after one priority WebSocket closed normally before its answer completed. Result: the latency benefit is route-dependent, regresses the executor route, and nearly doubles cost. Keep GPT-5.6 Sol out of the built-in allowlist and remove it from live config. Users can still opt in explicitly for workloads they benchmark themselves.
+A paired, order-balanced four-repetition benchmark on 2026-07-12 held model, prompt bytes, reasoning, fixtures, and tools constant. All retained arms passed at score 1.000, and every candidate payload recorded `service_tier: "priority"`. Priority was 36.5% faster for core orchestration at high effort but 15.6% slower for executor fixing at medium effort, while costing 81% and 100% more. A clean low-effort exploration rerun was 19.6% faster at 98% higher cost, but production exploration routes use Luna rather than Sol. An earlier balanced exploration cohort was excluded after one priority WebSocket closed normally before its answer completed. Result: the latency benefit is route-dependent, regresses the executor route, and nearly doubles cost. This evidence governs whether Fast Mode should be enabled, not whether a backend-supported model is recognized. Keep Fast Mode user-controlled and benchmark it for each workload.
 
 Retained artifacts: `.pi/evals/2026-07-12T13-42-50-849Z-aec2ddaf/`, `.pi/evals/2026-07-12T13-45-15-679Z-aec2ddaf/`, and `.pi/evals/2026-07-12T13-48-37-962Z-aec2ddaf/`. Excluded transport-failure cohort: `.pi/evals/2026-07-12T13-47-04-519Z-aec2ddaf/`.
 

@@ -27,7 +27,7 @@ Command notifications use the model support source: `model`, `built-in allowlist
 {
   "enabled": true,
   "warned": true,
-  "allowlist": ["openai-codex/gpt-5.5"]
+  "allowlist": []
 }
 ```
 
@@ -38,7 +38,7 @@ Editor schema help ships at `extensions/fast/configuration_schema.json`. It is t
   "$schema": "../extensions/fast/configuration_schema.json",
   "enabled": true,
   "warned": true,
-  "allowlist": ["openai-codex/gpt-5.5", "openai-codex/gpt-5.6-sol"]
+  "allowlist": []
 }
 ```
 
@@ -47,11 +47,11 @@ Editor schema help ships at `extensions/fast/configuration_schema.json`. It is t
 - `allowlist` is required and must be an array of exact canonical `provider/id` strings. Entries with whitespace, missing provider, or missing id are invalid.
 - `allowList` is intentionally invalid; use lowercase `allowlist`.
 
-Config allowlist entries add model support. A model supports Fast Mode when its metadata has `fastMode: true`, it matches the built-in allowlist (`openai-codex/gpt-5.5`), or it matches an exact `provider/id` entry from the config allowlist. The config allowlist does not replace built-in support.
+Config allowlist entries add model support. A model supports Fast Mode when its metadata has `fastMode: true`, it matches the built-in allowlist, or it matches an exact `provider/id` entry from the config allowlist. The built-in allowlist covers `openai-codex/gpt-5.4`, `openai-codex/gpt-5.5`, and the `openai-codex/gpt-5.6-{luna,sol,terra}` models currently advertised by Pi. It intentionally excludes GPT-5.4 Mini and GPT-5.3 Codex Spark. The config allowlist does not replace built-in support.
 
 Invalid config fails fast. Malformed JSON, non-object config, missing/non-boolean `enabled`, missing/non-array `allowlist`, invalid allowlist entries, or the deprecated `allowList` key throw during config read instead of silently falling back.
 
-When writing state, the extension preserves existing unknown top-level config keys and preserves the existing `allowlist`. If no config file exists, the first write creates one with the built-in allowlist.
+When writing state, the extension preserves existing unknown top-level config keys and preserves the existing `allowlist`. If no config file exists, the first write creates one with an empty config allowlist; built-in support remains separate so later capability changes are not persisted as user overrides.
 
 On session start, session switch, or session tree navigation, state resolves in this order:
 
@@ -77,7 +77,7 @@ When those checks pass, the extension returns a patched payload with `service_ti
 
 An authenticated `openai-codex` ChatGPT-backend probe completed successfully with GPT-5.6 Sol and the priority field enabled through the config allowlist on 2026-07-11. This proves that the backend accepts the request contract.
 
-An order-balanced four-repetition paired benchmark on 2026-07-12 found equal quality but route-dependent latency: priority was 36.5% faster for core orchestration and 15.6% slower for executor fixing, while costing 81% and 100% more. A clean low-effort exploration rerun was 19.6% faster at 98% higher cost, but production exploration uses Luna rather than Sol. GPT-5.6 Sol therefore remains outside the built-in allowlist and was removed from live config. See `docs/context/gpt-5.6-harness-optimization.md` for artifacts, exclusion notes, and methodology.
+An order-balanced four-repetition paired benchmark on 2026-07-12 found equal quality but route-dependent latency: priority was 36.5% faster for core orchestration and 15.6% slower for executor fixing, while costing 81% and 100% more. A clean low-effort exploration rerun was 19.6% faster at 98% higher cost, but production exploration uses Luna rather than Sol. Fast Mode therefore remains user-controlled rather than default-on policy; supported-model detection reflects backend capability instead of benchmark preference. See `docs/context/gpt-5.6-harness-optimization.md` for artifacts and methodology.
 
 ## Limitations
 

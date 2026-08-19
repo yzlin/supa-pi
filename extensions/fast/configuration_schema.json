@@ -15,7 +15,7 @@
     },
     "allowlist": {
       "type": "array",
-      "default": ["openai-codex/gpt-5.5"],
+      "default": [],
       "description": "Additional exact canonical provider/id model IDs that support Fast Mode.",
       "items": {
         "type": "string",
