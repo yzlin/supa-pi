@@ -50,7 +50,8 @@ Requirements:
 - If duplicate same-hash v1 files exist, use the newest `updatedAt` result and preserve/report warning paths.
 - Old `planId`-only checkpoint calls are unsupported and hard-error.
 - If an unfinished checkpoint exists for the same `canonicalPlan`, auto-resume it without asking.
-- If an unfinished checkpoint exists for a different canonical plan, ask whether to resume the unfinished plan or replace it with the new plan before creating or dispatching tasks.
+- Different-plan unfinished checkpoints remain untouched and unannounced; they never gate or redirect the current invocation.
+- Load and resume only by the current `canonicalPlan`; do not call `list_unfinished` during normal orchestration.
 - Reconcile checkpoint state against live task state before resuming or dispatching more work.
 - On task failure, stop dispatching dependent or new work, checkpoint current state, reconcile live task results, and report the failure, blockers, files touched, validation, and exact next choices.
 - Continue until all tasks are completed or terminally blocked.
@@ -67,7 +68,7 @@ Execution Brief:
 Execution loop:
 1. Resolve the plan input and normalize it.
 2. Present the concise plan, ask ambiguity questions if needed, derive the fixed-template `canonicalPlan`, and complete the conservative whole-plan danger preflight.
-3. Use `execute_checkpoint` to load the `.pi/execute/` checkpoint by `canonicalPlan`, handling same-plan resume and different-plan collisions; save later creates storage if needed.
+3. Use `execute_checkpoint` to load and, when unfinished, resume only the `.pi/execute/` checkpoint for the current `canonicalPlan`; save later creates storage if needed.
 4. Materialize the current task graph in `pi-tasks`.
 5. Mark runnable tasks `in_progress`, then dispatch them together with `execute_tasks`.
 6. Read the validated result payload returned by `execute_tasks`; never accept assistant-text JSON as an executor result.

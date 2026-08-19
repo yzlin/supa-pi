@@ -348,6 +348,15 @@ describe("execute orchestration contract", () => {
       "never accept assistant-text JSON as an executor result"
     );
     expect(skill).not.toContain("Dispatch runnable tasks with `TaskExecute`");
+    expect(skill).toContain(
+      "Different-plan unfinished checkpoints remain untouched and unannounced; they never gate or redirect the current invocation."
+    );
+    expect(skill).toContain(
+      "Load and resume only by the current `canonicalPlan`; do not call `list_unfinished` during normal orchestration."
+    );
+    expect(skill).not.toContain(
+      "ask whether to resume the unfinished plan or replace it with the new plan"
+    );
     expect(executor).toContain(
       "When `structured_output` is available, call it exactly once"
     );

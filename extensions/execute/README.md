@@ -44,7 +44,8 @@ Canonical orchestration workflow: `../../skills/execute/SKILL.md`. It instructs 
 - derive one fixed-template `canonicalPlan` from the normalized executable plan and pass that exact trimmed non-empty string to every `execute_checkpoint` load/save;
 - checkpoint progress under `.pi/execute/` with `execute_checkpoint` and stop/checkpoint/report on task failure;
 - auto-resume an unfinished checkpoint for the same `canonicalPlan` hash;
-- ask whether to resume or replace when a different unfinished v1 checkpoint exists;
+- leave different-plan unfinished checkpoints untouched and unannounced so they never gate or redirect the current invocation;
+- load and resume checkpoints only by the current `canonicalPlan`, without listing different-plan checkpoints during normal orchestration;
 - persist dangerous-action approval only when bound to the same `canonicalPlanHash`; never reuse approval for a different canonical plan.
 
 ## Structured executor output
