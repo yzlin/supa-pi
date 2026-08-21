@@ -43,6 +43,7 @@ Before finishing:
 - verify claims are grounded in inspected files
 - ensure no placeholder text remains
 - ensure front matter is present on each markdown file
+- replace generic or promotional prose with concrete mechanisms, paths, commands, sources, or limits without altering exact terms, syntax, provenance, or required structure
 - keep docs breadth proportional to target size and command scope
 
 Finish with a short summary containing:
