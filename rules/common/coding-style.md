@@ -66,3 +66,5 @@ Before marking work complete:
 
 ### Principle
 Code should be self-documenting. If you need a comment to explain WHAT the code does, consider refactoring to make it clearer.
+
+When a comment is needed, place it at the boundary that owns the behavior and explain the non-obvious rationale. Include constraints or invalidation conditions only when maintainers need them to recognize when the rationale or code is no longer valid. Do not restate the code, preserve abandoned attempts, or speculate about future work.
