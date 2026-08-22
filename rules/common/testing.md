@@ -1,33 +1,12 @@
 # Testing Requirements
 
-## Minimum Test Coverage: 80%
+For behavior changes and bug fixes performed directly in the main session, load and follow the canonical [`tdd-workflow`](../../skills/tdd-workflow/SKILL.md) skill.
 
-Test Types (ALL required):
-1. **Unit Tests** - Individual functions, utilities, components
-2. **Integration Tests** - API endpoints, database operations
-3. **E2E Tests** - Critical user flows (framework chosen per language)
+Documentation-only, configuration-only, generated, and purely mechanical changes do not trigger that workflow by default unless they alter behavior.
 
-## Test-Driven Development
+Testing must leave these outcomes:
 
-MANDATORY workflow:
-1. Write test first (RED)
-2. Run test - it should FAIL
-3. Write minimal implementation (GREEN)
-4. Run test - it should PASS
-5. Refactor (IMPROVE)
-6. Verify coverage (80%+)
-
-## Regression Tests
-
-- Regression tests should pin the missing invariant, not duplicate an existing test path.
-
-## Troubleshooting Test Failures
-
-1. Use **tdd-guide** agent
-2. Check test isolation
-3. Verify mocks are correct
-4. Fix implementation, not tests (unless tests are wrong)
-
-## Agent Support
-
-- **tdd-guide** - Use PROACTIVELY for new features, enforces write-tests-first
+- The requested behavior and meaningful failure paths are demonstrated at the narrowest sufficient test level.
+- Relevant existing behavior remains protected by passing regression tests.
+- Repository-native validation and existing coverage policy are satisfied when available.
+- Validation evidence and any unavailable tooling or unresolved risk are reported explicitly.

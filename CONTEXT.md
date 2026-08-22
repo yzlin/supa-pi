@@ -25,6 +25,10 @@ The repository is optimized for local workflow quality and maintainable agent be
 - **Disabled Extension** — extension code present in the repo but not listed in `package.json -> pi.extensions`.
 - **Live Pi config** — the runtime Pi agent directory under `~/.pi/agent`.
 - **Development clone** — any checkout used for editing this repo. It does not have to be `~/.pi/agent`.
+- **Core orchestration contract** — always-on main-session policy for autonomy, direct-versus-delegated work, verification, and output behavior. _Avoid_: routing rule, workflow rule.
+- **Agent role contract** — a delegated worker's responsibility, tools, model, boundaries, and output contract; reusable implementation methodology belongs in a Skill. _Avoid_: methodology agent.
+- **Workflow skill** — reusable task procedure loaded only when the work matches, shared by direct and delegated execution when applicable. _Avoid_: specialist worker, routing policy.
+- **Task rule** — selectively loaded user or project policy defining when guidance applies and which outcomes are required; it does not own always-on orchestration routing. _Avoid_: dispatcher, agent catalog.
 - **Matt-compatible context docs** — `CONTEXT.md`, `CONTEXT-MAP.md`, `docs/adr/`, and optional `docs/context/` notes.
 
 ## Product constraints

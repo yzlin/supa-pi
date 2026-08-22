@@ -1,5 +1,7 @@
 import { describe, expect, it } from "bun:test";
-import { resolve } from "node:path";
+import { cpSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import {
@@ -11,13 +13,161 @@ import {
 import { ModelRegistry, ModelRuntime } from "@earendil-works/pi-coding-agent";
 
 import type { EvalCase } from "./index";
-import { isContainedRelativePath, runVariant } from "./runner";
+import {
+  CANONICAL_SUBTRACT_TEST,
+  isContainedRelativePath,
+  runAllowedFixtureTest,
+  runVariant,
+} from "./runner";
 
 const fixturePath = resolve(
   fileURLToPath(new URL(".", import.meta.url)),
   "fixtures/sample-project"
 );
 const modelRegistry = new ModelRegistry(await ModelRuntime.create());
+describe("canonical fixture test execution", () => {
+  it("semantically checks code and rejects tampered regression tests", () => {
+    const deadWorkspace = mkdtempSync(join(tmpdir(), "supa-pi-dead-test-"));
+    cpSync(fixturePath, deadWorkspace, { recursive: true });
+    const mathPath = join(deadWorkspace, "src/math.ts");
+    writeFileSync(
+      mathPath,
+      `${readFileSync(mathPath, "utf8")}\n// export function add(left: number, right: number): number { return left + right; }\nfunction dead(left: number, right: number) { if (false) return left + right; }\n`
+    );
+    expect(runAllowedFixtureTest(deadWorkspace).exitCode).toBe(1);
+
+    writeFileSync(
+      mathPath,
+      readFileSync(join(fixturePath, "src/math.ts"), "utf8").replace(
+        "return left - right",
+        "return left + right"
+      )
+    );
+    expect(runAllowedFixtureTest(deadWorkspace).exitCode).toBe(0);
+
+    const changedTestWorkspace = mkdtempSync(
+      join(tmpdir(), "supa-pi-changed-test-")
+    );
+    cpSync(fixturePath, changedTestWorkspace, { recursive: true });
+    writeFileSync(
+      join(changedTestWorkspace, "tests/math.case.ts"),
+      'import { test, expect } from "bun:test";\ntest("weakened", () => expect(true).toBe(true));\n'
+    );
+    expect(runAllowedFixtureTest(changedTestWorkspace).exitCode).toBe(1);
+  });
+
+  it("semantically simulates canonical test-first creation without host execution", () => {
+    const workspace = mkdtempSync(join(tmpdir(), "supa-pi-created-test-"));
+    cpSync(fixturePath, workspace, { recursive: true });
+    const command = "bun test tests/subtract.case.ts";
+
+    expect(runAllowedFixtureTest(workspace, command)).toMatchObject({
+      exitCode: 1,
+    });
+    writeFileSync(
+      join(workspace, "tests/subtract.case.ts"),
+      CANONICAL_SUBTRACT_TEST
+    );
+    const red = runAllowedFixtureTest(workspace, command);
+    expect(red.exitCode).toBe(1);
+    expect(red.output.toString()).toContain("1 failed, 0 passed");
+
+    const mathPath = join(workspace, "src/math.ts");
+    writeFileSync(
+      mathPath,
+      `${readFileSync(mathPath, "utf8")}\nexport function subtract(left: number, right: number): number {\n  return left - right;\n}\n`
+    );
+    expect(runAllowedFixtureTest(workspace, command).exitCode).toBe(1);
+    writeFileSync(
+      mathPath,
+      readFileSync(mathPath, "utf8").replace(
+        "return left - right;",
+        "return left + right;"
+      )
+    );
+    const green = runAllowedFixtureTest(workspace, command);
+    expect(green.exitCode).toBe(0);
+    expect(green.output.toString()).toContain("1 passed, 0 failed");
+    expect(
+      readFileSync(join(workspace, "tests/subtract.case.ts"), "utf8")
+    ).toBe(CANONICAL_SUBTRACT_TEST);
+
+    writeFileSync(
+      mathPath,
+      "export function add(left: number, right: number): number { return ((left) + (right)); }\n\nexport function multiply(left: number, right: number): number { return ((left * right)); }\n\nexport function subtract(left: number, right: number): number { return (left - (right)); }\n"
+    );
+    expect(runAllowedFixtureTest(workspace, command).exitCode).toBe(0);
+
+    for (const expressions of [
+      ["right + left", "left * right", "left - right"],
+      ["left + right + 1 - 1", "left * right", "left - right"],
+      ["left + right", "left * right", "left - right + left - left"],
+      ["left + right + left - left", "left * right", "left - right"],
+      ["left + right", "-(right * -left)", "left - right"],
+      ["left + right", "left * right", "left + (0 - right)"],
+      [
+        "left + right + (left - 9007199254740992) - (left - 9007199254740992)",
+        "left * right",
+        "left - right",
+      ],
+    ]) {
+      writeFileSync(
+        mathPath,
+        `export function add(left: number, right: number): number { return ${expressions[0]}; }\n\nexport function multiply(left: number, right: number): number { return ${expressions[1]}; }\n\nexport function subtract(left: number, right: number): number { return ${expressions[2]}; }\n`
+      );
+      expect(runAllowedFixtureTest(workspace, command).exitCode).toBe(1);
+    }
+
+    writeFileSync(
+      mathPath,
+      "export function add(left: number, right: number): number { return right + left; }\n\nexport function subtract(left: number, right: number): number { return left + (0 - right); }\n"
+    );
+    expect(runAllowedFixtureTest(workspace, command).exitCode).toBe(1);
+
+    cpSync(fixturePath, workspace, { recursive: true });
+    writeFileSync(
+      join(workspace, "tests/subtract.case.ts"),
+      CANONICAL_SUBTRACT_TEST
+    );
+    writeFileSync(
+      join(workspace, "src/math.ts"),
+      "export function add(left: number, right: number): number {\n  return left + right;\n}\n\nexport function multiply(left: number, right: number): number {\n  return left * right;\n}\n\nexport function subtract(left: number, right: number): number {\n  return left - right;\n}\n"
+    );
+    writeFileSync(join(workspace, "tests/math.case.ts"), "corrupted\n");
+    expect(runAllowedFixtureTest(workspace, command).exitCode).toBe(1);
+  });
+
+  it("never executes and rejects code outside the closed fixture grammar", () => {
+    const workspace = mkdtempSync(join(tmpdir(), "supa-pi-malicious-test-"));
+    cpSync(fixturePath, workspace, { recursive: true });
+    const marker = join(workspace, "host-code-ran");
+    const declarations =
+      "export function add(left: number, right: number): number { return left + right; }\nexport function multiply(left: number, right: number): number { return left * right; }\n";
+
+    for (const residue of [
+      `Bun.write(${JSON.stringify(marker)}, "owned");`,
+      "while (true) {}",
+      'throw new Error("owned");',
+      'if (false) { Bun.write("dead", "code"); }',
+      "function dead() { return 1; }",
+      declarations,
+    ]) {
+      writeFileSync(
+        join(workspace, "src/math.ts"),
+        `${residue}\n${declarations}`
+      );
+      expect(runAllowedFixtureTest(workspace).exitCode).toBe(1);
+    }
+    expect(() => readFileSync(marker)).toThrow();
+
+    writeFileSync(
+      join(workspace, "src/math.ts"),
+      `// fixture implementation\n${declarations}`
+    );
+    expect(runAllowedFixtureTest(workspace).exitCode).toBe(0);
+  });
+});
+
 const UUID_V7_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 
@@ -207,6 +357,77 @@ describe("runVariant", () => {
     expect(result.payloadServiceTier).toBe("priority");
   });
 
+  it("terminates after structured_output without accepting a later provider turn", async () => {
+    const model = modelRegistry.find("openai", "gpt-4o");
+    if (!model) {
+      throw new Error("test model is unavailable");
+    }
+    let providerCalls = 0;
+    const result = await runVariant({
+      evalCase: {
+        id: "structured-termination",
+        workload: "focused bug fix",
+        promptPath: "skills/tdd-workflow/SKILL.md",
+        task: "Report completion.",
+        tools: ["structured_output"],
+        checks: [
+          {
+            type: "structuredOutput",
+            expectedStatus: "done",
+            domain: "evidence",
+            weight: 1,
+          },
+        ],
+      },
+      variant: "candidate",
+      repetition: 1,
+      promptContent: "---\nname: tdd-workflow\n---\nRun tests.",
+      promptSha256: "candidate-hash",
+      fixturePath,
+      model,
+      thinking: "medium",
+      timeoutMs: 5000,
+      maxTurns: 3,
+      getApiKey: () => Promise.resolve("test-key"),
+      streamFn: (selectedModel) => {
+        providerCalls += 1;
+        if (providerCalls > 1) {
+          return createMessageStream(
+            createMessage(selectedModel, [
+              { type: "text", text: "later work must not be accepted" },
+            ])
+          );
+        }
+        return createMessageStream(
+          createMessage(
+            selectedModel,
+            [
+              {
+                type: "toolCall",
+                id: "structured-1",
+                name: "structured_output",
+                arguments: {
+                  status: "done",
+                  summary: "Finished.",
+                  filesTouched: [],
+                  validation: [],
+                  followUps: [],
+                  blockers: [],
+                },
+              },
+            ],
+            "toolUse"
+          )
+        );
+      },
+    });
+
+    expect(providerCalls).toBe(1);
+    expect(result.output).not.toContain("later work");
+    expect(result.toolCalls).toHaveLength(1);
+    expect(result.taskPassed).toBe(true);
+  });
+
   it("executes fixture-bound tools and records the trajectory", async () => {
     const model = modelRegistry.find("openai", "gpt-4o");
     if (!model) {
@@ -299,8 +520,7 @@ describe("runVariant", () => {
             type: "toolCallMatchesBeforeAssistantMatches",
             name: "bash",
             args: { command: "bun test tests/math.case.ts" },
-            resultPattern:
-              "0 pass\\s+1 fail\\s+Expected add\\(7, 5\\) to be 12",
+            resultPattern: "Expected: 12[\\s\\S]*Received: 2",
             isError: true,
             assistantPattern: "root cause|candidate|hypothesis|probe",
             assistantFlags: "i",
@@ -350,7 +570,7 @@ describe("runVariant", () => {
       expect.objectContaining({
         name: "bash",
         isError: true,
-        resultText: expect.stringContaining("Expected add(7, 5) to be 12"),
+        resultText: expect.stringContaining("Expected: 12"),
       })
     );
   });
@@ -373,8 +593,7 @@ describe("runVariant", () => {
             type: "toolCallMatchesBeforeAssistantMatches",
             name: "bash",
             args: { command: "bun test tests/math.case.ts" },
-            resultPattern:
-              "0 pass\\s+1 fail\\s+Expected add\\(7, 5\\) to be 12",
+            resultPattern: "Expected: 12[\\s\\S]*Received: 2",
             isError: true,
             assistantPattern: "root cause|candidate|hypothesis|probe",
             assistantFlags: "i",
@@ -559,6 +778,12 @@ describe("runVariant", () => {
     expect(result.toolCalls.map((call) => call.assistantTurn)).toEqual([
       1, 2, 3,
     ]);
+    expect(result.toolCalls[1]).toMatchObject({
+      mutationTargets: ["src/math.ts"],
+      hasProductionTargets: true,
+      mutationProven: true,
+      mutationDelta: [{ path: "src/math.ts", status: "changed" }],
+    });
   });
 
   it("rejects questionnaire approval and edit from the same assistant turn", async () => {
@@ -626,6 +851,11 @@ describe("runVariant", () => {
 
     expect(result.score.overall).toBe(0);
     expect(result.toolCalls.map((call) => call.assistantTurn)).toEqual([1, 1]);
+    for (const call of result.toolCalls) {
+      expect(call.startOrder).toBeNumber();
+      expect(call.endOrder).toBeNumber();
+      expect(call.endOrder!).toBeGreaterThan(call.startOrder!);
+    }
   });
 
   it("supplies the stop response without allowing workspace edits", async () => {

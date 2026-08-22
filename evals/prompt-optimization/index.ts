@@ -1,17 +1,34 @@
 import { spawn } from "node:child_process";
 import { createHash } from "node:crypto";
-import { existsSync } from "node:fs";
+import {
+  closeSync,
+  constants as fsConstants,
+  fstatSync,
+  lstatSync,
+  openSync,
+  readFileSync,
+  readSync,
+  realpathSync,
+} from "node:fs";
 import { lstat, readdir, readFile, readlink, realpath } from "node:fs/promises";
 import { isAbsolute, relative, resolve } from "node:path";
 import { isDeepStrictEqual } from "node:util";
 
 import { parseFrontmatter } from "@earendil-works/pi-coding-agent";
 
+import { composeTddExecutorPrompt } from "../../extensions/execute/executor-prompt";
+import { validateTddEvidence } from "../../extensions/execute/tdd-evidence";
+
 export const CHECK_DOMAINS = ["quality", "task", "tests", "evidence"] as const;
 export const CORE_EVAL_BASE_PROMPT = `You are an expert coding assistant operating inside Pi.
 
 Work inside the provided workspace. Inspect before editing. Make the smallest complete change. Preserve safety and type correctness. Verify changed behavior. Lead with the result and retain concrete evidence.`;
 export type CheckDomain = (typeof CHECK_DOMAINS)[number];
+
+const TDD_WORKFLOW_PATH = "skills/tdd-workflow/SKILL.md";
+const EXECUTOR_ROLE_PROMPT = parseFrontmatter(
+  readFileSync(new URL("../../agents/executor.md", import.meta.url), "utf8")
+).body.trim();
 
 const CASE_ID_PATTERN = /^[a-z0-9][a-z0-9_-]*$/;
 const QUESTIONNAIRE_RESPONSES = [
@@ -32,6 +49,7 @@ const TOOL_NAMES = [
   "web_search",
   "fetch_content",
   "questionnaire",
+  "structured_output",
 ] as const;
 export type ToolName = (typeof TOOL_NAMES)[number];
 
@@ -48,6 +66,16 @@ interface ToolCallMatchCheck extends CheckBase {
   isError: boolean;
 }
 
+interface ToolCallSequenceCheck extends CheckBase {
+  name: string;
+  args: Record<string, unknown>;
+  firstResultPattern: string;
+  firstIsError: boolean;
+  secondResultPattern: string;
+  secondIsError: boolean;
+  flags?: string;
+}
+
 export type EvalCheck =
   | (CheckBase & { type: "outputIncludes"; value: string })
   | (CheckBase & { type: "outputMatches"; pattern: string; flags?: string })
@@ -57,6 +85,7 @@ export type EvalCheck =
   | (CheckBase & { type: "toolCalled"; name: string })
   | (CheckBase & { type: "toolNotCalled"; name: string })
   | (ToolCallMatchCheck & { type: "toolCallMatches" })
+  | (ToolCallSequenceCheck & { type: "toolCallSequence" })
   | (ToolCallMatchCheck & {
       type: "toolCallMatchesBeforeAssistantMatches";
       assistantPattern: string;
@@ -70,6 +99,11 @@ export type EvalCheck =
     })
   | (CheckBase & { type: "questionnaireGate" })
   | (CheckBase & { type: "workspaceUnchanged" })
+  | (CheckBase & {
+      type: "structuredOutput";
+      expectedStatus?: "done" | "blocked" | "needs_followup";
+    })
+  | (CheckBase & { type: "tddEvidence" })
   | (CheckBase & { type: "workspaceChangesOnly"; paths: string[] });
 
 export interface EvalCase {
@@ -116,9 +150,26 @@ export interface ToolCallRecord {
   name: string;
   args: Record<string, unknown>;
   assistantTurn: number;
+  startOrder?: number;
+  endOrder?: number;
   isError?: boolean;
   resultText?: string;
   questionnaireResponse?: string;
+  mutationTargets?: string[];
+  hasTestTargets?: boolean;
+  hasProductionTargets?: boolean;
+  mutationAmbiguous?: boolean;
+  rustWriteContent?: "production" | "test" | "unavailable";
+  editOldSnippet?: string;
+  editNewSnippet?: string;
+  editDeltaTruncated?: boolean;
+  regressionIntent?: string[];
+  regressionTitles?: string[];
+  mutationDelta?: Array<{
+    path: string;
+    status: "changed" | "created" | "deleted";
+  }>;
+  mutationProven?: boolean;
 }
 
 export interface AssistantMessageRecord {
@@ -129,9 +180,11 @@ export interface AssistantMessageRecord {
 interface ScoreInput {
   output: string;
   workspace: string;
+  taskIntent?: string;
   initialWorkspaceSnapshot?: string;
   toolCalls: ToolCallRecord[];
   assistantMessages?: AssistantMessageRecord[];
+  trajectoryErrors?: string[];
 }
 
 export interface CheckResult {
@@ -295,6 +348,40 @@ function parseCheck(value: unknown, label: string): EvalCheck {
       }
       return { ...parsedMatch, type: value.type };
     }
+    case "toolCallSequence": {
+      assertNonEmptyString(value.name, `${label}.name`);
+      assertObject(value.args, `${label}.args`);
+      assertNonEmptyString(
+        value.firstResultPattern,
+        `${label}.firstResultPattern`
+      );
+      assertNonEmptyString(
+        value.secondResultPattern,
+        `${label}.secondResultPattern`
+      );
+      if (
+        typeof value.firstIsError !== "boolean" ||
+        typeof value.secondIsError !== "boolean"
+      ) {
+        throw new Error(`${label} sequence error expectations must be boolean`);
+      }
+      if (value.flags !== undefined && typeof value.flags !== "string") {
+        throw new Error(`${label}.flags must be a string`);
+      }
+      new RegExp(value.firstResultPattern, value.flags as string | undefined);
+      new RegExp(value.secondResultPattern, value.flags as string | undefined);
+      return {
+        ...base,
+        type: value.type,
+        name: value.name,
+        args: value.args,
+        firstResultPattern: value.firstResultPattern,
+        firstIsError: value.firstIsError,
+        secondResultPattern: value.secondResultPattern,
+        secondIsError: value.secondIsError,
+        flags: value.flags as string | undefined,
+      };
+    }
     case "toolCalledAfter": {
       assertNonEmptyString(value.name, `${label}.name`);
       assertNonEmptyString(value.after, `${label}.after`);
@@ -313,7 +400,26 @@ function parseCheck(value: unknown, label: string): EvalCheck {
     }
     case "questionnaireGate":
     case "workspaceUnchanged":
+    case "tddEvidence":
       return { ...base, type: value.type };
+    case "structuredOutput":
+      if (
+        value.expectedStatus !== undefined &&
+        !["done", "blocked", "needs_followup"].includes(
+          String(value.expectedStatus)
+        )
+      ) {
+        throw new Error(`${label}.expectedStatus is invalid`);
+      }
+      return {
+        ...base,
+        type: value.type,
+        expectedStatus: value.expectedStatus as
+          | "done"
+          | "blocked"
+          | "needs_followup"
+          | undefined,
+      };
     case "workspaceChangesOnly":
       if (
         !Array.isArray(value.paths) ||
@@ -362,6 +468,7 @@ export function parseCorpus(value: unknown): EvalCorpus {
       caseValue.promptPath !== "extensions/core-prompt/prompt.md" &&
       caseValue.promptPath !== "skills/diagnose/SKILL.md" &&
       caseValue.promptPath !== "skills/showing-me/SKILL.md" &&
+      caseValue.promptPath !== "skills/tdd-workflow/SKILL.md" &&
       !caseValue.promptPath.startsWith("agents/")
     ) {
       throw new Error(`${label}.promptPath must target a SupaPi prompt`);
@@ -400,7 +507,9 @@ export function parseCorpus(value: unknown): EvalCorpus {
       promptPath: caseValue.promptPath,
       task: caseValue.task,
       tools: caseValue.tools as ToolName[],
-      questionnaireResponse: caseValue.questionnaireResponse,
+      questionnaireResponse: caseValue.questionnaireResponse as
+        | QuestionnaireResponse
+        | undefined,
       checks: caseValue.checks.map((check, checkIndex) =>
         parseCheck(check, `${label}.checks[${checkIndex}]`)
       ),
@@ -414,6 +523,77 @@ function sha256(content: string | Buffer): string {
   return createHash("sha256").update(content).digest("hex");
 }
 
+export function readStableContainedFile(
+  repositoryRoot: string,
+  relativePath: string
+): Buffer {
+  const noFollow = fsConstants.O_NOFOLLOW;
+  if (typeof noFollow !== "number" || noFollow === 0) {
+    throw new Error("O_NOFOLLOW is required for prompt reads");
+  }
+  const root = realpathSync(repositoryRoot);
+  const absolute = resolve(root, relativePath);
+  if (!isSafeRelativePath(relative(root, absolute))) {
+    throw new Error(`file escapes repository root: ${relativePath}`);
+  }
+  let descriptor: number | undefined;
+  try {
+    const pathBefore = lstatSync(absolute);
+    if (!pathBefore.isFile() || pathBefore.isSymbolicLink()) {
+      throw new Error(
+        `file must be a regular non-symlink file: ${relativePath}`
+      );
+    }
+    // biome-ignore lint/suspicious/noBitwiseOperators: open(2) flags are bitmasks.
+    descriptor = openSync(absolute, fsConstants.O_RDONLY | noFollow);
+    const before = fstatSync(descriptor);
+    if (
+      !before.isFile() ||
+      before.dev !== pathBefore.dev ||
+      before.ino !== pathBefore.ino ||
+      realpathSync(absolute) !== absolute
+    ) {
+      throw new Error(`file changed before read: ${relativePath}`);
+    }
+    const content = Buffer.alloc(before.size);
+    let offset = 0;
+    while (offset < content.length) {
+      const count = readSync(
+        descriptor,
+        content,
+        offset,
+        content.length - offset,
+        offset
+      );
+      if (count <= 0) {
+        throw new Error(`file changed while reading: ${relativePath}`);
+      }
+      offset += count;
+    }
+    const after = fstatSync(descriptor);
+    const pathAfter = lstatSync(absolute);
+    if (
+      after.dev !== before.dev ||
+      after.ino !== before.ino ||
+      after.size !== before.size ||
+      after.mtimeMs !== before.mtimeMs ||
+      after.ctimeMs !== before.ctimeMs ||
+      pathAfter.dev !== after.dev ||
+      pathAfter.ino !== after.ino ||
+      realpathSync(absolute) !== absolute
+    ) {
+      throw new Error(`file changed while reading: ${relativePath}`);
+    }
+    return content;
+  } catch (error) {
+    throw new Error(`cannot safely read ${relativePath}`, { cause: error });
+  } finally {
+    if (descriptor !== undefined) {
+      closeSync(descriptor);
+    }
+  }
+}
+
 export async function loadPromptPair(
   repositoryRoot: string,
   promptPath: string,
@@ -425,21 +605,13 @@ export async function loadPromptPair(
   const resolvedRepositoryRoot = await realpath(repositoryRoot);
   const candidatePath = resolve(resolvedRepositoryRoot, promptPath);
   const relativeCandidate = relative(resolvedRepositoryRoot, candidatePath);
-  if (!(isSafeRelativePath(relativeCandidate) && existsSync(candidatePath))) {
-    throw new Error(`candidate prompt does not exist: ${promptPath}`);
-  }
-  const candidateStat = await lstat(candidatePath);
-  if (!candidateStat.isFile() || candidateStat.isSymbolicLink()) {
-    throw new Error(
-      `candidate prompt must be a regular non-symlink file: ${promptPath}`
-    );
-  }
-  const resolvedCandidatePath = await realpath(candidatePath);
-  if (
-    !isSafeRelativePath(relative(resolvedRepositoryRoot, resolvedCandidatePath))
-  ) {
+  if (!isSafeRelativePath(relativeCandidate)) {
     throw new Error(`candidate prompt escapes repository root: ${promptPath}`);
   }
+  const candidateContent = readStableContainedFile(
+    resolvedRepositoryRoot,
+    promptPath
+  ).toString("utf8");
 
   const baselineProcess = spawn(
     "git",
@@ -457,13 +629,12 @@ export async function loadPromptPair(
   baselineProcess.stderr.on("data", (chunk: Buffer) =>
     baselineErrors.push(chunk)
   );
-  const [baselineExitCode, candidateContent] = await Promise.all([
-    new Promise<number | null>((resolveExit, reject) => {
+  const baselineExitCode = await new Promise<number | null>(
+    (resolveExit, reject) => {
       baselineProcess.once("error", reject);
       baselineProcess.once("close", resolveExit);
-    }),
-    readFile(candidatePath, "utf8"),
-  ]);
+    }
+  );
   const baselineError = Buffer.concat(baselineErrors).toString("utf8");
   if (baselineExitCode !== 0) {
     const treeProcess = spawn(
@@ -514,6 +685,26 @@ export function composePrompt(promptPath: string, content: string): string {
     "",
     body.trim(),
   ].join("\n");
+}
+
+export function composeEvalRequest(
+  promptPath: string,
+  content: string,
+  task: string
+): { systemPrompt: string; userPrompt: string; structuredOutput: boolean } {
+  if (promptPath === TDD_WORKFLOW_PATH) {
+    return {
+      systemPrompt: EXECUTOR_ROLE_PROMPT,
+      userPrompt: composeTddExecutorPrompt(task, content),
+      structuredOutput: true,
+    };
+  }
+
+  return {
+    systemPrompt: composePrompt(promptPath, content),
+    userPrompt: task,
+    structuredOutput: false,
+  };
 }
 
 export function createEmptyMetrics(): RunMetrics {
@@ -747,6 +938,40 @@ async function scoreCheck(
           : `${check.name} exact successful/expected result was missing`,
       };
     }
+    case "toolCallSequence": {
+      const matchingIndexes = input.toolCalls
+        .map((call, index) => ({ call, index }))
+        .filter(
+          ({ call }) =>
+            call.name === check.name &&
+            includesRequiredArgs(call.args, check.args) &&
+            typeof call.resultText === "string"
+        );
+      const first = matchingIndexes.find(
+        ({ call }) =>
+          call.isError === check.firstIsError &&
+          new RegExp(check.firstResultPattern, check.flags).test(
+            call.resultText ?? ""
+          )
+      );
+      const second = matchingIndexes.find(
+        ({ call, index }) =>
+          first !== undefined &&
+          index > first.index &&
+          call.isError === check.secondIsError &&
+          new RegExp(check.secondResultPattern, check.flags).test(
+            call.resultText ?? ""
+          )
+      );
+      const passed = first !== undefined && second !== undefined;
+      return {
+        check,
+        passed,
+        evidence: passed
+          ? `${check.name} matched the required observed result sequence`
+          : `${check.name} did not match the required observed result sequence`,
+      };
+    }
     case "toolCalledAfter": {
       const prerequisiteCall = input.toolCalls.find(
         (call) =>
@@ -810,6 +1035,75 @@ async function scoreCheck(
         evidence: passed
           ? "questionnaire gate matched"
           : "questionnaire gate shape or options differed",
+      };
+    }
+    case "tddEvidence": {
+      const structured = input.toolCalls.filter(
+        (call) => call.name === "structured_output" && !call.isError
+      );
+      const calls = input.toolCalls.map((call, index) => ({
+        ...call,
+        startOrder: call.startOrder ?? index * 2,
+        endOrder: call.endOrder ?? index * 2 + 1,
+        isError: call.isError === true,
+      }));
+      const error =
+        structured.length === 1
+          ? validateTddEvidence(
+              structured[0]!.args,
+              calls,
+              input.trajectoryErrors ?? [],
+              input.taskIntent ?? ""
+            )
+          : "exactly one structured result required";
+      return {
+        check,
+        passed: error === undefined,
+        evidence:
+          error ?? "structured TDD evidence matched observed ordered execution",
+      };
+    }
+    case "structuredOutput": {
+      const calls = input.toolCalls.filter(
+        (call) => call.name === "structured_output"
+      );
+      const result = calls[0]?.args;
+      const keys = result ? Object.keys(result).sort() : [];
+      const expectedKeys = [
+        "blockers",
+        "filesTouched",
+        "followUps",
+        "status",
+        "summary",
+        "validation",
+      ];
+      const passed =
+        calls.length === 1 &&
+        !calls[0]?.isError &&
+        isDeepStrictEqual(keys, expectedKeys) &&
+        ["done", "blocked", "needs_followup"].includes(
+          String(result?.status)
+        ) &&
+        (check.expectedStatus === undefined ||
+          result?.status === check.expectedStatus) &&
+        typeof result?.summary === "string" &&
+        result.summary.trim().length > 0 &&
+        [
+          result.filesTouched,
+          result.validation,
+          result.followUps,
+          result.blockers,
+        ].every(
+          (value) =>
+            Array.isArray(value) &&
+            value.every((entry) => typeof entry === "string")
+        );
+      return {
+        check,
+        passed,
+        evidence: passed
+          ? "exactly one valid structured executor result submitted"
+          : `structured executor result was missing, repeated, invalid, or not status ${check.expectedStatus ?? "any supported status"}`,
       };
     }
     case "workspaceUnchanged": {

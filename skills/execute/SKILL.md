@@ -35,6 +35,8 @@ Requirements:
 - Run a conservative danger preflight over the whole `canonicalPlan` before creating or dispatching any task. Treat destructive actions, secret exposure, production data/service changes, broad filesystem operations, external side effects, or irreversible operations as dangerous unless clearly ruled out.
 - If the plan is dangerous, get approval before task creation or dispatch. Persist dangerous-action approval in checkpoint state only when it is bound to the same `canonicalPlanHash`; never reuse approval for a different canonical plan.
 - Break the plan into atomic executable tasks only after ambiguity and danger checks pass.
+- Mark behavior changes and bug fixes with `tdd: true` when dispatching them through `execute_tasks`. Keep the red regression test, minimal implementation, green validation, and coverage evidence in one atomic managed task so one executor owns the full TDD cycle.
+- Omit `tdd` by default for documentation-only, configuration-only, generated, and purely mechanical tasks unless they change behavior. Do not pass arbitrary skill names or paths.
 - The main session must own task management. Create and manage tasks from this session only.
 - Manage task state via `pi-tasks` using `TaskCreate`, `TaskUpdate`, `TaskList`, and `TaskGet` as needed.
 - Dispatch runnable work with `execute_tasks`, which launches fresh `executor` agents with a closed native structured-output schema. Do not use `TaskExecute` or parse executor assistant text during `/execute`.
@@ -77,6 +79,7 @@ Execution loop:
 9. Repeat until done or blocked.
 
 Worker contract:
+- Each executor task may include the optional boolean `tdd`. For `tdd: true`, `execute_tasks` injects the trusted bundled canonical TDD workflow and requires `validation` entries beginning `RED:`, `GREEN:`, and `COVERAGE:`. A no-work `blocked` or `needs_followup` result must give explicit unavailable/not-run reasons for all three. If RED was actually observed before work became blocked, preserve that actual `RED:` evidence, mark only `GREEN:` and `COVERAGE:` unavailable/not-run with reasons, and include the blocker. Missing evidence fails only that task and is not repaired.
 - Each executor task must submit this object through its injected `structured_output` tool. Directly invoked executors may use JSON assistant text only as a compatibility fallback outside `/execute`:
   {
     "status": "done" | "blocked" | "needs_followup",

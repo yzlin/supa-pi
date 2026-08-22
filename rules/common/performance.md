@@ -36,7 +36,7 @@ Use measured GPT-5.6 routes:
 
 - **gpt-5.6-luna, low**: codebase exploration
 - **gpt-5.6-terra, low**: documentation and E2E verification
-- **gpt-5.6-sol, medium**: validated execution, build-fix, dead-code cleanup, and TDD workers
+- **gpt-5.6-sol, medium**: validated execution, build-fix, dead-code cleanup, and TDD execution
 - **gpt-5.6-sol, high**: main sessions, planning, architecture, research, and high-risk reviews
 
 Use `xhigh`, `max`, or Pro mode only when a route-specific eval proves a quality gain. Preserve `transport: "auto"` unless a benchmark proves otherwise.

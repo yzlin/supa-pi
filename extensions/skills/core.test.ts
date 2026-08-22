@@ -381,7 +381,7 @@ describe("skills core", () => {
     const resolved = parseSkillSource("owner/repo/tree/main/skills/demo");
     const oldGithubToken = process.env.GITHUB_TOKEN;
     const oldGhToken = process.env.GH_TOKEN;
-    process.env.GITHUB_TOKEN = undefined;
+    delete process.env.GITHUB_TOKEN;
     process.env.GH_TOKEN = "token-123";
     const calls: RequestInit[] = [];
     const fetcher = (url: string | URL | Request, init?: RequestInit) => {
@@ -417,12 +417,12 @@ describe("skills core", () => {
       });
     } finally {
       if (oldGithubToken === undefined) {
-        process.env.GITHUB_TOKEN = undefined;
+        delete process.env.GITHUB_TOKEN;
       } else {
         process.env.GITHUB_TOKEN = oldGithubToken;
       }
       if (oldGhToken === undefined) {
-        process.env.GH_TOKEN = undefined;
+        delete process.env.GH_TOKEN;
       } else {
         process.env.GH_TOKEN = oldGhToken;
       }

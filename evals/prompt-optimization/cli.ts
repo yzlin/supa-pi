@@ -1,6 +1,7 @@
 import { spawn } from "node:child_process";
 import { createHash } from "node:crypto";
-import { lstat, mkdir, readFile, writeFile } from "node:fs/promises";
+import { existsSync } from "node:fs";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -19,6 +20,7 @@ import {
   loadPromptPair,
   type PromptPair,
   parseCorpus,
+  readStableContainedFile,
 } from "./index";
 import { type EvalVariant, type RunRecord, runVariant } from "./runner";
 
@@ -256,26 +258,25 @@ export async function snapshotPromptCandidates(
   repositoryRoot: string,
   promptPaths: string[]
 ): Promise<string> {
-  const states = await Promise.all(
-    [...new Set(promptPaths)].sort().map(async (promptPath) => {
-      const candidatePath = resolve(repositoryRoot, promptPath);
+  const states = await Promise.resolve(
+    [...new Set(promptPaths)].sort().map((promptPath) => {
       try {
-        const stat = await lstat(candidatePath);
-        if (!stat.isFile()) {
-          return { path: promptPath, state: "not-regular-file" };
-        }
-        const content = await readFile(candidatePath);
+        const content = readStableContainedFile(repositoryRoot, promptPath);
         return {
           path: promptPath,
           state: "file",
           sha256: createHash("sha256").update(content).digest("hex"),
         };
       } catch (error) {
+        const cause =
+          typeof error === "object" && error !== null && "cause" in error
+            ? error.cause
+            : error;
         if (
-          typeof error === "object" &&
-          error !== null &&
-          "code" in error &&
-          error.code === "ENOENT"
+          typeof cause === "object" &&
+          cause !== null &&
+          "code" in cause &&
+          cause.code === "ENOENT"
         ) {
           return { path: promptPath, state: "missing" };
         }
@@ -293,6 +294,7 @@ export async function changedPromptPaths(
     "extensions/core-prompt/prompt.md",
     "skills/diagnose/SKILL.md",
     "skills/showing-me/SKILL.md",
+    "skills/tdd-workflow/SKILL.md",
   ];
   const pathspecs = ["agents", ...supportedFiles];
   const outputs = await Promise.all([
@@ -321,10 +323,52 @@ export async function changedPromptPaths(
         .filter(
           (path) =>
             supportedFiles.includes(path) ||
-            (path.startsWith("agents/") && path.endsWith(".md"))
+            (path.startsWith("agents/") &&
+              path.endsWith(".md") &&
+              existsSync(resolve(repositoryRoot, path)))
         )
     ),
   ].sort();
+}
+
+export async function establishChangedPromptSnapshot(
+  repositoryRoot: string,
+  operations: {
+    discover?: typeof changedPromptPaths;
+    snapshot?: typeof snapshotPromptCandidates;
+  } = {}
+): Promise<{ paths: string[]; stateSha256: string }> {
+  const discover = operations.discover ?? changedPromptPaths;
+  const snapshot = operations.snapshot ?? snapshotPromptCandidates;
+  const paths = await discover(repositoryRoot);
+  const stateSha256 = await snapshot(repositoryRoot, paths);
+  const pathsAfterSnapshot = await discover(repositoryRoot);
+  if (JSON.stringify(pathsAfterSnapshot) !== JSON.stringify(paths)) {
+    throw new Error(
+      "changed prompt path set changed while establishing the protected startup snapshot; discard results and rerun"
+    );
+  }
+  return { paths, stateSha256 };
+}
+
+export async function changedPromptSnapshotMatches(
+  repositoryRoot: string,
+  startingPaths: string[],
+  startingStateSha256: string
+): Promise<boolean> {
+  const currentPaths = await changedPromptPaths(repositoryRoot);
+  if (JSON.stringify(currentPaths) !== JSON.stringify(startingPaths)) {
+    return false;
+  }
+  const currentState = await snapshotPromptCandidates(
+    repositoryRoot,
+    currentPaths
+  );
+  const pathsAfterSnapshot = await changedPromptPaths(repositoryRoot);
+  return (
+    JSON.stringify(pathsAfterSnapshot) === JSON.stringify(currentPaths) &&
+    currentState === startingStateSha256
+  );
 }
 
 function assertCorpusCoverage(
@@ -576,8 +620,12 @@ export async function main(): Promise<void> {
           return evalCase;
         })
       : corpus.cases;
+  const {
+    paths: startingChangedPromptPaths,
+    stateSha256: startingChangedPromptStateSha256,
+  } = await establishChangedPromptSnapshot(repositoryRoot);
   if (options.caseIds.length === 0) {
-    assertCorpusCoverage(corpus, await changedPromptPaths(repositoryRoot));
+    assertCorpusCoverage(corpus, startingChangedPromptPaths);
   }
   const selectedPromptPaths = [
     ...new Set(selectedCases.map((evalCase) => evalCase.promptPath)),
@@ -704,11 +752,17 @@ export async function main(): Promise<void> {
     repositoryRoot,
     selectedPromptPaths
   );
+  const changedPromptsUnchanged = await changedPromptSnapshotMatches(
+    repositoryRoot,
+    startingChangedPromptPaths,
+    startingChangedPromptStateSha256
+  );
   if (
     endedAtHead !== startedFromHead ||
     endedAtDiffSha256 !== candidateDiffSha256 ||
     endedAtCorpusSha256 !== corpusSha256 ||
-    endedAtPromptStateSha256 !== candidatePromptStateSha256
+    endedAtPromptStateSha256 !== candidatePromptStateSha256 ||
+    !changedPromptsUnchanged
   ) {
     throw new Error(
       "repository prompts, HEAD, or eval corpus changed during the run; discard results and rerun"
@@ -753,6 +807,8 @@ export async function main(): Promise<void> {
     startedFromHead,
     candidateDiffSha256,
     candidatePromptStateSha256,
+    changedPromptPaths: startingChangedPromptPaths,
+    changedPromptStateSha256: startingChangedPromptStateSha256,
     corpusSha256,
     coreEvalBasePromptSha256: createHash("sha256")
       .update(CORE_EVAL_BASE_PROMPT)

@@ -1,40 +1,18 @@
 # Development Workflow
 
-> This file extends [common/git-workflow.md](./git-workflow.md) with the full feature development process that happens before git operations.
+> This file extends [common/git-workflow.md](./git-workflow.md) with the development process that happens before git operations.
 
-The Feature Implementation Workflow describes the development pipeline: research, planning, TDD, code review, and then committing to git.
+Scale effort to scope, uncertainty, and risk. Clear, local, low-risk work can use a short inspect → patch → targeted verify loop. Broader, unfamiliar, cross-cutting, security-sensitive, or irreversible work warrants proportionally deeper research, planning, and review.
 
-Scale this workflow to task size. For trivial or local edits, use judgment and keep the loop light: inspect → patch → targeted verify. For non-trivial implementation, define success criteria before coding, such as `step → verify: check`. For phased work, each phase must leave a usable, verified end-to-end path; do not trade working behavior for unfinished layers.
+Every change must leave these outcomes:
 
-## Feature Implementation Workflow
+1. **Context understood** — inspect the relevant code, repository guidance, and existing patterns before editing.
+2. **Success defined** — identify the requested result, constraints, and practical validation. For phased work, each phase must leave a usable, verified end-to-end path.
+3. **Smallest complete change** — address the root cause without unrelated refactoring, unnecessary dependencies, or suppressed failures.
+4. **Applicable policy followed** — use [testing.md](./testing.md) when its trigger applies; perform security, performance, compatibility, or external research when the change's risks require it.
+5. **Validation completed** — run the strongest practical repository-native checks targeted to the change, then broaden checks when impact or uncertainty justifies it.
+6. **Result reported** — state what changed, validation evidence, and any remaining blocker or risk.
 
-0. **Research & Reuse** _(mandatory before any new implementation)_
-   - **GitHub code search first:** Run `gh search repos` and `gh search code` to find existing implementations, templates, and patterns before writing anything new.
-   - **Exa MCP for research:** Use `exa-web-search` MCP during the planning phase for broader research, data ingestion, and discovering prior art.
-   - **Check package registries:** Search npm, PyPI, crates.io, and other registries before writing utility code. Prefer battle-tested libraries over hand-rolled solutions.
-   - **Search for adaptable implementations:** Look for open-source projects that solve 80%+ of the problem and can be forked, ported, or wrapped.
-   - Prefer adopting or porting a proven approach over writing net-new code when it meets the requirement.
+Use durable planning documents only when complexity, coordination, or rollout needs durable review. Seek independent review when risk, ambiguity, or blast radius makes it valuable; it is not mandatory for trivial changes.
 
-1. **Plan First**
-   - Use **planner** agent for complex or ambiguous implementation plans
-   - Generate planning docs before coding when the decision or rollout needs durable review: PRD, architecture, system_design, tech_doc, task_list
-   - Identify dependencies and risks
-   - Break down into phases
-
-2. **TDD Approach**
-   - Use **tdd-guide** agent
-   - Write tests first (RED)
-   - Implement to pass tests (GREEN)
-   - Refactor (IMPROVE)
-   - Verify 80%+ coverage
-
-3. **Code Review**
-   - Use **code-reviewer** agent immediately after writing code
-   - Use **security-reviewer** agent before or after changes involving auth, permissions, user input, file uploads, external APIs/webhooks, secrets, payment/PII, or AI tools/agents
-   - Address CRITICAL and HIGH issues
-   - Fix MEDIUM issues when possible
-
-4. **Commit & Push**
-   - Detailed commit messages
-   - Follow conventional commits format
-   - See [git-workflow.md](./git-workflow.md) for commit message format and PR process
+Follow [git-workflow.md](./git-workflow.md) for commit and pull-request practices when git operations are requested.

@@ -56,7 +56,6 @@ See `package.json` for the full registration list.
 - `explorer` / `Explore`
 - `architect`
 - `researcher`
-- `tdd-guide`
 - `code-reviewer`
 - `code-simplifier`
 - `security-reviewer`
@@ -73,6 +72,8 @@ See `package.json` for the full registration list.
 `skills/` includes locally curated skills authored in this repo plus selected imports from Vercel agent-skills at commit `ce3e64e468f8fa09a2d075d102771838061fdac0`. Current imported-and-curated snapshots include `composition-patterns`, `react-best-practices`, `react-native-skills`, and `react-view-transitions`.
 
 `skills/showing-me/SKILL.md` adapts the visual-explanation approach from HumanLayer's MIT-licensed [`show-me` skill](https://github.com/humanlayer/skills/blob/3c2629142c5d437428269b1b722b08c0b87f574d/plugins/show-me/skills/show-me/SKILL.md) at commit `3c2629142c5d437428269b1b722b08c0b87f574d`.
+
+Behavior changes and bug fixes use the canonical `skills/tdd-workflow/SKILL.md`. During `/execute`, the generic executor receives it only through trusted `tdd: true` skill injection; there is no separate TDD agent.
 
 Local durable-doc behavior is canonical in `skills/context-docs/SKILL.md`. It alone owns durable-context routing, formats, commands, and persistence while preserving broad product/domain `CONTEXT.md` content, real `CONTEXT-MAP.md` boundaries, and full ADR semantics. The reusable `domain-modeling` skill is the canonical semantic primitive for terminology, scenarios, contradictions, boundaries, and ADR candidacy; context-docs consumes its completed packets without delegating them back. The shared `grilling` skill owns adversarial interviews, including natural-language triggers, and invokes domain-modeling only for explicit domain signals. `grill-me` is the thin wrapper used only by the explicit `/grill-me <plan>` command. It performs a docs-first preflight, drafts only `CONTEXT.md`, `CONTEXT-MAP.md`, or qualifying ADR changes, and writes them only after the user locks the plan. Domain-modeling adds no command or production runtime registration.
 

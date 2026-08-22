@@ -345,6 +345,15 @@ describe("execute orchestration contract", () => {
     expect(skill).toContain("Dispatch runnable work with `execute_tasks`");
     expect(skill).toContain("exactly one report-only typed repair");
     expect(skill).toContain(
+      "Mark behavior changes and bug fixes with `tdd: true`"
+    );
+    expect(skill).toContain(
+      "Keep the red regression test, minimal implementation, green validation, and coverage evidence in one atomic managed task"
+    );
+    expect(skill).toContain(
+      "Omit `tdd` by default for documentation-only, configuration-only, generated, and purely mechanical tasks"
+    );
+    expect(skill).toContain(
       "never accept assistant-text JSON as an executor result"
     );
     expect(skill).not.toContain("Dispatch runnable tasks with `TaskExecute`");

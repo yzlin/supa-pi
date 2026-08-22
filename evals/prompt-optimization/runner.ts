@@ -1,13 +1,16 @@
-import { existsSync } from "node:fs";
+import { createHash } from "node:crypto";
 import {
-  cp,
-  mkdir,
-  mkdtemp,
-  readdir,
-  readFile,
-  realpath,
-  rm,
-} from "node:fs/promises";
+  closeSync,
+  existsSync,
+  constants as fsConstants,
+  fstatSync,
+  lstatSync,
+  openSync,
+  readFileSync,
+  readSync,
+  realpathSync,
+} from "node:fs";
+import { cp, mkdir, mkdtemp, readdir, realpath, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import {
   dirname,
@@ -41,9 +44,11 @@ import {
 } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
 
+import { EXECUTOR_RESULT_SCHEMA } from "../../extensions/execute/executor-prompt";
+import { normalizeTddToolMetadata } from "../../extensions/execute/tdd-evidence";
 import {
   type AssistantMessageRecord,
-  composePrompt,
+  composeEvalRequest,
   createEmptyMetrics,
   type EvalCase,
   type RunMetrics,
@@ -55,6 +60,97 @@ import {
 } from "./index";
 
 const LEADING_AT_PATTERN = /^@/;
+const LEADING_WHITESPACE_PATTERN = /^\s*/;
+const EVAL_PROOF_MAX_BYTES = 8 * 1024 * 1024;
+const EVAL_PROOF_BUFFER_BYTES = 64 * 1024;
+const EVAL_MUTATION_TOOLS = new Set(["edit", "write"]);
+
+type EvalFileProof =
+  | { kind: "absent" }
+  | { kind: "file"; size: number; sha256: string };
+
+function evalFileProof(
+  workspace: string,
+  target: string
+): EvalFileProof | undefined {
+  const noFollow = fsConstants.O_NOFOLLOW;
+  if (typeof noFollow !== "number" || noFollow === 0) {
+    return;
+  }
+  const root = realpathSync(workspace);
+  const absolute = resolve(root, target);
+  const child = relative(root, absolute);
+  if (!child || child.startsWith("..") || isAbsolute(child)) {
+    return;
+  }
+  try {
+    const pathStat = lstatSync(absolute);
+    if (pathStat.isSymbolicLink()) {
+      return;
+    }
+  } catch (error) {
+    return (error as NodeJS.ErrnoException).code === "ENOENT"
+      ? { kind: "absent" }
+      : undefined;
+  }
+  let descriptor: number | undefined;
+  try {
+    // biome-ignore lint/suspicious/noBitwiseOperators: open(2) flags are bitmasks.
+    const flags = fsConstants.O_RDONLY | fsConstants.O_NONBLOCK | noFollow;
+    descriptor = openSync(absolute, flags);
+    const before = fstatSync(descriptor);
+    if (!before.isFile() || before.size > EVAL_PROOF_MAX_BYTES) {
+      return;
+    }
+    const hash = createHash("sha256");
+    const buffer = Buffer.allocUnsafe(EVAL_PROOF_BUFFER_BYTES);
+    let offset = 0;
+    while (offset < before.size) {
+      const read = readSync(
+        descriptor,
+        buffer,
+        0,
+        Math.min(buffer.length, before.size - offset),
+        offset
+      );
+      if (read <= 0) {
+        return;
+      }
+      hash.update(buffer.subarray(0, read));
+      offset += read;
+    }
+    const after = fstatSync(descriptor);
+    const pathAfter = lstatSync(absolute);
+    if (
+      after.dev !== before.dev ||
+      after.ino !== before.ino ||
+      after.size !== before.size ||
+      after.mtimeMs !== before.mtimeMs ||
+      pathAfter.dev !== after.dev ||
+      pathAfter.ino !== after.ino ||
+      realpathSync(absolute) !== absolute
+    ) {
+      return;
+    }
+    return { kind: "file", size: after.size, sha256: hash.digest("hex") };
+  } catch {
+    return;
+  } finally {
+    if (descriptor !== undefined) {
+      closeSync(descriptor);
+    }
+  }
+}
+
+function sameEvalProof(left: EvalFileProof, right: EvalFileProof): boolean {
+  return (
+    left.kind === right.kind &&
+    (left.kind === "absent" ||
+      (right.kind === "file" &&
+        left.size === right.size &&
+        left.sha256 === right.sha256))
+  );
+}
 
 const codexServiceTierStream: StreamFn = (model, context, options) => {
   const serviceTierOptions = options as typeof options & {
@@ -92,6 +188,7 @@ export interface RunRecord {
   score: ScoreResult;
   metrics: RunMetrics;
   toolCalls: ToolCallRecord[];
+  trajectoryErrors: string[];
   assistantMessages: AssistantMessageRecord[];
 }
 
@@ -120,6 +217,223 @@ async function copyFixture(source: string, destination: string): Promise<void> {
   }
 }
 
+const IMMUTABLE_MATH_TEST = readFileSync(
+  new URL("./fixtures/sample-project/tests/math.case.ts", import.meta.url),
+  "utf8"
+);
+export const CANONICAL_SUBTRACT_TEST = `import { expect, test } from "bun:test";
+
+import { subtract } from "../src/math";
+
+test("subtracts the right operand", () => {
+  expect(subtract(7, 5)).toBe(2);
+});
+`;
+
+function stripComments(source: string): string | undefined {
+  let output = "";
+  let state: "code" | "line" | "block" = "code";
+  for (let index = 0; index < source.length; index += 1) {
+    const character = source[index]!;
+    const next = source[index + 1];
+    if (state === "line") {
+      if (character === "\n") {
+        state = "code";
+        output += character;
+      } else {
+        output += " ";
+      }
+    } else if (state === "block") {
+      if (character === "*" && next === "/") {
+        output += "  ";
+        index += 1;
+        state = "code";
+      } else {
+        output += character === "\n" ? "\n" : " ";
+      }
+    } else if (character === "/" && next === "/") {
+      output += "  ";
+      index += 1;
+      state = "line";
+    } else if (character === "/" && next === "*") {
+      output += "  ";
+      index += 1;
+      state = "block";
+    } else {
+      output += character;
+    }
+  }
+  return state === "block" ? undefined : output;
+}
+
+function stripHarmlessParentheses(source: string): string {
+  let expression = source.trim();
+  while (expression.startsWith("(") && expression.endsWith(")")) {
+    let depth = 0;
+    let wrapsExpression = true;
+    for (let index = 0; index < expression.length; index += 1) {
+      if (expression[index] === "(") {
+        depth += 1;
+      } else if (expression[index] === ")") {
+        depth -= 1;
+      }
+      if (depth < 0 || (depth === 0 && index < expression.length - 1)) {
+        wrapsExpression = false;
+        break;
+      }
+    }
+    if (!wrapsExpression || depth !== 0) {
+      break;
+    }
+    expression = expression.slice(1, -1).trim();
+  }
+  return expression;
+}
+
+function expressionMatchesOperation(
+  source: string,
+  leftParameter: string,
+  rightParameter: string,
+  operator: string
+): boolean {
+  const expression = stripHarmlessParentheses(source);
+  let depth = 0;
+  let operatorIndex = -1;
+  for (let index = 0; index < expression.length; index += 1) {
+    const character = expression[index];
+    if (character === "(") {
+      depth += 1;
+    } else if (character === ")") {
+      depth -= 1;
+    } else if (character === operator && depth === 0) {
+      if (operatorIndex !== -1) {
+        return false;
+      }
+      operatorIndex = index;
+    }
+    if (depth < 0) {
+      return false;
+    }
+  }
+  return (
+    depth === 0 &&
+    operatorIndex !== -1 &&
+    stripHarmlessParentheses(expression.slice(0, operatorIndex)) ===
+      leftParameter &&
+    stripHarmlessParentheses(expression.slice(operatorIndex + 1)) ===
+      rightParameter
+  );
+}
+
+/** Scores allowlisted fixture tests with a bounded closed arithmetic grammar; never executes workspace code. */
+export function runAllowedFixtureTest(
+  cwd: string,
+  command = "bun test tests/math.case.ts"
+): { exitCode: number; output: Buffer } {
+  const specifications = {
+    "bun test tests/math.case.ts": {
+      tests: [{ path: "tests/math.case.ts", content: IMMUTABLE_MATH_TEST }],
+      operations: { add: "+", multiply: "*" },
+      success: "math > adds numbers\n2 passed, 0 failed\n",
+      failure:
+        "math > adds numbers\nExpected: 12\nReceived: 2\n1 failed, 1 passed\n",
+    },
+    "bun test tests/subtract.case.ts": {
+      tests: [
+        { path: "tests/math.case.ts", content: IMMUTABLE_MATH_TEST },
+        { path: "tests/subtract.case.ts", content: CANONICAL_SUBTRACT_TEST },
+      ],
+      operations: { add: "+", multiply: "*", subtract: "-" },
+      success: "subtracts the right operand\n1 passed, 0 failed\n",
+      failure:
+        "subtracts the right operand\nExpected: 2\nReceived: missing or incorrect subtract\n1 failed, 0 passed\n",
+    },
+  } as const;
+  const specification = specifications[command as keyof typeof specifications];
+  if (!specification) {
+    return {
+      exitCode: 126,
+      output: Buffer.from("Blocked by eval command allowlist\n"),
+    };
+  }
+  try {
+    if (
+      specification.tests.some(
+        (test) => readFileSync(join(cwd, test.path), "utf8") !== test.content
+      )
+    ) {
+      return {
+        exitCode: 1,
+        output: Buffer.from(
+          "1 failed: canonical regression test is missing or modified\n"
+        ),
+      };
+    }
+    const source = stripComments(
+      readFileSync(join(cwd, "src/math.ts"), "utf8")
+    );
+    const declaration =
+      /export\s+function\s+(add|multiply|subtract)\s*\(\s*([A-Za-z_$][\w$]*)\s*:\s*number\s*,\s*([A-Za-z_$][\w$]*)\s*:\s*number\s*\)\s*:\s*number\s*\{\s*return\s+([^;{}\n]{1,200});\s*\}/gy;
+    const operations = new Map<
+      string,
+      { leftParameter: string; rightParameter: string; expression: string }
+    >();
+    let offset = 0;
+    while (source !== undefined) {
+      declaration.lastIndex = offset;
+      const whitespace =
+        LEADING_WHITESPACE_PATTERN.exec(source.slice(offset))?.[0].length ?? 0;
+      declaration.lastIndex += whitespace;
+      const match = declaration.exec(source);
+      if (
+        !match ||
+        match.index !== offset + whitespace ||
+        operations.has(match[1]!)
+      ) {
+        break;
+      }
+      operations.set(match[1]!, {
+        leftParameter: match[2]!,
+        rightParameter: match[3]!,
+        expression: match[4]!,
+      });
+      offset = declaration.lastIndex;
+    }
+    const fullyParsed =
+      source !== undefined && source.slice(offset).trim() === "";
+    const expected = Object.entries(specification.operations);
+    const exactMathFixture =
+      operations.size === expected.length &&
+      [...operations.keys()].every((name) => name in specification.operations);
+    const passed =
+      fullyParsed &&
+      exactMathFixture &&
+      expected.every(([name, operator]) => {
+        const implementation = operations.get(name);
+        return (
+          implementation !== undefined &&
+          expressionMatchesOperation(
+            implementation.expression,
+            implementation.leftParameter,
+            implementation.rightParameter,
+            operator
+          )
+        );
+      });
+    return {
+      exitCode: passed ? 0 : 1,
+      output: Buffer.from(
+        passed ? specification.success : specification.failure
+      ),
+    };
+  } catch {
+    return {
+      exitCode: 1,
+      output: Buffer.from("1 failed: fixture files unavailable\n"),
+    };
+  }
+}
+
 function createSafeBashOperations() {
   return {
     async exec(
@@ -132,7 +446,12 @@ function createSafeBashOperations() {
       }
     ): Promise<{ exitCode: number | null }> {
       const normalized = command.trim().replaceAll(/\s+/g, " ");
-      if (normalized !== "bun test tests/math.case.ts") {
+      if (
+        ![
+          "bun test tests/math.case.ts",
+          "bun test tests/subtract.case.ts",
+        ].includes(normalized)
+      ) {
         options.onData(
           Buffer.from(`Blocked by eval command allowlist: ${command}\n`)
         );
@@ -142,16 +461,13 @@ function createSafeBashOperations() {
       if (options.signal?.aborted) {
         return { exitCode: null };
       }
-      const mathSource = await readFile(join(cwd, "src/math.ts"), "utf8");
-      const passed = mathSource.includes("return left + right;");
-      options.onData(
-        Buffer.from(
-          passed
-            ? "1 pass\n0 fail\n"
-            : "0 pass\n1 fail\nExpected add(7, 5) to be 12\n"
-        )
+      const execution = await Promise.resolve(
+        runAllowedFixtureTest(cwd, normalized)
       );
-      return { exitCode: passed ? 0 : 1 };
+      if (execution.output.length) {
+        options.onData(execution.output);
+      }
+      return { exitCode: execution.exitCode };
     },
   };
 }
@@ -269,6 +585,21 @@ function createQuestionnaireTool(
   };
 }
 
+const structuredOutputTool: AgentTool<typeof EXECUTOR_RESULT_SCHEMA> = {
+  name: "structured_output",
+  label: "Structured output",
+  description:
+    "Submit the final executor result exactly once. This must be the final action.",
+  parameters: EXECUTOR_RESULT_SCHEMA,
+  execute() {
+    return Promise.resolve({
+      content: [{ type: "text" as const, text: "Structured result accepted." }],
+      details: {},
+      terminate: true,
+    });
+  },
+};
+
 const fetchContentTool: AgentTool = {
   name: "fetch_content",
   label: "Fetch content",
@@ -344,9 +675,12 @@ function createTools(workspace: string, evalCase: EvalCase): AgentTool[] {
   const builtIns = [...builtInsByName.values()].filter((tool) =>
     names.includes(tool.name as EvalCase["tools"][number])
   );
-  const extras = [agentTool, webSearchTool, fetchContentTool].filter((tool) =>
-    names.includes(tool.name as EvalCase["tools"][number])
-  );
+  const extras = [
+    agentTool,
+    webSearchTool,
+    fetchContentTool,
+    structuredOutputTool,
+  ].filter((tool) => names.includes(tool.name as EvalCase["tools"][number]));
   const questionnaireTools = evalCase.questionnaireResponse
     ? [createQuestionnaireTool(evalCase.questionnaireResponse)]
     : [];
@@ -370,9 +704,14 @@ export async function runVariant(
   await copyFixture(options.fixturePath, workspace);
   const initialWorkspaceSnapshot = await snapshotWorkspace(workspace);
   const tools = createTools(workspace, options.evalCase);
+  const request = composeEvalRequest(
+    options.evalCase.promptPath,
+    options.promptContent,
+    options.evalCase.task
+  );
   const context: AgentContext = {
     systemPrompt: [
-      composePrompt(options.evalCase.promptPath, options.promptContent),
+      request.systemPrompt,
       "# Eval environment",
       `Working directory: ${workspace}`,
     ].join("\n\n"),
@@ -381,7 +720,7 @@ export async function runVariant(
   };
   const prompt: AgentMessage = {
     role: "user",
-    content: options.evalCase.task,
+    content: request.userPrompt,
     timestamp: Date.now(),
   };
   const controller = new AbortController();
@@ -394,8 +733,18 @@ export async function runVariant(
   let responseModel: string | undefined;
   let observedTurns = 0;
   const toolCalls: ToolCallRecord[] = [];
+  const trajectoryErrors: string[] = [];
+  const recordTrajectoryError = (message: string) => {
+    if (trajectoryErrors.length < 20) {
+      trajectoryErrors.push(message);
+    }
+  };
   const assistantMessages: AssistantMessageRecord[] = [];
-  const pendingToolCalls = new Map<string, ToolCallRecord>();
+  const pendingToolCalls = new Map<
+    string,
+    ToolCallRecord & { preMutationProofs?: EvalFileProof[] }
+  >();
+  let eventOrder = 0;
   const serviceTier = options.serviceTier ?? "default";
   const payloadServiceTiers = new Set<string>();
 
@@ -446,28 +795,96 @@ export async function runVariant(
     );
 
     for await (const event of eventStream) {
+      eventOrder += 1;
       if (event.type === "tool_execution_start") {
+        if (pendingToolCalls.has(event.toolCallId)) {
+          recordTrajectoryError(`duplicate start: ${event.toolCallId}`);
+          continue;
+        }
+        if (pendingToolCalls.size >= 100) {
+          recordTrajectoryError("pending tool-call capture limit exceeded");
+          continue;
+        }
+        const rawArgs =
+          event.args && typeof event.args === "object"
+            ? (event.args as Record<string, unknown>)
+            : {};
+        const metadata = normalizeTddToolMetadata(event.toolName, rawArgs);
+        const mutationTargets = metadata.mutationTargets;
+        const preMutationProofs = EVAL_MUTATION_TOOLS.has(event.toolName)
+          ? mutationTargets
+              ?.slice(0, 16)
+              .map((target) => evalFileProof(workspace, target))
+          : undefined;
         const call = {
           name: event.toolName,
-          args: event.args,
+          ...metadata,
+          args: rawArgs,
           assistantTurn: observedTurns,
+          startOrder: eventOrder,
+          ...(preMutationProofs?.every(
+            (proof): proof is EvalFileProof => proof !== undefined
+          )
+            ? { preMutationProofs }
+            : {}),
         };
         pendingToolCalls.set(event.toolCallId, call);
       }
       if (event.type === "tool_execution_end") {
-        const call = pendingToolCalls.get(event.toolCallId) ?? {
+        const pending = pendingToolCalls.get(event.toolCallId);
+        if (!pending) {
+          recordTrajectoryError(`unmatched end: ${event.toolCallId}`);
+        }
+        const call = pending ?? {
           name: event.toolName,
           args: {},
           assistantTurn: observedTurns,
+          startOrder: eventOrder,
         };
         const questionnaireResponse =
           call.name === "questionnaire"
             ? (event.result?.details?.answers?.[0]?.label as unknown)
             : undefined;
         const resultText = textFromContent(event.result?.content);
+        const { preMutationProofs, ...retainedCall } = call;
+        const postMutationProofs = call.mutationTargets
+          ?.slice(0, 16)
+          .map((target) => evalFileProof(workspace, target));
+        const mutationDelta =
+          preMutationProofs &&
+          postMutationProofs?.every(
+            (proof): proof is EvalFileProof => proof !== undefined
+          )
+            ? preMutationProofs.flatMap((proof, index) => {
+                const post = postMutationProofs[index]!;
+                if (sameEvalProof(proof, post)) {
+                  return [];
+                }
+                let status: "changed" | "created" | "deleted" = "changed";
+                if (proof.kind === "absent") {
+                  status = "created";
+                } else if (post.kind === "absent") {
+                  status = "deleted";
+                }
+                return [
+                  {
+                    path: call.mutationTargets![index]!,
+                    status,
+                  },
+                ];
+              })
+            : undefined;
         const completedCall = {
-          ...call,
+          ...retainedCall,
+          endOrder: eventOrder,
           isError: event.isError,
+          ...(EVAL_MUTATION_TOOLS.has(call.name)
+            ? {
+                mutationProven:
+                  event.isError !== true && (mutationDelta?.length ?? 0) > 0,
+                ...(mutationDelta?.length ? { mutationDelta } : {}),
+              }
+            : {}),
           ...(resultText ? { resultText } : {}),
           ...(typeof questionnaireResponse === "string"
             ? { questionnaireResponse }
@@ -505,6 +922,22 @@ export async function runVariant(
     closeOpenAICodexWebSocketSessions(sessionId);
   }
 
+  if (pendingToolCalls.size > 0) {
+    const pendingIds = [...pendingToolCalls.keys()].slice(0, 5).join(", ");
+    recordTrajectoryError(
+      `pending starts at terminal status: ${pendingToolCalls.size}${pendingIds ? ` (${pendingIds})` : ""}`
+    );
+  }
+
+  if (request.structuredOutput) {
+    const structuredCall = toolCalls.find(
+      (call) => call.name === "structured_output" && !call.isError
+    );
+    if (structuredCall) {
+      output = JSON.stringify(structuredCall.args);
+    }
+  }
+
   const { failedToolKeys: _failedToolKeys, ...publicMetrics } =
     metrics as RunMetrics & {
       failedToolKeys?: string[];
@@ -517,6 +950,8 @@ export async function runVariant(
         initialWorkspaceSnapshot,
         toolCalls,
         assistantMessages,
+        trajectoryErrors,
+        taskIntent: options.evalCase.task,
       },
       options.evalCase.checks
     );
@@ -559,6 +994,7 @@ export async function runVariant(
       score,
       metrics: publicMetrics,
       toolCalls,
+      trajectoryErrors,
       assistantMessages,
     };
   } finally {
