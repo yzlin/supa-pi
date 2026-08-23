@@ -79,7 +79,7 @@ const TRUSTED_SYNTHESIZER_SYSTEM_PROMPT = `You are the /review finding synthesiz
 Perform lossless clustering only. Merge findings if and only if they identify the same root cause and materially the same fix. Keep uncertain matches separate. Propose a canonical title, why, and change for each cluster. Do not decide truth, priority, or confidence. Every input candidate ID must appear in exactly one cluster; never invent, omit, or repeat an ID. The workflow derives locations, reported priorities, reviewer roles, and model provenance from IDs.
 
 Submit exactly one final result through structured_output and do not respond afterward. The object contains only clusters; each cluster contains only non-empty memberIds, title, why, and change.`;
-const STRUCTURED_OUTPUT_CLEANUP_TIMEOUT_MS = 1000;
+const STRUCTURED_OUTPUT_CLEANUP_TIMEOUT_MS = 30_000;
 const AGENT_PROGRESS_SNIPPET_CHAR_LIMIT = 120;
 const PATH_SEPARATOR_RE = /[/\\]/g;
 const WINDOWS_DRIVE_PREFIX_RE = /^[A-Za-z]:-/;

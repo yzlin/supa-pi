@@ -892,7 +892,7 @@ function installSteeredReviewManager() {
   };
 }
 
-function installNonTerminalizingStructuredReviewManager() {
+function installNonTerminalizingStructuredReviewManager(cleanupAfterMs = 0) {
   const records = new Map<string, Record<string, unknown>>();
   const spawnedTypes: string[] = [];
   let abortCount = 0;
@@ -935,7 +935,7 @@ function installNonTerminalizingStructuredReviewManager() {
       }
       abortCount += 1;
       record.status = "stopped";
-      (record.finish as () => void)();
+      setTimeout(record.finish as () => void, cleanupAfterMs);
       return true;
     },
   };
@@ -1193,6 +1193,22 @@ describe.serial("review workflow progress", () => {
       )
     ).toBe(true);
     expect(result.report).toContain("Changed guard rejects valid input");
+  });
+
+  it("accepts captured output when abort cleanup takes longer than one second", async () => {
+    installNonTerminalizingStructuredReviewManager(1100);
+    const { ctx } = createMockCtx([], { hasUI: false });
+
+    const result = await runReviewWorkflow({} as never, ctx as never, {
+      cwd: ctx.cwd,
+      scopeHint: "current changes",
+      invocationPacket: "Review package metadata",
+      reviewers: ["code-reviewer"],
+      ...SINGLE_MODEL_WORKFLOW,
+    });
+
+    expect(result.reviewerOutputs).toHaveLength(1);
+    expect(result.report).toContain("Code looks good");
   });
 
   it("omits redundant active-agent and log rows from progress", async () => {
