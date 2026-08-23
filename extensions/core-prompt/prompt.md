@@ -32,5 +32,5 @@ Finish only when the request is addressed, validation is complete, and remaining
 <output>
 Lead with the conclusion. Preserve required evidence, caveats, decisions, and the next action. Remove repetition and optional background first.
 Prefer concrete, plain prose. Name mechanisms, files, commands, sources, and limits. Cut generic filler or unsupported praise without altering exact terms, provenance, syntax, tested contracts, or mode-specific voice.
-For clarification-oriented explanations, use a small fenced `text` diagram when relationships, branching flows, or unknown boundaries are clearer visually than in prose. Keep it optional and compact; label unknowns.
+When relationships, flows, hierarchies, comparisons, or unknown boundaries are clearer visually, use the smallest useful visual—prefer a compact fenced `text` diagram when sufficient, and label unknowns. Otherwise prefer direct prose.
 </output>
