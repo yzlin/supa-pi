@@ -40,6 +40,29 @@ export interface TddEvidenceResult {
   blockers?: unknown;
 }
 
+export type TddEvidenceHardFailureCode =
+  | "capture_integrity"
+  | "fabricated_claim"
+  | "fabricated_coverage"
+  | "missing_green"
+  | "report_integrity"
+  | "unresolved_tests"
+  | "unsafe_runner"
+  | "unsafe_shell";
+
+export type TddEvidenceAssessment =
+  | { kind: "verified" }
+  | {
+      kind: "needs_verification";
+      code: "strategy_deviation";
+      message: string;
+    }
+  | {
+      kind: "failed";
+      code: TddEvidenceHardFailureCode;
+      message: string;
+    };
+
 const MUTATION_TOOLS = new Set([
   "edit",
   "write",
@@ -110,7 +133,7 @@ const MAVEN_TEST_SUMMARY_PATTERN =
 const DOTNET_TEST_SUMMARY_PATTERN =
   /failed:\s*(\d+)[^\n]*passed:\s*(\d+)[^\n]*total:\s*([1-9]\d*)/i;
 const COVERAGE_PERCENT_PATTERN =
-  /\b(statements?|branches?|functions?|lines?)\s*[:=]\s*(\d+(?:\.\d+)?)%|\b(\d+(?:\.\d+)?)%\s+(statements?|branches?|functions?|lines?)\b/gi;
+  /\b(statements?|branches?|functions?|lines?)\s*[:=]\s*(\d+(?:\.\d+)?)\s*%|\b(\d+(?:\.\d+)?)\s*%\s+(statements?|branches?|functions?|lines?)\b/gi;
 const COVERAGE_COUNT_PATTERN =
   /\b(?:measured|reported|observed)\s+(\d+(?:\.\d+)?)\s+(statements?|branches?|functions?|lines?)|\b(statements?|branches?|functions?|lines?)\s*[:=]\s*(\d+(?:\.\d+)?)\b(?!\s*%)/gi;
 const COVERAGE_RATIO_PATTERN =
@@ -118,7 +141,7 @@ const COVERAGE_RATIO_PATTERN =
 const COVERAGE_THRESHOLD_PATTERN =
   /\b(?:coverage\s+)?threshold(?:\s+of)?\s+(\d+(?:\.\d+)?)%?\s+(met|passed)\b/gi;
 const NUMERIC_COVERAGE_CLAIM_PATTERN =
-  /\b(?:statements?|branches?|functions?|lines?)\s*[:=]\s*\d|\b\d+(?:\.\d+)?%\s+(?:statements?|branches?|functions?|lines?)|\b\d+(?:\.\d+)?\s*(?:of|\/)\s*\d+(?:\.\d+)?\s+(?:statements?|branches?|functions?|lines?)|\b(?:coverage\s+)?threshold\b/i;
+  /\b(?:statements?|branches?|functions?|lines?)\s*[:=]\s*\d|\b\d+(?:\.\d+)?\s*%\s+(?:statements?|branches?|functions?|lines?)|\b\d+(?:\.\d+)?\s*(?:of|\/)\s*\d+(?:\.\d+)?\s+(?:statements?|branches?|functions?|lines?)|\b(?:coverage\s+)?threshold\b/i;
 const NEGATIVE_COVERAGE_PATTERN =
   /\b(?:failed|failing|unmet|below|under|missed)\b|\bthreshold\b[^\n]*(?:not met|not passed)|\bexit(?:ed)?(?:\s+with)?(?:\s+code)?\s+[1-9]\d*\b/i;
 const COVERAGE_KIND_PATTERN =
@@ -473,11 +496,23 @@ function trustedIntentAuthorizesRegression(
   });
 }
 
+function trustedTitleMatchesOutput(
+  trustedTaskIntent: string,
+  regressionTitles: string[],
+  output: string
+): boolean {
+  return regressionTitles.some(
+    (title) =>
+      trustedIntentAuthorizesRegression(trustedTaskIntent, [], [title]) &&
+      hasNormalizedTokenSequence(output, title)
+  );
+}
+
 function missingReference(text: string): string | undefined {
   for (const pattern of TARGET_MISSING_REFERENCE_PATTERNS) {
     const match = pattern.exec(text);
     if (match?.[1]) {
-      return normalizedIntent(match[1]);
+      return normalizedIntent(match[1]).replace(LEADING_DOT_SLASH_PATTERN, "");
     }
   }
 }
@@ -598,11 +633,34 @@ const READ_ONLY_SHELL_COMMANDS = new Set([
   "head",
   "ls",
   "pwd",
+  "readlink",
   "rg",
   "tail",
   "wc",
   "which",
 ]);
+const FIND_MUTATION_ACTIONS = new Set([
+  "-delete",
+  "-exec",
+  "-execdir",
+  "-fprint",
+  "-fprint0",
+  "-fprintf",
+  "-fls",
+  "-ok",
+  "-okdir",
+]);
+const ADVISORY_GIT_INSPECTION_SUBCOMMANDS = new Set([
+  "diff",
+  "log",
+  "ls-files",
+  "rev-parse",
+  "show",
+  "status",
+]);
+const SHELL_INSPECTION_SEPARATOR_PATTERN = /\s*(?:&&|[;|])\s*/;
+const UNSAFE_SHELL_INSPECTION_CONTROL_PATTERN =
+  /[`<>\n]|\$\(|\|\||(^|[^&])&([^&]|$)/;
 
 function canonicalMutationPath(path: string): string | undefined {
   if (
@@ -1537,21 +1595,13 @@ function isMutationCall(call: TddToolCall): boolean {
   if (executable === "git" || !READ_ONLY_SHELL_COMMANDS.has(executable)) {
     return true;
   }
-  if (executable === "find") {
-    const findActions = new Set([
-      "-delete",
-      "-exec",
-      "-execdir",
-      "-fprint",
-      "-fprint0",
-      "-fprintf",
-      "-fls",
-      "-ok",
-      "-okdir",
-    ]);
-    if (tokens.slice(1).some((token) => findActions.has(token.toLowerCase()))) {
-      return true;
-    }
+  if (
+    executable === "find" &&
+    tokens
+      .slice(1)
+      .some((token) => FIND_MUTATION_ACTIONS.has(token.toLowerCase()))
+  ) {
+    return true;
   }
   return false;
 }
@@ -1714,7 +1764,8 @@ export function validateTddEvidence(
   result: TddEvidenceResult,
   calls: TddToolCall[],
   captureErrors: string[] = [],
-  trustedTaskIntent = ""
+  trustedTaskIntent = "",
+  expectedCommand?: string
 ): string | undefined {
   const parsed = prefixedEvidence(result);
   if (parsed.error) {
@@ -1925,8 +1976,10 @@ export function validateTddEvidence(
     }
     const outputIntent = intentTerms([call.resultText]);
     const missingIntent = new Set([...expectedIntent]);
-    const titleIdentityMatches = retainedRegressionTitles.some((title) =>
-      hasNormalizedTokenSequence(call.resultText ?? "", title)
+    const titleIdentityMatches = trustedTitleMatchesOutput(
+      trustedTaskIntent,
+      retainedRegressionTitles,
+      call.resultText ?? ""
     );
     const overlapCount = [...expectedIntent].filter((term) =>
       outputIntent.has(term)
@@ -1944,7 +1997,7 @@ export function validateTddEvidence(
       call.isError &&
       expectedIntent.size > 0 &&
       (retainedRegressionTitles.length > 0
-        ? titleIdentityMatches
+        ? titleIdentityMatches || exactExpectedSymbol
         : intentIdentityMatches) &&
       outputShowsOutcome(
         call.resultText ?? "",
@@ -1956,26 +2009,55 @@ export function validateTddEvidence(
       evidenceClaims(entries.get("RED:")!, "red", command)
     );
   });
-  const green = tests
-    .filter(
+  const matchedGreenCandidates = tests.filter(
+    (call) =>
+      red &&
+      call.startOrder > red.endOrder &&
+      !call.isError &&
+      outputShowsOutcome(
+        call.resultText ?? "",
+        "green",
+        new Set(),
+        call.args.command as string
+      ) &&
+      evidenceClaims(
+        entries.get("GREEN:")!,
+        "green",
+        call.args.command as string
+      )
+  );
+  const firstMatchedGreen = matchedGreenCandidates[0];
+  const greenCandidates = matchedGreenCandidates.filter(
+    (call) => call.args.command === red?.args.command
+  );
+  const firstGreen = greenCandidates[0];
+  const green = greenCandidates.at(-1);
+  if (
+    expectedCommand !== undefined &&
+    red !== undefined &&
+    red.args.command !== expectedCommand
+  ) {
+    return "TDD evidence RED command must exactly match declared redGreenCommand.";
+  }
+  if (
+    expectedCommand !== undefined &&
+    firstMatchedGreen !== undefined &&
+    firstMatchedGreen.args.command !== expectedCommand
+  ) {
+    return "TDD evidence GREEN command must exactly match declared redGreenCommand.";
+  }
+  if (
+    red &&
+    firstGreen &&
+    tests.some(
       (call) =>
-        red &&
         call.startOrder > red.endOrder &&
-        !call.isError &&
-        call.args.command === red.args.command &&
-        outputShowsOutcome(
-          call.resultText ?? "",
-          "green",
-          new Set(),
-          call.args.command as string
-        ) &&
-        evidenceClaims(
-          entries.get("GREEN:")!,
-          "green",
-          call.args.command as string
-        )
+        call.startOrder <= firstGreen.endOrder &&
+        call.args.command !== red.args.command
     )
-    .at(-1);
+  ) {
+    return "TDD ordering rejects broader test commands before the matched GREEN.";
+  }
   if (!red && tests.some((call) => call.resultTruncated)) {
     return "Truncated test output did not retain authoritative RED evidence.";
   }
@@ -2026,7 +2108,10 @@ export function validateTddEvidence(
     return;
   }
   if (!(red && green)) {
-    return `A ${status} TDD executor result must bind RED: and GREEN: to the same observed supported test command and actual failing/passing test output.`;
+    const detail = red
+      ? `matched RED ended at order ${red.endOrder}, but no later successful exact-command GREEN matched`
+      : "no retained test failure matched RED for the declared command and regression identity";
+    return `A ${status} TDD executor result must bind RED: and GREEN: to the same observed supported test command and actual failing/passing test output. Detail: ${detail}.`;
   }
   const unsafeRunnerWorkspace =
     tests.some(
@@ -2049,7 +2134,7 @@ export function validateTddEvidence(
     (call) =>
       call !== red && call !== green && !isProvenCoverageVerification(call)
   );
-  const testMutationAfterRed = implementationMutations.some(
+  const testMutationAfterRed = implementationMutations.find(
     (call) =>
       MUTATION_TOOLS.has(call.name) &&
       call.startOrder > red.endOrder &&
@@ -2081,7 +2166,7 @@ export function validateTddEvidence(
       call.endOrder >= red.startOrder &&
       !(call.startOrder > red.endOrder && call.endOrder < green.startOrder)
   );
-  const actionAfterGreen = calls.some(
+  const actionAfterGreen = calls.find(
     (call) =>
       call !== structured[0] &&
       call.startOrder > green.endOrder &&
@@ -2128,7 +2213,7 @@ export function validateTddEvidence(
       )
   );
   if (testMutationAfterRed) {
-    return "TDD ordering rejects regression-test mutations after RED.";
+    return `TDD ordering rejects regression-test mutations after RED. Detail: RED ended at order ${red.endOrder}; test mutation started at order ${testMutationAfterRed.startOrder}.`;
   }
   if (shellMutationBetween) {
     return "TDD ordering rejects mutation-capable shell calls between RED and GREEN; use a discrete mutation tool for implementation proof.";
@@ -2141,7 +2226,14 @@ export function validateTddEvidence(
     mutationOutsideImplementationWindow ||
     actionAfterGreen
   ) {
-    return "TDD ordering requires a production implementation mutation after RED and final GREEN after the last mutation.";
+    let detail =
+      "no proven production mutation occurred strictly between RED and final GREEN";
+    if (actionAfterGreen) {
+      detail = `final GREEN ended at order ${green.endOrder}; later mutation started at order ${actionAfterGreen.startOrder}`;
+    } else if (mutationOutsideImplementationWindow) {
+      detail = "a mutation occurred outside the strict RED-to-GREEN window";
+    }
+    return `TDD ordering requires a production implementation mutation after RED and final GREEN after the last mutation. Detail: ${detail}.`;
   }
   if (unresolvedTestFailure) {
     return "TDD validation requires every supported test failure after the last implementation mutation to have a later successful rerun of the same normalized command and scope.";
@@ -2192,7 +2284,356 @@ export function validateTddEvidence(
           verificationEnd
         ))
   ) {
-    return `A ${status} TDD executor result must include meaningful actual COVERAGE: evidence.`;
+    const detail =
+      numericCoverageClaims(coverage).length > 0
+        ? "numeric coverage claims could not be safely correlated with labeled retained measurements; cite the exact passing command without numeric claims"
+        : "the claim did not match an eligible successful verification, a covered behavior and failure path, or a concrete tooling-unavailable reason";
+    return `A ${status} TDD executor result must include meaningful actual COVERAGE: evidence. Detail: ${detail}.`;
   }
   return;
+}
+
+function isAdvisoryInspectionCommand(command: string): boolean {
+  if (UNSAFE_SHELL_INSPECTION_CONTROL_PATTERN.test(command)) {
+    return false;
+  }
+  const segments = command
+    .split(SHELL_INSPECTION_SEPARATOR_PATTERN)
+    .map((segment) => segment.trim())
+    .filter(Boolean);
+  return (
+    segments.length > 0 &&
+    segments.every((segment) => {
+      const scanned = scanShell(segment);
+      const executable = (scanned.tokens[0] ?? "").toLowerCase();
+      if (
+        scanned.activeControl ||
+        !executable ||
+        ENV_ASSIGNMENT_PATTERN.test(executable) ||
+        executable.includes("/") ||
+        executable.includes("\\") ||
+        !READ_ONLY_SHELL_COMMANDS.has(executable)
+      ) {
+        return false;
+      }
+      if (executable === "git") {
+        return ADVISORY_GIT_INSPECTION_SUBCOMMANDS.has(
+          (scanned.tokens[1] ?? "").toLowerCase()
+        );
+      }
+      return !(
+        executable === "find" &&
+        scanned.tokens
+          .slice(1)
+          .some((token) => FIND_MUTATION_ACTIONS.has(token.toLowerCase()))
+      );
+    })
+  );
+}
+
+function hasUnsafeShellActivity(calls: TddToolCall[]): boolean {
+  return calls.some(
+    (call) =>
+      call.name === "bash" &&
+      typeof call.args.command === "string" &&
+      isMutationCall(call) &&
+      !isSupportedTestCommand(call.args.command) &&
+      !isProvenCoverageVerification(call) &&
+      !isAdvisoryInspectionCommand(call.args.command)
+  );
+}
+
+function supportedTddRunnerCalls(calls: TddToolCall[]): TddToolCall[] {
+  return calls.filter(
+    (call) =>
+      call.name === "bash" &&
+      typeof call.args.command === "string" &&
+      isSupportedTestCommand(call.args.command)
+  );
+}
+
+function observedTddTests(calls: TddToolCall[]): TddToolCall[] {
+  return supportedTddRunnerCalls(calls).filter(
+    (call) => !testCommandHasWriteOption(call.args.command as string)
+  );
+}
+
+function hasUnsafeRunnerProof(calls: TddToolCall[]): boolean {
+  return supportedTddRunnerCalls(calls).some(
+    (call) =>
+      testCommandHasWriteOption(call.args.command as string) ||
+      call.runnerWorkspaceProof !== true ||
+      (call.runnerWorkspaceDelta?.length ?? 0) > 0
+  );
+}
+
+function lastProvenProductionEnd(calls: TddToolCall[]): number | undefined {
+  const productionMutations = calls.filter(
+    (call) =>
+      MUTATION_TOOLS.has(call.name) &&
+      !call.isError &&
+      mutationHasProvenDelta(call) &&
+      discreteMutationEffects(call).hasProductionTargets
+  );
+  return productionMutations.length > 0
+    ? Math.max(...productionMutations.map((call) => call.endOrder))
+    : undefined;
+}
+
+function hasFabricatedNumericCoverage(
+  coverageEntry: string,
+  calls: TddToolCall[]
+): boolean {
+  const coverage = coverageEntry.slice("COVERAGE:".length).trim().toLowerCase();
+  if (!NUMERIC_COVERAGE_CLAIM_PATTERN.test(coverage)) {
+    return false;
+  }
+  const claims = numericCoverageClaims(coverage);
+  if (claims.length === 0 || claims.some(({ valid }) => !valid)) {
+    return true;
+  }
+  const lastProductionEnd = lastProvenProductionEnd(calls);
+  const observed = new Set(
+    observedTddTests(calls)
+      .filter(
+        (call) =>
+          lastProductionEnd !== undefined &&
+          call.startOrder > lastProductionEnd &&
+          !call.isError &&
+          call.runnerWorkspaceProof === true &&
+          (call.runnerWorkspaceDelta?.length ?? 0) === 0
+      )
+      .flatMap((call) =>
+        numericCoverageClaims((call.resultText ?? "").toLowerCase())
+      )
+      .filter(({ valid }) => valid)
+      .map(({ key }) => key)
+  );
+  return claims.some(({ key }) => !observed.has(key));
+}
+
+function correlatedObservedRed(
+  calls: TddToolCall[],
+  redEntry: string,
+  trustedTaskIntent: string,
+  expectedCommand?: string
+): boolean {
+  const unavailable = hasUnavailableReason(redEntry);
+  const observed = observedTddTests(calls).some((call) => {
+    if (
+      !(
+        call.isError &&
+        (unavailable ||
+          evidenceClaims(redEntry, "red", call.args.command as string))
+      )
+    ) {
+      return false;
+    }
+    const priorTestMutations = calls.filter(
+      (candidate) =>
+        MUTATION_TOOLS.has(candidate.name) &&
+        candidate.endOrder < call.startOrder &&
+        !candidate.isError &&
+        candidate.mutationProven === true &&
+        discreteMutationEffects(candidate).hasTestTargets
+    );
+    const titles = priorTestMutations.flatMap(
+      (candidate) => candidate.regressionTitles ?? []
+    );
+    if (
+      trustedTitleMatchesOutput(
+        trustedTaskIntent,
+        titles,
+        call.resultText ?? ""
+      )
+    ) {
+      return true;
+    }
+    const missing = missingReference(call.resultText ?? "");
+    const expectedIntent = intentTerms([trustedTaskIntent, expectedCommand]);
+    if (missing !== undefined) {
+      return (
+        expectedIntent.has(missing) &&
+        outputShowsOutcome(
+          call.resultText ?? "",
+          "red",
+          new Set([missing]),
+          call.args.command as string,
+          true
+        )
+      );
+    }
+    const outputIntent = intentTerms([call.resultText]);
+    const overlap = [...expectedIntent].filter((term) =>
+      outputIntent.has(term)
+    ).length;
+    return (
+      overlap >= 2 &&
+      outputShowsOutcome(
+        call.resultText ?? "",
+        "red",
+        expectedIntent,
+        call.args.command as string,
+        true
+      )
+    );
+  });
+  return unavailable ? !observed : observed;
+}
+
+function authenticFinalGreen(
+  calls: TddToolCall[],
+  greenEntry: string
+): TddToolCall | undefined {
+  const lastProductionEnd = lastProvenProductionEnd(calls);
+  if (lastProductionEnd === undefined) {
+    return;
+  }
+  const green = observedTddTests(calls)
+    .filter(
+      (call) =>
+        call.startOrder > lastProductionEnd &&
+        !call.isError &&
+        call.runnerWorkspaceProof === true &&
+        (call.runnerWorkspaceDelta?.length ?? 0) === 0 &&
+        outputShowsOutcome(
+          call.resultText ?? "",
+          "green",
+          new Set(),
+          call.args.command as string
+        ) &&
+        evidenceClaims(greenEntry, "green", call.args.command as string)
+    )
+    .at(-1);
+  return green;
+}
+
+function normalizedObservedTestScope(call: TddToolCall): string {
+  return commandTokens(call.args.command as string)
+    .map((token) => token.normalize("NFKC").toLocaleLowerCase("und"))
+    .join("\0");
+}
+
+function hasUnresolvedPostProductionFailure(calls: TddToolCall[]): boolean {
+  const lastProductionEnd = lastProvenProductionEnd(calls);
+  if (lastProductionEnd === undefined) {
+    return true;
+  }
+  const tests = observedTddTests(calls);
+  return tests.some(
+    (failed) =>
+      failed.startOrder > lastProductionEnd &&
+      failed.isError &&
+      !tests.some(
+        (rerun) =>
+          rerun.startOrder > failed.endOrder &&
+          !rerun.isError &&
+          normalizedObservedTestScope(rerun) ===
+            normalizedObservedTestScope(failed) &&
+          outputShowsOutcome(
+            rerun.resultText ?? "",
+            "green",
+            new Set(),
+            rerun.args.command as string
+          )
+      )
+  );
+}
+
+export function assessTddEvidence(
+  result: TddEvidenceResult,
+  calls: TddToolCall[],
+  captureErrors: string[] = [],
+  trustedTaskIntent = "",
+  expectedCommand?: string
+): TddEvidenceAssessment {
+  const message = validateTddEvidence(
+    result,
+    calls,
+    captureErrors,
+    trustedTaskIntent,
+    expectedCommand
+  );
+  if (!message) {
+    return { kind: "verified" };
+  }
+  const parsed = prefixedEvidence(result);
+  const status = String(result.status);
+  if (
+    parsed.error ||
+    !["done", "blocked", "needs_followup"].includes(status) ||
+    ((status === "blocked" || status === "needs_followup") &&
+      !(
+        Array.isArray(result.blockers) &&
+        result.blockers.some(
+          (item) => typeof item === "string" && item.trim().length > 0
+        )
+      ))
+  ) {
+    return { kind: "failed", code: "report_integrity", message };
+  }
+  const entries = parsed.entries!;
+  if (
+    captureErrors.length > 0 ||
+    calls.some(
+      (call) =>
+        !(Number.isFinite(call.startOrder) && Number.isFinite(call.endOrder)) ||
+        call.endOrder <= call.startOrder
+    )
+  ) {
+    return { kind: "failed", code: "capture_integrity", message };
+  }
+  const structured = calls.filter((call) => call.name === "structured_output");
+  const finalCall = calls.reduce<TddToolCall | undefined>(
+    (latest, call) =>
+      !latest || call.startOrder > latest.startOrder ? call : latest,
+    undefined
+  );
+  if (
+    structured.length !== 1 ||
+    structured[0] !== finalCall ||
+    calls.some(
+      (call) =>
+        call !== structured[0] &&
+        call.assistantTurn === structured[0]?.assistantTurn
+    )
+  ) {
+    return { kind: "failed", code: "report_integrity", message };
+  }
+  if (hasUnsafeRunnerProof(calls)) {
+    return { kind: "failed", code: "unsafe_runner", message };
+  }
+  if (hasUnsafeShellActivity(calls)) {
+    return { kind: "failed", code: "unsafe_shell", message };
+  }
+  if (
+    HYPOTHETICAL_MARKERS.some((marker) =>
+      ["RED:", "GREEN:", "COVERAGE:"].some((prefix) =>
+        entries.get(prefix)!.toLowerCase().includes(marker)
+      )
+    )
+  ) {
+    return { kind: "failed", code: "fabricated_claim", message };
+  }
+  if (hasFabricatedNumericCoverage(entries.get("COVERAGE:")!, calls)) {
+    return { kind: "failed", code: "fabricated_coverage", message };
+  }
+  const green = authenticFinalGreen(calls, entries.get("GREEN:")!);
+  if (!green) {
+    return { kind: "failed", code: "missing_green", message };
+  }
+  if (
+    !correlatedObservedRed(
+      calls,
+      entries.get("RED:")!,
+      trustedTaskIntent,
+      expectedCommand
+    )
+  ) {
+    return { kind: "failed", code: "fabricated_claim", message };
+  }
+  if (hasUnresolvedPostProductionFailure(calls)) {
+    return { kind: "failed", code: "unresolved_tests", message };
+  }
+  return { kind: "needs_verification", code: "strategy_deviation", message };
 }

@@ -45,6 +45,7 @@ import {
 import { Type } from "typebox";
 
 import { EXECUTOR_RESULT_SCHEMA } from "../../extensions/execute/executor-prompt";
+import { validateTaskShape } from "../../extensions/execute/task-shape";
 import { normalizeTddToolMetadata } from "../../extensions/execute/tdd-evidence";
 import {
   type AssistantMessageRecord,
@@ -58,6 +59,18 @@ import {
   snapshotWorkspace,
   type ToolCallRecord,
 } from "./index";
+import {
+  composeTaskShapeRequest,
+  type ExecuteDiagnosticOwnership,
+  scoreTaskShapeRun,
+  simulatedCheckpointSchema,
+  simulatedExecuteTasksSchema,
+  simulatedTaskCreateSchema,
+  simulatedTaskIdSchema,
+  simulatedTaskUpdateSchema,
+  type TaskShapeCase,
+  type TaskShapeRunEvidence,
+} from "./task-shape";
 
 const LEADING_AT_PATTERN = /^@/;
 const LEADING_WHITESPACE_PATTERN = /^\s*/;
@@ -166,6 +179,36 @@ const codexServiceTierStream: StreamFn = (model, context, options) => {
 export type EvalVariant = "baseline" | "candidate";
 export type EvalServiceTier = "default" | "priority";
 
+export interface PlannedRun {
+  caseId: string;
+  repetition: number;
+  variant: EvalVariant;
+}
+
+export function planRuns(
+  caseIds: readonly string[],
+  repetitions: number,
+  singleArm = false
+): PlannedRun[] {
+  const runs: PlannedRun[] = [];
+  for (const [caseIndex, caseId] of caseIds.entries()) {
+    for (let repetition = 1; repetition <= repetitions; repetition += 1) {
+      let variants: EvalVariant[];
+      if (singleArm) {
+        variants = ["candidate"];
+      } else if ((caseIndex + repetition) % 2 === 0) {
+        variants = ["baseline", "candidate"];
+      } else {
+        variants = ["candidate", "baseline"];
+      }
+      for (const variant of variants) {
+        runs.push({ caseId, repetition, variant });
+      }
+    }
+  }
+  return runs;
+}
+
 export interface RunRecord {
   caseId: string;
   workload: string;
@@ -190,6 +233,7 @@ export interface RunRecord {
   toolCalls: ToolCallRecord[];
   trajectoryErrors: string[];
   assistantMessages: AssistantMessageRecord[];
+  taskShapeEvidence?: TaskShapeRunEvidence;
 }
 
 export interface RunVariantOptions {
@@ -206,6 +250,7 @@ export interface RunVariantOptions {
   maxTurns: number;
   getApiKey: (provider: string) => Promise<string | undefined>;
   streamFn?: StreamFn;
+  taskShapeCase?: TaskShapeCase;
 }
 
 async function copyFixture(source: string, destination: string): Promise<void> {
@@ -662,7 +707,254 @@ async function isSafeWorkspacePath(
   return isWithinDirectory(workspacePath, await realpath(existingAncestor));
 }
 
-function createTools(workspace: string, evalCase: EvalCase): AgentTool[] {
+export function createSimulatedOrchestrationTools(
+  reconciliation?: ExecuteDiagnosticOwnership
+): AgentTool[] {
+  let nextTaskId = 1;
+  let reconciliationTasks: Array<{ taskId: string; filesTouched: string[] }> =
+    [];
+  const diagnosedFiles = new Set<string>();
+  const taskCreate: AgentTool<typeof simulatedTaskCreateSchema> = {
+    name: "TaskCreate",
+    label: "Create Task (simulated)",
+    description:
+      "Validate a bounded executor-owned task proposal. No pi-task is created.",
+    parameters: simulatedTaskCreateSchema,
+    execute(_id, params) {
+      const taskId = `sim-task-${nextTaskId}`;
+      nextTaskId += 1;
+      return Promise.resolve({
+        content: [
+          {
+            type: "text" as const,
+            text: JSON.stringify({
+              taskId,
+              subject: params.subject,
+              simulated: true,
+            }),
+          },
+        ],
+        details: { taskId, simulated: true },
+      });
+    },
+  };
+  const taskUpdate: AgentTool<typeof simulatedTaskUpdateSchema> = {
+    name: "TaskUpdate",
+    label: "Update Task (simulated)",
+    description:
+      "Validate a simulated task status transition. No task state is persisted.",
+    parameters: simulatedTaskUpdateSchema,
+    execute(_id, params) {
+      const task = reconciliationTasks.find(
+        (candidate) => candidate.taskId === params.taskId
+      );
+      const diagnosticsComplete =
+        task?.filesTouched.every((filePath) => diagnosedFiles.has(filePath)) ??
+        false;
+      const expectedStatus =
+        reconciliation === "request-caused" ? "in_progress" : "completed";
+      const evaluationComplete =
+        reconciliation !== undefined &&
+        diagnosticsComplete &&
+        params.status === expectedStatus;
+      return Promise.resolve({
+        content: [
+          {
+            type: "text" as const,
+            text: JSON.stringify({
+              ...params,
+              diagnosticsComplete,
+              evaluationComplete,
+              simulated: true,
+            }),
+          },
+        ],
+        details: { diagnosticsComplete, evaluationComplete, simulated: true },
+        ...(reconciliation !== undefined && !evaluationComplete
+          ? { isError: true }
+          : {}),
+      });
+    },
+  };
+  const taskList: AgentTool = {
+    name: "TaskList",
+    label: "List Tasks (simulated)",
+    description:
+      "Return the bounded simulated task list. No pi-task store is accessed.",
+    parameters: Type.Object({}, { additionalProperties: false }),
+    execute() {
+      return Promise.resolve({
+        content: [
+          {
+            type: "text" as const,
+            text: JSON.stringify({ tasks: [], simulated: true }),
+          },
+        ],
+        details: { simulated: true },
+      });
+    },
+  };
+  const taskGet: AgentTool<typeof simulatedTaskIdSchema> = {
+    name: "TaskGet",
+    label: "Get Task (simulated)",
+    description:
+      "Read one simulated task identifier. No pi-task store is accessed.",
+    parameters: simulatedTaskIdSchema,
+    execute(_id, params) {
+      return Promise.resolve({
+        content: [
+          {
+            type: "text" as const,
+            text: JSON.stringify({
+              ...params,
+              status: "in_progress",
+              simulated: true,
+            }),
+          },
+        ],
+        details: { simulated: true },
+      });
+    },
+  };
+  const checkpoint: AgentTool<typeof simulatedCheckpointSchema> = {
+    name: "execute_checkpoint",
+    label: "Execute Checkpoint (simulated)",
+    description:
+      "Validate a bounded checkpoint request without reading or writing files.",
+    parameters: simulatedCheckpointSchema,
+    execute(_id, params) {
+      return Promise.resolve({
+        content: [
+          {
+            type: "text" as const,
+            text: JSON.stringify({
+              op: params.op,
+              found: false,
+              simulated: true,
+            }),
+          },
+        ],
+        details: { simulated: true },
+      });
+    },
+  };
+  const diagnosticsSchema = Type.Object(
+    {
+      operation: Type.Literal("diagnostics"),
+      filePath: Type.String({ minLength: 1, maxLength: 500 }),
+    },
+    { additionalProperties: false }
+  );
+  const diagnostics: AgentTool<typeof diagnosticsSchema> = {
+    name: "lsp",
+    label: "LSP diagnostics (simulated)",
+    description:
+      "Inspect one returned touched file after completed simulated execution.",
+    parameters: diagnosticsSchema,
+    execute(_id, params) {
+      const filePath = (params as { filePath: string }).filePath;
+      const expected = reconciliationTasks.some((task) =>
+        task.filesTouched.includes(filePath)
+      );
+      if (expected) {
+        diagnosedFiles.add(filePath);
+      }
+      const text =
+        reconciliation === "request-caused"
+          ? `${filePath}: request-caused type diagnostic`
+          : `${filePath}: no request-caused diagnostics; unrelated diagnostic exists elsewhere`;
+      return Promise.resolve({
+        content: [{ type: "text" as const, text }],
+        details: { expected, ownership: reconciliation, simulated: true },
+        ...(expected ? {} : { isError: true }),
+      });
+    },
+  };
+  const executeTasks: AgentTool<typeof simulatedExecuteTasksSchema> = {
+    name: "execute_tasks",
+    label: "Execute Tasks (capture only)",
+    description:
+      "Validate and capture the complete pre-dispatch graph of up to four closed executor requests. An accepted capture completes this shape evaluation successfully; no real Agent is requested or launched.",
+    parameters: simulatedExecuteTasksSchema,
+    execute(_id, params) {
+      const errors = params.tasks.flatMap((task, index) => {
+        if (task.tdd === true) {
+          const validation = validateTaskShape(task.tddShape);
+          return validation.ok === false
+            ? validation.errors.map((error) => `tasks[${index}]: ${error}`)
+            : [];
+        }
+        return task.tddShape === undefined
+          ? []
+          : [`tasks[${index}]: tddShape requires tdd:true`];
+      });
+      const accepted = errors.length === 0;
+      reconciliationTasks =
+        accepted && reconciliation
+          ? params.tasks.flatMap((task) => {
+              if (task.tdd !== true) {
+                return [];
+              }
+              const validation = validateTaskShape(task.tddShape);
+              return validation.ok
+                ? [
+                    {
+                      taskId: task.taskId,
+                      filesTouched: validation.value.mutations.map(
+                        (mutation) => mutation.path
+                      ),
+                    },
+                  ]
+                : [];
+            })
+          : [];
+      const results = reconciliationTasks.map((task) => ({
+        taskId: task.taskId,
+        outcome: "completed",
+        result: { filesTouched: task.filesTouched },
+      }));
+      const evaluationComplete = accepted && reconciliation === undefined;
+      const payload = {
+        accepted,
+        captured: true,
+        evaluationComplete,
+        agentLaunch: "not_requested_in_shape_evaluation",
+        errors: errors.slice(0, 8),
+        ...(reconciliation
+          ? { diagnosticOwnership: reconciliation, results }
+          : {}),
+      };
+      return Promise.resolve({
+        content: [
+          {
+            type: "text" as const,
+            text: JSON.stringify(payload),
+          },
+        ],
+        details: payload,
+        ...(accepted ? {} : { isError: true }),
+      });
+    },
+  };
+  return [
+    taskCreate,
+    taskUpdate,
+    taskList,
+    taskGet,
+    checkpoint,
+    ...(reconciliation ? [diagnostics] : []),
+    executeTasks,
+  ];
+}
+
+function createTools(
+  workspace: string,
+  evalCase: EvalCase,
+  taskShapeCase?: TaskShapeCase
+): AgentTool[] {
+  if (taskShapeCase) {
+    return createSimulatedOrchestrationTools(taskShapeCase.reconciliation);
+  }
   const names = evalCase.tools;
   const builtInsByName = new Map(
     [
@@ -703,12 +995,25 @@ export async function runVariant(
   const sessionId = SessionManager.inMemory().getSessionId();
   await copyFixture(options.fixturePath, workspace);
   const initialWorkspaceSnapshot = await snapshotWorkspace(workspace);
-  const tools = createTools(workspace, options.evalCase);
-  const request = composeEvalRequest(
-    options.evalCase.promptPath,
-    options.promptContent,
-    options.evalCase.task
-  );
+  const tools = createTools(workspace, options.evalCase, options.taskShapeCase);
+  const request = options.taskShapeCase
+    ? {
+        ...composeTaskShapeRequest(
+          options.promptContent,
+          readFileSync(
+            new URL("../../extensions/core-prompt/prompt.md", import.meta.url),
+            "utf8"
+          ),
+          options.evalCase.task,
+          options.taskShapeCase.reconciliation
+        ),
+        structuredOutput: false,
+      }
+    : composeEvalRequest(
+        options.evalCase.promptPath,
+        options.promptContent,
+        options.evalCase.task
+      );
   const context: AgentContext = {
     systemPrompt: [
       request.systemPrompt,
@@ -996,6 +1301,15 @@ export async function runVariant(
       toolCalls,
       trajectoryErrors,
       assistantMessages,
+      ...(options.taskShapeCase
+        ? {
+            taskShapeEvidence: scoreTaskShapeRun(
+              options.taskShapeCase,
+              toolCalls,
+              completed
+            ),
+          }
+        : {}),
     };
   } finally {
     await rm(workspace, { force: true, recursive: true });

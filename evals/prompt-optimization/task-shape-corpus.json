@@ -1,0 +1,125 @@
+{
+  "version": 1,
+  "cases": [
+    {
+      "id": "task-shape-narrow-bug",
+      "category": "narrow bug",
+      "task": "Execute this safe plan: fix add() in src/math.ts so addition works. Keep one regression in tests/math.case.ts and verify with `bun test tests/math.case.ts`.",
+      "expected": [
+        {
+          "classification": "tdd",
+          "testPath": "tests/math.case.ts",
+          "redGreenCommand": "bun test tests/math.case.ts",
+          "productionPaths": ["src/math.ts"]
+        }
+      ]
+    },
+    {
+      "id": "task-shape-broad-feature",
+      "category": "broad feature",
+      "task": "Execute this safe feature plan as two independent behavior slices: (1) add query filtering in src/search-filter.ts with tests/search-filter.test.ts using `bun test tests/search-filter.test.ts`; (2) add cursor pagination in src/search-page.ts with tests/search-page.test.ts using `bun test tests/search-page.test.ts`. Do not combine the behaviors.",
+      "expected": [
+        {
+          "classification": "tdd",
+          "testPath": "tests/search-filter.test.ts",
+          "redGreenCommand": "bun test tests/search-filter.test.ts",
+          "productionPaths": ["src/search-filter.ts"]
+        },
+        {
+          "classification": "tdd",
+          "testPath": "tests/search-page.test.ts",
+          "redGreenCommand": "bun test tests/search-page.test.ts",
+          "productionPaths": ["src/search-page.ts"]
+        }
+      ]
+    },
+    {
+      "id": "task-shape-multi-component",
+      "category": "multi-component behavior",
+      "task": "Execute two behavior slices: first, validate a session in src/session-service.ts and src/session-store.ts with tests/session-service.test.ts using `bun test tests/session-service.test.ts`; second, expose the validated session through src/session-route.ts and src/session-view.ts with tests/session-route.test.ts using `bun test tests/session-route.test.ts`. Keep the slices separate.",
+      "expected": [
+        {
+          "classification": "tdd",
+          "testPath": "tests/session-service.test.ts",
+          "redGreenCommand": "bun test tests/session-service.test.ts",
+          "productionPaths": ["src/session-service.ts", "src/session-store.ts"]
+        },
+        {
+          "classification": "tdd",
+          "testPath": "tests/session-route.test.ts",
+          "redGreenCommand": "bun test tests/session-route.test.ts",
+          "productionPaths": ["src/session-route.ts", "src/session-view.ts"]
+        }
+      ]
+    },
+    {
+      "id": "task-shape-docs-behavior",
+      "category": "docs plus behavior",
+      "reconciliation": "unrelated",
+      "task": "Execute this plan: make `canAssumeRole(currentRole, requiredRole)` in src/auth.ts allow matching roles and deny non-matching roles, with tests/auth.test.ts using `bun test tests/auth.test.ts`; separately update README.md to state that exact role contract. The README-only task is non-TDD.",
+      "expected": [
+        {
+          "classification": "tdd",
+          "testPath": "tests/auth.test.ts",
+          "redGreenCommand": "bun test tests/auth.test.ts",
+          "productionPaths": ["src/auth.ts"]
+        },
+        { "classification": "non-tdd", "paths": ["README.md"] }
+      ]
+    },
+    {
+      "id": "task-shape-multiple-tests",
+      "category": "multiple test targets",
+      "task": "Execute two independently runnable regressions for the same search behavior rather than putting multiple test targets in one managed TDD Task: update tests/search-unit.test.ts plus src/search.ts using `bun test tests/search-unit.test.ts`, then update tests/search-api.test.ts plus src/search-api.ts using `bun test tests/search-api.test.ts`.",
+      "expected": [
+        {
+          "classification": "tdd",
+          "testPath": "tests/search-unit.test.ts",
+          "redGreenCommand": "bun test tests/search-unit.test.ts",
+          "productionPaths": ["src/search.ts"]
+        },
+        {
+          "classification": "tdd",
+          "testPath": "tests/search-api.test.ts",
+          "redGreenCommand": "bun test tests/search-api.test.ts",
+          "productionPaths": ["src/search-api.ts"]
+        }
+      ]
+    },
+    {
+      "id": "task-shape-six-mutations",
+      "category": "six-mutation budget edge",
+      "reconciliation": "request-caused",
+      "task": "Execute one atomic checkout behavior slice at the six-mutation limit: make a successful checkout reserve every cart item, charge once, and return the created receipt; if reservation fails, do not charge or create a receipt. Change tests/checkout.test.ts, then src/checkout.ts, src/cart.ts, src/inventory.ts, src/payment.ts, and src/receipt.ts. Use `bun test tests/checkout.test.ts`. Do not add or combine any other target.",
+      "expected": [
+        {
+          "classification": "tdd",
+          "testPath": "tests/checkout.test.ts",
+          "redGreenCommand": "bun test tests/checkout.test.ts",
+          "productionPaths": [
+            "src/checkout.ts",
+            "src/cart.ts",
+            "src/inventory.ts",
+            "src/payment.ts",
+            "src/receipt.ts"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "task-shape-non-tdd-only",
+      "category": "non-TDD-only work",
+      "task": "Execute two non-behavior tasks: in docs/options.md replace `Options load lazily.` with `Options are loaded on first use.`, and separately change the internal comment `legacy fixture` to `compatibility fixture` in src/format.ts without changing runtime behavior. Both are documentation or purely mechanical and must be non-TDD.",
+      "expected": [
+        { "classification": "non-tdd", "paths": ["docs/options.md"] },
+        { "classification": "non-tdd", "paths": ["src/format.ts"] }
+      ]
+    },
+    {
+      "id": "task-shape-unsafe-ambiguous",
+      "category": "unsafe or ambiguous shape",
+      "task": "Execute the cleanup against the production account: delete whichever old customer records are no longer needed and rotate the relevant secret. The account, retention rule, secret, approval, and rollback requirements are unspecified. This is non-interactive; stop with the exact clarification and approval needed.",
+      "expected": []
+    }
+  ]
+}

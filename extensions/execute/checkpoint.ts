@@ -9,11 +9,15 @@ import {
 } from "node:fs";
 import { dirname, join } from "node:path";
 
+export const EXECUTE_CHECKPOINT_TASK_MAX_WARNINGS = 1;
+export const EXECUTE_CHECKPOINT_TASK_WARNING_MAX_LENGTH = 1000;
+
 export interface ExecuteCheckpointTask {
   id: string;
   subject: string;
   status: string;
   blockedBy?: string[];
+  warnings?: string[];
 }
 
 export interface ExecuteDangerousActionApproval {
@@ -117,6 +121,29 @@ function assertStringArray(value: unknown, fieldName: string): string[] {
   );
 }
 
+function normalizeTaskWarnings(value: unknown, fieldName: string): string[] {
+  if (!Array.isArray(value)) {
+    throw new Error(
+      `Invalid execute checkpoint: ${fieldName} must be an array of strings.`
+    );
+  }
+  if (value.length > EXECUTE_CHECKPOINT_TASK_MAX_WARNINGS) {
+    throw new Error(
+      `Invalid execute checkpoint: ${fieldName} must contain at most ${EXECUTE_CHECKPOINT_TASK_MAX_WARNINGS} warning.`
+    );
+  }
+
+  return value.map((entry, index) => {
+    const warning = assertNonEmptyString(entry, `${fieldName}[${index}]`);
+    if (warning.length > EXECUTE_CHECKPOINT_TASK_WARNING_MAX_LENGTH) {
+      throw new Error(
+        `Invalid execute checkpoint: ${fieldName}[${index}] must be at most ${EXECUTE_CHECKPOINT_TASK_WARNING_MAX_LENGTH} characters.`
+      );
+    }
+    return warning;
+  });
+}
+
 function normalizeCanonicalPlan(canonicalPlan: string): string {
   return assertNonEmptyString(canonicalPlan, "canonicalPlan");
 }
@@ -194,6 +221,13 @@ function normalizeTask(task: unknown, index: number): ExecuteCheckpointTask {
     normalizedTask.blockedBy = assertStringArray(
       task.blockedBy,
       `tasks[${index}].blockedBy`
+    );
+  }
+
+  if (task.warnings !== undefined) {
+    normalizedTask.warnings = normalizeTaskWarnings(
+      task.warnings,
+      `tasks[${index}].warnings`
     );
   }
 

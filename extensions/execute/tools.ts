@@ -2,6 +2,8 @@ import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
 
 import {
+  EXECUTE_CHECKPOINT_TASK_MAX_WARNINGS,
+  EXECUTE_CHECKPOINT_TASK_WARNING_MAX_LENGTH,
   listUnfinishedExecuteCheckpoints,
   loadExecuteCheckpoint,
   saveExecuteCheckpoint,
@@ -15,6 +17,18 @@ const ExecuteCheckpointTaskSchema = Type.Object({
     Type.Array(Type.String({ minLength: 1 }), {
       description: "Optional list of blocking task ids.",
     })
+  ),
+  warnings: Type.Optional(
+    Type.Array(
+      Type.String({
+        minLength: 1,
+        maxLength: EXECUTE_CHECKPOINT_TASK_WARNING_MAX_LENGTH,
+      }),
+      {
+        description: "Optional settled Task-shape warnings for this task.",
+        maxItems: EXECUTE_CHECKPOINT_TASK_MAX_WARNINGS,
+      }
+    )
   ),
 });
 

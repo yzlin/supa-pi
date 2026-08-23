@@ -50,6 +50,12 @@ const TOOL_NAMES = [
   "fetch_content",
   "questionnaire",
   "structured_output",
+  "TaskCreate",
+  "TaskUpdate",
+  "TaskList",
+  "TaskGet",
+  "execute_checkpoint",
+  "execute_tasks",
 ] as const;
 export type ToolName = (typeof TOOL_NAMES)[number];
 

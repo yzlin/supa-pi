@@ -10,21 +10,40 @@ import {
   ModelRegistry,
   ModelRuntime,
   resolveCliModel,
+  SettingsManager,
 } from "@earendil-works/pi-coding-agent";
 
 import {
   type AggregateDelta,
   aggregateVariants,
   CORE_EVAL_BASE_PROMPT,
+  type EvalCase,
   type EvalCorpus,
   loadPromptPair,
   type PromptPair,
   parseCorpus,
   readStableContainedFile,
 } from "./index";
-import { type EvalVariant, type RunRecord, runVariant } from "./runner";
+import {
+  type EvalVariant,
+  planRuns,
+  type RunRecord,
+  runVariant,
+} from "./runner";
+import {
+  aggregatePersistedTaskShapeRuns,
+  assertTaskShapePlan,
+  loadTaskShapeCorpus,
+  TASK_SHAPE_PLANNED_CALLS,
+  TASK_SHAPE_PROMPT_PATH,
+  TASK_SHAPE_REPETITIONS,
+  type TaskShapeAggregate,
+} from "./task-shape";
 
 const DEFAULT_MODEL = "openai-codex/gpt-5.6-sol";
+export const TASK_SHAPE_CASE_IDS = loadTaskShapeCorpus().cases.map(
+  (evalCase) => evalCase.id
+);
 const DEFAULT_THINKING: ThinkingLevel = "high";
 const DEFAULT_TIMEOUT_MS = 300_000;
 const DEFAULT_MAX_TURNS = 20;
@@ -33,9 +52,11 @@ interface CliOptions {
   caseIds: string[];
   help: boolean;
   model: string;
+  modelExplicit: boolean;
   thinking: ThinkingLevel;
   candidateThinking?: ThinkingLevel;
   compareServiceTier: boolean;
+  taskShapeSuite: boolean;
   repetitions: number;
   timeoutMs: number;
   maxTurns: number;
@@ -96,12 +117,15 @@ export function parseCliOptions(args: string[]): CliOptions {
     caseIds: [],
     help: false,
     model: DEFAULT_MODEL,
+    modelExplicit: false,
     thinking: DEFAULT_THINKING,
     compareServiceTier: false,
+    taskShapeSuite: false,
     repetitions: 1,
     timeoutMs: DEFAULT_TIMEOUT_MS,
     maxTurns: DEFAULT_MAX_TURNS,
   };
+  let repetitionsExplicit = false;
   for (let index = 0; index < args.length; index += 1) {
     const flag = args[index];
     const value = args[index + 1];
@@ -120,6 +144,7 @@ export function parseCliOptions(args: string[]): CliOptions {
           throw new Error("--model requires provider/model");
         }
         options.model = value;
+        options.modelExplicit = true;
         index += 1;
         break;
       case "--thinking":
@@ -134,6 +159,9 @@ export function parseCliOptions(args: string[]): CliOptions {
       case "--compare-service-tier":
         options.compareServiceTier = true;
         break;
+      case "--task-shape-suite":
+        options.taskShapeSuite = true;
+        break;
       case "--candidate-thinking":
         if (!THINKING_LEVELS.includes(value as ThinkingLevel)) {
           throw new Error(
@@ -145,6 +173,7 @@ export function parseCliOptions(args: string[]): CliOptions {
         break;
       case "--repetitions":
         options.repetitions = parsePositiveInteger(value, flag);
+        repetitionsExplicit = true;
         index += 1;
         break;
       case "--timeout-ms":
@@ -163,6 +192,20 @@ export function parseCliOptions(args: string[]): CliOptions {
     }
   }
 
+  if (options.taskShapeSuite) {
+    if (options.caseIds.length > 0) {
+      throw new Error("--task-shape-suite cannot be combined with --case");
+    }
+    if (options.compareServiceTier || options.candidateThinking) {
+      throw new Error(
+        "--task-shape-suite cannot be combined with paired comparison flags"
+      );
+    }
+    if (repetitionsExplicit && options.repetitions !== TASK_SHAPE_REPETITIONS) {
+      throw new Error("--task-shape-suite requires exactly 3 repetitions");
+    }
+    options.repetitions = TASK_SHAPE_REPETITIONS;
+  }
   if (options.candidateThinking === options.thinking) {
     throw new Error("reasoning comparison requires different thinking levels");
   }
@@ -421,6 +464,56 @@ function createSummary(records: RunRecord[]): EvalSummary {
   };
 }
 
+export function plannedCallMessage(
+  caseCount: number,
+  repetitions: number,
+  singleArm: boolean
+): string {
+  const arms = singleArm ? 1 : 2;
+  const armLabel = singleArm ? "candidate arm" : "variants";
+  return `Running ${caseCount * repetitions * arms} live calls: ${caseCount} case(s) × ${repetitions} repetition(s) × ${arms} ${armLabel}\n`;
+}
+
+export function modelSelectionRecord(
+  selectedAtStart: string,
+  resolved: string,
+  explicit: boolean
+) {
+  return {
+    source: explicit ? ("cli" as const) : ("configured-primary" as const),
+    selectedAtStart,
+    resolved,
+  };
+}
+
+export function singleArmManifestFields(plannedCalls: number) {
+  return {
+    mode: "task-shape-suite" as const,
+    plannedCalls,
+    arm: {
+      variant: "candidate" as const,
+      promptSource: "working-tree" as const,
+    },
+  };
+}
+
+export function configuredPrimaryModel(
+  explicitModel: string | undefined,
+  settings: Pick<SettingsManager, "getDefaultProvider" | "getDefaultModel">
+): string {
+  if (explicitModel) {
+    return explicitModel;
+  }
+  const provider = settings.getDefaultProvider();
+  const model = settings.getDefaultModel();
+  if (!(provider && model)) {
+    throw new Error(
+      "--task-shape-suite requires a configured primary model or --model"
+    );
+  }
+  return `${provider}/${model}`;
+}
+
 function signed(value: number, digits = 2): string {
   return `${value >= 0 ? "+" : ""}${value.toFixed(digits)}`;
 }
@@ -524,6 +617,22 @@ export function validateReasoningComparison(
   }
 }
 
+export function taskShapeSummaryMarkdown(summary: TaskShapeAggregate): string {
+  return `${[
+    "# Task-shape suite summary",
+    "",
+    "Single candidate arm; no baseline or deltas were computed.",
+    "",
+    "| Gate | Result |",
+    "| --- | ---: |",
+    `| Planned 24 candidate calls | ${summary.plannedRunsValid ? "PASS" : "FAIL"} |`,
+    `| Structurally valid runs | ${summary.structuralValidRuns}/24 |`,
+    `| Correct classification and shape | ${summary.classificationCorrectRuns}/24 |`,
+    `| Invalid/oversized TDD attempts | ${summary.invalidOrOversizedTddAttempts} |`,
+    `| Aggregate | ${summary.gates.passed ? "PASS" : "FAIL"} |`,
+  ].join("\n")}\n`;
+}
+
 function summaryMarkdown(summary: EvalSummary, comparison: Comparison): string {
   const aggregate = summary.aggregate;
   const baseline = aggregate.baselineMetrics;
@@ -590,19 +699,59 @@ export async function main(): Promise<void> {
   const options = parseCliOptions(process.argv.slice(2));
   if (options.help) {
     process.stdout.write(
-      "Usage: bun run eval:prompts -- [options]\n\nOptions:\n  --case <id> (repeatable)\n  --model <provider/model>\n  --thinking <level>\n  --candidate-thinking <level>\n  --compare-service-tier\n  --repetitions <count>\n  --timeout-ms <milliseconds>\n  --max-turns <count>\n"
+      "Usage: bun run eval:prompts -- [options]\n\nOptions:\n  --case <id> (repeatable)\n  --model <provider/model>\n  --thinking <level>\n  --candidate-thinking <level>\n  --compare-service-tier\n  --task-shape-suite (8 cases × 3 repetitions, candidate only)\n  --repetitions <count>\n  --timeout-ms <milliseconds>\n  --max-turns <count>\n"
     );
     return;
   }
   const moduleDirectory = fileURLToPath(new URL(".", import.meta.url));
   const repositoryRoot = resolve(moduleDirectory, "../..");
-  const corpusPath = join(moduleDirectory, "corpus.json");
+  const corpusPath = join(
+    moduleDirectory,
+    options.taskShapeSuite ? "task-shape-corpus.json" : "corpus.json"
+  );
   const fixturePath = join(moduleDirectory, "fixtures/sample-project");
   const corpusContent = await readFile(corpusPath, "utf8");
   const corpusSha256 = createHash("sha256").update(corpusContent).digest("hex");
-  const corpus = parseCorpus(JSON.parse(corpusContent));
+  const standardCorpus = parseCorpus(
+    JSON.parse(await readFile(join(moduleDirectory, "corpus.json"), "utf8"))
+  );
+  const taskShapeCorpus = options.taskShapeSuite
+    ? loadTaskShapeCorpus()
+    : undefined;
+  if (taskShapeCorpus) {
+    assertTaskShapePlan(taskShapeCorpus.cases.length, options.repetitions);
+  }
+  const taskShapeCasesById = new Map(
+    (taskShapeCorpus?.cases ?? []).map((evalCase) => [evalCase.id, evalCase])
+  );
+  const suiteEvalCases: EvalCase[] = (taskShapeCorpus?.cases ?? []).map(
+    (evalCase) => ({
+      id: evalCase.id,
+      workload: "tool-heavy orchestration",
+      promptPath: TASK_SHAPE_PROMPT_PATH,
+      task: evalCase.task,
+      tools: [
+        "TaskCreate",
+        "TaskUpdate",
+        "TaskList",
+        "TaskGet",
+        "execute_checkpoint",
+        "execute_tasks",
+      ],
+      checks: [
+        {
+          type: "workspaceUnchanged" as const,
+          domain: "tests" as const,
+          weight: 1,
+        },
+      ],
+    })
+  );
+  const activeCases = options.taskShapeSuite
+    ? suiteEvalCases
+    : standardCorpus.cases;
   const casesById = new Map(
-    corpus.cases.map((evalCase) => [evalCase.id, evalCase])
+    activeCases.map((evalCase) => [evalCase.id, evalCase])
   );
   const unknownCaseIds = options.caseIds.filter(
     (caseId) => !casesById.has(caseId)
@@ -610,22 +759,25 @@ export async function main(): Promise<void> {
   if (unknownCaseIds.length > 0) {
     throw new Error(`unknown eval case: ${unknownCaseIds.join(", ")}`);
   }
+  const requestedCaseIds = options.taskShapeSuite
+    ? [...TASK_SHAPE_CASE_IDS]
+    : options.caseIds;
   const selectedCases =
-    options.caseIds.length > 0
-      ? options.caseIds.map((caseId) => {
+    requestedCaseIds.length > 0
+      ? requestedCaseIds.map((caseId) => {
           const evalCase = casesById.get(caseId);
           if (!evalCase) {
             throw new Error(`unknown eval case: ${caseId}`);
           }
           return evalCase;
         })
-      : corpus.cases;
+      : activeCases;
   const {
     paths: startingChangedPromptPaths,
     stateSha256: startingChangedPromptStateSha256,
   } = await establishChangedPromptSnapshot(repositoryRoot);
-  if (options.caseIds.length === 0) {
-    assertCorpusCoverage(corpus, startingChangedPromptPaths);
+  if (options.caseIds.length === 0 && !options.taskShapeSuite) {
+    assertCorpusCoverage(standardCorpus, startingChangedPromptPaths);
   }
   const selectedPromptPaths = [
     ...new Set(selectedCases.map((evalCase) => evalCase.promptPath)),
@@ -649,13 +801,20 @@ export async function main(): Promise<void> {
 
   const modelRuntime = await ModelRuntime.create();
   const modelRegistry = new ModelRegistry(modelRuntime);
+  const settingsManager = SettingsManager.create(repositoryRoot);
+  const selectedModel = options.taskShapeSuite
+    ? configuredPrimaryModel(
+        options.modelExplicit ? options.model : undefined,
+        settingsManager
+      )
+    : options.model;
   const resolvedModel = resolveCliModel({
-    cliModel: options.model,
+    cliModel: selectedModel,
     cliThinking: options.thinking,
     modelRuntime,
   });
   if (resolvedModel.error || !resolvedModel.model) {
-    throw new Error(resolvedModel.error ?? `model not found: ${options.model}`);
+    throw new Error(resolvedModel.error ?? `model not found: ${selectedModel}`);
   }
   validateReasoningComparison(resolvedModel.model, comparison);
   validateServiceTierComparison(resolvedModel.model, comparison);
@@ -664,11 +823,23 @@ export async function main(): Promise<void> {
     throw new Error(auth.error);
   }
 
-  const promptPairs = new Map<string, PromptPair>();
   const variantConfigs = new Map<string, Record<EvalVariant, VariantConfig>>();
   for (const path of selectedPromptPaths) {
-    const pair = await loadPromptPair(repositoryRoot, path, startedFromHead);
+    let pair: PromptPair;
+    if (options.taskShapeSuite) {
+      const content = readStableContainedFile(repositoryRoot, path).toString(
+        "utf8"
+      );
+      const candidate = {
+        content,
+        sha256: createHash("sha256").update(content).digest("hex"),
+      };
+      pair = { baseline: candidate, candidate };
+    } else {
+      pair = await loadPromptPair(repositoryRoot, path, startedFromHead);
+    }
     if (
+      !options.taskShapeSuite &&
       comparison.kind === "prompt" &&
       pair.baseline.sha256 === pair.candidate.sha256
     ) {
@@ -676,62 +847,60 @@ export async function main(): Promise<void> {
         `prompt is unchanged between HEAD and working tree: ${path}`
       );
     }
-    promptPairs.set(path, pair);
     variantConfigs.set(path, createVariantConfigs(pair, options));
   }
 
-  const totalCalls = selectedCases.length * options.repetitions * 2;
+  const plannedRuns = planRuns(
+    selectedCases.map((evalCase) => evalCase.id),
+    options.repetitions,
+    options.taskShapeSuite
+  );
+  const totalCalls = plannedRuns.length;
+  if (options.taskShapeSuite && totalCalls !== TASK_SHAPE_PLANNED_CALLS) {
+    throw new Error("Task-shape suite did not plan exactly 24 calls");
+  }
   process.stdout.write(
-    `Running ${totalCalls} live calls: ${selectedCases.length} case(s) × ${options.repetitions} repetition(s) × 2 variants\n`
+    plannedCallMessage(
+      selectedCases.length,
+      options.repetitions,
+      options.taskShapeSuite
+    )
   );
 
   const records: RunRecord[] = [];
-  for (let caseIndex = 0; caseIndex < selectedCases.length; caseIndex += 1) {
-    const evalCase = selectedCases[caseIndex];
+  for (const plannedRun of plannedRuns) {
+    const evalCase = casesById.get(plannedRun.caseId);
     if (!evalCase) {
-      continue;
-    }
-    const pair = promptPairs.get(evalCase.promptPath);
-    if (!pair) {
-      throw new Error(`missing prompt pair: ${evalCase.promptPath}`);
+      throw new Error(`missing planned eval case: ${plannedRun.caseId}`);
     }
     const configs = variantConfigs.get(evalCase.promptPath);
     if (!configs) {
       throw new Error(`missing variant configs: ${evalCase.promptPath}`);
     }
-    for (
-      let repetition = 1;
-      repetition <= options.repetitions;
-      repetition += 1
-    ) {
-      const variants: EvalVariant[] =
-        (caseIndex + repetition) % 2 === 0
-          ? ["baseline", "candidate"]
-          : ["candidate", "baseline"];
-      for (const variant of variants) {
-        process.stdout.write(
-          `[${records.length + 1}/${totalCalls}] ${evalCase.id} ${variant} r${repetition}\n`
-        );
-        const config = configs[variant];
-        records.push(
-          await runVariant({
-            evalCase,
-            variant,
-            repetition,
-            promptContent: config.promptContent,
-            promptSha256: config.promptSha256,
-            fixturePath,
-            model: resolvedModel.model,
-            thinking: config.thinking,
-            ...(config.serviceTier ? { serviceTier: config.serviceTier } : {}),
-            timeoutMs: options.timeoutMs,
-            maxTurns: options.maxTurns,
-            getApiKey: (provider) =>
-              modelRegistry.getApiKeyForProvider(provider),
-          })
-        );
-      }
-    }
+    const { variant, repetition } = plannedRun;
+    process.stdout.write(
+      `[${records.length + 1}/${totalCalls}] ${evalCase.id} ${variant} r${repetition}\n`
+    );
+    const config = configs[variant];
+    records.push(
+      await runVariant({
+        evalCase,
+        variant,
+        repetition,
+        promptContent: config.promptContent,
+        promptSha256: config.promptSha256,
+        fixturePath,
+        model: resolvedModel.model,
+        thinking: config.thinking,
+        ...(config.serviceTier ? { serviceTier: config.serviceTier } : {}),
+        timeoutMs: options.timeoutMs,
+        maxTurns: options.maxTurns,
+        getApiKey: (provider) => modelRegistry.getApiKeyForProvider(provider),
+        ...(options.taskShapeSuite
+          ? { taskShapeCase: taskShapeCasesById.get(evalCase.id) }
+          : {}),
+      })
+    );
   }
 
   const endedAtHead = (
@@ -768,7 +937,9 @@ export async function main(): Promise<void> {
       "repository prompts, HEAD, or eval corpus changed during the run; discard results and rerun"
     );
   }
-  validateServiceTierEvidence(records, comparison);
+  if (!options.taskShapeSuite) {
+    validateServiceTierEvidence(records, comparison);
+  }
   const timestamp = new Date().toISOString().replaceAll(/[:.]/g, "-");
   const outputDirectory = join(
     repositoryRoot,
@@ -778,12 +949,14 @@ export async function main(): Promise<void> {
   );
   await mkdir(join(outputDirectory, "runs"), { recursive: true });
   for (const [path, configs] of variantConfigs) {
-    await writePromptSnapshot(
-      outputDirectory,
-      "baseline",
-      path,
-      configs.baseline.promptContent
-    );
+    if (!options.taskShapeSuite) {
+      await writePromptSnapshot(
+        outputDirectory,
+        "baseline",
+        path,
+        configs.baseline.promptContent
+      );
+    }
     await writePromptSnapshot(
       outputDirectory,
       "candidate",
@@ -801,7 +974,15 @@ export async function main(): Promise<void> {
       `${JSON.stringify(record, null, 2)}\n`
     );
   }
-  const summary = createSummary(records);
+  const summary = options.taskShapeSuite
+    ? await aggregatePersistedTaskShapeRuns(
+        join(outputDirectory, "runs"),
+        taskShapeCorpus!
+      )
+    : createSummary(records);
+  const summaryMarkdownContent = options.taskShapeSuite
+    ? taskShapeSummaryMarkdown(summary as TaskShapeAggregate)
+    : summaryMarkdown(summary as EvalSummary, comparison);
   const manifest = {
     schemaVersion: 1,
     startedFromHead,
@@ -814,12 +995,25 @@ export async function main(): Promise<void> {
       .update(CORE_EVAL_BASE_PROMPT)
       .digest("hex"),
     partial: options.caseIds.length > 0,
+    ...(options.taskShapeSuite
+      ? singleArmManifestFields(totalCalls)
+      : { mode: "paired", plannedCalls: totalCalls }),
     selectedCases: selectedCases.map((evalCase) => evalCase.id),
     model: `${resolvedModel.model.provider}/${resolvedModel.model.id}`,
+    ...(options.taskShapeSuite
+      ? {
+          modelSelection: modelSelectionRecord(
+            selectedModel,
+            `${resolvedModel.model.provider}/${resolvedModel.model.id}`,
+            options.modelExplicit
+          ),
+        }
+      : {}),
     thinking: options.thinking,
     candidateThinking: options.candidateThinking,
-    compareServiceTier: options.compareServiceTier,
-    comparison,
+    ...(options.taskShapeSuite
+      ? {}
+      : { compareServiceTier: options.compareServiceTier, comparison }),
     repetitions: options.repetitions,
     timeoutMs: options.timeoutMs,
     maxTurns: options.maxTurns,
@@ -827,10 +1021,12 @@ export async function main(): Promise<void> {
     promptHashes: Object.fromEntries(
       [...variantConfigs].map(([path, configs]) => [
         path,
-        {
-          baseline: configs.baseline.promptSha256,
-          candidate: configs.candidate.promptSha256,
-        },
+        options.taskShapeSuite
+          ? { candidate: configs.candidate.promptSha256 }
+          : {
+              baseline: configs.baseline.promptSha256,
+              candidate: configs.candidate.promptSha256,
+            },
       ])
     ),
   };
@@ -843,15 +1039,15 @@ export async function main(): Promise<void> {
       join(outputDirectory, "summary.json"),
       `${JSON.stringify(summary, null, 2)}\n`
     ),
-    writeFile(
-      join(outputDirectory, "summary.md"),
-      summaryMarkdown(summary, comparison)
-    ),
+    writeFile(join(outputDirectory, "summary.md"), summaryMarkdownContent),
   ]);
 
   process.stdout.write(
-    `\n${summaryMarkdown(summary, comparison)}\nArtifacts: ${outputDirectory}\n`
+    `\n${summaryMarkdownContent}\nArtifacts: ${outputDirectory}\n`
   );
+  if (options.taskShapeSuite && !(summary as TaskShapeAggregate).gates.passed) {
+    process.exitCode = 1;
+  }
 }
 
 if (import.meta.main) {

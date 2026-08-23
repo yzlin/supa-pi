@@ -16,6 +16,7 @@ import type { EvalCase } from "./index";
 import {
   CANONICAL_SUBTRACT_TEST,
   isContainedRelativePath,
+  planRuns,
   runAllowedFixtureTest,
   runVariant,
 } from "./runner";
@@ -25,6 +26,20 @@ const fixturePath = resolve(
   "fixtures/sample-project"
 );
 const modelRegistry = new ModelRegistry(await ModelRuntime.create());
+describe("run planning", () => {
+  it("plans one candidate arm for the bounded suite and preserves paired ordering", () => {
+    const caseIds = Array.from({ length: 8 }, (_, index) => `case-${index}`);
+    const singleArm = planRuns(caseIds, 3, true);
+
+    expect(singleArm).toHaveLength(24);
+    expect(singleArm.every((run) => run.variant === "candidate")).toBe(true);
+    expect(planRuns(["a"], 1)).toEqual([
+      { caseId: "a", repetition: 1, variant: "candidate" },
+      { caseId: "a", repetition: 1, variant: "baseline" },
+    ]);
+  });
+});
+
 describe("canonical fixture test execution", () => {
   it("semantically checks code and rejects tampered regression tests", () => {
     const deadWorkspace = mkdtempSync(join(tmpdir(), "supa-pi-dead-test-"));

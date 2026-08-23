@@ -1,6 +1,7 @@
 import { describe, expect, it } from "bun:test";
 
 import {
+  assessTddEvidence,
   coverageVerificationTargets,
   isSupportedTestCommand,
   mutationResultProvesDelta,
@@ -90,6 +91,42 @@ function trajectory(
 }
 
 describe("TDD evidence validation", () => {
+  it("enforces an optionally declared exact RED/GREEN command", () => {
+    expect(
+      validateTddEvidence(
+        result(),
+        trajectory(),
+        [],
+        "Fix formatName empty input",
+        "bun test tests/formatName.test.ts"
+      )
+    ).toBeUndefined();
+    expect(
+      validateTddEvidence(
+        result(),
+        trajectory(),
+        [],
+        "Fix formatName empty input",
+        "bun test tests/other.test.ts"
+      )
+    ).toContain("RED command must exactly match declared redGreenCommand");
+
+    const differentGreen = trajectory();
+    differentGreen[2]!.args = { command: "bun test tests/other.test.ts" };
+    const differentGreenResult = result();
+    differentGreenResult.validation[1] =
+      "GREEN: bun test tests/other.test.ts passed with 5 passed";
+    expect(
+      validateTddEvidence(
+        differentGreenResult,
+        differentGreen,
+        [],
+        "Fix formatName empty input",
+        "bun test tests/formatName.test.ts"
+      )
+    ).toContain("GREEN command must exactly match declared redGreenCommand");
+  });
+
   it("accepts retained authoritative truncated evidence and rejects lost outcomes", () => {
     const retained = trajectory();
     retained[0]!.resultTruncated = true;
@@ -289,6 +326,7 @@ describe("TDD evidence validation", () => {
       'error: No matching export in "src/format.ts" for import "formatName"\n(fail) regression\n 1 fail',
       `SyntaxError: Export named 'formatName' not found in module './src/format.ts'\nregression\n1 failed, 0 passed`,
       `Module '"./src/format"' has no exported member 'formatName'.\nregression\n1 failed, 0 passed`,
+      `Cannot find module './formatName'\n(fail) regression\n1 fail`,
     ]) {
       expect(
         validateTddEvidence(
@@ -1363,7 +1401,7 @@ describe("TDD evidence validation", () => {
     );
   });
 
-  it("rejects opaque package scripts as authoritative RED/GREEN evidence", () => {
+  it("keeps package scripts non-authoritative even with claimed proof metadata", () => {
     for (const command of [
       "bun run test:unit",
       "npm test",
@@ -1372,10 +1410,12 @@ describe("TDD evidence validation", () => {
       "pnpm run test:unit",
       "yarn test",
       "yarn run test:unit",
+      "npm run TEST:unit",
     ]) {
       const calls = trajectory();
       for (const call of [calls[0], calls[2]]) {
         call!.args = { command };
+        call!.runnerWorkspaceProof = true;
       }
       const evidence = result();
       evidence.validation[0] = `RED: ${command} failed with 1 failed`;
@@ -1805,6 +1845,412 @@ describe("TDD evidence validation", () => {
     }
   });
 
+  describe("blocked-session regression replays", () => {
+    it("treats authentic but imperfect TDD as needing verification", () => {
+      const evidence = {
+        status: "done",
+        validation: [
+          "RED: bun test extensions/auto-rename/index.test.ts failed because ./index was missing",
+          "GREEN: bun test extensions/auto-rename/index.test.ts passed with 36 tests",
+          "COVERAGE: Focused suite covers lifecycle and failure scenarios",
+        ],
+        blockers: [],
+      };
+      const calls: TddToolCall[] = [
+        {
+          name: "write",
+          args: {},
+          mutationTargets: ["extensions/auto-rename/index.test.ts"],
+          hasTestTargets: true,
+          hasProductionTargets: false,
+          mutationAmbiguous: false,
+          regressionIntent: ["extensions/auto-rename/index.test.ts"],
+          regressionTitles: ["captures first raw interactive input"],
+          mutationProven: true,
+          assistantTurn: 0,
+          startOrder: 1,
+          endOrder: 2,
+          isError: false,
+        },
+        {
+          name: "bash",
+          args: { command: "find node_modules -name '*.md' | head -20" },
+          assistantTurn: 1,
+          startOrder: 3,
+          endOrder: 4,
+          isError: false,
+        },
+        {
+          name: "bash",
+          args: { command: "bun test extensions/auto-rename/index.test.ts" },
+          assistantTurn: 2,
+          startOrder: 5,
+          endOrder: 6,
+          isError: true,
+          runnerWorkspaceProof: true,
+          resultText: "error: Cannot find module './index'\n0 pass\n1 fail",
+        },
+        {
+          name: "write",
+          args: {},
+          mutationTargets: ["extensions/auto-rename/index.ts"],
+          hasTestTargets: false,
+          hasProductionTargets: true,
+          mutationAmbiguous: false,
+          mutationProven: true,
+          assistantTurn: 3,
+          startOrder: 7,
+          endOrder: 8,
+          isError: false,
+        },
+        {
+          name: "bash",
+          args: { command: "bun test extensions/auto-rename/index.test.ts" },
+          assistantTurn: 4,
+          startOrder: 9,
+          endOrder: 10,
+          isError: false,
+          runnerWorkspaceProof: true,
+          resultText:
+            "auto-rename > captures first raw interactive input\n36 pass\n0 fail",
+        },
+        {
+          name: "bash",
+          args: { command: "git status --short" },
+          assistantTurn: 5,
+          startOrder: 11,
+          endOrder: 12,
+          isError: false,
+        },
+        {
+          name: "structured_output",
+          args: {},
+          assistantTurn: 6,
+          startOrder: 13,
+          endOrder: 14,
+          isError: false,
+        },
+      ];
+
+      expect(
+        assessTddEvidence(
+          evidence,
+          calls,
+          [],
+          "Implement safe auto-rename lifecycle behavior",
+          "bun test extensions/auto-rename/index.test.ts"
+        )
+      ).toMatchObject({ kind: "needs_verification" });
+      expect(
+        assessTddEvidence(
+          evidence,
+          calls,
+          ["pending starts at terminal status: 1"],
+          "Implement safe auto-rename lifecycle behavior",
+          "bun test extensions/auto-rename/index.test.ts"
+        )
+      ).toMatchObject({ kind: "failed", code: "capture_integrity" });
+      expect(
+        assessTddEvidence(
+          evidence,
+          calls.map((call) =>
+            call.startOrder === 9
+              ? { ...call, runnerWorkspaceProof: false }
+              : call
+          ),
+          [],
+          "Implement safe auto-rename lifecycle behavior",
+          "bun test extensions/auto-rename/index.test.ts"
+        )
+      ).toMatchObject({ kind: "failed", code: "unsafe_runner" });
+      expect(
+        assessTddEvidence(
+          {
+            ...evidence,
+            validation: [
+              evidence.validation[0]!,
+              evidence.validation[1]!,
+              "COVERAGE: 99% statements covered",
+            ],
+          },
+          calls,
+          [],
+          "Implement safe auto-rename lifecycle behavior",
+          "bun test extensions/auto-rename/index.test.ts"
+        )
+      ).toMatchObject({ kind: "failed", code: "fabricated_coverage" });
+      expect(
+        assessTddEvidence(
+          evidence,
+          calls.filter((call) => call.startOrder !== 9),
+          [],
+          "Implement safe auto-rename lifecycle behavior",
+          "bun test extensions/auto-rename/index.test.ts"
+        )
+      ).toMatchObject({ kind: "failed", code: "missing_green" });
+
+      const unresolvedFailure: TddToolCall[] = [
+        ...calls.filter((call) => call.startOrder < 11),
+        {
+          name: "bash",
+          args: { command: "bun test extensions/auto-rename" },
+          assistantTurn: 5,
+          startOrder: 11,
+          endOrder: 12,
+          isError: true,
+          runnerWorkspaceProof: true,
+          resultText: "auto-rename integration\n1 fail",
+        },
+        { ...calls[4]!, assistantTurn: 6, startOrder: 13, endOrder: 14 },
+        { ...calls[6]!, assistantTurn: 7, startOrder: 15, endOrder: 16 },
+      ];
+      expect(
+        assessTddEvidence(
+          evidence,
+          unresolvedFailure,
+          [],
+          "Implement safe auto-rename lifecycle behavior",
+          "bun test extensions/auto-rename/index.test.ts"
+        )
+      ).toMatchObject({ kind: "failed", code: "unresolved_tests" });
+
+      const writeCapableRunner: TddToolCall[] = [
+        ...calls.filter((call) => call.startOrder < 11),
+        {
+          name: "bash",
+          args: {
+            command:
+              "bun test extensions/auto-rename/index.test.ts --update-snapshots",
+          },
+          assistantTurn: 5,
+          startOrder: 11,
+          endOrder: 12,
+          isError: false,
+          runnerWorkspaceProof: true,
+          runnerWorkspaceDelta: [
+            {
+              path: "extensions/auto-rename/index.test.ts",
+              status: "changed",
+            },
+          ],
+          resultText: "36 pass\n0 fail",
+        },
+        { ...calls[6]!, assistantTurn: 6 },
+      ];
+      expect(
+        assessTddEvidence(
+          evidence,
+          writeCapableRunner,
+          [],
+          "Implement safe auto-rename lifecycle behavior",
+          "bun test extensions/auto-rename/index.test.ts"
+        )
+      ).toMatchObject({ kind: "failed", code: "unsafe_runner" });
+      expect(
+        assessTddEvidence(
+          evidence,
+          calls.map((call) =>
+            call.startOrder === 11
+              ? { ...call, args: { command: "rm -rf build" } }
+              : call
+          ),
+          [],
+          "Implement safe auto-rename lifecycle behavior",
+          "bun test extensions/auto-rename/index.test.ts"
+        )
+      ).toMatchObject({ kind: "failed", code: "unsafe_shell" });
+
+      for (const coverage of [
+        "COVERAGE: lifecycle should pass",
+        "COVERAGE: 99 % statements covered",
+      ]) {
+        const staleMeasurementCalls = calls.map((call) =>
+          call.startOrder === 3
+            ? {
+                name: "bash",
+                args: {
+                  command: "bun test extensions/auto-rename/index.test.ts",
+                },
+                assistantTurn: 1,
+                startOrder: 3,
+                endOrder: 4,
+                isError: false,
+                runnerWorkspaceProof: true,
+                resultText: "99 % statements\n36 pass\n0 fail",
+              }
+            : call
+        );
+        expect(
+          assessTddEvidence(
+            {
+              ...evidence,
+              validation: [...evidence.validation.slice(0, 2), coverage],
+            },
+            staleMeasurementCalls,
+            [],
+            "Implement safe auto-rename lifecycle behavior",
+            "bun test extensions/auto-rename/index.test.ts"
+          )
+        ).toMatchObject({
+          kind: "failed",
+          code: coverage.includes("should")
+            ? "fabricated_claim"
+            : "fabricated_coverage",
+        });
+      }
+
+      expect(
+        assessTddEvidence(
+          {
+            ...evidence,
+            validation: [
+              "RED: not run because behavioral RED was unavailable",
+              ...evidence.validation.slice(1),
+            ],
+          },
+          calls,
+          [],
+          "Implement safe auto-rename lifecycle behavior",
+          "bun test extensions/auto-rename/index.test.ts"
+        )
+      ).toMatchObject({ kind: "failed", code: "fabricated_claim" });
+
+      expect(
+        assessTddEvidence(
+          {
+            ...evidence,
+            validation: [
+              "RED: bun test extensions/auto-rename/index.test.ts failed with unrelated widget crash",
+              ...evidence.validation.slice(1),
+            ],
+          },
+          calls.map((call) => {
+            if (call.startOrder === 1) {
+              return {
+                ...call,
+                regressionIntent: ["unrelated widget crash"],
+                regressionTitles: [
+                  "auto rename lifecycle behavior",
+                  "unrelated widget crash",
+                ],
+              };
+            }
+            return call.startOrder === 5
+              ? { ...call, resultText: "unrelated widget crash\n1 fail" }
+              : call;
+          }),
+          [],
+          "Implement safe auto-rename lifecycle behavior",
+          "bun test extensions/auto-rename/index.test.ts"
+        )
+      ).toMatchObject({ kind: "failed", code: "fabricated_claim" });
+    });
+
+    it("correlates a retained relative missing-module RED", () => {
+      const calls = trajectory(
+        "Cannot find module './formatName'\n(fail) formatName regression\n1 fail"
+      );
+      calls.unshift({
+        name: "write",
+        ...normalizeTddToolMetadata("write", {
+          path: "tests/formatName.test.ts",
+          content:
+            'import { formatName } from "./formatName"; test("formatName regression", () => formatName());',
+        }),
+        assistantTurn: 0,
+        startOrder: -2,
+        endOrder: -1,
+        isError: false,
+        mutationProven: true,
+      });
+
+      expect(
+        validateTddEvidence(result(), calls, [], "Implement formatName")
+      ).toBeUndefined();
+    });
+
+    it("reports safe event orders for a test mutation after RED", () => {
+      const calls = trajectory();
+      calls.splice(2, 0, {
+        name: "edit",
+        ...normalizeTddToolMetadata("edit", {
+          path: "tests/formatName.test.ts",
+          oldText: 'test("old", () => old());',
+          newText: 'test("new", () => changed());',
+        }),
+        assistantTurn: 2,
+        startOrder: 6,
+        endOrder: 6.5,
+        isError: false,
+        mutationProven: true,
+      });
+
+      expect(validateTddEvidence(result(), calls)).toContain(
+        "RED ended at order 2; test mutation started at order 6"
+      );
+    });
+
+    it("reports a production mutation after final GREEN", () => {
+      const calls = trajectory();
+      calls.splice(3, 0, {
+        name: "edit",
+        args: {
+          path: "src/unit.ts",
+          oldText: "return fixed",
+          newText: "return changed again",
+        },
+        assistantTurn: 3,
+        startOrder: 9,
+        endOrder: 9.5,
+        isError: false,
+      });
+      calls[4] = {
+        ...calls[4]!,
+        assistantTurn: 4,
+        startOrder: 12,
+        endOrder: 13,
+      };
+
+      expect(validateTddEvidence(result(), calls)).toContain(
+        "final GREEN ended at order 8; later mutation started at order 9"
+      );
+    });
+
+    it("explains unmatched numeric Bun coverage claims without raw output", () => {
+      const calls = trajectory();
+      calls.splice(3, 0, {
+        name: "bash",
+        args: { command: "bun test --coverage tests/formatName.test.ts" },
+        assistantTurn: 3,
+        startOrder: 9,
+        endOrder: 9.5,
+        isError: false,
+        resultText: [
+          "formatName regression",
+          "5 passed, 0 failed",
+          "File | % Funcs | % Lines",
+          "src/unit.ts | 100.00 | 99.40",
+        ].join("\n"),
+        runnerWorkspaceProof: true,
+      });
+      calls[4] = {
+        ...calls[4]!,
+        assistantTurn: 4,
+        startOrder: 12,
+        endOrder: 13,
+      };
+      const evidence = result();
+      evidence.validation[2] =
+        "COVERAGE: `bun test --coverage tests/formatName.test.ts` passed; unit.ts reached 100.00% functions and 99.40% lines";
+
+      const error = validateTddEvidence(evidence, calls);
+      expect(error).toContain(
+        "numeric coverage claims could not be safely correlated with labeled retained measurements"
+      );
+      expect(error).not.toContain("src/unit.ts");
+    });
+  });
+
   it("enforces status-aware partial-result evidence", () => {
     const partial = {
       ...result(),
@@ -2018,29 +2464,65 @@ describe("TDD evidence validation", () => {
 
   it("requires every post-mutation failed test scope to be rerun successfully", () => {
     const unresolved = trajectory();
-    unresolved.splice(2, 0, {
+    unresolved.splice(3, 0, {
       name: "bash",
       args: { command: "bun   test tests/broad.test.ts" },
-      assistantTurn: 2,
-      startOrder: 6,
-      endOrder: 6.5,
+      assistantTurn: 3,
+      startOrder: 8.2,
+      endOrder: 8.4,
       isError: true,
       resultText: "broad regression\n1 failed",
     });
+    unresolved[4] = { ...unresolved[4]!, assistantTurn: 4 };
     expect(validateTddEvidence(result(), unresolved)).toContain(
       "every supported test failure"
     );
 
-    const resolved = unresolved.toSpliced(3, 0, {
+    const resolved = unresolved.toSpliced(4, 0, {
       name: "bash",
       args: { command: "BUN test 'tests/broad.test.ts'" },
-      assistantTurn: 2,
-      startOrder: 6.6,
-      endOrder: 6.8,
+      assistantTurn: 3,
+      startOrder: 8.5,
+      endOrder: 8.7,
       isError: false,
       resultText: "broad regression\n1 passed, 0 failed",
     });
+    resolved[5] = { ...resolved[5]!, assistantTurn: 5 };
     expect(validateTddEvidence(result(), resolved)).toBeUndefined();
+  });
+
+  it("rejects broader test commands before the matched focused GREEN", () => {
+    const calls = trajectory();
+    calls.splice(2, 0, {
+      name: "bash",
+      args: { command: "bun test" },
+      assistantTurn: 2,
+      startOrder: 7,
+      endOrder: 8,
+      isError: false,
+      resultText: "formatName regression\n5 passed, 0 failed",
+    });
+    calls[3] = {
+      ...calls[3]!,
+      assistantTurn: 3,
+      startOrder: 10,
+      endOrder: 11,
+    };
+    calls[4] = {
+      ...calls[4]!,
+      assistantTurn: 4,
+      startOrder: 13,
+      endOrder: 14,
+    };
+
+    expect(validateTddEvidence(result(), calls)).toContain(
+      "broader test commands before the matched GREEN"
+    );
+
+    calls[2] = { ...calls[2]!, startOrder: 9.5, endOrder: 10.5 };
+    expect(validateTddEvidence(result(), calls)).toContain(
+      "broader test commands before the matched GREEN"
+    );
   });
 
   it("uses the final successful runner and rejects stale later test activity", () => {
@@ -2135,36 +2617,40 @@ describe("TDD evidence validation", () => {
     expect(validateTddEvidence(evidence, finalCoverage)).toBeUndefined();
 
     const unprovenAfterCoverage = trajectory();
-    unprovenAfterCoverage[2] = {
-      ...unprovenAfterCoverage[2]!,
-      args: { command: "bun test --coverage" },
-      resultText: "formatName regression\n5 passed\nStatements: 92%",
-    };
     unprovenAfterCoverage.splice(3, 0, {
+      name: "bash",
+      args: { command: "bun test --coverage" },
+      assistantTurn: 3,
+      startOrder: 9,
+      endOrder: 10,
+      isError: false,
+      resultText: "formatName regression\n5 passed\nStatements: 92%",
+    });
+    unprovenAfterCoverage.splice(4, 0, {
       name: "write",
       ...normalizeTddToolMetadata("write", {
         path: "src/unproven.ts",
         content: "export const value = true;",
       }),
-      assistantTurn: 3,
-      startOrder: 9,
-      endOrder: 10,
-      isError: false,
-    });
-    unprovenAfterCoverage.splice(4, 0, {
-      name: "bash",
-      args: { command: "bun test tests/formatName.test.ts" },
       assistantTurn: 4,
       startOrder: 12,
       endOrder: 13,
       isError: false,
-      resultText: "formatName regression\n5 passed, 0 failed",
     });
-    unprovenAfterCoverage[5] = {
-      ...unprovenAfterCoverage[5]!,
+    unprovenAfterCoverage.splice(5, 0, {
+      name: "bash",
+      args: { command: "bun test tests/formatName.test.ts" },
       assistantTurn: 5,
       startOrder: 15,
       endOrder: 16,
+      isError: false,
+      resultText: "formatName regression\n5 passed, 0 failed",
+    });
+    unprovenAfterCoverage[6] = {
+      ...unprovenAfterCoverage[6]!,
+      assistantTurn: 6,
+      startOrder: 18,
+      endOrder: 19,
     };
     expect(validateTddEvidence(evidence, unprovenAfterCoverage)).toContain(
       "COVERAGE"

@@ -511,6 +511,148 @@ describe("execute tools", () => {
     });
   });
 
+  it("loads version:1 Task entries without warnings unchanged", async () => {
+    await withTempDir(async (cwd) => {
+      const runtime = createMockPiRuntime();
+      executeExtension(runtime.pi as never);
+      const checkpointDir = join(cwd, ".pi", "execute");
+      const canonicalPlan = "Old warning-free checkpoint";
+      const canonicalPlanHash = hashCanonicalPlan(canonicalPlan);
+      const checkpointPath = join(
+        checkpointDir,
+        "execute-v1-11111111-1111-4111-8111-111111111111.json"
+      );
+      mkdirSync(checkpointDir, { recursive: true });
+      writeJsonFile(checkpointPath, {
+        version: 1,
+        id: "11111111-1111-4111-8111-111111111111",
+        canonicalPlanHash,
+        status: "running",
+        createdAt: "2026-04-17T00:00:00.000Z",
+        updatedAt: "2026-04-17T00:00:00.000Z",
+        normalizedSummary: "Old checkpoint",
+        tasks: [{ id: "1", subject: "Old task", status: "pending" }],
+      });
+
+      const payload = readToolPayload(
+        await runExecuteCheckpointTool(runtime, cwd, {
+          op: "load",
+          canonicalPlan,
+        })
+      );
+
+      expect(payload.found).toBe(true);
+      expect((payload.checkpoint as { tasks: unknown[] }).tasks).toEqual([
+        { id: "1", subject: "Old task", status: "pending" },
+      ]);
+    });
+  });
+
+  it("round-trips normalized Task warnings through save, load, and list", async () => {
+    await withTempDir(async (cwd) => {
+      const runtime = createMockPiRuntime();
+      executeExtension(runtime.pi as never);
+      const canonicalPlan = "Persist settled warning";
+      const task = {
+        id: "1",
+        subject: "Build strip",
+        status: "pending",
+        warnings: ["  Mutation manifest omitted generated file.  "],
+      };
+
+      await runExecuteCheckpointTool(runtime, cwd, {
+        op: "save",
+        canonicalPlan,
+        checkpoint: {
+          status: "running",
+          normalizedSummary: "Persist warning",
+          tasks: [task],
+        },
+      });
+      const loadPayload = readToolPayload(
+        await runExecuteCheckpointTool(runtime, cwd, {
+          op: "load",
+          canonicalPlan,
+        })
+      );
+      const listPayload = readToolPayload(
+        await runExecuteCheckpointTool(runtime, cwd, {
+          op: "list_unfinished",
+        })
+      );
+      const expectedTask = {
+        id: "1",
+        subject: "Build strip",
+        status: "pending",
+        warnings: ["Mutation manifest omitted generated file."],
+      };
+
+      expect(loadPayload.warnings).toEqual([]);
+      expect((loadPayload.checkpoint as { tasks: unknown[] }).tasks).toEqual([
+        expectedTask,
+      ]);
+      expect(listPayload.warnings).toEqual([]);
+      expect(
+        (listPayload.checkpoints as Array<{ tasks: unknown[] }>)[0]?.tasks
+      ).toEqual([expectedTask]);
+    });
+  });
+
+  it("rejects malformed and out-of-bounds Task warnings", async () => {
+    await withTempDir(async (cwd) => {
+      const runtime = createMockPiRuntime();
+      executeExtension(runtime.pi as never);
+      const cases: Array<{ warnings: unknown; error: string }> = [
+        {
+          warnings: "not-an-array",
+          error:
+            "Invalid execute checkpoint: tasks[0].warnings must be an array of strings.",
+        },
+        {
+          warnings: [42],
+          error:
+            "Invalid execute checkpoint: tasks[0].warnings[0] must be a non-empty string.",
+        },
+        {
+          warnings: ["   "],
+          error:
+            "Invalid execute checkpoint: tasks[0].warnings[0] must be a non-empty string.",
+        },
+        {
+          warnings: ["a".repeat(1001)],
+          error:
+            "Invalid execute checkpoint: tasks[0].warnings[0] must be at most 1000 characters.",
+        },
+        {
+          warnings: ["first", "second"],
+          error:
+            "Invalid execute checkpoint: tasks[0].warnings must contain at most 1 warning.",
+        },
+      ];
+
+      for (const [index, testCase] of cases.entries()) {
+        const result = await runExecuteCheckpointTool(runtime, cwd, {
+          op: "save",
+          canonicalPlan: `Invalid Task warning ${index}`,
+          checkpoint: {
+            status: "running",
+            normalizedSummary: "Invalid warning",
+            tasks: [
+              {
+                id: "1",
+                subject: "Task",
+                status: "pending",
+                warnings: testCase.warnings,
+              },
+            ],
+          },
+        });
+        expect((result as { isError?: boolean }).isError).toBe(true);
+        expect(readToolPayload(result).error).toBe(testCase.error);
+      }
+    });
+  });
+
   it("resolves the same canonicalPlan to the same checkpoint on repeated saves", async () => {
     await withTempDir(async (cwd) => {
       const runtime = createMockPiRuntime();

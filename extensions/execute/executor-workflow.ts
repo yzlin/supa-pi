@@ -3,13 +3,17 @@ import {
   closeSync,
   constants as fsConstants,
   fstatSync,
+  fsyncSync,
   lstatSync,
+  mkdirSync,
   openSync,
   readdirSync,
   readFileSync,
   readlinkSync,
   readSync,
   realpathSync,
+  unlinkSync,
+  writeFileSync,
 } from "node:fs";
 import { dirname, join, relative, resolve as resolvePath } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -37,12 +41,19 @@ import {
 export { EXECUTOR_RESULT_SCHEMA } from "./executor-prompt";
 
 import {
+  compareMutationManifest,
+  TASK_SHAPE_MAX_WARNINGS,
+  TASK_SHAPE_WARNING_MAX_LENGTH,
+  type TaskShape,
+  validateTaskShape,
+} from "./task-shape";
+import {
+  assessTddEvidence,
   coverageVerificationTargets,
   isSupportedTestCommand,
   normalizeTddToolMetadata,
   runnerGeneratedArtifactDirectories,
   type TddToolCall,
-  validateTddEvidence,
 } from "./tdd-evidence";
 
 const EXECUTOR_WORKFLOW_TIMEOUT_MS = 20 * 60 * 1000;
@@ -57,6 +68,9 @@ const MAX_TRAJECTORY_ARG_BYTES = 4000;
 const MAX_TRAJECTORY_BYTES = 128_000;
 const MAX_PENDING_TRAJECTORY_CALLS = 100;
 const MAX_TRAJECTORY_CAPTURE_ERRORS = 20;
+const MAX_TDD_DEBUG_ARTIFACT_BYTES = 1024 * 1024;
+const MAX_TDD_DEBUG_ARTIFACTS = 20;
+const TDD_DEBUG_ARTIFACT_PATTERN = /^tdd-[0-9a-f-]{36}\.json$/;
 const MAX_PROOF_TARGETS = 16;
 const MAX_PROOF_TOTAL_BYTES = 8 * 1024 * 1024;
 const MAX_RUNNER_PROOF_FILES = 10_000;
@@ -549,11 +563,147 @@ export interface ExecutorResult {
   blockers: string[];
 }
 
+type InvalidExecutorResult = Pick<
+  ExecutorResult,
+  "filesTouched" | "validation" | "blockers"
+>;
+
+type TddDebugArtifactReference =
+  | { debugArtifactPath: string }
+  | { debugArtifactError: string };
+
+function retainTddDebugArtifact(
+  cwd: string,
+  task: ExecutorWorkflowTask,
+  evidenceError: string,
+  executorResult: ExecutorResult,
+  toolCalls: TddToolCall[],
+  trajectoryErrors: string[]
+): TddDebugArtifactReference {
+  try {
+    const root = realpathSync(cwd);
+    let debugDirectory = root;
+    for (const segment of [".pi", "execute", "debug"]) {
+      debugDirectory = join(debugDirectory, segment);
+      try {
+        const stat = lstatSync(debugDirectory);
+        if (stat.isSymbolicLink() || !stat.isDirectory()) {
+          throw new Error("unsafe debug artifact directory");
+        }
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
+          throw error;
+        }
+        mkdirSync(debugDirectory, { mode: 0o700 });
+      }
+    }
+    const resolvedDebugDirectory = realpathSync(debugDirectory);
+    if (
+      resolvedDebugDirectory !== debugDirectory ||
+      !isContained(root, resolvedDebugDirectory) ||
+      lstatSync(resolvedDebugDirectory).mode % 0o1000 !== 0o700
+    ) {
+      throw new Error("unsafe debug artifact directory");
+    }
+    const retainedArtifacts = readdirSync(resolvedDebugDirectory).filter(
+      (name) => TDD_DEBUG_ARTIFACT_PATTERN.test(name)
+    );
+    if (retainedArtifacts.length >= MAX_TDD_DEBUG_ARTIFACTS) {
+      throw Object.assign(new Error("debug artifact limit reached"), {
+        code: "DEBUG_ARTIFACT_LIMIT",
+      });
+    }
+
+    const artifact = `${JSON.stringify(
+      {
+        version: 1,
+        createdAt: new Date().toISOString(),
+        task,
+        evidenceError,
+        executorResult,
+        trajectory: {
+          errors: trajectoryErrors,
+          toolCalls,
+        },
+      },
+      null,
+      2
+    )}\n`;
+    if (Buffer.byteLength(artifact) > MAX_TDD_DEBUG_ARTIFACT_BYTES) {
+      throw new Error("debug artifact exceeded size limit");
+    }
+
+    const debugArtifactPath = join(
+      resolvedDebugDirectory,
+      `tdd-${randomUUID()}.json`
+    );
+    const noFollow = fsConstants.O_NOFOLLOW;
+    if (typeof noFollow !== "number" || noFollow === 0) {
+      throw new Error("safe debug artifact creation unavailable");
+    }
+
+    let descriptor: number | undefined;
+    let identity: { dev: number; ino: number } | undefined;
+    try {
+      // biome-ignore-start lint/suspicious/noBitwiseOperators: open(2) flags are bitmasks.
+      const flags =
+        fsConstants.O_WRONLY |
+        fsConstants.O_CREAT |
+        fsConstants.O_EXCL |
+        noFollow;
+      // biome-ignore-end lint/suspicious/noBitwiseOperators: open(2) flags are bitmasks.
+      descriptor = openSync(debugArtifactPath, flags, 0o600);
+      const opened = fstatSync(descriptor);
+      identity = { dev: opened.dev, ino: opened.ino };
+      const pathStat = lstatSync(debugArtifactPath);
+      if (
+        !opened.isFile() ||
+        pathStat.isSymbolicLink() ||
+        pathStat.dev !== opened.dev ||
+        pathStat.ino !== opened.ino ||
+        realpathSync(debugArtifactPath) !== debugArtifactPath ||
+        !isContained(root, debugArtifactPath)
+      ) {
+        throw new Error("unsafe debug artifact target");
+      }
+      writeFileSync(descriptor, artifact, "utf8");
+      fsyncSync(descriptor);
+    } catch (error) {
+      if (identity) {
+        try {
+          const current = lstatSync(debugArtifactPath);
+          if (
+            !current.isSymbolicLink() &&
+            current.dev === identity.dev &&
+            current.ino === identity.ino
+          ) {
+            unlinkSync(debugArtifactPath);
+          }
+        } catch {
+          // Best-effort cleanup of an agent-owned incomplete artifact.
+        }
+      }
+      throw error;
+    } finally {
+      if (descriptor !== undefined) {
+        closeSync(descriptor);
+      }
+    }
+    return { debugArtifactPath: relative(root, debugArtifactPath) };
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException).code;
+    return {
+      debugArtifactError: `Failed to persist private TDD debug artifact${code ? ` (${code})` : ""}.`,
+    };
+  }
+}
+
 export interface ExecutorWorkflowTask {
   taskId: string;
   subject: string;
   prompt: string;
   tdd?: boolean;
+  tddShape?: TaskShape;
 }
 
 export type ExecutorWorkflowResult =
@@ -562,6 +712,7 @@ export type ExecutorWorkflowResult =
       outcome: "completed";
       result: ExecutorResult;
       repaired: boolean;
+      warnings?: string[];
     }
   | {
       taskId: string;
@@ -571,11 +722,21 @@ export type ExecutorWorkflowResult =
     }
   | {
       taskId: string;
+      outcome: "needs_verification";
+      result: ExecutorResult;
+      repaired: false;
+      warnings: string[];
+    }
+  | {
+      taskId: string;
       outcome: "failed";
       error: string;
+      invalidResult?: InvalidExecutorResult;
+      debugArtifactPath?: string;
+      debugArtifactError?: string;
     };
 
-const EXECUTOR_WORKFLOW_TASK_SCHEMA = Type.Object(
+const EXECUTOR_WORKFLOW_TASK_ENVELOPE_SCHEMA = Type.Object(
   {
     taskId: Type.String({ minLength: 1, maxLength: MAX_TASK_ID_LENGTH }),
     subject: Type.String({
@@ -587,8 +748,31 @@ const EXECUTOR_WORKFLOW_TASK_SCHEMA = Type.Object(
       maxLength: MAX_EXECUTOR_TASK_PROMPT_LENGTH,
     }),
     tdd: Type.Optional(Type.Boolean()),
+    tddShape: Type.Optional(Type.Unknown()),
   },
   { additionalProperties: false }
+);
+
+const EXECUTOR_WORKFLOW_TASKS_SCHEMA = Type.Array(
+  EXECUTOR_WORKFLOW_TASK_ENVELOPE_SCHEMA,
+  {
+    minItems: 1,
+    maxItems: MAX_EXECUTOR_TASKS,
+  }
+);
+
+const INVALID_EXECUTOR_RESULT_SCHEMA = Type.Object(
+  {
+    filesTouched: EXECUTOR_RESULT_SCHEMA.properties.filesTouched,
+    validation: EXECUTOR_RESULT_SCHEMA.properties.validation,
+    blockers: EXECUTOR_RESULT_SCHEMA.properties.blockers,
+  },
+  { additionalProperties: false }
+);
+
+const EXECUTOR_WARNINGS_SCHEMA = Type.Array(
+  Type.String({ maxLength: TASK_SHAPE_WARNING_MAX_LENGTH }),
+  { maxItems: TASK_SHAPE_MAX_WARNINGS }
 );
 
 const EXECUTOR_WORKFLOW_RESULT_SCHEMA = Type.Array(
@@ -599,6 +783,7 @@ const EXECUTOR_WORKFLOW_RESULT_SCHEMA = Type.Array(
         outcome: Type.Literal("completed"),
         result: EXECUTOR_RESULT_SCHEMA,
         repaired: Type.Boolean(),
+        warnings: Type.Optional(EXECUTOR_WARNINGS_SCHEMA),
       },
       { additionalProperties: false }
     ),
@@ -614,8 +799,21 @@ const EXECUTOR_WORKFLOW_RESULT_SCHEMA = Type.Array(
     Type.Object(
       {
         taskId: Type.String({ minLength: 1 }),
+        outcome: Type.Literal("needs_verification"),
+        result: EXECUTOR_RESULT_SCHEMA,
+        repaired: Type.Literal(false),
+        warnings: EXECUTOR_WARNINGS_SCHEMA,
+      },
+      { additionalProperties: false }
+    ),
+    Type.Object(
+      {
+        taskId: Type.String({ minLength: 1 }),
         outcome: Type.Literal("failed"),
         error: Type.String({ minLength: 1 }),
+        invalidResult: Type.Optional(INVALID_EXECUTOR_RESULT_SCHEMA),
+        debugArtifactPath: Type.Optional(Type.String({ minLength: 1 })),
+        debugArtifactError: Type.Optional(Type.String({ minLength: 1 })),
       },
       { additionalProperties: false }
     ),
@@ -739,31 +937,17 @@ interface RunExecutorWorkflowOptions {
   agentRunner: WorkflowAgentRunner;
   cwd: string;
   signal?: AbortSignal;
+  noFollow?: number;
 }
 
-export function ensureTddMutationProofSupported(
-  tasks: ExecutorWorkflowTask[],
-  noFollow: number | undefined = fsConstants.O_NOFOLLOW
-): void {
-  if (
-    tasks.some((task) => task.tdd) &&
-    !(typeof noFollow === "number" && noFollow !== 0)
-  ) {
-    throw new Error(
-      "execute_tasks does not support tdd:true on this platform because safe mutation proof requires O_NOFOLLOW."
-    );
-  }
-}
+const TDD_PROOF_UNSUPPORTED_ERROR =
+  "execute_tasks does not support tdd:true on this platform because safe mutation proof requires O_NOFOLLOW.";
 
 export async function runExecutorWorkflow(
   tasks: ExecutorWorkflowTask[],
   options: RunExecutorWorkflowOptions
 ): Promise<ExecutorWorkflowResult[]> {
-  const tasksSchema = Type.Array(EXECUTOR_WORKFLOW_TASK_SCHEMA, {
-    minItems: 1,
-    maxItems: MAX_EXECUTOR_TASKS,
-  });
-  if (!Check(tasksSchema, tasks)) {
+  if (!Check(EXECUTOR_WORKFLOW_TASKS_SCHEMA, tasks)) {
     throw new Error(
       `execute_tasks requires 1-${MAX_EXECUTOR_TASKS} valid executor tasks.`
     );
@@ -773,12 +957,49 @@ export async function runExecutorWorkflow(
   if (taskIds.size !== tasks.length) {
     throw new Error("execute_tasks task IDs must be unique.");
   }
-  ensureTddMutationProofSupported(tasks);
+  const noFollow = options.noFollow ?? fsConstants.O_NOFOLLOW;
+  const mutationProofSupported = typeof noFollow === "number" && noFollow !== 0;
+  const rejectedResults = new Map<string, ExecutorWorkflowResult>();
+  for (const task of tasks) {
+    let error: string | undefined;
+    if (task.tdd !== true) {
+      if (task.tddShape !== undefined) {
+        error = "execute_tasks rejects tddShape unless tdd is true.";
+      }
+    } else if (task.tddShape === undefined) {
+      error = "execute_tasks requires a valid tddShape when tdd is true.";
+    } else {
+      const validation = validateTaskShape(task.tddShape);
+      if (validation.ok === false) {
+        error = `execute_tasks received an invalid tddShape: ${validation.errors.join("; ")}`;
+      } else if (!mutationProofSupported) {
+        error = TDD_PROOF_UNSUPPORTED_ERROR;
+      }
+    }
+    if (error) {
+      rejectedResults.set(task.taskId, {
+        taskId: task.taskId,
+        outcome: "failed",
+        error,
+      });
+    }
+  }
 
-  const workflowTasks = tasks.map((task) => ({
+  const runnableTasks = tasks.filter(
+    (task) => !rejectedResults.has(task.taskId)
+  );
+  if (runnableTasks.length === 0) {
+    return tasks.map((task) => rejectedResults.get(task.taskId)!);
+  }
+
+  const workflowTasks = runnableTasks.map((task) => ({
     ...task,
     prompt: task.tdd
-      ? composeTddExecutorPrompt(task.prompt, TRUSTED_TDD_WORKFLOW)
+      ? composeTddExecutorPrompt(
+          task.prompt,
+          TRUSTED_TDD_WORKFLOW,
+          task.tddShape
+        )
       : composeExecutorPrompt(task.prompt),
   }));
 
@@ -793,7 +1014,7 @@ export async function runExecutorWorkflow(
     signal: options.signal,
     timeoutMs: EXECUTOR_WORKFLOW_TIMEOUT_MS,
     budget: {
-      maxAgentCalls: tasks.length * 2,
+      maxAgentCalls: runnableTasks.length * 2,
       maxResultBytes: 512_000,
     },
   });
@@ -807,27 +1028,98 @@ export async function runExecutorWorkflow(
       tddTrajectoryErrors?: string[];
     }
   >;
-  const results = rawResults.map(
-    ({ tddToolCalls, tddTrajectoryErrors, ...outcome }, index) => {
-      const evidenceError =
-        outcome.outcome === "completed"
-          ? validateTddEvidence(
+  const tasksById = new Map(
+    runnableTasks.map((task) => [task.taskId, task] as const)
+  );
+  const seenResultIds = new Set<string>();
+  const runnableResults = rawResults.map(
+    ({ tddToolCalls, tddTrajectoryErrors, ...outcome }) => {
+      const task = tasksById.get(outcome.taskId);
+      if (!(task && !seenResultIds.has(outcome.taskId))) {
+        throw new Error(
+          "Executor workflow returned an invalid result envelope."
+        );
+      }
+      seenResultIds.add(outcome.taskId);
+      const toolCalls = Array.isArray(tddToolCalls) ? tddToolCalls : [];
+      const trajectoryErrors = Array.isArray(tddTrajectoryErrors)
+        ? tddTrajectoryErrors
+        : [];
+      const evidenceAssessment =
+        task.tdd && outcome.outcome === "completed"
+          ? assessTddEvidence(
               outcome.result,
-              Array.isArray(tddToolCalls) ? tddToolCalls : [],
-              Array.isArray(tddTrajectoryErrors) ? tddTrajectoryErrors : [],
-              tasks[index]?.prompt ?? ""
+              toolCalls,
+              trajectoryErrors,
+              task.prompt,
+              task.tddShape?.redGreenCommand
             )
           : undefined;
-      if (tasks[index]?.tdd && evidenceError) {
+      if (
+        evidenceAssessment?.kind === "failed" &&
+        outcome.outcome === "completed"
+      ) {
         return {
           taskId: outcome.taskId,
           outcome: "failed" as const,
-          error: evidenceError,
+          error: evidenceAssessment.message,
+          ...retainTddDebugArtifact(
+            options.cwd,
+            task,
+            evidenceAssessment.message,
+            outcome.result,
+            toolCalls,
+            trajectoryErrors
+          ),
+          invalidResult: {
+            filesTouched: outcome.result.filesTouched,
+            validation: outcome.result.validation,
+            blockers: outcome.result.blockers,
+          },
         };
+      }
+      if (
+        evidenceAssessment?.kind === "needs_verification" &&
+        outcome.outcome === "completed"
+      ) {
+        return {
+          taskId: outcome.taskId,
+          outcome: "needs_verification" as const,
+          result: outcome.result,
+          repaired: false as const,
+          warnings: [
+            `TDD strategy deviation requires independent verification: ${evidenceAssessment.message}`.slice(
+              0,
+              TASK_SHAPE_WARNING_MAX_LENGTH
+            ),
+          ],
+        };
+      }
+      if (task.tdd && task.tddShape && outcome.outcome === "completed") {
+        const observedTargets = toolCalls.flatMap((call) =>
+          call.isError || call.mutationProven !== true
+            ? []
+            : (call.mutationDelta ?? []).map((delta) => delta.path)
+        );
+        const warnings = compareMutationManifest(
+          task.tddShape.mutations,
+          observedTargets
+        );
+        return warnings.length > 0 ? { ...outcome, warnings } : outcome;
       }
       return outcome;
     }
   );
+  if (seenResultIds.size !== runnableTasks.length) {
+    throw new Error("Executor workflow returned an invalid result envelope.");
+  }
+  const resultsById = new Map(
+    [...rejectedResults.values(), ...runnableResults].map((result) => [
+      result.taskId,
+      result,
+    ])
+  );
+  const results = tasks.map((task) => resultsById.get(task.taskId));
 
   if (!Check(EXECUTOR_WORKFLOW_RESULT_SCHEMA, results)) {
     throw new Error("Executor workflow returned an invalid result envelope.");
@@ -1064,7 +1356,7 @@ export function createExecutorAgentRunner(
           }
           if (directRunner && !preRunnerWorkspaceProof) {
             recordTrajectoryError(
-              "direct test runner relevant workspace pre-proof was incomplete"
+              "test runner relevant workspace pre-proof was incomplete"
             );
           }
           pendingToolCalls.set(event.toolCallId, {
@@ -1169,7 +1461,7 @@ export function createExecutorAgentRunner(
             : undefined;
           if (directRunner && !postRunnerWorkspaceProof) {
             recordTrajectoryError(
-              "direct test runner relevant workspace post-proof was incomplete"
+              "test runner relevant workspace post-proof was incomplete"
             );
           }
           const runnerWorkspaceDelta =
@@ -1460,7 +1752,7 @@ export function registerExecutorWorkflowTool(pi: ExtensionAPI): void {
     ],
     parameters: Type.Object(
       {
-        tasks: Type.Array(EXECUTOR_WORKFLOW_TASK_SCHEMA, {
+        tasks: Type.Array(EXECUTOR_WORKFLOW_TASK_ENVELOPE_SCHEMA, {
           minItems: 1,
           maxItems: MAX_EXECUTOR_TASKS,
         }),
@@ -1468,11 +1760,14 @@ export function registerExecutorWorkflowTool(pi: ExtensionAPI): void {
       { additionalProperties: false }
     ),
     async execute(_toolCallId, params, signal, _onUpdate, ctx) {
-      const results = await runExecutorWorkflow(params.tasks, {
-        cwd: ctx.cwd,
-        signal,
-        agentRunner: createExecutorAgentRunner(pi, ctx as ExtensionContext),
-      });
+      const results = await runExecutorWorkflow(
+        params.tasks as ExecutorWorkflowTask[],
+        {
+          cwd: ctx.cwd,
+          signal,
+          agentRunner: createExecutorAgentRunner(pi, ctx as ExtensionContext),
+        }
+      );
 
       return {
         content: [
