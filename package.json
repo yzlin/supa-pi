@@ -23,6 +23,7 @@
       "./extensions/session-query.ts",
       "./extensions/handoff.ts",
       "./extensions/context",
+      "./extensions/auto-rename",
       "./extensions/context-docs",
       "./extensions/btw",
       "./extensions/rtk",

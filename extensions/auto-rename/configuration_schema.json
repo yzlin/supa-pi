@@ -1,0 +1,41 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "SupaPi auto-rename configuration",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "enabled": {
+      "type": "boolean",
+      "default": true
+    },
+    "prompt": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 1000,
+      "pattern": "\\S",
+      "default": "Generate a concise 3–6 word plain Title Case session title for the user's request. Return only the title."
+    },
+    "maxQueryLength": {
+      "type": "integer",
+      "minimum": 100,
+      "maximum": 20000,
+      "default": 2000
+    },
+    "maxNameLength": {
+      "type": "integer",
+      "minimum": 12,
+      "maximum": 200,
+      "default": 80
+    },
+    "timeoutMs": {
+      "type": "integer",
+      "minimum": 100,
+      "maximum": 60000,
+      "default": 10000
+    },
+    "debug": {
+      "type": "boolean",
+      "default": false
+    }
+  }
+}

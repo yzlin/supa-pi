@@ -24,6 +24,8 @@ Do not describe `extensions/om` as active runtime behavior unless package regist
 
 `extensions/no-sleep.ts` is active. It prevents macOS from sleeping while Pi's agent is running by spawning `caffeinate`, registers `/no-sleep [status|on|off|toggle|agent|session]`, defaults to `PI_NO_SLEEP=on`, defaults to agent-scoped caffeination, and supports `PI_NO_SLEEP_SCOPE=session` plus `PI_NO_SLEEP_DISPLAY=1`.
 
+`extensions/auto-rename` is active. After `agent_settled`, it gives an unnamed session a validated 3–6 word title from the bounded first raw user request, with persisted-branch fallback, while preserving manual names and guarding session/tree concurrency. It registers `/auto-rename [status|regen]`, uses one no-retry request to the active model, and falls back privately to `session-<8hex>`. Its only config is `~/.pi/agent/auto-rename.json`; invalid config disables naming and warns. This repo-native rewrite intentionally omits upstream config compatibility, model/endpoint selection, retry chains, prefixes, readable IDs, config initialization, tools, and shell execution. It is informed by [`byteowlz/pi-agent-extensions/pi-auto-rename`](https://github.com/byteowlz/pi-agent-extensions/tree/main/pi-auto-rename), under the MIT License; the full local contract and deviations are in `extensions/auto-rename/README.md`.
+
 `extensions/whimsical` is active. It sets a random whimsical working message at `turn_start`, clears it at `turn_end`, and registers `/whimsical [set]` to show or select bundled message sets (`default`, `negative-energy`) plus valid custom sets from `~/.pi/agent/whimsical/<slug>.json`. Selection persists to the session and `~/.pi/agent/whimsical.json`; latest command session state wins over global config, with unavailable or invalid selected custom sets falling back to bundled `default`. It scans on extension init/session lifecycle and command invocation; completions use the cached list from the last scan. It does not watch files. It is adapted from Armin Ronacher's `agent-stuff` `extensions/whimsical.ts` under Apache License 2.0.
 
 `extensions/fast` is active. It registers:
@@ -44,6 +46,8 @@ Fast Mode persists global state and additive exact-match model support in `~/.pi
 `extensions/tool-display` owns `read`, `write`, and optional compact renderers for `grep`, `find`, and `ls`. Its strict-text unified `edit` candidate is owned only when explicitly enabled and defaults off pending the live gate; disabled sessions receive Pi's built-in edit definition instead. There is no standalone active multi-edit extension entry.
 
 `extensions/rtk` owns `bash` execution, output rewrite, statistics, and compaction metadata. RTK may reuse tool-display bash rendering helpers, but tool-display must not register `bash`.
+
+Keep `./extensions/auto-rename` before input-transforming `./extensions/context-docs` so automatic naming captures the original interactive text rather than the generated workflow message.
 
 Keep `./extensions/rtk` before `./extensions/tool-display` in `package.json -> pi.extensions` so ownership stays explicit and reviewable.
 
