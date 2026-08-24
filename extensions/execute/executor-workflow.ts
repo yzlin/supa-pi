@@ -1,3 +1,4 @@
+import { execFileSync } from "node:child_process";
 import { createHash, randomUUID } from "node:crypto";
 import {
   closeSync,
@@ -74,6 +75,7 @@ const TDD_DEBUG_ARTIFACT_PATTERN = /^tdd-[0-9a-f-]{36}\.json$/;
 const MAX_PROOF_TARGETS = 16;
 const MAX_PROOF_TOTAL_BYTES = 8 * 1024 * 1024;
 const MAX_RUNNER_PROOF_FILES = 10_000;
+const MAX_RUNNER_PROOF_GIT_OUTPUT_BYTES = 8 * 1024 * 1024;
 const MAX_RUNNER_PROOF_TOTAL_BYTES = 64 * 1024 * 1024;
 const HASH_BUFFER_BYTES = 64 * 1024;
 const RUNNER_PROOF_IGNORED_DIRECTORIES = new Set([
@@ -402,6 +404,116 @@ function safeSymlinkProof(
   }
 }
 
+const GATSBY_CONFIG_FILES = [
+  "gatsby-config.js",
+  "gatsby-config.cjs",
+  "gatsby-config.mjs",
+  "gatsby-config.ts",
+];
+const GATSBY_GENERATED_DIRECTORIES = new Set([".cache", "public"]);
+
+function isGatsbyWorkspace(root: string): boolean {
+  return GATSBY_CONFIG_FILES.some((path) => {
+    try {
+      return lstatSync(join(root, path)).isFile();
+    } catch {
+      return false;
+    }
+  });
+}
+
+function workspaceEntryIdentity(absolute: string): string | undefined {
+  const identity = regularFileIdentity(lstatSync(absolute));
+  return identity ? `${identity.dev}:${identity.ino}` : undefined;
+}
+
+interface TrackedWorkspaceIdentities {
+  entries: ReadonlySet<string>;
+  directoryPrefixes: ReadonlySet<string>;
+  subtrees: ReadonlySet<string>;
+}
+
+function gitTrackedWorkspaceIdentities(
+  root: string
+): TrackedWorkspaceIdentities | undefined {
+  let output: Buffer;
+  try {
+    output = execFileSync(
+      "git",
+      [
+        "--no-optional-locks",
+        "-c",
+        "core.fsmonitor=false",
+        "ls-files",
+        "--cached",
+        "-z",
+        "--",
+        ".",
+      ],
+      {
+        cwd: root,
+        maxBuffer: MAX_RUNNER_PROOF_GIT_OUTPUT_BYTES,
+        stdio: ["ignore", "pipe", "ignore"],
+        timeout: 1000,
+      }
+    );
+  } catch {
+    return;
+  }
+  let decoded: string;
+  try {
+    decoded = new TextDecoder("utf-8", { fatal: true }).decode(output);
+  } catch {
+    return;
+  }
+  const paths = decoded.split("\0").filter(Boolean);
+  if (paths.length > MAX_RUNNER_PROOF_FILES) {
+    return;
+  }
+  const entries = new Set<string>();
+  const directoryPrefixes = new Set<string>();
+  const subtrees = new Set<string>();
+  for (const path of paths) {
+    const absolute = resolvePath(root, path);
+    if (!isContained(root, absolute)) {
+      return;
+    }
+    try {
+      const stat = lstatSync(absolute);
+      const identity = regularFileIdentity(stat);
+      if (!identity) {
+        return;
+      }
+      const identityKey = `${identity.dev}:${identity.ino}`;
+      entries.add(identityKey);
+      if (stat.isDirectory()) {
+        subtrees.add(identityKey);
+      }
+      let parent = dirname(absolute);
+      while (parent !== root) {
+        if (!isContained(root, parent)) {
+          return;
+        }
+        const parentStat = lstatSync(parent);
+        if (!parentStat.isDirectory() || parentStat.isSymbolicLink()) {
+          return;
+        }
+        const parentIdentity = regularFileIdentity(parentStat);
+        if (!parentIdentity) {
+          return;
+        }
+        directoryPrefixes.add(`${parentIdentity.dev}:${parentIdentity.ino}`);
+        parent = dirname(parent);
+      }
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
+        return;
+      }
+    }
+  }
+  return { entries, directoryPrefixes, subtrees };
+}
+
 function runnerWorkspaceProof(
   cwd: string | undefined,
   command: string,
@@ -421,34 +533,72 @@ function runnerWorkspaceProof(
   const ignoredGeneratedDirectories = new Set(
     runnerGeneratedArtifactDirectories(command)
   );
+  const gatsbyWorkspace = isGatsbyWorkspace(root);
+  const trackedWorkspace = gatsbyWorkspace
+    ? gitTrackedWorkspaceIdentities(root)
+    : undefined;
+  const skipGatsbyGeneratedOutput = trackedWorkspace !== undefined;
   const paths: Array<{ path: string; kind: "file" | "symlink" }> = [];
-  const directories: Array<{ path: string; generated: boolean }> = [
-    { path: root, generated: false },
-  ];
+  let visitedEntries = 0;
+  const directories: Array<{
+    path: string;
+    generated: boolean;
+    gatsbyGenerated: boolean;
+  }> = [{ path: root, generated: false, gatsbyGenerated: false }];
   try {
     while (directories.length > 0) {
       const directory = directories.pop()!;
       for (const entry of readdirSync(directory.path, {
         withFileTypes: true,
       })) {
+        visitedEntries += 1;
+        if (visitedEntries > MAX_RUNNER_PROOF_FILES) {
+          return;
+        }
         const absolute = join(directory.path, entry.name);
         const path = relative(root, absolute).split("\\").join("/");
+        let untrackedGatsbyOutput = false;
+        if (directory.gatsbyGenerated && !entry.isDirectory()) {
+          const identity = workspaceEntryIdentity(absolute);
+          if (!identity) {
+            return;
+          }
+          untrackedGatsbyOutput = !trackedWorkspace?.entries.has(identity);
+        }
         if (entry.isSymbolicLink()) {
-          if (!ignoredPathSet.has(path)) {
+          if (!(ignoredPathSet.has(path) || untrackedGatsbyOutput)) {
             paths.push({ path, kind: "symlink" });
           }
         } else if (entry.isDirectory()) {
           if (!RUNNER_PROOF_IGNORED_DIRECTORIES.has(entry.name)) {
+            let gatsbyGenerated =
+              directory.gatsbyGenerated ||
+              (directory.path === root &&
+                skipGatsbyGeneratedOutput &&
+                GATSBY_GENERATED_DIRECTORIES.has(entry.name));
+            if (gatsbyGenerated) {
+              const identity = workspaceEntryIdentity(absolute);
+              if (!identity) {
+                return;
+              }
+              if (trackedWorkspace?.subtrees.has(identity)) {
+                gatsbyGenerated = false;
+              } else if (!trackedWorkspace?.directoryPrefixes.has(identity)) {
+                continue;
+              }
+            }
             directories.push({
               path: absolute,
               generated:
                 directory.generated ||
                 ignoredGeneratedDirectories.has(entry.name),
+              gatsbyGenerated,
             });
           }
         } else if (
           entry.isFile() &&
           !ignoredPathSet.has(path) &&
+          !untrackedGatsbyOutput &&
           (!directory.generated ||
             artifactBaseline === undefined ||
             artifactBaseline.has(path))
@@ -1045,16 +1195,39 @@ export async function runExecutorWorkflow(
       const trajectoryErrors = Array.isArray(tddTrajectoryErrors)
         ? tddTrajectoryErrors
         : [];
+      const recoverableNeedsFollowup =
+        task.tdd &&
+        outcome.outcome === "completed" &&
+        outcome.result.status === "needs_followup" &&
+        !outcome.result.blockers.some((blocker) => blocker.trim()) &&
+        outcome.result.followUps.some((followUp) => followUp.trim());
+      let evidenceResult: ExecutorResult | undefined;
+      if (outcome.outcome === "completed") {
+        evidenceResult = recoverableNeedsFollowup
+          ? { ...outcome.result, status: "done" }
+          : outcome.result;
+      }
       const evidenceAssessment =
-        task.tdd && outcome.outcome === "completed"
+        task.tdd && evidenceResult
           ? assessTddEvidence(
-              outcome.result,
+              evidenceResult,
               toolCalls,
               trajectoryErrors,
               task.prompt,
               task.tddShape?.redGreenCommand
             )
           : undefined;
+      const taskShapeWarnings =
+        task.tdd && task.tddShape && outcome.outcome === "completed"
+          ? compareMutationManifest(
+              task.tddShape.mutations,
+              toolCalls.flatMap((call) =>
+                call.isError || call.mutationProven !== true
+                  ? []
+                  : (call.mutationDelta ?? []).map((delta) => delta.path)
+              )
+            )
+          : [];
       if (
         evidenceAssessment?.kind === "failed" &&
         outcome.outcome === "completed"
@@ -1079,6 +1252,31 @@ export async function runExecutorWorkflow(
         };
       }
       if (
+        recoverableNeedsFollowup &&
+        evidenceAssessment?.kind !== "failed" &&
+        outcome.outcome === "completed"
+      ) {
+        const strategyWarning =
+          evidenceAssessment?.kind === "needs_verification"
+            ? ` ${evidenceAssessment.message}`
+            : "";
+        const taskShapeWarning = taskShapeWarnings[0]
+          ? ` ${taskShapeWarnings[0]}`
+          : "";
+        return {
+          taskId: outcome.taskId,
+          outcome: "needs_verification" as const,
+          result: outcome.result,
+          repaired: false as const,
+          warnings: [
+            `Recoverable executor status requires independent verification: needs_followup contained non-blocking followUps but no blocker.${strategyWarning}${taskShapeWarning}`.slice(
+              0,
+              TASK_SHAPE_WARNING_MAX_LENGTH
+            ),
+          ],
+        };
+      }
+      if (
         evidenceAssessment?.kind === "needs_verification" &&
         outcome.outcome === "completed"
       ) {
@@ -1096,16 +1294,9 @@ export async function runExecutorWorkflow(
         };
       }
       if (task.tdd && task.tddShape && outcome.outcome === "completed") {
-        const observedTargets = toolCalls.flatMap((call) =>
-          call.isError || call.mutationProven !== true
-            ? []
-            : (call.mutationDelta ?? []).map((delta) => delta.path)
-        );
-        const warnings = compareMutationManifest(
-          task.tddShape.mutations,
-          observedTargets
-        );
-        return warnings.length > 0 ? { ...outcome, warnings } : outcome;
+        return taskShapeWarnings.length > 0
+          ? { ...outcome, warnings: taskShapeWarnings }
+          : outcome;
       }
       return outcome;
     }

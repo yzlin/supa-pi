@@ -62,6 +62,18 @@ Requirements:
 - After a TDD Agent settles with strictly valid evidence, `execute_tasks` compares only its proven successful mutation target order with the declared manifest. An observed order that is not a bounded subsequence of the declaration adds at most one bounded `warnings` entry to that completed result; it does not retroactively fail the task. Persist that warning on the matching checkpoint task and report it. Declared oversize remains a pre-dispatch failure; actual work may grow and settle as completed with a manifest warning or as `needs_verification` when strict method evidence is imperfect.
 - Never let the `executor` create, modify, or schedule more tasks. If follow-up work is discovered, the executor should only report it; the orchestrator decides whether to create more tasks.
 - Do not create new tasks from executor `followUps` until you have collected the current dispatch round's structured outputs and reconciled checkpoint state.
+
+### Automatic recovery
+
+- Do not ask the user to approve recoverable local work. Recover automatically when all required work is local, reversible, inside the accepted Execution Brief, and confined to Agent-owned or clearly scoped files.
+- Use at most two automatic recovery rounds per task. Persist each attempt and its evidence in pi-task metadata and the checkpoint summary. After two failed rounds, treat the remaining problem as a hard blocker.
+- For `needs_verification`, inspect the claimed files, run the narrowest current behavior test and applicable diagnostics, then mark the task complete and continue when they pass.
+- When independent verification finds a scoped formatting, lint, type, test-fixture, or other mechanical issue, create and run a separate non-TDD recovery Task. Re-run the affected behavior test after cleanup. Do not request approval.
+- A `needs_followup` result with non-blocking `followUps`, no blocker, authentic RED/GREEN evidence, and a safe trajectory settles as `needs_verification`; verify it and schedule its cleanup automatically.
+- Generated output discovered during a TDD Slice must become a separate non-TDD Task. Do not run generation, formatter, lint-fix, or other mutation-capable shell commands between RED and the first GREEN.
+- A hard-failed `invalidResult` remains diagnostics only. Never mark its TDD Slice complete from that payload. If recovery is safe, create a new recovery Task that produces fresh validation evidence; do not waive the hard failure through a questionnaire.
+- Ask the user only when recovery needs human input or approval: destructive or irreversible action, external or production side effects, credentials or inaccessible environment state, ambiguous file ownership, material scope or behavior choice, or a hard blocker after the bounded recovery rounds.
+
 - Persist progress under `.pi/execute/` via the `execute_checkpoint` tool so the run can resume after interruption.
 - Use `execute_checkpoint` for all checkpoint reads and writes under `.pi/execute/`. Pass `canonicalPlan` on load/save; the tool owns checkpoint IDs. Do not use raw `write` or `edit` for checkpoint mutation unless the tool is unavailable or direct file repair is explicitly required.
 - Checkpoints are v1 files named `execute-v1-<uuid>.json`; `.pi/execute/index.json` maps `sha256(canonicalPlan)` to UUID as a repairable cache. Files are truth: load is pure/no creation, save allocates UUID if needed, and checkpoint contents store `canonicalPlanHash` only.
@@ -72,7 +84,7 @@ Requirements:
 - Different-plan unfinished checkpoints remain untouched and unannounced; they never gate or redirect the current invocation.
 - Load and resume only by the current `canonicalPlan`; do not call `list_unfinished` during normal orchestration.
 - Reconcile checkpoint state against live task state before resuming or dispatching more work.
-- On task failure, stop dispatching dependent or new work, checkpoint current state, reconcile live task results, and report the failure, blockers, files touched, validation, and exact next choices.
+- On task failure, stop dependent work and reconcile checkpoint state. Apply the Automatic recovery rules for safe local failures. Report exact choices only when the remaining blocker requires human input or approval.
 - Continue until all tasks are completed or terminally blocked.
 
 Execution Brief:
@@ -96,7 +108,7 @@ Execution loop:
 9. Repeat until done or blocked.
 
 Worker contract:
-- Each executor task may include the optional boolean `tdd`. For `tdd: true`, `execute_tasks` injects the trusted bundled canonical TDD workflow as the preferred strategy and requires `validation` entries beginning `RED:`, `GREEN:`, and `COVERAGE:`. Aim for the same exact supported command for RED and first GREEN, then broader tests. If strict process proof is imperfect but the trajectory retains trustworthy report structure, task-correlated RED or an honest unavailable reason, a proven production mutation, and an authentic final GREEN, the task settles `needs_verification` instead of failing. Malformed, unsafe, fabricated, uncorrelated, or currently failing evidence remains a hard task failure. Package-manager scripts remain non-authoritative. A no-work `blocked` or `needs_followup` result must give explicit unavailable/not-run reasons for all three.
+- Each executor task may include the optional boolean `tdd`. For `tdd: true`, `execute_tasks` injects the trusted bundled canonical TDD workflow as the preferred strategy and requires `validation` entries beginning `RED:`, `GREEN:`, and `COVERAGE:`. Aim for the same exact supported command for RED and first GREEN, then broader tests. If strict process proof is imperfect but the trajectory retains trustworthy report structure, task-correlated RED or an honest unavailable reason, a proven production mutation, and an authentic final GREEN, the task settles `needs_verification` instead of failing. Malformed, unsafe, fabricated, uncorrelated, or currently failing evidence remains a hard task failure, except the explicitly bounded `needs_followup` recovery case above. Package-manager scripts remain non-authoritative. A no-work `blocked` or `needs_followup` result must give explicit unavailable/not-run reasons for all three.
 - Each executor task must submit this object through its injected `structured_output` tool. Directly invoked executors may use JSON assistant text only as a compatibility fallback outside `/execute`:
   {
     "status": "done" | "blocked" | "needs_followup",

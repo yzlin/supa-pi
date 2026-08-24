@@ -2,6 +2,7 @@ import { describe, expect, it } from "bun:test";
 import { execFileSync } from "node:child_process";
 import {
   chmodSync,
+  existsSync,
   mkdirSync,
   mkdtempSync,
   readdirSync,
@@ -9,6 +10,7 @@ import {
   renameSync,
   statSync,
   symlinkSync,
+  truncateSync,
   unlinkSync,
   writeFileSync,
 } from "node:fs";
@@ -239,6 +241,12 @@ describe("execute executor workflow", () => {
     );
     expect(requests[0]?.prompt).toContain(
       "Add numeric coverage claims only when those exact values appear in retained runner output."
+    );
+    expect(requests[0]?.prompt).toContain(
+      "Use needs_followup only when a non-empty blocker prevents completion."
+    );
+    expect(requests[0]?.prompt).toContain(
+      "Use done when the requested work is complete; put non-blocking cleanup in followUps."
     );
   });
 
@@ -1146,6 +1154,220 @@ describe("execute executor workflow", () => {
     ]);
   });
 
+  it("routes completed needs_followup reports without blockers to verification", async () => {
+    const recoverableResult = {
+      ...validTddResult,
+      status: "needs_followup" as const,
+      followUps: ["Format the completed regression test."],
+      blockers: [],
+    };
+    const runner: WorkflowAgentRunner = (request) =>
+      agentResult(request, recoverableResult);
+
+    const results = await runExecutorWorkflow(
+      [{ ...task, tddShape: validTddShape, tdd: true }],
+      {
+        agentRunner: runner,
+        cwd: "/repo",
+      }
+    );
+
+    expect(results).toEqual([
+      {
+        taskId: "7",
+        outcome: "needs_verification",
+        result: recoverableResult,
+        repaired: false,
+        warnings: [
+          expect.stringContaining(
+            "Recoverable executor status requires independent verification"
+          ),
+        ],
+      },
+    ]);
+  });
+
+  it("preserves mutation-manifest warnings during recoverable settlement", async () => {
+    const recoverableResult = {
+      ...validTddResult,
+      status: "needs_followup" as const,
+      followUps: ["Review the unplanned generated file."],
+      blockers: [],
+    };
+    const runner: WorkflowAgentRunner = (request) =>
+      agentResult(request, recoverableResult, "ignored", [
+        {
+          name: "bash",
+          args: { command: "bun test tests/formatName.test.ts" },
+          assistantTurn: 0,
+          startOrder: 1,
+          endOrder: 2,
+          isError: true,
+          runnerWorkspaceProof: true,
+          resultText:
+            "formatter > formatName rejects empty input\n1 failed, 4 passed",
+        },
+        {
+          name: "edit",
+          args: {
+            path: "src/format.ts",
+            oldText: "return unformatted",
+            newText: "return formatted",
+          },
+          mutationProven: true,
+          mutationDelta: [{ path: "src/format.ts", status: "changed" }],
+          assistantTurn: 1,
+          startOrder: 4,
+          endOrder: 5,
+          isError: false,
+        },
+        {
+          name: "write",
+          args: { path: "src/unplanned.ts", content: "generated" },
+          mutationProven: true,
+          mutationDelta: [{ path: "src/unplanned.ts", status: "created" }],
+          assistantTurn: 2,
+          startOrder: 7,
+          endOrder: 8,
+          isError: false,
+        },
+        {
+          name: "bash",
+          args: { command: "bun test tests/formatName.test.ts" },
+          assistantTurn: 3,
+          startOrder: 10,
+          endOrder: 11,
+          isError: false,
+          runnerWorkspaceProof: true,
+          resultText:
+            "formatter > formatName rejects empty input\n5 passed, 0 failed",
+        },
+        {
+          name: "structured_output",
+          args: recoverableResult,
+          assistantTurn: 4,
+          startOrder: 13,
+          endOrder: 14,
+          isError: false,
+        },
+      ]);
+
+    const results = await runExecutorWorkflow(
+      [{ ...task, tddShape: validTddShape, tdd: true }],
+      { agentRunner: runner, cwd: "/repo" }
+    );
+
+    expect(results[0]).toMatchObject({
+      outcome: "needs_verification",
+      warnings: [expect.stringContaining("src/unplanned.ts")],
+    });
+  });
+
+  it("does not downgrade unsafe needs_followup trajectories", async () => {
+    const recoverableResult = {
+      ...validTddResult,
+      status: "needs_followup" as const,
+      followUps: ["Regenerate types separately."],
+      blockers: [],
+    };
+    const runner: WorkflowAgentRunner = (request) =>
+      agentResult(request, recoverableResult, "ignored", [
+        {
+          name: "bash",
+          args: { command: "bun test tests/formatName.test.ts" },
+          assistantTurn: 0,
+          startOrder: 1,
+          endOrder: 2,
+          isError: true,
+          runnerWorkspaceProof: true,
+          resultText:
+            "formatter > formatName rejects empty input\n1 failed, 4 passed",
+        },
+        {
+          name: "edit",
+          args: {
+            path: "src/format.ts",
+            oldText: "return unformatted",
+            newText: "return formatted",
+          },
+          assistantTurn: 1,
+          startOrder: 4,
+          endOrder: 5,
+          isError: false,
+        },
+        {
+          name: "bash",
+          args: { command: "NODE_ENV=development bunx gatsby develop" },
+          assistantTurn: 2,
+          startOrder: 7,
+          endOrder: 8,
+          isError: false,
+          resultText: "Generated Gatsby types.",
+        },
+        {
+          name: "bash",
+          args: { command: "bun test tests/formatName.test.ts" },
+          assistantTurn: 3,
+          startOrder: 10,
+          endOrder: 11,
+          isError: false,
+          runnerWorkspaceProof: true,
+          resultText:
+            "formatter > formatName rejects empty input\n5 passed, 0 failed",
+        },
+        {
+          name: "structured_output",
+          args: recoverableResult,
+          assistantTurn: 4,
+          startOrder: 13,
+          endOrder: 14,
+          isError: false,
+        },
+      ]);
+
+    const results = await runExecutorWorkflow(
+      [{ ...task, tddShape: validTddShape, tdd: true }],
+      {
+        agentRunner: runner,
+        cwd: "/repo",
+      }
+    );
+
+    expect(results).toMatchObject([
+      {
+        taskId: "7",
+        outcome: "failed",
+        error: expect.stringContaining("mutation-capable shell calls"),
+      },
+    ]);
+  });
+
+  it("keeps needs_followup without blockers or follow-ups as a hard failure", async () => {
+    const runner: WorkflowAgentRunner = (request) =>
+      agentResult(request, {
+        ...validTddResult,
+        status: "needs_followup",
+        followUps: [],
+        blockers: [],
+      });
+
+    const results = await runExecutorWorkflow(
+      [{ ...task, tddShape: validTddShape, tdd: true }],
+      {
+        agentRunner: runner,
+        cwd: "/repo",
+      }
+    );
+
+    expect(results).toMatchObject([
+      {
+        taskId: "7",
+        outcome: "failed",
+        error: expect.stringContaining("non-empty blocker"),
+      },
+    ]);
+  });
+
   it("fails only a tdd:true task with missing evidence and preserves siblings", async () => {
     let calls = 0;
     const runner: WorkflowAgentRunner = (request) => {
@@ -1459,6 +1681,18 @@ describe("executor agent runner cleanup", () => {
         }
         if (prompt.includes("Runner package mutation")) {
           writeFileSync(join(workspace, "package.json"), '{"changed":true}');
+        }
+        if (prompt.includes("Runner tracked ignored mutation")) {
+          writeFileSync(join(workspace, ".cache/tracked.txt"), "after");
+        }
+        if (prompt.includes("Runner ignored behavior mutation")) {
+          writeFileSync(join(workspace, ".env.test"), "after");
+        }
+        if (prompt.includes("Runner normalized tracked mutation")) {
+          writeFileSync(join(workspace, "public/é.txt"), "after");
+        }
+        if (prompt.includes("Runner tracked submodule mutation")) {
+          writeFileSync(join(workspace, "public/site/fixture.txt"), "after");
         }
         if (prompt.includes("Runner file permission mutation")) {
           chmodSync(join(workspace, "permission-protected.txt"), 0o711);
@@ -2113,6 +2347,7 @@ describe("executor agent runner cleanup", () => {
     expect(
       fifoWrite.toolCalls?.find(({ name }) => name === "write")?.mutationProven
     ).toBe(false);
+    unlinkSync(join(workspace, "proof.fifo"));
 
     writeFileSync(join(workspace, "swap.ts"), "before");
     writeFileSync(join(workspace, "swap-outside.ts"), "outside");
@@ -2218,6 +2453,237 @@ describe("executor agent runner cleanup", () => {
         expect(truncated?.resultText).toEndWith("1 pass");
       }
     }
+
+    const gitProbeDirectory = mkdtempSync(join(tmpdir(), "supa-pi-git-probe-"));
+    const gitProbeMarker = join(gitProbeDirectory, "invoked");
+    const gitProbe = join(gitProbeDirectory, "git");
+    writeFileSync(gitProbe, `#!/bin/sh\ntouch '${gitProbeMarker}'\nexit 1\n`);
+    chmodSync(gitProbe, 0o700);
+    const originalPath = process.env.PATH;
+    process.env.PATH = `${gitProbeDirectory}:${originalPath ?? ""}`;
+    let nonGatsbyProof: {
+      toolCalls?: Array<{ runnerWorkspaceProof?: boolean }>;
+    };
+    try {
+      nonGatsbyProof = (await runner(
+        {
+          agent: "executor",
+          prompt: "Non-Gatsby runner proof",
+          executorOutputSchema: EXECUTOR_RESULT_SCHEMA,
+          captureTrajectory: true,
+        } as never,
+        { signal: new AbortController().signal } as never
+      )) as typeof nonGatsbyProof;
+    } finally {
+      process.env.PATH = originalPath;
+    }
+    expect(
+      nonGatsbyProof.toolCalls?.map(
+        ({ runnerWorkspaceProof }) => runnerWorkspaceProof
+      )
+    ).toEqual([true, true]);
+    expect(existsSync(gitProbeMarker)).toBe(false);
+
+    execFileSync("git", ["init", "-q"], { cwd: workspace });
+    execFileSync("git", ["config", "core.precomposeunicode", "true"], {
+      cwd: workspace,
+    });
+    mkdirSync(join(workspace, ".cache"));
+    mkdirSync(join(workspace, "public/site"), { recursive: true });
+    writeFileSync(join(workspace, ".gitignore"), ".cache/\n.env.test\n");
+    writeFileSync(join(workspace, "gatsby-config.ts"), "export default {};\n");
+    writeFileSync(join(workspace, ".cache/tracked.txt"), "before");
+    writeFileSync(join(workspace, ".env.test"), "before");
+    writeFileSync(join(workspace, "public/é.txt"), "before");
+    writeFileSync(join(workspace, ".cache/generated.bin"), "");
+    truncateSync(join(workspace, ".cache/generated.bin"), 65 * 1024 * 1024);
+    execFileSync("git", ["add", ".gitignore"], { cwd: workspace });
+    execFileSync("git", ["add", "-f", ".cache/tracked.txt", "public/é.txt"], {
+      cwd: workspace,
+    });
+    const submodule = join(workspace, "public/site");
+    execFileSync("git", ["init", "-q"], { cwd: submodule });
+    execFileSync("git", ["config", "user.email", "test@example.com"], {
+      cwd: submodule,
+    });
+    execFileSync("git", ["config", "user.name", "Test"], { cwd: submodule });
+    writeFileSync(join(submodule, "fixture.txt"), "before");
+    execFileSync("git", ["add", "fixture.txt"], { cwd: submodule });
+    execFileSync("git", ["commit", "-qm", "fixture"], { cwd: submodule });
+    const submoduleCommit = execFileSync("git", ["rev-parse", "HEAD"], {
+      cwd: submodule,
+      encoding: "utf8",
+    }).trim();
+    execFileSync(
+      "git",
+      [
+        "update-index",
+        "--add",
+        "--cacheinfo",
+        `160000,${submoduleCommit},public/site`,
+      ],
+      { cwd: workspace }
+    );
+    const fsmonitorHelper = join(workspace, "fsmonitor-probe.sh");
+    const fsmonitorMarker = join(workspace, "fsmonitor-invoked");
+    writeFileSync(
+      fsmonitorHelper,
+      "#!/bin/sh\ntouch fsmonitor-invoked\nexit 1\n"
+    );
+    chmodSync(fsmonitorHelper, 0o700);
+    execFileSync("git", ["config", "core.fsmonitor", "./fsmonitor-probe.sh"], {
+      cwd: workspace,
+    });
+
+    const ignoredGeneratedOutput = (await runner(
+      {
+        agent: "executor",
+        prompt: "Runner ignored generated output",
+        executorOutputSchema: EXECUTOR_RESULT_SCHEMA,
+        captureTrajectory: true,
+      } as never,
+      { signal: new AbortController().signal } as never
+    )) as {
+      toolCalls?: Array<{ runnerWorkspaceProof?: boolean }>;
+      trajectoryErrors?: string[];
+    };
+    expect(
+      ignoredGeneratedOutput.toolCalls?.map(
+        ({ runnerWorkspaceProof }) => runnerWorkspaceProof
+      )
+    ).toEqual([true, true]);
+    expect(ignoredGeneratedOutput.trajectoryErrors).toEqual([]);
+    expect(existsSync(fsmonitorMarker)).toBe(false);
+
+    process.env.PATH = `${gitProbeDirectory}:${originalPath ?? ""}`;
+    let failedGatsbyEnumeration: {
+      toolCalls?: Array<{ runnerWorkspaceProof?: boolean }>;
+      trajectoryErrors?: string[];
+    };
+    try {
+      failedGatsbyEnumeration = (await runner(
+        {
+          agent: "executor",
+          prompt: "Gatsby failed Git enumeration",
+          executorOutputSchema: EXECUTOR_RESULT_SCHEMA,
+          captureTrajectory: true,
+        } as never,
+        { signal: new AbortController().signal } as never
+      )) as typeof failedGatsbyEnumeration;
+    } finally {
+      process.env.PATH = originalPath;
+    }
+    expect(existsSync(gitProbeMarker)).toBe(true);
+    expect(
+      failedGatsbyEnumeration.toolCalls?.map(
+        ({ runnerWorkspaceProof }) => runnerWorkspaceProof
+      )
+    ).toEqual([false, false]);
+    expect(failedGatsbyEnumeration.trajectoryErrors).toContain(
+      "test runner relevant workspace pre-proof was incomplete"
+    );
+
+    const trackedIgnoredMutation = (await runner(
+      {
+        agent: "executor",
+        prompt: "Runner tracked ignored mutation",
+        executorOutputSchema: EXECUTOR_RESULT_SCHEMA,
+        captureTrajectory: true,
+      } as never,
+      { signal: new AbortController().signal } as never
+    )) as {
+      toolCalls?: Array<{
+        runnerWorkspaceProof?: boolean;
+        runnerWorkspaceDelta?: unknown;
+      }>;
+    };
+    expect(trackedIgnoredMutation.toolCalls?.[0]).toMatchObject({
+      runnerWorkspaceProof: true,
+      runnerWorkspaceDelta: [{ path: ".cache/tracked.txt", status: "changed" }],
+    });
+
+    const ignoredBehaviorMutation = (await runner(
+      {
+        agent: "executor",
+        prompt: "Runner ignored behavior mutation",
+        executorOutputSchema: EXECUTOR_RESULT_SCHEMA,
+        captureTrajectory: true,
+      } as never,
+      { signal: new AbortController().signal } as never
+    )) as {
+      toolCalls?: Array<{
+        runnerWorkspaceProof?: boolean;
+        runnerWorkspaceDelta?: unknown;
+      }>;
+    };
+    expect(ignoredBehaviorMutation.toolCalls?.[0]).toMatchObject({
+      runnerWorkspaceProof: true,
+      runnerWorkspaceDelta: [{ path: ".env.test", status: "changed" }],
+    });
+
+    const normalizedTrackedMutation = (await runner(
+      {
+        agent: "executor",
+        prompt: "Runner normalized tracked mutation",
+        executorOutputSchema: EXECUTOR_RESULT_SCHEMA,
+        captureTrajectory: true,
+      } as never,
+      { signal: new AbortController().signal } as never
+    )) as {
+      toolCalls?: Array<{
+        runnerWorkspaceProof?: boolean;
+        runnerWorkspaceDelta?: unknown;
+      }>;
+    };
+    expect(normalizedTrackedMutation.toolCalls?.[0]).toMatchObject({
+      runnerWorkspaceProof: true,
+      runnerWorkspaceDelta: [{ path: "public/é.txt", status: "changed" }],
+    });
+
+    const trackedSubmoduleMutation = (await runner(
+      {
+        agent: "executor",
+        prompt: "Runner tracked submodule mutation",
+        executorOutputSchema: EXECUTOR_RESULT_SCHEMA,
+        captureTrajectory: true,
+      } as never,
+      { signal: new AbortController().signal } as never
+    )) as {
+      toolCalls?: Array<{
+        runnerWorkspaceProof?: boolean;
+        runnerWorkspaceDelta?: unknown;
+      }>;
+    };
+    expect(trackedSubmoduleMutation.toolCalls?.[0]).toMatchObject({
+      runnerWorkspaceProof: true,
+      runnerWorkspaceDelta: [
+        { path: "public/site/fixture.txt", status: "changed" },
+      ],
+    });
+
+    for (let index = 0; index <= 10_000; index += 1) {
+      writeFileSync(join(workspace, `.cache/generated-${index}.txt`), "");
+    }
+    const generatedEntryOverflow = (await runner(
+      {
+        agent: "executor",
+        prompt: "Runner generated entry overflow",
+        executorOutputSchema: EXECUTOR_RESULT_SCHEMA,
+        captureTrajectory: true,
+      } as never,
+      { signal: new AbortController().signal } as never
+    )) as {
+      toolCalls?: Array<{ runnerWorkspaceProof?: boolean }>;
+      trajectoryErrors?: string[];
+    };
+    expect(
+      generatedEntryOverflow.toolCalls?.map(
+        ({ runnerWorkspaceProof }) => runnerWorkspaceProof
+      )
+    ).toEqual([false, false]);
+    expect(generatedEntryOverflow.trajectoryErrors).toContain(
+      "test runner relevant workspace pre-proof was incomplete"
+    );
   });
 
   it("disposes a completed structured executor session", async () => {

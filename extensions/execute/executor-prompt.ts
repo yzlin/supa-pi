@@ -60,6 +60,8 @@ export const EXECUTOR_RESULT_SCHEMA = Type.Object(
 export const EXECUTOR_RESULT_PROMPT = [
   "Call structured_output exactly once as your sole final action with output matching this exact closed schema:",
   JSON.stringify(EXECUTOR_RESULT_SCHEMA),
+  "Use needs_followup only when a non-empty blocker prevents completion.",
+  "Use done when the requested work is complete; put non-blocking cleanup in followUps.",
   "Do not return the result as assistant text or emit assistant text after structured_output.",
 ].join("\n");
 

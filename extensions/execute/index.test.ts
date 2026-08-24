@@ -354,6 +354,13 @@ describe("execute orchestration contract", () => {
       "Omit `tdd` by default for documentation-only, configuration-only, generated, and purely mechanical tasks"
     );
     expect(skill).toContain(
+      "Do not ask the user to approve recoverable local work"
+    );
+    expect(skill).toContain("at most two automatic recovery rounds");
+    expect(skill).toContain(
+      "Generated output discovered during a TDD Slice must become a separate non-TDD Task"
+    );
+    expect(skill).toContain(
       "never accept assistant-text JSON as an executor result"
     );
     expect(skill).not.toContain("Dispatch runnable tasks with `TaskExecute`");
