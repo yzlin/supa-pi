@@ -25,16 +25,27 @@ describe("visual explanation skill contracts", () => {
     expect(skill).toContain("Glimpse");
   });
 
-  it("keeps /show-me as a thin showing-me wrapper", () => {
-    const prompt = readRepositoryFile("prompts", "show-me.md");
+  it("keeps /show-me as a thin prompt-pipeline showing-me wrapper", () => {
+    const extension = readRepositoryFile(
+      "extensions",
+      "prompt-commands",
+      "index.ts"
+    );
 
+    expect(extension).toContain('"show-me": {');
+    const prompt = readRepositoryFile("prompts", "show-me.md");
     expect(prompt).toContain('argument-hint: "[topic]"');
     expect(prompt).toContain(
       "Use the `showing-me` skill as canonical for this explicit command."
     );
-    expect(prompt).toContain("$@");
-    expect(prompt).not.toContain("component tree");
-    expect(prompt).not.toContain("Mermaid");
+    expect(prompt).toContain("Topic:\n$@");
+    expect(extension).toContain(
+      "Use the `showing-me` skill as canonical for this explicit command."
+    );
+    expect(extension).toContain('pi.on("input"');
+    expect(extension).not.toContain("registerCommand");
+    expect(extension).not.toContain("component tree");
+    expect(extension).not.toContain("Mermaid");
   });
 
   it("keeps architecture diagrams proportional to the question", () => {

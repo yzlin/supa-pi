@@ -41,6 +41,10 @@ Fast Mode persists global state and additive exact-match model support in `~/.pi
 
 `extensions/execute` is active. It registers `/execute`, `execute_checkpoint`, and `execute_tasks`. The main session owns pi-task and checkpoint state; `execute_tasks` launches at most four bounded executor agents per round through the pi-subagents workflow runtime with a compact closed native structured-output schema, settled per-task outcomes, hard agent deadlines, eventual session disposal, no inherited extension/parent-bridge tools, and at most one report-only repair by the tool-less `executor-output-repair` agent. For behavior changes and bug fixes, a task marked `tdd: true` uses the generic executor and receives only the canonical `skills/tdd-workflow/SKILL.md` from a fixed bundled path; callers cannot select arbitrary skills. Repaired reports return `needs_verification` and cannot complete a task without independent orchestrator checks.
 
+## Prompt-pipeline command ownership
+
+`extensions/prompt-commands` does not register slash commands. The three names are prompt templates under `prompts/`, so Pi keeps attached images, original input events/source metadata, and native steering/follow-up queue behavior. Each template also contains its complete functional `$@` wrapper as a standalone fallback for `--no-extensions` and Extension load failures. The Extension transforms normal `prompt()` input before template argument tokenization only when Pi's effective `expandPromptTemplates` option is enabled; explicit opt-out calls and Extension-origin `sendUserMessage()` content remain literal. It applies the same raw expansion at the otherwise non-interceptable direct `AgentSession.steer()` and `followUp()` boundary, so its output no longer starts with a slash command and cannot be expanded a second time. It accepts the same whitespace delimiter class as Pi templates, consumes one delimiter character, and preserves every remaining character. The unavoidable process-wide session-method patch uses async-call-scoped prompt options and lifecycle-owned transformers: the newest owner supplies current behavior, shutdown removes that owner, and the original methods are restored after the last owner shuts down. Keep the Extension active and the three prompt files deployed together.
+
 ## Tool ownership and registration order
 
 `extensions/tool-display` owns `read`, `write`, and optional compact renderers for `grep`, `find`, and `ls`. Its strict-text unified `edit` candidate is owned only when explicitly enabled and defaults off pending the live gate; disabled sessions receive Pi's built-in edit definition instead. There is no standalone active multi-edit extension entry.
@@ -57,12 +61,12 @@ Web access tools come from the external `npm:pi-web-access` companion package, n
 
 ## Deployment model
 
-This repo can be developed from any checkout path. The live Pi config is still the `~/.pi/agent` environment described by setup docs.
+This repo can be developed from any checkout path. `setup.sh` first installs that checkout's locked production dependencies with Bun, then registers the checkout as a Pi local-path package before reconciling linked prompt files. Pi local-path installation records the source but does not install its dependencies, so this ordering is required for every manifest Extension to load. Registration makes `package.json -> pi.extensions` active in the live Pi config and keeps extension command replacements available during upgrades. Dependency installation is fail-fast. The live Pi config is still the `~/.pi/agent` environment described by setup docs.
 
 When changing setup or installation docs, keep this distinction clear:
 
-- development clone — where the repo is edited
-- live Pi config — where Pi loads agents, skills, prompts, rules, and extensions
+- development clone — where the repo is edited and the installed local-path package points
+- live Pi config — where Pi records packages and loads agents, skills, prompts, rules, and extensions
 
 ## License context
 

@@ -42,6 +42,23 @@ link_dir_contents() {
     return
   fi
 
+  local source_abs
+  source_abs="$(cd "$source_dir" && pwd)"
+
+  local target_path
+  for target_path in "$target_dir"/*; do
+    if [ ! -L "$target_path" ] || [ -e "$target_path" ]; then
+      continue
+    fi
+
+    local link_target
+    link_target="$(readlink "$target_path")"
+    if [ "$(dirname "$link_target")" = "$source_abs" ]; then
+      rm -- "$target_path"
+      echo "  Removed stale $label/$(basename "$target_path") link"
+    fi
+  done
+
   local linked_any=false
   local source_path
   for source_path in "$source_dir"/*; do
@@ -175,6 +192,13 @@ echo "Installing packages..."
 for package in "${PI_PACKAGES[@]}"; do
   pi install "$package"
 done
+
+# Local-path packages are not copied and Pi does not install their dependencies.
+echo "Installing locked supa-pi runtime dependencies..."
+(cd "$SCRIPT_DIR" && bun install --frozen-lockfile --production)
+
+# Deploy this repo's package manifest before reconciling retired prompt links.
+pi install "$SCRIPT_DIR"
 
 echo ""
 

@@ -23,6 +23,7 @@ Documented extensions in this repo include:
 - **`extensions/caveman`** — standalone `/caveman` mode with per-session persistence and generic extension status
 - **`@yzlin/pieditor` 2.0.0** — required compositor-free npm package for editor UX improvements like `@` file picking, shell completions, raw paste, and command remapping; installed by `setup.sh`
 - **`extensions/init-deep`** — deterministic `/init-deep` command flow for generating hierarchical `AGENTS.md`
+- **`extensions/prompt-commands`** — active raw-input transformer for the queueable `/grill-me`, `/research-brief`, and `/show-me` prompt entrypoints; canonical behavior remains in their delegated skills or prompt instructions
 - **`extensions/questionnaire`** — active structured clarification tool with bounded schema, single/multi-question TUI flows, preview notes, validation, and locally documented rpiv divergences in `docs/context/questionnaire.md`
 - **`extensions/context-docs`** — deterministic `/context-setup`, `/context-note`, `/adr`, and `/context-review` workflows for durable project context docs; canonical workflow behavior lives in `skills/context-docs/SKILL.md`
 - **`extensions/docs-list`** — `docs_list` tool for discovering project markdown docs before coding; backed by the same implementation as the `docs-list` CLI
@@ -81,7 +82,7 @@ Run `/skill` or `/skill list` in a custom UI session to open the first-slice Ski
 
 ## Included prompts
 
-`prompts/show-me.md` is the thin `/show-me [topic]` wrapper for the canonical `showing-me` skill.
+`prompts/grill-me.md`, `prompts/research-brief.md`, and `prompts/show-me.md` provide queueable prompt entrypoints and complete `$@`-based fallbacks when Extensions are disabled or fail to load. Before normal template expansion, `extensions/prompt-commands` replaces each invocation from its untouched raw argument substring; space-, tab-, and newline-separated arguments preserve their remaining layout, images, input source/events, and both steering and follow-up delivery. Queue interception is removed when its final Extension owner shuts down, so reloads use current code without leaving a process-wide transformer behind. `/grill-me` and `/show-me` delegate canonical behavior to the `grill-me` and `showing-me` skills respectively.
 
 `prompts/wait-what.md` adapts Matt Pocock's MIT-licensed [`skills/productivity/wait-what/SKILL.md`](https://github.com/mattpocock/skills/blob/84fdeffd12f2ee307994d1eb6feb48173b6e0502/skills/productivity/wait-what/SKILL.md) at commit `84fdeffd12f2ee307994d1eb6feb48173b6e0502`.
 
@@ -126,7 +127,7 @@ The global agent protocol and common workflow rules include guidance adapted fro
 
 ## Install
 
-This repo can live anywhere. `setup.sh` links repo-managed files into `~/.pi/agent` and the bundled skills extension discovers this repo's `skills/` directory directly.
+This repo can live anywhere. `setup.sh` installs the checkout as a Pi local-path package, links repo-managed files into `~/.pi/agent`, and the bundled skills extension discovers this repo's `skills/` directory directly.
 
 ```bash
 git clone git@github.com:yzlin/supa-pi ~/dev/yzlin/supa-pi
@@ -137,8 +138,12 @@ cd ~/dev/yzlin/supa-pi
 `setup.sh` will:
 
 1. create `~/.pi/agent` and `~/.pi/agent/settings.json` if missing
-2. install companion Pi packages with `pi install`
-3. symlink this repo's `AGENTS.global.md` as `~/.pi/agent/AGENTS.md`, plus `keybindings.json`, `agents/`, `prompts/`, and `rules/` into the live Pi agent directory
+2. install companion Pi packages
+3. install this checkout's locked production dependencies with Bun
+4. register this checkout as a Pi local-path package
+5. symlink this repo's `AGENTS.global.md` as `~/.pi/agent/AGENTS.md`, plus `keybindings.json`, `agents/`, `prompts/`, and `rules/` into the live Pi agent directory
+
+The locked checkout dependencies are installed before local-path registration because Pi does not install dependencies for local sources. Registration still happens before prompt links are reconciled, so extension command replacements are deployed before retired prompt entrypoints are removed during upgrades. Setup fails immediately if dependency installation fails.
 
 Fresh setup uses Pi's official fullscreen TUI by default. Existing `settings.json` files are left untouched; existing users can select fullscreen via `/settings` or start Pi with `--tui-mode fullscreen`. Both regular and fullscreen modes are supported.
 

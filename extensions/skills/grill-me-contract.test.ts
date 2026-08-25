@@ -170,18 +170,28 @@ describe("semantic ownership contract", () => {
   });
 });
 
-describe("grill-me prompt contract", () => {
-  it("uses simple plan syntax and delegates only to its wrapper", () => {
-    const prompt = readRepositoryFile("prompts", "grill-me.md");
+describe("grill-me command contract", () => {
+  it("keeps a thin prompt-pipeline wrapper around the canonical skill", () => {
+    const extension = readRepositoryFile(
+      "extensions",
+      "prompt-commands",
+      "index.ts"
+    );
 
+    expect(extension).toContain('"grill-me": {');
+    const prompt = readRepositoryFile("prompts", "grill-me.md");
     expect(prompt).toContain('argument-hint: "<plan>"');
     expect(prompt).toContain(
       "Use the `grill-me` wrapper skill as canonical for this explicit command."
     );
-    expect(prompt).toContain("$@");
-    expect(prompt).not.toContain(" -- ");
-    expect(prompt).not.toContain("`grilling` skill");
-    expect(prompt).not.toContain("CONTEXT.md");
-    expect(prompt).not.toContain("questionnaire");
+    expect(prompt).toContain("Plan:\n$@");
+    expect(extension).toContain(
+      "Use the `grill-me` wrapper skill as canonical for this explicit command."
+    );
+    expect(extension).toContain('pi.on("input"');
+    expect(extension).not.toContain("registerCommand");
+    expect(extension).not.toContain("`grilling` skill");
+    expect(extension).not.toContain("CONTEXT.md");
+    expect(extension).not.toContain("questionnaire");
   });
 });

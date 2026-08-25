@@ -37,7 +37,8 @@
       "./extensions/notify.ts",
       "./extensions/no-sleep.ts",
       "./extensions/whimsical",
-      "./extensions/fast"
+      "./extensions/fast",
+      "./extensions/prompt-commands"
     ]
   },
   "dependencies": {

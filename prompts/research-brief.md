@@ -1,5 +1,6 @@
 ---
 description: Investigate a topic with strict evidence, citations, and explicit uncertainty
+argument-hint: "<topic>"
 ---
 
 Research the following topic in strict evidence mode:
