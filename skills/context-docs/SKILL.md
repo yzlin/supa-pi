@@ -89,9 +89,15 @@ Route domain and product language to `CONTEXT.md`; agent conventions to a manage
 
 Create or update an ADR under `docs/adr/` unless the target has another ADR convention. Use a stable lowercase hyphenated filename; without a numbering convention, prefer `docs/adr/YYYY-MM-DD-short-title.md`.
 
-Use the full format:
+Use `summary` and `read_when` frontmatter so `docs_list` can route the ADR, followed by the full ADR format:
 
 ```markdown
+---
+summary: "<one-sentence decision summary>"
+read_when:
+  - "<conditions that should route future agents to this ADR>"
+---
+
 # ADR: <title>
 
 - Status: proposed | accepted | superseded | deprecated | rejected

@@ -2,7 +2,7 @@
 name: composition-patterns
 description:
   React composition patterns that scale. Use for React/Next.js UI work in this
-  repo when components accumulate boolean props, need flexible APIs, or benefit
+  target workspace when components accumulate boolean props, need flexible APIs, or benefit
   from compound components and context. Skip non-UI packages. Includes React 19
   API changes.
 license: MIT

@@ -1,6 +1,6 @@
 ---
 name: react-view-transitions
-description: Guide for implementing smooth, native-feeling animations using React's View Transition API (`<ViewTransition>` component, `addTransitionType`, and CSS view transition pseudo-elements). Use for React web or Next.js packages in this repo when adding page transitions, shared-element animations, route changes, or animated state changes. Skip native-only work and verify the target app can use the View Transition API.
+description: Guide for implementing smooth, native-feeling animations using React's View Transition API (`<ViewTransition>` component, `addTransitionType`, and CSS view transition pseudo-elements). Use for React web or Next.js packages in the target workspace when adding page transitions, shared-element animations, route changes, or animated state changes. Skip native-only work and verify the target app can use the View Transition API.
 license: MIT
 metadata:
   author: vercel

@@ -1,6 +1,6 @@
 ---
 name: react-best-practices
-description: React and Next.js performance optimization guidelines from Vercel Engineering. Use for React/Next.js packages in this repo when writing, reviewing, or refactoring UI, data fetching, or bundle-loading code. Skip non-UI packages, and verify Next.js/Vercel-specific advice against the target runtime.
+description: React and Next.js performance optimization guidelines from Vercel Engineering. Use for React/Next.js packages in the target workspace when writing, reviewing, or refactoring UI, data fetching, or bundle-loading code. Skip non-UI packages, and verify Next.js/Vercel-specific advice against the target runtime.
 license: MIT
 metadata:
   author: vercel

@@ -1,3 +1,9 @@
+---
+summary: "Active Questionnaire Extension schema, interaction behavior, and runtime boundaries."
+read_when:
+  - "Changing questionnaire tool parameters, TUI behavior, validation, result shape, or clarification guidance."
+---
+
 # Questionnaire extension
 
 Read when changing `extensions/questionnaire/*`, prompt guidance for user clarification, or README claims about the active Questionnaire Extension.

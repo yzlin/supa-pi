@@ -1,3 +1,9 @@
+---
+summary: "Behavior and safety boundaries for scoped code-improvement commands."
+read_when:
+  - "Changing /simplify, /improve-codebase-architecture, scope parsing, consent gates, or code-improvement prompts."
+---
+
 # Code-improvement extension
 
 Read when changing `/simplify`, `/improve-codebase-architecture`, or code-improvement prompt files.

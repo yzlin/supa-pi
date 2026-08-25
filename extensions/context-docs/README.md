@@ -19,7 +19,7 @@ The workflows preserve Matt-compatible files while keeping SupaPi's broad `CONTE
 
 - `CONTEXT.md` — human-readable product purpose, domain model and glossary, constraints, open questions, and context-map pointer.
 - `CONTEXT-MAP.md` — real durable-context boundaries, ADR locations, and explicit guidance for which docs agents should read.
-- `docs/adr/` — full Architecture Decision Records for tradeoff decisions.
+- `docs/adr/` — full Architecture Decision Records with `summary` and `read_when` metadata for tradeoff decisions.
 - `docs/context/` — optional longer durable notes.
 - managed `AGENTS.md` sections — agent-specific conventions.
 

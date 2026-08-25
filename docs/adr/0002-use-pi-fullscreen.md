@@ -1,3 +1,9 @@
+---
+summary: "Use Pi-owned fullscreen composition while retaining pieditor only for editor UX."
+read_when:
+  - "Changing Pi version support, setup TUI defaults, fullscreen/regular compatibility, or pieditor viewport ownership."
+---
+
 # ADR 0002: Use Pi fullscreen instead of pieditor fixed mode
 
 - Status: Accepted

@@ -1,3 +1,9 @@
+---
+summary: "Canonical registration, ownership, and deployment notes for SupaPi extensions."
+read_when:
+  - "Changing package.json extension registration, active/retired extension claims, tool ownership, or setup deployment."
+---
+
 # Extension registration context
 
 ## Active Extensions
@@ -6,11 +12,7 @@ An Extension is active only when listed in `package.json -> pi.extensions`.
 
 When documenting active capabilities, prefer `package.json` over directory presence. Extension code may exist in the repo without being loaded by Pi.
 
-## Disabled Extension code
-
-`extensions/om` is present in the repository but intentionally disabled because it is not listed in `package.json -> pi.extensions`.
-
-Do not describe `extensions/om` as active runtime behavior unless package registration changes.
+## Registration notes
 
 `extensions/notify.ts` is active and sends a desktop notification after `agent_end`. On macOS in Ghostty, it lazily compiles and launches a cached AppleScript app named `Pi agent` because direct OSC notifications fail in the live setup; this gives notifications the `Pi agent` sender identity. It falls back to OSC 777 if the app cannot compile or launch. Elsewhere, it uses OSC 777, supported by terminals including Ghostty, iTerm2, WezTerm, and rxvt-unicode. It is copied from original author Armin Ronacher's `mitsuhiko/agent-stuff` [`extensions/notify.ts`](https://github.com/mitsuhiko/agent-stuff/blob/main/extensions/notify.ts) under Apache License 2.0; the local file adds attribution, repository formatting/lint changes, and the macOS Ghostty delivery path.
 

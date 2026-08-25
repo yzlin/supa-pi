@@ -2,7 +2,7 @@
 name: react-native-skills
 description:
   React Native and Expo best practices for building performant mobile apps. Use
-  for Expo/React Native packages in this repo when working on components, list
+  for Expo/React Native packages in the target workspace when working on components, list
   performance, animations, or native integrations. Skip browser-only packages.
 license: MIT
 metadata:

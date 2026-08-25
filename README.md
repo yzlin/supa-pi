@@ -18,7 +18,6 @@ This repo is a curated `~/.pi/agent` setup with local extensions, custom agents,
 Documented extensions in this repo include:
 
 - **`extensions/lsp`** — unified `lsp` tool for diagnostics, definitions, references, hover, symbols, call hierarchy, and code actions
-- **`extensions/om`** — disabled Observational Memory extension code for branch-local memory restore, observer/reflector passes, and `/om` admin commands; present in the repo but not registered in `package.json -> pi.extensions`
 - **`extensions/rtk`** — output compaction and `/rtk stats` dashboard; owns `bash` execution, rewrite, and stats
 - **`extensions/caveman`** — standalone `/caveman` mode with per-session persistence and generic extension status
 - **`@yzlin/pieditor` 2.0.0** — required compositor-free npm package for editor UX improvements like `@` file picking, shell completions, raw paste, and command remapping; installed by `setup.sh`

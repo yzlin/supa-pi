@@ -1,3 +1,9 @@
+---
+summary: "Adopt a safety-gated local unified-edit dialect while retaining Pi's built-in edit by default."
+read_when:
+  - "Changing the tool-display edit schema, unified-edit dialect, mutation safety, compatibility policy, or live reliability gate."
+---
+
 # ADR 0001: Local unified-edit dialect
 
 - Status: Proposed; deterministic implementation complete, live reliability gate pending
