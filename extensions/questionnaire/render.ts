@@ -11,7 +11,7 @@ const OPTION_TITLE_MIN_WIDTH = 24;
 const OPTION_PREVIEW_MIN_WIDTH = 12;
 const OPTION_COLUMN_GUTTER_WIDTH = 3;
 const OPTION_TITLE_SPLIT = 0.45;
-const OPTION_PREVIEW_MAX_LINES = 6;
+const ACTIVE_OPTION_PREVIEW_MAX_LINES = 12;
 const OPTION_LABEL_MAX_LINES = 6;
 const NOTE_PREVIEW_MAX_LINES = 6;
 const PREVIEW_LAYOUT_MIN_WIDTH = 72;
@@ -196,15 +196,24 @@ export function renderQuestionnaireRuntime(args: {
           );
           add(`${left} │ ${right}`);
         }
-        if (
-          question.multiSelect !== true &&
-          getNotePreviewLines(width).length > 0
-        ) {
-          lines.push("");
-          renderNoteDraft(width);
-        }
       } else {
         renderOptions();
+        lines.push("");
+        add(theme.fg("muted", " Preview"));
+        for (const line of getOptionPreviewLines(
+          options[state.optionIndex],
+          width,
+          theme
+        )) {
+          add(line);
+        }
+      }
+      if (
+        question.multiSelect !== true &&
+        getNotePreviewLines(width).length > 0
+      ) {
+        lines.push("");
+        renderNoteDraft(width);
       }
     } else {
       renderOptions();
@@ -426,7 +435,7 @@ function getOptionPreviewLines(
     return [theme.fg("accent", " No preview available.")];
   }
   return wrapPreviewText(preview, Math.max(1, width - 1), {
-    maxLines: OPTION_PREVIEW_MAX_LINES,
+    maxLines: ACTIVE_OPTION_PREVIEW_MAX_LINES,
   }).map((line) => theme.fg("accent", ` ${line}`));
 }
 

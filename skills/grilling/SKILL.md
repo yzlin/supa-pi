@@ -26,8 +26,9 @@ Use its completed packet to guide subsequent interview questions while preservin
 - Use `questionnaire` for user answers when interactive UI is available.
 - When using `questionnaire`, ask exactly one single-select question per call; do not use `multiSelect`.
 - Add `preview` to every caller-supplied option; the injected custom answer row is the only no-preview exception.
-- Each preview must explain the option's meaning, implication, and main risk or tradeoff. Do not merely repeat the label.
-- Do not put a recommendation in the questionnaire prompt or question description. Prefix the recommended option label with `Recommend:` and, when that option has a preview, prefix its preview with `Recommend:` too.
+- Keep every preview concise and decision-ready. Format it with compact, explicit `Meaning:`, `Outcome:`, and `Tradeoff:` parts; do not merely repeat the label.
+- Do not put a recommendation in the questionnaire prompt or question description. Prefix the recommended option label with `Recommend:` and its preview with `Recommend:`. Add a `Why recommended:` part tied to known goals or constraints rather than personal preference.
+- When a decision involves flows, boundaries, states, hierarchies, or comparisons, include a compact unfenced plain-text diagram. Simple choices need no decorative diagram.
 - Never re-ask an answered question. If it was asked in plain text, accept the answer without repeating it with `questionnaire`; briefly summarize it, then move to the next unresolved decision.
 - Start with the highest-leverage unresolved question. Continue in descending leverage until the plan is clear, risks are exposed, tradeoffs are explicit, and all major decisions are resolved.
 

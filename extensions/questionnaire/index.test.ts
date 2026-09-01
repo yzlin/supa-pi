@@ -717,11 +717,13 @@ describe("questionnaire reducer and key router", () => {
     expect(wideOutput).toContain("Best for structured downstream parsing.");
     expect(wideOutput).toContain("Structured JSON output");
     expect(narrowOutput).toContain("Type something.");
-    expect(narrowOutput).not.toContain("Custom answer preview");
-    expect(narrowOutput).not.toContain("appear after you type it.");
+    expect(narrowOutput).toContain("Preview");
+    expect(narrowOutput).toContain("Custom answer preview");
+    expect(narrowOutput).toContain("appear after you type it.");
+    expect(narrowOutput).not.toContain("│");
   });
 
-  it("renders only the active option preview on wide layouts and omits previews on narrow layouts", () => {
+  it("renders only the active option preview on wide and stacked narrow layouts", () => {
     const question = {
       id: "scope",
       label: "Scope",
@@ -759,8 +761,51 @@ describe("questionnaire reducer and key router", () => {
     expect(wideOutput).toContain("Tests preview");
     expect(wideOutput).not.toContain("Docs preview");
     expect(narrowOutput).toContain("☑ Docs");
+    expect(narrowOutput.indexOf("☐ Tests")).toBeLessThan(
+      narrowOutput.indexOf("Preview")
+    );
     expect(narrowOutput).not.toContain("│");
-    expect(narrowOutput).not.toContain("Tests preview");
+    expect(narrowOutput).toContain("Tests preview");
+    expect(narrowOutput).not.toContain("Docs preview");
+  });
+
+  it("caps stacked narrow previews at exactly 12 wrapped lines", () => {
+    const preview = Array.from(
+      { length: 13 },
+      (_, index) => `preview line ${index + 1}`
+    ).join("\n");
+    const question = {
+      id: "scope",
+      label: "Scope",
+      prompt: "What should change?",
+      options: [{ value: "docs", label: "Docs", preview }],
+    };
+
+    const lines = renderQuestionnaireRuntime({
+      width: 60,
+      theme: PLAIN_THEME,
+      questions: [question],
+      state: createQuestionnaireRuntimeState(),
+      options: getRenderOptions(question),
+      editor: EMPTY_EDITOR as never,
+      previewEnabled: true,
+    });
+    const previewHeaderIndex = lines.findIndex(
+      (line) => line.trim() === "Preview"
+    );
+    const previewEndIndex = lines.findIndex(
+      (line, index) => index > previewHeaderIndex && line === ""
+    );
+    const previewLines = lines.slice(previewHeaderIndex + 1, previewEndIndex);
+
+    expect(previewHeaderIndex).toBeGreaterThan(
+      lines.findIndex((line) => line.includes("1. Docs"))
+    );
+    expect(previewLines).toHaveLength(12);
+    expect(previewLines.join("\n")).toContain("preview line 12");
+    expect(previewLines.join("\n")).not.toContain("preview line 13");
+    expect(previewLines.at(-1)).toContain("…");
+    expect(lines.join("\n")).not.toContain("│");
   });
 
   it("does not render option previews on the review tab", () => {
@@ -1070,18 +1115,16 @@ describe("questionnaire reducer and key router", () => {
     }
   });
 
-  it("caps option preview row wrapping work in side-by-side layout", () => {
+  it("caps wide active previews at exactly 12 wrapped lines", () => {
+    const preview = Array.from(
+      { length: 13 },
+      (_, index) => `preview line ${index + 1}`
+    ).join("\n");
     const question = {
       id: "large-preview",
       label: "Large preview",
       prompt: "Which preview?",
-      options: [
-        {
-          value: "large",
-          label: "Large",
-          preview: "x ".repeat(10_000),
-        },
-      ],
+      options: [{ value: "large", label: "Large", preview }],
     };
 
     const rows = renderQuestionnaireRuntime({
@@ -1095,9 +1138,12 @@ describe("questionnaire reducer and key router", () => {
     }).filter((line) => line.includes("│"));
 
     const previewRows = rows.slice(1);
+    const renderedPreview = previewRows.join("\n");
 
-    expect(previewRows.length).toBeLessThanOrEqual(6);
-    expect(previewRows.join("\n")).toContain("…");
+    expect(previewRows).toHaveLength(12);
+    expect(renderedPreview).toContain("preview line 12");
+    expect(renderedPreview).not.toContain("preview line 13");
+    expect(previewRows.at(-1)).toContain("…");
   });
 
   it("strips fenced option previews before capping side-by-side rows", () => {

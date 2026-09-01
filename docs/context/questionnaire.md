@@ -91,10 +91,11 @@ Multi-select questions:
 Preview mode:
 
 - Enables automatically for the current question when any option has `preview` content, including multi-select questions.
-- Wide layouts render option titles in the left column and one active preview pane in the right column. The preview pane follows the highlighted row only; inactive option previews are not rendered.
+- Wide layouts keep option titles in the left column and the active preview in the right column, bounded to 12 wrapped lines.
+- Narrow layouts render the option list followed by a stacked active Preview section, bounded to 12 wrapped lines.
+- In both layouts, only the highlighted option preview is rendered; inactive option previews are not rendered.
 - Single-select custom rows show `Custom answer preview will appear after you type it.` while highlighted.
 - Rows without preview content show `No preview available.` in the active preview pane.
-- Narrow layouts that cannot satisfy the preview column minimums render only the option list; they omit the active preview pane instead of stacking it below the options.
 - Questionnaire-provided display text strips terminal control sequences before rendering.
 - A preview wrapped in one outer fenced code block renders the fence contents without the surrounding backtick fence.
 - Multi-select preview mode supports highlighted-option previews while retaining checkbox toggles and the `Next` commit row. The `Next` row has no preview unless the injected row is highlighted, in which case the pane shows `No preview available.`

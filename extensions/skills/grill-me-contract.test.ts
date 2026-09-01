@@ -30,6 +30,25 @@ describe("grilling skill contract", () => {
     }
   });
 
+  it("requires structured, grounded, and adaptively visual option previews", () => {
+    const skill = readRepositoryFile("skills", "grilling", "SKILL.md");
+
+    for (const text of [
+      "`Meaning:`",
+      "`Outcome:`",
+      "`Tradeoff:`",
+      "`Why recommended:`",
+      "known goals or constraints",
+      "rather than personal preference",
+      "flows, boundaries, states, hierarchies, or comparisons",
+      "compact unfenced plain-text diagram",
+      "Simple choices need no decorative diagram",
+      "concise and decision-ready",
+    ]) {
+      expect(skill).toContain(text);
+    }
+  });
+
   it("conditionally composes domain modeling without making it always-on", () => {
     const skill = readRepositoryFile("skills", "grilling", "SKILL.md");
 
