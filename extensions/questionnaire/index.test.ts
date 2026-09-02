@@ -107,6 +107,128 @@ function executeQuestionnaireWithCustom(
   });
 }
 
+describe("questionnaire public runtime boundary", () => {
+  it("exposes ask without old aliases while preserving persisted questionnaire identifiers", async () => {
+    const tools: any[] = [];
+    const commands = new Map<string, any>();
+    const handlers = new Map<string, (...args: any[]) => any>();
+    const appendEntryCalls: Array<{ type: string; data: any }> = [];
+    const sendMessageCalls: Array<{ message: any; options?: any }> = [];
+
+    questionnaire({
+      registerTool(tool: any) {
+        tools.push(tool);
+      },
+      registerCommand(name: string, command: any) {
+        commands.set(name, command);
+      },
+      on(eventName: string, handler: (...args: any[]) => any) {
+        handlers.set(eventName, handler);
+      },
+      appendEntry(type: string, data: any) {
+        appendEntryCalls.push({ type, data });
+      },
+      sendMessage(message: any, options?: any) {
+        sendMessageCalls.push({ message, options });
+      },
+    } as any);
+
+    expect(tools.map((tool) => tool.name)).toEqual(["ask"]);
+    expect(commands.keys().toArray()).toEqual(["ask-stats"]);
+    expect(tools[0]?.label).toBe("Ask");
+    expect(
+      tools[0]?.renderCall(VALID_EXECUTE_PARAMS, PLAIN_THEME).render(80)
+    ).toEqual([expect.stringContaining("ask ")]);
+
+    const beforeAgentStart = handlers.get("before_agent_start");
+    const guidance = await beforeAgentStart?.(
+      { systemPrompt: "Base prompt" },
+      { hasUI: true }
+    );
+    const askFacingCopy = [
+      tools[0]?.description,
+      tools[0]?.promptSnippet,
+      ...(tools[0]?.promptGuidelines ?? []),
+      guidance?.systemPrompt,
+      getQuestionnaireRedirectCorrectionMessage(),
+    ].join("\n");
+    expect(askFacingCopy.toLowerCase()).toContain("ask");
+    expect(askFacingCopy.toLowerCase()).not.toContain("questionnaire");
+
+    const agentEnd = handlers.get("agent_end");
+    await agentEnd?.(
+      {
+        messages: [
+          { role: "toolResult", toolName: "ask", content: [] },
+          {
+            role: "assistant",
+            stopReason: "stop",
+            content: [
+              { type: "text", text: "Which output format do you prefer?" },
+            ],
+          },
+        ],
+      },
+      {
+        hasUI: true,
+        ui: {
+          notify() {
+            return;
+          },
+        },
+      }
+    );
+    expect(appendEntryCalls).toEqual([]);
+
+    await handlers.get("input")?.({ source: "interactive" });
+    await agentEnd?.(
+      {
+        messages: [
+          {
+            role: "assistant",
+            stopReason: "stop",
+            content: [
+              { type: "text", text: "Which output format do you prefer?" },
+            ],
+          },
+        ],
+      },
+      {
+        hasUI: true,
+        ui: {
+          notify() {
+            return;
+          },
+        },
+      }
+    );
+    expect(appendEntryCalls[0]?.type).toBe("questionnaire-plain-text-miss");
+    expect(sendMessageCalls[0]?.message.customType).toBe(
+      "questionnaire-auto-redirect"
+    );
+
+    await commands.get("ask-stats")?.handler("", {
+      sessionManager: {
+        getEntries() {
+          return [
+            {
+              type: "custom",
+              customType: "questionnaire-plain-text-miss",
+              data: appendEntryCalls[0]?.data,
+            },
+          ];
+        },
+      },
+      ui: {
+        notify() {
+          return;
+        },
+      },
+    });
+    expect(sendMessageCalls[1]?.message.customType).toBe("questionnaire-stats");
+  });
+});
+
 describe("questionnaire custom UI execution", () => {
   it("executes the custom UI component and returns the selected answer", async () => {
     let customCalls = 0;
@@ -186,6 +308,12 @@ describe("questionnaire custom UI execution", () => {
     );
 
     expect(result).toMatchObject({
+      content: [
+        {
+          type: "text",
+          text: "Error: Invalid ask request: Ask requires 1-3 questions.",
+        },
+      ],
       details: {
         cancelled: true,
         error: {
@@ -194,6 +322,7 @@ describe("questionnaire custom UI execution", () => {
         },
       },
     });
+    expect(JSON.stringify(result).toLowerCase()).not.toContain("questionnaire");
   });
 });
 
@@ -299,6 +428,21 @@ describe("validateQuestionnaireParams", () => {
     expect(
       validateQuestionnaireParams({ questions: [validQuestion] })
     ).toMatchObject({ valid: true });
+  });
+
+  it("uses ask-facing wording when rejecting invalid question counts", () => {
+    const result = validateQuestionnaireParams({ questions: [] });
+
+    expect(result).toMatchObject({
+      valid: false,
+      issues: [
+        {
+          code: "question_count",
+          message: "Ask requires 1-3 questions.",
+        },
+      ],
+    });
+    expect(JSON.stringify(result).toLowerCase()).not.toContain("questionnaire");
   });
 
   it("rejects duplicate question ids", () => {
@@ -1766,7 +1910,7 @@ describe("questionnaire auto-redirect", () => {
     expect(notifyCalls).toEqual([
       {
         message:
-          "Assistant asked a plain-text clarification. Auto-redirecting it to questionnaire.",
+          "Assistant asked a plain-text clarification. Auto-redirecting it to ask.",
         level: "warning",
       },
     ]);
@@ -1837,7 +1981,7 @@ describe("questionnaire auto-redirect", () => {
     expect(notifyCalls).toEqual([
       {
         message:
-          "Assistant still asked a plain-text clarification after redirect. Prefer questionnaire manually.",
+          "Assistant still asked a plain-text clarification after redirect. Prefer ask manually.",
         level: "warning",
       },
     ]);

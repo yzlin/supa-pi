@@ -399,10 +399,11 @@ describe("diagnose command", () => {
     );
     expect(skill).toContain("Approve scoped fix");
     expect(skill).toContain("Stop and clean probes");
+    expect(skill).toContain("use the public `ask` tool");
     expect(skill).toContain("do not use `multiSelect`");
     expect(skill).toContain("Invocation wording");
     expect(skill).toContain(
-      "If the questionnaire cannot be used, do not infer approval or edit the fix; report the blocked gate and print both exact choices `Approve scoped fix` and `Stop and clean probes` verbatim."
+      "If `ask` is unavailable, do not infer approval or edit the fix; report the blocked gate and print both exact choices `Approve scoped fix` and `Stop and clean probes` verbatim."
     );
     expect(skill).toContain("requires a new proposal and the same gate again");
   });

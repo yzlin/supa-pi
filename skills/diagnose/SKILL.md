@@ -117,12 +117,12 @@ Only after `Diagnosis: Proven`, prepare a scoped proposal that names:
 3. the honest regression-test seam, or why none exists;
 4. targeted verification, including the original causal signal and relevant control.
 
-Then use `questionnaire` for one mandatory single-select question with exactly these two supplied options (do not use `multiSelect` and do not add another option):
+Then use the public `ask` tool for one mandatory single-select question with exactly these two supplied options (do not use `multiSelect` and do not add another option):
 
 - `Approve scoped fix`
 - `Stop and clean probes`
 
-Do not edit the fix before the user selects `Approve scoped fix`. Invocation wording, “fix it,” general autonomy, and approval of probes do not satisfy this gate. If the questionnaire cannot be used, do not infer approval or edit the fix; report the blocked gate and print both exact choices `Approve scoped fix` and `Stop and clean probes` verbatim.
+Do not edit the fix before the user selects `Approve scoped fix`. Invocation wording, “fix it,” general autonomy, and approval of probes do not satisfy this gate. If `ask` is unavailable, do not infer approval or edit the fix; report the blocked gate and print both exact choices `Approve scoped fix` and `Stop and clean probes` verbatim.
 
 Selection of `Stop and clean probes`, refusal, cancellation, or abandonment means remove agent-added probes and temporary state, preserve only redacted artifacts, and stop. A material deviation from the approved remedy, files, regression seam, or verification plan requires a new proposal and the same gate again.
 

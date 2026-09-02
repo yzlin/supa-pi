@@ -48,7 +48,7 @@ const TOOL_NAMES = [
   "Agent",
   "web_search",
   "fetch_content",
-  "questionnaire",
+  "ask",
   "structured_output",
   "TaskCreate",
   "TaskUpdate",
@@ -500,10 +500,10 @@ export function parseCorpus(value: unknown): EvalCorpus {
     }
     if (
       (caseValue.questionnaireResponse !== undefined) !==
-      (caseValue.tools as unknown[]).includes("questionnaire")
+      (caseValue.tools as unknown[]).includes("ask")
     ) {
       throw new Error(
-        `${label} must configure questionnaireResponse exactly when questionnaire is enabled`
+        `${label} must configure questionnaireResponse exactly when ask is enabled`
       );
     }
 
@@ -983,7 +983,7 @@ async function scoreCheck(
         (call) =>
           call.name === check.after &&
           !call.isError &&
-          (call.name !== "questionnaire" ||
+          (call.name !== "ask" ||
             call.questionnaireResponse === "Approve scoped fix")
       );
       const matchingCalls = input.toolCalls.filter(
@@ -1008,9 +1008,7 @@ async function scoreCheck(
       };
     }
     case "questionnaireGate": {
-      const calls = input.toolCalls.filter(
-        (call) => call.name === "questionnaire"
-      );
+      const calls = input.toolCalls.filter((call) => call.name === "ask");
       const questions = calls[0]?.args.questions;
       const question = Array.isArray(questions) ? questions[0] : undefined;
       const questionRecord =

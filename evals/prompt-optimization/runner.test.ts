@@ -245,7 +245,7 @@ function createQuestionnaireToolCall(id: string, multiSelect?: boolean) {
   return {
     type: "toolCall" as const,
     id,
-    name: "questionnaire",
+    name: "ask",
     arguments: {
       questions: [
         {
@@ -692,14 +692,14 @@ describe("runVariant", () => {
         workload: "focused bug fix",
         promptPath: "skills/diagnose/SKILL.md",
         task: "Use the required fix gate.",
-        tools: ["questionnaire", "edit", "bash"],
+        tools: ["ask", "edit", "bash"],
         questionnaireResponse: "Approve scoped fix",
         checks: [
           { type: "questionnaireGate", domain: "task", weight: 1 },
           {
             type: "toolCalledAfter",
             name: "edit",
-            after: "questionnaire",
+            after: "ask",
             domain: "tests",
             weight: 1,
           },
@@ -786,7 +786,7 @@ describe("runVariant", () => {
 
     expect(result.score.overall).toBe(1);
     expect(result.toolCalls.map((call) => call.name)).toEqual([
-      "questionnaire",
+      "ask",
       "edit",
       "bash",
     ]);
@@ -813,13 +813,13 @@ describe("runVariant", () => {
         workload: "focused bug fix",
         promptPath: "skills/diagnose/SKILL.md",
         task: "Use the required fix gate.",
-        tools: ["questionnaire", "edit"],
+        tools: ["ask", "edit"],
         questionnaireResponse: "Approve scoped fix",
         checks: [
           {
             type: "toolCalledAfter",
             name: "edit",
-            after: "questionnaire",
+            after: "ask",
             domain: "tests",
             weight: 1,
           },
@@ -885,7 +885,7 @@ describe("runVariant", () => {
         workload: "focused bug fix",
         promptPath: "skills/diagnose/SKILL.md",
         task: "Use the required fix gate.",
-        tools: ["questionnaire", "edit", "write"],
+        tools: ["ask", "edit", "write"],
         questionnaireResponse: "Stop and clean probes",
         checks: [
           { type: "questionnaireGate", domain: "task", weight: 1 },
@@ -927,9 +927,7 @@ describe("runVariant", () => {
     });
 
     expect(result.score.overall).toBe(1);
-    expect(result.toolCalls.map((call) => call.name)).toEqual([
-      "questionnaire",
-    ]);
+    expect(result.toolCalls.map((call) => call.name)).toEqual(["ask"]);
   });
 
   it("blocks model file access outside the temporary workspace", async () => {

@@ -83,7 +83,7 @@ const QUESTIONNAIRE_REDIRECT_MESSAGE_TYPE = "questionnaire-auto-redirect";
 const QUESTIONNAIRE_MISS_LOG_TYPE = "questionnaire-plain-text-miss";
 
 export function getQuestionnaireRedirectCorrectionMessage(): string {
-  return "Extension correction: you asked the user a plain-text clarification in an interactive session. Re-ask only the necessary clarification using the questionnaire tool instead of plain text. Ask at most 1-3 focused questions. After receiving the answer, continue the original task immediately and provide the pending result instead of stopping after a brief acknowledgment. Only stop early if materially new information is still required.";
+  return "Extension correction: you asked the user a plain-text clarification in an interactive session. Re-ask only the necessary clarification using the ask tool instead of plain text. Ask at most 1-3 focused questions. After receiving the answer, continue the original task immediately and provide the pending result instead of stopping after a brief acknowledgment. Only stop early if materially new information is still required.";
 }
 
 function looksLikePlainTextClarification(text: string): boolean {
@@ -199,7 +199,7 @@ export function validateQuestionnaireParams(
     issues.push({
       path: "questions",
       code: "question_count",
-      message: "Questionnaire requires 1-3 questions.",
+      message: "Ask requires 1-3 questions.",
     });
   }
 
@@ -325,15 +325,12 @@ export default function questionnaire(pi: ExtensionAPI): void {
     return;
   });
 
-  pi.registerCommand("questionnaire-stats", {
-    description: "Show questionnaire miss and redirect stats for this session",
+  pi.registerCommand("ask-stats", {
+    description: "Show ask miss and redirect stats for this session",
     handler(_args, ctx): Promise<void> {
       const logs = getQuestionnaireMissLogs(ctx.sessionManager.getEntries());
       if (logs.length === 0) {
-        ctx.ui.notify(
-          "No questionnaire misses logged in this session.",
-          "info"
-        );
+        ctx.ui.notify("No ask misses logged in this session.", "info");
         return Promise.resolve();
       }
 
@@ -382,7 +379,7 @@ export default function questionnaire(pi: ExtensionAPI): void {
 
       pi.sendMessage({
         customType: "questionnaire-stats",
-        content: `Questionnaire stats\n\nTotal misses: ${logs.length}\nAuto-redirected: ${autoRedirected}\nRepeated after redirect: ${redirectedAlready}\n\nBy source:\n- interactive: ${sourceCounts.interactive}\n- rpc: ${sourceCounts.rpc}\n- extension: ${sourceCounts.extension}\n- unknown: ${sourceCounts.unknown}\n\nRecent misses:\n${recent.join("\n")}`,
+        content: `Ask stats\n\nTotal misses: ${logs.length}\nAuto-redirected: ${autoRedirected}\nRepeated after redirect: ${redirectedAlready}\n\nBy source:\n- interactive: ${sourceCounts.interactive}\n- rpc: ${sourceCounts.rpc}\n- extension: ${sourceCounts.extension}\n- unknown: ${sourceCounts.unknown}\n\nRecent misses:\n${recent.join("\n")}`,
         display: true,
       });
       return Promise.resolve();
@@ -390,18 +387,18 @@ export default function questionnaire(pi: ExtensionAPI): void {
   });
 
   pi.registerTool({
-    name: "questionnaire",
-    label: "Questionnaire",
+    name: "ask",
+    label: "Ask",
     description:
       "Ask the user one or more questions. Use for clarifying requirements, getting preferences, or confirming decisions. Single-select questions include a final custom input option. Multi-select questions use checkboxes and a Next row instead of custom input. For multiple questions, shows a tab-based interface.",
     promptSnippet:
       "Ask the user structured clarifying questions in the interactive main session",
     promptGuidelines: [
-      "When you need user input in the interactive main session, prefer questionnaire over asking plain-text questions.",
+      "When you need user input in the interactive main session, prefer ask over asking plain-text questions.",
       "Use a single question with options for simple clarifications; use multiple questions only when several answers are needed together.",
       "Keep questions short, decision-oriented, and limited to what is needed to proceed.",
       "Single-select questions include a custom input row. Multi-select questions use checkboxes and a Next row, with no custom input row.",
-      "Do not use questionnaire in background or non-interactive contexts.",
+      "Do not use ask in background or non-interactive contexts.",
     ],
     parameters: QuestionnaireParams,
 
@@ -414,7 +411,7 @@ export default function questionnaire(pi: ExtensionAPI): void {
       const validation = validateQuestionnaireParams(params);
       if (validation.valid === false) {
         return errorResult(
-          `Error: Invalid questionnaire: ${validation.issues.map((issue) => issue.message).join(" ")}`,
+          `Error: Invalid ask request: ${validation.issues.map((issue) => issue.message).join(" ")}`,
           [],
           validation
         );
@@ -586,7 +583,7 @@ export default function questionnaire(pi: ExtensionAPI): void {
       const qs = (args.questions as Question[]) || [];
       const count = qs.length;
       const labels = qs.map((q) => q.label || q.id).join(", ");
-      let text = theme.fg("toolTitle", theme.bold("questionnaire "));
+      let text = theme.fg("toolTitle", theme.bold("ask "));
       text += theme.fg("muted", `${count} question${count === 1 ? "" : "s"}`);
       if (labels) {
         text += theme.fg("dim", ` (${truncateToWidth(labels, 40)})`);
@@ -632,10 +629,10 @@ export default function questionnaire(pi: ExtensionAPI): void {
         `
 
 QUESTION-ASKING RULES:
-- If you need clarification from the user and interactive UI is available, prefer the questionnaire tool over asking plain-text questions.
-- Use questionnaire for preferences, confirmations, missing requirements, and tradeoff choices that materially affect the work.
+- If you need clarification from the user and interactive UI is available, prefer the ask tool over asking plain-text questions.
+- Use ask for preferences, confirmations, missing requirements, and tradeoff choices that materially affect the work.
 - Ask at most 1-3 focused questions at a time.
-- Do not use questionnaire in background, subagent, or non-interactive contexts.
+- Do not use ask in background, subagent, or non-interactive contexts.
 `,
     };
   });
@@ -646,8 +643,7 @@ QUESTION-ASKING RULES:
     }
 
     const usedQuestionnaire = event.messages.some(
-      (message) =>
-        message.role === "toolResult" && message.toolName === "questionnaire"
+      (message) => message.role === "toolResult" && message.toolName === "ask"
     );
     if (usedQuestionnaire) {
       return;
@@ -683,7 +679,7 @@ QUESTION-ASKING RULES:
 
     if (redirectedAlready) {
       ctx.ui.notify(
-        "Assistant still asked a plain-text clarification after redirect. Prefer questionnaire manually.",
+        "Assistant still asked a plain-text clarification after redirect. Prefer ask manually.",
         "warning"
       );
       return;
@@ -698,7 +694,7 @@ QUESTION-ASKING RULES:
     }
 
     ctx.ui.notify(
-      "Assistant asked a plain-text clarification. Auto-redirecting it to questionnaire.",
+      "Assistant asked a plain-text clarification. Auto-redirecting it to ask.",
       "warning"
     );
 

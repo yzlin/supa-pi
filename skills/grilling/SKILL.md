@@ -23,13 +23,13 @@ Use its completed packet to guide subsequent interview questions while preservin
 ## Interview Contract
 
 - Ask exactly one question at a time.
-- Use `questionnaire` for user answers when interactive UI is available.
-- When using `questionnaire`, ask exactly one single-select question per call; do not use `multiSelect`.
+- Use the public `ask` tool for user answers when interactive UI is available.
+- When using `ask`, ask exactly one single-select question per call; do not use `multiSelect`.
 - Add `preview` to every caller-supplied option; the injected custom answer row is the only no-preview exception.
 - Keep every preview concise and decision-ready. Format it with compact, explicit `Meaning:`, `Outcome:`, and `Tradeoff:` parts; do not merely repeat the label.
-- Do not put a recommendation in the questionnaire prompt or question description. Prefix the recommended option label with `Recommend:` and its preview with `Recommend:`. Add a `Why recommended:` part tied to known goals or constraints rather than personal preference.
+- Do not put a recommendation in the ask prompt or question description. Prefix the recommended option label with `Recommend:` and its preview with `Recommend:`. Add a `Why recommended:` part tied to known goals or constraints rather than personal preference.
 - When a decision involves flows, boundaries, states, hierarchies, or comparisons, include a compact unfenced plain-text diagram. Simple choices need no decorative diagram.
-- Never re-ask an answered question. If it was asked in plain text, accept the answer without repeating it with `questionnaire`; briefly summarize it, then move to the next unresolved decision.
+- Never re-ask an answered question. If it was asked in plain text, accept the answer without repeating it with `ask`; briefly summarize it, then move to the next unresolved decision.
 - Start with the highest-leverage unresolved question. Continue in descending leverage until the plan is clear, risks are exposed, tradeoffs are explicit, and all major decisions are resolved.
 
 ## Risk Taxonomy
@@ -50,6 +50,6 @@ Ask direct, specific questions. Do not ask broad or multi-part questions.
 
 ## Final Confirmation
 
-Once all major decisions are resolved, ask one final `questionnaire` gate with exactly two caller-supplied options: `Lock plan, stop here` and `Keep grilling`. Rely on the injected custom row for `Type something.`; do not supply it yourself.
+Once all major decisions are resolved, ask one final `ask` gate with exactly two caller-supplied options: `Lock plan, stop here` and `Keep grilling`. Rely on the injected custom row for `Type something.`; do not supply it yourself.
 
 The final gate must not ask whether to proceed to implementation and must not include any implement/proceed/start-coding wording or option. If the user chooses `Keep grilling`, continue one question at a time. Treat only `Lock plan, stop here` as confirmation that the interview is complete.

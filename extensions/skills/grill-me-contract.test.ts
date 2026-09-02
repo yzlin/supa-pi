@@ -30,6 +30,16 @@ describe("grilling skill contract", () => {
     }
   });
 
+  it("uses the public ask tool for interactive answers and the final gate", () => {
+    const skill = readRepositoryFile("skills", "grilling", "SKILL.md");
+
+    expect(skill).toContain(
+      "Use the public `ask` tool for user answers when interactive UI is available."
+    );
+    expect(skill).toContain("ask one final `ask` gate");
+    expect(skill).not.toContain("`questionnaire`");
+  });
+
   it("requires structured, grounded, and adaptively visual option previews", () => {
     const skill = readRepositoryFile("skills", "grilling", "SKILL.md");
 

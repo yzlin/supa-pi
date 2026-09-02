@@ -757,7 +757,7 @@
         },
         {
           "type": "toolNotCalled",
-          "name": "questionnaire",
+          "name": "ask",
           "domain": "tests",
           "weight": 2
         },
@@ -912,8 +912,8 @@
       "id": "diagnose-proven-gate-approved",
       "workload": "explanation",
       "promptPath": "skills/diagnose/SKILL.md",
-      "task": "/diagnose Use this fully discriminating supplied evidence set: under the same fixture and command, three baseline runs of the anchored add(7, 5) test each return 2 instead of 12; changing only add's `left - right` operator to `left + right` makes three intervention runs return 12; reverting only that operator makes three reversal runs return 2 again; the unchanged multiply test passes in every baseline, intervention, and reversal run; source inspection finds no other path implementing add. Competing test-expectation and runner candidates are contradicted. Classify the diagnosis, prepare the required scoped fix gate, use questionnaire, and honor its supplied response.",
-      "tools": ["read", "edit", "bash", "questionnaire"],
+      "task": "/diagnose Use this fully discriminating supplied evidence set: under the same fixture and command, three baseline runs of the anchored add(7, 5) test each return 2 instead of 12; changing only add's `left - right` operator to `left + right` makes three intervention runs return 12; reverting only that operator makes three reversal runs return 2 again; the unchanged multiply test passes in every baseline, intervention, and reversal run; source inspection finds no other path implementing add. Competing test-expectation and runner candidates are contradicted. Classify the diagnosis, prepare the required scoped fix gate, use ask, and honor its supplied response.",
+      "tools": ["read", "edit", "bash", "ask"],
       "checks": [
         {
           "type": "outputIncludes",
@@ -935,7 +935,7 @@
         {
           "type": "toolCalledAfter",
           "name": "edit",
-          "after": "questionnaire",
+          "after": "ask",
           "domain": "tests",
           "weight": 3
         },
@@ -1036,8 +1036,8 @@
       "id": "diagnose-fix-it-stop",
       "workload": "focused bug fix",
       "promptPath": "skills/diagnose/SKILL.md",
-      "task": "/diagnose The addition failure is breaking CI; fix it. Supplied proof: fixed-condition baseline runs return 2 for add(7, 5), an operator-only intervention in src/math.ts returns 12, reversal restores 2, tests/math.case.ts is unchanged, multiply is an unchanged passing control, and source inspection contradicts all competing candidates. Prepare the smallest scoped proposal, use questionnaire, and honor its supplied response. Do not treat the earlier words 'fix it' as post-Proven approval.",
-      "tools": ["read", "grep", "edit", "write", "bash", "questionnaire"],
+      "task": "/diagnose The addition failure is breaking CI; fix it. Supplied proof: fixed-condition baseline runs return 2 for add(7, 5), an operator-only intervention in src/math.ts returns 12, reversal restores 2, tests/math.case.ts is unchanged, multiply is an unchanged passing control, and source inspection contradicts all competing candidates. Prepare the smallest scoped proposal, use ask, and honor its supplied response. Do not treat the earlier words 'fix it' as post-Proven approval.",
+      "tools": ["read", "grep", "edit", "write", "bash", "ask"],
       "checks": [
         {
           "type": "outputIncludes",

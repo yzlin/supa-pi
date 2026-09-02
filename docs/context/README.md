@@ -15,4 +15,4 @@ Current notes:
 - `code-improvement.md` — `/simplify` scoped grammar, allowlist boundaries, flags, and delegation behavior.
 - `extension-registration.md` — extension registration, ownership, retirement, and deployment boundaries.
 - `gpt-5.6-harness-optimization.md` — model routing, prompt, cache, tool-surface, and eval evidence.
-- `questionnaire.md` — Questionnaire Extension behavior and local rpiv divergences.
+- `questionnaire.md` — Questionnaire Extension behavior, including the public `ask` tool and `/ask-stats` command, and local rpiv divergences.

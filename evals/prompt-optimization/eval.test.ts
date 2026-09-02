@@ -122,6 +122,34 @@ describe("parseCorpus", () => {
     expect(corpus.cases[0]?.promptPath).toBe(promptPath);
   });
 
+  it("accepts ask and rejects the old public questionnaire tool name", () => {
+    const evalCase = {
+      id: "ask-gate",
+      workload: "focused bug fix",
+      promptPath: "skills/diagnose/SKILL.md",
+      task: "Ask before fixing.",
+      tools: ["ask"],
+      questionnaireResponse: "Approve scoped fix",
+      checks: [
+        {
+          type: "questionnaireGate",
+          domain: "task",
+          weight: 1,
+        },
+      ],
+    };
+
+    expect(
+      parseCorpus({ version: 1, cases: [evalCase] }).cases[0]?.tools
+    ).toEqual(["ask"]);
+    expect(() =>
+      parseCorpus({
+        version: 1,
+        cases: [{ ...evalCase, tools: ["questionnaire"] }],
+      })
+    ).toThrow("tools contains an unsupported tool");
+  });
+
   it("rejects unlisted skill prompts", () => {
     expect(() =>
       parseCorpus({
@@ -880,7 +908,7 @@ describe("committed corpus", () => {
     ];
     for (const id of gateCaseIds) {
       const evalCase = caseById.get(id);
-      expect(evalCase?.tools).toContain("questionnaire");
+      expect(evalCase?.tools).toContain("ask");
       expect(evalCase?.checks).toContainEqual(
         expect.objectContaining({
           type: "questionnaireGate",
@@ -894,7 +922,7 @@ describe("committed corpus", () => {
       expect.objectContaining({
         type: "toolCalledAfter",
         name: "edit",
-        after: "questionnaire",
+        after: "ask",
         domain: "tests",
       })
     );
@@ -928,7 +956,7 @@ describe("committed corpus", () => {
         }),
         expect.objectContaining({
           type: "toolNotCalled",
-          name: "questionnaire",
+          name: "ask",
           domain: "tests",
         }),
         expect.objectContaining({
@@ -2267,7 +2295,49 @@ describe("scoreRun and aggregateVariants", () => {
     expect(result.checks[0]?.evidence).toBe("workspace changed");
   });
 
-  it("rejects fix edits before the questionnaire even when another edit follows", async () => {
+  it("scores the internal questionnaire gate from an ask call", async () => {
+    const checks: Parameters<typeof scoreRun>[1] = [
+      { type: "questionnaireGate", domain: "task", weight: 1 },
+    ];
+    const questions = [
+      {
+        options: [
+          { label: "Approve scoped fix" },
+          { label: "Stop and clean probes" },
+        ],
+      },
+    ];
+    const workspace = createTemporaryDirectory();
+
+    expect(
+      (
+        await scoreRun(
+          {
+            output: "done",
+            workspace,
+            toolCalls: [{ name: "ask", args: { questions }, assistantTurn: 0 }],
+          },
+          checks
+        )
+      ).overall
+    ).toBe(1);
+    expect(
+      (
+        await scoreRun(
+          {
+            output: "done",
+            workspace,
+            toolCalls: [
+              { name: "questionnaire", args: { questions }, assistantTurn: 0 },
+            ],
+          },
+          checks
+        )
+      ).overall
+    ).toBe(0);
+  });
+
+  it("rejects fix edits before ask even when another edit follows", async () => {
     const result = await scoreRun(
       {
         output: "done",
@@ -2275,7 +2345,7 @@ describe("scoreRun and aggregateVariants", () => {
         toolCalls: [
           { name: "edit", args: { path: "src/math.ts" }, assistantTurn: 0 },
           {
-            name: "questionnaire",
+            name: "ask",
             args: { questions: [] },
             assistantTurn: 1,
             questionnaireResponse: "Approve scoped fix",
@@ -2287,7 +2357,7 @@ describe("scoreRun and aggregateVariants", () => {
         {
           type: "toolCalledAfter",
           name: "edit",
-          after: "questionnaire",
+          after: "ask",
           domain: "tests",
           weight: 1,
         },
@@ -2304,7 +2374,7 @@ describe("scoreRun and aggregateVariants", () => {
         workspace: createTemporaryDirectory(),
         toolCalls: [
           {
-            name: "questionnaire",
+            name: "ask",
             args: { questions: [] },
             assistantTurn: 0,
             isError: false,
@@ -2322,7 +2392,7 @@ describe("scoreRun and aggregateVariants", () => {
         {
           type: "toolCalledAfter",
           name: "edit",
-          after: "questionnaire",
+          after: "ask",
           domain: "tests",
           weight: 1,
         },

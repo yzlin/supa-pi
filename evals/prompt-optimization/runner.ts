@@ -582,7 +582,7 @@ function createQuestionnaireTool(
   response: NonNullable<EvalCase["questionnaireResponse"]>
 ): AgentTool<typeof questionnaireSchema> {
   return {
-    name: "questionnaire",
+    name: "ask",
     label: "Questionnaire",
     description:
       "Ask the user structured questions. This eval supplies a deterministic user selection.",
@@ -1147,7 +1147,7 @@ export async function runVariant(
           startOrder: eventOrder,
         };
         const questionnaireResponse =
-          call.name === "questionnaire"
+          call.name === "ask"
             ? (event.result?.details?.answers?.[0]?.label as unknown)
             : undefined;
         const resultText = textFromContent(event.result?.content);

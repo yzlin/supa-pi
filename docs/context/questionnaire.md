@@ -1,7 +1,7 @@
 ---
 summary: "Active Questionnaire Extension schema, interaction behavior, and runtime boundaries."
 read_when:
-  - "Changing questionnaire tool parameters, TUI behavior, validation, result shape, or clarification guidance."
+  - "Changing the public ask tool parameters, TUI behavior, validation, result shape, or clarification guidance."
 ---
 
 # Questionnaire extension
@@ -10,9 +10,18 @@ Read when changing `extensions/questionnaire/*`, prompt guidance for user clarif
 
 ## Purpose
 
-`questionnaire` is the active structured clarification tool for interactive Pi sessions. It replaces plain-text clarification questions with a bounded TUI picker so agents can collect the minimum user input needed and then continue the original task.
+`ask` is the active structured clarification tool for interactive Pi sessions. It replaces plain-text clarification questions with a bounded TUI picker so agents can collect the minimum user input needed and then continue the original task.
 
 Do not use it from background or non-interactive contexts. The tool returns an error envelope when `ctx.hasUI` is false.
+
+## Public and internal names
+
+- The only public tool name is `ask`; there is no `questionnaire` tool alias.
+- The public session statistics command is `/ask-stats`; there is no `/questionnaire-stats` command alias.
+- The implementation remains under `extensions/questionnaire` and retains internal `Questionnaire` symbols.
+- Persisted session entry identifiers remain `questionnaire-*` for compatibility.
+
+This public-name migration does not change the input schema, TUI behavior, validation, or result contract documented below.
 
 ## Input schema
 
