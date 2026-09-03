@@ -23,6 +23,7 @@
       "./extensions/session-query.ts",
       "./extensions/handoff.ts",
       "./extensions/context",
+      "./extensions/prompt-commands",
       "./extensions/auto-rename",
       "./extensions/context-docs",
       "./extensions/btw",
@@ -37,8 +38,7 @@
       "./extensions/notify.ts",
       "./extensions/no-sleep.ts",
       "./extensions/whimsical",
-      "./extensions/fast",
-      "./extensions/prompt-commands"
+      "./extensions/fast"
     ]
   },
   "dependencies": {

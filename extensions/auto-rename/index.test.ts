@@ -3,9 +3,22 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
+import {
+  AgentSession,
+  createAgentSession,
+  DefaultResourceLoader,
+  type ExtensionAPI,
+  SessionManager,
+  SettingsManager,
+} from "@earendil-works/pi-coding-agent";
+
+import promptCommandsExtension from "../prompt-commands";
 import autoRenameExtension from "./index";
 
 type Handler = (event: any, ctx: any) => unknown;
+type SessionModel = NonNullable<
+  Parameters<typeof createAgentSession>[0]
+>["model"];
 interface Command {
   handler: (args: string, ctx: any) => unknown;
 }
@@ -175,19 +188,231 @@ async function input(
   await h.emit("input", { text, source });
 }
 
-describe("auto-rename lifecycle", () => {
-  it("captures only the first non-empty raw interactive/RPC input, ignores extension input, and bounds it immediately", async () => {
-    const h = harness({ config: { maxQueryLength: 100 } });
-    await start(h);
-    await input(h, "extension content", "extension");
-    await input(h, "   ", "interactive");
-    await input(h, `first-${"x".repeat(200)}`, "rpc");
-    await input(h, "second request", "interactive");
-    expect(h.calls).toHaveLength(0);
-    await h.emit("agent_settled");
-    expect(h.calls[0]?.[1].messages[0].content).toBe(`first-${"x".repeat(94)}`);
+async function createRealSession(
+  extensionFactories: Array<(pi: ExtensionAPI) => void>,
+  additionalPromptTemplatePaths: string[] = [],
+  sessionId?: string,
+  model?: SessionModel
+) {
+  const directory = mkdtempSync(join(tmpdir(), "auto-rename-real-"));
+  homes.push(directory);
+  const settingsManager = SettingsManager.inMemory();
+  const loader = new DefaultResourceLoader({
+    cwd: directory,
+    agentDir: directory,
+    settingsManager,
+    extensionFactories,
+    additionalPromptTemplatePaths,
+  });
+  await loader.reload();
+  const result = await createAgentSession({
+    cwd: directory,
+    agentDir: directory,
+    resourceLoader: loader,
+    model,
+    sessionManager: SessionManager.inMemory(
+      directory,
+      sessionId ? { id: sessionId } : undefined
+    ),
+    settingsManager,
+  });
+  await result.session.extensionRunner.emit({
+    type: "session_start",
+    reason: "startup",
+  });
+  return result.session;
+}
+
+async function disposeRealSession(
+  session: Awaited<ReturnType<typeof createRealSession>>
+): Promise<void> {
+  await session.extensionRunner.emit({
+    type: "session_shutdown",
+    reason: "quit",
+  });
+  session.dispose();
+}
+
+describe("auto-rename prompt lifecycle", () => {
+  it("restores the native prompt after composed extension shutdown", async () => {
+    const originalPrompt = AgentSession.prototype.prompt;
+    const session = await createRealSession(
+      [promptCommandsExtension, autoRenameExtension],
+      [join(import.meta.dir, "..", "..", "prompts")]
+    );
+
+    expect(AgentSession.prototype.prompt).not.toBe(originalPrompt);
+    await disposeRealSession(session);
+    await settleBackgroundWork();
+    expect(AgentSession.prototype.prompt).toBe(originalPrompt);
   });
 
+  it("restores native prompt after reload removes auto-rename", async () => {
+    const originalPrompt = AgentSession.prototype.prompt;
+    const composed = await createRealSession([
+      promptCommandsExtension,
+      autoRenameExtension,
+    ]);
+    await disposeRealSession(composed);
+
+    const promptCommandsOnly = await createRealSession([
+      promptCommandsExtension,
+    ]);
+    await disposeRealSession(promptCommandsOnly);
+    await settleBackgroundWork();
+
+    expect(AgentSession.prototype.prompt).toBe(originalPrompt);
+  });
+
+  it("names only the exact prompted session when IDs collide", async () => {
+    const reviewCommand = (pi: ExtensionAPI) => {
+      pi.registerCommand("review", {
+        description: "Diagnostic review command",
+        handler: () => Promise.resolve(),
+      });
+    };
+    const first = await createRealSession(
+      [autoRenameExtension, reviewCommand],
+      [],
+      "shared-session-id"
+    );
+    const second = await createRealSession(
+      [autoRenameExtension, reviewCommand],
+      [],
+      "shared-session-id"
+    );
+
+    try {
+      await first.prompt("/review uncommitted", { source: "rpc" });
+      await settleBackgroundWork();
+
+      expect(first.sessionName).toMatch(FALLBACK_NAME_PATTERN);
+      expect(second.sessionName).toBeUndefined();
+    } finally {
+      await disposeRealSession(first);
+      await disposeRealSession(second);
+    }
+  });
+
+  it("does not name a rejected prompt or retain it as source", async () => {
+    const session = await createRealSession([autoRenameExtension]);
+    const queued: unknown[] = [];
+    session.agent.steer = (message) => queued.push(message);
+    (session as unknown as { _isAgentRunActive: boolean })._isAgentRunActive =
+      true;
+
+    try {
+      await expect(
+        session.prompt("rejected private prompt", { source: "rpc" })
+      ).rejects.toThrow("streamingBehavior");
+      await settleBackgroundWork();
+      expect(session.sessionName).toBeUndefined();
+
+      await session.prompt("accepted public prompt", {
+        source: "rpc",
+        streamingBehavior: "steer",
+      });
+      await settleBackgroundWork();
+      expect(queued).toHaveLength(1);
+      expect(session.sessionName).toMatch(FALLBACK_NAME_PATTERN);
+    } finally {
+      await disposeRealSession(session);
+    }
+  });
+
+  it("names an extension command from its raw pre-dispatch prompt", async () => {
+    let reviewRan = false;
+    const reviewCommand = (pi: ExtensionAPI) => {
+      pi.registerCommand("review", {
+        description: "Diagnostic review command",
+        handler: () => {
+          reviewRan = true;
+          return Promise.resolve();
+        },
+      });
+    };
+    const session = await createRealSession([
+      autoRenameExtension,
+      reviewCommand,
+    ]);
+
+    try {
+      await session.prompt("/review uncommitted", { source: "rpc" });
+      await settleBackgroundWork();
+
+      expect(reviewRan).toBe(true);
+      expect(session.sessionName).toMatch(FALLBACK_NAME_PATTERN);
+    } finally {
+      await disposeRealSession(session);
+    }
+  });
+
+  it("ignores extension-origin prompts at the pre-dispatch seam", async () => {
+    const session = await createRealSession([autoRenameExtension]);
+    const queued: unknown[] = [];
+    session.agent.steer = (message) => queued.push(message);
+    (session as unknown as { _isAgentRunActive: boolean })._isAgentRunActive =
+      true;
+
+    try {
+      await session.sendUserMessage("/review uncommitted", {
+        deliverAs: "steer",
+      });
+      await settleBackgroundWork();
+
+      expect(queued).toHaveLength(1);
+      expect(session.sessionName).toBeUndefined();
+    } finally {
+      await disposeRealSession(session);
+    }
+  });
+
+  it("names grill-me from raw text before its long-running agent settles", async () => {
+    const namingSources: string[] = [];
+    const namingSpy = (pi: ExtensionAPI) => {
+      pi.on("session_start", (_event, ctx) => {
+        const registry = ctx.modelRegistry as unknown as {
+          complete: (_model: unknown, request: any) => Promise<any>;
+        };
+        registry.complete = (_model, request) => {
+          namingSources.push(request.messages[0].content);
+          return completion("Raw Grill Prompt Title");
+        };
+      });
+    };
+    const model = {
+      provider: "test",
+      id: "active",
+      api: "test-api",
+    } as SessionModel;
+    const session = await createRealSession(
+      [namingSpy, promptCommandsExtension, autoRenameExtension],
+      [join(import.meta.dir, "..", "..", "prompts")],
+      undefined,
+      model
+    );
+    const queued: unknown[] = [];
+    session.agent.steer = (message) => queued.push(message);
+    (session as unknown as { _isAgentRunActive: boolean })._isAgentRunActive =
+      true;
+
+    try {
+      await session.prompt("/grill-me test plan", {
+        source: "rpc",
+        streamingBehavior: "steer",
+      });
+      await settleBackgroundWork();
+
+      expect(queued).toHaveLength(1);
+      expect(namingSources).toEqual(["/grill-me test plan"]);
+      expect(session.sessionName).toBe("Raw Grill Prompt Title");
+    } finally {
+      await disposeRealSession(session);
+    }
+  });
+});
+
+describe("auto-rename lifecycle", () => {
   it("does nothing on startup/resume/reload/fork and names a resumed session from its persisted first request", async () => {
     const h = harness({ branch: [user("Persisted old request")] });
     for (const reason of ["startup", "resume", "reload", "fork"]) {
@@ -200,13 +425,11 @@ describe("auto-rename lifecycle", () => {
     expect(h.calls[0]?.[1].messages[0].content).toBe("Persisted old request");
   });
 
-  it("uses retained raw text for a new branch and handles string or text-block persisted messages", async () => {
-    const h = harness();
-    await start(h);
-    await input(h, "Raw request wins");
-    h.setBranch([user("Expanded persisted request")]);
-    await h.emit("agent_settled");
-    expect(h.calls[0]?.[1].messages[0].content).toBe("Raw request wins");
+  it("handles string or text-block persisted messages", async () => {
+    const first = harness({ branch: [user("String fallback")] });
+    await start(first);
+    await first.emit("agent_settled");
+    expect(first.calls[0]?.[1].messages[0].content).toBe("String fallback");
 
     const second = harness({
       branch: [
@@ -433,15 +656,14 @@ describe("/auto-rename command and configuration", () => {
     expect(status).not.toContain("secret source");
   });
 
-  it("regen replaces an unchanged existing name using retained raw source", async () => {
+  it("regen replaces an unchanged existing name using persisted source", async () => {
     const h = harness({
       name: "Existing Session Name",
       branch: [user("persisted")],
     });
     await start(h);
-    await input(h, "raw regen request");
     await h.command("regen");
-    expect(h.calls[0]?.[1].messages[0].content).toBe("raw regen request");
+    expect(h.calls[0]?.[1].messages[0].content).toBe("persisted");
     expect(h.name).toBe("Improve Session Naming Flow");
   });
 

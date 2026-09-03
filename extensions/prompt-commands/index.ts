@@ -1,9 +1,9 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 
+import type { ImageContent } from "@earendil-works/pi-ai";
 import {
   AgentSession,
   type ExtensionAPI,
-  type ImageContent,
   type PromptOptions,
 } from "@earendil-works/pi-coding-agent";
 
@@ -38,6 +38,9 @@ interface QueuePatchRegistry {
   originalPrompt: PromptMethod;
   originalSteer: QueueMethod;
   originalFollowUp: QueueMethod;
+  prompt: PromptMethod;
+  steer: QueueMethod;
+  followUp: QueueMethod;
   promptExpansion: AsyncLocalStorage<boolean>;
   owners: Map<QueueOwner, Transformer>;
 }
@@ -89,16 +92,19 @@ function addQueueOwner(owner: QueueOwner, transform: Transformer): void {
   const existing = registries.get(prototype);
   if (existing) {
     existing.owners.set(owner, transform);
+    if (prototype.prompt === existing.originalPrompt) {
+      prototype.prompt = existing.prompt;
+    }
+    if (prototype.steer === existing.originalSteer) {
+      prototype.steer = existing.steer;
+    }
+    if (prototype.followUp === existing.originalFollowUp) {
+      prototype.followUp = existing.followUp;
+    }
     return;
   }
 
-  const registry: QueuePatchRegistry = {
-    originalPrompt: prototype.prompt,
-    originalSteer: prototype.steer,
-    originalFollowUp: prototype.followUp,
-    promptExpansion: new AsyncLocalStorage<boolean>(),
-    owners: new Map([[owner, transform]]),
-  };
+  let registry: QueuePatchRegistry;
   const prompt: PromptMethod = function prompt(text, options) {
     return registry.promptExpansion.run(
       options?.expandPromptTemplates ?? true,
@@ -118,6 +124,16 @@ function addQueueOwner(owner: QueueOwner, transform: Transformer): void {
       currentTransformer(registry)(text),
       images
     );
+  };
+  registry = {
+    originalPrompt: prototype.prompt,
+    originalSteer: prototype.steer,
+    originalFollowUp: prototype.followUp,
+    prompt,
+    steer,
+    followUp,
+    promptExpansion: new AsyncLocalStorage<boolean>(),
+    owners: new Map([[owner, transform]]),
   };
 
   try {
@@ -152,12 +168,34 @@ function removeQueueOwner(owner: QueueOwner): void {
     return;
   }
 
-  prototype.prompt = registry.originalPrompt;
-  prototype.steer = registry.originalSteer;
-  prototype.followUp = registry.originalFollowUp;
-  registries.delete(prototype);
-  if (registries.size === 0) {
-    delete globals[queuePatch];
+  const cleanup = () => {
+    if (registry.owners.size > 0) {
+      return;
+    }
+    if (prototype.prompt === registry.prompt) {
+      prototype.prompt = registry.originalPrompt;
+    }
+    if (prototype.steer === registry.steer) {
+      prototype.steer = registry.originalSteer;
+    }
+    if (prototype.followUp === registry.followUp) {
+      prototype.followUp = registry.originalFollowUp;
+    }
+    if (
+      prototype.prompt !== registry.originalPrompt ||
+      prototype.steer !== registry.originalSteer ||
+      prototype.followUp !== registry.originalFollowUp
+    ) {
+      return;
+    }
+    registries.delete(prototype);
+    if (registries.size === 0) {
+      delete globals[queuePatch];
+    }
+  };
+  cleanup();
+  if (registries.get(prototype) === registry) {
+    setTimeout(cleanup, 0);
   }
 }
 

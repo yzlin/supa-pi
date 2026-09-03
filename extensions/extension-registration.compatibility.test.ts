@@ -10,8 +10,6 @@ import { join } from "node:path";
 
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 
-import autoRenameExtension from "./auto-rename";
-import contextDocsExtension from "./context-docs";
 import rtkExtension from "./rtk";
 import toolDisplayExtension from "./tool-display";
 
@@ -78,97 +76,15 @@ afterEach(() => {
 });
 
 describe("extension registration compatibility", () => {
-  test("auto-rename captures raw input before context-docs transforms it", async () => {
+  test("nests prompt wrappers in cleanup-safe order", () => {
     const extensions = packageJson.pi?.extensions ?? [];
-    const autoRenamePath = "./extensions/auto-rename";
-    const contextDocsPath = "./extensions/context-docs";
-    expect(extensions.indexOf(autoRenamePath)).toBeLessThan(
-      extensions.indexOf(contextDocsPath)
+    const autoRenameIndex = extensions.indexOf("./extensions/auto-rename");
+    expect(extensions.indexOf("./extensions/prompt-commands")).toBeLessThan(
+      autoRenameIndex
     );
-
-    const lifecycleHandlers = new Map<
-      string,
-      Array<(event: any, ctx: any) => unknown>
-    >();
-    const namingSources: string[] = [];
-    let sessionName: string | undefined;
-    const api = {
-      on(name: string, handler: (event: any, ctx: any) => unknown) {
-        lifecycleHandlers.set(name, [
-          ...(lifecycleHandlers.get(name) ?? []),
-          handler,
-        ]);
-      },
-      registerCommand() {
-        // Commands are irrelevant to this input-chain integration harness.
-      },
-      getSessionName: () => sessionName,
-      setSessionName(name: string) {
-        sessionName = name;
-      },
-    } as unknown as ExtensionAPI;
-    const factories = new Map([
-      [autoRenamePath, autoRenameExtension],
-      [contextDocsPath, contextDocsExtension],
-    ]);
-    for (const path of extensions) {
-      factories.get(path)?.(api);
-    }
-
-    const cwd = tempDir();
-    const ctx = {
-      cwd,
-      hasUI: true,
-      model: { provider: "mock", id: "active" },
-      modelRegistry: {
-        complete(_model: unknown, request: any) {
-          namingSources.push(request.messages[0].content);
-          return Promise.resolve({
-            stopReason: "stop",
-            content: [{ type: "text", text: "Original Context Request" }],
-          });
-        },
-      },
-      sessionManager: {
-        getSessionId: () => "session-integration",
-        getBranch: () => [],
-      },
-      ui: {
-        confirm: () => Promise.resolve(true),
-        notify() {
-          // No notification is expected in this integration path.
-        },
-      },
-    };
-    const originalHome = process.env.HOME;
-    process.env.HOME = cwd;
-    try {
-      for (const handler of lifecycleHandlers.get("session_start") ?? []) {
-        await handler({ type: "session_start", reason: "startup" }, ctx);
-      }
-      let text = "context note: preserve the original request";
-      for (const handler of lifecycleHandlers.get("input") ?? []) {
-        const result = (await handler(
-          { type: "input", source: "interactive", text },
-          ctx
-        )) as { action?: string; text?: string } | undefined;
-        if (result?.action === "transform" && result.text) {
-          text = result.text;
-        }
-      }
-      expect(text).toContain("Use the canonical `context-docs` skill");
-      for (const handler of lifecycleHandlers.get("agent_settled") ?? []) {
-        await handler({ type: "agent_settled" }, ctx);
-      }
-      await new Promise<void>((resolve) => setTimeout(resolve, 0));
-    } finally {
-      process.env.HOME = originalHome;
-    }
-
-    expect(namingSources).toEqual([
-      "context note: preserve the original request",
-    ]);
-    expect(sessionName).toBe("Original Context Request");
+    expect(autoRenameIndex).toBeLessThan(
+      extensions.indexOf("./extensions/context-docs")
+    );
   });
 
   test("tool ownership is explicit", () => {

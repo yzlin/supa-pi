@@ -55,7 +55,6 @@ export interface NamingContext {
 
 export type NamingFailureCategory =
   | "no-model"
-  | "unsupported-api"
   | "timeout"
   | "abort"
   | "provider-error"
@@ -161,10 +160,6 @@ export async function generateSessionTitle(
   if (callerSignal?.aborted) {
     return failed(sessionId, "abort");
   }
-  if (ctx.model.api === "openai-codex-responses") {
-    return failed(sessionId, "unsupported-api");
-  }
-
   const operationController = new AbortController();
   let timedOut = false;
   const timeout = setTimeout(() => {

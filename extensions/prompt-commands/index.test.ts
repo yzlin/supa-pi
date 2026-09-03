@@ -3,12 +3,12 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
+import type { ImageContent } from "@earendil-works/pi-ai";
 import {
   AgentSession,
   createAgentSession,
   DefaultResourceLoader,
   type ExtensionAPI,
-  type ImageContent,
   SessionManager,
   SettingsManager,
 } from "@earendil-works/pi-coding-agent";
@@ -364,6 +364,34 @@ describe("raw prompt pipeline commands", () => {
         ?.text
     ).not.toStartWith("current:");
     noOwner.session.dispose();
+  });
+
+  it("restores its prompt wrapper after an outer wrapper unlinks", async () => {
+    const prototype = AgentSession.prototype as unknown as {
+      prompt: (text: string, options?: unknown) => Promise<void>;
+    };
+    const originalPrompt = prototype.prompt;
+    const { session } = await createSession([]);
+    const promptCommandsPrompt = prototype.prompt;
+    const outerPrompt = function outerPrompt(
+      this: AgentSession,
+      text: string,
+      options?: unknown
+    ) {
+      return promptCommandsPrompt.call(this, text, options);
+    };
+    prototype.prompt = outerPrompt;
+
+    await session.extensionRunner.emit({
+      type: "session_shutdown",
+      reason: "reload",
+    });
+    session.dispose();
+    expect(prototype.prompt).toBe(outerPrompt);
+
+    prototype.prompt = promptCommandsPrompt;
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
+    expect(prototype.prompt).toBe(originalPrompt);
   });
 
   it("keeps all three prompt templates functional when extensions are disabled or fail to load", async () => {

@@ -1,7 +1,9 @@
-import type {
-  ExtensionAPI,
-  ExtensionCommandContext,
-  ExtensionContext,
+import {
+  AgentSession,
+  type ExtensionAPI,
+  type ExtensionCommandContext,
+  type ExtensionContext,
+  type PromptOptions,
 } from "@earendil-works/pi-coding-agent";
 
 import {
@@ -13,6 +15,87 @@ import { generateSessionTitle, type NamingFailureCategory } from "./naming";
 
 type RuntimeContext = ExtensionContext | ExtensionCommandContext;
 type OperationKind = "automatic" | "regen";
+type PromptMethod = (text: string, options?: PromptOptions) => Promise<void>;
+type PromptObserver = (
+  session: AgentSession,
+  text: string,
+  options?: PromptOptions
+) => void;
+type PromptOwner = symbol;
+type SessionPrototype = AgentSession & { prompt: PromptMethod };
+
+interface PromptCaptureRegistry {
+  originalPrompt: PromptMethod;
+  prompt: PromptMethod;
+  owners: Map<PromptOwner, PromptObserver>;
+}
+
+const promptCapture = Symbol.for("supa-pi.auto-rename.prompt-capture");
+type PromptCaptureRegistries = Map<SessionPrototype, PromptCaptureRegistry>;
+type GlobalWithPromptCapture = typeof globalThis & {
+  [promptCapture]?: PromptCaptureRegistries;
+};
+
+function addPromptObserver(owner: PromptOwner, observer: PromptObserver): void {
+  const globals = globalThis as GlobalWithPromptCapture;
+  const prototype = AgentSession.prototype as SessionPrototype;
+  const registries = globals[promptCapture] ?? new Map();
+  const existing = registries.get(prototype);
+  if (existing) {
+    existing.owners.set(owner, observer);
+    return;
+  }
+
+  let registry: PromptCaptureRegistry;
+  const prompt: PromptMethod = function observedPrompt(text, options) {
+    return registry.originalPrompt.call(this, text, {
+      ...options,
+      preflightResult: (accepted: boolean) => {
+        options?.preflightResult?.(accepted);
+        if (!accepted) {
+          return;
+        }
+        for (const currentObserver of registry.owners.values()) {
+          currentObserver(this, text, options);
+        }
+      },
+    });
+  };
+  registry = {
+    originalPrompt: prototype.prompt,
+    prompt,
+    owners: new Map([[owner, observer]]),
+  };
+  prototype.prompt = prompt;
+  registries.set(prototype, registry);
+  globals[promptCapture] = registries;
+}
+
+function removePromptObserver(owner: PromptOwner): void {
+  const globals = globalThis as GlobalWithPromptCapture;
+  const registries = globals[promptCapture];
+  const prototype = AgentSession.prototype as SessionPrototype;
+  const registry = registries?.get(prototype);
+  if (!registry) {
+    return;
+  }
+
+  registry.owners.delete(owner);
+  const cleanup = () => {
+    if (registry.owners.size > 0 || prototype.prompt !== registry.prompt) {
+      return;
+    }
+    prototype.prompt = registry.originalPrompt;
+    registries.delete(prototype);
+    if (registries.size === 0) {
+      delete globals[promptCapture];
+    }
+  };
+  cleanup();
+  if (registry.owners.size === 0 && registries.get(prototype) === registry) {
+    setTimeout(cleanup, 0);
+  }
+}
 
 interface NamingOperation {
   controller: AbortController;
@@ -87,6 +170,9 @@ function notify(
 }
 
 export default function autoRenameExtension(pi: ExtensionAPI): void {
+  const promptOwner = Symbol("auto-rename-prompt-owner");
+  let promptObserverActive = true;
+  let activeContext: ExtensionContext | null = null;
   let configState: AutoRenameConfigState = {
     valid: true,
     source: "defaults",
@@ -255,26 +341,44 @@ export default function autoRenameExtension(pi: ExtensionAPI): void {
     return "started";
   }
 
+  function observePrompt(
+    session: AgentSession,
+    text: string,
+    options?: PromptOptions
+  ): void {
+    const source = options?.source ?? "interactive";
+    if (
+      source === "extension" ||
+      retainedRaw !== null ||
+      text.trim().length === 0 ||
+      !activeContext ||
+      session.sessionManager !== activeContext.sessionManager ||
+      session.sessionId !== currentSessionId(activeContext)
+    ) {
+      return;
+    }
+    retainedRaw = text.slice(0, configState.config.maxQueryLength);
+    debug("prompt-captured");
+    runNaming("automatic", activeContext).catch(() => {
+      abortOperation("automatic-unexpected-error");
+    });
+  }
+
+  addPromptObserver(promptOwner, observePrompt);
+
   pi.on("session_start", (_event, ctx) => {
+    if (!promptObserverActive) {
+      addPromptObserver(promptOwner, observePrompt);
+      promptObserverActive = true;
+    }
     abortOperation("session-start");
+    activeContext = ctx;
     retainedRaw = null;
     persistedBranchSource = firstBranchUserText(ctx);
     observedName = normalizedName(pi.getSessionName());
     completedAutomaticBranches.clear();
     lastFailure = null;
     reloadConfig(ctx);
-  });
-
-  pi.on("input", (event) => {
-    if (
-      retainedRaw === null &&
-      event.source !== "extension" &&
-      event.text.trim().length > 0
-    ) {
-      retainedRaw = event.text.slice(0, configState.config.maxQueryLength);
-      debug("input-captured");
-    }
-    return { action: "continue" };
   });
 
   pi.on("session_info_changed", (event) => {
@@ -298,6 +402,11 @@ export default function autoRenameExtension(pi: ExtensionAPI): void {
 
   pi.on("session_shutdown", () => {
     abortOperation("session-shutdown");
+    if (promptObserverActive) {
+      removePromptObserver(promptOwner);
+      promptObserverActive = false;
+    }
+    activeContext = null;
     retainedRaw = null;
     persistedBranchSource = null;
     observedName = undefined;

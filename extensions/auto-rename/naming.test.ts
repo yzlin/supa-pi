@@ -164,11 +164,11 @@ describe("generateSessionTitle", () => {
     expect(options.signal).toBeInstanceOf(AbortSignal);
   });
 
-  it("skips Codex generation because its adapter cannot enforce the output cap", async () => {
-    let called = false;
-    const ctx = context(CODEX_MODEL, (() => {
-      called = true;
-      return Promise.resolve(response("Should Never Generate Title"));
+  it("generates a semantic title with the active Codex model", async () => {
+    const calls: unknown[][] = [];
+    const ctx = context(CODEX_MODEL, ((...args: unknown[]) => {
+      calls.push(args);
+      return Promise.resolve(response("Inspect Failed Session Rename"));
     }) as NamingContext["modelRegistry"]["complete"]);
 
     const result = await generateSessionTitle(
@@ -178,8 +178,23 @@ describe("generateSessionTitle", () => {
       CONFIG
     );
 
-    expect(called).toBe(false);
-    expect(result).toEqual(expectedFailure("codex-session", "unsupported-api"));
+    expect(calls).toHaveLength(1);
+    expect(calls[0]?.[0]).toBe(CODEX_MODEL);
+    expect(result).toEqual({ title: "Inspect Failed Session Rename" });
+  });
+
+  it("keeps the private fallback when Codex generation fails", async () => {
+    const ctx = context(CODEX_MODEL, (async () =>
+      response("", "error")) as NamingContext["modelRegistry"]["complete"]);
+
+    const result = await generateSessionTitle(
+      ctx,
+      "sensitive prompt",
+      "codex-session",
+      CONFIG
+    );
+
+    expect(result).toEqual(expectedFailure("codex-session", "provider-error"));
   });
 
   it("returns categorized stable fallbacks for unavailable and unsafe results", async () => {
