@@ -70,6 +70,12 @@ Answer variants:
 
 Cancelled or invalid runs return text content plus `details.cancelled: true`; validation errors also include `details.error` with issue objects.
 
+## Completed result cards
+
+Completed successful `ask` result cards retain a compact checkmarked summary by default. The configured `app.tools.expand` action (`Ctrl+O` by default) expands a card to show the full retained human-facing question label and prompt plus the chosen answer details: labels, descriptions, previews, notes, exact custom text, and every chosen multi-select option, or `(none)` for an empty selection.
+
+Expanded cards hide unchosen options and internal ids and values. Expanded fields are not truncated, and terminal control sequences are stripped for display. This presentation does not change model-facing content or the result shape, and cancelled or invalid output remains unchanged. Existing persisted results render from their retained details without migration.
+
 ## Custom UI composition
 
 Questionnaire opens its TUI directly through `ctx.ui.custom` after validation passes. Pi owns regular and fullscreen rendering composition, so the extension does not wrap or replace the rendering surface. Validation errors return the cancelled error envelope without opening the custom UI.

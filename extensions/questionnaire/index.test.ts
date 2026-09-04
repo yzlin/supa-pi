@@ -67,9 +67,19 @@ const VALID_EXECUTE_PARAMS = {
 function registerQuestionnaireTool() {
   let registeredTool: {
     execute: (...args: unknown[]) => Promise<unknown>;
+    renderResult: (...args: unknown[]) => {
+      render(width: number): string[];
+      invalidate(): void;
+    };
   } | null = null;
   questionnaire({
-    registerTool(tool: { execute: (...args: unknown[]) => Promise<unknown> }) {
+    registerTool(tool: {
+      execute: (...args: unknown[]) => Promise<unknown>;
+      renderResult: (...args: unknown[]) => {
+        render(width: number): string[];
+        invalidate(): void;
+      };
+    }) {
       registeredTool = tool;
     },
     registerCommand() {
@@ -105,6 +115,14 @@ function executeQuestionnaireWithCustom(
       },
     },
   });
+}
+
+function renderQuestionnaireResult(result: unknown, expanded: boolean): string {
+  const tool = registerQuestionnaireTool();
+  return tool
+    .renderResult(result, { expanded }, PLAIN_THEME)
+    .render(10_000)
+    .join("\n");
 }
 
 describe("questionnaire public runtime boundary", () => {
@@ -1716,6 +1734,331 @@ describe("questionnaire reducer and key router", () => {
     expect(output).toContain("☑ Tests");
     expect(output).toContain("Next");
     expect(output).not.toContain("Type something.");
+  });
+});
+
+describe("questionnaire result renderer", () => {
+  const longPrompt = `Which output format should be used? ${"Keep every prompt word. ".repeat(20)}`;
+  const longPreview = `Structured output preview: ${"full preview content ".repeat(20)}`;
+  const successfulResult = {
+    content: [{ type: "text", text: "model-facing content stays separate" }],
+    details: {
+      questions: [
+        {
+          id: "internal-format-id",
+          label: "Output format",
+          prompt: longPrompt,
+          options: [
+            {
+              value: "private-json-value",
+              label: "JSON",
+              description: "Machine-readable structured data.",
+              preview: longPreview,
+            },
+            {
+              value: "private-yaml-value",
+              label: "YAML not chosen",
+              description: "Unchosen YAML description.",
+              preview: "Unchosen YAML preview.",
+            },
+          ],
+        },
+        {
+          id: "internal-custom-id",
+          label: "Special instructions",
+          prompt: "What exact special instruction should be followed?",
+          options: [
+            { value: "private-first-value", label: "First preset" },
+            { value: "private-second-value", label: "Second preset" },
+          ],
+        },
+        {
+          id: "internal-scope-id",
+          label: "Scope",
+          prompt: "Which areas should change?",
+          multiSelect: true,
+          options: [
+            { value: "private-docs-value", label: "Docs" },
+            { value: "private-tests-value", label: "Tests not chosen" },
+            { value: "private-code-value", label: "Code" },
+          ],
+        },
+        {
+          id: "internal-empty-id",
+          label: "Optional extras",
+          prompt: "Which optional extras should be included?",
+          multiSelect: true,
+          options: [
+            { value: "private-alpha-value", label: "Alpha not chosen" },
+            { value: "private-beta-value", label: "Beta not chosen" },
+          ],
+        },
+      ],
+      answers: [
+        {
+          kind: "option",
+          id: "internal-format-id",
+          value: "private-json-value",
+          label: "JSON",
+          wasCustom: false,
+          index: 1,
+          preview: longPreview,
+          note: "Preserve field ordering exactly.",
+        },
+        {
+          kind: "custom",
+          id: "internal-custom-id",
+          value: "Use tabs, then keep ALL punctuation: [x] / {y}!",
+          label: "Use tabs, then keep ALL punctuation: [x] / {y}!",
+          wasCustom: true,
+          note: "This custom note stays exact.",
+        },
+        {
+          kind: "multi",
+          id: "internal-scope-id",
+          value: ["private-docs-value", "private-code-value"],
+          label: "Docs, Code",
+          wasCustom: false,
+          multi: true,
+          selectedOptions: [
+            {
+              value: "private-docs-value",
+              label: "Docs",
+              description: "Update all documentation.",
+              preview: "Documentation preview in full.",
+              index: 1,
+            },
+            {
+              value: "private-code-value",
+              label: "Code",
+              description: "Update production code.",
+              preview: "Production code preview in full.",
+              index: 3,
+            },
+          ],
+        },
+        {
+          kind: "multi",
+          id: "internal-empty-id",
+          value: [],
+          label: "",
+          wasCustom: false,
+          multi: true,
+          selectedOptions: [],
+        },
+      ],
+      cancelled: false,
+    },
+  };
+
+  it("reuses result lines at the same width and recomputes for width changes", () => {
+    const tool = registerQuestionnaireTool();
+    const component = tool.renderResult(
+      { content: [{ type: "text", text: "one\ttwo three four" }] },
+      { expanded: false },
+      PLAIN_THEME
+    );
+
+    const narrowLines = component.render(8);
+    expect(component.render(8)).toBe(narrowLines);
+
+    const wideLines = component.render(80);
+    expect(wideLines).not.toBe(narrowLines);
+    expect(wideLines).toEqual(["one   two three four"]);
+    expect(component.render(80)).toBe(wideLines);
+  });
+
+  it("recomputes result lines after invalidation", () => {
+    const tool = registerQuestionnaireTool();
+    const component = tool.renderResult(
+      { content: [{ type: "text", text: "result text" }] },
+      { expanded: false },
+      PLAIN_THEME
+    );
+    const cachedLines = component.render(80);
+
+    component.invalidate();
+
+    const recomputedLines = component.render(80);
+    expect(recomputedLines).not.toBe(cachedLines);
+    expect(recomputedLines).toEqual(cachedLines);
+    expect(component.render(80)).toBe(recomputedLines);
+  });
+
+  it("keeps successful results compact unless expanded", () => {
+    const output = renderQuestionnaireResult(successfulResult, false);
+
+    expect(output).toBe(
+      "✓ internal-format-id: 1. JSON\n" +
+        "✓ internal-custom-id: (wrote) Use tabs, then keep ALL punctuation: [x] / {y}!\n" +
+        "✓ internal-scope-id: 1. Docs, 3. Code\n" +
+        "✓ internal-empty-id: (none)"
+    );
+    expect(output).not.toContain(longPrompt);
+    expect(output).not.toContain("Machine-readable structured data.");
+    expect(output).not.toContain(longPreview);
+  });
+
+  it("adds full human-facing selected-answer blocks when expanded", () => {
+    const output = renderQuestionnaireResult(successfulResult, true);
+
+    for (const expected of [
+      "✓ Output format: 1. JSON",
+      "Output format",
+      longPrompt,
+      "1. JSON",
+      "Machine-readable structured data.",
+      longPreview,
+      "Preserve field ordering exactly.",
+      "Special instructions",
+      "What exact special instruction should be followed?",
+      "Use tabs, then keep ALL punctuation: [x] / {y}!",
+      "This custom note stays exact.",
+      "Scope",
+      "Which areas should change?",
+      "1. Docs",
+      "Update all documentation.",
+      "Documentation preview in full.",
+      "3. Code",
+      "Update production code.",
+      "Production code preview in full.",
+      "Optional extras",
+      "Which optional extras should be included?",
+      "(none)",
+    ]) {
+      expect(output).toContain(expected);
+    }
+
+    expect(output.indexOf("Output format")).toBeLessThan(
+      output.indexOf(longPrompt)
+    );
+    expect(output.indexOf(longPrompt)).toBeLessThan(
+      output.indexOf("Machine-readable structured data.")
+    );
+    for (const hidden of [
+      "internal-format-id",
+      "internal-custom-id",
+      "internal-scope-id",
+      "internal-empty-id",
+      "private-json-value",
+      "private-docs-value",
+      "private-code-value",
+      "YAML not chosen",
+      "Unchosen YAML description.",
+      "Unchosen YAML preview.",
+      "Tests not chosen",
+      "Alpha not chosen",
+      "Beta not chosen",
+    ]) {
+      expect(output).not.toContain(hidden);
+    }
+  });
+
+  it("strips terminal controls from expanded fields while preserving theme ANSI", () => {
+    const control = (text: string) =>
+      `\u001b[2J${text}\u001b]52;c;SGVsbG8=\u0007`;
+    const result = {
+      content: [{ type: "text", text: "model-facing content stays separate" }],
+      details: {
+        questions: [
+          {
+            id: "scope",
+            label: control("Scope"),
+            prompt: control("Which areas?"),
+            multiSelect: true,
+            options: [],
+          },
+          {
+            id: "custom",
+            label: control("Custom"),
+            prompt: control("What detail?"),
+            options: [],
+          },
+        ],
+        answers: [
+          {
+            kind: "multi",
+            id: "scope",
+            value: ["docs"],
+            label: control("Docs"),
+            wasCustom: false,
+            multi: true,
+            selectedOptions: [
+              {
+                value: "docs",
+                label: control("Docs"),
+                description: control("Documentation description"),
+                preview: control("Documentation preview"),
+                index: 1,
+              },
+            ],
+            note: control("Selection note"),
+          },
+          {
+            kind: "custom",
+            id: "custom",
+            value: control("Exact custom detail"),
+            label: control("Exact custom detail"),
+            wasCustom: true,
+            note: control("Custom note"),
+          },
+        ],
+        cancelled: false,
+      },
+    };
+    const tool = registerQuestionnaireTool();
+    const output = tool
+      .renderResult(result, { expanded: true }, ANSI_THEME)
+      .render(10_000)
+      .join("\n");
+
+    for (const expected of [
+      "Scope",
+      "Which areas?",
+      "1. Docs",
+      "Documentation description",
+      "Documentation preview",
+      "Selection note",
+      "Custom",
+      "What detail?",
+      "Exact custom detail",
+      "Custom note",
+    ]) {
+      expect(output).toContain(expected);
+    }
+    expect(output).not.toContain("\u001b[2J");
+    expect(output).not.toContain("\u001b]52;");
+    expect(output).not.toContain("\u0007");
+    expect(output).toContain("\u001b[34m");
+  });
+
+  it("uses exactly one blank line between expanded summaries and details", () => {
+    const output = renderQuestionnaireResult(successfulResult, true);
+
+    expect(output).toContain("✓ Optional extras: (none)\n\nOutput format\n");
+    expect(output).not.toContain(
+      "✓ Optional extras: (none)\n\n\nOutput format\n"
+    );
+  });
+
+  it("keeps cancelled and invalid output unchanged when expanded", () => {
+    expect(
+      renderQuestionnaireResult(
+        {
+          content: [{ type: "text", text: "cancelled content" }],
+          details: { questions: [], answers: [], cancelled: true },
+        },
+        true
+      )
+    ).toBe("Cancelled");
+    expect(
+      renderQuestionnaireResult(
+        {
+          content: [{ type: "text", text: "Error: invalid ask request" }],
+        },
+        true
+      )
+    ).toBe("Error: invalid ask request");
   });
 });
 

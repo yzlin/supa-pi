@@ -11,6 +11,7 @@ import {
   type EditorTheme,
   Text,
   truncateToWidth,
+  wrapTextWithAnsi,
 } from "@earendil-works/pi-tui";
 import { Type } from "typebox";
 
@@ -22,6 +23,7 @@ import {
   isAllAnswered,
   reduceQuestionnaireRuntime,
 } from "./state";
+import { stripTerminalControls } from "./text";
 import {
   CUSTOM_OPTION_LABEL,
   CUSTOM_OPTION_VALUE,
@@ -290,6 +292,35 @@ function errorResult(
     content: [{ type: "text", text: message }],
     details: { questions, answers: [], cancelled: true, error: validation },
   };
+}
+
+function renderResultText(text: string) {
+  const normalizedText = text.replace(/\t/g, "   ");
+  let cachedWidth: number | undefined;
+  let cachedLines: string[] | undefined;
+
+  return {
+    render(width: number): string[] {
+      if (cachedLines && cachedWidth === width) {
+        return cachedLines;
+      }
+
+      cachedWidth = width;
+      cachedLines = wrapTextWithAnsi(normalizedText, Math.max(1, width));
+      return cachedLines;
+    },
+    invalidate(): void {
+      cachedWidth = undefined;
+      cachedLines = undefined;
+    },
+  };
+}
+
+function indentDetail(text: string, prefix: string): string {
+  return text
+    .split("\n")
+    .map((line) => `${prefix}${line}`)
+    .join("\n");
 }
 
 export function getRenderOptions(question: {
@@ -591,30 +622,121 @@ export default function questionnaire(pi: ExtensionAPI): void {
       return new Text(text, 0, 0);
     },
 
-    renderResult(result, _options, theme) {
+    renderResult(result, options, theme) {
       const details = result.details as QuestionnaireResult | undefined;
       if (!details) {
         const text = result.content[0];
-        return new Text(text?.type === "text" ? text.text : "", 0, 0);
+        return renderResultText(text?.type === "text" ? text.text : "");
       }
       if (details.cancelled) {
-        return new Text(theme.fg("warning", "Cancelled"), 0, 0);
+        return renderResultText(theme.fg("warning", "Cancelled"));
       }
-      const lines = details.answers.map((a) => {
-        if (a.kind === "custom") {
-          return `${theme.fg("success", "✓ ")}${theme.fg("accent", a.id)}: ${theme.fg("muted", "(wrote) ")}${a.label}`;
+
+      const questionsById = new Map(
+        details.questions.map((question) => [question.id, question])
+      );
+      const displayField = options.expanded
+        ? stripTerminalControls
+        : (text: string) => text;
+      const summaryLines = details.answers.map((answer) => {
+        const question = questionsById.get(answer.id);
+        const heading = displayField(
+          options.expanded ? (question?.label ?? "Question") : answer.id
+        );
+        if (answer.kind === "custom") {
+          return `${theme.fg("success", "✓ ")}${theme.fg("accent", heading)}: ${theme.fg("muted", "(wrote) ")}${displayField(answer.label)}`;
         }
-        if (a.kind === "multi") {
+        if (answer.kind === "multi") {
           const display =
-            a.selectedOptions
-              .map((option) => `${option.index}. ${option.label}`)
+            answer.selectedOptions
+              .map((option) => `${option.index}. ${displayField(option.label)}`)
               .join(", ") || "(none)";
-          return `${theme.fg("success", "✓ ")}${theme.fg("accent", a.id)}: ${display}`;
+          return `${theme.fg("success", "✓ ")}${theme.fg("accent", heading)}: ${display}`;
         }
-        const display = a.index ? `${a.index}. ${a.label}` : a.label;
-        return `${theme.fg("success", "✓ ")}${theme.fg("accent", a.id)}: ${display}`;
+        const label = displayField(answer.label);
+        const display = answer.index ? `${answer.index}. ${label}` : label;
+        return `${theme.fg("success", "✓ ")}${theme.fg("accent", heading)}: ${display}`;
       });
-      return new Text(lines.join("\n"), 0, 0);
+
+      if (!options.expanded) {
+        return renderResultText(summaryLines.join("\n"));
+      }
+
+      const detailBlocks = details.answers.flatMap((answer) => {
+        const question = questionsById.get(answer.id);
+        if (!question) {
+          return [];
+        }
+
+        const detailLines = [
+          theme.fg("accent", stripTerminalControls(question.label)),
+          stripTerminalControls(question.prompt),
+          theme.fg("muted", "Chosen answer:"),
+        ];
+        if (answer.kind === "custom") {
+          detailLines.push(
+            indentDetail(stripTerminalControls(answer.label), "  ")
+          );
+        } else if (answer.kind === "multi") {
+          if (answer.selectedOptions.length === 0) {
+            detailLines.push("  (none)");
+          }
+          for (const selectedOption of answer.selectedOptions) {
+            detailLines.push(
+              `  ${selectedOption.index}. ${stripTerminalControls(selectedOption.label)}`
+            );
+            if (selectedOption.description !== undefined) {
+              detailLines.push(
+                indentDetail(
+                  stripTerminalControls(selectedOption.description),
+                  "    Description: "
+                )
+              );
+            }
+            if (selectedOption.preview !== undefined) {
+              detailLines.push(
+                indentDetail(
+                  stripTerminalControls(selectedOption.preview),
+                  "    Preview: "
+                )
+              );
+            }
+          }
+        } else {
+          detailLines.push(
+            `  ${answer.index}. ${stripTerminalControls(answer.label)}`
+          );
+          const selectedOption = question.options.find(
+            (option) => option.value === answer.value
+          );
+          if (selectedOption?.description !== undefined) {
+            detailLines.push(
+              indentDetail(
+                stripTerminalControls(selectedOption.description),
+                "    Description: "
+              )
+            );
+          }
+          if (answer.preview !== undefined) {
+            detailLines.push(
+              indentDetail(
+                stripTerminalControls(answer.preview),
+                "    Preview: "
+              )
+            );
+          }
+        }
+        if (answer.note !== undefined) {
+          detailLines.push(
+            indentDetail(stripTerminalControls(answer.note), "  Note: ")
+          );
+        }
+        return [detailLines.join("\n")];
+      });
+
+      return renderResultText(
+        `${summaryLines.join("\n")}\n\n${detailBlocks.join("\n\n")}`
+      );
     },
   });
 
