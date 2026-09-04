@@ -19,10 +19,13 @@ import {
 import { dirname, join, relative, resolve as resolvePath } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import type {
-  ExtensionAPI,
-  ExtensionContext,
-  ToolDefinition,
+import {
+  type ExtensionAPI,
+  type ExtensionContext,
+  getAgentDir,
+  hasTrustRequiringProjectResources,
+  ProjectTrustStore,
+  type ToolDefinition,
 } from "@earendil-works/pi-coding-agent";
 import {
   runWorkflowScript,
@@ -76,7 +79,7 @@ const MAX_PROOF_TARGETS = 16;
 const MAX_PROOF_TOTAL_BYTES = 8 * 1024 * 1024;
 const MAX_RUNNER_PROOF_FILES = 10_000;
 const MAX_RUNNER_PROOF_GIT_OUTPUT_BYTES = 8 * 1024 * 1024;
-const MAX_RUNNER_PROOF_TOTAL_BYTES = 64 * 1024 * 1024;
+const MAX_RUNNER_PROOF_TOTAL_BYTES = 128 * 1024 * 1024;
 const HASH_BUFFER_BYTES = 64 * 1024;
 const RUNNER_PROOF_IGNORED_DIRECTORIES = new Set([
   ".git",
@@ -534,17 +537,27 @@ function runnerWorkspaceProof(
     runnerGeneratedArtifactDirectories(command)
   );
   const gatsbyWorkspace = isGatsbyWorkspace(root);
-  const trackedWorkspace = gatsbyWorkspace
-    ? gitTrackedWorkspaceIdentities(root)
-    : undefined;
-  const skipGatsbyGeneratedOutput = trackedWorkspace !== undefined;
+  let yarnCachePresent = false;
+  try {
+    yarnCachePresent = lstatSync(join(root, ".yarn/cache")).isDirectory();
+  } catch {
+    // No Yarn cache needs classification.
+  }
+  const trackedWorkspace =
+    gatsbyWorkspace || yarnCachePresent
+      ? gitTrackedWorkspaceIdentities(root)
+      : undefined;
+  const skipGatsbyGeneratedOutput =
+    gatsbyWorkspace && trackedWorkspace !== undefined;
+  const skipUntrackedYarnCache =
+    yarnCachePresent && trackedWorkspace !== undefined;
   const paths: Array<{ path: string; kind: "file" | "symlink" }> = [];
   let visitedEntries = 0;
   const directories: Array<{
     path: string;
     generated: boolean;
-    gatsbyGenerated: boolean;
-  }> = [{ path: root, generated: false, gatsbyGenerated: false }];
+    trackedOnly: boolean;
+  }> = [{ path: root, generated: false, trackedOnly: false }];
   try {
     while (directories.length > 0) {
       const directory = directories.pop()!;
@@ -557,32 +570,33 @@ function runnerWorkspaceProof(
         }
         const absolute = join(directory.path, entry.name);
         const path = relative(root, absolute).split("\\").join("/");
-        let untrackedGatsbyOutput = false;
-        if (directory.gatsbyGenerated && !entry.isDirectory()) {
+        let untrackedGeneratedOutput = false;
+        if (directory.trackedOnly && !entry.isDirectory()) {
           const identity = workspaceEntryIdentity(absolute);
           if (!identity) {
             return;
           }
-          untrackedGatsbyOutput = !trackedWorkspace?.entries.has(identity);
+          untrackedGeneratedOutput = !trackedWorkspace?.entries.has(identity);
         }
         if (entry.isSymbolicLink()) {
-          if (!(ignoredPathSet.has(path) || untrackedGatsbyOutput)) {
+          if (!(ignoredPathSet.has(path) || untrackedGeneratedOutput)) {
             paths.push({ path, kind: "symlink" });
           }
         } else if (entry.isDirectory()) {
           if (!RUNNER_PROOF_IGNORED_DIRECTORIES.has(entry.name)) {
-            let gatsbyGenerated =
-              directory.gatsbyGenerated ||
+            let trackedOnly =
+              directory.trackedOnly ||
               (directory.path === root &&
                 skipGatsbyGeneratedOutput &&
-                GATSBY_GENERATED_DIRECTORIES.has(entry.name));
-            if (gatsbyGenerated) {
+                GATSBY_GENERATED_DIRECTORIES.has(entry.name)) ||
+              (skipUntrackedYarnCache && path === ".yarn/cache");
+            if (trackedOnly) {
               const identity = workspaceEntryIdentity(absolute);
               if (!identity) {
                 return;
               }
               if (trackedWorkspace?.subtrees.has(identity)) {
-                gatsbyGenerated = false;
+                trackedOnly = false;
               } else if (!trackedWorkspace?.directoryPrefixes.has(identity)) {
                 continue;
               }
@@ -592,13 +606,13 @@ function runnerWorkspaceProof(
               generated:
                 directory.generated ||
                 ignoredGeneratedDirectories.has(entry.name),
-              gatsbyGenerated,
+              trackedOnly,
             });
           }
         } else if (
           entry.isFile() &&
           !ignoredPathSet.has(path) &&
-          !untrackedGatsbyOutput &&
+          !untrackedGeneratedOutput &&
           (!directory.generated ||
             artifactBaseline === undefined ||
             artifactBaseline.has(path))
@@ -1398,6 +1412,53 @@ export interface ExecutorAgentRunnerOptions {
   cleanupTimeoutMs?: number;
 }
 
+export function isExecutorCwdTrusted(
+  sessionCwd: string,
+  executorCwd: string,
+  agentDir = getAgentDir()
+): boolean {
+  if (sessionCwd === executorCwd) {
+    return true;
+  }
+  try {
+    if (realpathSync(sessionCwd) === realpathSync(executorCwd)) {
+      return true;
+    }
+    if (!hasTrustRequiringProjectResources(executorCwd)) {
+      return true;
+    }
+    return new ProjectTrustStore(agentDir).get(executorCwd) === true;
+  } catch {
+    return false;
+  }
+}
+
+function extensionContextAtCwd(
+  ctx: ExtensionContext,
+  cwd: string,
+  projectTrusted: boolean
+): ExtensionContext {
+  try {
+    if (realpathSync(ctx.cwd) === realpathSync(cwd)) {
+      return ctx;
+    }
+  } catch {
+    // The caller's trust check reports invalid paths before spawning.
+  }
+  return new Proxy(ctx, {
+    get(target, property) {
+      if (property === "cwd") {
+        return cwd;
+      }
+      if (property === "isProjectTrusted") {
+        return () => projectTrusted;
+      }
+      const value = Reflect.get(target, property, target);
+      return typeof value === "function" ? value.bind(target) : value;
+    },
+  });
+}
+
 export function createExecutorAgentRunner(
   pi: ExtensionAPI,
   ctx: ExtensionContext,
@@ -1409,6 +1470,18 @@ export function createExecutorAgentRunner(
     options.cleanupTimeoutMs ?? EXECUTOR_CLEANUP_TIMEOUT_MS;
 
   return async (request, runContext): Promise<WorkflowAgentResult> => {
+    const executionCwd = runContext.cwd || ctx.cwd;
+    const projectTrusted = isExecutorCwdTrusted(ctx.cwd, executionCwd);
+    if (!projectTrusted) {
+      throw new Error(
+        "execute_tasks cwd is not trusted. Open that workspace in Pi and approve its project resources before dispatch."
+      );
+    }
+    const childContext = extensionContextAtCwd(
+      ctx,
+      executionCwd,
+      projectTrusted
+    );
     const agentType = request.agent ?? request.type ?? request.subagent_type;
     if (
       agentType !== EXECUTOR_AGENT_TYPE &&
@@ -1439,7 +1512,7 @@ export function createExecutorAgentRunner(
     const proofBudget: ProofBudget = { targets: 0, bytes: 0, exhausted: false };
     let proofBudgetErrorRecorded = false;
     const captureProof = (target: string): FileProof | undefined => {
-      const proof = safeFileProof(ctx.cwd, target, proofBudget);
+      const proof = safeFileProof(executionCwd, target, proofBudget);
       if (proofBudget.exhausted && !proofBudgetErrorRecorded) {
         proofBudgetErrorRecorded = true;
         recordTrajectoryError(
@@ -1532,7 +1605,7 @@ export function createExecutorAgentRunner(
             isSupportedTestCommand(command);
           const preRunnerWorkspaceProof = directRunner
             ? runnerWorkspaceProof(
-                ctx.cwd,
+                executionCwd,
                 command,
                 coverageTargets ?? [],
                 runnerArtifactBaseline
@@ -1644,7 +1717,7 @@ export function createExecutorAgentRunner(
             isSupportedTestCommand(command);
           const postRunnerWorkspaceProof = directRunner
             ? runnerWorkspaceProof(
-                ctx.cwd,
+                executionCwd,
                 command,
                 coverageTargets ?? [],
                 runnerArtifactBaseline
@@ -1747,7 +1820,7 @@ export function createExecutorAgentRunner(
         : [...PARENT_BRIDGE_TOOL_NAMES];
     const deniedTools = deniedToolNames.map(createDeniedExecutorTool);
 
-    const id = manager.spawn(pi, ctx, agentType, prompt, {
+    const id = manager.spawn(pi, childContext, agentType, prompt, {
       description:
         typeof request.description === "string" && request.description.trim()
           ? request.description
@@ -1930,6 +2003,21 @@ function waitForPromiseOrDelay(
   });
 }
 
+export function resolveExecutorCwd(
+  sessionCwd: string,
+  requestedCwd?: string
+): string {
+  try {
+    const resolved = realpathSync(resolvePath(sessionCwd, requestedCwd ?? "."));
+    if (!lstatSync(resolved).isDirectory()) {
+      throw new Error("not a directory");
+    }
+    return resolved;
+  } catch {
+    throw new Error("execute_tasks cwd must resolve to an existing directory.");
+  }
+}
+
 export function registerExecutorWorkflowTool(pi: ExtensionAPI): void {
   pi.registerTool({
     name: "execute_tasks",
@@ -1943,6 +2031,7 @@ export function registerExecutorWorkflowTool(pi: ExtensionAPI): void {
     ],
     parameters: Type.Object(
       {
+        cwd: Type.Optional(Type.String({ minLength: 1, maxLength: 4096 })),
         tasks: Type.Array(EXECUTOR_WORKFLOW_TASK_ENVELOPE_SCHEMA, {
           minItems: 1,
           maxItems: MAX_EXECUTOR_TASKS,
@@ -1951,10 +2040,16 @@ export function registerExecutorWorkflowTool(pi: ExtensionAPI): void {
       { additionalProperties: false }
     ),
     async execute(_toolCallId, params, signal, _onUpdate, ctx) {
+      const cwd = resolveExecutorCwd(ctx.cwd, params.cwd);
+      if (!isExecutorCwdTrusted(ctx.cwd, cwd)) {
+        throw new Error(
+          "execute_tasks cwd is not trusted. Open that workspace in Pi and approve its project resources before dispatch."
+        );
+      }
       const results = await runExecutorWorkflow(
         params.tasks as ExecutorWorkflowTask[],
         {
-          cwd: ctx.cwd,
+          cwd,
           signal,
           agentRunner: createExecutorAgentRunner(pi, ctx as ExtensionContext),
         }

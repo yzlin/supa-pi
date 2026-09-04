@@ -226,6 +226,8 @@ const JS_TEST_TITLE_PATTERN =
 const FUNCTION_TEST_TITLE_PATTERN =
   /\b(?:async\s+)?(?:def|fn)\s+(test[_A-Za-z0-9]+)\b/g;
 const GO_TEST_TITLE_PATTERN = /\bfunc\s+(Test[A-Za-z0-9_]+)\b/g;
+const GTEST_TITLE_PATTERN =
+  /\bTEST\s*\(\s*([A-Za-z_][A-Za-z0-9_]*)\s*,\s*([A-Za-z_][A-Za-z0-9_]*)\s*\)/g;
 const GHERKIN_SCENARIO_PATTERN = /^\s*Scenario(?: Outline)?:\s*(.+)$/gim;
 
 const HYPOTHETICAL_MARKERS = [
@@ -1027,6 +1029,15 @@ function boundedRegressionTitles(values: Array<string | undefined>): string[] {
           return [...titles];
         }
       }
+      for (const match of bounded.matchAll(GTEST_TITLE_PATTERN)) {
+        const title = retainTitle(match[2]!);
+        if (title) {
+          retainTitle(`${match[1]} ${match[2]}`);
+        }
+        if (titles.size >= MAX_REGRESSION_INTENT_ITEMS) {
+          return [...titles];
+        }
+      }
       for (const pattern of [
         FUNCTION_TEST_TITLE_PATTERN,
         GO_TEST_TITLE_PATTERN,
@@ -1212,35 +1223,67 @@ export function normalizeTddToolMetadata(
     ? classifyRustWriteContent(rawArgs.content)
     : undefined;
   const sourceEdit = name === "edit" && targets?.length === 1;
-  const rawOldText =
-    sourceEdit && typeof rawArgs.oldText === "string"
-      ? rawArgs.oldText
+  const topLevelEdit =
+    sourceEdit &&
+    typeof rawArgs.oldText === "string" &&
+    typeof rawArgs.newText === "string"
+      ? [{ oldText: rawArgs.oldText, newText: rawArgs.newText }]
       : undefined;
-  const rawNewText =
-    sourceEdit && typeof rawArgs.newText === "string"
-      ? rawArgs.newText
-      : undefined;
-  const truncateSnippet = (value: string): string =>
-    Buffer.from(value)
-      .subarray(0, MAX_EDIT_SNIPPET_BYTES)
-      .toString("utf8")
-      .replace(TRAILING_REPLACEMENT_CHARACTER_PATTERN, "");
+  const nestedEdits =
+    sourceEdit && Array.isArray(rawArgs.edits) ? rawArgs.edits : undefined;
+  const boundedNestedEdits = nestedEdits?.slice(0, MAX_METADATA_SCAN_SEGMENTS);
+  const nestedEditPairs = boundedNestedEdits?.every(
+    (edit): edit is { oldText: string; newText: string } =>
+      typeof edit === "object" &&
+      edit !== null &&
+      typeof (edit as Record<string, unknown>).oldText === "string" &&
+      typeof (edit as Record<string, unknown>).newText === "string"
+  )
+    ? boundedNestedEdits
+    : undefined;
+  const editPairs = topLevelEdit ?? nestedEditPairs;
+  const boundedEditText = (key: "oldText" | "newText") => {
+    if (!editPairs || editPairs.length === 0) {
+      return;
+    }
+    const chunks: Buffer[] = [];
+    let remaining = MAX_EDIT_SNIPPET_BYTES;
+    let truncated = (nestedEdits?.length ?? 0) > editPairs.length;
+    for (const [index, edit] of editPairs.entries()) {
+      const value = Buffer.from(edit[key]);
+      const separator = index === 0 ? Buffer.alloc(0) : Buffer.from("\n");
+      if (separator.byteLength > remaining) {
+        truncated = true;
+        break;
+      }
+      chunks.push(separator);
+      remaining -= separator.byteLength;
+      chunks.push(value.subarray(0, remaining));
+      if (value.byteLength > remaining) {
+        truncated = true;
+        remaining = 0;
+        break;
+      }
+      remaining -= value.byteLength;
+    }
+    return {
+      snippet: Buffer.concat(chunks)
+        .toString("utf8")
+        .replace(TRAILING_REPLACEMENT_CHARACTER_PATTERN, ""),
+      truncated,
+    };
+  };
+  const oldEditText = boundedEditText("oldText");
+  const newEditText = boundedEditText("newText");
   const editDeltaTruncated =
-    (rawOldText !== undefined &&
-      Buffer.byteLength(rawOldText) > MAX_EDIT_SNIPPET_BYTES) ||
-    (rawNewText !== undefined &&
-      Buffer.byteLength(rawNewText) > MAX_EDIT_SNIPPET_BYTES);
+    oldEditText?.truncated === true || newEditText?.truncated === true;
   const retainedCall = {
     name,
     args: {},
     ...(targets ? { mutationTargets: targets } : {}),
     ...(rustWriteContent ? { rustWriteContent } : {}),
-    ...(rawOldText === undefined
-      ? {}
-      : { editOldSnippet: truncateSnippet(rawOldText) }),
-    ...(rawNewText === undefined
-      ? {}
-      : { editNewSnippet: truncateSnippet(rawNewText) }),
+    ...(oldEditText ? { editOldSnippet: oldEditText.snippet } : {}),
+    ...(newEditText ? { editNewSnippet: newEditText.snippet } : {}),
     ...(editDeltaTruncated ? { editDeltaTruncated: true } : {}),
   } as TddToolCall;
   const effects = discreteMutationEffects(retainedCall);
@@ -1280,8 +1323,12 @@ export function normalizeTddToolMetadata(
     ...(editDeltaTruncated ? { editDeltaTruncated: true } : {}),
     ...(regressionIntent.length > 0 ? { regressionIntent } : {}),
     ...(regressionTitles.length > 0 ? { regressionTitles } : {}),
-    ...(name === "edit" && rawOldText !== undefined && rawNewText !== undefined
-      ? { mutationProven: rawOldText !== rawNewText }
+    ...(name === "edit" && editPairs
+      ? {
+          mutationProven: editPairs.some(
+            ({ oldText, newText }) => oldText !== newText
+          ),
+        }
       : {}),
   };
 }

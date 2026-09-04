@@ -460,6 +460,24 @@ describe("TDD evidence validation", () => {
     }
   });
 
+  it("retains GoogleTest names for native RED correlation", () => {
+    const metadata = normalizeTddToolMetadata("edit", {
+      path: "tests/AndroidOboeFifoTransportTest.cpp",
+      edits: [
+        {
+          oldText: "",
+          newText:
+            "TEST(AndroidOboeFifoTransportTest, SinkFailureWaitsForAdmittedCallbackProducerToQuiesce) {}",
+        },
+      ],
+    });
+
+    expect(metadata.regressionTitles).toEqual([
+      "sinkfailurewaitsforadmittedcallbackproducertoquiesce",
+      "androidoboefifotransporttest sinkfailurewaitsforadmittedcallbackproducertoquiesce",
+    ]);
+  });
+
   it("allows test-first setup but requires production mutation between RED and GREEN", () => {
     const testFirst = trajectory();
     testFirst.unshift({

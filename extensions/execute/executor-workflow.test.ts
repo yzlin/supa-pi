@@ -7,7 +7,9 @@ import {
   mkdtempSync,
   readdirSync,
   readFileSync,
+  realpathSync,
   renameSync,
+  rmdirSync,
   statSync,
   symlinkSync,
   truncateSync,
@@ -17,6 +19,7 @@ import {
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 
+import { ProjectTrustStore } from "@earendil-works/pi-coding-agent";
 import type {
   WorkflowAgentRequest,
   WorkflowAgentRunner,
@@ -31,7 +34,9 @@ import {
 import {
   createExecutorAgentRunner,
   EXECUTOR_RESULT_SCHEMA,
+  isExecutorCwdTrusted,
   registerExecutorWorkflowTool,
+  resolveExecutorCwd,
   runExecutorWorkflow,
   type SubagentsManagerRegistry,
 } from "./executor-workflow";
@@ -427,6 +432,18 @@ describe("execute executor workflow", () => {
         })
       ).toBe(true);
     }
+    expect(
+      Value.Check(parameters, {
+        cwd: "../target-worktree",
+        tasks: [{ ...task, tdd: true, tddShape: validTddShape }],
+      })
+    ).toBe(true);
+    expect(
+      Value.Check(parameters, {
+        cwd: "",
+        tasks: [{ ...task, tdd: true, tddShape: validTddShape }],
+      })
+    ).toBe(false);
     expect(
       Value.Check(parameters, {
         tasks: [{ ...task, tdd: true, tddShape: validTddShape, extra: true }],
@@ -1600,6 +1617,114 @@ describe("execute executor workflow", () => {
   });
 });
 
+describe("executor cwd selection", () => {
+  it("resolves an existing directory relative to the session cwd", () => {
+    const sessionCwd = mkdtempSync(join(tmpdir(), "supa-pi-session-cwd-"));
+    const targetCwd = join(sessionCwd, "target");
+    mkdirSync(targetCwd);
+    writeFileSync(join(sessionCwd, "file.txt"), "not a directory");
+
+    expect(resolveExecutorCwd(sessionCwd)).toBe(realpathSync(sessionCwd));
+    expect(resolveExecutorCwd(sessionCwd, "target")).toBe(
+      realpathSync(targetCwd)
+    );
+    expect(() => resolveExecutorCwd(sessionCwd, "missing")).toThrow(
+      "existing directory"
+    );
+    expect(() => resolveExecutorCwd(sessionCwd, "file.txt")).toThrow(
+      "existing directory"
+    );
+  });
+
+  it("requires independent trust for an alternate cwd with project resources", () => {
+    const sessionCwd = mkdtempSync(join(tmpdir(), "supa-pi-session-cwd-"));
+    const targetCwd = mkdtempSync(join(tmpdir(), "supa-pi-target-cwd-"));
+    const agentDir = mkdtempSync(join(tmpdir(), "supa-pi-agent-dir-"));
+
+    expect(isExecutorCwdTrusted(sessionCwd, targetCwd, agentDir)).toBe(true);
+    mkdirSync(join(targetCwd, ".pi"));
+    writeFileSync(join(targetCwd, ".pi/settings.json"), "{}");
+    expect(isExecutorCwdTrusted(sessionCwd, targetCwd, agentDir)).toBe(false);
+    new ProjectTrustStore(agentDir).set(targetCwd, true);
+    expect(isExecutorCwdTrusted(sessionCwd, targetCwd, agentDir)).toBe(true);
+  });
+
+  it("launches the child agent from the workflow cwd", async () => {
+    const sessionCwd = mkdtempSync(join(tmpdir(), "supa-pi-session-cwd-"));
+    const targetCwd = mkdtempSync(join(tmpdir(), "supa-pi-target-cwd-"));
+    let observedCwd: string | undefined;
+    let observedTrust: boolean | undefined;
+    const record = {
+      type: "executor",
+      status: "completed",
+      toolUses: 1,
+      promise: Promise.resolve(),
+    };
+    const manager: SubagentsManagerRegistry = {
+      spawn(_pi, childCtx, _type, _prompt, options) {
+        observedCwd = childCtx.cwd;
+        observedTrust = childCtx.isProjectTrusted();
+        const structuredOutput = (
+          options.customTools as Array<{
+            name: string;
+            execute: (toolCallId: string, params: unknown) => Promise<unknown>;
+          }>
+        ).find(({ name }) => name === "structured_output");
+        if (!structuredOutput) {
+          throw new Error("structured_output was not injected");
+        }
+        record.promise = structuredOutput
+          .execute("structured", validResult)
+          .then(() => undefined);
+        return "agent-target-cwd";
+      },
+      getRecord() {
+        return record;
+      },
+    };
+    const runner = createExecutorAgentRunner(
+      {
+        events: {
+          emit() {
+            // No stop event expected for a completed fake record.
+          },
+        },
+      } as never,
+      { cwd: sessionCwd } as never,
+      { manager }
+    );
+
+    const result = (await runner(
+      {
+        agent: "executor",
+        prompt: "Work in target",
+        executorOutputSchema: EXECUTOR_RESULT_SCHEMA,
+      } as never,
+      {
+        cwd: targetCwd,
+        signal: new AbortController().signal,
+      } as never
+    )) as { structuredOutput?: unknown };
+
+    expect(observedCwd).toBe(targetCwd);
+    expect(observedTrust).toBe(true);
+    expect(result.structuredOutput).toEqual(validResult);
+
+    mkdirSync(join(targetCwd, ".pi"));
+    writeFileSync(join(targetCwd, ".pi/settings.json"), "{}");
+    await expect(
+      runner(
+        {
+          agent: "executor",
+          prompt: "Work in untrusted target",
+          executorOutputSchema: EXECUTOR_RESULT_SCHEMA,
+        } as never,
+        { cwd: targetCwd } as never
+      )
+    ).rejects.toThrow("not trusted");
+  });
+});
+
 describe("executor agent runner cleanup", () => {
   it("captures observed bash outcomes in execution order", async () => {
     const workspace = mkdtempSync(join(tmpdir(), "supa-pi-write-proof-"));
@@ -1690,6 +1815,12 @@ describe("executor agent runner cleanup", () => {
         }
         if (prompt.includes("Runner normalized tracked mutation")) {
           writeFileSync(join(workspace, "public/é.txt"), "after");
+        }
+        if (prompt.includes("Runner tracked Yarn input mutation")) {
+          writeFileSync(
+            join(workspace, ".yarn/patches/runtime.patch"),
+            "after"
+          );
         }
         if (prompt.includes("Runner tracked submodule mutation")) {
           writeFileSync(join(workspace, "public/site/fixture.txt"), "after");
@@ -2393,6 +2524,55 @@ describe("executor agent runner cleanup", () => {
     expect(largeProof.trajectoryErrors?.join(" ")).toContain(
       "mutation proof budget exceeded"
     );
+
+    execFileSync("git", ["init", "-q"], { cwd: workspace });
+    mkdirSync(join(workspace, ".yarn/cache"), { recursive: true });
+    mkdirSync(join(workspace, ".yarn/patches"), { recursive: true });
+    writeFileSync(join(workspace, ".gitignore"), ".yarn/cache/\n");
+    writeFileSync(join(workspace, ".yarn/patches/runtime.patch"), "before");
+    execFileSync("git", ["add", ".gitignore", ".yarn/patches/runtime.patch"], {
+      cwd: workspace,
+    });
+    writeFileSync(join(workspace, ".yarn/cache/dependency.zip"), "");
+    truncateSync(
+      join(workspace, ".yarn/cache/dependency.zip"),
+      129 * 1024 * 1024
+    );
+    writeFileSync(join(workspace, "large-runner-source.bin"), "");
+    truncateSync(join(workspace, "large-runner-source.bin"), 65 * 1024 * 1024);
+    const boundedMediumWorkspace = (await runner(
+      {
+        agent: "executor",
+        prompt: "Runner bounded medium workspace",
+        executorOutputSchema: EXECUTOR_RESULT_SCHEMA,
+        captureTrajectory: true,
+      } as never,
+      { signal: new AbortController().signal } as never
+    )) as {
+      toolCalls?: Array<{ runnerWorkspaceProof?: boolean }>;
+      trajectoryErrors?: string[];
+    };
+    expect(
+      boundedMediumWorkspace.toolCalls?.map(
+        ({ runnerWorkspaceProof }) => runnerWorkspaceProof
+      )
+    ).toEqual([true, true]);
+    expect(boundedMediumWorkspace.trajectoryErrors).toEqual([]);
+
+    const trackedYarnMutation = (await runner(
+      {
+        agent: "executor",
+        prompt: "Runner tracked Yarn input mutation",
+        executorOutputSchema: EXECUTOR_RESULT_SCHEMA,
+        captureTrajectory: true,
+      } as never,
+      { signal: new AbortController().signal } as never
+    )) as { toolCalls?: Array<{ runnerWorkspaceDelta?: unknown }> };
+    expect(trackedYarnMutation.toolCalls?.[0]?.runnerWorkspaceDelta).toEqual([
+      { path: ".yarn/patches/runtime.patch", status: "changed" },
+    ]);
+    unlinkSync(join(workspace, ".yarn/cache/dependency.zip"));
+    rmdirSync(join(workspace, ".yarn/cache"));
 
     const unsafeWrite = (await runner(
       {
