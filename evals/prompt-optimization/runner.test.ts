@@ -241,7 +241,7 @@ function createSuccessfulStream(model: Model<Api>) {
   );
 }
 
-function createQuestionnaireToolCall(id: string, multiSelect?: boolean) {
+function createAskToolCall(id: string, multiSelect?: boolean) {
   return {
     type: "toolCall" as const,
     id,
@@ -680,7 +680,7 @@ describe("runVariant", () => {
     );
   });
 
-  it("supplies approval through one exact questionnaire gate before editing", async () => {
+  it("supplies approval through one exact ask gate before editing", async () => {
     const model = modelRegistry.find("openai", "gpt-4o");
     if (!model) {
       throw new Error("test model is unavailable");
@@ -688,14 +688,14 @@ describe("runVariant", () => {
     let providerCall = 0;
     const result = await runVariant({
       evalCase: {
-        id: "questionnaire-approve",
+        id: "ask-approve",
         workload: "focused bug fix",
         promptPath: "skills/diagnose/SKILL.md",
         task: "Use the required fix gate.",
         tools: ["ask", "edit", "bash"],
-        questionnaireResponse: "Approve scoped fix",
+        askResponse: "Approve scoped fix",
         checks: [
-          { type: "questionnaireGate", domain: "task", weight: 1 },
+          { type: "askGate", domain: "task", weight: 1 },
           {
             type: "toolCalledAfter",
             name: "edit",
@@ -735,7 +735,7 @@ describe("runVariant", () => {
           return createMessageStream(
             createMessage(
               selectedModel,
-              [createQuestionnaireToolCall("questionnaire-1")],
+              [createAskToolCall("ask-1")],
               "toolUse"
             )
           );
@@ -801,7 +801,7 @@ describe("runVariant", () => {
     });
   });
 
-  it("rejects questionnaire approval and edit from the same assistant turn", async () => {
+  it("rejects ask approval and edit from the same assistant turn", async () => {
     const model = modelRegistry.find("openai", "gpt-4o");
     if (!model) {
       throw new Error("test model is unavailable");
@@ -809,12 +809,12 @@ describe("runVariant", () => {
     let providerCall = 0;
     const result = await runVariant({
       evalCase: {
-        id: "questionnaire-same-turn",
+        id: "ask-same-turn",
         workload: "focused bug fix",
         promptPath: "skills/diagnose/SKILL.md",
         task: "Use the required fix gate.",
         tools: ["ask", "edit"],
-        questionnaireResponse: "Approve scoped fix",
+        askResponse: "Approve scoped fix",
         checks: [
           {
             type: "toolCalledAfter",
@@ -842,7 +842,7 @@ describe("runVariant", () => {
             createMessage(
               selectedModel,
               [
-                createQuestionnaireToolCall("questionnaire-same-turn-1"),
+                createAskToolCall("ask-same-turn-1"),
                 {
                   type: "toolCall",
                   id: "edit-same-turn-1",
@@ -881,14 +881,14 @@ describe("runVariant", () => {
     let providerCall = 0;
     const result = await runVariant({
       evalCase: {
-        id: "questionnaire-stop",
+        id: "ask-stop",
         workload: "focused bug fix",
         promptPath: "skills/diagnose/SKILL.md",
         task: "Use the required fix gate.",
         tools: ["ask", "edit", "write"],
-        questionnaireResponse: "Stop and clean probes",
+        askResponse: "Stop and clean probes",
         checks: [
-          { type: "questionnaireGate", domain: "task", weight: 1 },
+          { type: "askGate", domain: "task", weight: 1 },
           { type: "toolNotCalled", name: "edit", domain: "tests", weight: 1 },
           {
             type: "workspaceUnchanged",
@@ -913,7 +913,7 @@ describe("runVariant", () => {
           return createMessageStream(
             createMessage(
               selectedModel,
-              [createQuestionnaireToolCall("questionnaire-stop-1", false)],
+              [createAskToolCall("ask-stop-1", false)],
               "toolUse"
             )
           );

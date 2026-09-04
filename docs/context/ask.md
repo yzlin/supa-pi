@@ -1,12 +1,12 @@
 ---
-summary: "Active Questionnaire Extension schema, interaction behavior, and runtime boundaries."
+summary: "Active Ask Extension schema, interaction behavior, and runtime boundaries."
 read_when:
   - "Changing the public ask tool parameters, TUI behavior, validation, result shape, or clarification guidance."
 ---
 
-# Questionnaire extension
+# Ask Extension
 
-Read when changing `extensions/questionnaire/*`, prompt guidance for user clarification, or README claims about the active Questionnaire Extension.
+Read when changing `extensions/ask/*`, prompt guidance for user clarification, or README claims about the active Ask Extension.
 
 ## Purpose
 
@@ -14,14 +14,15 @@ Read when changing `extensions/questionnaire/*`, prompt guidance for user clarif
 
 Do not use it from background or non-interactive contexts. The tool returns an error envelope when `ctx.hasUI` is false.
 
-## Public and internal names
+## Public and compatibility names
 
-- The only public tool name is `ask`; there is no `questionnaire` tool alias.
-- The public session statistics command is `/ask-stats`; there is no `/questionnaire-stats` command alias.
-- The implementation remains under `extensions/questionnaire` and retains internal `Questionnaire` symbols.
-- Persisted session entry identifiers remain `questionnaire-*` for compatibility.
+- The public tool name is `ask`.
+- The public session statistics command is `/ask-stats`.
+- The implementation lives under `extensions/ask` and uses direct `Ask*` symbols.
+- The tool and command do not register legacy aliases.
+- Persisted custom entry identifiers remain `questionnaire-*` for compatibility.
 
-This public-name migration does not change the input schema, TUI behavior, validation, or result contract documented below.
+The current naming does not change the input schema, TUI behavior, validation, or result contract documented below.
 
 ## Input schema
 
@@ -50,7 +51,7 @@ Reserved values and labels are injected by the extension and cannot be supplied 
 
 ## Result union
 
-Successful results are returned through `createQuestionnaireEnvelope` as both text content and structured `details`.
+Successful results are returned through `createAskEnvelope` as both text content and structured `details`.
 
 `details` contains:
 
@@ -78,7 +79,7 @@ Expanded cards hide unchosen options and internal ids and values. Expanded field
 
 ## Custom UI composition
 
-Questionnaire opens its TUI directly through `ctx.ui.custom` after validation passes. Pi owns regular and fullscreen rendering composition, so the extension does not wrap or replace the rendering surface. Validation errors return the cancelled error envelope without opening the custom UI.
+The Ask Extension opens its TUI directly through `ctx.ui.custom` after validation passes. Pi owns regular and fullscreen rendering composition, so the extension does not wrap or replace the rendering surface. Validation errors return the cancelled error envelope without opening the custom UI.
 
 ## Keyboard behavior
 
@@ -111,7 +112,7 @@ Preview mode:
 - In both layouts, only the highlighted option preview is rendered; inactive option previews are not rendered.
 - Single-select custom rows show `Custom answer preview will appear after you type it.` while highlighted.
 - Rows without preview content show `No preview available.` in the active preview pane.
-- Questionnaire-provided display text strips terminal control sequences before rendering.
+- Extension-provided display text strips terminal control sequences before rendering.
 - A preview wrapped in one outer fenced code block renders the fence contents without the surrounding backtick fence.
 - Multi-select preview mode supports highlighted-option previews while retaining checkbox toggles and the `Next` commit row. The `Next` row has no preview unless the injected row is highlighted, in which case the pane shows `No preview available.`
 - `n`: edit a preview note for the current single-select question.
@@ -119,7 +120,7 @@ Preview mode:
 
 ## Validation
 
-`validateQuestionnaireParams` rejects:
+`validateAskParams` rejects:
 
 - Question count outside 1-3.
 - Option count outside 2-5.

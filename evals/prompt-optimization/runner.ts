@@ -560,7 +560,7 @@ const webSearchTool: AgentTool = {
   },
 };
 
-const questionnaireSchema = Type.Object({
+const askSchema = Type.Object({
   questions: Type.Array(
     Type.Object({
       id: Type.String(),
@@ -578,15 +578,15 @@ const questionnaireSchema = Type.Object({
   ),
 });
 
-function createQuestionnaireTool(
-  response: NonNullable<EvalCase["questionnaireResponse"]>
-): AgentTool<typeof questionnaireSchema> {
+function createAskTool(
+  response: NonNullable<EvalCase["askResponse"]>
+): AgentTool<typeof askSchema> {
   return {
     name: "ask",
-    label: "Questionnaire",
+    label: "Ask",
     description:
       "Ask the user structured questions. This eval supplies a deterministic user selection.",
-    parameters: questionnaireSchema,
+    parameters: askSchema,
     execute(_toolCallId, params) {
       const question = params.questions[0];
       const option = question?.options.find(
@@ -597,7 +597,7 @@ function createQuestionnaireTool(
           content: [
             {
               type: "text" as const,
-              text: "Questionnaire rejected: required supplied option missing.",
+              text: "Ask rejected: required supplied option missing.",
             },
           ],
           details: { cancelled: true },
@@ -973,10 +973,10 @@ function createTools(
     fetchContentTool,
     structuredOutputTool,
   ].filter((tool) => names.includes(tool.name as EvalCase["tools"][number]));
-  const questionnaireTools = evalCase.questionnaireResponse
-    ? [createQuestionnaireTool(evalCase.questionnaireResponse)]
+  const askTools = evalCase.askResponse
+    ? [createAskTool(evalCase.askResponse)]
     : [];
-  return [...builtIns, ...extras, ...questionnaireTools];
+  return [...builtIns, ...extras, ...askTools];
 }
 
 function textFromContent(
@@ -1146,7 +1146,7 @@ export async function runVariant(
           assistantTurn: observedTurns,
           startOrder: eventOrder,
         };
-        const questionnaireResponse =
+        const askResponse =
           call.name === "ask"
             ? (event.result?.details?.answers?.[0]?.label as unknown)
             : undefined;
@@ -1191,9 +1191,7 @@ export async function runVariant(
               }
             : {}),
           ...(resultText ? { resultText } : {}),
-          ...(typeof questionnaireResponse === "string"
-            ? { questionnaireResponse }
-            : {}),
+          ...(typeof askResponse === "string" ? { askResponse } : {}),
         };
         toolCalls.push(completedCall);
         pendingToolCalls.delete(event.toolCallId);

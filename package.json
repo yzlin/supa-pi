@@ -10,7 +10,7 @@
   },
   "pi": {
     "extensions": [
-      "./extensions/questionnaire",
+      "./extensions/ask",
       "./extensions/caveman",
       "./extensions/core-prompt",
       "./extensions/rules",

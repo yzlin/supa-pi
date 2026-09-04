@@ -1,5 +1,5 @@
 /**
- * Questionnaire Tool - Unified tool for asking single or multiple questions
+ * Ask Tool - Unified tool for asking single or multiple questions
  *
  * Single question: simple options list
  * Multiple questions: tab bar navigation between questions
@@ -15,28 +15,28 @@ import {
 } from "@earendil-works/pi-tui";
 import { Type } from "typebox";
 
-import { routeQuestionnaireKey } from "./keys";
-import { renderQuestionnaireRuntime } from "./render";
-import { createQuestionnaireEnvelope } from "./response";
+import { routeAskKey } from "./keys";
+import { renderAskRuntime } from "./render";
+import { createAskEnvelope } from "./response";
 import {
-  createQuestionnaireRuntimeState,
+  createAskRuntimeState,
   isAllAnswered,
-  reduceQuestionnaireRuntime,
+  reduceAskRuntime,
 } from "./state";
 import { stripTerminalControls } from "./text";
 import {
+  ASK_RESERVED_LABELS,
+  ASK_RESERVED_VALUES,
+  type AskParamsInput,
+  type AskResult,
+  type AskValidationErrorDetails,
+  type AskValidationIssue,
   CUSTOM_OPTION_LABEL,
   CUSTOM_OPTION_VALUE,
   NEXT_OPTION_LABEL,
   NEXT_OPTION_VALUE,
-  QUESTIONNAIRE_RESERVED_LABELS,
-  QUESTIONNAIRE_RESERVED_VALUES,
   type Question,
   type QuestionInput,
-  type QuestionnaireParamsInput,
-  type QuestionnaireResult,
-  type QuestionnaireValidationErrorDetails,
-  type QuestionnaireValidationIssue,
   type QuestionOption,
   type RenderOption,
 } from "./types";
@@ -46,22 +46,22 @@ const CLARIFICATION_TRIGGER_REGEX =
 
 export type {
   Answer,
+  AskParamsInput,
+  AskResult,
+  AskValidationErrorDetails,
+  AskValidationIssue,
   Question,
   QuestionInput,
-  QuestionnaireParamsInput,
-  QuestionnaireResult,
-  QuestionnaireValidationErrorDetails,
-  QuestionnaireValidationIssue,
   QuestionOption,
   RenderOption,
 } from "./types";
 export {
+  ASK_RESERVED_LABELS,
+  ASK_RESERVED_VALUES,
   CUSTOM_OPTION_LABEL,
   CUSTOM_OPTION_VALUE,
   NEXT_OPTION_LABEL,
   NEXT_OPTION_VALUE,
-  QUESTIONNAIRE_RESERVED_LABELS,
-  QUESTIONNAIRE_RESERVED_VALUES,
 } from "./types";
 
 interface AssistantTextBlock {
@@ -81,10 +81,11 @@ function hasToolCall(content: { type: string }[]): boolean {
   return content.some((block) => block.type === "toolCall");
 }
 
-const QUESTIONNAIRE_REDIRECT_MESSAGE_TYPE = "questionnaire-auto-redirect";
-const QUESTIONNAIRE_MISS_LOG_TYPE = "questionnaire-plain-text-miss";
+const LEGACY_ASK_REDIRECT_MESSAGE_TYPE = "questionnaire-auto-redirect";
+const LEGACY_ASK_MISS_LOG_TYPE = "questionnaire-plain-text-miss";
+const LEGACY_ASK_STATS_MESSAGE_TYPE = "questionnaire-stats";
 
-export function getQuestionnaireRedirectCorrectionMessage(): string {
+export function getAskRedirectCorrectionMessage(): string {
   return "Extension correction: you asked the user a plain-text clarification in an interactive session. Re-ask only the necessary clarification using the ask tool instead of plain text. Ask at most 1-3 focused questions. After receiving the answer, continue the original task immediately and provide the pending result instead of stopping after a brief acknowledgment. Only stop early if materially new information is still required.";
 }
 
@@ -102,11 +103,11 @@ function hasAutoRedirectMessage(
   return messages.some(
     (message) =>
       message.role === "custom" &&
-      message.customType === QUESTIONNAIRE_REDIRECT_MESSAGE_TYPE
+      message.customType === LEGACY_ASK_REDIRECT_MESSAGE_TYPE
   );
 }
 
-interface QuestionnaireMissLog {
+interface LegacyAskMissLog {
   source: "interactive" | "rpc" | "extension" | null;
   redirectedAlready: boolean;
   autoRedirected: boolean;
@@ -114,19 +115,18 @@ interface QuestionnaireMissLog {
   timestamp: string;
 }
 
-function getQuestionnaireMissLogs(
+function getLegacyAskMissLogs(
   entries: Array<{ type: string; customType?: string; data?: unknown }>
-): QuestionnaireMissLog[] {
+): LegacyAskMissLog[] {
   return entries
     .filter(
       (entry) =>
-        entry.type === "custom" &&
-        entry.customType === QUESTIONNAIRE_MISS_LOG_TYPE
+        entry.type === "custom" && entry.customType === LEGACY_ASK_MISS_LOG_TYPE
     )
-    .map((entry) => entry.data as QuestionnaireMissLog);
+    .map((entry) => entry.data as LegacyAskMissLog);
 }
 
-export { wrapQuestionnaireText } from "./text";
+export { wrapAskText } from "./text";
 
 // Schema
 const QuestionOptionSchema = Type.Object({
@@ -162,7 +162,7 @@ const QuestionSchema = Type.Object({
   ),
 });
 
-const QuestionnaireParams = Type.Object({
+const AskParams = Type.Object({
   questions: Type.Array(QuestionSchema, {
     description: "Questions to ask the user",
     minItems: 1,
@@ -171,11 +171,11 @@ const QuestionnaireParams = Type.Object({
 });
 
 function addDuplicateIssue(
-  issues: QuestionnaireValidationIssue[],
+  issues: AskValidationIssue[],
   seen: Set<string>,
   value: string,
   path: string,
-  code: QuestionnaireValidationIssue["code"],
+  code: AskValidationIssue["code"],
   label: string
 ): void {
   if (!seen.has(value)) {
@@ -189,12 +189,10 @@ function addDuplicateIssue(
   });
 }
 
-export function validateQuestionnaireParams(
-  params: QuestionnaireParamsInput
-):
-  | QuestionnaireValidationErrorDetails
-  | { valid: true; questions: QuestionInput[] } {
-  const issues: QuestionnaireValidationIssue[] = [];
+export function validateAskParams(
+  params: AskParamsInput
+): AskValidationErrorDetails | { valid: true; questions: QuestionInput[] } {
+  const issues: AskValidationIssue[] = [];
   const questions = params.questions ?? [];
 
   if (questions.length < 1 || questions.length > 3) {
@@ -245,14 +243,14 @@ export function validateQuestionnaireParams(
         "duplicate_option_label",
         "Option label"
       );
-      if (QUESTIONNAIRE_RESERVED_VALUES.includes(option.value as never)) {
+      if (ASK_RESERVED_VALUES.includes(option.value as never)) {
         issues.push({
           path: valuePath,
           code: "reserved_option_value",
           message: `Option value ${option.value} is reserved.`,
         });
       }
-      if (QUESTIONNAIRE_RESERVED_LABELS.includes(option.label as never)) {
+      if (ASK_RESERVED_LABELS.includes(option.label as never)) {
         issues.push({
           path: labelPath,
           code: "reserved_option_label",
@@ -269,7 +267,7 @@ export function validateQuestionnaireParams(
   return { valid: true, questions };
 }
 
-export { createQuestionnaireEnvelope } from "./response";
+export { createAskEnvelope } from "./response";
 
 function normalizeQuestion(question: QuestionInput, index: number): Question {
   return {
@@ -281,11 +279,11 @@ function normalizeQuestion(question: QuestionInput, index: number): Question {
 function errorResult(
   message: string,
   questions: Question[] = [],
-  validation?: QuestionnaireValidationErrorDetails
+  validation?: AskValidationErrorDetails
 ): {
   content: { type: "text"; text: string }[];
-  details: QuestionnaireResult & {
-    error?: QuestionnaireValidationErrorDetails;
+  details: AskResult & {
+    error?: AskValidationErrorDetails;
   };
 } {
   return {
@@ -348,7 +346,7 @@ export function getRenderOptions(question: {
   ];
 }
 
-export default function questionnaire(pi: ExtensionAPI): void {
+export default function ask(pi: ExtensionAPI): void {
   let lastInputSource: "interactive" | "rpc" | "extension" | null = null;
 
   pi.on("input", (event) => {
@@ -359,7 +357,7 @@ export default function questionnaire(pi: ExtensionAPI): void {
   pi.registerCommand("ask-stats", {
     description: "Show ask miss and redirect stats for this session",
     handler(_args, ctx): Promise<void> {
-      const logs = getQuestionnaireMissLogs(ctx.sessionManager.getEntries());
+      const logs = getLegacyAskMissLogs(ctx.sessionManager.getEntries());
       if (logs.length === 0) {
         ctx.ui.notify("No ask misses logged in this session.", "info");
         return Promise.resolve();
@@ -409,7 +407,7 @@ export default function questionnaire(pi: ExtensionAPI): void {
         });
 
       pi.sendMessage({
-        customType: "questionnaire-stats",
+        customType: LEGACY_ASK_STATS_MESSAGE_TYPE,
         content: `Ask stats\n\nTotal misses: ${logs.length}\nAuto-redirected: ${autoRedirected}\nRepeated after redirect: ${redirectedAlready}\n\nBy source:\n- interactive: ${sourceCounts.interactive}\n- rpc: ${sourceCounts.rpc}\n- extension: ${sourceCounts.extension}\n- unknown: ${sourceCounts.unknown}\n\nRecent misses:\n${recent.join("\n")}`,
         display: true,
       });
@@ -431,7 +429,7 @@ export default function questionnaire(pi: ExtensionAPI): void {
       "Single-select questions include a custom input row. Multi-select questions use checkboxes and a Next row, with no custom input row.",
       "Do not use ask in background or non-interactive contexts.",
     ],
-    parameters: QuestionnaireParams,
+    parameters: AskParams,
 
     async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
       if (!ctx.hasUI) {
@@ -439,7 +437,7 @@ export default function questionnaire(pi: ExtensionAPI): void {
           "Error: UI not available (running in non-interactive mode)"
         );
       }
-      const validation = validateQuestionnaireParams(params);
+      const validation = validateAskParams(params);
       if (validation.valid === false) {
         return errorResult(
           `Error: Invalid ask request: ${validation.issues.map((issue) => issue.message).join(" ")}`,
@@ -449,165 +447,156 @@ export default function questionnaire(pi: ExtensionAPI): void {
       }
 
       const questions = validation.questions.map(normalizeQuestion);
-      const result = await ctx.ui.custom<QuestionnaireResult>(
-        (tui, theme, _kb, done) => {
-          let state = createQuestionnaireRuntimeState();
-          let cachedLines: string[] | undefined;
+      const result = await ctx.ui.custom<AskResult>((tui, theme, _kb, done) => {
+        let state = createAskRuntimeState();
+        let cachedLines: string[] | undefined;
 
-          const editorTheme: EditorTheme = {
-            borderColor: (s) => theme.fg("accent", s),
-            selectList: {
-              selectedPrefix: (t) => theme.fg("accent", t),
-              selectedText: (t) => theme.fg("accent", t),
-              description: (t) => theme.fg("muted", t),
-              scrollInfo: (t) => theme.fg("dim", t),
-              noMatch: (t) => theme.fg("warning", t),
-            },
-          };
-          const editor = new Editor(tui, editorTheme);
+        const editorTheme: EditorTheme = {
+          borderColor: (s) => theme.fg("accent", s),
+          selectList: {
+            selectedPrefix: (t) => theme.fg("accent", t),
+            selectedText: (t) => theme.fg("accent", t),
+            description: (t) => theme.fg("muted", t),
+            scrollInfo: (t) => theme.fg("dim", t),
+            noMatch: (t) => theme.fg("warning", t),
+          },
+        };
+        const editor = new Editor(tui, editorTheme);
 
-          function refresh() {
-            cachedLines = undefined;
-            tui.requestRender();
+        function refresh() {
+          cachedLines = undefined;
+          tui.requestRender();
+        }
+
+        function submit(cancelled: boolean) {
+          done({
+            questions,
+            answers: Array.from(state.answers.values()),
+            cancelled,
+          });
+        }
+
+        function currentQuestion(): Question | undefined {
+          return questions[state.currentTab];
+        }
+
+        function questionHasPreview(question: Question | undefined): boolean {
+          return (
+            question?.options.some((option) => option.preview !== undefined) ===
+            true
+          );
+        }
+
+        function canUsePreview(): boolean {
+          const question = currentQuestion();
+          return questionHasPreview(question);
+        }
+
+        function canUsePreviewNotes(): boolean {
+          const question = currentQuestion();
+          return (
+            question !== undefined &&
+            question.multiSelect !== true &&
+            questionHasPreview(question)
+          );
+        }
+
+        function currentOptions(): RenderOption[] {
+          const question = currentQuestion();
+          return question ? getRenderOptions(question) : [];
+        }
+
+        function applyEffect(
+          effect: ReturnType<typeof reduceAskRuntime>["effect"]
+        ) {
+          if (effect.type === "submit") {
+            submit(effect.cancelled);
+            return;
           }
-
-          function submit(cancelled: boolean) {
-            done({
-              questions,
-              answers: Array.from(state.answers.values()),
-              cancelled,
-            });
+          if (effect.type === "startInput" || effect.type === "clearInput") {
+            editor.setText("");
           }
-
-          function currentQuestion(): Question | undefined {
-            return questions[state.currentTab];
+          if (effect.type === "startNote") {
+            editor.setText(state.noteDrafts.get(effect.questionId) ?? "");
           }
-
-          function questionHasPreview(question: Question | undefined): boolean {
-            return (
-              question?.options.some(
-                (option) => option.preview !== undefined
-              ) === true
-            );
+          if (effect.type !== "none") {
+            refresh();
           }
+        }
 
-          function canUsePreview(): boolean {
-            const question = currentQuestion();
-            return questionHasPreview(question);
-          }
+        function dispatch(action: Parameters<typeof reduceAskRuntime>[1]) {
+          const reduced = reduceAskRuntime(state, action, questions);
+          state = reduced.state;
+          applyEffect(reduced.effect);
+        }
 
-          function canUsePreviewNotes(): boolean {
-            const question = currentQuestion();
-            return (
-              question !== undefined &&
-              question.multiSelect !== true &&
-              questionHasPreview(question)
-            );
-          }
-
-          function currentOptions(): RenderOption[] {
-            const question = currentQuestion();
-            return question ? getRenderOptions(question) : [];
-          }
-
-          function applyEffect(
-            effect: ReturnType<typeof reduceQuestionnaireRuntime>["effect"]
-          ) {
-            if (effect.type === "submit") {
-              submit(effect.cancelled);
-              return;
-            }
-            if (effect.type === "startInput" || effect.type === "clearInput") {
-              editor.setText("");
-            }
-            if (effect.type === "startNote") {
-              editor.setText(state.noteDrafts.get(effect.questionId) ?? "");
-            }
-            if (effect.type !== "none") {
-              refresh();
-            }
-          }
-
-          function dispatch(
-            action: Parameters<typeof reduceQuestionnaireRuntime>[1]
-          ) {
-            const reduced = reduceQuestionnaireRuntime(
-              state,
-              action,
-              questions
-            );
-            state = reduced.state;
-            applyEffect(reduced.effect);
-          }
-
-          editor.onSubmit = (value) => {
-            if (state.notesMode && state.noteQuestionId) {
-              dispatch({
-                type: "saveNoteDraft",
-                questionId: state.noteQuestionId,
-                value,
-              });
-              return;
-            }
-            if (!state.inputQuestionId) {
-              return;
-            }
+        editor.onSubmit = (value) => {
+          if (state.notesMode && state.noteQuestionId) {
             dispatch({
-              type: "saveCustomAnswer",
-              questionId: state.inputQuestionId,
+              type: "saveNoteDraft",
+              questionId: state.noteQuestionId,
               value,
             });
-          };
-
-          function handleInput(data: string) {
-            const action = routeQuestionnaireKey({
-              data,
-              state,
-              questions,
-              options: currentOptions(),
-              allAnswered: isAllAnswered(questions, state.answers),
-              previewNotesEnabled: canUsePreviewNotes(),
-            });
-
-            if (!action) {
-              return;
-            }
-            if (action.type === "editor") {
-              editor.handleInput(data);
-              refresh();
-              return;
-            }
-            dispatch(action);
+            return;
           }
+          if (!state.inputQuestionId) {
+            return;
+          }
+          dispatch({
+            type: "saveCustomAnswer",
+            questionId: state.inputQuestionId,
+            value,
+          });
+        };
 
-          function render(width: number): string[] {
-            if (cachedLines) {
-              return cachedLines;
-            }
+        function handleInput(data: string) {
+          const action = routeAskKey({
+            data,
+            state,
+            questions,
+            options: currentOptions(),
+            allAnswered: isAllAnswered(questions, state.answers),
+            previewNotesEnabled: canUsePreviewNotes(),
+          });
 
-            cachedLines = renderQuestionnaireRuntime({
-              width,
-              theme,
-              questions,
-              state,
-              options: currentOptions(),
-              editor,
-              previewEnabled: canUsePreview(),
-            });
+          if (!action) {
+            return;
+          }
+          if (action.type === "editor") {
+            editor.handleInput(data);
+            refresh();
+            return;
+          }
+          dispatch(action);
+        }
+
+        function render(width: number): string[] {
+          if (cachedLines) {
             return cachedLines;
           }
 
-          return {
-            render,
-            invalidate: () => {
-              cachedLines = undefined;
-            },
-            handleInput,
-          };
+          cachedLines = renderAskRuntime({
+            width,
+            theme,
+            questions,
+            state,
+            options: currentOptions(),
+            editor,
+            previewEnabled: canUsePreview(),
+          });
+          return cachedLines;
         }
-      );
 
-      return createQuestionnaireEnvelope({ ...result, questions });
+        return {
+          render,
+          invalidate: () => {
+            cachedLines = undefined;
+          },
+          handleInput,
+        };
+      });
+
+      return createAskEnvelope({ ...result, questions });
     },
 
     renderCall(args, theme) {
@@ -623,7 +612,7 @@ export default function questionnaire(pi: ExtensionAPI): void {
     },
 
     renderResult(result, options, theme) {
-      const details = result.details as QuestionnaireResult | undefined;
+      const details = result.details as AskResult | undefined;
       if (!details) {
         const text = result.content[0];
         return renderResultText(text?.type === "text" ? text.text : "");
@@ -764,10 +753,10 @@ QUESTION-ASKING RULES:
       return;
     }
 
-    const usedQuestionnaire = event.messages.some(
+    const usedAsk = event.messages.some(
       (message) => message.role === "toolResult" && message.toolName === "ask"
     );
-    if (usedQuestionnaire) {
+    if (usedAsk) {
       return;
     }
 
@@ -791,7 +780,7 @@ QUESTION-ASKING RULES:
     const shouldAutoRedirect =
       lastInputSource === "interactive" && !redirectedAlready;
 
-    pi.appendEntry(QUESTIONNAIRE_MISS_LOG_TYPE, {
+    pi.appendEntry(LEGACY_ASK_MISS_LOG_TYPE, {
       source: lastInputSource,
       redirectedAlready,
       autoRedirected: shouldAutoRedirect,
@@ -822,8 +811,8 @@ QUESTION-ASKING RULES:
 
     pi.sendMessage(
       {
-        customType: QUESTIONNAIRE_REDIRECT_MESSAGE_TYPE,
-        content: getQuestionnaireRedirectCorrectionMessage(),
+        customType: LEGACY_ASK_REDIRECT_MESSAGE_TYPE,
+        content: getAskRedirectCorrectionMessage(),
         display: false,
       },
       { triggerTurn: true }

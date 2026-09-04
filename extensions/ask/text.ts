@@ -98,7 +98,7 @@ export function stripTerminalControlsUpTo(
   return { text: out, truncated: inputLimit < text.length };
 }
 
-export function wrapQuestionnaireText(text: string, width: number): string[] {
+export function wrapAskText(text: string, width: number): string[] {
   const clampedWidth = Math.max(1, width);
   const normalized = stripTerminalControls(text).replace(/\t/g, "    ");
 

@@ -1,4 +1,4 @@
-import type { Answer, Question, QuestionnaireResult } from "./types";
+import type { Answer, AskResult, Question } from "./types";
 
 function createAnswerSummary(questions: Question[], answers: Answer[]): string {
   return answers
@@ -22,13 +22,13 @@ function createAnswerSummary(questions: Question[], answers: Answer[]): string {
     .join("\n");
 }
 
-export function createQuestionnaireEnvelope(result: QuestionnaireResult): {
+export function createAskEnvelope(result: AskResult): {
   content: { type: "text"; text: string }[];
-  details: QuestionnaireResult;
+  details: AskResult;
 } {
   if (result.cancelled) {
     return {
-      content: [{ type: "text", text: "User cancelled the questionnaire" }],
+      content: [{ type: "text", text: "User cancelled the ask" }],
       details: result,
     };
   }

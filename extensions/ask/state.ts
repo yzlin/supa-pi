@@ -1,6 +1,6 @@
 import type { Answer, Question, RenderOption } from "./types";
 
-export interface QuestionnaireRuntimeState {
+export interface AskRuntimeState {
   currentTab: number;
   optionIndex: number;
   inputMode: boolean;
@@ -12,7 +12,7 @@ export interface QuestionnaireRuntimeState {
   multiSelections: Map<string, Set<string>>;
 }
 
-export type QuestionnaireRuntimeEffect =
+export type AskRuntimeEffect =
   | { type: "none" }
   | { type: "refresh" }
   | { type: "submit"; cancelled: boolean }
@@ -20,7 +20,7 @@ export type QuestionnaireRuntimeEffect =
   | { type: "startNote"; questionId: string }
   | { type: "clearInput" };
 
-export type QuestionnaireRuntimeAction =
+export type AskRuntimeAction =
   | { type: "cancel" }
   | { type: "moveOption"; delta: -1 | 1; optionCount: number }
   | { type: "moveTab"; delta: -1 | 1; totalTabs: number }
@@ -36,7 +36,7 @@ export type QuestionnaireRuntimeAction =
   | { type: "saveNoteDraft"; questionId: string; value: string }
   | { type: "exitInput" };
 
-export function createQuestionnaireRuntimeState(): QuestionnaireRuntimeState {
+export function createAskRuntimeState(): AskRuntimeState {
   return {
     currentTab: 0,
     optionIndex: 0,
@@ -58,9 +58,9 @@ export function isAllAnswered(
 }
 
 export function advanceAfterAnswer(
-  state: QuestionnaireRuntimeState,
+  state: AskRuntimeState,
   questions: Question[]
-): QuestionnaireRuntimeState {
+): AskRuntimeState {
   if (questions.length <= 1) {
     return state;
   }
@@ -76,10 +76,10 @@ export function advanceAfterAnswer(
 }
 
 function withAnswer(
-  state: QuestionnaireRuntimeState,
+  state: AskRuntimeState,
   answer: Answer,
   questions: Question[]
-): QuestionnaireRuntimeState {
+): AskRuntimeState {
   const answers = new Map(state.answers);
   answers.set(answer.id, answer);
   return advanceAfterAnswer(
@@ -93,11 +93,11 @@ function withAnswer(
   );
 }
 
-export function reduceQuestionnaireRuntime(
-  state: QuestionnaireRuntimeState,
-  action: QuestionnaireRuntimeAction,
+export function reduceAskRuntime(
+  state: AskRuntimeState,
+  action: AskRuntimeAction,
   questions: Question[]
-): { state: QuestionnaireRuntimeState; effect: QuestionnaireRuntimeEffect } {
+): { state: AskRuntimeState; effect: AskRuntimeEffect } {
   switch (action.type) {
     case "cancel":
       return { state, effect: { type: "submit", cancelled: true } };

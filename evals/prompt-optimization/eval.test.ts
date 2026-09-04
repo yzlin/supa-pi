@@ -129,10 +129,10 @@ describe("parseCorpus", () => {
       promptPath: "skills/diagnose/SKILL.md",
       task: "Ask before fixing.",
       tools: ["ask"],
-      questionnaireResponse: "Approve scoped fix",
+      askResponse: "Approve scoped fix",
       checks: [
         {
-          type: "questionnaireGate",
+          type: "askGate",
           domain: "task",
           weight: 1,
         },
@@ -911,13 +911,13 @@ describe("committed corpus", () => {
       expect(evalCase?.tools).toContain("ask");
       expect(evalCase?.checks).toContainEqual(
         expect.objectContaining({
-          type: "questionnaireGate",
+          type: "askGate",
           domain: "task",
         })
       );
     }
     const approvedCase = caseById.get("diagnose-proven-gate-approved");
-    expect(approvedCase?.questionnaireResponse).toBe("Approve scoped fix");
+    expect(approvedCase?.askResponse).toBe("Approve scoped fix");
     expect(approvedCase?.checks).toContainEqual(
       expect.objectContaining({
         type: "toolCalledAfter",
@@ -1091,12 +1091,12 @@ describe("committed corpus", () => {
     }
 
     const stopCase = caseById.get("diagnose-fix-it-stop");
-    expect(stopCase?.questionnaireResponse).toBe("Stop and clean probes");
+    expect(stopCase?.askResponse).toBe("Stop and clean probes");
     expect(stopCase?.checks).toContainEqual(
       expect.objectContaining({ type: "workspaceUnchanged", domain: "tests" })
     );
     for (const evalCase of diagnoseCases.filter(
-      (candidate) => candidate.questionnaireResponse !== "Approve scoped fix"
+      (candidate) => candidate.askResponse !== "Approve scoped fix"
     )) {
       expect(evalCase.checks).toContainEqual(
         expect.objectContaining({
@@ -2295,9 +2295,9 @@ describe("scoreRun and aggregateVariants", () => {
     expect(result.checks[0]?.evidence).toBe("workspace changed");
   });
 
-  it("scores the internal questionnaire gate from an ask call", async () => {
+  it("scores the internal ask gate from an ask call", async () => {
     const checks: Parameters<typeof scoreRun>[1] = [
-      { type: "questionnaireGate", domain: "task", weight: 1 },
+      { type: "askGate", domain: "task", weight: 1 },
     ];
     const questions = [
       {
@@ -2348,7 +2348,7 @@ describe("scoreRun and aggregateVariants", () => {
             name: "ask",
             args: { questions: [] },
             assistantTurn: 1,
-            questionnaireResponse: "Approve scoped fix",
+            askResponse: "Approve scoped fix",
           },
           { name: "edit", args: { path: "src/math.ts" }, assistantTurn: 2 },
         ],
@@ -2378,7 +2378,7 @@ describe("scoreRun and aggregateVariants", () => {
             args: { questions: [] },
             assistantTurn: 0,
             isError: false,
-            questionnaireResponse: "Approve scoped fix",
+            askResponse: "Approve scoped fix",
           },
           {
             name: "edit",

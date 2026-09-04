@@ -1,8 +1,8 @@
 import type { Editor } from "@earendil-works/pi-tui";
 import { truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
 
-import { isAllAnswered, type QuestionnaireRuntimeState } from "./state";
-import { stripTerminalControlsUpTo, wrapQuestionnaireText } from "./text";
+import { type AskRuntimeState, isAllAnswered } from "./state";
+import { stripTerminalControlsUpTo, wrapAskText } from "./text";
 import type { Question, RenderOption } from "./types";
 
 const PREVIEW_OPENING_CODE_FENCE_REGEX = /^```[\w-]*\s*$/;
@@ -16,17 +16,17 @@ const OPTION_LABEL_MAX_LINES = 6;
 const NOTE_PREVIEW_MAX_LINES = 6;
 const PREVIEW_LAYOUT_MIN_WIDTH = 72;
 
-interface QuestionnaireTheme {
+interface AskTheme {
   fg(color: string, text: string): string;
   bg(color: string, text: string): string;
   bold(text: string): string;
 }
 
-export function renderQuestionnaireRuntime(args: {
+export function renderAskRuntime(args: {
   width: number;
-  theme: QuestionnaireTheme;
+  theme: AskTheme;
   questions: Question[];
-  state: QuestionnaireRuntimeState;
+  state: AskRuntimeState;
   options: RenderOption[];
   editor: Editor;
   previewEnabled?: boolean;
@@ -40,7 +40,7 @@ export function renderQuestionnaireRuntime(args: {
   const add = (text: string) => lines.push(truncateToWidth(text, width));
   const addWrapped = (text: string, indent: string, color: string) => {
     const contentWidth = Math.max(1, width - indent.length);
-    for (const line of wrapQuestionnaireText(text, contentWidth)) {
+    for (const line of wrapAskText(text, contentWidth)) {
       add(`${indent}${theme.fg(color, line)}`);
     }
   };
@@ -62,7 +62,7 @@ export function renderQuestionnaireRuntime(args: {
     const note = question ? state.noteDrafts.get(question.id) : undefined;
     const contentWidth = Math.max(1, paneWidth - 1);
     const wrappedNoteLines = note
-      ? wrapCappedQuestionnaireText(note, contentWidth, NOTE_PREVIEW_MAX_LINES)
+      ? wrapCappedAskText(note, contentWidth, NOTE_PREVIEW_MAX_LINES)
       : [];
     const previewLines = wrappedNoteLines.some((line) => line.trim().length > 0)
       ? wrappedNoteLines
@@ -292,13 +292,13 @@ function wrapPreviewText(
   options: { maxLines?: number } = {}
 ): string[] {
   if (!options.maxLines) {
-    return wrapQuestionnaireText(stripOuterCodeFence(text), width);
+    return wrapAskText(stripOuterCodeFence(text), width);
   }
 
   const maxChars = Math.max(1, width) * options.maxLines;
   const cappedText = prepareCappedPreviewText(text, maxChars).text;
   return capWrappedLines(
-    wrapQuestionnaireText(cappedText, width),
+    wrapAskText(cappedText, width),
     width,
     options.maxLines
   );
@@ -316,7 +316,7 @@ function stripTrailingOuterClosingFence(text: string): string {
   return text;
 }
 
-function wrapCappedQuestionnaireText(
+function wrapCappedAskText(
   text: string,
   width: number,
   maxLines: number
@@ -327,11 +327,7 @@ function wrapCappedQuestionnaireText(
   const cappedText = truncated
     ? `${sanitized.text.slice(0, maxChars)}…`
     : sanitized.text;
-  return capWrappedLines(
-    wrapQuestionnaireText(cappedText, width),
-    width,
-    maxLines
-  );
+  return capWrappedLines(wrapAskText(cappedText, width), width, maxLines);
 }
 
 function capWrappedLines(
@@ -383,8 +379,8 @@ function formatOptionBlockForWidth(
   width: number,
   selected: boolean,
   question: Question | undefined,
-  state: QuestionnaireRuntimeState,
-  theme: QuestionnaireTheme
+  state: AskRuntimeState,
+  theme: AskTheme
 ): string[] {
   const cursor = selected ? "> " : "  ";
   let marker = `${index + 1}. `;
@@ -402,7 +398,7 @@ function formatOptionBlockForWidth(
   const color = selected ? "accent" : "text";
   const contentWidth = Math.max(1, width - visibleWidth(cursor + marker));
   const continuation = " ".repeat(visibleWidth(cursor + marker));
-  const block = wrapCappedQuestionnaireText(
+  const block = wrapCappedAskText(
     title,
     contentWidth,
     OPTION_LABEL_MAX_LINES
@@ -412,10 +408,7 @@ function formatOptionBlockForWidth(
   });
 
   if (option.description) {
-    for (const line of wrapQuestionnaireText(
-      option.description,
-      contentWidth
-    )) {
+    for (const line of wrapAskText(option.description, contentWidth)) {
       block.push(continuation + theme.fg(selected ? "accent" : "muted", line));
     }
   }
@@ -425,7 +418,7 @@ function formatOptionBlockForWidth(
 function getOptionPreviewLines(
   option: RenderOption | undefined,
   width: number,
-  theme: QuestionnaireTheme
+  theme: AskTheme
 ): string[] {
   const preview =
     option?.isOther === true
@@ -446,7 +439,7 @@ function padToVisibleWidth(text: string, width: number): string {
 
 function renderSubmitPicker(args: {
   add(text: string): void;
-  theme: QuestionnaireTheme;
+  theme: AskTheme;
   selectedIndex: number;
   allAnswered: boolean;
 }) {
@@ -470,9 +463,9 @@ function renderSubmitPicker(args: {
 
 function renderTabs(args: {
   add(text: string): void;
-  theme: QuestionnaireTheme;
+  theme: AskTheme;
   questions: Question[];
-  state: QuestionnaireRuntimeState;
+  state: AskRuntimeState;
 }) {
   const { add, theme, questions, state } = args;
   const tabs: string[] = ["← "];

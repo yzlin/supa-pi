@@ -2,23 +2,20 @@ import { describe, expect, it } from "bun:test";
 
 import { visibleWidth } from "@earendil-works/pi-tui";
 
-import questionnaire, {
+import ask, {
   CUSTOM_OPTION_LABEL,
   CUSTOM_OPTION_VALUE,
-  createQuestionnaireEnvelope,
-  getQuestionnaireRedirectCorrectionMessage,
+  createAskEnvelope,
+  getAskRedirectCorrectionMessage,
   getRenderOptions,
   NEXT_OPTION_LABEL,
   NEXT_OPTION_VALUE,
-  validateQuestionnaireParams,
-  wrapQuestionnaireText,
+  validateAskParams,
+  wrapAskText,
 } from "./index";
-import { routeQuestionnaireKey } from "./keys";
-import { renderQuestionnaireRuntime } from "./render";
-import {
-  createQuestionnaireRuntimeState,
-  reduceQuestionnaireRuntime,
-} from "./state";
+import { routeAskKey } from "./keys";
+import { renderAskRuntime } from "./render";
+import { createAskRuntimeState, reduceAskRuntime } from "./state";
 import { stripTerminalControlsUpTo } from "./text";
 
 const PLAIN_THEME = {
@@ -64,7 +61,7 @@ const VALID_EXECUTE_PARAMS = {
   ],
 };
 
-function registerQuestionnaireTool() {
+function registerAskTool() {
   let registeredTool: {
     execute: (...args: unknown[]) => Promise<unknown>;
     renderResult: (...args: unknown[]) => {
@@ -72,7 +69,7 @@ function registerQuestionnaireTool() {
       invalidate(): void;
     };
   } | null = null;
-  questionnaire({
+  ask({
     registerTool(tool: {
       execute: (...args: unknown[]) => Promise<unknown>;
       renderResult: (...args: unknown[]) => {
@@ -97,15 +94,15 @@ function registerQuestionnaireTool() {
   } as never);
 
   if (!registeredTool) {
-    throw new Error("questionnaire tool was not registered");
+    throw new Error("ask tool was not registered");
   }
   return registeredTool;
 }
 
-function executeQuestionnaireWithCustom(
+function executeAskWithCustom(
   custom: (renderFactory: unknown) => unknown | Promise<unknown>
 ) {
-  const tool = registerQuestionnaireTool();
+  const tool = registerAskTool();
   return tool.execute("tool-call", VALID_EXECUTE_PARAMS, undefined, undefined, {
     hasUI: true,
     ui: {
@@ -117,23 +114,23 @@ function executeQuestionnaireWithCustom(
   });
 }
 
-function renderQuestionnaireResult(result: unknown, expanded: boolean): string {
-  const tool = registerQuestionnaireTool();
+function renderAskResult(result: unknown, expanded: boolean): string {
+  const tool = registerAskTool();
   return tool
     .renderResult(result, { expanded }, PLAIN_THEME)
     .render(10_000)
     .join("\n");
 }
 
-describe("questionnaire public runtime boundary", () => {
-  it("exposes ask without old aliases while preserving persisted questionnaire identifiers", async () => {
+describe("ask public runtime boundary", () => {
+  it("exposes ask without old aliases while preserving legacy persisted custom entry identifiers", async () => {
     const tools: any[] = [];
     const commands = new Map<string, any>();
     const handlers = new Map<string, (...args: any[]) => any>();
     const appendEntryCalls: Array<{ type: string; data: any }> = [];
     const sendMessageCalls: Array<{ message: any; options?: any }> = [];
 
-    questionnaire({
+    ask({
       registerTool(tool: any) {
         tools.push(tool);
       },
@@ -168,7 +165,7 @@ describe("questionnaire public runtime boundary", () => {
       tools[0]?.promptSnippet,
       ...(tools[0]?.promptGuidelines ?? []),
       guidance?.systemPrompt,
-      getQuestionnaireRedirectCorrectionMessage(),
+      getAskRedirectCorrectionMessage(),
     ].join("\n");
     expect(askFacingCopy.toLowerCase()).toContain("ask");
     expect(askFacingCopy.toLowerCase()).not.toContain("questionnaire");
@@ -247,10 +244,10 @@ describe("questionnaire public runtime boundary", () => {
   });
 });
 
-describe("questionnaire custom UI execution", () => {
+describe("ask custom UI execution", () => {
   it("executes the custom UI component and returns the selected answer", async () => {
     let customCalls = 0;
-    const result = await executeQuestionnaireWithCustom((renderFactory) => {
+    const result = await executeAskWithCustom((renderFactory) => {
       customCalls++;
       let submitted: unknown;
       const component = (
@@ -299,14 +296,14 @@ describe("questionnaire custom UI execution", () => {
 
   it("propagates errors thrown by the custom UI", async () => {
     await expect(
-      executeQuestionnaireWithCustom(() => {
+      executeAskWithCustom(() => {
         throw new Error("custom UI failed");
       })
     ).rejects.toThrow("custom UI failed");
   });
 
   it("returns validation errors without opening the custom UI", async () => {
-    const tool = registerQuestionnaireTool();
+    const tool = registerAskTool();
     const result = await tool.execute(
       "tool-call",
       { questions: [] },
@@ -344,12 +341,12 @@ describe("questionnaire custom UI execution", () => {
   });
 });
 
-describe("wrapQuestionnaireText", () => {
-  it("wraps long questionnaire copy instead of truncating it", () => {
+describe("wrapAskText", () => {
+  it("wraps long ask copy instead of truncating it", () => {
     const text =
-      "This is a long questionnaire description that should wrap across multiple lines instead of getting cut off.";
+      "This is a long ask description that should wrap across multiple lines instead of getting cut off.";
 
-    const lines = wrapQuestionnaireText(text, 24);
+    const lines = wrapAskText(text, 24);
 
     expect(lines.length).toBeGreaterThan(1);
     expect(lines.join(" ").replace(/\s+/g, " ").trim()).toBe(
@@ -360,8 +357,8 @@ describe("wrapQuestionnaireText", () => {
     }
   });
 
-  it("strips terminal control sequences from questionnaire text", () => {
-    const lines = wrapQuestionnaireText(
+  it("strips terminal control sequences from ask text", () => {
+    const lines = wrapAskText(
       "Safe\u001b[2J text\u001b]52;c;SGVsbG8=\u0007 done",
       80
     );
@@ -370,9 +367,9 @@ describe("wrapQuestionnaireText", () => {
   });
 });
 
-describe("getQuestionnaireRedirectCorrectionMessage", () => {
-  it("tells the assistant to continue the original task after the questionnaire answer", () => {
-    const message = getQuestionnaireRedirectCorrectionMessage();
+describe("getAskRedirectCorrectionMessage", () => {
+  it("tells the assistant to continue the original task after the ask answer", () => {
+    const message = getAskRedirectCorrectionMessage();
 
     expect(message).toContain("continue the original task immediately");
     expect(message).toContain("provide the pending result");
@@ -431,7 +428,7 @@ describe("getRenderOptions", () => {
   });
 });
 
-describe("validateQuestionnaireParams", () => {
+describe("validateAskParams", () => {
   const validQuestion = {
     id: "format",
     label: "Format",
@@ -443,13 +440,13 @@ describe("validateQuestionnaireParams", () => {
   };
 
   it("accepts 1-3 questions with 2-5 options", () => {
-    expect(
-      validateQuestionnaireParams({ questions: [validQuestion] })
-    ).toMatchObject({ valid: true });
+    expect(validateAskParams({ questions: [validQuestion] })).toMatchObject({
+      valid: true,
+    });
   });
 
   it("uses ask-facing wording when rejecting invalid question counts", () => {
-    const result = validateQuestionnaireParams({ questions: [] });
+    const result = validateAskParams({ questions: [] });
 
     expect(result).toMatchObject({
       valid: false,
@@ -464,7 +461,7 @@ describe("validateQuestionnaireParams", () => {
   });
 
   it("rejects duplicate question ids", () => {
-    const result = validateQuestionnaireParams({
+    const result = validateAskParams({
       questions: [validQuestion, { ...validQuestion, label: "Other" }],
     });
 
@@ -475,7 +472,7 @@ describe("validateQuestionnaireParams", () => {
   });
 
   it("rejects invalid counts, duplicate options, and reserved sentinels", () => {
-    const result = validateQuestionnaireParams({
+    const result = validateAskParams({
       questions: [
         {
           ...validQuestion,
@@ -510,7 +507,7 @@ describe("validateQuestionnaireParams", () => {
 
   it("allows multi-select option previews", () => {
     expect(
-      validateQuestionnaireParams({
+      validateAskParams({
         questions: [
           {
             id: "scope",
@@ -527,7 +524,7 @@ describe("validateQuestionnaireParams", () => {
   });
 });
 
-describe("questionnaire reducer and key router", () => {
+describe("ask reducer and key router", () => {
   const questions = [
     {
       id: "format",
@@ -550,14 +547,14 @@ describe("questionnaire reducer and key router", () => {
   ];
 
   it("wraps option selection at list boundaries", () => {
-    const state = createQuestionnaireRuntimeState();
+    const state = createAskRuntimeState();
 
-    const upResult = reduceQuestionnaireRuntime(
+    const upResult = reduceAskRuntime(
       state,
       { type: "moveOption", delta: -1, optionCount: 2 },
       questions
     );
-    const downResult = reduceQuestionnaireRuntime(
+    const downResult = reduceAskRuntime(
       upResult.state,
       { type: "moveOption", delta: 1, optionCount: 2 },
       questions
@@ -569,9 +566,9 @@ describe("questionnaire reducer and key router", () => {
   });
 
   it("saves a selected answer and advances to the next question", () => {
-    const state = createQuestionnaireRuntimeState();
+    const state = createAskRuntimeState();
 
-    const result = reduceQuestionnaireRuntime(
+    const result = reduceAskRuntime(
       state,
       {
         type: "selectOption",
@@ -594,7 +591,7 @@ describe("questionnaire reducer and key router", () => {
   });
 
   it("routes vim navigation keys like arrow navigation", () => {
-    const state = createQuestionnaireRuntimeState();
+    const state = createAskRuntimeState();
     const options = getRenderOptions(questions[0]);
     const cases = [
       { data: "j", action: { type: "moveOption", delta: 1, optionCount: 3 } },
@@ -605,7 +602,7 @@ describe("questionnaire reducer and key router", () => {
 
     for (const { data, action } of cases) {
       expect(
-        routeQuestionnaireKey({
+        routeAskKey({
           data,
           state,
           questions,
@@ -619,12 +616,12 @@ describe("questionnaire reducer and key router", () => {
   it("keeps vim navigation keys in editor and note modes as editor input", () => {
     const modes = [
       {
-        ...createQuestionnaireRuntimeState(),
+        ...createAskRuntimeState(),
         inputMode: true,
         inputQuestionId: "format",
       },
       {
-        ...createQuestionnaireRuntimeState(),
+        ...createAskRuntimeState(),
         notesMode: true,
         noteQuestionId: "format",
       },
@@ -633,7 +630,7 @@ describe("questionnaire reducer and key router", () => {
     for (const state of modes) {
       for (const data of ["j", "k", "h", "l"]) {
         expect(
-          routeQuestionnaireKey({
+          routeAskKey({
             data,
             state,
             questions,
@@ -646,10 +643,10 @@ describe("questionnaire reducer and key router", () => {
   });
 
   it("routes enter to custom input when Type something is selected", () => {
-    const state = { ...createQuestionnaireRuntimeState(), optionIndex: 2 };
+    const state = { ...createAskRuntimeState(), optionIndex: 2 };
     const options = getRenderOptions(questions[0]);
 
-    const action = routeQuestionnaireKey({
+    const action = routeAskKey({
       data: "\r",
       state,
       questions,
@@ -665,12 +662,12 @@ describe("questionnaire reducer and key router", () => {
 
   it("rejects empty custom answers and keeps input open", () => {
     const state = {
-      ...createQuestionnaireRuntimeState(),
+      ...createAskRuntimeState(),
       inputMode: true,
       inputQuestionId: "format",
     };
 
-    const result = reduceQuestionnaireRuntime(
+    const result = reduceAskRuntime(
       state,
       { type: "saveCustomAnswer", questionId: "format", value: "   " },
       questions
@@ -684,20 +681,20 @@ describe("questionnaire reducer and key router", () => {
 
   it("keeps submit disabled until all questions are answered", () => {
     const state = {
-      ...createQuestionnaireRuntimeState(),
+      ...createAskRuntimeState(),
       currentTab: questions.length,
     };
 
-    const action = routeQuestionnaireKey({
+    const action = routeAskKey({
       data: "\r",
       state,
       questions,
       options: [],
       allAnswered: false,
     });
-    const result = reduceQuestionnaireRuntime(
+    const result = reduceAskRuntime(
       state,
-      action as Parameters<typeof reduceQuestionnaireRuntime>[1],
+      action as Parameters<typeof reduceAskRuntime>[1],
       questions
     );
 
@@ -707,12 +704,12 @@ describe("questionnaire reducer and key router", () => {
 
   it("allows cancel from the submit picker even with missing answers", () => {
     const state = {
-      ...createQuestionnaireRuntimeState(),
+      ...createAskRuntimeState(),
       currentTab: questions.length,
       optionIndex: 1,
     };
 
-    const action = routeQuestionnaireKey({
+    const action = routeAskKey({
       data: "\r",
       state,
       questions,
@@ -725,20 +722,20 @@ describe("questionnaire reducer and key router", () => {
 
   it("wraps submit picker rows", () => {
     const state = {
-      ...createQuestionnaireRuntimeState(),
+      ...createAskRuntimeState(),
       currentTab: questions.length,
     };
 
-    const action = routeQuestionnaireKey({
+    const action = routeAskKey({
       data: "\u001b[A",
       state,
       questions,
       options: [],
       allAnswered: false,
     });
-    const result = reduceQuestionnaireRuntime(
+    const result = reduceAskRuntime(
       state,
-      action as Parameters<typeof reduceQuestionnaireRuntime>[1],
+      action as Parameters<typeof reduceAskRuntime>[1],
       questions
     );
 
@@ -748,10 +745,10 @@ describe("questionnaire reducer and key router", () => {
 
   it("renders a submit and cancel picker with disabled submit copy", () => {
     const state = {
-      ...createQuestionnaireRuntimeState(),
+      ...createAskRuntimeState(),
       currentTab: questions.length,
     };
-    const lines = renderQuestionnaireRuntime({
+    const lines = renderAskRuntime({
       width: 80,
       theme: PLAIN_THEME,
       questions,
@@ -777,46 +774,46 @@ describe("questionnaire reducer and key router", () => {
       ],
     };
     const options = getRenderOptions(multiQuestion);
-    let state = createQuestionnaireRuntimeState();
+    let state = createAskRuntimeState();
 
-    const firstAction = routeQuestionnaireKey({
+    const firstAction = routeAskKey({
       data: " ",
       state,
       questions: [multiQuestion],
       options,
       allAnswered: false,
     });
-    let result = reduceQuestionnaireRuntime(
+    let result = reduceAskRuntime(
       state,
-      firstAction as Parameters<typeof reduceQuestionnaireRuntime>[1],
+      firstAction as Parameters<typeof reduceAskRuntime>[1],
       [multiQuestion]
     );
     state = { ...result.state, optionIndex: 2 };
 
-    const secondAction = routeQuestionnaireKey({
+    const secondAction = routeAskKey({
       data: "\r",
       state,
       questions: [multiQuestion],
       options,
       allAnswered: false,
     });
-    result = reduceQuestionnaireRuntime(
+    result = reduceAskRuntime(
       state,
-      secondAction as Parameters<typeof reduceQuestionnaireRuntime>[1],
+      secondAction as Parameters<typeof reduceAskRuntime>[1],
       [multiQuestion]
     );
     state = { ...result.state, optionIndex: 3 };
 
-    const nextAction = routeQuestionnaireKey({
+    const nextAction = routeAskKey({
       data: "\r",
       state,
       questions: [multiQuestion],
       options,
       allAnswered: false,
     });
-    result = reduceQuestionnaireRuntime(
+    result = reduceAskRuntime(
       state,
-      nextAction as Parameters<typeof reduceQuestionnaireRuntime>[1],
+      nextAction as Parameters<typeof reduceAskRuntime>[1],
       [multiQuestion]
     );
 
@@ -848,20 +845,20 @@ describe("questionnaire reducer and key router", () => {
         { value: "text", label: "Text", preview: "Plain text output" },
       ],
     };
-    const wideLines = renderQuestionnaireRuntime({
+    const wideLines = renderAskRuntime({
       width: 100,
       theme: PLAIN_THEME,
       questions: [question],
-      state: createQuestionnaireRuntimeState(),
+      state: createAskRuntimeState(),
       options: getRenderOptions(question),
       editor: EMPTY_EDITOR as never,
       previewEnabled: true,
     });
     const customState = {
-      ...createQuestionnaireRuntimeState(),
+      ...createAskRuntimeState(),
       optionIndex: 2,
     };
-    const narrowLines = renderQuestionnaireRuntime({
+    const narrowLines = renderAskRuntime({
       width: 60,
       theme: PLAIN_THEME,
       questions: [question],
@@ -896,10 +893,10 @@ describe("questionnaire reducer and key router", () => {
         { value: "tests", label: "Tests", preview: "Tests preview" },
       ],
     };
-    const state = { ...createQuestionnaireRuntimeState(), optionIndex: 1 };
+    const state = { ...createAskRuntimeState(), optionIndex: 1 };
     state.multiSelections.set("scope", new Set(["docs"]));
 
-    const wideOutput = renderQuestionnaireRuntime({
+    const wideOutput = renderAskRuntime({
       width: 100,
       theme: PLAIN_THEME,
       questions: [question],
@@ -908,7 +905,7 @@ describe("questionnaire reducer and key router", () => {
       editor: EMPTY_EDITOR as never,
       previewEnabled: true,
     }).join("\n");
-    const narrowOutput = renderQuestionnaireRuntime({
+    const narrowOutput = renderAskRuntime({
       width: 60,
       theme: PLAIN_THEME,
       questions: [question],
@@ -943,11 +940,11 @@ describe("questionnaire reducer and key router", () => {
       options: [{ value: "docs", label: "Docs", preview }],
     };
 
-    const lines = renderQuestionnaireRuntime({
+    const lines = renderAskRuntime({
       width: 60,
       theme: PLAIN_THEME,
       questions: [question],
-      state: createQuestionnaireRuntimeState(),
+      state: createAskRuntimeState(),
       options: getRenderOptions(question),
       editor: EMPTY_EDITOR as never,
       previewEnabled: true,
@@ -981,7 +978,7 @@ describe("questionnaire reducer and key router", () => {
       ],
     };
     const state = {
-      ...createQuestionnaireRuntimeState(),
+      ...createAskRuntimeState(),
       currentTab: 1,
       answers: new Map([
         [
@@ -999,7 +996,7 @@ describe("questionnaire reducer and key router", () => {
       ]),
     };
 
-    const output = renderQuestionnaireRuntime({
+    const output = renderAskRuntime({
       width: 100,
       theme: PLAIN_THEME,
       questions: [question],
@@ -1024,10 +1021,10 @@ describe("questionnaire reducer and key router", () => {
       prompt: "Which format?",
       options: [{ value: "json", label: "JSON", preview: "Structured JSON" }],
     };
-    const state = createQuestionnaireRuntimeState();
+    const state = createAskRuntimeState();
     state.noteDrafts.set("format", "Remember to include schema details.");
 
-    const lines = renderQuestionnaireRuntime({
+    const lines = renderAskRuntime({
       width: 100,
       theme: PLAIN_THEME,
       questions: [question],
@@ -1051,10 +1048,10 @@ describe("questionnaire reducer and key router", () => {
       prompt: "Which format?",
       options: [{ value: "json", label: "JSON", preview: "Structured JSON" }],
     };
-    const state = createQuestionnaireRuntimeState();
+    const state = createAskRuntimeState();
     state.noteDrafts.set("format", "note ".repeat(10_000));
 
-    const lines = renderQuestionnaireRuntime({
+    const lines = renderAskRuntime({
       width: 80,
       theme: PLAIN_THEME,
       questions: [question],
@@ -1081,7 +1078,7 @@ describe("questionnaire reducer and key router", () => {
       prompt: "Which format?",
       options: [{ value: "json", label: "JSON", preview: "Structured JSON" }],
     };
-    const state = createQuestionnaireRuntimeState();
+    const state = createAskRuntimeState();
     state.noteDrafts.set("format", "note ".repeat(10_000));
     const originalTrim = String.prototype.trim;
     String.prototype.trim = function trimWithoutLongInputs() {
@@ -1093,7 +1090,7 @@ describe("questionnaire reducer and key router", () => {
 
     try {
       expect(() =>
-        renderQuestionnaireRuntime({
+        renderAskRuntime({
           width: 80,
           theme: PLAIN_THEME,
           questions: [question],
@@ -1131,11 +1128,11 @@ describe("questionnaire reducer and key router", () => {
 
     try {
       expect(() =>
-        renderQuestionnaireRuntime({
+        renderAskRuntime({
           width: 80,
           theme: PLAIN_THEME,
           questions: [question],
-          state: createQuestionnaireRuntimeState(),
+          state: createAskRuntimeState(),
           options: getRenderOptions(question),
           editor: EMPTY_EDITOR as never,
           previewEnabled: true,
@@ -1161,11 +1158,11 @@ describe("questionnaire reducer and key router", () => {
       ],
     };
 
-    const lines = renderQuestionnaireRuntime({
+    const lines = renderAskRuntime({
       width: 80,
       theme: ANSI_THEME,
       questions: [question],
-      state: createQuestionnaireRuntimeState(),
+      state: createAskRuntimeState(),
       options: getRenderOptions(question),
       editor: EMPTY_EDITOR as never,
       previewEnabled: true,
@@ -1193,20 +1190,20 @@ describe("questionnaire reducer and key router", () => {
       ],
     };
 
-    const previewMinBreakLines = renderQuestionnaireRuntime({
+    const previewMinBreakLines = renderAskRuntime({
       width: 80,
       theme: PLAIN_THEME,
       questions: [question],
-      state: createQuestionnaireRuntimeState(),
+      state: createAskRuntimeState(),
       options: getRenderOptions(question),
       editor: EMPTY_EDITOR as never,
       previewEnabled: true,
     });
-    const titleMinBreakLines = renderQuestionnaireRuntime({
+    const titleMinBreakLines = renderAskRuntime({
       width: 72,
       theme: PLAIN_THEME,
       questions: [question],
-      state: createQuestionnaireRuntimeState(),
+      state: createAskRuntimeState(),
       options: getRenderOptions(question),
       editor: EMPTY_EDITOR as never,
       previewEnabled: true,
@@ -1253,9 +1250,9 @@ describe("questionnaire reducer and key router", () => {
         },
       ],
     };
-    const state = { ...createQuestionnaireRuntimeState(), optionIndex: 1 };
+    const state = { ...createAskRuntimeState(), optionIndex: 1 };
 
-    const rows = renderQuestionnaireRuntime({
+    const rows = renderAskRuntime({
       width: 80,
       theme: ANSI_THEME,
       questions: [question],
@@ -1289,11 +1286,11 @@ describe("questionnaire reducer and key router", () => {
       options: [{ value: "large", label: "Large", preview }],
     };
 
-    const rows = renderQuestionnaireRuntime({
+    const rows = renderAskRuntime({
       width: 80,
       theme: PLAIN_THEME,
       questions: [question],
-      state: createQuestionnaireRuntimeState(),
+      state: createAskRuntimeState(),
       options: getRenderOptions(question),
       editor: EMPTY_EDITOR as never,
       previewEnabled: true,
@@ -1322,11 +1319,11 @@ describe("questionnaire reducer and key router", () => {
       ],
     };
 
-    const rows = renderQuestionnaireRuntime({
+    const rows = renderAskRuntime({
       width: 80,
       theme: PLAIN_THEME,
       questions: [question],
-      state: createQuestionnaireRuntimeState(),
+      state: createAskRuntimeState(),
       options: getRenderOptions(question),
       editor: EMPTY_EDITOR as never,
       previewEnabled: true,
@@ -1352,11 +1349,11 @@ describe("questionnaire reducer and key router", () => {
       ],
     };
 
-    const rows = renderQuestionnaireRuntime({
+    const rows = renderAskRuntime({
       width: 80,
       theme: PLAIN_THEME,
       questions: [question],
-      state: createQuestionnaireRuntimeState(),
+      state: createAskRuntimeState(),
       options: getRenderOptions(question),
       editor: EMPTY_EDITOR as never,
       previewEnabled: true,
@@ -1399,11 +1396,11 @@ describe("questionnaire reducer and key router", () => {
       ],
     };
 
-    const rows = renderQuestionnaireRuntime({
+    const rows = renderAskRuntime({
       width: 80,
       theme: PLAIN_THEME,
       questions: [question],
-      state: createQuestionnaireRuntimeState(),
+      state: createAskRuntimeState(),
       options: getRenderOptions(question),
       editor: EMPTY_EDITOR as never,
       previewEnabled: true,
@@ -1429,11 +1426,11 @@ describe("questionnaire reducer and key router", () => {
       ],
     };
 
-    const rows = renderQuestionnaireRuntime({
+    const rows = renderAskRuntime({
       width: 80,
       theme: PLAIN_THEME,
       questions: [question],
-      state: createQuestionnaireRuntimeState(),
+      state: createAskRuntimeState(),
       options: getRenderOptions(question),
       editor: EMPTY_EDITOR as never,
       previewEnabled: true,
@@ -1468,11 +1465,11 @@ describe("questionnaire reducer and key router", () => {
     };
 
     try {
-      renderQuestionnaireRuntime({
+      renderAskRuntime({
         width: 80,
         theme: PLAIN_THEME,
         questions: [question],
-        state: createQuestionnaireRuntimeState(),
+        state: createAskRuntimeState(),
         options: getRenderOptions(question),
         editor: EMPTY_EDITOR as never,
         previewEnabled: true,
@@ -1492,11 +1489,11 @@ describe("questionnaire reducer and key router", () => {
       options: [{ value: "large", label: "x ".repeat(10_000) }],
     };
 
-    const lines = renderQuestionnaireRuntime({
+    const lines = renderAskRuntime({
       width: 40,
       theme: PLAIN_THEME,
       questions: [question],
-      state: createQuestionnaireRuntimeState(),
+      state: createAskRuntimeState(),
       options: getRenderOptions(question),
       editor: EMPTY_EDITOR as never,
     });
@@ -1524,11 +1521,11 @@ describe("questionnaire reducer and key router", () => {
       ],
     };
 
-    const rows = renderQuestionnaireRuntime({
+    const rows = renderAskRuntime({
       width: 80,
       theme: PLAIN_THEME,
       questions: [question],
-      state: createQuestionnaireRuntimeState(),
+      state: createAskRuntimeState(),
       options: getRenderOptions(question),
       editor: EMPTY_EDITOR as never,
       previewEnabled: true,
@@ -1553,11 +1550,11 @@ describe("questionnaire reducer and key router", () => {
       ],
     };
 
-    const rows = renderQuestionnaireRuntime({
+    const rows = renderAskRuntime({
       width: 80,
       theme: PLAIN_THEME,
       questions: [question],
-      state: createQuestionnaireRuntimeState(),
+      state: createAskRuntimeState(),
       options: getRenderOptions(question),
       editor: EMPTY_EDITOR as never,
       previewEnabled: true,
@@ -1585,11 +1582,11 @@ describe("questionnaire reducer and key router", () => {
       ],
     };
 
-    const rows = renderQuestionnaireRuntime({
+    const rows = renderAskRuntime({
       width: 80,
       theme: ANSI_THEME,
       questions: [question],
-      state: createQuestionnaireRuntimeState(),
+      state: createAskRuntimeState(),
       options: getRenderOptions(question),
       editor: EMPTY_EDITOR as never,
       previewEnabled: true,
@@ -1617,11 +1614,11 @@ describe("questionnaire reducer and key router", () => {
         { value: "dashboard", label: "Dashboard layout" },
       ],
     };
-    const lines = renderQuestionnaireRuntime({
+    const lines = renderAskRuntime({
       width: 100,
       theme: ANSI_THEME,
       questions: [question],
-      state: createQuestionnaireRuntimeState(),
+      state: createAskRuntimeState(),
       options: getRenderOptions(question),
       editor: EMPTY_EDITOR as never,
       previewEnabled: true,
@@ -1646,23 +1643,23 @@ describe("questionnaire reducer and key router", () => {
         { value: "text", label: "Text" },
       ],
     };
-    let state = createQuestionnaireRuntimeState();
+    let state = createAskRuntimeState();
 
-    let result = reduceQuestionnaireRuntime(
+    let result = reduceAskRuntime(
       state,
       { type: "startNote", questionId: "format" },
       [question]
     );
     expect(result.state.notesMode).toBe(true);
 
-    result = reduceQuestionnaireRuntime(
+    result = reduceAskRuntime(
       result.state,
       { type: "saveNoteDraft", questionId: "format", value: "Prefer schemas" },
       [question]
     );
     state = result.state;
 
-    result = reduceQuestionnaireRuntime(
+    result = reduceAskRuntime(
       state,
       {
         type: "selectOption",
@@ -1683,11 +1680,11 @@ describe("questionnaire reducer and key router", () => {
   });
 
   it("routes n to notes mode only for preview-capable questions", () => {
-    const state = createQuestionnaireRuntimeState();
+    const state = createAskRuntimeState();
     const question = questions[0];
 
     expect(
-      routeQuestionnaireKey({
+      routeAskKey({
         data: "n",
         state,
         questions: [question],
@@ -1697,7 +1694,7 @@ describe("questionnaire reducer and key router", () => {
       })
     ).toEqual({ type: "startNote", questionId: "format" });
     expect(
-      routeQuestionnaireKey({
+      routeAskKey({
         data: "n",
         state,
         questions: [question],
@@ -1718,9 +1715,9 @@ describe("questionnaire reducer and key router", () => {
         { value: "tests", label: "Tests" },
       ],
     };
-    const state = createQuestionnaireRuntimeState();
+    const state = createAskRuntimeState();
     state.multiSelections.set("scope", new Set(["tests"]));
-    const lines = renderQuestionnaireRuntime({
+    const lines = renderAskRuntime({
       width: 80,
       theme: PLAIN_THEME,
       questions: [multiQuestion],
@@ -1737,7 +1734,7 @@ describe("questionnaire reducer and key router", () => {
   });
 });
 
-describe("questionnaire result renderer", () => {
+describe("ask result renderer", () => {
   const longPrompt = `Which output format should be used? ${"Keep every prompt word. ".repeat(20)}`;
   const longPreview = `Structured output preview: ${"full preview content ".repeat(20)}`;
   const successfulResult = {
@@ -1852,7 +1849,7 @@ describe("questionnaire result renderer", () => {
   };
 
   it("reuses result lines at the same width and recomputes for width changes", () => {
-    const tool = registerQuestionnaireTool();
+    const tool = registerAskTool();
     const component = tool.renderResult(
       { content: [{ type: "text", text: "one\ttwo three four" }] },
       { expanded: false },
@@ -1869,7 +1866,7 @@ describe("questionnaire result renderer", () => {
   });
 
   it("recomputes result lines after invalidation", () => {
-    const tool = registerQuestionnaireTool();
+    const tool = registerAskTool();
     const component = tool.renderResult(
       { content: [{ type: "text", text: "result text" }] },
       { expanded: false },
@@ -1886,7 +1883,7 @@ describe("questionnaire result renderer", () => {
   });
 
   it("keeps successful results compact unless expanded", () => {
-    const output = renderQuestionnaireResult(successfulResult, false);
+    const output = renderAskResult(successfulResult, false);
 
     expect(output).toBe(
       "✓ internal-format-id: 1. JSON\n" +
@@ -1900,7 +1897,7 @@ describe("questionnaire result renderer", () => {
   });
 
   it("adds full human-facing selected-answer blocks when expanded", () => {
-    const output = renderQuestionnaireResult(successfulResult, true);
+    const output = renderAskResult(successfulResult, true);
 
     for (const expected of [
       "✓ Output format: 1. JSON",
@@ -2006,7 +2003,7 @@ describe("questionnaire result renderer", () => {
         cancelled: false,
       },
     };
-    const tool = registerQuestionnaireTool();
+    const tool = registerAskTool();
     const output = tool
       .renderResult(result, { expanded: true }, ANSI_THEME)
       .render(10_000)
@@ -2033,7 +2030,7 @@ describe("questionnaire result renderer", () => {
   });
 
   it("uses exactly one blank line between expanded summaries and details", () => {
-    const output = renderQuestionnaireResult(successfulResult, true);
+    const output = renderAskResult(successfulResult, true);
 
     expect(output).toContain("✓ Optional extras: (none)\n\nOutput format\n");
     expect(output).not.toContain(
@@ -2043,7 +2040,7 @@ describe("questionnaire result renderer", () => {
 
   it("keeps cancelled and invalid output unchanged when expanded", () => {
     expect(
-      renderQuestionnaireResult(
+      renderAskResult(
         {
           content: [{ type: "text", text: "cancelled content" }],
           details: { questions: [], answers: [], cancelled: true },
@@ -2052,7 +2049,7 @@ describe("questionnaire result renderer", () => {
       )
     ).toBe("Cancelled");
     expect(
-      renderQuestionnaireResult(
+      renderAskResult(
         {
           content: [{ type: "text", text: "Error: invalid ask request" }],
         },
@@ -2062,9 +2059,9 @@ describe("questionnaire result renderer", () => {
   });
 });
 
-describe("createQuestionnaireEnvelope", () => {
+describe("createAskEnvelope", () => {
   it("returns LLM-facing summary and answer lookup", () => {
-    const result = createQuestionnaireEnvelope({
+    const result = createAskEnvelope({
       questions: [
         {
           id: "format",
@@ -2100,7 +2097,7 @@ describe("createQuestionnaireEnvelope", () => {
   });
 
   it("formats preview and note metadata for single-select answers", () => {
-    const result = createQuestionnaireEnvelope({
+    const result = createAskEnvelope({
       questions: [
         {
           id: "format",
@@ -2137,7 +2134,7 @@ describe("createQuestionnaireEnvelope", () => {
   });
 
   it("formats multi-select answers in option order", () => {
-    const result = createQuestionnaireEnvelope({
+    const result = createAskEnvelope({
       questions: [
         {
           id: "scope",
@@ -2178,14 +2175,14 @@ describe("createQuestionnaireEnvelope", () => {
   });
 });
 
-describe("questionnaire auto-redirect", () => {
+describe("ask auto-redirect", () => {
   function setupHarness() {
     const handlers = new Map<string, (...args: any[]) => any>();
     const sendMessageCalls: Array<{ message: any; options: any }> = [];
     const appendEntryCalls: Array<{ type: string; data: any }> = [];
     const notifyCalls: Array<{ message: string; level: string }> = [];
 
-    questionnaire({
+    ask({
       on(eventName: string, handler: (...args: any[]) => any) {
         handlers.set(eventName, handler);
       },
@@ -2212,7 +2209,7 @@ describe("questionnaire auto-redirect", () => {
     };
   }
 
-  it("redirects an interactive plain-text clarification into a questionnaire follow-up turn", async () => {
+  it("redirects an interactive plain-text clarification into an ask follow-up turn", async () => {
     const {
       inputHandler,
       agentEndHandler,
@@ -2271,7 +2268,7 @@ describe("questionnaire auto-redirect", () => {
       {
         message: {
           customType: "questionnaire-auto-redirect",
-          content: getQuestionnaireRedirectCorrectionMessage(),
+          content: getAskRedirectCorrectionMessage(),
           display: false,
         },
         options: { triggerTurn: true },

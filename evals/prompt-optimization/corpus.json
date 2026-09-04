@@ -928,7 +928,7 @@
           "weight": 2
         },
         {
-          "type": "questionnaireGate",
+          "type": "askGate",
           "domain": "task",
           "weight": 3
         },
@@ -963,7 +963,7 @@
           "weight": 3
         }
       ],
-      "questionnaireResponse": "Approve scoped fix"
+      "askResponse": "Approve scoped fix"
     },
     {
       "id": "diagnose-private-probe-design",
@@ -1064,7 +1064,7 @@
           "weight": 1
         },
         {
-          "type": "questionnaireGate",
+          "type": "askGate",
           "domain": "task",
           "weight": 3
         },
@@ -1093,7 +1093,7 @@
           "weight": 1
         }
       ],
-      "questionnaireResponse": "Stop and clean probes"
+      "askResponse": "Stop and clean probes"
     }
   ]
 }

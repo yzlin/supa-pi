@@ -31,11 +31,8 @@ const EXECUTOR_ROLE_PROMPT = parseFrontmatter(
 ).body.trim();
 
 const CASE_ID_PATTERN = /^[a-z0-9][a-z0-9_-]*$/;
-const QUESTIONNAIRE_RESPONSES = [
-  "Approve scoped fix",
-  "Stop and clean probes",
-] as const;
-type QuestionnaireResponse = (typeof QUESTIONNAIRE_RESPONSES)[number];
+const ASK_RESPONSES = ["Approve scoped fix", "Stop and clean probes"] as const;
+type AskResponse = (typeof ASK_RESPONSES)[number];
 
 const TOOL_NAMES = [
   "read",
@@ -103,7 +100,7 @@ export type EvalCheck =
       after: string;
       args?: Record<string, unknown>;
     })
-  | (CheckBase & { type: "questionnaireGate" })
+  | (CheckBase & { type: "askGate" })
   | (CheckBase & { type: "workspaceUnchanged" })
   | (CheckBase & {
       type: "structuredOutput";
@@ -118,7 +115,7 @@ export interface EvalCase {
   promptPath: string;
   task: string;
   tools: ToolName[];
-  questionnaireResponse?: QuestionnaireResponse;
+  askResponse?: AskResponse;
   checks: EvalCheck[];
 }
 
@@ -160,7 +157,7 @@ export interface ToolCallRecord {
   endOrder?: number;
   isError?: boolean;
   resultText?: string;
-  questionnaireResponse?: string;
+  askResponse?: string;
   mutationTargets?: string[];
   hasTestTargets?: boolean;
   hasProductionTargets?: boolean;
@@ -404,7 +401,7 @@ function parseCheck(value: unknown, label: string): EvalCheck {
         ...(args === undefined ? {} : { args }),
       };
     }
-    case "questionnaireGate":
+    case "askGate":
     case "workspaceUnchanged":
     case "tddEvidence":
       return { ...base, type: value.type };
@@ -492,18 +489,18 @@ export function parseCorpus(value: unknown): EvalCorpus {
       throw new Error(`${label}.checks must be non-empty`);
     }
     if (
-      caseValue.questionnaireResponse !== undefined &&
-      caseValue.questionnaireResponse !== QUESTIONNAIRE_RESPONSES[0] &&
-      caseValue.questionnaireResponse !== QUESTIONNAIRE_RESPONSES[1]
+      caseValue.askResponse !== undefined &&
+      caseValue.askResponse !== ASK_RESPONSES[0] &&
+      caseValue.askResponse !== ASK_RESPONSES[1]
     ) {
-      throw new Error(`${label}.questionnaireResponse is invalid`);
+      throw new Error(`${label}.askResponse is invalid`);
     }
     if (
-      (caseValue.questionnaireResponse !== undefined) !==
+      (caseValue.askResponse !== undefined) !==
       (caseValue.tools as unknown[]).includes("ask")
     ) {
       throw new Error(
-        `${label} must configure questionnaireResponse exactly when ask is enabled`
+        `${label} must configure askResponse exactly when ask is enabled`
       );
     }
 
@@ -513,9 +510,7 @@ export function parseCorpus(value: unknown): EvalCorpus {
       promptPath: caseValue.promptPath,
       task: caseValue.task,
       tools: caseValue.tools as ToolName[],
-      questionnaireResponse: caseValue.questionnaireResponse as
-        | QuestionnaireResponse
-        | undefined,
+      askResponse: caseValue.askResponse as AskResponse | undefined,
       checks: caseValue.checks.map((check, checkIndex) =>
         parseCheck(check, `${label}.checks[${checkIndex}]`)
       ),
@@ -983,8 +978,7 @@ async function scoreCheck(
         (call) =>
           call.name === check.after &&
           !call.isError &&
-          (call.name !== "ask" ||
-            call.questionnaireResponse === "Approve scoped fix")
+          (call.name !== "ask" || call.askResponse === "Approve scoped fix")
       );
       const matchingCalls = input.toolCalls.filter(
         (call) =>
@@ -1007,7 +1001,7 @@ async function scoreCheck(
           : `${check.name} was missing, errored, or not in a later assistant turn than successful ${check.after}`,
       };
     }
-    case "questionnaireGate": {
+    case "askGate": {
       const calls = input.toolCalls.filter((call) => call.name === "ask");
       const questions = calls[0]?.args.questions;
       const question = Array.isArray(questions) ? questions[0] : undefined;
@@ -1029,16 +1023,14 @@ async function scoreCheck(
         Array.isArray(questions) &&
         questions.length === 1 &&
         questionRecord?.multiSelect !== true &&
-        labels.length === QUESTIONNAIRE_RESPONSES.length &&
-        labels.every(
-          (label, index) => label === QUESTIONNAIRE_RESPONSES[index]
-        );
+        labels.length === ASK_RESPONSES.length &&
+        labels.every((label, index) => label === ASK_RESPONSES[index]);
       return {
         check,
         passed,
         evidence: passed
-          ? "questionnaire gate matched"
-          : "questionnaire gate shape or options differed",
+          ? "ask gate matched"
+          : "ask gate shape or options differed",
       };
     }
     case "tddEvidence": {

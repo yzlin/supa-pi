@@ -2,11 +2,11 @@ export const CUSTOM_OPTION_VALUE = "__other__";
 export const CUSTOM_OPTION_LABEL = "Type something.";
 export const NEXT_OPTION_VALUE = "__next__";
 export const NEXT_OPTION_LABEL = "Next";
-export const QUESTIONNAIRE_RESERVED_VALUES = [
+export const ASK_RESERVED_VALUES = [
   CUSTOM_OPTION_VALUE,
   NEXT_OPTION_VALUE,
 ] as const;
-export const QUESTIONNAIRE_RESERVED_LABELS = [
+export const ASK_RESERVED_LABELS = [
   CUSTOM_OPTION_LABEL,
   NEXT_OPTION_LABEL,
 ] as const;
@@ -65,7 +65,7 @@ export type Answer =
       note?: string;
     };
 
-export interface QuestionnaireResult {
+export interface AskResult {
   questions: Question[];
   answers: Answer[];
   cancelled: boolean;
@@ -73,7 +73,7 @@ export interface QuestionnaireResult {
   answersByQuestion?: Record<string, Answer>;
 }
 
-export interface QuestionnaireValidationIssue {
+export interface AskValidationIssue {
   path: string;
   code:
     | "question_count"
@@ -87,11 +87,11 @@ export interface QuestionnaireValidationIssue {
   message: string;
 }
 
-export interface QuestionnaireValidationErrorDetails {
+export interface AskValidationErrorDetails {
   valid: false;
-  issues: QuestionnaireValidationIssue[];
+  issues: AskValidationIssue[];
 }
 
-export interface QuestionnaireParamsInput {
+export interface AskParamsInput {
   questions?: QuestionInput[];
 }

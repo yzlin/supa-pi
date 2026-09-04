@@ -1,9 +1,6 @@
 import { Key, type KeyId, matchesKey } from "@earendil-works/pi-tui";
 
-import type {
-  QuestionnaireRuntimeAction,
-  QuestionnaireRuntimeState,
-} from "./state";
+import type { AskRuntimeAction, AskRuntimeState } from "./state";
 import type { Question, RenderOption } from "./types";
 
 function matchesNavigationKey(
@@ -14,14 +11,14 @@ function matchesNavigationKey(
   return matchesKey(data, key) || data === vimKey;
 }
 
-export function routeQuestionnaireKey(args: {
+export function routeAskKey(args: {
   data: string;
-  state: QuestionnaireRuntimeState;
+  state: AskRuntimeState;
   questions: Question[];
   options: RenderOption[];
   allAnswered: boolean;
   previewNotesEnabled?: boolean;
-}): QuestionnaireRuntimeAction | { type: "editor" } | null {
+}): AskRuntimeAction | { type: "editor" } | null {
   const { data, state, questions, options, allAnswered, previewNotesEnabled } =
     args;
   const optionCount = options.length;
