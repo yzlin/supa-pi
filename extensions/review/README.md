@@ -15,13 +15,13 @@ Read when changing `/review`, `/review-summary`, `/review-fix`, reviewer orchest
 
 Reviewer and verifier agents retain extension inheritance, while the report-only `review-synthesizer` disables it explicitly. The synthesizer uses only the workflow-injected `structured_output` tool; extension-enabled nested-session manager ownership is enforced by `pi-subagents` lifecycle regression coverage.
 
-The default matrix uses one reviewer model at high thinking:
+The default matrix uses GPT-6 Astra at medium thinking for every review stage:
 
 | role | default model | thinking |
 | --- | --- | --- |
-| each selected reviewer | `openai-codex/gpt-5.6-sol` | `high` |
-| synthesizer | `openai-codex/gpt-5.6-sol` | fixed `high` |
-| verifier | `openai-codex/gpt-5.6-sol` | fixed `high` |
+| each selected reviewer | `openai-codex/gpt-6-astra` | `medium` |
+| synthesizer | `openai-codex/gpt-6-astra` | fixed `medium` |
+| verifier | `openai-codex/gpt-6-astra` | fixed `medium` |
 
 The panel accepts 1–4 distinct model IDs. Each reviewer panel entry has its own Pi thinking level: `off`, `minimal`, `low`, `medium`, `high`, or `xhigh`. Duplicate IDs normalize to one run, using the first entry, so one model cannot gain multiple support votes. Reviewer execution has one global role×model concurrency cap of 4. Synthesizer and verifier calls run afterward, not concurrently with the reviewer matrix.
 
@@ -38,10 +38,10 @@ Each file may contain any subset of the three fields, which layer independently.
 {
   "$schema": "/path/to/supa-pi/extensions/review/review.schema.json",
   "reviewerPanel": [
-    { "model": "openai-codex/gpt-5.6-sol", "thinkingLevel": "high" }
+    { "model": "openai-codex/gpt-6-astra", "thinkingLevel": "medium" }
   ],
-  "synthesizerModel": "openai-codex/gpt-5.6-sol",
-  "verifierModel": "openai-codex/gpt-5.6-sol"
+  "synthesizerModel": "openai-codex/gpt-6-astra",
+  "verifierModel": "openai-codex/gpt-6-astra"
 }
 ```
 
@@ -97,9 +97,9 @@ Reviewer submission:
 
 The orchestrator assigns candidate IDs and immutable reviewer role, model ID, and thinking provenance. Models never author provenance.
 
-Synthesizer submission contains only `clusters`; each cluster contains `memberIds`, `title`, `why`, and `change`. It cannot inspect the repository or decide truth, priority, or confidence. It merges only the same root cause with materially the same fix. Similar impact with a different fix remains separate. Every candidate ID must occur exactly once: unknown, repeated, or omitted IDs invalidate the entire submission. The synthesizer gets one fixed-high structured repair; a second invalid or lossy result fails review. Locations and reported priorities are derived from member IDs, including multiple distinct locations.
+Synthesizer submission contains only `clusters`; each cluster contains `memberIds`, `title`, `why`, and `change`. It cannot inspect the repository or decide truth, priority, or confidence. It merges only the same root cause with materially the same fix. Similar impact with a different fix remains separate. Every candidate ID must occur exactly once: unknown, repeated, or omitted IDs invalidate the entire submission. The synthesizer gets one fixed-medium structured repair; a second invalid or lossy result fails review. Locations and reported priorities are derived from member IDs, including multiple distinct locations.
 
-Verifier submission contains only `reviewScope`, `verdict`, and findings with `memberIds`, final `priority`, rewritten `title`/`why`/`change`, `confidence`, evidence `reason`, and `consensusEffect`. The verifier must inspect changed code and every cited location. Votes alone are never evidence and silence is neutral. It may split an over-merged cluster or merge under-merged clusters by regrouping original member IDs. Omitted IDs are rejected. Unknown or repeated IDs invalidate the submission and trigger one fixed-high repair; another invalid result fails review.
+Verifier submission contains only `reviewScope`, `verdict`, and findings with `memberIds`, final `priority`, rewritten `title`/`why`/`change`, `confidence`, evidence `reason`, and `consensusEffect`. The verifier must inspect changed code and every cited location. Votes alone are never evidence and silence is neutral. It may split an over-merged cluster or merge under-merged clusters by regrouping original member IDs. Omitted IDs are rejected. Unknown or repeated IDs invalidate the submission and trigger one fixed-medium repair; another invalid result fails review.
 
 Confidence is `high`, `medium`, or `low`. Distinct-model positive support may raise confidence by at most one level only after independently plausible code evidence; then `consensusEffect` is `raised-one-level`, otherwise `none`. The verifier may correct priority and wording. Low-confidence findings remain in structured details but are filtered from rendered findings.
 

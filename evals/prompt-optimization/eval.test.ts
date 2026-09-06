@@ -239,6 +239,69 @@ describe("parseCorpus", () => {
       })
     ).toThrow("promptPath");
   });
+
+  it("accepts bounded tool-call counts and rejects invalid bounds", () => {
+    const makeCorpus = (check: Record<string, unknown>) => ({
+      version: 1,
+      cases: [
+        {
+          id: "counted",
+          workload: "focused bug fix",
+          promptPath: "agents/executor.md",
+          task: "Verify once.",
+          tools: ["bash"],
+          checks: [
+            {
+              type: "toolCallCount",
+              name: "bash",
+              domain: "tests",
+              weight: 1,
+              ...check,
+            },
+          ],
+        },
+      ],
+    });
+
+    expect(parseCorpus(makeCorpus({ max: 1 })).cases[0]?.checks[0]).toEqual({
+      type: "toolCallCount",
+      name: "bash",
+      max: 1,
+      domain: "tests",
+      weight: 1,
+    });
+    expect(
+      parseCorpus(
+        makeCorpus({
+          args: { command: "bun test tests/math.case.ts" },
+          min: 1,
+          max: 2,
+        })
+      ).cases[0]?.checks[0]
+    ).toEqual({
+      type: "toolCallCount",
+      name: "bash",
+      args: { command: "bun test tests/math.case.ts" },
+      min: 1,
+      max: 2,
+      domain: "tests",
+      weight: 1,
+    });
+
+    for (const invalid of [
+      {},
+      { min: -1 },
+      { max: -1 },
+      { min: 1.5 },
+      { max: 1.5 },
+      { min: Number.MAX_SAFE_INTEGER + 1 },
+      { max: Number.MAX_SAFE_INTEGER + 1 },
+      { min: 2, max: 1 },
+      { min: 0, args: [] },
+    ]) {
+      expect(() => parseCorpus(makeCorpus(invalid))).toThrow();
+    }
+  });
 });
 
 describe("committed corpus", () => {
@@ -286,6 +349,820 @@ describe("committed corpus", () => {
     );
     expect(coveredPaths.has("agents/tdd-guide.md")).toBe(false);
     expect(coveredPaths).toEqual(new Set(expectedPaths));
+  });
+
+  it("distinguishes action readiness from evaluation-only scope", async () => {
+    const corpus = parseCorpus(
+      JSON.parse(readFileSync(join(moduleDirectory, "corpus.json"), "utf8"))
+    );
+    const actionCase = corpus.cases.find(
+      (evalCase) => evalCase.id === "readiness-action-fix"
+    );
+    const evaluationCase = corpus.cases.find(
+      (evalCase) => evalCase.id === "readiness-evaluation-only"
+    );
+    if (!(actionCase && evaluationCase)) {
+      throw new Error("readiness paired core-prompt cases are missing");
+    }
+
+    const actionWorkspace = createTemporaryDirectory();
+    cpSync(join(moduleDirectory, "fixtures/sample-project"), actionWorkspace, {
+      recursive: true,
+    });
+    const actionSnapshot = await snapshotWorkspace(actionWorkspace);
+    const mathPath = join(actionWorkspace, "src/math.ts");
+    writeFileSync(
+      mathPath,
+      readFileSync(mathPath, "utf8").replace(
+        "return left - right;",
+        "return left + right;"
+      )
+    );
+    const completedAction = await scoreRun(
+      {
+        output:
+          "Fixed src/math.ts and verified tests/math.case.ts; both addition and multiplication tests pass.",
+        workspace: actionWorkspace,
+        initialWorkspaceSnapshot: actionSnapshot,
+        toolCalls: [
+          {
+            name: "edit",
+            args: {
+              path: "src/math.ts",
+              oldText: "return left - right;",
+              newText: "return left + right;",
+            },
+            assistantTurn: 1,
+            isError: false,
+          },
+          {
+            name: "bash",
+            args: { command: "bun test tests/math.case.ts" },
+            assistantTurn: 2,
+            isError: false,
+            resultText: "2 passed, 0 failed",
+          },
+        ],
+      },
+      actionCase.checks
+    );
+    expect(completedAction.overall).toBe(1);
+
+    const acknowledgmentOnly = await scoreRun(
+      {
+        output: "Yes, I can fix that.",
+        workspace: createTemporaryDirectory(),
+        toolCalls: [],
+      },
+      actionCase.checks
+    );
+    expect(acknowledgmentOnly.overall).toBeLessThan(1);
+
+    const evaluationWorkspace = createTemporaryDirectory();
+    cpSync(
+      join(moduleDirectory, "fixtures/sample-project"),
+      evaluationWorkspace,
+      {
+        recursive: true,
+      }
+    );
+    const evaluationSnapshot = await snapshotWorkspace(evaluationWorkspace);
+    const groundedEvaluation = await scoreRun(
+      {
+        output:
+          "src/math.ts implements add with left - right, while tests/math.case.ts expects 12. Options: replace subtraction with addition now, or first add broader edge-case coverage before making that change.",
+        workspace: evaluationWorkspace,
+        initialWorkspaceSnapshot: evaluationSnapshot,
+        toolCalls: [
+          {
+            name: "read",
+            args: { path: "src/math.ts" },
+            assistantTurn: 1,
+            isError: false,
+          },
+        ],
+      },
+      evaluationCase.checks
+    );
+    expect(groundedEvaluation.overall).toBe(1);
+
+    writeFileSync(
+      join(evaluationWorkspace, "src/math.ts"),
+      readFileSync(join(evaluationWorkspace, "src/math.ts"), "utf8").replace(
+        "return left - right;",
+        "return left + right;"
+      )
+    );
+    const unauthorizedMutation = await scoreRun(
+      {
+        output: "I assessed and fixed src/math.ts.",
+        workspace: evaluationWorkspace,
+        initialWorkspaceSnapshot: evaluationSnapshot,
+        toolCalls: [
+          {
+            name: "edit",
+            args: {
+              path: "src/math.ts",
+              oldText: "return left - right;",
+              newText: "return left + right;",
+            },
+            assistantTurn: 1,
+            isError: false,
+          },
+        ],
+      },
+      evaluationCase.checks
+    );
+    expect(unauthorizedMutation.overall).toBeLessThan(1);
+  });
+
+  it("distinguishes routine inferable gaps from consequential ambiguity", async () => {
+    const corpus = parseCorpus(
+      JSON.parse(readFileSync(join(moduleDirectory, "corpus.json"), "utf8"))
+    );
+    const routineCase = corpus.cases.find(
+      (evalCase) => evalCase.id === "readiness-routine-inference"
+    );
+    const ambiguousCase = corpus.cases.find(
+      (evalCase) => evalCase.id === "readiness-consequential-ambiguity"
+    );
+    if (!(routineCase && ambiguousCase)) {
+      throw new Error("readiness inference/ambiguity case pair is missing");
+    }
+
+    const completedWorkspace = createTemporaryDirectory();
+    cpSync(
+      join(moduleDirectory, "fixtures/sample-project"),
+      completedWorkspace,
+      {
+        recursive: true,
+      }
+    );
+    const completedSnapshot = await snapshotWorkspace(completedWorkspace);
+    const completedMathPath = join(completedWorkspace, "src/math.ts");
+    writeFileSync(
+      completedMathPath,
+      readFileSync(completedMathPath, "utf8").replace(
+        "return left - right;",
+        "return left + right;"
+      )
+    );
+    const completedRoutineWork = await scoreRun(
+      {
+        output:
+          "Fixed the incorrect addition operation in src/math.ts. `bun test tests/math.case.ts` passed with 2 tests and 0 failures.",
+        workspace: completedWorkspace,
+        initialWorkspaceSnapshot: completedSnapshot,
+        toolCalls: [
+          {
+            name: "bash",
+            args: { command: "bun test tests/math.case.ts" },
+            assistantTurn: 1,
+            isError: true,
+            resultText: "1 passed, 1 failed",
+          },
+          {
+            name: "edit",
+            args: {
+              path: "src/math.ts",
+              oldText: "return left - right;",
+              newText: "return left + right;",
+            },
+            assistantTurn: 2,
+            isError: false,
+          },
+          {
+            name: "bash",
+            args: { command: "bun test tests/math.case.ts" },
+            assistantTurn: 3,
+            isError: false,
+            resultText: "2 passed, 0 failed",
+          },
+        ],
+      },
+      routineCase.checks
+    );
+    expect(completedRoutineWork.overall).toBe(1);
+
+    const stalledWorkspace = createTemporaryDirectory();
+    cpSync(join(moduleDirectory, "fixtures/sample-project"), stalledWorkspace, {
+      recursive: true,
+    });
+    const stalledSnapshot = await snapshotWorkspace(stalledWorkspace);
+    const needlessStall = await scoreRun(
+      {
+        output:
+          "Which test command should I run, and which implementation file should I change?",
+        workspace: stalledWorkspace,
+        initialWorkspaceSnapshot: stalledSnapshot,
+        toolCalls: [],
+      },
+      routineCase.checks
+    );
+    expect(needlessStall.overall).toBeLessThan(1);
+
+    const clarificationOutputs = [
+      "src/auth.ts currently grants admin-panel access whenever debug is true. Should the admin role be required regardless of debug, or should the verified internal-debug exception remain?",
+      "I found the conflict in src/auth.ts. Which policy should apply: require the admin role even in debug mode, or preserve the verified internal-debug bypass?",
+      "src/auth.ts needs a policy decision: should verified internal debug sessions keep the bypass, or must the admin role always be required?",
+      "canAccessAdminPanel confirms debug currently bypasses the admin-role check. Please confirm either: require the admin role regardless of debug, or retain the verified internal-debug exception.",
+      "The intended policy needs clarification. `src/auth.ts` currently grants access whenever `debug` is true, regardless of role. Should I enforce **admin-role-only access regardless of debug**, or is there an approved internal exception?",
+      "The function grants debug access regardless of admin role. Please confirm which policy governs this release.",
+      "`src/auth.ts` grants access whenever `debug` is true. Which policy governs this release?\n- **Admin-only:** debug never grants access.\n- **Internal bypass:** use a trusted internal-session signal.",
+      "`canAccessAdminPanel` currently lets debug sessions through, creating the stated authorization-policy ambiguity. Please confirm the policy I should implement.",
+      "The observed `src/auth.ts` branch bypasses the role check in debug mode. Choose the authorization rule for this release:\n1. Require an admin role.\n2. Keep an internal-session bypass.",
+      "`src/auth.ts` currently lets debug sessions bypass the admin-role check. Which option should I implement?\n1. Require the admin role in every session.\n2. Retain the internal-session exception.",
+      "The authorization branch currently grants access in debug mode regardless of role. Which of these alternatives do you want?\n- Require the admin role for all access.\n- Preserve the internal bypass.",
+      "Options:\n1. Require the admin role in every session.\n2. Retain the internal debug bypass.\nWhich option should I implement?",
+      "Option 1: require the admin role even in debug mode.\nOption 2: retain a verified internal debug bypass.\nWhich option should I implement?",
+    ];
+    for (const output of clarificationOutputs) {
+      const clarifiedWorkspace = createTemporaryDirectory();
+      cpSync(
+        join(moduleDirectory, "fixtures/sample-project"),
+        clarifiedWorkspace,
+        { recursive: true }
+      );
+      const clarifiedSnapshot = await snapshotWorkspace(clarifiedWorkspace);
+      const focusedClarification = await scoreRun(
+        {
+          output,
+          workspace: clarifiedWorkspace,
+          initialWorkspaceSnapshot: clarifiedSnapshot,
+          toolCalls: [
+            {
+              name: "read",
+              args: { path: "./src/auth.ts" },
+              assistantTurn: 1,
+              isError: false,
+              resultText:
+                'if (debug) { return true; } return role === "admin";',
+            },
+          ],
+        },
+        ambiguousCase.checks
+      );
+      expect(focusedClarification.overall).toBe(1);
+    }
+
+    for (const output of [
+      "src/auth.ts has conflicting policies: debug must never grant admin access or internal sessions retain the bypass.",
+      'The handoff asks, "Which authorization policy should apply?" src/auth.ts currently bypasses the admin check in debug mode.',
+      "The question is whether the admin rule or internal debug bypass should apply. src/auth.ts confirms the current bypass.",
+      "src/auth.ts currently bypasses the admin check in debug mode. Should database users be denied access or should the cache bypass remain?",
+      "I will enforce admin-only access because README.md is authoritative; src/auth.ts currently has a debug bypass.",
+      "I will choose the security policy myself: admin role required, debug bypass removed. No files changed yet.",
+      "I cannot decide the admin/debug policy from this evidence. No files changed.",
+      "Which programming language should we use?\nThe admin/debug policy is documented above.",
+      "I chose the authorization rule: require the admin role and remove the debug bypass.",
+      "We should decide later. The security policy concerns the admin role and debug bypass.",
+      "Should the release use TypeScript?\n- Admin role required.\n- Debug bypass retained.",
+      "Which policy should govern database retention? Separately, src/auth.ts uses an admin role and debug bypass.",
+      "src/auth.ts uses an admin role and debug bypass. Which policy should govern database retention?",
+      "- Require the admin role even during debug.\n- Retain the internal debug bypass.\nWhich policy should govern database retention?",
+      "Which policy should govern database retention?\n- Require the admin role even during debug.\n- Retain the internal debug bypass.",
+    ]) {
+      const rejectedWorkspace = createTemporaryDirectory();
+      cpSync(
+        join(moduleDirectory, "fixtures/sample-project"),
+        rejectedWorkspace,
+        { recursive: true }
+      );
+      const rejectedSnapshot = await snapshotWorkspace(rejectedWorkspace);
+      const rejectedClarification = await scoreRun(
+        {
+          output,
+          workspace: rejectedWorkspace,
+          initialWorkspaceSnapshot: rejectedSnapshot,
+          toolCalls: [
+            {
+              name: "read",
+              args: { path: "src/auth.ts" },
+              assistantTurn: 1,
+              isError: false,
+              resultText:
+                'if (debug) { return true; } return role === "admin";',
+            },
+          ],
+        },
+        ambiguousCase.checks
+      );
+      expect(rejectedClarification.overall).toBeLessThan(1);
+    }
+
+    const speculativeWorkspace = createTemporaryDirectory();
+    cpSync(
+      join(moduleDirectory, "fixtures/sample-project"),
+      speculativeWorkspace,
+      {
+        recursive: true,
+      }
+    );
+    const speculativeSnapshot = await snapshotWorkspace(speculativeWorkspace);
+    const speculativeAuthPath = join(speculativeWorkspace, "src/auth.ts");
+    writeFileSync(
+      speculativeAuthPath,
+      readFileSync(speculativeAuthPath, "utf8").replace(
+        "  if (debug) {\n    return true;\n  }\n",
+        ""
+      )
+    );
+    const otherwiseValidDecision =
+      "src/auth.ts confirms the bypass. Please confirm either: require the admin role regardless of debug, or retain the verified internal-debug exception.";
+    const groundedRead = {
+      name: "read",
+      args: { path: "src/auth.ts" },
+      assistantTurn: 1,
+      isError: false,
+      resultText: 'if (debug) { return true; } return role === "admin";',
+    };
+    for (const mutation of [
+      {
+        name: "edit",
+        args: {
+          path: "src/auth.ts",
+          oldText: "  if (debug) {\n    return true;\n  }\n",
+          newText: "",
+        },
+        assistantTurn: 2,
+        isError: false,
+      },
+      {
+        name: "write",
+        args: {
+          path: "src/auth.ts",
+          content: 'return role === "admin";',
+        },
+        assistantTurn: 2,
+        isError: false,
+      },
+    ]) {
+      const speculativeMutation = await scoreRun(
+        {
+          output: otherwiseValidDecision,
+          workspace: speculativeWorkspace,
+          initialWorkspaceSnapshot: speculativeSnapshot,
+          toolCalls: [groundedRead, mutation],
+        },
+        ambiguousCase.checks
+      );
+      expect(
+        speculativeMutation.checks.find(
+          ({ check }) => check.type === "authPolicyClarification"
+        )?.passed
+      ).toBe(true);
+      expect(speculativeMutation.overall).toBeLessThan(1);
+    }
+  });
+
+  it("rewards independent delegation only for the broad investigation", async () => {
+    const corpus = parseCorpus(
+      JSON.parse(readFileSync(join(moduleDirectory, "corpus.json"), "utf8"))
+    );
+    const broadCase = corpus.cases.find(
+      (evalCase) => evalCase.id === "readiness-independent-delegation"
+    );
+    const narrowCase = corpus.cases.find(
+      (evalCase) => evalCase.id === "readiness-local-lookup"
+    );
+    if (!(broadCase && narrowCase)) {
+      throw new Error("readiness delegation choice case pair is missing");
+    }
+
+    expect(broadCase.tools).toEqual(["read", "grep", "find", "ls", "Agent"]);
+    expect(narrowCase.tools).toEqual(broadCase.tools);
+    expect(broadCase.task).not.toContain("Agent");
+    expect(narrowCase.task).not.toContain("Agent");
+
+    const workspace = createTemporaryDirectory();
+    cpSync(join(moduleDirectory, "fixtures/sample-project"), workspace, {
+      recursive: true,
+    });
+    const initialWorkspaceSnapshot = await snapshotWorkspace(workspace);
+    const broadOutput =
+      "src/math.ts implements add with left - right, so the addition test gets 2 rather than 12. src/auth.ts returns true whenever debug is enabled, bypassing the README.md contract that admin-panel access requires the admin role.";
+    const broadParentRead = {
+      name: "read",
+      args: { path: "src/auth.ts" },
+      assistantTurn: 2,
+      isError: false,
+      resultText: 'if (debug) { return true; } return role === "admin";',
+    };
+    const broadGood = await scoreRun(
+      {
+        output: broadOutput,
+        workspace,
+        initialWorkspaceSnapshot,
+        toolCalls: [
+          {
+            name: "Agent",
+            args: { task: "Investigate the failing addition behavior." },
+            assistantTurn: 1,
+            isError: false,
+            resultText:
+              "src/math.ts uses left - right, causing add(7, 5) to return 2.",
+          },
+          broadParentRead,
+        ],
+      },
+      broadCase.checks
+    );
+    const broadBad = await scoreRun(
+      {
+        output: broadOutput,
+        workspace,
+        initialWorkspaceSnapshot,
+        toolCalls: [
+          {
+            name: "read",
+            args: { path: "src/math.ts" },
+            assistantTurn: 1,
+            isError: false,
+            resultText: "return left - right;",
+          },
+          broadParentRead,
+        ],
+      },
+      broadCase.checks
+    );
+
+    expect(broadGood.overall).toBe(1);
+    expect(broadBad.overall).toBeLessThan(1);
+
+    const narrowOutput = "README.md says admin access requires the admin role.";
+    const narrowRead = {
+      name: "read",
+      args: { path: "README.md" },
+      assistantTurn: 1,
+      isError: false,
+      resultText: "admin access requires the `admin` role.",
+    };
+    const narrowGood = await scoreRun(
+      {
+        output: narrowOutput,
+        workspace,
+        initialWorkspaceSnapshot,
+        toolCalls: [narrowRead],
+      },
+      narrowCase.checks
+    );
+    const narrowBad = await scoreRun(
+      {
+        output: narrowOutput,
+        workspace,
+        initialWorkspaceSnapshot,
+        toolCalls: [
+          narrowRead,
+          {
+            name: "Agent",
+            args: { task: "Look up the required admin role in README.md." },
+            assistantTurn: 2,
+            isError: false,
+            resultText: "README.md requires the admin role.",
+          },
+        ],
+      },
+      narrowCase.checks
+    );
+
+    expect(narrowGood.overall).toBe(1);
+    const retainedGrepLookup = await scoreRun(
+      {
+        output: "README.md says admin access requires the admin role.",
+        workspace,
+        initialWorkspaceSnapshot,
+        toolCalls: [
+          {
+            name: "grep",
+            args: { pattern: "admin access", path: "." },
+            assistantTurn: 1,
+            isError: false,
+            resultText:
+              "README.md-1-# Sample Project\nREADME.md:3: Public behavior: admin access requires the `admin` role.\nREADME.md-4-",
+          },
+        ],
+      },
+      narrowCase.checks
+    );
+    expect(retainedGrepLookup.overall).toBe(1);
+    expect(narrowBad.overall).toBeLessThan(1);
+  });
+
+  it("distinguishes sufficient stopping from unsupported completion", async () => {
+    const corpus = parseCorpus(
+      JSON.parse(readFileSync(join(moduleDirectory, "corpus.json"), "utf8"))
+    );
+    const stoppingCase = corpus.cases.find(
+      (evalCase) => evalCase.id === "readiness-verification-stop"
+    );
+    const unavailableCase = corpus.cases.find(
+      (evalCase) => evalCase.id === "readiness-verification-unavailable"
+    );
+    const canonicalCase = corpus.cases.find(
+      (evalCase) => evalCase.id === "tdd-fix"
+    );
+    if (!(stoppingCase && unavailableCase && canonicalCase)) {
+      throw new Error("readiness verification cases are missing");
+    }
+
+    expect(stoppingCase.task).toBe(
+      "Please fix why add(7, 5) returns 2 instead of 12 in this project. Make the smallest focused repair and report what you changed and verified."
+    );
+    expect(unavailableCase.task).toBe(
+      "Please fix why add(7, 5) returns 2 instead of 12 in this project. Make the smallest focused repair and report what you changed and verified. Environment: command execution is unavailable in this session."
+    );
+    expect(unavailableCase.tools).not.toContain("bash");
+    for (const canonicalCheck of canonicalCase.checks) {
+      expect(stoppingCase.checks).toContainEqual(
+        canonicalCheck.type === "tddEvidence"
+          ? expect.objectContaining(canonicalCheck)
+          : canonicalCheck
+      );
+    }
+    expect(stoppingCase.checks).toContainEqual(
+      expect.objectContaining({
+        type: "toolCallCount",
+        name: "bash",
+        args: { command: "bun test tests/math.case.ts" },
+        min: 2,
+        max: 2,
+      })
+    );
+
+    const workspace = createTemporaryDirectory();
+    cpSync(join(moduleDirectory, "fixtures/sample-project"), workspace, {
+      recursive: true,
+    });
+    const initialWorkspaceSnapshot = await snapshotWorkspace(workspace);
+    const mathPath = join(workspace, "src/math.ts");
+    writeFileSync(
+      mathPath,
+      readFileSync(mathPath, "utf8").replace(
+        "return left - right;",
+        "return left + right;"
+      )
+    );
+    const red = {
+      name: "bash",
+      args: { command: "bun test tests/math.case.ts" },
+      assistantTurn: 1,
+      isError: true,
+      resultText:
+        "tests/math.case.ts > add regression\nExpected: 12\nReceived: 2\n1 failed, 1 passed",
+    };
+    const editArgs = {
+      path: "src/math.ts",
+      oldText: "return left - right;",
+      newText: "return left + right;",
+    };
+    const edit = {
+      name: "edit",
+      ...normalizeTddToolMetadata("edit", editArgs),
+      args: editArgs,
+      assistantTurn: 2,
+      isError: false,
+      mutationProven: true,
+      mutationDelta: [{ path: "src/math.ts", status: "changed" as const }],
+    };
+    const green = {
+      name: "bash",
+      args: { command: "bun test tests/math.case.ts" },
+      assistantTurn: 3,
+      isError: false,
+      resultText:
+        "tests/math.case.ts > add regression and multiply path\n2 passed, 0 failed",
+    };
+    const done = {
+      name: "structured_output",
+      args: {
+        status: "done",
+        summary: "Fixed and verified add.",
+        filesTouched: ["src/math.ts"],
+        validation: [
+          "RED: bun test tests/math.case.ts failed with Expected: 12, Received: 2; 1 failed, 1 passed",
+          "GREEN: bun test tests/math.case.ts passed with 2 passed, 0 failed",
+          "COVERAGE: `add()` regression behavior and existing `multiply()` path covered",
+        ],
+        followUps: [],
+        blockers: [],
+      },
+      assistantTurn: 4,
+      isError: false,
+    };
+    const stopped = await scoreRun(
+      {
+        output: "",
+        workspace,
+        initialWorkspaceSnapshot,
+        toolCalls: [red, edit, green, done],
+      },
+      stoppingCase.checks
+    );
+    expect(stopped.overall).toBe(1);
+
+    const repeatedSuccess = await scoreRun(
+      {
+        output: "",
+        workspace,
+        initialWorkspaceSnapshot,
+        toolCalls: [
+          red,
+          edit,
+          green,
+          { ...green, assistantTurn: 4 },
+          { ...done, assistantTurn: 5 },
+        ],
+      },
+      stoppingCase.checks
+    );
+    expect(repeatedSuccess.overall).toBeLessThan(1);
+    expect(
+      repeatedSuccess.checks.find(({ check }) => check.type === "toolCallCount")
+        ?.passed
+    ).toBe(false);
+
+    const badOrdering = await scoreRun(
+      {
+        output: "",
+        workspace,
+        initialWorkspaceSnapshot,
+        toolCalls: [
+          { ...edit, assistantTurn: 1 },
+          { ...red, assistantTurn: 2 },
+          green,
+          done,
+        ],
+        taskIntent: stoppingCase.task,
+      },
+      stoppingCase.checks
+    );
+    expect(badOrdering.overall).toBeLessThan(1);
+    expect(
+      badOrdering.checks.find(({ check }) => check.type === "tddEvidence")
+        ?.passed
+    ).toBe(false);
+
+    writeFileSync(
+      join(workspace, "tests/math.case.ts"),
+      'import { expect, test } from "bun:test";\n\ntest("weakened", () => {\n  expect(true).toBe(true);\n});\n'
+    );
+    const mutatedProtectedTest = await scoreRun(
+      {
+        output: "",
+        workspace,
+        initialWorkspaceSnapshot,
+        toolCalls: [red, edit, green, done],
+        taskIntent: stoppingCase.task,
+      },
+      stoppingCase.checks
+    );
+    expect(mutatedProtectedTest.overall).toBeLessThan(1);
+    expect(
+      mutatedProtectedTest.checks.find(
+        ({ check }) =>
+          check.type === "fileEquals" && check.path === "tests/math.case.ts"
+      )?.passed
+    ).toBe(false);
+
+    const unavailableWorkspace = createTemporaryDirectory();
+    cpSync(
+      join(moduleDirectory, "fixtures/sample-project"),
+      unavailableWorkspace,
+      { recursive: true }
+    );
+    const unavailableSnapshot = await snapshotWorkspace(unavailableWorkspace);
+    const unavailableTools = unavailableCase.tools;
+    const blocked = {
+      name: "structured_output",
+      args: {
+        status: "blocked",
+        summary: "Could not establish regression evidence.",
+        filesTouched: [],
+        validation: [],
+        followUps: [],
+        blockers: ["bash verification tool is unavailable"],
+      },
+      assistantTurn: 1,
+      isError: false,
+    };
+    expect(
+      (
+        await scoreRun(
+          {
+            output: "",
+            workspace: unavailableWorkspace,
+            initialWorkspaceSnapshot: unavailableSnapshot,
+            toolCalls: [blocked],
+            availableTools: unavailableTools,
+          },
+          unavailableCase.checks
+        )
+      ).overall
+    ).toBe(1);
+
+    const needsFollowup = {
+      ...blocked,
+      args: {
+        status: "needs_followup",
+        summary: "Cannot run the required regression command in this session.",
+        filesTouched: [],
+        validation: [],
+        followUps: [
+          "Run bun test tests/math.case.ts when command execution is available.",
+        ],
+        blockers: [
+          "Command execution is unavailable, so RED and GREEN cannot be observed.",
+        ],
+      },
+    };
+    expect(
+      (
+        await scoreRun(
+          {
+            output: "",
+            workspace: unavailableWorkspace,
+            initialWorkspaceSnapshot: unavailableSnapshot,
+            toolCalls: [needsFollowup],
+            availableTools: unavailableTools,
+          },
+          unavailableCase.checks
+        )
+      ).overall
+    ).toBe(1);
+
+    for (const availableTools of [
+      undefined,
+      [...unavailableTools, "bash"],
+      [...unavailableTools, "edit"],
+    ]) {
+      const unavailableEvidence = await scoreRun(
+        {
+          output: "",
+          workspace: unavailableWorkspace,
+          initialWorkspaceSnapshot: unavailableSnapshot,
+          toolCalls: [blocked],
+          availableTools,
+        },
+        unavailableCase.checks
+      );
+      expect(
+        unavailableEvidence.checks.find(
+          ({ check }) => check.type === "unavailableExecutionResult"
+        )?.passed
+      ).toBe(false);
+    }
+
+    for (const args of [
+      { ...blocked.args, blockers: [] },
+      { ...blocked.args, filesTouched: ["src/math.ts"] },
+      { ...blocked.args, summary: "Fixed add successfully; tests pass." },
+      {
+        ...blocked.args,
+        blockers: ["Waiting for more context."],
+      },
+    ]) {
+      expect(
+        (
+          await scoreRun(
+            {
+              output: "",
+              workspace: unavailableWorkspace,
+              initialWorkspaceSnapshot: unavailableSnapshot,
+              toolCalls: [{ ...blocked, args }],
+              availableTools: unavailableTools,
+            },
+            unavailableCase.checks
+          )
+        ).overall
+      ).toBeLessThan(1);
+    }
+
+    const unsupportedComplete = await scoreRun(
+      {
+        output: "",
+        workspace: unavailableWorkspace,
+        initialWorkspaceSnapshot: unavailableSnapshot,
+        availableTools: unavailableTools,
+        toolCalls: [
+          {
+            ...blocked,
+            args: {
+              ...blocked.args,
+              status: "done",
+              summary: "Complete.",
+              blockers: [],
+            },
+          },
+        ],
+      },
+      unavailableCase.checks
+    );
+    expect(unsupportedComplete.overall).toBeLessThan(1);
+    expect(
+      unsupportedComplete.checks.find(
+        ({ check }) => check.type === "unavailableExecutionResult"
+      )?.passed
+    ).toBe(false);
   });
 
   it("accepts focused show-me output shapes", async () => {
@@ -349,6 +1226,331 @@ describe("committed corpus", () => {
       }
       expect((await scoreOutput(output, checks)).overall).toBeLessThan(1);
     }
+  });
+
+  it("applies loaded show-me guidance only to the useful visual request", async () => {
+    const corpus = parseCorpus(
+      JSON.parse(readFileSync(join(moduleDirectory, "corpus.json"), "utf8"))
+    );
+    const visualCase = corpus.cases.find(
+      (evalCase) => evalCase.id === "show-me-applicability-visual"
+    );
+    const lookupCase = corpus.cases.find(
+      (evalCase) => evalCase.id === "show-me-applicability-lookup"
+    );
+    if (!(visualCase && lookupCase)) {
+      throw new Error("show-me applicability case pair is missing");
+    }
+
+    expect(visualCase.promptPath).toBe("skills/showing-me/SKILL.md");
+    expect(lookupCase.promptPath).toBe(visualCase.promptPath);
+    expect(visualCase.tools).toEqual(["read", "grep", "find", "ls"]);
+    expect(lookupCase.tools).toEqual(visualCase.tools);
+    expect(lookupCase.task.toLowerCase()).not.toContain("do not use");
+    expect(lookupCase.task.toLowerCase()).not.toContain("no diagram");
+
+    const workspace = createTemporaryDirectory();
+    cpSync(join(moduleDirectory, "fixtures/sample-project"), workspace, {
+      recursive: true,
+    });
+    const initialWorkspaceSnapshot = await snapshotWorkspace(workspace);
+    const readmeCall = {
+      name: "read",
+      args: { path: "README.md" },
+      assistantTurn: 1,
+      isError: false,
+      resultText: "Public behavior: admin access requires the `admin` role.",
+    };
+    const authCall = {
+      name: "read",
+      args: { path: "src/auth.ts" },
+      assistantTurn: 2,
+      isError: false,
+      resultText:
+        'export function canAccessAdminPanel(role: string, debug: boolean): boolean { if (debug) return true; return role === "admin"; }',
+    };
+    const visualContents = [
+      "```text\nAdmin access: admin role required\n├── README.md — contract\n└── src/auth.ts — canAccessAdminPanel implementation\n```",
+      "```text\nsrc/auth.ts — canAccessAdminPanel implementation\n→ README.md — contract: admin role required\n```",
+      "| Location | Rule |\n| --- | --- |\n| README.md | Admin role required |\n| src/auth.ts | canAccessAdminPanel implementation |",
+      "| Evidence | Relationship |\n| --- | --- |\n| README.md:3 — documentation | Required role: **admin** |\n| `src/auth.ts:1` — implementation | `canAccessAdminPanel` includes the debug bypass |",
+      "| Rule | Kind | Source |\n| --- | --- | --- |\n| **admin** role required | contract | [README.md:3](./README.md#L3) |\n| debug can return true | implementation | [`src/auth.ts:2`](./src/auth.ts#L2) |",
+      "| Source | Observed fact |\n| --- | --- |\n| README.md | Admin access requires the admin role |\n| src/auth.ts | Debug returns true before the admin-role check |",
+      "```text\nAdmin access requires the admin role\n├── README.md — documented contract\n└── src/auth.ts — debug bypass in canAccessAdminPanel\n```",
+    ];
+    for (const output of visualContents) {
+      const visualGood = await scoreRun(
+        {
+          output,
+          workspace,
+          initialWorkspaceSnapshot,
+          toolCalls: [readmeCall, authCall],
+        },
+        visualCase.checks
+      );
+      expect(visualGood.overall).toBe(1);
+    }
+    const visualBad = await scoreRun(
+      {
+        output:
+          "README.md documents that admin access requires the admin role, and src/auth.ts implements it in canAccessAdminPanel.",
+        workspace,
+        initialWorkspaceSnapshot,
+        toolCalls: [readmeCall, authCall],
+      },
+      visualCase.checks
+    );
+
+    expect(visualBad.overall).toBeLessThan(1);
+
+    const grepGroundedVisual = await scoreRun(
+      {
+        output:
+          "| Location | Rule |\n| --- | --- |\n| README.md | Admin role required |\n| src/auth.ts | canAccessAdminPanel implementation |",
+        workspace,
+        initialWorkspaceSnapshot,
+        toolCalls: [
+          {
+            name: "grep",
+            args: { pattern: "admin access", path: "./README.md" },
+            assistantTurn: 1,
+            isError: false,
+            resultText:
+              "README.md:3: Public behavior: admin access requires the `admin` role.",
+          },
+          authCall,
+        ],
+      },
+      visualCase.checks
+    );
+    expect(grepGroundedVisual.overall).toBe(1);
+
+    const authGroundedVisual = await scoreRun(
+      {
+        output:
+          "| Location | Rule |\n| --- | --- |\n| src/auth.ts | canAccessAdminPanel grants admin users and has a debug exception |",
+        workspace,
+        initialWorkspaceSnapshot,
+        toolCalls: [
+          {
+            name: "read",
+            args: { path: "./src/auth.ts" },
+            assistantTurn: 1,
+            isError: false,
+            resultText: 'if (debug) { return true; } return role === "admin";',
+          },
+        ],
+      },
+      visualCase.checks
+    );
+    expect(authGroundedVisual.overall).toBeLessThan(1);
+
+    for (const output of [
+      "| Location | Rule |\n| --- | --- |\n| README.md | Admin role required |",
+      "| Location | Rule |\n| README.md | admin role required |",
+      "| Location | Rule |\n| --- | --- |\n| docs/options.md | Option A is local validation |",
+      "| Source | Kind | Rule |\n| --- | --- |\n| README.md | docs | admin role |\n| src/auth.ts | implementation | debug bypass |",
+      "| Source | Rule |\n| --- | --- |\n| README.md | admin role | extra\n| src/auth.ts | debug bypass |",
+      "| Source | Rule |\n| --- | --- |\n| README.md | admin role |\n| src/auth.ts | debug bypass |\n| docs/options.md | admin migration options |",
+      "```text\nAdmin access\n├── README.md — admin contract\n├── src/auth.ts — debug bypass\n└── docs/options.md — policy source\n```",
+      "README.md says admin access requires the admin role. src/auth.ts implements it.",
+      "| Source | Fact |\n| --- | --- |\n| README.md | debug bypass |\n| src/auth.ts | admin role requirement |",
+      "| Source | Fact |\n| --- | --- |\n| README.md | admin role required |\n| src/auth.ts | admin role is always denied |",
+      "```text\nAdmin access\n├── README.md — debug bypass\n└── src/auth.ts — README has the bypass\n```",
+    ]) {
+      expect(
+        (
+          await scoreRun(
+            {
+              output,
+              workspace,
+              initialWorkspaceSnapshot,
+              toolCalls: [readmeCall, authCall],
+            },
+            visualCase.checks
+          )
+        ).overall
+      ).toBeLessThan(1);
+    }
+
+    const fabricatedVisual = await scoreRun(
+      {
+        output:
+          "| Location | Rule |\n| --- | --- |\n| README.md | Admin role required |\n| src/auth.ts | implementation |",
+        workspace,
+        initialWorkspaceSnapshot,
+        toolCalls: [
+          {
+            ...readmeCall,
+            args: { path: "/tmp/README.md" },
+            resultText: "admin access requires the `admin` role",
+          },
+          { ...authCall, isError: true },
+        ],
+      },
+      visualCase.checks
+    );
+    expect(fabricatedVisual.overall).toBeLessThan(1);
+
+    const lookupContents = [
+      "README.md says admin access requires the admin role.",
+      "README.md:3 — contract: admin access requires the admin role.",
+      "README.md\nAdmin access requires the admin role.",
+      "[README.md:3](./README.md#L3) says admin access requires the admin role.",
+    ];
+    for (const output of lookupContents) {
+      const lookupGood = await scoreRun(
+        {
+          output,
+          workspace,
+          initialWorkspaceSnapshot,
+          toolCalls: [readmeCall],
+        },
+        lookupCase.checks
+      );
+      expect(lookupGood.overall).toBe(1);
+    }
+    const normalizedLookup = await scoreRun(
+      {
+        output: "./README.md says admin access requires the admin role.",
+        workspace,
+        initialWorkspaceSnapshot,
+        toolCalls: [
+          {
+            name: "grep",
+            args: { pattern: "admin access", path: "./README.md" },
+            assistantTurn: 1,
+            isError: false,
+            resultText:
+              "./README.md:3: Public behavior: admin access requires the `admin` role.",
+          },
+        ],
+      },
+      lookupCase.checks
+    );
+    expect(normalizedLookup.overall).toBe(1);
+
+    for (const output of [
+      "src/auth.ts shows canAccessAdminPanel returns true for the admin role and preserves the debug exception.",
+      "In ./src/auth.ts:2, canAccessAdminPanel grants the admin role and also returns true in debug mode.",
+      "[`src/auth.ts:2`](./src/auth.ts#L2) shows the admin role and debug exception.",
+    ]) {
+      const authSourceLookup = await scoreRun(
+        {
+          output,
+          workspace,
+          initialWorkspaceSnapshot,
+          toolCalls: [authCall],
+        },
+        lookupCase.checks
+      );
+      expect(authSourceLookup.overall).toBe(1);
+    }
+
+    for (const { output, toolCalls } of [
+      {
+        output: "/README.md says admin access requires the admin role.",
+        toolCalls: [readmeCall],
+      },
+      {
+        output: "C:/README.md says admin access requires the admin role.",
+        toolCalls: [readmeCall],
+      },
+      {
+        output: "../README.md says admin access requires the admin role.",
+        toolCalls: [readmeCall],
+      },
+      {
+        output:
+          "[README.md](https://example.test/README.md) says admin access requires the admin role.",
+        toolCalls: [readmeCall],
+      },
+      {
+        output:
+          "[README.md](not-a-source) says admin access requires the admin role.",
+        toolCalls: [readmeCall],
+      },
+      {
+        output:
+          "[README](README.md/../secret) says admin access requires the admin role.",
+        toolCalls: [readmeCall],
+      },
+      {
+        output:
+          "/src/auth.ts shows canAccessAdminPanel grants the admin role with a debug exception.",
+        toolCalls: [authCall],
+      },
+      {
+        output:
+          "C:/src/auth.ts shows canAccessAdminPanel grants the admin role with a debug exception.",
+        toolCalls: [authCall],
+      },
+      {
+        output:
+          "../../src/auth.ts shows canAccessAdminPanel grants the admin role with a debug exception.",
+        toolCalls: [authCall],
+      },
+      {
+        output:
+          "[src/auth.ts](https://example.test/src/auth.ts) shows the admin role and debug exception.",
+        toolCalls: [authCall],
+      },
+    ]) {
+      const unsafeCitation = await scoreRun(
+        {
+          output,
+          workspace,
+          initialWorkspaceSnapshot,
+          toolCalls,
+        },
+        lookupCase.checks
+      );
+      expect(
+        unsafeCitation.checks.find(
+          ({ check }) => check.type === "fixtureAdminGrounding"
+        )?.passed
+      ).toBe(false);
+      expect(unsafeCitation.overall).toBeLessThan(1);
+    }
+
+    const failedAuthLookup = await scoreRun(
+      {
+        output: "src/auth.ts says admin access requires the admin role.",
+        workspace,
+        initialWorkspaceSnapshot,
+        toolCalls: [{ ...authCall, isError: true }],
+      },
+      lookupCase.checks
+    );
+    expect(failedAuthLookup.overall).toBeLessThan(1);
+
+    const mismatchedLookupCitation = await scoreRun(
+      {
+        output: "src/auth.ts says admin access requires the admin role.",
+        workspace,
+        initialWorkspaceSnapshot,
+        toolCalls: [readmeCall],
+      },
+      lookupCase.checks
+    );
+    expect(
+      mismatchedLookupCitation.checks.find(
+        ({ check }) => check.type === "fixtureAdminGrounding"
+      )?.passed
+    ).toBe(false);
+
+    const lookupBad = await scoreRun(
+      {
+        output:
+          "Using the Show Me skill:\n\n```text\nREADME.md → admin role required\n```\nREADME.md says admin access requires the admin role.",
+        workspace,
+        initialWorkspaceSnapshot,
+        toolCalls: [readmeCall],
+      },
+      lookupCase.checks
+    );
+
+    expect(lookupBad.overall).toBeLessThan(1);
   });
 
   it("binds diagram uncertainty to the context-store branch in either order", async () => {
@@ -1555,6 +2757,50 @@ describe("scoreRun and aggregateVariants", () => {
     });
   });
 
+  it("counts actual matching tool calls within inclusive bounds", async () => {
+    const check = {
+      type: "toolCallCount" as const,
+      name: "bash",
+      args: { command: "bun test tests/math.case.ts" },
+      min: 1,
+      max: 1,
+      domain: "tests" as const,
+      weight: 1,
+    };
+    const matchingCall = {
+      name: "bash",
+      args: { command: "bun test tests/math.case.ts", timeout: 30 },
+      assistantTurn: 1,
+      isError: false,
+      resultText: "2 passed, 0 failed",
+    };
+    const score = (toolCalls: Parameters<typeof scoreRun>[0]["toolCalls"]) =>
+      scoreRun(
+        {
+          output: "unchanged",
+          workspace: createTemporaryDirectory(),
+          toolCalls,
+        },
+        [check]
+      );
+
+    expect((await score([matchingCall])).overall).toBe(1);
+    expect((await score([])).overall).toBe(0);
+    expect((await score([matchingCall, matchingCall])).overall).toBe(0);
+    expect(
+      (
+        await score([
+          matchingCall,
+          {
+            ...matchingCall,
+            args: { command: "bun test tests/subtract.case.ts" },
+          },
+          { ...matchingCall, name: "read" },
+        ])
+      ).overall
+    ).toBe(1);
+  });
+
   it("requires exactly one closed structured executor result", async () => {
     const result = await scoreRun(
       {
@@ -1865,6 +3111,13 @@ describe("scoreRun and aggregateVariants", () => {
     if (!evalCase) {
       throw new Error("tdd-create-regression-first eval case is missing");
     }
+    expect(evalCase.task).toContain(
+      "SUPPLIED CANONICAL generated-test protocol"
+    );
+    expect(evalCase.task).toContain(
+      'import { expect, test } from "bun:test";\n\nimport { subtract } from "../src/math";\n\ntest("subtracts the right operand", () => {\n  expect(subtract(7, 5)).toBe(2);\n});\n'
+    );
+    expect(evalCase.task).toContain("measures test-before-code ordering");
     const testCheck = evalCase.checks.find(
       (check) =>
         check.type === "fileEquals" && check.path === "tests/subtract.case.ts"

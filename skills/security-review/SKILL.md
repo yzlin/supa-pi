@@ -19,37 +19,19 @@ This skill ensures all code follows security best practices and identifies poten
 - Integrating third-party APIs, callbacks, or webhooks
 - Building AI/LLM features, tools, agents, or RAG workflows
 
-## Threat Model First
+## Shared Security Policy
 
-Before hardening code, spend five minutes identifying:
+Before beginning work, you MUST read and follow the canonical [Security Guidelines](../../rules/common/security.md). That common rule owns the shared threat-model, approval, and prohibited-action baseline and applies whenever this skill activates; load it directly from this link rather than assuming a rules extension or global catalog search supplied it.
 
-1. **Trust boundaries**: where untrusted data enters or crosses systems, such as HTTP requests, forms, file uploads, webhooks, third-party APIs, queues, config files, and LLM output.
-2. **Assets**: credentials, sessions, PII, payment data, tenant data, admin actions, money movement, and secrets.
-3. **Abuse cases**: how someone could spoof identity, tamper with data, deny an action, leak information, overload the system, or elevate privileges.
+## Specialized Security References
 
-If trust boundaries are unclear, stop and clarify before coding.
+For Solana wallet verification or transaction signing work, you MUST read [Solana security](references/solana.md).
 
-## Ask First
+For a user-influenced server-side fetch, you MUST read [SSRF prevention](references/ssrf.md).
 
-Get explicit user approval before:
+For work where LLM output or tools can affect application behavior, you MUST read [AI / LLM security](references/ai.md).
 
-- adding or changing authentication flows
-- changing authorization, roles, or permissions
-- storing new categories of sensitive data
-- adding external service integrations, callbacks, or webhooks
-- changing CORS, cookie, or security header behavior
-- adding file upload handlers
-- modifying rate limits or throttling
-- granting elevated permissions or destructive capabilities
-
-## Never Do
-
-- Never commit secrets or put them in logs.
-- Never trust client-side validation as a security boundary.
-- Never expose stack traces or internal errors to users.
-- Never store auth tokens in client-readable storage when httpOnly cookies are viable.
-- Never use `eval`, shell execution, raw SQL execution, or raw HTML rendering with untrusted data.
-- Never pass unvalidated LLM output into privileged code paths.
+Ordinary input-validation work does not automatically load any of these specialized references.
 
 ## Security Checklist
 
@@ -367,125 +349,6 @@ catch (error) {
 - [ ] Error messages generic for users
 - [ ] Detailed errors only in server logs
 - [ ] No stack traces exposed to users
-
-### 9. Blockchain Security (Solana)
-
-#### Wallet Verification
-```typescript
-import { verify } from '@solana/web3.js'
-
-async function verifyWalletOwnership(
-  publicKey: string,
-  signature: string,
-  message: string
-) {
-  try {
-    const isValid = verify(
-      Buffer.from(message),
-      Buffer.from(signature, 'base64'),
-      Buffer.from(publicKey, 'base64')
-    )
-    return isValid
-  } catch (error) {
-    return false
-  }
-}
-```
-
-#### Transaction Verification
-```typescript
-async function verifyTransaction(transaction: Transaction) {
-  // Verify recipient
-  if (transaction.to !== expectedRecipient) {
-    throw new Error('Invalid recipient')
-  }
-
-  // Verify amount
-  if (transaction.amount > maxAmount) {
-    throw new Error('Amount exceeds limit')
-  }
-
-  // Verify user has sufficient balance
-  const balance = await getBalance(transaction.from)
-  if (balance < transaction.amount) {
-    throw new Error('Insufficient balance')
-  }
-
-  return true
-}
-```
-
-#### Verification Steps
-- [ ] Wallet signatures verified
-- [ ] Transaction details validated
-- [ ] Balance checks before transactions
-- [ ] No blind transaction signing
-
-### 10. SSRF Prevention
-
-Any server-side fetch influenced by users can target internal services such as localhost, private networks, or cloud metadata endpoints.
-
-#### ❌ NEVER Fetch Arbitrary User URLs
-```typescript
-// DANGEROUS - user can target internal services
-await fetch(req.body.webhookUrl)
-```
-
-#### ✅ Prefer Allowlisted Endpoints
-```typescript
-const ALLOWED_WEBHOOK_HOSTS = new Set(['hooks.example.com'])
-
-function assertAllowedWebhookUrl(raw: string) {
-  const url = new URL(raw)
-
-  if (url.protocol !== 'https:') {
-    throw new Error('HTTPS required')
-  }
-
-  if (!ALLOWED_WEBHOOK_HOSTS.has(url.hostname)) {
-    throw new Error('Webhook host not allowed')
-  }
-
-  return url
-}
-
-await fetch(assertAllowedWebhookUrl(input.webhookUrl), { redirect: 'error' })
-```
-
-#### Verification Steps
-- [ ] User-influenced server fetches use scheme and host allowlists
-- [ ] Localhost, private, link-local, and reserved IP ranges rejected on high-risk paths
-- [ ] Redirects disabled or each redirect target revalidated
-- [ ] Fixed integration endpoints preferred over arbitrary URLs
-
-### 11. AI / LLM Security
-
-Treat model output like any other untrusted input. Prompts are not a security boundary.
-
-#### ❌ NEVER Trust Model Output Directly
-```typescript
-const sql = await model.generate(`Write SQL for: ${userQuestion}`)
-await db.query(sql) // arbitrary query execution
-
-const html = await model.generate(userPrompt)
-element.innerHTML = html // XSS risk
-```
-
-#### ✅ Validate and Constrain Model Output
-```typescript
-const raw = await model.generateObject({ prompt: userPrompt, schema: ActionSchema })
-const action = ActionSchema.parse(raw)
-
-await runAllowlistedAction(action.name, action.args)
-```
-
-#### Verification Steps
-- [ ] Model output validated before use
-- [ ] No raw model output passed to SQL, shell, `eval`, HTML, file paths, or tool calls
-- [ ] Secrets, cross-tenant data, and privileged system prompts kept out of model context
-- [ ] Tool permissions scoped to the minimum required
-- [ ] Destructive or irreversible tool actions require confirmation
-- [ ] Token, loop, and request limits prevent unbounded consumption
 
 ### 12. Dependency Security
 

@@ -90,6 +90,16 @@ function trajectory(
   ];
 }
 
+function assessableTrajectory(
+  greenText = "unit > formatName rejects empty input\n5 passed, 0 failed, 2 skipped"
+): TddToolCall[] {
+  const calls = trajectory(undefined, greenText);
+  calls[0]!.runnerWorkspaceProof = true;
+  calls[1]!.mutationProven = true;
+  calls[2]!.runnerWorkspaceProof = true;
+  return calls;
+}
+
 describe("TDD evidence validation", () => {
   it("enforces an optionally declared exact RED/GREEN command", () => {
     expect(
@@ -924,6 +934,110 @@ describe("TDD evidence validation", () => {
     }
   });
 
+  it("ignores only capture-proven shell calls denied before execution", () => {
+    const deniedInspections = trajectory();
+    deniedInspections.splice(0, 0, {
+      name: "bash",
+      args: {
+        command:
+          "cat package.json; cat src/*; cat tests/math.case.ts; git status --short",
+      },
+      assistantTurn: 0,
+      startOrder: -2,
+      endOrder: -1,
+      isError: true,
+      executionDeniedBeforeStart: true,
+      resultText: "Blocked by eval command allowlist",
+    });
+    deniedInspections.splice(4, 0, {
+      name: "bash",
+      args: {
+        command:
+          "git diff -- src/math.ts tests/math.case.ts && git status --short",
+      },
+      assistantTurn: 3,
+      startOrder: 9,
+      endOrder: 10,
+      isError: true,
+      executionDeniedBeforeStart: true,
+      resultText: "Blocked by eval command allowlist",
+    });
+    deniedInspections[5] = {
+      ...deniedInspections[5]!,
+      assistantTurn: 4,
+      startOrder: 12,
+      endOrder: 13,
+    };
+    expect(validateTddEvidence(result(), deniedInspections)).toBeUndefined();
+
+    for (const unsafe of [
+      {
+        command: "git status --short",
+        isError: true,
+      },
+      {
+        command: "echo x > src/math.ts; false",
+        isError: true,
+      },
+      {
+        command: "echo x > src/math.ts; false",
+        isError: true,
+        argsProofOnly: true,
+      },
+    ]) {
+      const calls = trajectory();
+      calls.splice(3, 0, {
+        name: "bash",
+        args: {
+          command: unsafe.command,
+          ...(unsafe.argsProofOnly ? { executionDeniedBeforeStart: true } : {}),
+        },
+        assistantTurn: 3,
+        startOrder: 9,
+        endOrder: 10,
+        isError: unsafe.isError,
+        resultText: "Blocked by eval command allowlist",
+      });
+      calls[4] = {
+        ...calls[4]!,
+        assistantTurn: 4,
+        startOrder: 12,
+        endOrder: 13,
+      };
+      expect(validateTddEvidence(result(), calls)).toContain("TDD ordering");
+    }
+
+    const impossibleSuccessfulDenial = trajectory();
+    impossibleSuccessfulDenial.splice(3, 0, {
+      name: "bash",
+      args: { command: "echo x > src/math.ts" },
+      assistantTurn: 3,
+      startOrder: 9,
+      endOrder: 10,
+      isError: false,
+      executionDeniedBeforeStart: true,
+    });
+    impossibleSuccessfulDenial[4] = {
+      ...impossibleSuccessfulDenial[4]!,
+      assistantTurn: 4,
+      startOrder: 12,
+      endOrder: 13,
+    };
+    expect(validateTddEvidence(result(), impossibleSuccessfulDenial)).toContain(
+      "TDD ordering"
+    );
+
+    const deniedTest = trajectory();
+    deniedTest[0] = {
+      ...deniedTest[0]!,
+      executionDeniedBeforeStart: true,
+      resultText: "formatName regression\n1 failed",
+    };
+    expect(validateTddEvidence(result(), deniedTest)).toContain(
+      "no retained test failure matched RED"
+    );
+  });
+
   it("classifies mutation capability independently of failed tool status", () => {
     const failedMutation = trajectory();
     failedMutation.splice(3, 0, {
@@ -1308,8 +1422,8 @@ describe("TDD evidence validation", () => {
     expect(truncatedTestFile).toMatchObject({
       editDeltaTruncated: true,
       hasTestTargets: true,
-      hasProductionTargets: true,
-      mutationAmbiguous: true,
+      hasProductionTargets: false,
+      mutationAmbiguous: false,
     });
   });
 
@@ -1492,6 +1606,97 @@ describe("TDD evidence validation", () => {
       };
       expect(validateTddEvidence(result(), calls)).toContain("TDD ordering");
     }
+  });
+
+  it("allows only an exact trusted fixture RED identity without relaxing normal matching", () => {
+    const calls = trajectory(
+      "tests/math.case.ts > math > adds numbers\nExpected: 12\nReceived: 2\n1 failed, 1 passed",
+      "tests/math.case.ts > math > adds numbers\n2 passed, 0 failed"
+    );
+    for (const call of [calls[0], calls[2]]) {
+      call!.args = { command: "bun test tests/math.case.ts" };
+    }
+    const evidence = result();
+    evidence.validation[0] =
+      "RED: bun test tests/math.case.ts failed with 1 failed, 1 passed";
+    evidence.validation[1] =
+      "GREEN: bun test tests/math.case.ts passed with 2 passed, 0 failed";
+    evidence.validation[2] =
+      "COVERAGE: add(7, 5) regression path covered by tests/math.case.ts";
+    const trustedFixtureRegression = {
+      command: "bun test tests/math.case.ts",
+      redOutputIdentity:
+        "tests/math.case.ts > math > adds numbers\nExpected: 12\nReceived: 2",
+    };
+
+    expect(
+      validateTddEvidence(evidence, calls, [], "Correct the billing cycle")
+    ).toContain("actual failing/passing test output");
+    expect(
+      validateTddEvidence(
+        evidence,
+        calls,
+        [],
+        "Correct the billing cycle",
+        undefined,
+        {
+          trustedFixtureRegression,
+        }
+      )
+    ).toBeUndefined();
+
+    for (const mutate of [
+      {
+        command: "bun test tests/math.case.ts --watch",
+        identity: trustedFixtureRegression.redOutputIdentity,
+      },
+      {
+        command: trustedFixtureRegression.command,
+        identity:
+          "tests/math.case.ts > math > multiplies numbers\nExpected: 35\nReceived: 12",
+      },
+    ]) {
+      const rejected = calls.map((call) => ({
+        ...call,
+        args: { ...call.args },
+      }));
+      rejected[0]!.args.command = mutate.command;
+      rejected[0]!.resultText = `${mutate.identity}\n1 failed, 1 passed`;
+      expect(
+        validateTddEvidence(
+          evidence,
+          rejected,
+          [],
+          "unrelated words",
+          undefined,
+          {
+            trustedFixtureRegression,
+          }
+        )
+      ).toContain("actual failing/passing test output");
+    }
+
+    const changedTest = calls.toSpliced(0, 0, {
+      name: "edit",
+      args: { path: "tests/math.case.ts", oldText: "old", newText: "new" },
+      assistantTurn: 0,
+      startOrder: -2,
+      endOrder: -1,
+      isError: false,
+      mutationProven: true,
+    });
+    expect(
+      validateTddEvidence(
+        evidence,
+        changedTest,
+        [],
+        "unrelated words",
+        undefined,
+        {
+          trustedFixtureRegression,
+        }
+      )
+    ).toContain("actual failing/passing test output");
   });
 
   it("correlates ordinary RED failures with focused or trusted regression intent", () => {
@@ -1860,6 +2065,283 @@ describe("TDD evidence validation", () => {
       const evidence = result();
       evidence.validation[2] = `COVERAGE: ${coverage}`;
       expect(validateTddEvidence(evidence, trajectory())).toContain("COVERAGE");
+    }
+  });
+
+  it("accepts grounded covers and covered claims through the same proof gate", () => {
+    for (const verb of ["covers", "covered"]) {
+      for (const suffix of [
+        "",
+        "; No repository coverage threshold was specified.",
+      ]) {
+        const evidence = result();
+        evidence.validation[2] = `COVERAGE: The focused test ${verb} \`formatName()\` behavior and \`empty-input\` failure path${suffix}`;
+        const calls = assessableTrajectory();
+        expect(validateTddEvidence(evidence, calls)).toBeUndefined();
+        expect(
+          assessTddEvidence(evidence, calls, [], "Fix formatName empty input")
+        ).toEqual({ kind: "verified" });
+      }
+    }
+  });
+
+  it("keeps negated present-tense coverage behind independent verification", () => {
+    for (const gap of [
+      "never covers",
+      "never fully covers",
+      "does not cover",
+      "doesn't cover",
+      "doesn’t fully cover",
+      "no longer covers",
+      "cannot cover",
+      "can't cover",
+      "fails to cover",
+      "fails to fully cover",
+      "is not covering",
+      "isn't covering",
+      "continues without covering",
+      "does not yet cover",
+    ]) {
+      const evidence = result();
+      evidence.validation[2] = `COVERAGE: The focused test covers \`formatName()\` behavior but ${gap} the \`empty-input\` failure path`;
+      const calls = assessableTrajectory();
+      expect(validateTddEvidence(evidence, calls)).toBeDefined();
+      expect(
+        assessTddEvidence(evidence, calls, [], "Fix formatName empty input")
+      ).toMatchObject({ kind: "needs_verification" });
+    }
+  });
+
+  it("does not let covers wording supply missing or fabricated proof", () => {
+    for (const [coverage, assessment] of [
+      [
+        "The focused test covers behavior and failure paths",
+        { kind: "needs_verification" },
+      ],
+      [
+        "The focused test covers `madeUpBehavior()` and `invented-case` failure path",
+        { kind: "needs_verification" },
+      ],
+      [
+        "Predicted: the focused test covers `formatName()` behavior and `empty-input` failure path",
+        { kind: "failed", code: "fabricated_claim" },
+      ],
+      [
+        "The focused test covers `formatName()` behavior and `empty-input` failure path; 99% statements covered",
+        { kind: "failed", code: "fabricated_coverage" },
+      ],
+    ] as const) {
+      const evidence = result();
+      evidence.validation[2] = `COVERAGE: ${coverage}`;
+      const calls = assessableTrajectory();
+      expect(validateTddEvidence(evidence, calls)).toBeDefined();
+      expect(
+        assessTddEvidence(evidence, calls, [], "Fix formatName empty input")
+      ).toMatchObject(assessment);
+    }
+  });
+
+  it("does not let tooling-unavailable wording bypass numeric coverage proof", () => {
+    const unsupported = [
+      "coverage tooling unavailable because the command allowlist blocked coverage invocation; 99% statements covered",
+      "coverage tooling unavailable because the command allowlist blocked coverage invocation; 101% statements covered",
+      "coverage tooling unavailable because the command allowlist blocked coverage invocation; statements: 99 percent",
+      "coverage tooling unavailable because the command allowlist blocked coverage invocation; 18 branches",
+      "coverage tooling unavailable because the command allowlist blocked coverage invocation; 99% coverage",
+      "coverage tooling unavailable because the command allowlist blocked coverage invocation; 150/14 branches covered",
+      "coverage tooling unavailable because the command allowlist blocked coverage invocation; coverage threshold banana met",
+    ];
+    for (const coverage of unsupported) {
+      const evidence = result();
+      evidence.validation[2] = `COVERAGE: ${coverage}`;
+      const calls = assessableTrajectory();
+      expect(validateTddEvidence(evidence, calls)).toContain("COVERAGE");
+      expect(
+        assessTddEvidence(evidence, calls, [], "Fix formatName empty input")
+      ).toMatchObject({ kind: "failed", code: "fabricated_coverage" });
+    }
+
+    const measured = result();
+    measured.validation[2] =
+      "COVERAGE: coverage tooling unavailable because the default script is absent; Statements: 92%";
+    const measuredCalls = assessableTrajectory(
+      "unit > formatName rejects empty input\n5 passed, 0 failed\nStatements: 92%"
+    );
+    expect(validateTddEvidence(measured, measuredCalls)).toBeUndefined();
+    expect(
+      assessTddEvidence(
+        measured,
+        measuredCalls,
+        [],
+        "Fix formatName empty input"
+      )
+    ).toEqual({ kind: "verified" });
+
+    for (const prefix of [
+      "",
+      "coverage tooling unavailable because the default script is absent; ",
+    ]) {
+      for (const [observedCount, percentClaim] of [
+        ["Statements: 99", "Statements: 99 percent"],
+        ["Statements: 99", "Statements: 99.5 percent"],
+        ["branches=18", "branches=18 percent"],
+        ["functions: 7", "functions: 7 percent covered"],
+      ]) {
+        const malformed = result();
+        malformed.validation[2] = `COVERAGE: ${prefix}${percentClaim}`;
+        const calls = assessableTrajectory(
+          `unit > formatName rejects empty input\n5 passed, 0 failed\n${observedCount}`
+        );
+        const validationError = validateTddEvidence(malformed, calls);
+        expect(validationError).toBeDefined();
+        expect(validationError).toContain("COVERAGE");
+        expect(
+          assessTddEvidence(malformed, calls, [], "Fix formatName empty input")
+        ).toMatchObject({ kind: "failed", code: "fabricated_coverage" });
+      }
+    }
+
+    const unavailableOnly = result();
+    unavailableOnly.validation[2] =
+      "COVERAGE: coverage tooling unavailable because the command allowlist blocked coverage invocation";
+    const unavailableCalls = assessableTrajectory();
+    expect(
+      validateTddEvidence(unavailableOnly, unavailableCalls)
+    ).toBeUndefined();
+    expect(
+      assessTddEvidence(
+        unavailableOnly,
+        unavailableCalls,
+        [],
+        "Fix formatName empty input"
+      )
+    ).toEqual({ kind: "verified" });
+
+    const measuredOutput =
+      "unit > formatName rejects empty input\n5 passed, 0 failed\nStatements: 92%";
+    for (const prefix of [
+      "",
+      "coverage tooling unavailable because the default script is absent; ",
+    ]) {
+      for (const residual of [
+        "99% coverage",
+        "18 branches",
+        "coverage threshold banana met",
+      ]) {
+        const mixed = result();
+        mixed.validation[2] = `COVERAGE: ${prefix}Statements: 92%; ${residual}`;
+        const calls = assessableTrajectory(measuredOutput);
+        const validationError = validateTddEvidence(mixed, calls);
+        if (!validationError) {
+          throw new Error(`accepted mixed coverage residue: ${residual}`);
+        }
+        expect(validationError).toContain("COVERAGE");
+        expect(
+          assessTddEvidence(mixed, calls, [], "Fix formatName empty input")
+        ).toMatchObject({ kind: "failed", code: "fabricated_coverage" });
+      }
+    }
+
+    for (const prefix of [
+      "`formatName()` behavior and `empty-input` failure path covered; ",
+      "coverage tooling unavailable because the command allowlist blocked coverage invocation; ",
+    ]) {
+      for (const assertion of [
+        "coverage threshold met",
+        "99% covered",
+        "99 percent statements covered",
+      ]) {
+        const malformed = result();
+        malformed.validation[2] = `COVERAGE: ${prefix}${assertion}`;
+        const calls = assessableTrajectory();
+        expect(validateTddEvidence(malformed, calls)).toContain("COVERAGE");
+        expect(
+          assessTddEvidence(malformed, calls, [], "Fix formatName empty input")
+        ).toMatchObject({ kind: "failed", code: "fabricated_coverage" });
+      }
+    }
+  });
+
+  it("treats explicit coverage gaps as adaptive rather than verified", () => {
+    for (const coverage of [
+      "`formatName()` behavior and `empty-input` failure path not covered",
+      "bun test tests/formatName.test.ts passed with 5 tests passed; `empty-input` path not tested",
+      "coverage tooling unavailable because the command allowlist blocked coverage invocation; `empty-input` path not covered",
+      "`formatName()` behavior was never fully covered",
+      "`formatName()` behavior wasn't fully tested",
+      "`formatName()` behavior has not been covered",
+      "`formatName()` behavior wasn’t covered",
+    ]) {
+      const evidence = result();
+      evidence.validation[2] = `COVERAGE: ${coverage}`;
+      const calls = assessableTrajectory();
+      expect(validateTddEvidence(evidence, calls)).toContain("COVERAGE");
+      expect(
+        assessTddEvidence(evidence, calls, [], "Fix formatName empty input")
+      ).toMatchObject({ kind: "needs_verification" });
+    }
+
+    for (const coverage of [
+      "`formatName()` behavior and `empty-input` failure path covered",
+      "`formatName()` behavior was not only covered but tested",
+    ]) {
+      const positive = result();
+      positive.validation[2] = `COVERAGE: ${coverage}`;
+      const positiveCalls = assessableTrajectory();
+      expect(validateTddEvidence(positive, positiveCalls)).toBeUndefined();
+      expect(
+        assessTddEvidence(
+          positive,
+          positiveCalls,
+          [],
+          "Fix formatName empty input"
+        )
+      ).toEqual({ kind: "verified" });
+    }
+  });
+
+  it("does not treat explicit threshold absence as a numeric assertion", () => {
+    const numericInputs = result();
+    numericInputs.validation[2] =
+      "COVERAGE: `formatName(99)` behavior and `empty-input` failure path covered after 5 tests passed";
+    const numericInputCalls = assessableTrajectory();
+    expect(
+      validateTddEvidence(numericInputs, numericInputCalls)
+    ).toBeUndefined();
+    expect(
+      assessTddEvidence(
+        numericInputs,
+        numericInputCalls,
+        [],
+        "Fix formatName empty input"
+      )
+    ).toEqual({ kind: "verified" });
+
+    for (const absence of [
+      "No repository coverage threshold was specified.",
+      "No repository coverage threshold was provided.",
+    ]) {
+      const named = result();
+      named.validation[2] = `COVERAGE: \`formatName()\` behavior and \`empty-input\` failure path covered. ${absence}`;
+      const calls = assessableTrajectory();
+      expect(validateTddEvidence(named, calls)).toBeUndefined();
+      expect(
+        assessTddEvidence(named, calls, [], "Fix formatName empty input")
+      ).toEqual({ kind: "verified" });
+
+      const absentOnly = result();
+      absentOnly.validation[2] = `COVERAGE: ${absence}`;
+      expect(validateTddEvidence(absentOnly, calls)).toContain("COVERAGE");
+      expect(
+        assessTddEvidence(absentOnly, calls, [], "Fix formatName empty input")
+      ).toMatchObject({ kind: "needs_verification" });
+
+      const fabricated = result();
+      fabricated.validation[2] = `COVERAGE: ${absence} 99% statements covered.`;
+      expect(validateTddEvidence(fabricated, calls)).toContain("COVERAGE");
+      expect(
+        assessTddEvidence(fabricated, calls, [], "Fix formatName empty input")
+      ).toMatchObject({ kind: "failed", code: "fabricated_coverage" });
     }
   });
 

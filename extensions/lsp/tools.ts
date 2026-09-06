@@ -70,9 +70,14 @@ function validateParams(
 
 // ── Types ───────────────────────────────────────────────────────────────────
 
+interface DiagnosticsClient {
+  readonly config: { readonly name: string };
+  getDiagnostics: (filePath: string) => Promise<Diagnostic[]>;
+}
+
 export interface ServerManager {
   /** Get all LSP clients that handle a given file extension. */
-  clientsForFile: (filePath: string) => LspClient[];
+  clientsForFile: (filePath: string) => DiagnosticsClient[];
   /** Get the first LSP client that handles a file and has a capability. */
   clientForFileWithCapability: (
     filePath: string,
@@ -102,7 +107,10 @@ const CAPABILITY_MAP: Record<LspOperation, string> = {
 
 // ── Registration ────────────────────────────────────────────────────────────
 
-export function registerLspTool(pi: ExtensionAPI, mgr: ServerManager) {
+export function registerLspTool(
+  pi: Pick<ExtensionAPI, "registerTool">,
+  mgr: ServerManager
+) {
   pi.registerTool({
     name: "lsp",
     label: "LSP",
@@ -317,25 +325,48 @@ async function executeDiagnostics(
 ) {
   const groups: { source: string; diagnostics: Diagnostic[] }[] = [];
   const errors: string[] = [];
+  const successfulSources: string[] = [];
 
   // Gather from all LSP servers that handle this file
   const clients = mgr.clientsForFile(filePath);
+  if (clients.length === 0) {
+    throw new Error(
+      `LSP diagnostics unavailable for ${filePath}: no matching LSP servers. Check /lsp status.`
+    );
+  }
+
   for (const client of clients) {
     try {
       const diags = await client.getDiagnostics(filePath);
+      successfulSources.push(client.config.name);
       if (diags.length > 0) {
         groups.push({ source: client.config.name, diagnostics: diags });
       }
-    } catch (err) {
-      errors.push(`${client.config.name}: ${(err as Error).message}`);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      errors.push(`${client.config.name}: ${message}`);
     }
   }
 
-  const text = formatDiagnostics(filePath, groups);
-  const errorNote = errors.length > 0 ? `\n\nNote: ${errors.join("; ")}` : "";
+  if (successfulSources.length === 0) {
+    throw new Error(
+      `LSP diagnostics unavailable for ${filePath}: all matching servers failed.\nServer errors: ${errors.join("; ")}`
+    );
+  }
 
+  if (errors.length > 0) {
+    const successfulResult =
+      groups.length > 0
+        ? formatDiagnostics(filePath, groups)
+        : `${successfulSources.join(", ")} returned no diagnostics.`;
+    throw new Error(
+      `LSP diagnostics incomplete for ${filePath}.\n\n${successfulResult}\n\nServer errors: ${errors.join("; ")}`
+    );
+  }
+
+  const text = formatDiagnostics(filePath, groups);
   return {
-    content: [{ type: "text" as const, text: text + errorNote }],
+    content: [{ type: "text" as const, text }],
     details: {
       groups: groups.map((g) => ({
         source: g.source,

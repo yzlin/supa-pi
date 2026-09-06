@@ -18,7 +18,8 @@
 - `docs/context/extension-registration.md` — read before changing `package.json -> pi.extensions`, documenting active Extensions, or reasoning about disabled Extension code.
 - `docs/context/ask.md` — read before changing the active Ask Extension, its public `ask` tool or `/ask-stats` command, schema/result shape, keyboard behavior, validation, or rpiv-divergence documentation.
 - `docs/context/code-improvement.md` — read before changing `/simplify`, `/improve-codebase-architecture`, or code-improvement prompt files.
-- `docs/context/gpt-5.6-harness-optimization.md` — read before changing default models, thinking levels, agent model routing, prompt size, prompt caching, tool exposure, structured model output, or model evals.
+- `docs/context/gpt-5.6-harness-optimization.md` — read before changing GPT-5.6 defaults, thinking levels, agent model routing, prompt size, prompt caching, tool exposure, structured model output, or interpreting historical GPT-5.6 evals.
+- `docs/context/gpt-6-astra-harness-readiness.md` — read before evaluating GPT-6 Astra, comparing it with current models, probing full-stack behavior, or proposing an Astra default or route change.
 - `extensions/review/README.md` — read before changing `/review`, `/review-summary`, `/review-fix`, reviewer-agent orchestration, or review prompt contracts.
 
 ## Major extension docs

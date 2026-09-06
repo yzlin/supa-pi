@@ -1,15 +1,18 @@
 import { describe, expect, it } from "bun:test";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
+import { spawn } from "bun";
 
 import {
   configuredPrimaryModel,
   createComparison,
   createVariantConfigs,
+  modelForVariant,
   modelSelectionRecord,
   parseCliOptions,
   plannedCallMessage,
+  resolveModelComparison,
   singleArmManifestFields,
   TASK_SHAPE_CASE_IDS,
   taskShapeSummaryMarkdown,
@@ -21,6 +24,26 @@ import {
   aggregatePersistedTaskShapeRuns,
   loadTaskShapeCorpus,
 } from "./task-shape";
+
+const PROMPT_HASHES_PATTERN =
+  /Prompt agents\/explorer\.md: baseline working-tree sha256=[a-f0-9]{64}; candidate working-tree sha256=[a-f0-9]{64}/;
+const CORE_PROMPT_HASH_PATTERN = /Core eval base prompt sha256=[a-f0-9]{64}/;
+
+async function snapshotDirectory(path: string): Promise<string[] | null> {
+  try {
+    return (await readdir(path)).sort();
+  } catch (error) {
+    if (
+      typeof error === "object" &&
+      error !== null &&
+      "code" in error &&
+      error.code === "ENOENT"
+    ) {
+      return null;
+    }
+    throw error;
+  }
+}
 
 describe("Task-shape artifact summaries", () => {
   it("aggregates persisted taskShapeEvidence into JSON and Markdown counts", async () => {
@@ -78,6 +101,128 @@ describe("Task-shape artifact summaries", () => {
     } finally {
       await rm(runsDirectory, { recursive: true, force: true });
     }
+  });
+});
+
+describe("dry-run CLI", () => {
+  it("prints an offline bounded model-comparison preview before live side effects", async () => {
+    const isolatedRoot = await mkdtemp(join(tmpdir(), "prompt-eval-dry-"));
+    const emptyHome = join(isolatedRoot, "home");
+    const isolatedTmp = join(isolatedRoot, "tmp");
+    await Promise.all([mkdir(emptyHome), mkdir(isolatedTmp)]);
+    const temporaryEntriesBefore = await snapshotDirectory(isolatedTmp);
+    const artifactsDirectory = resolve(import.meta.dir, "../../.pi/evals");
+    const artifactsBefore = await snapshotDirectory(artifactsDirectory);
+    try {
+      const child = spawn({
+        cmd: [
+          process.execPath,
+          resolve(import.meta.dir, "cli.ts"),
+          "--dry-run",
+          "--case",
+          "explore-root-cause",
+          "--model",
+          "synthetic/baseline",
+          "--candidate-model",
+          "synthetic/candidate",
+          "--thinking",
+          "high",
+          "--repetitions",
+          "2",
+          "--max-turns",
+          "3",
+          "--timeout-ms",
+          "1234",
+        ],
+        cwd: resolve(import.meta.dir, "../.."),
+        env: {
+          ...process.env,
+          HOME: emptyHome,
+          TMPDIR: isolatedTmp,
+          SUPA_PI_EVAL_FORBID_LIVE: "1",
+        },
+        stdout: "pipe",
+        stderr: "pipe",
+      });
+      const [exitCode, stdout, stderr] = await Promise.all([
+        child.exited,
+        new Response(child.stdout).text(),
+        new Response(child.stderr).text(),
+      ]);
+
+      expect(exitCode).toBe(0);
+      expect(stderr).toBe("");
+      expect(stdout).toContain(
+        "DRY RUN — no model runtime, credentials, network, fixture copies, or eval artifacts"
+      );
+      expect(stdout).toContain("Cases (1): explore-root-cause");
+      expect(stdout).toContain("Mode: model comparison");
+      expect(stdout).toContain(
+        "baseline: requested synthetic/baseline (unresolved/unverified); effort high; prompt working-tree"
+      );
+      expect(stdout).toContain(
+        "candidate: requested synthetic/candidate (unresolved/unverified); effort high; prompt working-tree"
+      );
+      expect(stdout).toContain("Repetitions: 2");
+      expect(stdout).toContain(
+        "RUNS: 4 (1 case(s) × 2 repetition(s) × 2 arms)"
+      );
+      expect(stdout).toContain(
+        "MODEL RESPONSE turns: at most 12 (4 runs × maxTurns 3)"
+      );
+      expect(stdout).toContain(
+        "maxTurns: 3 per run; timeout: 1234 ms per run (abort deadline)"
+      );
+      expect(stdout).toContain(
+        "Transport attempts/retries: not bounded by maxTurns; provider retry behavior is unresolved/unverified"
+      );
+      expect(stdout).toMatch(PROMPT_HASHES_PATTERN);
+      expect(stdout).toMatch(CORE_PROMPT_HASH_PATTERN);
+      expect(stdout).toContain(
+        "Live transmission: evaluated system prompt, case task, conversation messages, tool calls/results, and fixture contents exposed through tools go to each requested model provider"
+      );
+      expect(stdout).toContain("Cost: unknown; token budget: none");
+      expect(await snapshotDirectory(artifactsDirectory)).toEqual(
+        artifactsBefore
+      );
+      expect(await snapshotDirectory(isolatedTmp)).toEqual(
+        temporaryEntriesBefore
+      );
+    } finally {
+      await rm(isolatedRoot, { recursive: true, force: true });
+    }
+  });
+
+  it("exposes --dry-run in help and validates cases without entering live mode", async () => {
+    const cliPath = resolve(import.meta.dir, "cli.ts");
+    const cwd = resolve(import.meta.dir, "../..");
+    const help = spawn({
+      cmd: [process.execPath, cliPath, "--help"],
+      cwd,
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    const invalid = spawn({
+      cmd: [process.execPath, cliPath, "--dry-run", "--case", "not-a-case"],
+      cwd,
+      env: { ...process.env, SUPA_PI_EVAL_FORBID_LIVE: "1" },
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    const [helpCode, helpOutput, invalidCode, invalidError] = await Promise.all(
+      [
+        help.exited,
+        new Response(help.stdout).text(),
+        invalid.exited,
+        new Response(invalid.stderr).text(),
+      ]
+    );
+
+    expect(helpCode).toBe(0);
+    expect(helpOutput).toContain("--dry-run");
+    expect(invalidCode).toBe(1);
+    expect(invalidError).toContain("unknown eval case: not-a-case");
+    expect(invalidError).not.toContain("live execution forbidden");
   });
 });
 
@@ -164,6 +309,158 @@ describe("parseCliOptions", () => {
       selectedAtStart: "configured-provider/configured-model",
       resolved: "configured-provider/exact-model-id",
     });
+  });
+
+  it("parses an exact model comparison", () => {
+    const options = parseCliOptions([
+      "--model",
+      "synthetic/baseline",
+      "--candidate-model",
+      "synthetic/candidate",
+      "--thinking",
+      "high",
+      "--dry-run",
+    ]);
+
+    expect(options).toMatchObject({
+      model: "synthetic/baseline",
+      candidateModel: "synthetic/candidate",
+      thinking: "high",
+      dryRun: true,
+    });
+    expect(createComparison(options)).toEqual({
+      kind: "model",
+      baseline: {
+        thinking: "high",
+        promptSource: "working-tree",
+        requestedModel: "synthetic/baseline",
+      },
+      candidate: {
+        thinking: "high",
+        promptSource: "working-tree",
+        requestedModel: "synthetic/candidate",
+      },
+    });
+  });
+
+  it("rejects incomplete or combined model comparison modes", () => {
+    expect(() =>
+      parseCliOptions(["--candidate-model", "synthetic/candidate"])
+    ).toThrow("requires an explicit --model baseline");
+    expect(() =>
+      parseCliOptions([
+        "--model",
+        "synthetic/baseline",
+        "--candidate-model",
+        "synthetic/candidate",
+        "--candidate-thinking",
+        "medium",
+      ])
+    ).toThrow("cannot combine model comparison");
+    expect(() =>
+      parseCliOptions([
+        "--model",
+        "synthetic/baseline",
+        "--candidate-model",
+        "synthetic/candidate",
+        "--compare-service-tier",
+      ])
+    ).toThrow("cannot combine model comparison");
+    expect(() =>
+      parseCliOptions([
+        "--model",
+        "synthetic/baseline",
+        "--candidate-model",
+        "synthetic/candidate",
+        "--task-shape-suite",
+      ])
+    ).toThrow("cannot be combined with paired comparison flags");
+  });
+
+  it("resolves both model arms exactly and preserves arm identity", () => {
+    const baseline = {
+      provider: "synthetic",
+      id: "baseline",
+      reasoning: true,
+      thinkingLevelMap: { high: "high" },
+    };
+    const candidate = {
+      provider: "synthetic",
+      id: "candidate",
+      reasoning: true,
+      thinkingLevelMap: { high: "high" },
+    };
+    const selection = resolveModelComparison(
+      "synthetic/baseline",
+      "synthetic/candidate",
+      "high",
+      [baseline, candidate]
+    );
+
+    expect(modelForVariant(selection, "baseline")).toBe(baseline);
+    expect(modelForVariant(selection, "candidate")).toBe(candidate);
+    expect(selection.comparison).toEqual({
+      kind: "model",
+      baseline: {
+        thinking: "high",
+        promptSource: "working-tree",
+        requestedModel: "synthetic/baseline",
+        resolvedModel: "synthetic/baseline",
+      },
+      candidate: {
+        thinking: "high",
+        promptSource: "working-tree",
+        requestedModel: "synthetic/candidate",
+        resolvedModel: "synthetic/candidate",
+      },
+    });
+    expect(() =>
+      resolveModelComparison("synthetic/base", "synthetic/candidate", "high", [
+        baseline,
+        candidate,
+      ])
+    ).toThrow("exact model not found: synthetic/base");
+  });
+
+  it("rejects the same resolved model and incomparable effective effort", () => {
+    const baseline = {
+      provider: "synthetic",
+      id: "baseline",
+      reasoning: true,
+    };
+    const candidate = {
+      provider: "synthetic",
+      id: "candidate",
+      reasoning: true,
+      thinkingLevelMap: { minimal: "low", high: null },
+    };
+
+    expect(() =>
+      resolveModelComparison(
+        "synthetic/baseline",
+        "SYNTHETIC/BASELINE",
+        "high",
+        [baseline, candidate]
+      )
+    ).toThrow("must resolve to different models");
+    expect(() =>
+      resolveModelComparison(
+        "synthetic/baseline",
+        "synthetic/candidate",
+        "high",
+        [baseline, candidate]
+      )
+    ).toThrow("candidate model does not support thinking level: high");
+    expect(() =>
+      resolveModelComparison(
+        "synthetic/baseline",
+        "synthetic/candidate",
+        "minimal",
+        [baseline, candidate]
+      )
+    ).toThrow(
+      "effective thinking efforts are not comparable: minimal versus low"
+    );
   });
 
   it("parses a service-tier comparison", () => {
@@ -396,6 +693,26 @@ describe("createVariantConfigs", () => {
         promptSha256: "working-hash",
         thinking: "medium",
         serviceTier: "priority",
+      },
+    });
+  });
+
+  it("uses identical working-tree prompts and effort in model mode", () => {
+    expect(
+      createVariantConfigs(promptPair, {
+        thinking: "high",
+        candidateModel: "synthetic/candidate",
+      })
+    ).toEqual({
+      baseline: {
+        promptContent: "working-tree bytes",
+        promptSha256: "working-hash",
+        thinking: "high",
+      },
+      candidate: {
+        promptContent: "working-tree bytes",
+        promptSha256: "working-hash",
+        thinking: "high",
       },
     });
   });

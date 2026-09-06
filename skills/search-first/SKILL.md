@@ -61,6 +61,8 @@ Use this skill when:
 
 Before writing a utility or adding functionality, mentally run through:
 
+For a simple local lookup, search the repository directly in the main session without launching a researcher.
+
 0. Does this already exist in the repo? → `rg` through relevant modules/tests first
 1. Is this a common problem? → Search npm/PyPI
 2. Is there an MCP for this? → Check `~/.pi/agent/mcp.json` and search
@@ -69,17 +71,22 @@ Before writing a utility or adding functionality, mentally run through:
 
 ### Full Mode (agent)
 
-For non-trivial functionality, launch the researcher agent:
+For non-trivial functionality, use Full Mode. The main session owns research dispatch. Give the researcher a concrete question, project context, and constraints, then use its comparison in the main session:
 
 ```
-Task(subagent_type="general-purpose", prompt="
-  Research existing tools for: [DESCRIPTION]
-  Language/framework: [LANG]
-  Constraints: [ANY]
+Agent({
+  subagent_type: "researcher",
+  description: "Research existing solutions",
+  prompt: `
+    Research existing tools for: [CONCRETE QUESTION]
+    Language/framework: [LANG]
+    Project context: [RELEVANT CONTEXT]
+    Constraints: [ANY]
 
-  Search: npm/PyPI, MCP servers, skills, GitHub
-  Return: Structured comparison with recommendation
-")
+    Search: npm/PyPI, MCP servers, skills, GitHub
+    Return: Structured comparison with recommendation
+  `
+})
 ```
 
 ## Search Shortcuts by Category
@@ -107,13 +114,13 @@ Task(subagent_type="general-purpose", prompt="
 ## Integration Points
 
 ### With planner agent
-The planner should invoke researcher before Phase 1 (Architecture Review):
-- Researcher identifies available tools
+The main session supplies relevant researcher findings to the planner before Phase 1 (Architecture Review):
+- Researcher findings identify available tools
 - Planner incorporates them into the implementation plan
 - Avoids "reinventing the wheel" in the plan
 
 ### With architect agent
-The architect should consult researcher for:
+The main session supplies relevant researcher findings to the architect for:
 - Technology stack decisions
 - Integration pattern discovery
 - Existing reference architectures

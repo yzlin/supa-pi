@@ -1,8 +1,8 @@
 ---
 description: Independently verifies synthesized multi-model review findings against changed code.
 tools: read, bash
-model: openai-codex/gpt-5.6-sol
-thinking: high
+model: openai-codex/gpt-6-astra
+thinking: medium
 caveman: false
 ---
 

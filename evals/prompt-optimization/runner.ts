@@ -379,9 +379,10 @@ export function runAllowedFixtureTest(
     "bun test tests/math.case.ts": {
       tests: [{ path: "tests/math.case.ts", content: IMMUTABLE_MATH_TEST }],
       operations: { add: "+", multiply: "*" },
-      success: "math > adds numbers\n2 passed, 0 failed\n",
+      success:
+        "tests/math.case.ts > math > adds numbers\ntests/math.case.ts > math > multiplies numbers\n2 passed, 0 failed\n",
       failure:
-        "math > adds numbers\nExpected: 12\nReceived: 2\n1 failed, 1 passed\n",
+        "tests/math.case.ts > math > adds numbers\nExpected: 12\nReceived: 2\n1 failed, 1 passed\n",
     },
     "bun test tests/subtract.case.ts": {
       tests: [
@@ -389,9 +390,10 @@ export function runAllowedFixtureTest(
         { path: "tests/subtract.case.ts", content: CANONICAL_SUBTRACT_TEST },
       ],
       operations: { add: "+", multiply: "*", subtract: "-" },
-      success: "subtracts the right operand\n1 passed, 0 failed\n",
+      success:
+        "tests/subtract.case.ts > subtracts the right operand\n1 passed, 0 failed\n",
       failure:
-        "subtracts the right operand\nExpected: 2\nReceived: missing or incorrect subtract\n1 failed, 0 passed\n",
+        "tests/subtract.case.ts > subtracts the right operand\nExpected: 2\nReceived: missing or incorrect subtract\n1 failed, 0 passed\n",
     },
   } as const;
   const specification = specifications[command as keyof typeof specifications];
@@ -402,17 +404,26 @@ export function runAllowedFixtureTest(
     };
   }
   try {
-    if (
-      specification.tests.some(
-        (test) => readFileSync(join(cwd, test.path), "utf8") !== test.content
-      )
-    ) {
-      return {
-        exitCode: 1,
-        output: Buffer.from(
-          "1 failed: canonical regression test is missing or modified\n"
-        ),
-      };
+    for (const test of specification.tests) {
+      let actual: string;
+      try {
+        actual = readFileSync(join(cwd, test.path), "utf8");
+      } catch {
+        return {
+          exitCode: 1,
+          output: Buffer.from(
+            `${test.path}: required canonical test is missing\n1 failed, 0 passed\n`
+          ),
+        };
+      }
+      if (actual !== test.content) {
+        return {
+          exitCode: 1,
+          output: Buffer.from(
+            `${test.path}: required canonical test was modified\n1 failed, 0 passed\n`
+          ),
+        };
+      }
     }
     const source = stripComments(
       readFileSync(join(cwd, "src/math.ts"), "utf8")
@@ -447,12 +458,21 @@ export function runAllowedFixtureTest(
     const fullyParsed =
       source !== undefined && source.slice(offset).trim() === "";
     const expected = Object.entries(specification.operations);
-    const exactMathFixture =
-      operations.size === expected.length &&
-      [...operations.keys()].every((name) => name in specification.operations);
+    const supportedOperators = ["+", "*", "-"];
+    const hasOnlyClosedExpressions = [...operations.values()].every(
+      (implementation) =>
+        supportedOperators.some((operator) =>
+          expressionMatchesOperation(
+            implementation.expression,
+            implementation.leftParameter,
+            implementation.rightParameter,
+            operator
+          )
+        )
+    );
     const passed =
       fullyParsed &&
-      exactMathFixture &&
+      hasOnlyClosedExpressions &&
       expected.every(([name, operator]) => {
         const implementation = operations.get(name);
         return (
@@ -479,6 +499,17 @@ export function runAllowedFixtureTest(
   }
 }
 
+const ALLOWED_FIXTURE_TEST_COMMANDS = new Set([
+  "bun test tests/math.case.ts",
+  "bun test tests/subtract.case.ts",
+]);
+
+export function isAllowedFixtureTestCommand(command: string): boolean {
+  return ALLOWED_FIXTURE_TEST_COMMANDS.has(
+    command.trim().replaceAll(/\s+/g, " ")
+  );
+}
+
 function createSafeBashOperations() {
   return {
     async exec(
@@ -491,12 +522,7 @@ function createSafeBashOperations() {
       }
     ): Promise<{ exitCode: number | null }> {
       const normalized = command.trim().replaceAll(/\s+/g, " ");
-      if (
-        ![
-          "bun test tests/math.case.ts",
-          "bun test tests/subtract.case.ts",
-        ].includes(normalized)
-      ) {
+      if (!isAllowedFixtureTestCommand(command)) {
         options.onData(
           Buffer.from(`Blocked by eval command allowlist: ${command}\n`)
         );
@@ -995,6 +1021,30 @@ export async function runVariant(
   const sessionId = SessionManager.inMemory().getSessionId();
   await copyFixture(options.fixturePath, workspace);
   const initialWorkspaceSnapshot = await snapshotWorkspace(workspace);
+  const trustedFixtureRegressions = options.evalCase.checks.flatMap((check) =>
+    check.type === "tddEvidence" && check.trustedFixtureRegression
+      ? [check.trustedFixtureRegression]
+      : []
+  );
+  for (const trustedFixtureRegression of trustedFixtureRegressions) {
+    const preflight = runAllowedFixtureTest(
+      workspace,
+      trustedFixtureRegression.command
+    );
+    if (
+      !(
+        options.evalCase.tools.includes("bash") &&
+        isAllowedFixtureTestCommand(trustedFixtureRegression.command)
+      ) ||
+      preflight.exitCode === 0 ||
+      !preflight.output
+        .toString("utf8")
+        .includes(trustedFixtureRegression.redOutputIdentity)
+    ) {
+      await rm(workspace, { force: true, recursive: true });
+      throw new Error("trusted fixture regression preflight failed");
+    }
+  }
   const tools = createTools(workspace, options.evalCase, options.taskShapeCase);
   const request = options.taskShapeCase
     ? {
@@ -1019,6 +1069,7 @@ export async function runVariant(
       request.systemPrompt,
       "# Eval environment",
       `Working directory: ${workspace}`,
+      "Fixture restriction: `tests/math.case.ts` must remain byte-for-byte unchanged. Do not edit, replace, or add assertions to this file. This is a closed-simulator constraint, not a general TDD rule.",
     ].join("\n\n"),
     messages: [],
     tools,
@@ -1179,10 +1230,17 @@ export async function runVariant(
                 ];
               })
             : undefined;
+        const executionDeniedBeforeStart =
+          call.name === "bash" &&
+          typeof call.args.command === "string" &&
+          !isAllowedFixtureTestCommand(call.args.command);
         const completedCall = {
           ...retainedCall,
           endOrder: eventOrder,
           isError: event.isError,
+          ...(executionDeniedBeforeStart
+            ? { executionDeniedBeforeStart: true }
+            : {}),
           ...(EVAL_MUTATION_TOOLS.has(call.name)
             ? {
                 mutationProven:
@@ -1255,6 +1313,7 @@ export async function runVariant(
         assistantMessages,
         trajectoryErrors,
         taskIntent: options.evalCase.task,
+        availableTools: tools.map((tool) => tool.name),
       },
       options.evalCase.checks
     );

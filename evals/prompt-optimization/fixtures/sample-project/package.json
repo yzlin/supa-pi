@@ -3,6 +3,6 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "bun test tests/math.case.ts"
+    "test": "bun test ./tests/math.case.ts"
   }
 }

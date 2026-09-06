@@ -8,7 +8,9 @@ read_when:
 
 Snapshot date: 2026-07-13.
 
-This note compares current SupaPi behavior with OpenAI's GPT-5.6 guidance. OpenAI's published performance ranges are directional; validate every change against representative SupaPi tasks.
+Routing statements and reasoning benchmarks below describe the GPT-5.6 configuration at that stage, not current agent defaults. All 17 agents now use user-approved Astra defaults, with executor at low and reviewer-related agents at medium; see [current agent defaults](gpt-6-astra-harness-readiness.md#current-agent-defaults-user-approved). Historical benchmark figures remain unchanged and do not establish Astra performance.
+
+This note compares the recorded SupaPi behavior with OpenAI's GPT-5.6 guidance. OpenAI's published performance ranges are directional; validate every change against representative SupaPi tasks. For GPT-6 Astra compatibility and adoption readiness, see `gpt-6-astra-harness-readiness.md`; the Sol, Terra, and Luna results below do not transfer to Astra.
 
 ## Summary
 

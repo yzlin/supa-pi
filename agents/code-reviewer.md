@@ -1,8 +1,8 @@
 ---
 description: General code review specialist. Reviews changed code for correctness, maintainability, performance, and operational risk. Produces structured findings only.
 tools: read, grep, find, ls, bash
-model: openai-codex/gpt-5.6-sol
-thinking: high
+model: openai-codex/gpt-6-astra
+thinking: medium
 caveman: false
 ---
 

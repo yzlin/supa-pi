@@ -8,17 +8,14 @@
 - Prefer end-to-end verify; if blocked, say what’s missing.
 - Before non-trivial coding: state assumptions, material ambiguities, and done criteria.
 - Style: telegraph. Drop filler/grammar. Min tokens (global AGENTS + replies).
-- Smallest change that solves task; no drive-by refactors.
-- Follow YAGNI: do not add abstractions, options, or future-proofing unless needed now.
-- Prefer one-line or smallest-diff solutions when they fully solve the task.
-- Every changed line must trace to the user request.
-- No speculative flexibility, config, or abstractions unless required by the task or existing pattern.
+- Make the smallest complete change requested; every changed line must serve that scope. Explicitly requested broad refactors are allowed, but no unrelated or drive-by refactors.
+- Do not add abstractions, configuration, flexibility, or future-proofing unless the requested change needs them.
 
 ## Docs
 
-- Start: discover relevant docs before coding; use `docs_list` first when available, otherwise use the local docs-list command or equivalent file search.
-- Open docs whose summaries or `read_when` hints match the task.
-- Follow links until domain makes sense.
+- Discover relevant docs when the task needs unfamiliar project or domain context, or scoped instructions require it. Use `docs_list` when available; otherwise use the local docs-list command or equivalent search.
+- Skip discovery for obvious typos, mechanical edits, and already-understood local changes unless scoped instructions require it.
+- Read docs whose summaries or `read_when` hints match the task; follow links only to resolve task-relevant gaps.
 - Keep notes short; update docs when behavior/API changes (no ship w/o docs).
 - Add `read_when` hints on cross-cutting docs.
 

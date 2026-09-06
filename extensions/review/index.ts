@@ -917,8 +917,8 @@ function formatEffectiveModelDisclosure(models: EffectiveReviewModels): string {
     ...models.reviewerPanel.map((entry) =>
       formatModelDisclosure("reviewer", entry.model, entry.thinkingLevel)
     ),
-    formatModelDisclosure("synthesizer", models.synthesizerModel, "high"),
-    formatModelDisclosure("verifier", models.verifierModel, "high"),
+    formatModelDisclosure("synthesizer", models.synthesizerModel, "medium"),
+    formatModelDisclosure("verifier", models.verifierModel, "medium"),
   ].join("\n");
 }
 
@@ -2256,7 +2256,7 @@ export default function reviewExtension(pi: ExtensionAPI) {
         )
         .join(", ");
       ctx.ui.notify(
-        `Review plan: initial calls: ${reviewerRunCount} reviewer ${reviewerCallLabel} (${reviewers.length} ${reviewerRoleLabel} × ${reviewerPanel.length} ${reviewerModelLabel}), plus 2 downstream calls if findings (1 synthesizer + 1 verifier). Possible structured-repair retries: up to ${reviewerRunCount} reviewer ${reviewerRetryLabel}, plus up to 2 downstream retries when those stages run (1 synthesizer + 1 verifier). Reviewers: ${plannedModels}. Synthesizer: ${sanitizeModelForUi(synthesizerModel)}=high. Verifier: ${sanitizeModelForUi(verifierModel)}=high. Scope: ${hint}.`,
+        `Review plan: initial calls: ${reviewerRunCount} reviewer ${reviewerCallLabel} (${reviewers.length} ${reviewerRoleLabel} × ${reviewerPanel.length} ${reviewerModelLabel}), plus 2 downstream calls if findings (1 synthesizer + 1 verifier). Possible structured-repair retries: up to ${reviewerRunCount} reviewer ${reviewerRetryLabel}, plus up to 2 downstream retries when those stages run (1 synthesizer + 1 verifier). Reviewers: ${plannedModels}. Synthesizer: ${sanitizeModelForUi(synthesizerModel)}=medium. Verifier: ${sanitizeModelForUi(verifierModel)}=medium. Scope: ${hint}.`,
         "info"
       );
 

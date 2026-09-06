@@ -30,6 +30,283 @@
       ]
     },
     {
+      "id": "readiness-independent-delegation",
+      "workload": "codebase exploration",
+      "promptPath": "extensions/core-prompt/prompt.md",
+      "task": "Two release-readiness questions need evidence: determine why the addition test returns 2 instead of 12, and investigate whether canAccessAdminPanel crosses the documented authorization boundary. Report both root causes with exact file paths. Do not change files.",
+      "tools": ["read", "grep", "find", "ls", "Agent"],
+      "checks": [
+        {
+          "type": "toolCalled",
+          "name": "Agent",
+          "domain": "task",
+          "weight": 3
+        },
+        {
+          "type": "toolCallMatches",
+          "name": "read",
+          "args": { "path": "src/auth.ts" },
+          "resultPattern": "if \\(debug\\)[\\s\\S]*return true",
+          "flags": "i",
+          "isError": false,
+          "domain": "task",
+          "weight": 2
+        },
+        {
+          "type": "outputIncludes",
+          "value": "src/math.ts",
+          "domain": "evidence",
+          "weight": 1
+        },
+        {
+          "type": "outputMatches",
+          "pattern": "left - right|subtract",
+          "flags": "i",
+          "domain": "quality",
+          "weight": 1
+        },
+        {
+          "type": "outputIncludes",
+          "value": "src/auth.ts",
+          "domain": "evidence",
+          "weight": 1
+        },
+        {
+          "type": "outputMatches",
+          "pattern": "debug[\\s\\S]*(?:bypass|return true)|(?:bypass|return true)[\\s\\S]*debug",
+          "flags": "i",
+          "domain": "quality",
+          "weight": 1
+        },
+        {
+          "type": "workspaceUnchanged",
+          "domain": "tests",
+          "weight": 3
+        }
+      ]
+    },
+    {
+      "id": "readiness-local-lookup",
+      "workload": "codebase exploration",
+      "promptPath": "extensions/core-prompt/prompt.md",
+      "task": "What role does the fixture README say is required for admin access? Give the path and answer. Do not change files.",
+      "tools": ["read", "grep", "find", "ls", "Agent"],
+      "checks": [
+        {
+          "type": "fixtureAdminGrounding",
+          "source": "readme",
+          "visual": false,
+          "domain": "task",
+          "weight": 2
+        },
+        {
+          "type": "toolNotCalled",
+          "name": "Agent",
+          "domain": "task",
+          "weight": 3
+        },
+        {
+          "type": "outputIncludes",
+          "value": "README.md",
+          "domain": "evidence",
+          "weight": 1
+        },
+        {
+          "type": "outputMatches",
+          "pattern": "admin (?:role|access)|role[^.]*admin",
+          "flags": "i",
+          "domain": "quality",
+          "weight": 1
+        },
+        {
+          "type": "workspaceUnchanged",
+          "domain": "tests",
+          "weight": 3
+        }
+      ]
+    },
+    {
+      "id": "readiness-action-fix",
+      "workload": "focused bug fix",
+      "promptPath": "extensions/core-prompt/prompt.md",
+      "task": "Can you fix why add(7, 5) returns 2 instead of 12 in this project? Please make it work and let me know what you verified.",
+      "tools": ["read", "grep", "find", "ls", "edit", "write", "bash"],
+      "checks": [
+        {
+          "type": "fileEquals",
+          "path": "src/math.ts",
+          "value": "export function add(left: number, right: number): number {\n  return left + right;\n}\n\nexport function multiply(left: number, right: number): number {\n  return left * right;\n}\n",
+          "domain": "task",
+          "weight": 3
+        },
+        {
+          "type": "toolCallMatches",
+          "name": "bash",
+          "args": {
+            "command": "bun test tests/math.case.ts"
+          },
+          "resultPattern": "2 passed,\\s+0 failed",
+          "flags": "i",
+          "isError": false,
+          "domain": "tests",
+          "weight": 3
+        },
+        {
+          "type": "workspaceChangesOnly",
+          "paths": ["src/math.ts"],
+          "domain": "tests",
+          "weight": 3
+        },
+        {
+          "type": "outputIncludes",
+          "value": "src/math.ts",
+          "domain": "evidence",
+          "weight": 1
+        },
+        {
+          "type": "outputIncludes",
+          "value": "tests/math.case.ts",
+          "domain": "evidence",
+          "weight": 1
+        }
+      ]
+    },
+    {
+      "id": "readiness-evaluation-only",
+      "workload": "codebase exploration",
+      "promptPath": "extensions/core-prompt/prompt.md",
+      "task": "Can you assess why add(7, 5) returns 2 instead of 12 here and explain the practical options? I am deciding what to do next, so please do not change anything yet.",
+      "tools": ["read", "grep", "find", "ls", "edit", "write", "bash"],
+      "checks": [
+        {
+          "type": "toolCalled",
+          "name": "read",
+          "domain": "task",
+          "weight": 2
+        },
+        {
+          "type": "outputIncludes",
+          "value": "src/math.ts",
+          "domain": "evidence",
+          "weight": 1
+        },
+        {
+          "type": "outputIncludes",
+          "value": "tests/math.case.ts",
+          "domain": "evidence",
+          "weight": 1
+        },
+        {
+          "type": "outputMatches",
+          "pattern": "left - right|subtract",
+          "flags": "i",
+          "domain": "quality",
+          "weight": 2
+        },
+        {
+          "type": "outputMatches",
+          "pattern": "options?|replace|change|coverage",
+          "flags": "i",
+          "domain": "quality",
+          "weight": 1
+        },
+        {
+          "type": "toolNotCalled",
+          "name": "edit",
+          "domain": "tests",
+          "weight": 2
+        },
+        {
+          "type": "toolNotCalled",
+          "name": "write",
+          "domain": "tests",
+          "weight": 2
+        },
+        {
+          "type": "workspaceUnchanged",
+          "domain": "tests",
+          "weight": 3
+        }
+      ]
+    },
+    {
+      "id": "readiness-routine-inference",
+      "workload": "focused bug fix",
+      "promptPath": "extensions/core-prompt/prompt.md",
+      "task": "Please get this small package back to green before merge. Keep the fix focused, and report what you changed and verified.",
+      "tools": ["read", "grep", "find", "ls", "edit", "write", "bash"],
+      "checks": [
+        {
+          "type": "fileEquals",
+          "path": "src/math.ts",
+          "value": "export function add(left: number, right: number): number {\n  return left + right;\n}\n\nexport function multiply(left: number, right: number): number {\n  return left * right;\n}\n",
+          "domain": "task",
+          "weight": 3
+        },
+        {
+          "type": "toolCallMatches",
+          "name": "bash",
+          "args": {
+            "command": "bun test tests/math.case.ts"
+          },
+          "resultPattern": "2 passed,\\s+0 failed",
+          "flags": "i",
+          "isError": false,
+          "domain": "tests",
+          "weight": 3
+        },
+        {
+          "type": "workspaceChangesOnly",
+          "paths": ["src/math.ts"],
+          "domain": "tests",
+          "weight": 3
+        },
+        {
+          "type": "outputIncludes",
+          "value": "src/math.ts",
+          "domain": "evidence",
+          "weight": 1
+        },
+        {
+          "type": "outputIncludes",
+          "value": "bun test tests/math.case.ts",
+          "domain": "evidence",
+          "weight": 1
+        }
+      ]
+    },
+    {
+      "id": "readiness-consequential-ambiguity",
+      "workload": "focused bug fix",
+      "promptPath": "extensions/core-prompt/prompt.md",
+      "task": "Please update canAccessAdminPanel for today's release. The security handoff says debug mode must never grant admin-panel access, but the release note says internal debug sessions must retain the current bypass. Make the implementation and tests match the intended policy.",
+      "tools": ["read", "grep", "find", "ls", "edit", "write"],
+      "checks": [
+        {
+          "type": "authPolicyClarification",
+          "domain": "task",
+          "weight": 5
+        },
+        {
+          "type": "toolNotCalled",
+          "name": "edit",
+          "domain": "tests",
+          "weight": 2
+        },
+        {
+          "type": "toolNotCalled",
+          "name": "write",
+          "domain": "tests",
+          "weight": 2
+        },
+        {
+          "type": "workspaceUnchanged",
+          "domain": "tests",
+          "weight": 3
+        }
+      ]
+    },
+    {
       "id": "core-clarification-diagram",
       "workload": "explanation",
       "promptPath": "extensions/core-prompt/prompt.md",
@@ -134,6 +411,69 @@
           "flags": "i",
           "domain": "quality",
           "weight": 1
+        }
+      ]
+    },
+    {
+      "id": "show-me-applicability-visual",
+      "workload": "codebase exploration",
+      "promptPath": "skills/showing-me/SKILL.md",
+      "task": "Show me where this fixture documents and implements its admin-access rule. Include the required role and exact paths in one small view.",
+      "tools": ["read", "grep", "find", "ls"],
+      "checks": [
+        {
+          "type": "fixtureAdminGrounding",
+          "source": "readme-or-auth",
+          "visual": true,
+          "domain": "task",
+          "weight": 7
+        },
+        {
+          "type": "outputMatches",
+          "pattern": "admin(?:istrator)?(?: role)?|role[^.\\r\\n]*admin",
+          "flags": "i",
+          "domain": "quality",
+          "weight": 1
+        },
+        {
+          "type": "workspaceUnchanged",
+          "domain": "tests",
+          "weight": 3
+        }
+      ]
+    },
+    {
+      "id": "show-me-applicability-lookup",
+      "workload": "codebase exploration",
+      "promptPath": "skills/showing-me/SKILL.md",
+      "task": "What role does this fixture require for admin access? Give the source path and answer.",
+      "tools": ["read", "grep", "find", "ls"],
+      "checks": [
+        {
+          "type": "fixtureAdminGrounding",
+          "source": "readme-or-auth",
+          "visual": false,
+          "domain": "evidence",
+          "weight": 3
+        },
+        {
+          "type": "outputMatches",
+          "pattern": "admin(?:istrator)?(?: role)?|role[^.\\r\\n]*admin",
+          "flags": "i",
+          "domain": "task",
+          "weight": 2
+        },
+        {
+          "type": "outputMatches",
+          "pattern": "^(?![\\s\\S]*```)(?![\\s\\S]*(?:→|->|├|└|flowchart|sequenceDiagram))(?![\\s\\S]*\\b(?:Show Me|showing-me|loaded skill)\\b)(?=[\\s\\S]{1,300}$)[^\\r\\n]+(?:\\r?\\n[^\\r\\n]+)?$",
+          "flags": "i",
+          "domain": "quality",
+          "weight": 3
+        },
+        {
+          "type": "workspaceUnchanged",
+          "domain": "tests",
+          "weight": 3
         }
       ]
     },
@@ -602,10 +942,110 @@
       ]
     },
     {
+      "id": "readiness-verification-stop",
+      "workload": "focused bug fix",
+      "promptPath": "skills/tdd-workflow/SKILL.md",
+      "task": "Please fix why add(7, 5) returns 2 instead of 12 in this project. Make the smallest focused repair and report what you changed and verified.",
+      "tools": [
+        "read",
+        "grep",
+        "find",
+        "ls",
+        "edit",
+        "write",
+        "bash",
+        "structured_output"
+      ],
+      "checks": [
+        {
+          "type": "structuredOutput",
+          "expectedStatus": "done",
+          "domain": "evidence",
+          "weight": 2
+        },
+        {
+          "type": "fileContains",
+          "path": "src/math.ts",
+          "value": "return left + right;",
+          "domain": "task",
+          "weight": 2
+        },
+        {
+          "type": "toolCallSequence",
+          "name": "bash",
+          "args": { "command": "bun test tests/math.case.ts" },
+          "firstResultPattern": "1 failed,\\s+1 passed",
+          "firstIsError": true,
+          "secondResultPattern": "2 passed,\\s+0 failed",
+          "secondIsError": false,
+          "flags": "i",
+          "domain": "tests",
+          "weight": 5
+        },
+        {
+          "type": "fileEquals",
+          "path": "tests/math.case.ts",
+          "value": "import { describe, expect, it } from \"bun:test\";\n\nimport { add, multiply } from \"../src/math\";\n\ndescribe(\"math\", () => {\n  it(\"adds numbers\", () => {\n    expect(add(7, 5)).toBe(12);\n  });\n\n  it(\"multiplies numbers\", () => {\n    expect(multiply(7, 5)).toBe(35);\n  });\n});\n",
+          "domain": "tests",
+          "weight": 3
+        },
+        {
+          "type": "tddEvidence",
+          "domain": "evidence",
+          "weight": 3,
+          "trustedFixtureRegression": {
+            "command": "bun test tests/math.case.ts",
+            "redOutputIdentity": "tests/math.case.ts > math > adds numbers\nExpected: 12\nReceived: 2"
+          }
+        },
+        {
+          "type": "toolCallCount",
+          "name": "bash",
+          "args": { "command": "bun test tests/math.case.ts" },
+          "min": 2,
+          "max": 2,
+          "domain": "tests",
+          "weight": 4
+        },
+        {
+          "type": "workspaceChangesOnly",
+          "paths": ["src/math.ts"],
+          "domain": "tests",
+          "weight": 3
+        }
+      ]
+    },
+    {
+      "id": "readiness-verification-unavailable",
+      "workload": "focused bug fix",
+      "promptPath": "skills/tdd-workflow/SKILL.md",
+      "task": "Please fix why add(7, 5) returns 2 instead of 12 in this project. Make the smallest focused repair and report what you changed and verified. Environment: command execution is unavailable in this session.",
+      "tools": ["read", "grep", "find", "ls", "structured_output"],
+      "checks": [
+        {
+          "type": "unavailableExecutionResult",
+          "domain": "evidence",
+          "weight": 4
+        },
+        {
+          "type": "toolCallCount",
+          "name": "bash",
+          "max": 0,
+          "domain": "tests",
+          "weight": 2
+        },
+        {
+          "type": "workspaceUnchanged",
+          "domain": "tests",
+          "weight": 4
+        }
+      ]
+    },
+    {
       "id": "tdd-create-regression-first",
       "workload": "focused bug fix",
       "promptPath": "skills/tdd-workflow/SKILL.md",
-      "task": "Add an exported subtract(left, right) behavior to src/math.ts while preserving canonical add/multiply behavior and tests/math.case.ts. No subtraction regression test exists yet. First create tests/subtract.case.ts proving subtract(7, 5) is 2, then run bun test tests/subtract.case.ts to observe RED. Only after RED implement the smallest production changes, rerun the exact command for GREEN, preserve both regression test files, and submit structured evidence.",
+      "task": "Add an exported subtract(left, right) behavior to src/math.ts while preserving canonical add/multiply behavior and tests/math.case.ts. Use this SUPPLIED CANONICAL generated-test protocol: create tests/subtract.case.ts with exactly these bytes (including the final newline):\n\nimport { expect, test } from \"bun:test\";\n\nimport { subtract } from \"../src/math\";\n\ntest(\"subtracts the right operand\", () => {\n  expect(subtract(7, 5)).toBe(2);\n});\n\nThen run bun test tests/subtract.case.ts to observe RED. Only after RED implement the smallest production changes, rerun the exact command for GREEN, preserve both regression test files, and submit structured evidence. This fixed protocol measures test-before-code ordering, not arbitrary authored-test equivalence.",
       "tools": [
         "read",
         "grep",

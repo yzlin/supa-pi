@@ -21,6 +21,7 @@ Do not use it from background or non-interactive contexts. The tool returns an e
 - The implementation lives under `extensions/ask` and uses direct `Ask*` symbols.
 - The tool and command do not register legacy aliases.
 - Persisted custom entry identifiers remain `questionnaire-*` for compatibility.
+- `/ask-stats` continues to read historical miss records and their `autoRedirected` and `redirectedAlready` fields.
 
 The current naming does not change the input schema, TUI behavior, validation, or result contract documented below.
 
@@ -133,6 +134,12 @@ Multi-select questions may include option previews. They still omit the custom-a
 
 Validation failures return a cancelled error envelope and do not open UI.
 
+## Plain-text clarification diagnostics
+
+After a UI-backed run ends without an `ask` result, the extension may log assistant text that heuristically resembles a plain-text clarification. This diagnostic is intentionally uncertain: advice, examples, quoted or code questions, and rhetorical questions can match. The entry remains session-only diagnostic data and does not notify the user, inject a message, or trigger another model turn.
+
+New records retain the historical `questionnaire-plain-text-miss` identifier and historical fields for `/ask-stats` compatibility, with `autoRedirected: false` and `redirectedAlready: false`. `/ask-stats` still reports old records that have either field set. Remove this compatibility only when historical session records are explicitly migrated or retired.
+
 ## Intentional divergences from rpiv
 
 This extension is locally maintained for Pi and is not a drop-in rpiv clone.
@@ -147,4 +154,4 @@ Intentional differences:
 - Allows empty multi-select commits instead of forcing at least one selected option.
 - Preview mode is activated by option preview content and supports both single-select and multi-select questions, but only the active option preview is rendered.
 - Preview notes remain single-select only to keep multi-select result semantics clear.
-- Logs and auto-redirects likely plain-text clarification misses within an interactive session.
+- Logs likely plain-text clarification candidates in UI-backed sessions for diagnostics without warning, correction, or automatic follow-up.

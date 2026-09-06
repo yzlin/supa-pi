@@ -30,9 +30,9 @@ import {
 import { Type } from "typebox";
 
 export const REVIEW_REPORT_MESSAGE_TYPE = "review-report";
-export const REVIEWER_MODEL_POLICY_MODEL = "openai-codex/gpt-5.6-sol";
-export const DEFAULT_SYNTHESIZER_MODEL = "openai-codex/gpt-5.6-sol";
-export const DEFAULT_VERIFIER_MODEL = "openai-codex/gpt-5.6-sol";
+export const REVIEWER_MODEL_POLICY_MODEL = "openai-codex/gpt-6-astra";
+export const DEFAULT_SYNTHESIZER_MODEL = "openai-codex/gpt-6-astra";
+export const DEFAULT_VERIFIER_MODEL = "openai-codex/gpt-6-astra";
 export const REVIEW_WORKFLOW_CONCURRENCY = 4;
 
 export type ReviewThinkingLevel =
@@ -49,7 +49,7 @@ export interface ReviewPanelEntry {
 }
 
 export const DEFAULT_REVIEWER_PANEL: readonly ReviewPanelEntry[] = [
-  { model: REVIEWER_MODEL_POLICY_MODEL, thinkingLevel: "high" },
+  { model: REVIEWER_MODEL_POLICY_MODEL, thinkingLevel: "medium" },
 ];
 
 const WORKFLOW_TIMEOUT_MS = 20 * 60 * 1000;
@@ -491,13 +491,13 @@ export async function runReviewWorkflow(
         synthesizer: candidateFindings.length
           ? {
               model: input.synthesizerModel ?? DEFAULT_SYNTHESIZER_MODEL,
-              thinkingLevel: "high",
+              thinkingLevel: "medium",
             }
           : undefined,
         verifier: candidateFindings.length
           ? {
               model: input.verifierModel ?? DEFAULT_VERIFIER_MODEL,
-              thinkingLevel: "high",
+              thinkingLevel: "medium",
             }
           : undefined,
       },
@@ -1854,7 +1854,7 @@ async function runAndValidateSynthesizer(
       agent: "review-synthesizer",
       phase: "synthesizer",
       model,
-      thinking: "high",
+      thinking: "medium",
       description: "Losslessly cluster review findings",
       prompt: buildSynthesizerPrompt(input, candidates),
       schema: SYNTHESIZER_SUBMISSION_SCHEMA,
@@ -1871,7 +1871,7 @@ async function runAndValidateSynthesizer(
         agent: "review-synthesizer",
         phase: "repair",
         model,
-        thinking: "high",
+        thinking: "medium",
         description: "Repair review synthesizer structured output",
         prompt: buildSynthesizerRepairPrompt(
           candidates,
@@ -1908,7 +1908,7 @@ async function runVerifierAgent(
       args: {
         agent: "review-verifier",
         phase: "verifier",
-        model: input.verifierModel,
+        model: input.verifierModel ?? DEFAULT_VERIFIER_MODEL,
         description: "Verify and synthesize review report",
         prompt: buildVerifierPrompt(
           input,
@@ -1916,7 +1916,7 @@ async function runVerifierAgent(
           args.clusters
         ),
         schema: VERIFIER_SUBMISSION_SCHEMA,
-        thinking: "high",
+        thinking: "medium",
       },
       cwd: input.cwd,
       agentRunner,
@@ -2048,8 +2048,8 @@ async function parseOrRepairVerifierOutput(
       {
         agent: "review-verifier",
         phase: "repair",
-        model: input.verifierModel,
-        thinking: "high",
+        model: input.verifierModel ?? DEFAULT_VERIFIER_MODEL,
+        thinking: "medium",
         description: "Repair review verifier structured output",
         prompt: buildVerifierRepairPrompt(
           input,

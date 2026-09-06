@@ -108,6 +108,7 @@ By default, the scaffolded global config includes a conservative starter set ins
 
 - **Auto-detection**: Servers are matched to files by extension. Multiple servers can handle the same extension.
 - **Routing**: `diagnostics` aggregates from all matching servers. Other operations use the first server with the required capability.
+- **Diagnostics availability**: A diagnostics request fails as unavailable when no server matches or every matching server fails. If at least one server succeeds and another fails, it fails as incomplete while retaining useful partial diagnostics and each failed server's cause. Fully successful empty and populated results are unchanged.
 - **Lazy probe + start**: Server commands are checked only when needed for a matching request, then spawned on first tool use and kept alive for the session.
 - **Config merge**: Project `.pi/lsp.json` overrides global `~/.pi/agent/lsp.json`.
 

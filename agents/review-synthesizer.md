@@ -1,8 +1,8 @@
 ---
 description: Losslessly clusters multi-model reviewer findings without inspecting the repository.
 tools: none
-model: openai-codex/gpt-5.6-sol
-thinking: high
+model: openai-codex/gpt-6-astra
+thinking: medium
 extensions: false
 caveman: false
 ---

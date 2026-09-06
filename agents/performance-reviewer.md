@@ -1,8 +1,8 @@
 ---
 description: Performance review specialist. Reviews changed code for concrete performance regressions, scalability risks, unbounded work, and missing measurement. Produces structured findings only.
 tools: read, grep, find, ls, bash
-model: openai-codex/gpt-5.6-sol
-thinking: high
+model: openai-codex/gpt-6-astra
+thinking: medium
 caveman: false
 ---
 

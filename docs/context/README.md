@@ -14,5 +14,6 @@ Current notes:
 
 - `code-improvement.md` — `/simplify` scoped grammar, allowlist boundaries, flags, and delegation behavior.
 - `extension-registration.md` — extension registration, ownership, retirement, and deployment boundaries.
-- `gpt-5.6-harness-optimization.md` — model routing, prompt, cache, tool-surface, and eval evidence.
+- `gpt-5.6-harness-optimization.md` — historical GPT-5.6 model routing, prompt, cache, tool-surface, and eval evidence.
+- `gpt-6-astra-harness-readiness.md` — Astra compatibility evidence, bounded model-comparison cohorts, visible-session probes, and approval-gated adoption stages.
 - `ask.md` — Ask Extension behavior, including the public `ask` tool and `/ask-stats` command, and local rpiv divergences.

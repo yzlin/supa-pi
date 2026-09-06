@@ -5,8 +5,8 @@ tools: read,grep,find,ls,bash,edit,write
 extensions: false
 skills: false
 disallowed_tools: message_parent, ask_parent
-model: openai-codex/gpt-5.6-sol
-thinking: medium
+model: openai-codex/gpt-6-astra
+thinking: low
 caveman: true
 ---
 

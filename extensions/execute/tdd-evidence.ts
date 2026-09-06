@@ -32,6 +32,17 @@ export interface TddToolCall {
   }>;
   /** True only when tool arguments or result metadata authoritatively prove a delta. */
   mutationProven?: boolean;
+  /** Capture-owned proof that a shell call was denied before its command started. */
+  executionDeniedBeforeStart?: boolean;
+}
+
+export interface TrustedFixtureRegression {
+  command: string;
+  redOutputIdentity: string;
+}
+
+export interface TddEvidenceTrustedOptions {
+  trustedFixtureRegression?: TrustedFixtureRegression;
 }
 
 export interface TddEvidenceResult {
@@ -135,19 +146,23 @@ const DOTNET_TEST_SUMMARY_PATTERN =
 const COVERAGE_PERCENT_PATTERN =
   /\b(statements?|branches?|functions?|lines?)\s*[:=]\s*(\d+(?:\.\d+)?)\s*%|\b(\d+(?:\.\d+)?)\s*%\s+(statements?|branches?|functions?|lines?)\b/gi;
 const COVERAGE_COUNT_PATTERN =
-  /\b(?:measured|reported|observed)\s+(\d+(?:\.\d+)?)\s+(statements?|branches?|functions?|lines?)|\b(statements?|branches?|functions?|lines?)\s*[:=]\s*(\d+(?:\.\d+)?)\b(?!\s*%)/gi;
+  /\b(?:measured|reported|observed)\s+(\d+(?:\.\d+)?)\s+(statements?|branches?|functions?|lines?)|\b(statements?|branches?|functions?|lines?)\s*[:=]\s*(\d+(?:\.\d+)?)\b(?!\.\d|\s*(?:%|percent\b))/gi;
 const COVERAGE_RATIO_PATTERN =
   /\b(\d+(?:\.\d+)?)\s*(?:of|\/)\s*(\d+(?:\.\d+)?)\s+(statements?|branches?|functions?|lines?)\s+(?:covered|measured|reported|observed)\b/gi;
 const COVERAGE_THRESHOLD_PATTERN =
   /\b(?:coverage\s+)?threshold(?:\s+of)?\s+(\d+(?:\.\d+)?)%?\s+(met|passed)\b/gi;
 const NUMERIC_COVERAGE_CLAIM_PATTERN =
-  /\b(?:statements?|branches?|functions?|lines?)\s*[:=]\s*\d|\b\d+(?:\.\d+)?\s*%\s+(?:statements?|branches?|functions?|lines?)|\b\d+(?:\.\d+)?\s*(?:of|\/)\s*\d+(?:\.\d+)?\s+(?:statements?|branches?|functions?|lines?)|\b(?:coverage\s+)?threshold\b/i;
+  /\b(?:statements?|branches?|functions?|lines?)\s*[:=]\s*\d|\b\d+(?:\.\d+)?\s*%\s+(?:(?:statements?|branches?|functions?|lines?)\b|coverage\b)|\b\d+(?:\.\d+)?\s+(?:statements?|branches?|functions?|lines?)\b|\b\d+(?:\.\d+)?\s*(?:of|\/)\s*\d+(?:\.\d+)?\s+(?:statements?|branches?|functions?|lines?)|\b(?:coverage\s+)?threshold(?:\s+of)?\s+(?:[-+]?\d|\S+(?=\s+(?:met|passed|unmet|failed|failing|below|under|missed)\b))/i;
 const NEGATIVE_COVERAGE_PATTERN =
   /\b(?:failed|failing|unmet|below|under|missed)\b|\bthreshold\b[^\n]*(?:not met|not passed)|\bexit(?:ed)?(?:\s+with)?(?:\s+code)?\s+[1-9]\d*\b/i;
+const NEGATED_COVERAGE_ACTION_PATTERN =
+  /\b(?:(?:has|have|had|is|are|was|were)\s+)?(?:not|never|no\s+longer|without|cannot|can['’]t|fail(?:s|ed|ing)?\s+to|(?:is|are|was|were|has|have|had|do|does|did)n['’]t)\s+(?:(?:been|being|fully|yet)\s+){0,2}(?:cover(?:ed|s|ing)?|tested)\b/i;
+const UNSUPPORTED_COVERAGE_ASSERTION_PATTERN =
+  /\b\d+(?:\.\d+)?\s*%\s*(?:coverage|covered)\b|\b\d+(?:\.\d+)?\s+percent\s+(?:statements?|branches?|functions?|lines?)(?:\s+covered)?\b|\b(?:coverage\s+)?threshold(?:\s+of)?(?:\s+\S+)?\s+(?:met|passed|unmet|failed|failing|below|under|missed)\b/i;
 const COVERAGE_KIND_PATTERN =
   /\b(?:behavio[u]?r|failure|error|regression|edge|branch|path|case|scenario|test)\b/;
 const COVERAGE_ACTION_PATTERN =
-  /\b(?:covered|tested|exercised|verified|passed|succeeded)\b/;
+  /\b(?:covered|covers|tested|exercised|verified|passed|succeeded)\b/;
 const NAMED_EVIDENCE_PATTERN =
   /(?:`[^`\n]+`|"[^"\n]+"|'[^'\n]+'|\b[A-Za-z_$][\w$]*\([^\n)]*\)|\b[\w.-]+(?:[/.-][\w.-]+)+\b)/;
 const TEST_COMMAND_RESULT_PATTERN =
@@ -1112,14 +1127,14 @@ function discreteMutationEffects(call: TddToolCall): MutationEffects {
   let hasProductionTargets = false;
   let ambiguous = false;
   for (const path of targets) {
+    if (TEST_PATH_PATTERN.test(path)) {
+      hasTestTargets = true;
+      continue;
+    }
     if (call.name === "edit" && call.editDeltaTruncated) {
       hasTestTargets = true;
       hasProductionTargets = true;
       ambiguous = true;
-      continue;
-    }
-    if (TEST_PATH_PATTERN.test(path)) {
-      hasTestTargets = true;
       continue;
     }
     if (RUST_SOURCE_PATH_PATTERN.test(path)) {
@@ -1608,7 +1623,18 @@ function mutationHasProvenDelta(call: TddToolCall): boolean {
   );
 }
 
+function isExecutionDeniedBeforeStart(call: TddToolCall): boolean {
+  return (
+    call.name === "bash" &&
+    call.isError &&
+    call.executionDeniedBeforeStart === true
+  );
+}
+
 function isMutationCall(call: TddToolCall): boolean {
+  if (isExecutionDeniedBeforeStart(call)) {
+    return false;
+  }
   if (MUTATION_TOOLS.has(call.name)) {
     return true;
   }
@@ -1695,6 +1721,25 @@ function numericCoverageClaims(text: string): NumericCoverageClaim[] {
   return claims;
 }
 
+function hasUnsupportedCoverageAssertion(text: string): boolean {
+  let residue = text;
+  for (const pattern of [
+    COVERAGE_PERCENT_PATTERN,
+    COVERAGE_RATIO_PATTERN,
+    COVERAGE_THRESHOLD_PATTERN,
+    COVERAGE_COUNT_PATTERN,
+  ]) {
+    pattern.lastIndex = 0;
+    residue = residue.replace(pattern, (measurement) =>
+      " ".repeat(measurement.length)
+    );
+  }
+  return (
+    NUMERIC_COVERAGE_CLAIM_PATTERN.test(residue) ||
+    UNSUPPORTED_COVERAGE_ASSERTION_PATTERN.test(residue)
+  );
+}
+
 function hasMeaningfulCoverageEvidence(
   coverage: string,
   tests: TddToolCall[],
@@ -1712,12 +1757,10 @@ function hasMeaningfulCoverageEvidence(
     return false;
   }
   const numericClaims = numericCoverageClaims(coverage);
-  if (
-    numericClaims.length > 0 ||
-    NUMERIC_COVERAGE_CLAIM_PATTERN.test(coverage)
-  ) {
+  if (numericClaims.length > 0 || hasUnsupportedCoverageAssertion(coverage)) {
     if (
       numericClaims.length === 0 ||
+      hasUnsupportedCoverageAssertion(coverage) ||
       numericClaims.some(({ valid }) => !valid)
     ) {
       return false;
@@ -1812,7 +1855,8 @@ export function validateTddEvidence(
   calls: TddToolCall[],
   captureErrors: string[] = [],
   trustedTaskIntent = "",
-  expectedCommand?: string
+  expectedCommand?: string,
+  trustedOptions: TddEvidenceTrustedOptions = {}
 ): string | undefined {
   const parsed = prefixedEvidence(result);
   if (parsed.error) {
@@ -1906,6 +1950,7 @@ export function validateTddEvidence(
   const tests = calls.filter(
     (call) =>
       call.name === "bash" &&
+      !isExecutionDeniedBeforeStart(call) &&
       typeof call.args.command === "string" &&
       isSupportedTestCommand(call.args.command) &&
       !testCommandHasWriteOption(call.args.command)
@@ -2040,12 +2085,21 @@ export function validateTddEvidence(
       overlapCount >= 2 ||
       exactExpectedSymbol ||
       (focusedFallbackAllowed && focusedIntent.size > 0 && overlapCount >= 1);
+    const trustedFixtureIdentityMatches = Boolean(
+      trustedOptions.trustedFixtureRegression &&
+        candidatePreRedTestMutations.length === 0 &&
+        command === trustedOptions.trustedFixtureRegression.command &&
+        (call.resultText ?? "").includes(
+          trustedOptions.trustedFixtureRegression.redOutputIdentity
+        )
+    );
     return (
       call.isError &&
-      expectedIntent.size > 0 &&
-      (retainedRegressionTitles.length > 0
-        ? titleIdentityMatches || exactExpectedSymbol
-        : intentIdentityMatches) &&
+      (trustedFixtureIdentityMatches ||
+        (expectedIntent.size > 0 &&
+          (retainedRegressionTitles.length > 0
+            ? titleIdentityMatches || exactExpectedSymbol
+            : intentIdentityMatches))) &&
       outputShowsOutcome(
         call.resultText ?? "",
         "red",
@@ -2319,17 +2373,24 @@ export function validateTddEvidence(
     TOOLING_PATTERN.test(coverage) &&
     BECAUSE_PATTERN.test(coverage) &&
     intentTerms([concreteToolingReason]).size > 0;
+  const numericCoverageClaimed =
+    numericCoverageClaims(coverage).length > 0 ||
+    hasUnsupportedCoverageAssertion(coverage);
+  const meaningfulCoverage = hasMeaningfulCoverageEvidence(
+    coverage,
+    verificationTests,
+    coverageEvidenceIntent,
+    lastImplementationEnd,
+    verificationEnd
+  );
+  let invalidCoverage = !meaningfulCoverage;
+  if (!numericCoverageClaimed && coverageUnavailable) {
+    invalidCoverage = !explainedToolingUnavailable;
+  }
   if (
     HYPOTHETICAL_MARKERS.some((marker) => coverage.includes(marker)) ||
-    (coverageUnavailable
-      ? !explainedToolingUnavailable
-      : !hasMeaningfulCoverageEvidence(
-          coverage,
-          verificationTests,
-          coverageEvidenceIntent,
-          lastImplementationEnd,
-          verificationEnd
-        ))
+    NEGATED_COVERAGE_ACTION_PATTERN.test(coverage) ||
+    invalidCoverage
   ) {
     const detail =
       numericCoverageClaims(coverage).length > 0
@@ -2394,6 +2455,7 @@ function supportedTddRunnerCalls(calls: TddToolCall[]): TddToolCall[] {
   return calls.filter(
     (call) =>
       call.name === "bash" &&
+      !isExecutionDeniedBeforeStart(call) &&
       typeof call.args.command === "string" &&
       isSupportedTestCommand(call.args.command)
   );
@@ -2432,11 +2494,14 @@ function hasFabricatedNumericCoverage(
   calls: TddToolCall[]
 ): boolean {
   const coverage = coverageEntry.slice("COVERAGE:".length).trim().toLowerCase();
-  if (!NUMERIC_COVERAGE_CLAIM_PATTERN.test(coverage)) {
+  const claims = numericCoverageClaims(coverage);
+  if (claims.length === 0 && !hasUnsupportedCoverageAssertion(coverage)) {
     return false;
   }
-  const claims = numericCoverageClaims(coverage);
-  if (claims.length === 0 || claims.some(({ valid }) => !valid)) {
+  if (
+    hasUnsupportedCoverageAssertion(coverage) ||
+    claims.some(({ valid }) => !valid)
+  ) {
     return true;
   }
   const lastProductionEnd = lastProvenProductionEnd(calls);
@@ -2592,14 +2657,16 @@ export function assessTddEvidence(
   calls: TddToolCall[],
   captureErrors: string[] = [],
   trustedTaskIntent = "",
-  expectedCommand?: string
+  expectedCommand?: string,
+  trustedOptions: TddEvidenceTrustedOptions = {}
 ): TddEvidenceAssessment {
   const message = validateTddEvidence(
     result,
     calls,
     captureErrors,
     trustedTaskIntent,
-    expectedCommand
+    expectedCommand,
+    trustedOptions
   );
   if (!message) {
     return { kind: "verified" };

@@ -999,7 +999,7 @@ describe.serial("review model config", () => {
 });
 
 describe.serial("multi-model review orchestration", () => {
-  it("uses the default model with configured thinking and accurate progress totals", async () => {
+  it("uses the Astra medium default with accurate progress totals", async () => {
     const calls = installManager();
     const { ctx } = createCtx();
     const progress: ReviewWorkflowProgressUpdate[] = [];
@@ -1011,15 +1011,16 @@ describe.serial("multi-model review orchestration", () => {
       onProgress: (update) => progress.push(update),
     });
 
+    expect(DEFAULT_REVIEWER_PANEL).toEqual([
+      { model: "openai-codex/gpt-6-astra", thinkingLevel: "medium" },
+    ]);
+    expect(DEFAULT_SYNTHESIZER_MODEL).toBe("openai-codex/gpt-6-astra");
+    expect(DEFAULT_VERIFIER_MODEL).toBe("openai-codex/gpt-6-astra");
     expect(
       calls
         .map(({ type, model, thinking }) => `${type}:${model}=${thinking}`)
         .sort()
-    ).toEqual(
-      DEFAULT_REVIEWER_PANEL.map(
-        (entry) => `code-reviewer:${entry.model}=${entry.thinkingLevel}`
-      ).sort()
-    );
+    ).toEqual(["code-reviewer:openai-codex/gpt-6-astra=medium"]);
     expect(result.coverage.configuredPanelSize).toBe(1);
     expect(result.coverage.callPlan.reviewerRuns).toHaveLength(1);
     expect(progress.every(({ text }) => !text.includes("/4"))).toBe(true);
@@ -1240,7 +1241,10 @@ describe.serial("multi-model review orchestration", () => {
       (call) => call.type === "review-synthesizer"
     );
     expect(synthesizerCalls).toHaveLength(2);
-    expect(synthesizerCalls[0]?.thinking).toBe("high");
+    expect(synthesizerCalls.map(({ thinking }) => thinking)).toEqual([
+      "medium",
+      "medium",
+    ]);
     const structuredTool = (
       synthesizerCalls[0]?.options.customTools as
         | Array<{ name: string; parameters: unknown }>
@@ -1424,7 +1428,7 @@ describe.serial("multi-model review orchestration", () => {
       "review-verifier",
     ]);
     const verifierCall = calls.find((call) => call.type === "review-verifier");
-    expect(verifierCall?.thinking).toBe("high");
+    expect(verifierCall?.thinking).toBe("medium");
     expect(verifierCall?.prompt).toContain(
       'consensusEffect "raised-one-level"'
     );
@@ -1587,9 +1591,14 @@ describe.serial("multi-model review orchestration", () => {
     expect(
       result.verifier.findings.map((finding) => finding.memberIds)
     ).toEqual([["candidate-0001"], ["candidate-0002"]]);
-    expect(
-      calls.filter((call) => call.type === "review-verifier")
-    ).toHaveLength(2);
+    const verifierCalls = calls.filter(
+      (call) => call.type === "review-verifier"
+    );
+    expect(verifierCalls).toHaveLength(2);
+    expect(verifierCalls.map(({ thinking }) => thinking)).toEqual([
+      "medium",
+      "medium",
+    ]);
     expect(calls.at(-1)?.prompt).toContain(
       "previous verifier structured submission failed validation"
     );
@@ -1842,14 +1851,16 @@ describe.serial("/review command settings and disclosure", () => {
           message.includes(
             "Possible structured-repair retries: up to 1 reviewer retry, plus up to 2 downstream retries when those stages run"
           ) &&
-          message.includes(`Synthesizer: ${DEFAULT_SYNTHESIZER_MODEL}=high`) &&
-          message.includes(`Verifier: ${DEFAULT_VERIFIER_MODEL}=high`)
+          message.includes(
+            `Synthesizer: ${DEFAULT_SYNTHESIZER_MODEL}=medium`
+          ) &&
+          message.includes(`Verifier: ${DEFAULT_VERIFIER_MODEL}=medium`)
       )
     ).toBe(true);
     expect(reports(runtime)).toHaveLength(1);
   });
 
-  it("parses CLI model=level panels, normalizes duplicate IDs to one run, and fixes downstream effort at high", async () => {
+  it("parses CLI model=level panels, normalizes duplicate IDs to one run, and fixes downstream effort at medium", async () => {
     const calls = installManager();
     const runtime = changedFilesRuntime();
     const { ctx } = createCtx();
@@ -1888,7 +1899,7 @@ describe.serial("/review command settings and disclosure", () => {
       );
       expect(
         notifications.some(({ message }) =>
-          message.includes(`Synthesizer: ${DEFAULT_SYNTHESIZER_MODEL}=high`)
+          message.includes(`Synthesizer: ${DEFAULT_SYNTHESIZER_MODEL}=medium`)
         )
       ).toBe(true);
     }
@@ -1988,7 +1999,7 @@ describe.serial("/review command settings and disclosure", () => {
     expect(calls).toHaveLength(DEFAULT_REVIEWER_PANEL.length);
     expect(
       notifications.some(({ message }) =>
-        message.includes(`Verifier: ${DEFAULT_VERIFIER_MODEL}=high`)
+        message.includes(`Verifier: ${DEFAULT_VERIFIER_MODEL}=medium`)
       )
     ).toBe(true);
     expect(runtime.appendedEntries).toContainEqual({

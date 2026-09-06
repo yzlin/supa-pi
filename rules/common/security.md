@@ -3,9 +3,9 @@
 ## Threat Model First
 
 Before security-sensitive work, identify:
-- trust boundaries: where untrusted data enters or crosses systems
-- assets: secrets, credentials, PII, money movement, admin actions, tenant data
-- abuse cases: how the feature can be misused, bypassed, or overloaded
+- trust boundaries: where untrusted data enters or crosses systems, including HTTP requests, forms, file uploads, webhooks, third-party APIs, queues, config files, and LLM output
+- assets: credentials, sessions, PII, payment data, tenant data, admin actions, money movement, and secrets
+- abuse cases: how someone could spoof identity, tamper with data, deny an action, leak information, overload the system, or elevate privileges, as well as misuse or bypass the feature
 
 If trust boundaries are unclear, stop and clarify before coding.
 
@@ -25,10 +25,10 @@ Before ANY commit:
 
 Get explicit user approval before:
 - adding or changing authentication flows
-- changing authorization or role/permission behavior
+- changing authorization, roles, or permissions
 - storing new categories of sensitive data
 - adding external service integrations, callbacks, or webhooks
-- changing CORS configuration
+- changing CORS, cookie, or security header behavior
 - adding file upload handlers
 - modifying rate limits or throttling
 - granting elevated permissions or destructive capabilities
@@ -36,11 +36,13 @@ Get explicit user approval before:
 ## Never Do
 
 - Never hardcode secrets in source code
+- Never commit secrets or put them in logs.
 - Never log passwords, tokens, API keys, private keys, full payment data, or session identifiers
-- Never trust client-side validation as a security boundary
-- Never expose stack traces or internal error details to users
-- Never store auth tokens in client-readable storage when an httpOnly cookie is viable
+- Never trust client-side validation as a security boundary.
+- Never expose stack traces or internal errors to users.
+- Never store auth tokens in client-readable storage when httpOnly cookies are viable.
 - Never use `eval`, shell execution, SQL execution, or raw HTML rendering with untrusted data
+- Never pass unvalidated LLM output into privileged code paths.
 
 ## Secret Management
 

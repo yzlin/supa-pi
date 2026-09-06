@@ -8,6 +8,9 @@ Requirements:
 - Use `TaskCreate`, `TaskExecute`, and `TaskOutput`. Use `TaskGet` or `TaskUpdate` only if needed.
 - The task must use `agentType: "researcher"`.
 - Put the full user request in the task description.
+- By default, request the research brief in the task result without assigning an output file.
+- When the user requests file output, assign the explicit output path in the task description; do not invent a path when none was requested.
+- For multiple requested research tracks with file output, assign a distinct explicit output path to each task.
 - Require the worker to stay in strict evidence mode:
   - do not guess
   - cite factual claims

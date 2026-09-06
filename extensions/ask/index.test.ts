@@ -6,7 +6,6 @@ import ask, {
   CUSTOM_OPTION_LABEL,
   CUSTOM_OPTION_VALUE,
   createAskEnvelope,
-  getAskRedirectCorrectionMessage,
   getRenderOptions,
   NEXT_OPTION_LABEL,
   NEXT_OPTION_VALUE,
@@ -165,7 +164,6 @@ describe("ask public runtime boundary", () => {
       tools[0]?.promptSnippet,
       ...(tools[0]?.promptGuidelines ?? []),
       guidance?.systemPrompt,
-      getAskRedirectCorrectionMessage(),
     ].join("\n");
     expect(askFacingCopy.toLowerCase()).toContain("ask");
     expect(askFacingCopy.toLowerCase()).not.toContain("questionnaire");
@@ -218,9 +216,7 @@ describe("ask public runtime boundary", () => {
       }
     );
     expect(appendEntryCalls[0]?.type).toBe("questionnaire-plain-text-miss");
-    expect(sendMessageCalls[0]?.message.customType).toBe(
-      "questionnaire-auto-redirect"
-    );
+    expect(sendMessageCalls).toEqual([]);
 
     await commands.get("ask-stats")?.handler("", {
       sessionManager: {
@@ -240,7 +236,7 @@ describe("ask public runtime boundary", () => {
         },
       },
     });
-    expect(sendMessageCalls[1]?.message.customType).toBe("questionnaire-stats");
+    expect(sendMessageCalls[0]?.message.customType).toBe("questionnaire-stats");
   });
 });
 
@@ -364,18 +360,6 @@ describe("wrapAskText", () => {
     );
 
     expect(lines.join("\n")).toBe("Safe text done");
-  });
-});
-
-describe("getAskRedirectCorrectionMessage", () => {
-  it("tells the assistant to continue the original task after the ask answer", () => {
-    const message = getAskRedirectCorrectionMessage();
-
-    expect(message).toContain("continue the original task immediately");
-    expect(message).toContain("provide the pending result");
-    expect(message).toContain(
-      "instead of stopping after a brief acknowledgment"
-    );
   });
 });
 
@@ -2175,10 +2159,11 @@ describe("createAskEnvelope", () => {
   });
 });
 
-describe("ask auto-redirect", () => {
+describe("ask clarification diagnostics", () => {
   function setupHarness() {
     const handlers = new Map<string, (...args: any[]) => any>();
-    const sendMessageCalls: Array<{ message: any; options: any }> = [];
+    const commands = new Map<string, any>();
+    const sendMessageCalls: Array<{ message: any; options?: any }> = [];
     const appendEntryCalls: Array<{ type: string; data: any }> = [];
     const notifyCalls: Array<{ message: string; level: string }> = [];
 
@@ -2186,8 +2171,8 @@ describe("ask auto-redirect", () => {
       on(eventName: string, handler: (...args: any[]) => any) {
         handlers.set(eventName, handler);
       },
-      registerCommand() {
-        /* noop */
+      registerCommand(name: string, command: any) {
+        commands.set(name, command);
       },
       registerTool() {
         /* noop */
@@ -2195,7 +2180,7 @@ describe("ask auto-redirect", () => {
       appendEntry(type: string, data: any) {
         appendEntryCalls.push({ type, data });
       },
-      sendMessage(message: any, options: any) {
+      sendMessage(message: any, options?: any) {
         sendMessageCalls.push({ message, options });
       },
     } as any);
@@ -2203,138 +2188,153 @@ describe("ask auto-redirect", () => {
     return {
       inputHandler: handlers.get("input"),
       agentEndHandler: handlers.get("agent_end"),
+      statsHandler: commands.get("ask-stats")?.handler,
       sendMessageCalls,
       appendEntryCalls,
       notifyCalls,
     };
   }
 
-  it("redirects an interactive plain-text clarification into an ask follow-up turn", async () => {
-    const {
-      inputHandler,
-      agentEndHandler,
-      sendMessageCalls,
-      appendEntryCalls,
-      notifyCalls,
-    } = setupHarness();
-
-    expect(inputHandler).toBeDefined();
-    expect(agentEndHandler).toBeDefined();
-
-    await inputHandler?.({ source: "interactive" });
-    await agentEndHandler?.(
-      {
-        messages: [
-          {
-            role: "assistant",
-            stopReason: "stop",
-            content: [
-              {
-                type: "text",
-                text: "Which output format do you prefer?",
-              },
-            ],
-          },
-        ],
-      },
-      {
-        hasUI: true,
-        ui: {
-          notify(message: string, level: string) {
-            notifyCalls.push({ message, level });
-          },
-        },
-      }
-    );
-
-    expect(notifyCalls).toEqual([
-      {
-        message:
-          "Assistant asked a plain-text clarification. Auto-redirecting it to ask.",
-        level: "warning",
-      },
-    ]);
-
-    expect(appendEntryCalls).toHaveLength(1);
-    expect(appendEntryCalls[0]?.type).toBe("questionnaire-plain-text-miss");
-    expect(appendEntryCalls[0]?.data).toMatchObject({
-      source: "interactive",
-      redirectedAlready: false,
-      autoRedirected: true,
-      text: "Which output format do you prefer?",
-    });
-
-    expect(sendMessageCalls).toEqual([
-      {
-        message: {
-          customType: "questionnaire-auto-redirect",
-          content: getAskRedirectCorrectionMessage(),
-          display: false,
-        },
-        options: { triggerTurn: true },
-      },
-    ]);
+  const assistantMessage = (text: string) => ({
+    role: "assistant",
+    stopReason: "stop",
+    content: [{ type: "text", text }],
   });
 
-  it("does not trigger another turn after a prior auto-redirect message already exists", async () => {
-    const {
-      inputHandler,
-      agentEndHandler,
-      sendMessageCalls,
-      appendEntryCalls,
-      notifyCalls,
-    } = setupHarness();
+  it("logs a genuine clarification without sending, notifying, or triggering a turn", async () => {
+    const harness = setupHarness();
 
-    expect(inputHandler).toBeDefined();
-    expect(agentEndHandler).toBeDefined();
-
-    await inputHandler?.({ source: "interactive" });
-    await agentEndHandler?.(
-      {
-        messages: [
-          {
-            role: "custom",
-            customType: "questionnaire-auto-redirect",
-          },
-          {
-            role: "assistant",
-            stopReason: "stop",
-            content: [
-              {
-                type: "text",
-                text: "Which output format do you prefer?",
-              },
-            ],
-          },
-        ],
-      },
+    await harness.inputHandler?.({ source: "interactive" });
+    await harness.agentEndHandler?.(
+      { messages: [assistantMessage("Which output format do you prefer?")] },
       {
         hasUI: true,
         ui: {
-          notify(message: string, level: string) {
-            notifyCalls.push({ message, level });
-          },
+          notify: (message: string, level: string) =>
+            harness.notifyCalls.push({ message, level }),
         },
       }
     );
 
-    expect(notifyCalls).toEqual([
-      {
-        message:
-          "Assistant still asked a plain-text clarification after redirect. Prefer ask manually.",
-        level: "warning",
+    expect(harness.appendEntryCalls).toHaveLength(1);
+    expect(harness.appendEntryCalls[0]).toMatchObject({
+      type: "questionnaire-plain-text-miss",
+      data: {
+        source: "interactive",
+        redirectedAlready: false,
+        autoRedirected: false,
+        text: "Which output format do you prefer?",
       },
-    ]);
+    });
+    expect(harness.sendMessageCalls).toEqual([]);
+    expect(harness.notifyCalls).toEqual([]);
+  });
 
-    expect(appendEntryCalls).toHaveLength(1);
-    expect(appendEntryCalls[0]?.type).toBe("questionnaire-plain-text-miss");
-    expect(appendEntryCalls[0]?.data).toMatchObject({
-      source: "interactive",
-      redirectedAlready: true,
-      autoRedirected: false,
-      text: "Which output format do you prefer?",
+  it("keeps uncertain advice, sample, quoted, code, and rhetorical candidates log-only", async () => {
+    const candidates = [
+      "You can ask another agent: which approach would you prefer?",
+      "For example: what should the reviewer check?",
+      'The docs say, "Could you retry?"',
+      "```ts\nconst prompt = 'Which format do you prefer?'\n```",
+      "What should good software be, if not clear?",
+    ];
+
+    for (const text of candidates) {
+      const harness = setupHarness();
+      await harness.inputHandler?.({ source: "interactive" });
+      await harness.agentEndHandler?.(
+        { messages: [assistantMessage(text)] },
+        {
+          hasUI: true,
+          ui: {
+            notify: (message: string, level: string) =>
+              harness.notifyCalls.push({ message, level }),
+          },
+        }
+      );
+
+      expect(harness.appendEntryCalls).toHaveLength(1);
+      expect(harness.appendEntryCalls[0]?.data).toMatchObject({
+        autoRedirected: false,
+        text,
+      });
+      expect(harness.sendMessageCalls).toEqual([]);
+      expect(harness.notifyCalls).toEqual([]);
+    }
+  });
+
+  it("does not diagnose a turn that already contains an ask result", async () => {
+    const harness = setupHarness();
+    await harness.inputHandler?.({ source: "interactive" });
+    await harness.agentEndHandler?.(
+      {
+        messages: [
+          { role: "toolResult", toolName: "ask", content: [] },
+          assistantMessage("Which output format do you prefer?"),
+        ],
+      },
+      { hasUI: true, ui: { notify: () => undefined } }
+    );
+
+    expect(harness.appendEntryCalls).toEqual([]);
+    expect(harness.sendMessageCalls).toEqual([]);
+  });
+
+  it("does nothing without UI and logs all UI input sources without intervention", async () => {
+    const noUi = setupHarness();
+    await noUi.inputHandler?.({ source: "interactive" });
+    await noUi.agentEndHandler?.(
+      { messages: [assistantMessage("Which format do you prefer?")] },
+      { hasUI: false, ui: { notify: () => undefined } }
+    );
+    expect(noUi.appendEntryCalls).toEqual([]);
+
+    for (const source of ["interactive", "rpc", "extension"] as const) {
+      const harness = setupHarness();
+      await harness.inputHandler?.({ source });
+      await harness.agentEndHandler?.(
+        { messages: [assistantMessage("Which format do you prefer?")] },
+        { hasUI: true, ui: { notify: () => undefined } }
+      );
+      expect(harness.appendEntryCalls[0]?.data).toMatchObject({
+        source,
+        autoRedirected: false,
+      });
+      expect(harness.sendMessageCalls).toEqual([]);
+    }
+  });
+
+  it("reads historical questionnaire logs and historical redirect fields in ask stats", async () => {
+    const harness = setupHarness();
+    await harness.statsHandler?.("", {
+      sessionManager: {
+        getEntries: () => [
+          {
+            type: "custom",
+            customType: "questionnaire-plain-text-miss",
+            data: {
+              source: "interactive",
+              redirectedAlready: true,
+              autoRedirected: true,
+              text: "Which historical format?",
+              timestamp: "2026-01-01T00:00:00.000Z",
+            },
+          },
+        ],
+      },
+      ui: { notify: () => undefined },
     });
 
-    expect(sendMessageCalls).toEqual([]);
+    expect(harness.sendMessageCalls).toHaveLength(1);
+    expect(harness.sendMessageCalls[0]?.message).toMatchObject({
+      customType: "questionnaire-stats",
+      display: true,
+    });
+    expect(harness.sendMessageCalls[0]?.message.content).toContain(
+      "Auto-redirected: 1"
+    );
+    expect(harness.sendMessageCalls[0]?.message.content).toContain(
+      "Repeated after redirect: 1"
+    );
   });
 });

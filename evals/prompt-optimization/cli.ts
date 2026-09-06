@@ -50,11 +50,13 @@ const DEFAULT_MAX_TURNS = 20;
 
 interface CliOptions {
   caseIds: string[];
+  dryRun: boolean;
   help: boolean;
   model: string;
   modelExplicit: boolean;
   thinking: ThinkingLevel;
   candidateThinking?: ThinkingLevel;
+  candidateModel?: string;
   compareServiceTier: boolean;
   taskShapeSuite: boolean;
   repetitions: number;
@@ -69,13 +71,15 @@ interface VariantConfig {
   serviceTier?: "default" | "priority";
 }
 
-type ComparisonKind = "prompt" | "reasoning" | "service-tier";
+type ComparisonKind = "prompt" | "reasoning" | "service-tier" | "model";
 type PromptSource = "head" | "working-tree";
 
 interface ComparisonArm {
   thinking: ThinkingLevel;
   promptSource: PromptSource;
   serviceTier?: "default" | "priority";
+  requestedModel?: string;
+  resolvedModel?: string;
 }
 
 interface Comparison {
@@ -87,6 +91,17 @@ interface Comparison {
 interface ReasoningModelSupport {
   reasoning: boolean;
   thinkingLevelMap?: Partial<Record<ThinkingLevel, string | null>>;
+}
+
+interface ModelChoice extends ReasoningModelSupport {
+  id: string;
+  provider: string;
+}
+
+export interface ModelComparisonSelection<T extends ModelChoice> {
+  baseline: T;
+  candidate: T;
+  comparison: Comparison;
 }
 
 const THINKING_LEVELS: ThinkingLevel[] = [
@@ -115,6 +130,7 @@ function parsePositiveInteger(value: string | undefined, flag: string): number {
 export function parseCliOptions(args: string[]): CliOptions {
   const options: CliOptions = {
     caseIds: [],
+    dryRun: false,
     help: false,
     model: DEFAULT_MODEL,
     modelExplicit: false,
@@ -145,6 +161,13 @@ export function parseCliOptions(args: string[]): CliOptions {
         }
         options.model = value;
         options.modelExplicit = true;
+        index += 1;
+        break;
+      case "--candidate-model":
+        if (!value) {
+          throw new Error("--candidate-model requires provider/model");
+        }
+        options.candidateModel = value;
         index += 1;
         break;
       case "--thinking":
@@ -184,6 +207,9 @@ export function parseCliOptions(args: string[]): CliOptions {
         options.maxTurns = parsePositiveInteger(value, flag);
         index += 1;
         break;
+      case "--dry-run":
+        options.dryRun = true;
+        break;
       case "--help":
         options.help = true;
         break;
@@ -196,7 +222,11 @@ export function parseCliOptions(args: string[]): CliOptions {
     if (options.caseIds.length > 0) {
       throw new Error("--task-shape-suite cannot be combined with --case");
     }
-    if (options.compareServiceTier || options.candidateThinking) {
+    if (
+      options.compareServiceTier ||
+      options.candidateThinking ||
+      options.candidateModel
+    ) {
       throw new Error(
         "--task-shape-suite cannot be combined with paired comparison flags"
       );
@@ -205,6 +235,17 @@ export function parseCliOptions(args: string[]): CliOptions {
       throw new Error("--task-shape-suite requires exactly 3 repetitions");
     }
     options.repetitions = TASK_SHAPE_REPETITIONS;
+  }
+  if (options.candidateModel && !options.modelExplicit) {
+    throw new Error("--candidate-model requires an explicit --model baseline");
+  }
+  if (
+    options.candidateModel &&
+    (options.candidateThinking || options.compareServiceTier)
+  ) {
+    throw new Error(
+      "cannot combine model comparison with reasoning or service-tier comparisons"
+    );
   }
   if (options.candidateThinking === options.thinking) {
     throw new Error("reasoning comparison requires different thinking levels");
@@ -223,7 +264,10 @@ export function parseCliOptions(args: string[]): CliOptions {
 
 export function createVariantConfigs(
   pair: PromptPair,
-  options: Pick<CliOptions, "thinking" | "candidateThinking"> & {
+  options: Pick<
+    CliOptions,
+    "thinking" | "candidateThinking" | "candidateModel"
+  > & {
     compareServiceTier?: boolean;
   }
 ): Record<EvalVariant, VariantConfig> {
@@ -240,6 +284,21 @@ export function createVariantConfigs(
         promptSha256: pair.candidate.sha256,
         thinking: options.thinking,
         serviceTier: "priority",
+      },
+    };
+  }
+
+  if (options.candidateModel) {
+    return {
+      baseline: {
+        promptContent: pair.candidate.content,
+        promptSha256: pair.candidate.sha256,
+        thinking: options.thinking,
+      },
+      candidate: {
+        promptContent: pair.candidate.content,
+        promptSha256: pair.candidate.sha256,
+        thinking: options.thinking,
       },
     };
   }
@@ -519,6 +578,22 @@ function signed(value: number, digits = 2): string {
 }
 
 export function createComparison(options: CliOptions): Comparison {
+  if (options.candidateModel) {
+    return {
+      kind: "model",
+      baseline: {
+        thinking: options.thinking,
+        promptSource: "working-tree",
+        requestedModel: options.model,
+      },
+      candidate: {
+        thinking: options.thinking,
+        promptSource: "working-tree",
+        requestedModel: options.candidateModel,
+      },
+    };
+  }
+
   if (options.compareServiceTier) {
     return {
       kind: "service-tier",
@@ -546,6 +621,108 @@ export function createComparison(options: CliOptions): Comparison {
       promptSource: "working-tree",
     },
   };
+}
+
+function exactModelChoice<T extends ModelChoice>(
+  requested: string,
+  models: readonly T[]
+): T {
+  const normalized = requested.trim().toLowerCase();
+  const canonicalMatches = models.filter(
+    (model) => `${model.provider}/${model.id}`.toLowerCase() === normalized
+  );
+  const idMatches = models.filter(
+    (model) => model.id.toLowerCase() === normalized
+  );
+  const matches = canonicalMatches.length > 0 ? canonicalMatches : idMatches;
+  if (matches.length !== 1) {
+    throw new Error(`exact model not found: ${requested}`);
+  }
+  return matches[0]!;
+}
+
+function effectiveThinkingEffort(
+  model: ModelChoice,
+  thinking: ThinkingLevel,
+  arm: "baseline" | "candidate"
+): string {
+  if (!model.reasoning) {
+    if (thinking === "off") {
+      return "off";
+    }
+    throw new Error(
+      `${arm} model does not support thinking level: ${thinking}`
+    );
+  }
+  const mapped = model.thinkingLevelMap?.[thinking];
+  if (
+    mapped === null ||
+    (mapped === undefined && (thinking === "xhigh" || thinking === "max"))
+  ) {
+    throw new Error(
+      `${arm} model does not support thinking level: ${thinking}`
+    );
+  }
+  return mapped ?? thinking;
+}
+
+export function resolveModelComparison<T extends ModelChoice>(
+  baselineRequested: string,
+  candidateRequested: string,
+  thinking: ThinkingLevel,
+  models: readonly T[]
+): ModelComparisonSelection<T> {
+  const baseline = exactModelChoice(baselineRequested, models);
+  const candidate = exactModelChoice(candidateRequested, models);
+  const baselineResolved = `${baseline.provider}/${baseline.id}`;
+  const candidateResolved = `${candidate.provider}/${candidate.id}`;
+  if (baselineResolved.toLowerCase() === candidateResolved.toLowerCase()) {
+    throw new Error("model comparison arms must resolve to different models");
+  }
+  const baselineEffort = effectiveThinkingEffort(
+    baseline,
+    thinking,
+    "baseline"
+  );
+  const candidateEffort = effectiveThinkingEffort(
+    candidate,
+    thinking,
+    "candidate"
+  );
+  if (baselineEffort !== candidateEffort) {
+    throw new Error(
+      `effective thinking efforts are not comparable: ${baselineEffort} versus ${candidateEffort}`
+    );
+  }
+  return {
+    baseline,
+    candidate,
+    comparison: {
+      kind: "model",
+      baseline: {
+        thinking,
+        promptSource: "working-tree",
+        requestedModel: baselineRequested,
+        resolvedModel: baselineResolved,
+      },
+      candidate: {
+        thinking,
+        promptSource: "working-tree",
+        requestedModel: candidateRequested,
+        resolvedModel: candidateResolved,
+      },
+    },
+  };
+}
+
+export function modelForVariant<T>(
+  models: Pick<
+    ModelComparisonSelection<T & ModelChoice>,
+    "baseline" | "candidate"
+  >,
+  variant: EvalVariant
+): T {
+  return models[variant];
 }
 
 export function validateServiceTierComparison(
@@ -642,15 +819,18 @@ function summaryMarkdown(summary: EvalSummary, comparison: Comparison): string {
     title = "Reasoning";
   } else if (comparison.kind === "service-tier") {
     title = "Service tier";
+  } else if (comparison.kind === "model") {
+    title = "Model";
   }
-  const baselineLabel =
-    comparison.kind === "service-tier"
-      ? `Baseline (${comparison.baseline.serviceTier})`
-      : `Baseline (${comparison.baseline.thinking})`;
-  const candidateLabel =
-    comparison.kind === "service-tier"
-      ? `Candidate (${comparison.candidate.serviceTier})`
-      : `Candidate (${comparison.candidate.thinking})`;
+  let baselineLabel = `Baseline (${comparison.baseline.thinking})`;
+  let candidateLabel = `Candidate (${comparison.candidate.thinking})`;
+  if (comparison.kind === "service-tier") {
+    baselineLabel = `Baseline (${comparison.baseline.serviceTier})`;
+    candidateLabel = `Candidate (${comparison.candidate.serviceTier})`;
+  } else if (comparison.kind === "model") {
+    baselineLabel = `Baseline (${comparison.baseline.resolvedModel})`;
+    candidateLabel = `Candidate (${comparison.candidate.resolvedModel})`;
+  }
   const lines = [
     `# ${title} eval summary`,
     "",
@@ -695,11 +875,62 @@ async function writePromptSnapshot(
   await writeFile(target, content);
 }
 
+function dryRunPreview(
+  options: CliOptions,
+  selectedCases: readonly EvalCase[],
+  selectedModel: string,
+  comparison: Comparison,
+  variantConfigs: ReadonlyMap<string, Record<EvalVariant, VariantConfig>>,
+  totalRuns: number
+): string {
+  const arms: EvalVariant[] = options.taskShapeSuite
+    ? ["candidate"]
+    : ["baseline", "candidate"];
+  const mode = options.taskShapeSuite
+    ? "task-shape suite"
+    : `${comparison.kind} comparison`;
+  const lines = [
+    "DRY RUN — no model runtime, credentials, network, fixture copies, or eval artifacts.",
+    `Cases (${selectedCases.length}): ${selectedCases.map((evalCase) => evalCase.id).join(", ")}`,
+    `Mode: ${mode}`,
+  ];
+  for (const variant of arms) {
+    const arm = comparison[variant];
+    const requestedModel = arm.requestedModel ?? selectedModel;
+    const serviceTier = arm.serviceTier
+      ? `; service tier ${arm.serviceTier}`
+      : "";
+    lines.push(
+      `${variant}: requested ${requestedModel} (unresolved/unverified); effort ${arm.thinking}; prompt ${arm.promptSource}${serviceTier}`
+    );
+  }
+  lines.push(
+    `Repetitions: ${options.repetitions}`,
+    `RUNS: ${totalRuns} (${selectedCases.length} case(s) × ${options.repetitions} repetition(s) × ${arms.length} arms)`,
+    `MODEL RESPONSE turns: at most ${totalRuns * options.maxTurns} (${totalRuns} runs × maxTurns ${options.maxTurns})`,
+    `maxTurns: ${options.maxTurns} per run; timeout: ${options.timeoutMs} ms per run (abort deadline)`,
+    "Transport attempts/retries: not bounded by maxTurns; provider retry behavior is unresolved/unverified."
+  );
+  for (const [path, configs] of variantConfigs) {
+    const hashes = arms.map(
+      (variant) =>
+        `${variant} ${comparison[variant].promptSource} sha256=${configs[variant].promptSha256}`
+    );
+    lines.push(`Prompt ${path}: ${hashes.join("; ")}`);
+  }
+  lines.push(
+    `Core eval base prompt sha256=${createHash("sha256").update(CORE_EVAL_BASE_PROMPT).digest("hex")}`,
+    "Live transmission: evaluated system prompt, case task, conversation messages, tool calls/results, and fixture contents exposed through tools go to each requested model provider.",
+    "Cost: unknown; token budget: none."
+  );
+  return `${lines.join("\n")}\n`;
+}
+
 export async function main(): Promise<void> {
   const options = parseCliOptions(process.argv.slice(2));
   if (options.help) {
     process.stdout.write(
-      "Usage: bun run eval:prompts -- [options]\n\nOptions:\n  --case <id> (repeatable)\n  --model <provider/model>\n  --thinking <level>\n  --candidate-thinking <level>\n  --compare-service-tier\n  --task-shape-suite (8 cases × 3 repetitions, candidate only)\n  --repetitions <count>\n  --timeout-ms <milliseconds>\n  --max-turns <count>\n"
+      "Usage: bun run eval:prompts -- [options]\n\nOptions:\n  --case <id> (repeatable)\n  --model <provider/model> (baseline in model comparison)\n  --candidate-model <provider/model> (compare exact models)\n  --thinking <level>\n  --candidate-thinking <level>\n  --compare-service-tier\n  --task-shape-suite (8 cases × 3 repetitions, candidate only)\n  --repetitions <count>\n  --timeout-ms <milliseconds>\n  --max-turns <count>\n  --dry-run (offline approval preview; no model calls or artifacts)\n"
     );
     return;
   }
@@ -782,7 +1013,7 @@ export async function main(): Promise<void> {
   const selectedPromptPaths = [
     ...new Set(selectedCases.map((evalCase) => evalCase.promptPath)),
   ].sort();
-  const comparison = createComparison(options);
+  let comparison = createComparison(options);
   const startedFromHead = (
     await gitOutput(repositoryRoot, ["rev-parse", "HEAD"])
   ).trim();
@@ -799,30 +1030,12 @@ export async function main(): Promise<void> {
     selectedPromptPaths
   );
 
-  const modelRuntime = await ModelRuntime.create();
-  const modelRegistry = new ModelRegistry(modelRuntime);
-  const settingsManager = SettingsManager.create(repositoryRoot);
   const selectedModel = options.taskShapeSuite
     ? configuredPrimaryModel(
         options.modelExplicit ? options.model : undefined,
-        settingsManager
+        SettingsManager.create(repositoryRoot)
       )
     : options.model;
-  const resolvedModel = resolveCliModel({
-    cliModel: selectedModel,
-    cliThinking: options.thinking,
-    modelRuntime,
-  });
-  if (resolvedModel.error || !resolvedModel.model) {
-    throw new Error(resolvedModel.error ?? `model not found: ${selectedModel}`);
-  }
-  validateReasoningComparison(resolvedModel.model, comparison);
-  validateServiceTierComparison(resolvedModel.model, comparison);
-  const auth = await modelRegistry.getApiKeyAndHeaders(resolvedModel.model);
-  if (auth.ok === false) {
-    throw new Error(auth.error);
-  }
-
   const variantConfigs = new Map<string, Record<EvalVariant, VariantConfig>>();
   for (const path of selectedPromptPaths) {
     let pair: PromptPair;
@@ -859,6 +1072,65 @@ export async function main(): Promise<void> {
   if (options.taskShapeSuite && totalCalls !== TASK_SHAPE_PLANNED_CALLS) {
     throw new Error("Task-shape suite did not plan exactly 24 calls");
   }
+  if (options.dryRun) {
+    process.stdout.write(
+      dryRunPreview(
+        options,
+        selectedCases,
+        selectedModel,
+        comparison,
+        variantConfigs,
+        totalCalls
+      )
+    );
+    return;
+  }
+  if (process.env.SUPA_PI_EVAL_FORBID_LIVE === "1") {
+    throw new Error("live execution forbidden by SUPA_PI_EVAL_FORBID_LIVE");
+  }
+
+  const modelRuntime = await ModelRuntime.create();
+  const modelRegistry = new ModelRegistry(modelRuntime);
+  type EvalModel = NonNullable<ReturnType<typeof resolveCliModel>["model"]>;
+  let baselineModel: EvalModel;
+  let modelComparison: ModelComparisonSelection<EvalModel> | undefined;
+  if (options.candidateModel) {
+    modelComparison = resolveModelComparison(
+      selectedModel,
+      options.candidateModel,
+      options.thinking,
+      [...modelRuntime.getModels()]
+    );
+    baselineModel = modelComparison.baseline;
+    comparison = modelComparison.comparison;
+  } else {
+    const resolvedModel = resolveCliModel({
+      cliModel: selectedModel,
+      cliThinking: options.thinking,
+      modelRuntime,
+    });
+    if (resolvedModel.error || !resolvedModel.model) {
+      throw new Error(
+        resolvedModel.error ?? `model not found: ${selectedModel}`
+      );
+    }
+    baselineModel = resolvedModel.model;
+  }
+  validateReasoningComparison(baselineModel, comparison);
+  validateServiceTierComparison(baselineModel, comparison);
+  const variantModels = modelComparison ?? {
+    baseline: baselineModel,
+    candidate: baselineModel,
+  };
+  for (const model of new Set([
+    variantModels.baseline,
+    variantModels.candidate,
+  ])) {
+    const auth = await modelRegistry.getApiKeyAndHeaders(model);
+    if (auth.ok === false) {
+      throw new Error(auth.error);
+    }
+  }
   process.stdout.write(
     plannedCallMessage(
       selectedCases.length,
@@ -890,7 +1162,7 @@ export async function main(): Promise<void> {
         promptContent: config.promptContent,
         promptSha256: config.promptSha256,
         fixturePath,
-        model: resolvedModel.model,
+        model: modelForVariant(variantModels, variant),
         thinking: config.thinking,
         ...(config.serviceTier ? { serviceTier: config.serviceTier } : {}),
         timeoutMs: options.timeoutMs,
@@ -999,12 +1271,12 @@ export async function main(): Promise<void> {
       ? singleArmManifestFields(totalCalls)
       : { mode: "paired", plannedCalls: totalCalls }),
     selectedCases: selectedCases.map((evalCase) => evalCase.id),
-    model: `${resolvedModel.model.provider}/${resolvedModel.model.id}`,
+    model: `${baselineModel.provider}/${baselineModel.id}`,
     ...(options.taskShapeSuite
       ? {
           modelSelection: modelSelectionRecord(
             selectedModel,
-            `${resolvedModel.model.provider}/${resolvedModel.model.id}`,
+            `${baselineModel.provider}/${baselineModel.id}`,
             options.modelExplicit
           ),
         }

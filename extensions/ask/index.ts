@@ -81,13 +81,8 @@ function hasToolCall(content: { type: string }[]): boolean {
   return content.some((block) => block.type === "toolCall");
 }
 
-const LEGACY_ASK_REDIRECT_MESSAGE_TYPE = "questionnaire-auto-redirect";
 const LEGACY_ASK_MISS_LOG_TYPE = "questionnaire-plain-text-miss";
 const LEGACY_ASK_STATS_MESSAGE_TYPE = "questionnaire-stats";
-
-export function getAskRedirectCorrectionMessage(): string {
-  return "Extension correction: you asked the user a plain-text clarification in an interactive session. Re-ask only the necessary clarification using the ask tool instead of plain text. Ask at most 1-3 focused questions. After receiving the answer, continue the original task immediately and provide the pending result instead of stopping after a brief acknowledgment. Only stop early if materially new information is still required.";
-}
 
 function looksLikePlainTextClarification(text: string): boolean {
   if (!text.includes("?")) {
@@ -95,16 +90,6 @@ function looksLikePlainTextClarification(text: string): boolean {
   }
 
   return CLARIFICATION_TRIGGER_REGEX.test(text);
-}
-
-function hasAutoRedirectMessage(
-  messages: Array<{ role: string; customType?: string }>
-): boolean {
-  return messages.some(
-    (message) =>
-      message.role === "custom" &&
-      message.customType === LEGACY_ASK_REDIRECT_MESSAGE_TYPE
-  );
 }
 
 interface LegacyAskMissLog {
@@ -776,46 +761,12 @@ QUESTION-ASKING RULES:
       return;
     }
 
-    const redirectedAlready = hasAutoRedirectMessage(event.messages);
-    const shouldAutoRedirect =
-      lastInputSource === "interactive" && !redirectedAlready;
-
     pi.appendEntry(LEGACY_ASK_MISS_LOG_TYPE, {
       source: lastInputSource,
-      redirectedAlready,
-      autoRedirected: shouldAutoRedirect,
+      redirectedAlready: false,
+      autoRedirected: false,
       text,
       timestamp: new Date().toISOString(),
     });
-
-    if (redirectedAlready) {
-      ctx.ui.notify(
-        "Assistant still asked a plain-text clarification after redirect. Prefer ask manually.",
-        "warning"
-      );
-      return;
-    }
-
-    if (!shouldAutoRedirect) {
-      ctx.ui.notify(
-        "Assistant asked a plain-text clarification. Logged for tuning; no auto-redirect outside interactive TUI.",
-        "warning"
-      );
-      return;
-    }
-
-    ctx.ui.notify(
-      "Assistant asked a plain-text clarification. Auto-redirecting it to ask.",
-      "warning"
-    );
-
-    pi.sendMessage(
-      {
-        customType: LEGACY_ASK_REDIRECT_MESSAGE_TYPE,
-        content: getAskRedirectCorrectionMessage(),
-        display: false,
-      },
-      { triggerTurn: true }
-    );
   });
 }

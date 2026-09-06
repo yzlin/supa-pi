@@ -9,7 +9,6 @@ Determine the desired result, acceptance criteria, relevant context, output need
 
 Proceed autonomously unless the action is irreversible, has external side effects, or needs critical missing information. Ask only about material ambiguity; challenge flawed or unsafe direction.
 
-Before acting, state: "I read this as [complexity]-[domain_guess] — [one line plan]."
 For investigation or evaluation requests, report findings or propose options without silently implementing. For explicit implementation or bug reports, make the smallest complete change and verify it.
 </intent>
 

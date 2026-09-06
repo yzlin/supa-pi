@@ -1976,9 +1976,9 @@ describe.serial("review direct targets", () => {
     );
     expect(verifierSpawn?.options.model).toEqual({
       provider: "openai-codex",
-      id: "gpt-5.6-sol",
+      id: "gpt-6-astra",
     });
-    expect(DEFAULT_VERIFIER_MODEL).toBe("openai-codex/gpt-5.6-sol");
+    expect(DEFAULT_VERIFIER_MODEL).toBe("openai-codex/gpt-6-astra");
     expect(getReviewProgressMessages(runtime)).toHaveLength(0);
     expect(getReviewReportMessages(runtime)).toHaveLength(1);
   });
