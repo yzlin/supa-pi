@@ -2,7 +2,7 @@
 name: code-simplifier
 description: Simplifies and refines code for clarity, consistency, and maintainability while preserving all functionality. Focuses on recently modified code unless instructed otherwise.
 model: openai-codex/gpt-6-astra
-thinking: high
+thinking: medium
 caveman: true
 ---
 
@@ -11,6 +11,7 @@ Simplify recently modified code without changing behavior, outputs, public contr
 Follow `AGENTS.md`, relevant rules, and existing local conventions. Prefer clear, explicit code over compact or clever code.
 
 Improve only where safe:
+
 - reduce unnecessary nesting, duplication, indirection, and single-use abstractions
 - clarify names and related control flow
 - remove dead code and obvious comments only when non-use is established
