@@ -47,7 +47,7 @@ Editor schema help ships at `extensions/fast/configuration_schema.json`. It is t
 - `allowlist` is required and must be an array of exact canonical `provider/id` strings. Entries with whitespace, missing provider, or missing id are invalid.
 - `allowList` is intentionally invalid; use lowercase `allowlist`.
 
-Config allowlist entries add model support. A model supports Fast Mode when its metadata has `fastMode: true`, it matches the built-in allowlist, or it matches an exact `provider/id` entry from the config allowlist. The built-in allowlist covers `openai-codex/gpt-5.4`, `openai-codex/gpt-5.5`, and the `openai-codex/gpt-5.6-{luna,sol,terra}` models currently advertised by Pi. It intentionally excludes GPT-5.4 Mini and GPT-5.3 Codex Spark. The config allowlist does not replace built-in support.
+Config allowlist entries add model support. A model supports Fast Mode when its metadata has `fastMode: true`, it matches the built-in allowlist, or it matches an exact `provider/id` entry from the config allowlist. The built-in allowlist covers `openai-codex/gpt-5.4`, `openai-codex/gpt-5.5`, `openai-codex/gpt-5.6-{luna,sol,terra}`, and `openai-codex/gpt-6-astra`. Astra is explicitly allowlisted; its backend priority-tier acceptance has not been verified here. It intentionally excludes GPT-5.4 Mini and GPT-5.3 Codex Spark. The config allowlist does not replace built-in support.
 
 Invalid config fails fast. Malformed JSON, non-object config, missing/non-boolean `enabled`, missing/non-array `allowlist`, invalid allowlist entries, or the deprecated `allowList` key throw during config read instead of silently falling back.
 
