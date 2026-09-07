@@ -48,6 +48,18 @@ Probe the applicable risks in this order of leverage:
 
 Ask direct, specific questions. Do not ask broad or multi-part questions.
 
+## Pre-Lock Summary
+
+Before asking the final lock question, summarize:
+
+- agreed decisions and scope
+- remaining open questions, explicitly distinguishing blockers from deferred items
+- recommended implementation approach, grounded in inspected evidence
+- success criteria and verification approach
+- next step, without starting implementation
+
+Present recommendations separately from agreed decisions. If blockers remain, continue interviewing rather than offering the final lock.
+
 ## Final Confirmation
 
 Once all major decisions are resolved, ask one final `ask` gate with exactly two caller-supplied options: `Lock plan, stop here` and `Keep grilling`. Rely on the injected custom row for `Type something.`; do not supply it yourself.

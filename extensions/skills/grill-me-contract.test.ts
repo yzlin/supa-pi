@@ -76,6 +76,29 @@ describe("grilling skill contract", () => {
     expect(skill).toContain("Do not load it for every interview");
   });
 
+  it("summarizes the plan before lock and keeps blockers in the interview", () => {
+    const skill = readRepositoryFile("skills", "grilling", "SKILL.md");
+    const summaryStart = skill.indexOf("## Pre-Lock Summary");
+    const finalConfirmationStart = skill.indexOf("## Final Confirmation");
+
+    expect(summaryStart).toBeGreaterThan(-1);
+    expect(finalConfirmationStart).toBeGreaterThan(summaryStart);
+
+    const summary = skill.slice(summaryStart, finalConfirmationStart);
+    for (const text of [
+      "Before asking the final lock question, summarize:",
+      "agreed decisions and scope",
+      "remaining open questions, explicitly distinguishing blockers from deferred items",
+      "recommended implementation approach, grounded in inspected evidence",
+      "success criteria and verification approach",
+      "next step, without starting implementation",
+      "Present recommendations separately from agreed decisions",
+      "If blockers remain, continue interviewing rather than offering the final lock",
+    ]) {
+      expect(summary).toContain(text);
+    }
+  });
+
   it("keeps the final gate stop-only and never implementation-oriented", () => {
     const skill = readRepositoryFile("skills", "grilling", "SKILL.md");
 
