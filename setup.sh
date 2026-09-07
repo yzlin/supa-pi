@@ -155,8 +155,8 @@ if [ ! -f "$PI_AGENT_DIR/settings.json" ]; then
     cat <<EOF
 {
   "defaultProvider": "openai-codex",
-  "defaultModel": "gpt-5.6-sol",
-  "defaultThinkingLevel": "high",
+  "defaultModel": "gpt-6-astra",
+  "defaultThinkingLevel": "medium",
   "packages": [
 EOF
     print_package_json_lines
