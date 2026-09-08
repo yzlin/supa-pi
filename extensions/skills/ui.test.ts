@@ -300,7 +300,7 @@ describe("skills manager UI", () => {
     },
   };
 
-  it("renders themed modal chrome, sections, preview, action placeholder, and footer", () => {
+  it("renders themed modal chrome, sections, preview, managed removal action, and footer", () => {
     const lines = renderSkillsManager(
       inventory(),
       {
@@ -338,7 +338,7 @@ describe("skills manager UI", () => {
     expect(text).not.toContain("<accent:› <bold:Managed Demo>");
     expect(text).toContain("<warning:Status: dirty>");
     expect(text).toContain(
-      "<dim:Actions: install/update/remove unavailable in this first slice>"
+      "<dim:Actions: d remove (confirmation required); install/update unavailable>"
     );
     expect(text).toContain("<dim:↑/k ↓/j navigate");
     expectPageShortcutHelp(text);
@@ -547,6 +547,63 @@ describe("skills manager UI", () => {
     expectPageShortcutHelp(text);
   });
 
+  it("returns only the selected managed removal and preserves its filter", () => {
+    const results: unknown[] = [];
+    const component = createSkillsManagerComponent({
+      inventory: inventory(),
+      initialQuery: "managed",
+      done: (result) => results.push(result),
+    });
+    expect(component.render().join("\n")).toContain("d remove");
+    component.handleInput("d");
+    expect(results).toEqual([{ id: "managed-demo", query: "managed" }]);
+  });
+
+  it.each([
+    "bundled",
+    "no-match",
+  ])("disables removal for %s selection", (query) => {
+    const results: unknown[] = [];
+    const component = createSkillsManagerComponent({
+      inventory: inventory(),
+      initialQuery: query,
+      done: (result) => results.push(result),
+    });
+    component.handleInput("d");
+    expect(results).toEqual([]);
+    component.handleInput("\r");
+    expect(component.render().join("\n")).toContain("Remove unavailable");
+    component.handleInput("d");
+    expect(results).toEqual([]);
+  });
+
+  it("ignores the obsolete r shortcut with actions closed or open", () => {
+    const results: unknown[] = [];
+    const component = createSkillsManagerComponent({
+      inventory: inventory(),
+      done: (result) => results.push(result),
+    });
+    component.handleInput("r");
+    component.handleInput("\r");
+    component.handleInput("r");
+    expect(results).toEqual([]);
+    expect(component.render().join("\n")).not.toContain("r remove");
+  });
+
+  it("treats d as filter input, not removal, even with actions open", () => {
+    const results: unknown[] = [];
+    const component = createSkillsManagerComponent({
+      inventory: inventory(),
+      initialQuery: "manage",
+      done: (result) => results.push(result),
+    });
+    component.handleInput("\r");
+    component.handleInput("/");
+    component.handleInput("d");
+    expect(component.state.query).toBe("managed");
+    expect(results).toEqual([]);
+  });
+
   it("updates preview when navigating", () => {
     const component = createSkillsManagerComponent({
       inventory: inventory(),
@@ -609,7 +666,7 @@ describe("skills manager UI", () => {
 
       component.handleInput("\r");
       expect(component.render().join("\n")).toContain(
-        "Actions: install/update/remove unavailable"
+        "Actions: d remove (confirmation required)"
       );
       component.handleInput(closeKey);
       expect(closed).toBe(true);

@@ -29,11 +29,16 @@ export interface SkillsManagerTheme {
   bold?(text: string): string;
 }
 
+export interface SkillsManagerRemoval {
+  id: string;
+  query: string;
+}
+
 export interface SkillsManagerComponentOptions {
   inventory: SkillInventoryModel;
   initialQuery?: string;
   theme?: SkillsManagerTheme;
-  done: () => void;
+  done: (removal?: SkillsManagerRemoval) => void;
   hostTui?: TUI;
 }
 
@@ -628,14 +633,16 @@ function renderSkillsManagerWithScrollView(
         color(
           theme,
           "dim",
-          "Actions: install/update/remove unavailable in this first slice"
+          selected?.kind === "managed"
+            ? "Actions: d remove (confirmation required); install/update unavailable"
+            : "Remove unavailable: select a managed skill; install/update unavailable"
         ),
       ]
     : [];
   const help = color(
     theme,
     "dim",
-    "↑/k ↓/j navigate  pgup/pgdn ctrl+b/ctrl+f page  / filter  enter actions  esc/q close"
+    "↑/k ↓/j navigate  pgup/pgdn ctrl+b/ctrl+f page  / filter  d remove  esc/q close"
   );
   return [
     titleBorder(frameWidth, " Skills Manager ", theme),
@@ -954,7 +961,15 @@ export function createSkillsManagerComponent({
         normalizeSelection();
         return;
       }
-      if (data === "\r" || data === "\n") {
+      if (key === "d") {
+        const items = visibleItems(inventory, { query: state.query });
+        const selected = items[clampIndex(state.selectedIndex, items.length)];
+        if (selected?.kind === "managed") {
+          done({ id: selected.id, query: state.query });
+        }
+        return;
+      }
+      if (key === "enter") {
         state.actionMenuOpen = !state.actionMenuOpen;
       }
     },

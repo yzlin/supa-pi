@@ -58,6 +58,7 @@ import {
   createSkillsInstallPickerComponent,
   createSkillsManagerComponent,
   SKILLS_MANAGER_OVERLAY_OPTIONS,
+  type SkillsManagerRemoval,
 } from "./ui";
 
 const EXTENSION_DIR = dirname(fileURLToPath(import.meta.url));
@@ -279,19 +280,32 @@ async function showSkillsManager(
     ctx.ui.notify(fallbackText, "info");
     return;
   }
-  await ctx.ui.custom<void>(
+  const removal = await ctx.ui.custom<SkillsManagerRemoval | undefined>(
     (tui, theme, _kb, done) =>
       createSkillsManagerComponent({
         inventory,
         initialQuery,
         theme,
-        done: () => done(undefined),
+        done,
         hostTui: tui,
       }),
     {
       overlay: true,
       overlayOptions: SKILLS_MANAGER_OVERLAY_OPTIONS,
     }
+  );
+  if (!removal) {
+    return;
+  }
+  try {
+    await removeManaged(ctx, removal.id);
+  } catch (error) {
+    notifyError(ctx, error);
+  }
+  await showSkillsManager(
+    ctx,
+    readManagedManifest(createSkillsManagerPaths().manifestPath).skills,
+    removal.query
   );
 }
 
