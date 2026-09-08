@@ -175,6 +175,91 @@ function expectClosedObjectSchemas(schema: unknown): void {
 }
 
 describe("execute executor workflow", () => {
+  it("returns trusted recovery guidance without promoting rejected evidence", async () => {
+    for (const [code, validation, trajectoryErrors] of [
+      [
+        "report_integrity",
+        [...validTddResult.validation, "COVERAGE: duplicate"],
+        [],
+      ],
+      [
+        "fabricated_coverage",
+        [...validTddResult.validation.slice(0, 2), "COVERAGE: 99% lines"],
+        [],
+      ],
+      ["capture_integrity", validTddResult.validation, ["missing tool end"]],
+    ] as const) {
+      const rejected = { ...validTddResult, validation: [...validation] };
+      const results = await runExecutorWorkflow(
+        [
+          { ...task, tddShape: validTddShape, tdd: true },
+          { ...task, taskId: "8" },
+        ],
+        {
+          cwd: "/repo",
+          agentRunner: (request) =>
+            agentResult(
+              request,
+              request.prompt.includes("trusted-task-shape")
+                ? rejected
+                : validResult,
+              "ignored",
+              undefined,
+              [...trajectoryErrors]
+            ),
+        }
+      );
+      expect(results[0]).toMatchObject({
+        outcome: "failed",
+        invalidResult: { validation: [...validation] },
+        recovery: {
+          code,
+          action: "inspect_evidence",
+          guidance: expect.stringContaining(
+            "invalidResult is diagnostics only"
+          ),
+        },
+      });
+      expect(results[0]).not.toHaveProperty("result");
+      expect(results[1]).toMatchObject({ outcome: "completed" });
+    }
+  });
+
+  it("directs missing GREEN to fresh current verification, never completion", async () => {
+    const results = await runExecutorWorkflow(
+      [{ ...task, tddShape: validTddShape, tdd: true }],
+      {
+        cwd: "/repo",
+        agentRunner: (request) => {
+          const observed = agentResult(request, validTddResult);
+          return {
+            ...observed,
+            toolCalls: observed.toolCalls.map((call) =>
+              call.name === "bash"
+                ? {
+                    ...call,
+                    isError: true,
+                    resultText:
+                      "formatName rejects empty input\n1 failed, 0 passed",
+                  }
+                : call
+            ),
+          };
+        },
+      }
+    );
+    expect(results[0]).toMatchObject({
+      outcome: "failed",
+      recovery: {
+        code: "missing_green",
+        action: "verify_current_state",
+        guidance: expect.stringContaining("applicable diagnostics"),
+      },
+      invalidResult: { validation: validTddResult.validation },
+    });
+    expect(results[0]).not.toHaveProperty("result");
+  });
+
   it("uses a closed native structured-output schema", () => {
     expectClosedObjectSchemas(EXECUTOR_RESULT_SCHEMA);
   });

@@ -27,6 +27,11 @@ export interface ExecuteDangerousActionApproval {
   canonicalPlanHash?: string;
 }
 
+export interface ExecuteContinuation {
+  taskId: string;
+  recoveryRounds: number;
+}
+
 export interface ExecuteCheckpoint {
   version: 1;
   id: string;
@@ -36,6 +41,7 @@ export interface ExecuteCheckpoint {
   updatedAt: string;
   normalizedSummary: string;
   tasks: ExecuteCheckpointTask[];
+  continuation?: ExecuteContinuation;
   dangerousActionApproval?: ExecuteDangerousActionApproval;
 }
 
@@ -43,6 +49,7 @@ export interface ExecuteCheckpointInput {
   status: string;
   normalizedSummary: string;
   tasks: ExecuteCheckpointTask[];
+  continuation?: ExecuteContinuation;
   dangerousActionApproval?: ExecuteDangerousActionApproval;
 }
 
@@ -234,6 +241,29 @@ function normalizeTask(task: unknown, index: number): ExecuteCheckpointTask {
   return normalizedTask;
 }
 
+function normalizeContinuation(value: unknown): ExecuteContinuation {
+  if (
+    !isRecord(value) ||
+    Object.keys(value).some(
+      (key) => !["taskId", "recoveryRounds"].includes(key)
+    ) ||
+    !Number.isInteger(value.recoveryRounds) ||
+    (value.recoveryRounds as number) < 0 ||
+    (value.recoveryRounds as number) > 2
+  ) {
+    throw new Error(
+      "Invalid execute checkpoint: continuation requires taskId and integer recoveryRounds from 0 to 2."
+    );
+  }
+  const taskId = assertNonEmptyString(value.taskId, "continuation.taskId");
+  if (taskId.length > 128) {
+    throw new Error(
+      "Invalid execute checkpoint: continuation.taskId exceeds 128 characters."
+    );
+  }
+  return { taskId, recoveryRounds: value.recoveryRounds as number };
+}
+
 function parseStoredCheckpoint(value: unknown): ExecuteCheckpoint | null {
   if (!isRecord(value) || value.version !== 1) {
     return null;
@@ -260,6 +290,10 @@ function parseStoredCheckpoint(value: unknown): ExecuteCheckpoint | null {
     ),
     tasks: value.tasks.map((task, index) => normalizeTask(task, index)),
   };
+
+  if (value.continuation !== undefined) {
+    checkpoint.continuation = normalizeContinuation(value.continuation);
+  }
 
   if (value.dangerousActionApproval !== undefined) {
     checkpoint.dangerousActionApproval = normalizeDangerousActionApproval(
@@ -293,6 +327,10 @@ function normalizeCheckpointForSave(
     normalizedSummary,
     tasks,
   };
+
+  if (input.continuation !== undefined) {
+    checkpoint.continuation = normalizeContinuation(input.continuation);
+  }
 
   if (input.dangerousActionApproval !== undefined) {
     checkpoint.dangerousActionApproval = normalizeDangerousActionApproval(

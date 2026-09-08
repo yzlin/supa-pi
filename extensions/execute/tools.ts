@@ -1,9 +1,13 @@
-import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import type {
+  ExtensionAPI,
+  ExtensionContext,
+} from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
 
 import {
   EXECUTE_CHECKPOINT_TASK_MAX_WARNINGS,
   EXECUTE_CHECKPOINT_TASK_WARNING_MAX_LENGTH,
+  type ExecuteCheckpoint,
   listUnfinishedExecuteCheckpoints,
   loadExecuteCheckpoint,
   saveExecuteCheckpoint,
@@ -43,6 +47,19 @@ const ExecuteCheckpointSaveSchema = Type.Object({
   status: Type.String({ minLength: 1 }),
   normalizedSummary: Type.String({ minLength: 1 }),
   tasks: Type.Array(ExecuteCheckpointTaskSchema),
+  continuation: Type.Optional(
+    Type.Object(
+      {
+        taskId: Type.String({ minLength: 1, maxLength: 128 }),
+        recoveryRounds: Type.Integer({ minimum: 0, maximum: 2 }),
+      },
+      {
+        additionalProperties: false,
+        description:
+          "Fresh continuation eligibility only: next runnable task and consumed recovery rounds across its original slice lineage. Omit for pause, blocker, completion or unknown budget. Never resets recovery budgets.",
+      }
+    )
+  ),
   dangerousActionApproval: Type.Optional(ExecuteDangerousActionApprovalSchema),
 });
 
@@ -108,7 +125,15 @@ function buildSaveResponse(result: {
   };
 }
 
-export function registerExecuteCheckpointTool(pi: ExtensionAPI): void {
+export function registerExecuteCheckpointTool(
+  pi: ExtensionAPI,
+  observe?: (
+    canonicalPlanHash: string,
+    ctx: ExtensionContext,
+    checkpoint?: ExecuteCheckpoint,
+    signal?: AbortSignal
+  ) => void
+): void {
   pi.registerTool({
     name: "execute_checkpoint",
     label: "Execute Checkpoint",
@@ -127,7 +152,9 @@ export function registerExecuteCheckpointTool(pi: ExtensionAPI): void {
               return errorResult(canonicalPlan.error);
             }
 
-            return jsonResult(loadExecuteCheckpoint(canonicalPlan, cwd));
+            const loaded = loadExecuteCheckpoint(canonicalPlan, cwd);
+            observe?.(loaded.canonicalPlanHash, ctx);
+            return jsonResult(loaded);
           }
           case "save": {
             const canonicalPlan = requireCanonicalPlan(params, "save");
@@ -139,11 +166,18 @@ export function registerExecuteCheckpointTool(pi: ExtensionAPI): void {
               return errorResult("checkpoint is required when op is save.");
             }
 
-            return jsonResult(
-              buildSaveResponse(
-                saveExecuteCheckpoint(canonicalPlan, params.checkpoint, cwd)
-              )
+            const saved = saveExecuteCheckpoint(
+              canonicalPlan,
+              params.checkpoint,
+              cwd
             );
+            observe?.(
+              saved.checkpoint.canonicalPlanHash,
+              ctx,
+              saved.checkpoint,
+              _signal ?? ctx.signal
+            );
+            return jsonResult(buildSaveResponse(saved));
           }
           case "list_unfinished":
             return jsonResult(listUnfinishedExecuteCheckpoints(cwd));

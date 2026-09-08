@@ -8,6 +8,7 @@ import {
   EXECUTE_INVOCATION_PREAMBLE,
   EXECUTE_SYNTHESIS_MESSAGE,
 } from "./constants";
+import { registerExecuteContinuation } from "./continuation";
 import { registerExecutorWorkflowTool } from "./executor-workflow";
 import { registerExecuteCheckpointTool } from "./tools";
 
@@ -95,7 +96,8 @@ function getLastExecutionBriefFromSession(
 }
 
 export default function executeExtension(pi: ExtensionAPI): void {
-  registerExecuteCheckpointTool(pi);
+  const continuation = registerExecuteContinuation(pi);
+  registerExecuteCheckpointTool(pi, continuation.observe);
   registerExecutorWorkflowTool(pi);
 
   pi.registerCommand(EXECUTE_COMMAND_NAME, {
@@ -108,6 +110,7 @@ export default function executeExtension(pi: ExtensionAPI): void {
         ? buildPlanInvocationMessage(plan)
         : EXECUTE_SYNTHESIS_MESSAGE;
 
+      continuation.start(message, ctx);
       if (ctx.isIdle()) {
         pi.sendUserMessage(message);
         return Promise.resolve();

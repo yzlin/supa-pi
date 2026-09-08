@@ -57,6 +57,7 @@ import {
   isSupportedTestCommand,
   normalizeTddToolMetadata,
   runnerGeneratedArtifactDirectories,
+  type TddEvidenceHardFailureCode,
   type TddToolCall,
 } from "./tdd-evidence";
 
@@ -870,6 +871,24 @@ export interface ExecutorWorkflowTask {
   tddShape?: TaskShape;
 }
 
+interface EvidenceRecovery {
+  code: TddEvidenceHardFailureCode;
+  action: "inspect_evidence" | "verify_current_state";
+  guidance: string;
+}
+
+function evidenceRecovery(code: TddEvidenceHardFailureCode): EvidenceRecovery {
+  const currentTests = code === "missing_green" || code === "unresolved_tests";
+  const guidance = currentTests
+    ? "Inspect current files, run the declared tests and applicable diagnostics; fix scoped current failures before dependent work."
+    : "Inspect the rejection and retained trajectory before choosing recovery; report/capture defects do not establish safe work, and unmatched RED does not prove fabrication or task correlation.";
+  return {
+    code,
+    action: currentTests ? "verify_current_state" : "inspect_evidence",
+    guidance: `${guidance} invalidResult is diagnostics only, never completion proof. Preserve the rejection. If inspection establishes safe scoped work, use a separate independent-verification task with fresh current tests and diagnostics, not another mutating TDD replay to manufacture RED. Carry the original slice's recovery budget across replacement tasks; stop for unsafe work, human prerequisites, or exhausted budgets.`,
+  };
+}
+
 export type ExecutorWorkflowResult =
   | {
       taskId: string;
@@ -896,6 +915,7 @@ export type ExecutorWorkflowResult =
       outcome: "failed";
       error: string;
       invalidResult?: InvalidExecutorResult;
+      recovery?: EvidenceRecovery;
       debugArtifactPath?: string;
       debugArtifactError?: string;
     };
@@ -976,6 +996,19 @@ const EXECUTOR_WORKFLOW_RESULT_SCHEMA = Type.Array(
         outcome: Type.Literal("failed"),
         error: Type.String({ minLength: 1 }),
         invalidResult: Type.Optional(INVALID_EXECUTOR_RESULT_SCHEMA),
+        recovery: Type.Optional(
+          Type.Object(
+            {
+              code: Type.String({ minLength: 1, maxLength: 100 }),
+              action: Type.Union([
+                Type.Literal("inspect_evidence"),
+                Type.Literal("verify_current_state"),
+              ]),
+              guidance: Type.String({ minLength: 1, maxLength: 1000 }),
+            },
+            { additionalProperties: false }
+          )
+        ),
         debugArtifactPath: Type.Optional(Type.String({ minLength: 1 })),
         debugArtifactError: Type.Optional(Type.String({ minLength: 1 })),
       },
@@ -1250,6 +1283,7 @@ export async function runExecutorWorkflow(
           taskId: outcome.taskId,
           outcome: "failed" as const,
           error: evidenceAssessment.message,
+          recovery: evidenceRecovery(evidenceAssessment.code),
           ...retainTddDebugArtifact(
             options.cwd,
             task,

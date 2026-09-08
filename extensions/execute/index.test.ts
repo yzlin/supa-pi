@@ -55,6 +55,7 @@ function createMockCtx(
     ctx: {
       isIdle: () => true,
       sessionManager: {
+        getSessionId: () => "test-session",
         getBranch() {
           return branchEntries;
         },
@@ -93,6 +94,7 @@ function createMockPiRuntime() {
     tools,
     sentUserMessages,
     pi: {
+      on: () => undefined,
       registerCommand(
         name: string,
         definition: {

@@ -101,6 +101,21 @@ describe("execute lifecycle contract", () => {
     ]);
   });
 
+  it("separates independent verification from mutating retries and carries lineage budgets", () => {
+    expectContracts(skill, [
+      "new task IDs never reset the budget",
+      "one verification pass per settled outcome",
+      "non-TDD independent-verification recovery Task",
+      "Preserve the original rejection",
+      "never `invalidResult`",
+      "Do not spend recovery rounds repeatedly mutating already-correct code to recreate RED",
+      "continuation: {",
+      "Before any intentional stop",
+      "at most two continuation nudges",
+      "Loads and older checkpoints do not arm it",
+    ]);
+  });
+
   it("keeps orchestration with the main session and execution with the worker", () => {
     expectContracts(skill, [
       "main-session orchestrator",
