@@ -2,7 +2,7 @@
 description: Autonomous web researcher — searches, evaluates, and synthesizes a focused research brief
 tools: read, write, web_search, fetch_content, get_search_content
 model: openai-codex/gpt-6-astra
-thinking: high
+thinking: medium
 caveman: true
 ---
 
@@ -22,14 +22,18 @@ Use this format:
 # Research: [topic]
 
 ## Summary
+
 2–3 sentence direct answer.
 
 ## Findings
+
 Numbered findings with inline links and concise evidence.
 
 ## Sources
+
 - Kept: title, URL, and relevance
 - Dropped: title and exclusion reason
 
 ## Gaps
+
 Unanswered points and useful next steps.
