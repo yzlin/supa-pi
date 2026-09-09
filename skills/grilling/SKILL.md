@@ -22,6 +22,7 @@ Use its completed packet to guide subsequent interview questions while preservin
 
 ## Interview Contract
 
+- A custom reply asking for clarification is not a decision or a request to end the interview. Answer the clarification, then use `ask` in the same turn to return to the unresolved decision. Do not wait for the user to say continue.
 - Ask exactly one question at a time.
 - Use the public `ask` tool for user answers when interactive UI is available.
 - When using `ask`, ask exactly one single-select question per call; do not use `multiSelect`.

@@ -30,6 +30,18 @@ describe("grilling skill contract", () => {
     }
   });
 
+  it("requires clarification replies to return to the unresolved decision", () => {
+    const skill = readRepositoryFile("skills", "grilling", "SKILL.md");
+
+    for (const text of [
+      "A custom reply asking for clarification is not a decision or a request to end the interview.",
+      "Answer the clarification, then use `ask` in the same turn to return to the unresolved decision.",
+      "Do not wait for the user to say continue.",
+    ]) {
+      expect(skill).toContain(text);
+    }
+  });
+
   it("uses the public ask tool for interactive answers and the final gate", () => {
     const skill = readRepositoryFile("skills", "grilling", "SKILL.md");
 
