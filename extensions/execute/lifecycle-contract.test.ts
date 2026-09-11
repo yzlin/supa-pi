@@ -88,7 +88,7 @@ describe("execute lifecycle contract", () => {
 
   it("keeps bounded local recovery and checkpoint identity semantics", () => {
     expectContracts(skill, [
-      "at most two automatic recovery rounds per task",
+      "at most two automatic mutation-repair rounds per original task lineage",
       "Do not ask the user to approve recoverable local work",
       "separate non-TDD recovery Task",
       "Generated output discovered during a TDD Slice",
@@ -97,21 +97,25 @@ describe("execute lifecycle contract", () => {
       "Use `execute_checkpoint` for all checkpoint reads and writes",
       "index.json` maps `sha256(canonicalPlan)` to UUID as a repairable cache",
       "Legacy checkpoint files are ignored",
-      "stop dependent work",
+      "keep blocked dependencies stopped",
     ]);
   });
 
   it("separates independent verification from mutating retries and carries lineage budgets", () => {
     expectContracts(skill, [
-      "new task IDs never reset the budget",
-      "one verification pass per settled outcome",
+      "new task ID never resets that count",
+      "Independently verify each settled outcome exactly once",
+      "does not consume mutation-repair rounds",
+      "newly settled repaired outcome",
+      "verification-only chain",
       "non-TDD independent-verification recovery Task",
-      "Preserve the original rejection",
+      "Inspect retained evidence and actual files",
       "never `invalidResult`",
-      "Do not spend recovery rounds repeatedly mutating already-correct code to recreate RED",
+      "Do not spend repair rounds repeatedly mutating already-correct code to recreate RED",
       "continuation: {",
       "Before any intentional stop",
       "at most two continuation nudges",
+      "without executing or downloading it",
       "Loads and older checkpoints do not arm it",
     ]);
   });

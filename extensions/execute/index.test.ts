@@ -362,7 +362,9 @@ describe("execute orchestration contract", () => {
     expect(skill).toContain(
       "Do not ask the user to approve recoverable local work"
     );
-    expect(skill).toContain("at most two automatic recovery rounds");
+    expect(skill).toContain(
+      "at most two automatic mutation-repair rounds per original task lineage"
+    );
     expect(skill).toContain(
       "Generated output discovered during a TDD Slice must become a separate non-TDD Task"
     );

@@ -1,4 +1,14 @@
 import { describe, expect, it } from "bun:test";
+import {
+  chmodSync,
+  mkdirSync,
+  mkdtempSync,
+  realpathSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
 import {
   assessTddEvidence,
@@ -6,6 +16,7 @@ import {
   isSupportedTestCommand,
   mutationResultProvesDelta,
   normalizeTddToolMetadata,
+  resolveSupportedTestCommand,
   type TddToolCall,
   testCommandHasWriteOption,
   validateTddEvidence,
@@ -177,6 +188,47 @@ describe("TDD evidence validation", () => {
     expect(validateTddEvidence(result(), lostGreen)).toBe(
       "Truncated test output did not retain authoritative GREEN evidence."
     );
+  });
+
+  it("resolves directly installed supported runners without executing probes", () => {
+    expect(resolveSupportedTestCommand("bun test tests/unit.test.ts")).toEqual({
+      command: "bun",
+      args: ["test", "tests/unit.test.ts"],
+    });
+    expect(
+      resolveSupportedTestCommand("python -m pytest tests/test_unit.py")
+    ).toEqual({
+      command: "python",
+      args: ["-m", "pytest", "tests/test_unit.py"],
+    });
+
+    const workspace = mkdtempSync(join(tmpdir(), "supa-pi-runner-"));
+    try {
+      const canonicalWorkspace = realpathSync(workspace);
+      const runner = join(canonicalWorkspace, "node_modules/.bin/vitest");
+      mkdirSync(join(workspace, "node_modules/.bin"), { recursive: true });
+      writeFileSync(runner, "#!/bin/sh\n");
+      chmodSync(runner, 0o755);
+      expect(
+        resolveSupportedTestCommand("vitest tests/unit.test.ts", workspace)
+      ).toMatchObject({
+        command: "vitest",
+        args: ["tests/unit.test.ts"],
+        resolvedPath: runner,
+        pathPrefix: join(canonicalWorkspace, "node_modules/.bin"),
+      });
+    } finally {
+      rmSync(workspace, { recursive: true, force: true });
+    }
+
+    for (const command of [
+      "npx vitest tests/unit.test.ts",
+      "bunx jest tests/unit.test.ts",
+      "bun run test:unit",
+      "echo test",
+    ]) {
+      expect(resolveSupportedTestCommand(command)).toBeUndefined();
+    }
   });
 
   it("recognizes direct common runners but rejects scripts and shell probes", () => {

@@ -1,5 +1,6 @@
-import { describe, expect, it } from "bun:test";
+import { describe, expect, it, spyOn } from "bun:test";
 import { execFileSync } from "node:child_process";
+import * as fs from "node:fs";
 import {
   chmodSync,
   existsSync,
@@ -10,6 +11,7 @@ import {
   realpathSync,
   renameSync,
   rmdirSync,
+  rmSync,
   statSync,
   symlinkSync,
   truncateSync,
@@ -17,11 +19,12 @@ import {
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
+import { dirname, join, delimiter as pathDelimiter } from "node:path";
 
 import { ProjectTrustStore } from "@earendil-works/pi-coding-agent";
 import type {
   WorkflowAgentRequest,
+  WorkflowAgentResult,
   WorkflowAgentRunner,
 } from "@yzlin/pi-subagents/pi";
 import type { TSchema } from "typebox";
@@ -40,6 +43,7 @@ import {
   runExecutorWorkflow,
   type SubagentsManagerRegistry,
 } from "./executor-workflow";
+import type { TddToolCall } from "./tdd-evidence";
 
 const STRUCTURED_REPAIR_ERROR = /after one structured repair retry/i;
 
@@ -83,7 +87,7 @@ function agentResult(
   request: WorkflowAgentRequest,
   structuredOutput?: unknown,
   result = "assistant text is ignored",
-  toolCalls = structuredOutput &&
+  toolCalls: TddToolCall[] = structuredOutput &&
   typeof structuredOutput === "object" &&
   Array.isArray((structuredOutput as { validation?: unknown }).validation) &&
   (structuredOutput as { validation: string[] }).validation.some((entry) =>
@@ -658,6 +662,50 @@ describe("execute executor workflow", () => {
         { taskId: "valid-tdd", outcome: "completed" },
       ]
     );
+  });
+
+  it("rejects npx and bunx TDD wrappers before worker dispatch", async () => {
+    const requests: WorkflowAgentRequest[] = [];
+    const runner: WorkflowAgentRunner = (request) => {
+      requests.push(request);
+      return agentResult(request, validTddResult);
+    };
+    const results = await runExecutorWorkflow(
+      [
+        {
+          ...task,
+          taskId: "npx",
+          tdd: true,
+          tddShape: {
+            ...validTddShape,
+            redGreenCommand: "npx vitest tests/formatName.test.ts",
+          },
+        },
+        {
+          ...task,
+          taskId: "bunx",
+          tdd: true,
+          tddShape: {
+            ...validTddShape,
+            redGreenCommand: "bunx jest tests/formatName.test.ts",
+          },
+        },
+      ],
+      { agentRunner: runner, cwd: "/repo" }
+    );
+    expect(requests).toHaveLength(0);
+    expect(results).toEqual([
+      {
+        taskId: "npx",
+        outcome: "failed",
+        error: expect.stringContaining("npx and bunx are not expanded"),
+      },
+      {
+        taskId: "bunx",
+        outcome: "failed",
+        error: expect.stringContaining("npx and bunx are not expanded"),
+      },
+    ]);
   });
 
   it("fails only unsupported TDD tasks while dispatching plain siblings", async () => {
@@ -1673,6 +1721,71 @@ describe("execute executor workflow", () => {
     ]);
   });
 
+  it("cleans completed sibling captures when another worker cancels the workflow", async () => {
+    const rawDirectories = new Set<string>();
+    const before = new Set(
+      readdirSync(tmpdir()).filter((entry) => entry.startsWith("supa-pi-tdd-"))
+    );
+    const controller = new AbortController();
+    const abortTimer = setTimeout(() => controller.abort(), 40);
+    const runner: WorkflowAgentRunner = async (request, context) => {
+      if (request.prompt.includes("First sibling")) {
+        const directory = mkdtempSync(join(tmpdir(), "supa-pi-tdd-"));
+        rawDirectories.add(directory);
+        const rawPath = join(directory, "trajectory.raw");
+        writeFileSync(rawPath, "completed sibling capture");
+        await new Promise((resolve) => setTimeout(resolve, 10));
+        return {
+          ...(agentResult(request, validTddResult) as WorkflowAgentResult),
+          rawTrajectoryPath: rawPath,
+        } as WorkflowAgentResult & { rawTrajectoryPath: string };
+      }
+      await new Promise<void>((_resolve, reject) => {
+        const onAbort = () => reject(new Error("sibling cancellation"));
+        if (context.signal?.aborted) {
+          onAbort();
+          return;
+        }
+        context.signal?.addEventListener("abort", onAbort, { once: true });
+      });
+    };
+
+    try {
+      await expect(
+        runExecutorWorkflow(
+          [
+            {
+              ...task,
+              taskId: "first",
+              prompt: "First sibling",
+              tdd: true,
+              tddShape: validTddShape,
+            },
+            {
+              ...task,
+              taskId: "second",
+              prompt: "Second sibling",
+              tdd: true,
+              tddShape: validTddShape,
+            },
+          ],
+          { agentRunner: runner, cwd: "/repo", signal: controller.signal }
+        )
+      ).rejects.toThrow("Workflow cancelled");
+
+      expect(
+        readdirSync(tmpdir()).filter(
+          (entry) => entry.startsWith("supa-pi-tdd-") && !before.has(entry)
+        )
+      ).toEqual([]);
+    } finally {
+      clearTimeout(abortTimer);
+      for (const directory of rawDirectories) {
+        rmSync(directory, { recursive: true, force: true });
+      }
+    }
+  });
+
   it("caps each dispatch round at four tasks", async () => {
     const tasks = Array.from({ length: 5 }, (_, index) => ({
       taskId: String(index),
@@ -2124,7 +2237,10 @@ describe("executor agent runner cleanup", () => {
             args: { path: "src/pending.ts" },
           });
         }
-        if (prompt.includes("Many proof targets")) {
+        if (
+          prompt.includes("Many proof targets") ||
+          prompt.includes("Mutation proof then runner")
+        ) {
           const patch = [
             "*** Begin Patch",
             ...Array.from({ length: 9 }, (_, index) => [
@@ -2145,6 +2261,21 @@ describe("executor agent runner cleanup", () => {
             toolCallId: "many-proof-targets",
             isError: false,
             result: { content: [{ type: "text", text: "done" }] },
+          });
+        }
+        if (prompt.includes("Mutation proof then runner")) {
+          listener?.({
+            type: "tool_execution_start",
+            toolName: "bash",
+            toolCallId: "runner-after-mutation-proof-budget",
+            args: { command: "bun test" },
+          });
+          listener?.({
+            type: "tool_execution_end",
+            toolName: "bash",
+            toolCallId: "runner-after-mutation-proof-budget",
+            isError: false,
+            result: { content: [{ type: "text", text: "1 pass" }] },
           });
         }
         if (prompt.includes("Built-in write")) {
@@ -2593,6 +2724,26 @@ describe("executor agent runner cleanup", () => {
       "mutation proof budget exceeded"
     );
 
+    const readOnlyAfterMutationBudget = (await runner(
+      {
+        agent: "executor",
+        prompt: "Mutation proof then runner",
+        executorOutputSchema: EXECUTOR_RESULT_SCHEMA,
+        captureTrajectory: true,
+      } as never,
+      { signal: new AbortController().signal } as never
+    )) as {
+      toolCalls?: Array<{ name?: string; runnerWorkspaceProof?: boolean }>;
+      trajectoryErrors?: string[];
+    };
+    expect(readOnlyAfterMutationBudget.trajectoryErrors?.join(" ")).toContain(
+      "mutation proof budget exceeded"
+    );
+    expect(
+      readOnlyAfterMutationBudget.toolCalls?.find(({ name }) => name === "bash")
+        ?.runnerWorkspaceProof
+    ).toBe(true);
+
     writeFileSync(
       join(workspace, "large-proof.ts"),
       "x".repeat(8 * 1024 * 1024 + 1)
@@ -2949,6 +3100,589 @@ describe("executor agent runner cleanup", () => {
     expect(generatedEntryOverflow.trajectoryErrors).toContain(
       "test runner relevant workspace pre-proof was incomplete"
     );
+  });
+
+  it("retains complete overflow output in a private file-backed artifact", async () => {
+    const workspace = mkdtempSync(join(tmpdir(), "supa-pi-tdd-capture-"));
+    mkdirSync(join(workspace, "node_modules/.bin"), { recursive: true });
+    const runnerPath = join(workspace, "node_modules/.bin/bun");
+    writeFileSync(runnerPath, "#!/bin/sh\n");
+    chmodSync(runnerPath, 0o755);
+    const overflowOutput = `overflow-start\n${"x".repeat(1_100_000)}\noverflow-end`;
+    let listener: ((event: Record<string, unknown>) => void) | undefined;
+    const session = {
+      subscribe(next: (event: Record<string, unknown>) => void) {
+        listener = next;
+        return () => {
+          listener = undefined;
+        };
+      },
+      dispose() {
+        // No-op fake session cleanup.
+      },
+    };
+    const record = {
+      type: "executor",
+      status: "running",
+      toolUses: 1,
+      session,
+      promise: Promise.resolve(),
+    };
+    const manager: SubagentsManagerRegistry = {
+      spawn(_pi, _ctx, _type, _prompt, options) {
+        (options.onSessionCreated as (value: typeof session) => void)(session);
+        listener?.({
+          type: "tool_execution_start",
+          toolName: "bash",
+          toolCallId: "overflow",
+          args: { command: "bun test tests/formatName.test.ts" },
+        });
+        listener?.({
+          type: "tool_execution_end",
+          toolName: "bash",
+          toolCallId: "overflow",
+          isError: true,
+          result: {
+            content: [{ type: "text", text: overflowOutput }],
+            details: { truncation: { truncated: true } },
+          },
+        });
+        const structuredOutput = (
+          options.customTools as Array<{
+            name: string;
+            execute: (toolCallId: string, params: unknown) => Promise<unknown>;
+          }>
+        ).find(({ name }) => name === "structured_output");
+        record.promise =
+          structuredOutput
+            ?.execute("structured", validTddResult)
+            .then(() => undefined) ?? Promise.resolve();
+        record.status = "completed";
+        return "capture-agent";
+      },
+      getRecord() {
+        return record;
+      },
+    };
+    const pi = {
+      events: {
+        emit() {
+          // No stop event expected for the completed fake record.
+        },
+      },
+    };
+    try {
+      const results = await runExecutorWorkflow(
+        [{ ...task, tdd: true, tddShape: validTddShape }],
+        {
+          cwd: workspace,
+          agentRunner: createExecutorAgentRunner(
+            pi as never,
+            { cwd: workspace } as never,
+            { manager, agentTimeoutMs: 100, cleanupTimeoutMs: 20 }
+          ),
+        }
+      );
+
+      expect(results[0]?.outcome).toBe("failed");
+      const failed = results[0];
+      expect(
+        failed &&
+          "debugArtifactPath" in failed &&
+          typeof failed.debugArtifactPath === "string" &&
+          failed.debugArtifactPath.includes(".pi/execute/debug/tdd-")
+      ).toBe(true);
+      if (!(failed && "debugArtifactPath" in failed)) {
+        throw new Error("expected a debug artifact");
+      }
+      const artifact = JSON.parse(
+        readFileSync(join(workspace, failed.debugArtifactPath), "utf8")
+      ) as {
+        trajectory?: {
+          toolCalls?: Array<{ resultText?: string; resultTruncated?: boolean }>;
+          rawCapture?: { path?: string; bytes?: number; format?: string };
+        };
+      };
+      expect(artifact.trajectory?.toolCalls).toHaveLength(1);
+      expect(artifact.trajectory?.toolCalls?.[0]?.resultTruncated).toBe(true);
+      expect(artifact.trajectory?.rawCapture).toMatchObject({
+        format: "framed-utf8-v1",
+      });
+      const rawPath = artifact.trajectory?.rawCapture?.path;
+      if (!rawPath) {
+        throw new Error("expected a raw trajectory artifact");
+      }
+      const raw = readFileSync(join(workspace, rawPath), "utf8");
+      expect(raw).toContain('"resultTruncated":true');
+      expect(raw).toContain('"captureGap":"upstream_result_truncated"');
+      expect(raw).toContain(overflowOutput);
+      expect(artifact.trajectory?.rawCapture?.bytes).toBe(
+        Buffer.byteLength(raw)
+      );
+    } finally {
+      rmSync(workspace, { recursive: true, force: true });
+    }
+  });
+
+  it("preflights the resolved runner before spawning a worker", async () => {
+    const workspace = mkdtempSync(join(tmpdir(), "supa-pi-runner-preflight-"));
+    mkdirSync(join(workspace, "node_modules/.bin"), { recursive: true });
+    const runnerPath = join(workspace, "node_modules/.bin/bun");
+    writeFileSync(runnerPath, "#!/bin/sh\n");
+    chmodSync(runnerPath, 0o755);
+    let spawned = false;
+    const record = {
+      type: "executor",
+      status: "running",
+      toolUses: 0,
+      promise: Promise.resolve(),
+      session: {
+        dispose() {
+          // No-op fake session cleanup.
+        },
+      },
+    };
+    const manager: SubagentsManagerRegistry = {
+      spawn(_pi, _ctx, _type, _prompt, options) {
+        spawned = true;
+        const tool = (
+          options.customTools as Array<{
+            name: string;
+            execute: (toolCallId: string, params: unknown) => Promise<unknown>;
+          }>
+        ).find(({ name }) => name === "structured_output");
+        record.promise =
+          tool?.execute("structured", validResult).then(() => undefined) ??
+          Promise.resolve();
+        record.status = "completed";
+        return "preflight-agent";
+      },
+      getRecord() {
+        return record;
+      },
+    };
+    const pi = {
+      events: {
+        emit() {
+          // No stop event expected before preflight.
+        },
+      },
+    };
+    try {
+      const runner = createExecutorAgentRunner(
+        pi as never,
+        { cwd: workspace } as never,
+        { manager, agentTimeoutMs: 100, cleanupTimeoutMs: 20 }
+      );
+      await runner(
+        {
+          agent: "executor",
+          prompt: "Preflight",
+          executorOutputSchema: EXECUTOR_RESULT_SCHEMA,
+          preflightCommand: "bun test tests/formatName.test.ts",
+        } as never,
+        { cwd: workspace, signal: new AbortController().signal } as never
+      );
+      expect(spawned).toBe(true);
+    } finally {
+      rmSync(workspace, { recursive: true, force: true });
+    }
+  });
+
+  it("executes the injected bash tool with the resolved local runner", async () => {
+    const workspace = mkdtempSync(
+      join(tmpdir(), "supa-pi-runner-integration-")
+    );
+    const localBin = join(workspace, "node_modules", ".bin");
+    const localMarker = join(workspace, "local-runner.marker");
+    const probeDirectory = join(workspace, "host-probe");
+    const probeMarker = join(workspace, "host-probe.marker");
+    const localRunner = join(localBin, "vitest");
+    const probeRunner = join(probeDirectory, "vitest");
+    mkdirSync(localBin, { recursive: true });
+    mkdirSync(probeDirectory, { recursive: true });
+    writeFileSync(
+      localRunner,
+      `#!/bin/sh\nprintf '%s\\n%s\\n' "$PWD" "$*" > '${localMarker}'\nprintf '1 passed\\n'\n`
+    );
+    writeFileSync(
+      probeRunner,
+      `#!/bin/sh\ntouch '${probeMarker}'\nprintf 'host probe\\n'\n`
+    );
+    chmodSync(localRunner, 0o755);
+    chmodSync(probeRunner, 0o755);
+
+    const originalPath = process.env.PATH;
+    process.env.PATH = `${probeDirectory}:${originalPath ?? ""}`;
+    expect((process.env.PATH ?? "").split(pathDelimiter)).not.toContain(
+      localBin
+    );
+    let bashResult: unknown;
+    const record: {
+      type: string;
+      status: string;
+      toolUses: number;
+      promise: Promise<unknown>;
+      error?: string;
+      session: { dispose: () => void };
+    } = {
+      type: "executor",
+      status: "running",
+      toolUses: 1,
+      promise: Promise.resolve(),
+      error: undefined,
+      session: {
+        dispose() {
+          // No-op fake session cleanup.
+        },
+      },
+    };
+    const manager: SubagentsManagerRegistry = {
+      spawn(_pi, _ctx, _type, _prompt, options) {
+        const tools = options.customTools as Array<{
+          name: string;
+          execute: (
+            toolCallId: string,
+            params: unknown,
+            signal?: AbortSignal,
+            onUpdate?: unknown,
+            ctx?: unknown
+          ) => Promise<unknown>;
+        }>;
+        const bash = tools.find(({ name }) => name === "bash");
+        const structuredOutput = tools.find(
+          ({ name }) => name === "structured_output"
+        );
+        if (!(bash && structuredOutput)) {
+          throw new Error("resolved bash tool was not injected");
+        }
+        record.promise = (async () => {
+          try {
+            bashResult = await bash.execute(
+              "bash",
+              { command: "vitest --run local.test.ts" },
+              new AbortController().signal,
+              undefined,
+              undefined
+            );
+            await structuredOutput.execute("structured", validResult);
+            record.status = "completed";
+          } catch (error) {
+            record.status = "error";
+            record.error =
+              error instanceof Error ? error.message : String(error);
+            throw error;
+          }
+        })();
+        return "runner-integration-agent";
+      },
+      getRecord() {
+        return record;
+      },
+    };
+    const runner = createExecutorAgentRunner(
+      {
+        events: {
+          emit() {
+            // No stop event expected for a completed fake record.
+          },
+        },
+      } as never,
+      { cwd: workspace } as never,
+      { manager, agentTimeoutMs: 1000, cleanupTimeoutMs: 20 }
+    );
+
+    try {
+      await runner(
+        {
+          agent: "executor",
+          prompt: "Run the local Vitest executable.",
+          executorOutputSchema: EXECUTOR_RESULT_SCHEMA,
+          preflightCommand: "vitest --run local.test.ts",
+        } as never,
+        { cwd: workspace, signal: new AbortController().signal } as never
+      );
+
+      expect(existsSync(localMarker)).toBe(true);
+      expect(readFileSync(localMarker, "utf8")).toBe(
+        `${realpathSync(workspace)}\n--run local.test.ts\n`
+      );
+      expect(existsSync(probeMarker)).toBe(false);
+      expect(
+        (bashResult as { content?: Array<{ text?: string }> }).content?.[0]
+          ?.text
+      ).toContain("1 passed");
+    } finally {
+      if (originalPath === undefined) {
+        delete process.env.PATH;
+      } else {
+        process.env.PATH = originalPath;
+      }
+      rmSync(workspace, { recursive: true, force: true });
+    }
+  });
+
+  it("fails closed before worker spawn when runner preflight cannot resolve", async () => {
+    const workspace = mkdtempSync(join(tmpdir(), "supa-pi-runner-blocked-"));
+    let spawned = false;
+    const manager: SubagentsManagerRegistry = {
+      spawn() {
+        spawned = true;
+        return "unexpected";
+      },
+      getRecord() {
+        throw new Error("worker must not spawn before preflight");
+      },
+    };
+    const pi = {
+      events: {
+        emit() {
+          // No stop event expected before preflight.
+        },
+      },
+    };
+    try {
+      const runner = createExecutorAgentRunner(
+        pi as never,
+        { cwd: workspace } as never,
+        { manager, agentTimeoutMs: 100, cleanupTimeoutMs: 20 }
+      );
+      await expect(
+        runner(
+          {
+            agent: "executor",
+            prompt: "Missing runner",
+            executorOutputSchema: EXECUTOR_RESULT_SCHEMA,
+            preflightCommand: "./gradlew test",
+          } as never,
+          { cwd: workspace, signal: new AbortController().signal } as never
+        )
+      ).rejects.toThrow("runner preflight");
+      expect(spawned).toBe(false);
+    } finally {
+      rmSync(workspace, { recursive: true, force: true });
+    }
+  });
+
+  it("aborts runner preflight before spawning a worker", async () => {
+    const workspace = mkdtempSync(join(tmpdir(), "supa-pi-runner-abort-"));
+    let spawned = false;
+    const manager: SubagentsManagerRegistry = {
+      spawn() {
+        spawned = true;
+        return "unexpected";
+      },
+      getRecord() {
+        throw new Error("worker must not spawn after preflight abort");
+      },
+    };
+    const pi = {
+      events: {
+        emit() {
+          // No stop event expected before preflight.
+        },
+      },
+    };
+    const controller = new AbortController();
+    controller.abort();
+    try {
+      const runner = createExecutorAgentRunner(
+        pi as never,
+        { cwd: workspace } as never,
+        { manager, agentTimeoutMs: 100, cleanupTimeoutMs: 20 }
+      );
+      await expect(
+        runner(
+          {
+            agent: "executor",
+            prompt: "Aborted runner",
+            executorOutputSchema: EXECUTOR_RESULT_SCHEMA,
+            preflightCommand: "bun test tests/formatName.test.ts",
+          } as never,
+          { cwd: workspace, signal: controller.signal } as never
+        )
+      ).rejects.toThrow("preflight aborted");
+      expect(spawned).toBe(false);
+    } finally {
+      rmSync(workspace, { recursive: true, force: true });
+    }
+  });
+
+  it("cleans a raw capture when worker spawn fails", async () => {
+    const workspace = mkdtempSync(join(tmpdir(), "supa-pi-runner-spawn-"));
+    mkdirSync(join(workspace, "node_modules/.bin"), { recursive: true });
+    const runnerPath = join(workspace, "node_modules/.bin/bun");
+    writeFileSync(runnerPath, "#!/bin/sh\n");
+    chmodSync(runnerPath, 0o755);
+    const before = new Set(
+      readdirSync(tmpdir()).filter((entry) => entry.startsWith("supa-pi-tdd-"))
+    );
+    const manager: SubagentsManagerRegistry = {
+      spawn() {
+        throw new Error("spawn failed");
+      },
+      getRecord() {
+        throw new Error("record must not be requested after spawn failure");
+      },
+    };
+    const pi = {
+      events: {
+        emit() {
+          // No stop event expected after spawn failure.
+        },
+      },
+    };
+    try {
+      const runner = createExecutorAgentRunner(
+        pi as never,
+        { cwd: workspace } as never,
+        { manager, agentTimeoutMs: 100, cleanupTimeoutMs: 20 }
+      );
+      await expect(
+        runner(
+          {
+            agent: "executor",
+            prompt: "Spawn failure",
+            executorOutputSchema: EXECUTOR_RESULT_SCHEMA,
+            captureTrajectory: true,
+            preflightCommand: "bun test tests/formatName.test.ts",
+          } as never,
+          { cwd: workspace, signal: new AbortController().signal } as never
+        )
+      ).rejects.toThrow("spawn failed");
+      expect(
+        readdirSync(tmpdir()).filter(
+          (entry) => entry.startsWith("supa-pi-tdd-") && !before.has(entry)
+        )
+      ).toEqual([]);
+    } finally {
+      rmSync(workspace, { recursive: true, force: true });
+    }
+  });
+
+  it("reports raw capture flush failures after closing its descriptor", async () => {
+    const workspace = mkdtempSync(join(tmpdir(), "supa-pi-capture-flush-"));
+    let rawTrajectoryPath: string | undefined;
+    const record = {
+      type: "executor",
+      status: "running",
+      toolUses: 0,
+      promise: Promise.resolve(),
+      session: {
+        dispose() {
+          // No-op fake session cleanup.
+        },
+      },
+    };
+    const manager: SubagentsManagerRegistry = {
+      spawn(_pi, _ctx, _type, _prompt, options) {
+        const structuredOutput = (
+          options.customTools as Array<{
+            name: string;
+            execute: (toolCallId: string, params: unknown) => Promise<unknown>;
+          }>
+        ).find(({ name }) => name === "structured_output");
+        record.promise =
+          structuredOutput?.execute("structured", validResult).then(() => {
+            record.status = "completed";
+          }) ?? Promise.resolve();
+        record.status = "completed";
+        return "capture-flush-agent";
+      },
+      getRecord() {
+        return record;
+      },
+    };
+    const fsyncSpy = spyOn(fs, "fsyncSync").mockImplementationOnce(() => {
+      throw new Error("injected fsync failure");
+    });
+    const closeSpy = spyOn(fs, "closeSync");
+    const runner = createExecutorAgentRunner(
+      {
+        events: {
+          emit() {
+            // No stop event expected for a completed fake record.
+          },
+        },
+      } as never,
+      { cwd: workspace } as never,
+      { manager, agentTimeoutMs: 100, cleanupTimeoutMs: 20 }
+    );
+
+    try {
+      const result = (await runner(
+        {
+          agent: "executor",
+          prompt: "Capture flush failure",
+          executorOutputSchema: EXECUTOR_RESULT_SCHEMA,
+          captureTrajectory: true,
+        } as never,
+        { cwd: workspace, signal: new AbortController().signal } as never
+      )) as WorkflowAgentResult & {
+        rawTrajectoryPath?: string;
+        rawTrajectoryError?: string;
+        trajectoryErrors?: string[];
+      };
+      rawTrajectoryPath = result.rawTrajectoryPath;
+
+      expect(result.rawTrajectoryError).toContain("injected fsync failure");
+      expect(result.trajectoryErrors).toContain(result.rawTrajectoryError);
+      expect(closeSpy).toHaveBeenCalled();
+    } finally {
+      fsyncSpy.mockRestore();
+      closeSpy.mockRestore();
+      if (rawTrajectoryPath) {
+        rmSync(dirname(rawTrajectoryPath), { recursive: true, force: true });
+      }
+      rmSync(workspace, { recursive: true, force: true });
+    }
+  });
+
+  it("does not expand npx or bunx during runner preflight", async () => {
+    const workspace = mkdtempSync(join(tmpdir(), "supa-pi-runner-wrapper-"));
+    let spawned = false;
+    const manager: SubagentsManagerRegistry = {
+      spawn() {
+        spawned = true;
+        return "unexpected";
+      },
+      getRecord() {
+        throw new Error("worker must not spawn before preflight");
+      },
+    };
+    const pi = {
+      events: {
+        emit() {
+          // No stop event expected before preflight.
+        },
+      },
+    };
+    try {
+      const runner = createExecutorAgentRunner(
+        pi as never,
+        { cwd: workspace } as never,
+        { manager, agentTimeoutMs: 100, cleanupTimeoutMs: 20 }
+      );
+      for (const command of [
+        "npx vitest tests/formatName.test.ts",
+        "bunx jest tests/formatName.test.ts",
+      ]) {
+        await expect(
+          runner(
+            {
+              agent: "executor",
+              prompt: "Wrapper runner",
+              executorOutputSchema: EXECUTOR_RESULT_SCHEMA,
+              preflightCommand: command,
+            } as never,
+            { cwd: workspace, signal: new AbortController().signal } as never
+          )
+        ).rejects.toThrow("runner preflight");
+      }
+      expect(spawned).toBe(false);
+    } finally {
+      rmSync(workspace, { recursive: true, force: true });
+    }
   });
 
   it("disposes a completed structured executor session", async () => {

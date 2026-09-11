@@ -7,19 +7,30 @@ import {
   fsyncSync,
   lstatSync,
   mkdirSync,
+  mkdtempSync,
   openSync,
   readdirSync,
   readFileSync,
   readlinkSync,
   readSync,
   realpathSync,
+  rmdirSync,
   unlinkSync,
   writeFileSync,
+  writeSync,
 } from "node:fs";
-import { dirname, join, relative, resolve as resolvePath } from "node:path";
+import { tmpdir } from "node:os";
+import {
+  dirname,
+  join,
+  delimiter as pathDelimiter,
+  relative,
+  resolve as resolvePath,
+} from "node:path";
 import { fileURLToPath } from "node:url";
 
 import {
+  createBashToolDefinition,
   type ExtensionAPI,
   type ExtensionContext,
   getAgentDir,
@@ -56,6 +67,7 @@ import {
   coverageVerificationTargets,
   isSupportedTestCommand,
   normalizeTddToolMetadata,
+  resolveSupportedTestCommand,
   runnerGeneratedArtifactDirectories,
   type TddEvidenceHardFailureCode,
   type TddToolCall,
@@ -76,6 +88,7 @@ const MAX_TRAJECTORY_CAPTURE_ERRORS = 20;
 const MAX_TDD_DEBUG_ARTIFACT_BYTES = 1024 * 1024;
 const MAX_TDD_DEBUG_ARTIFACTS = 20;
 const TDD_DEBUG_ARTIFACT_PATTERN = /^tdd-[0-9a-f-]{36}\.json$/;
+const RAW_TDD_CAPTURE_FORMAT = "framed-utf8-v1";
 const MAX_PROOF_TARGETS = 16;
 const MAX_PROOF_TOTAL_BYTES = 8 * 1024 * 1024;
 const MAX_RUNNER_PROOF_FILES = 10_000;
@@ -88,7 +101,6 @@ const RUNNER_PROOF_IGNORED_DIRECTORIES = new Set([
   "node_modules",
 ]);
 const TRAILING_REPLACEMENT_CHARACTER_PATTERN = /\uFFFD$/;
-const LEADING_REPLACEMENT_CHARACTER_PATTERN = /^\uFFFD/;
 const PATH_SEPARATOR_PATTERN = /[\\/]/;
 const EXECUTOR_AGENT_TYPE = "executor";
 const EXECUTOR_REPAIR_AGENT_TYPE = "executor-output-repair";
@@ -699,24 +711,119 @@ function truncateUtf8(value: string, maxBytes: number): string {
 
 const TRAJECTORY_TRUNCATION_MARKER = "\n[... output middle omitted ...]\n";
 
-function truncateUtf8HeadTail(value: string, maxBytes: number): string {
-  const buffer = Buffer.from(value);
-  if (buffer.byteLength <= maxBytes) {
+function utf8Prefix(value: string, maxBytes: number): string {
+  if (Buffer.byteLength(value) <= maxBytes) {
     return value;
   }
+  let bytes = 0;
+  let end = 0;
+  for (const character of value) {
+    const size = Buffer.byteLength(character);
+    if (bytes + size > maxBytes) {
+      break;
+    }
+    bytes += size;
+    end += character.length;
+  }
+  return value.slice(0, end);
+}
+
+function utf8Suffix(value: string, maxBytes: number): string {
+  if (Buffer.byteLength(value) <= maxBytes) {
+    return value;
+  }
+  let bytes = 0;
+  let start = value.length;
+  while (start > 0) {
+    let characterStart = start - 1;
+    const code = value.charCodeAt(characterStart);
+    if (
+      code >= 0xdc_00 &&
+      code <= 0xdf_ff &&
+      characterStart > 0 &&
+      value.charCodeAt(characterStart - 1) >= 0xd8_00 &&
+      value.charCodeAt(characterStart - 1) <= 0xdb_ff
+    ) {
+      characterStart -= 1;
+    }
+    const character = value.slice(characterStart, start);
+    const size = Buffer.byteLength(character);
+    if (bytes + size > maxBytes) {
+      break;
+    }
+    bytes += size;
+    start = characterStart;
+  }
+  return value.slice(start);
+}
+
+function* textResultParts(content: unknown): Iterable<string> {
+  if (!Array.isArray(content)) {
+    return;
+  }
+  for (const part of content) {
+    if (
+      part &&
+      typeof part === "object" &&
+      "type" in part &&
+      part.type === "text" &&
+      "text" in part &&
+      typeof part.text === "string"
+    ) {
+      yield part.text;
+    }
+  }
+}
+
+function boundedResultText(
+  content: unknown,
+  maxBytes: number
+): { text: string; truncated: boolean } {
   const markerBytes = Buffer.byteLength(TRAJECTORY_TRUNCATION_MARKER);
-  const contentBytes = maxBytes - markerBytes;
-  const headBytes = Math.ceil(contentBytes / 2);
-  const tailBytes = Math.floor(contentBytes / 2);
-  const head = buffer
-    .subarray(0, headBytes)
-    .toString("utf8")
-    .replace(TRAILING_REPLACEMENT_CHARACTER_PATTERN, "");
-  const tail = buffer
-    .subarray(buffer.byteLength - tailBytes)
-    .toString("utf8")
-    .replace(LEADING_REPLACEMENT_CHARACTER_PATTERN, "");
-  return `${head}${TRAJECTORY_TRUNCATION_MARKER}${tail}`;
+  const contentBytes = Math.max(0, maxBytes - markerBytes);
+  const headLimit = Math.ceil(contentBytes / 2);
+  const tailLimit = Math.floor(contentBytes / 2);
+  let fullBytes = 0;
+  let fullText: string | undefined = "";
+  let head = "";
+  let headBytes = 0;
+  let tail = "";
+  let partIndex = 0;
+  const append = (piece: string) => {
+    const pieceBytes = Buffer.byteLength(piece);
+    if (fullText !== undefined) {
+      fullBytes += pieceBytes;
+      if (fullBytes <= maxBytes) {
+        fullText += piece;
+      } else {
+        fullText = undefined;
+      }
+    }
+    if (headBytes < headLimit) {
+      const prefix = utf8Prefix(piece, headLimit - headBytes);
+      head += prefix;
+      headBytes += Buffer.byteLength(prefix);
+    }
+    if (tailLimit > 0) {
+      const suffix = utf8Suffix(piece, tailLimit);
+      const combined = tail + suffix;
+      tail = utf8Suffix(combined, tailLimit);
+    }
+  };
+  for (const part of textResultParts(content)) {
+    if (partIndex > 0) {
+      append("\n");
+    }
+    append(part);
+    partIndex += 1;
+  }
+  if (fullText !== undefined) {
+    return { text: fullText, truncated: false };
+  }
+  return {
+    text: `${head}${TRAJECTORY_TRUNCATION_MARKER}${tail}`,
+    truncated: true,
+  };
 }
 
 export interface ExecutorResult {
@@ -737,14 +844,243 @@ type TddDebugArtifactReference =
   | { debugArtifactPath: string }
   | { debugArtifactError: string };
 
+interface RawTddTrajectoryCapture {
+  path: string;
+  append(
+    call: TddToolCall,
+    resultParts: () => Iterable<string>
+  ): string | undefined;
+  close(): string | undefined;
+}
+
+function hostOwned(stat: { uid?: number }): boolean {
+  const uid =
+    typeof process.getuid === "function" ? process.getuid() : undefined;
+  return uid === undefined || stat.uid === uid;
+}
+
+function writeCaptureText(descriptor: number, text: string): void {
+  const expected = Buffer.byteLength(text);
+  const written = writeSync(descriptor, text, undefined, "utf8");
+  if (written !== expected) {
+    throw new Error("incomplete raw TDD capture write");
+  }
+}
+
+function removeRawTddCapture(path: string | undefined): void {
+  if (!path) {
+    return;
+  }
+  try {
+    unlinkSync(path);
+  } catch {
+    // Best-effort cleanup of the host-owned temporary capture.
+  }
+  try {
+    rmdirSync(dirname(path));
+  } catch {
+    // Keep unexpected files in an attacker-controlled temporary directory.
+  }
+}
+
+function createRawTddTrajectoryCapture(): RawTddTrajectoryCapture {
+  const directory = realpathSync(mkdtempSync(join(tmpdir(), "supa-pi-tdd-")));
+  const path = join(directory, "trajectory.raw");
+  const noFollow = fsConstants.O_NOFOLLOW;
+  if (typeof noFollow !== "number" || noFollow === 0) {
+    removeRawTddCapture(path);
+    throw new Error("safe raw TDD capture creation unavailable");
+  }
+  let descriptor: number | undefined;
+  try {
+    const directoryStat = lstatSync(directory);
+    if (!(directoryStat.isDirectory() && hostOwned(directoryStat))) {
+      throw new Error("unsafe raw TDD capture directory");
+    }
+    // biome-ignore-start lint/suspicious/noBitwiseOperators: open(2) flags are bitmasks.
+    const flags =
+      fsConstants.O_WRONLY |
+      fsConstants.O_CREAT |
+      fsConstants.O_EXCL |
+      noFollow;
+    // biome-ignore-end lint/suspicious/noBitwiseOperators: open(2) flags are bitmasks.
+    descriptor = openSync(path, flags, 0o600);
+    const opened = fstatSync(descriptor);
+    const pathStat = lstatSync(path);
+    if (
+      !(opened.isFile() && hostOwned(opened)) ||
+      opened.mode % 0o1000 !== 0o600 ||
+      pathStat.isSymbolicLink() ||
+      pathStat.dev !== opened.dev ||
+      pathStat.ino !== opened.ino ||
+      realpathSync(path) !== path
+    ) {
+      throw new Error("unsafe raw TDD capture target");
+    }
+    return {
+      path,
+      append(call, resultParts) {
+        try {
+          let resultBytes = 0;
+          let partCount = 0;
+          for (const part of resultParts()) {
+            resultBytes += Buffer.byteLength(part) + (partCount > 0 ? 1 : 0);
+            partCount += 1;
+          }
+          const { resultText: _resultText, ...rawCall } = call;
+          const header = `${JSON.stringify({
+            version: 1,
+            type: "tool-call",
+            call: rawCall,
+            resultBytes,
+          })}\n`;
+          writeCaptureText(descriptor!, header);
+          let index = 0;
+          for (const part of resultParts()) {
+            if (index > 0) {
+              writeCaptureText(descriptor!, "\n");
+            }
+            writeCaptureText(descriptor!, part);
+            index += 1;
+          }
+        } catch (error) {
+          return `raw TDD capture failed: ${error instanceof Error ? error.message : String(error)}`;
+        }
+      },
+      close() {
+        if (descriptor === undefined) {
+          return;
+        }
+        const errors: string[] = [];
+        try {
+          fsyncSync(descriptor);
+        } catch (error) {
+          errors.push(
+            `raw TDD capture flush failed: ${error instanceof Error ? error.message : String(error)}`
+          );
+        }
+        try {
+          closeSync(descriptor);
+        } catch (error) {
+          errors.push(
+            `raw TDD capture close failed: ${error instanceof Error ? error.message : String(error)}`
+          );
+        }
+        descriptor = undefined;
+        return errors.length > 0 ? errors.join("; ") : undefined;
+      },
+    };
+  } catch (error) {
+    if (descriptor !== undefined) {
+      closeSync(descriptor);
+    }
+    removeRawTddCapture(path);
+    throw error;
+  }
+}
+
+function copyRawTddCapture(
+  sourcePath: string,
+  destinationPath: string
+): number {
+  const noFollow = fsConstants.O_NOFOLLOW;
+  if (typeof noFollow !== "number" || noFollow === 0) {
+    throw new Error("safe raw TDD artifact copy unavailable");
+  }
+  let source: number | undefined;
+  let destination: number | undefined;
+  try {
+    // biome-ignore-start lint/suspicious/noBitwiseOperators: open(2) flags are bitmasks.
+    source = openSync(sourcePath, fsConstants.O_RDONLY | noFollow);
+    const destinationFlags =
+      fsConstants.O_WRONLY |
+      fsConstants.O_CREAT |
+      fsConstants.O_EXCL |
+      noFollow;
+    // biome-ignore-end lint/suspicious/noBitwiseOperators: open(2) flags are bitmasks.
+    const sourceStat = fstatSync(source);
+    const sourcePathStat = lstatSync(sourcePath);
+    if (
+      !(
+        sourceStat.isFile() &&
+        hostOwned(sourceStat) &&
+        sourceStat.mode % 0o1000 === 0o600
+      ) ||
+      sourcePathStat.isSymbolicLink() ||
+      sourcePathStat.dev !== sourceStat.dev ||
+      sourcePathStat.ino !== sourceStat.ino ||
+      realpathSync(sourcePath) !== sourcePath
+    ) {
+      throw new Error("unsafe raw TDD capture");
+    }
+    destination = openSync(destinationPath, destinationFlags, 0o600);
+    const opened = fstatSync(destination);
+    const pathStat = lstatSync(destinationPath);
+    if (
+      !(opened.isFile() && hostOwned(opened)) ||
+      opened.mode % 0o1000 !== 0o600 ||
+      pathStat.isSymbolicLink() ||
+      pathStat.dev !== opened.dev ||
+      pathStat.ino !== opened.ino ||
+      realpathSync(destinationPath) !== destinationPath
+    ) {
+      throw new Error("unsafe raw TDD artifact target");
+    }
+    const buffer = Buffer.allocUnsafe(HASH_BUFFER_BYTES);
+    let copied = 0;
+    while (copied < sourceStat.size) {
+      const length = readSync(
+        source,
+        buffer,
+        0,
+        Math.min(buffer.length, sourceStat.size - copied),
+        copied
+      );
+      if (length <= 0) {
+        throw new Error("incomplete raw TDD capture read");
+      }
+      let written = 0;
+      while (written < length) {
+        written += writeSync(
+          destination,
+          buffer,
+          written,
+          length - written,
+          copied + written
+        );
+      }
+      copied += length;
+    }
+    fsyncSync(destination);
+    return copied;
+  } catch (error) {
+    try {
+      unlinkSync(destinationPath);
+    } catch {
+      // Best-effort cleanup of an incomplete host-owned sidecar.
+    }
+    throw error;
+  } finally {
+    if (source !== undefined) {
+      closeSync(source);
+    }
+    if (destination !== undefined) {
+      closeSync(destination);
+    }
+  }
+}
+
 function retainTddDebugArtifact(
   cwd: string,
   task: ExecutorWorkflowTask,
   evidenceError: string,
   executorResult: ExecutorResult,
   toolCalls: TddToolCall[],
-  trajectoryErrors: string[]
+  trajectoryErrors: string[],
+  rawTrajectoryPath?: string,
+  rawTrajectoryError?: string
 ): TddDebugArtifactReference {
+  let rawArtifactPath: string | undefined;
   try {
     const root = realpathSync(cwd);
     let debugDirectory = root;
@@ -779,6 +1115,28 @@ function retainTddDebugArtifact(
       });
     }
 
+    const artifactId = randomUUID();
+    let rawCapture:
+      | {
+          path: string;
+          format: string;
+          bytes: number;
+          error?: string;
+        }
+      | { error: string }
+      | undefined;
+    if (rawTrajectoryPath) {
+      rawArtifactPath = join(resolvedDebugDirectory, `tdd-${artifactId}.raw`);
+      const bytes = copyRawTddCapture(rawTrajectoryPath, rawArtifactPath);
+      rawCapture = {
+        path: relative(root, rawArtifactPath),
+        format: RAW_TDD_CAPTURE_FORMAT,
+        bytes,
+        ...(rawTrajectoryError ? { error: rawTrajectoryError } : {}),
+      };
+    } else if (rawTrajectoryError) {
+      rawCapture = { error: rawTrajectoryError };
+    }
     const artifact = `${JSON.stringify(
       {
         version: 1,
@@ -789,6 +1147,7 @@ function retainTddDebugArtifact(
         trajectory: {
           errors: trajectoryErrors,
           toolCalls,
+          ...(rawCapture ? { rawCapture } : {}),
         },
       },
       null,
@@ -800,7 +1159,7 @@ function retainTddDebugArtifact(
 
     const debugArtifactPath = join(
       resolvedDebugDirectory,
-      `tdd-${randomUUID()}.json`
+      `tdd-${artifactId}.json`
     );
     const noFollow = fsConstants.O_NOFOLLOW;
     if (typeof noFollow !== "number" || noFollow === 0) {
@@ -856,10 +1215,19 @@ function retainTddDebugArtifact(
     }
     return { debugArtifactPath: relative(root, debugArtifactPath) };
   } catch (error) {
+    if (rawArtifactPath) {
+      try {
+        unlinkSync(rawArtifactPath);
+      } catch {
+        // Best-effort cleanup of an incomplete host-owned sidecar.
+      }
+    }
     const code = (error as NodeJS.ErrnoException).code;
     return {
       debugArtifactError: `Failed to persist private TDD debug artifact${code ? ` (${code})` : ""}.`,
     };
+  } finally {
+    removeRawTddCapture(rawTrajectoryPath);
   }
 }
 
@@ -1053,6 +1421,7 @@ const outputs = await parallel(args.tasks.map((task) => async () => {
       prompt: task.prompt,
       executorOutputSchema: args.schema,
       captureTrajectory: task.tdd === true,
+      preflightCommand: task.tdd === true ? task.tddShape?.redGreenCommand : undefined,
       promptIsComplete: true,
     });
   } catch (error) {
@@ -1063,7 +1432,11 @@ const outputs = await parallel(args.tasks.map((task) => async () => {
     };
   }
 
-  if (initial && initial.structuredOutput !== undefined) {
+  if (
+    initial &&
+    ["completed", "steered"].includes(initial.status) &&
+    initial.structuredOutput !== undefined
+  ) {
     return {
       taskId: task.taskId,
       outcome: "completed",
@@ -1071,6 +1444,8 @@ const outputs = await parallel(args.tasks.map((task) => async () => {
       repaired: false,
       ...(task.tdd ? {
         tddToolCalls: initial.toolCalls,
+        tddRawTrajectoryPath: initial.rawTrajectoryPath,
+        tddRawTrajectoryError: initial.rawTrajectoryError,
         tddTrajectoryErrors: initial.trajectoryErrors,
       } : {}),
     };
@@ -1081,6 +1456,10 @@ const outputs = await parallel(args.tasks.map((task) => async () => {
       taskId: task.taskId,
       outcome: "failed",
       error: "TDD executor must return native structured output with its original ordered trajectory; report-only repair is not allowed.",
+      tddToolCalls: initial?.toolCalls,
+      tddRawTrajectoryPath: initial?.rawTrajectoryPath,
+      tddRawTrajectoryError: initial?.rawTrajectoryError,
+      tddTrajectoryErrors: initial?.trajectoryErrors,
     };
   }
 
@@ -1169,6 +1548,11 @@ export async function runExecutorWorkflow(
       const validation = validateTaskShape(task.tddShape);
       if (validation.ok === false) {
         error = `execute_tasks received an invalid tddShape: ${validation.errors.join("; ")}`;
+      } else if (
+        !resolveSupportedTestCommand(validation.value.redGreenCommand)
+      ) {
+        error =
+          "execute_tasks requires a directly installed supported test runner; npx and bunx are not expanded.";
       } else if (!mutationProofSupported) {
         error = TDD_PROOF_UNSUPPORTED_ERROR;
       }
@@ -1200,171 +1584,257 @@ export async function runExecutorWorkflow(
       : composeExecutorPrompt(task.prompt),
   }));
 
-  const workflow = await runWorkflowScript(EXECUTOR_WORKFLOW_SCRIPT, {
-    args: {
-      tasks: workflowTasks,
-      schema: EXECUTOR_RESULT_SCHEMA,
-      maxRepairOutputBytes: MAX_REPAIR_OUTPUT_BYTES,
-    },
-    cwd: options.cwd,
-    agentRunner: options.agentRunner,
-    signal: options.signal,
-    timeoutMs: EXECUTOR_WORKFLOW_TIMEOUT_MS,
-    budget: {
-      maxAgentCalls: runnableTasks.length * 2,
-      maxResultBytes: 512_000,
-    },
-  });
-
-  if (!Array.isArray(workflow.value)) {
-    throw new Error("Executor workflow returned an invalid result envelope.");
-  }
-  const rawResults = workflow.value as Array<
-    ExecutorWorkflowResult & {
-      tddToolCalls?: TddToolCall[];
-      tddTrajectoryErrors?: string[];
+  const unclaimedRawTrajectoryPaths = new Set<string>();
+  let rawTrajectoryCleanupStarted = false;
+  const trackedAgentRunner: WorkflowAgentRunner = async (request, context) => {
+    const result = await options.agentRunner(request, context);
+    if (
+      request.captureTrajectory === true &&
+      result &&
+      typeof result === "object"
+    ) {
+      const rawTrajectoryPath = (result as { rawTrajectoryPath?: unknown })
+        .rawTrajectoryPath;
+      if (typeof rawTrajectoryPath === "string") {
+        if (rawTrajectoryCleanupStarted) {
+          removeRawTddCapture(rawTrajectoryPath);
+        } else {
+          unclaimedRawTrajectoryPaths.add(rawTrajectoryPath);
+        }
+      }
     }
-  >;
-  const tasksById = new Map(
-    runnableTasks.map((task) => [task.taskId, task] as const)
-  );
-  const seenResultIds = new Set<string>();
-  const runnableResults = rawResults.map(
-    ({ tddToolCalls, tddTrajectoryErrors, ...outcome }) => {
-      const task = tasksById.get(outcome.taskId);
-      if (!(task && !seenResultIds.has(outcome.taskId))) {
-        throw new Error(
-          "Executor workflow returned an invalid result envelope."
-        );
-      }
-      seenResultIds.add(outcome.taskId);
-      const toolCalls = Array.isArray(tddToolCalls) ? tddToolCalls : [];
-      const trajectoryErrors = Array.isArray(tddTrajectoryErrors)
-        ? tddTrajectoryErrors
-        : [];
-      const recoverableNeedsFollowup =
-        task.tdd &&
-        outcome.outcome === "completed" &&
-        outcome.result.status === "needs_followup" &&
-        !outcome.result.blockers.some((blocker) => blocker.trim()) &&
-        outcome.result.followUps.some((followUp) => followUp.trim());
-      let evidenceResult: ExecutorResult | undefined;
-      if (outcome.outcome === "completed") {
-        evidenceResult = recoverableNeedsFollowup
-          ? { ...outcome.result, status: "done" }
-          : outcome.result;
-      }
-      const evidenceAssessment =
-        task.tdd && evidenceResult
-          ? assessTddEvidence(
-              evidenceResult,
-              toolCalls,
-              trajectoryErrors,
-              task.prompt,
-              task.tddShape?.redGreenCommand
-            )
-          : undefined;
-      const taskShapeWarnings =
-        task.tdd && task.tddShape && outcome.outcome === "completed"
-          ? compareMutationManifest(
-              task.tddShape.mutations,
-              toolCalls.flatMap((call) =>
-                call.isError || call.mutationProven !== true
-                  ? []
-                  : (call.mutationDelta ?? []).map((delta) => delta.path)
-              )
-            )
-          : [];
-      if (
-        evidenceAssessment?.kind === "failed" &&
-        outcome.outcome === "completed"
-      ) {
-        return {
-          taskId: outcome.taskId,
-          outcome: "failed" as const,
-          error: evidenceAssessment.message,
-          recovery: evidenceRecovery(evidenceAssessment.code),
-          ...retainTddDebugArtifact(
-            options.cwd,
-            task,
-            evidenceAssessment.message,
-            outcome.result,
-            toolCalls,
-            trajectoryErrors
-          ),
-          invalidResult: {
-            filesTouched: outcome.result.filesTouched,
-            validation: outcome.result.validation,
-            blockers: outcome.result.blockers,
-          },
-        };
-      }
-      if (
-        recoverableNeedsFollowup &&
-        evidenceAssessment?.kind !== "failed" &&
-        outcome.outcome === "completed"
-      ) {
-        const strategyWarning =
-          evidenceAssessment?.kind === "needs_verification"
-            ? ` ${evidenceAssessment.message}`
-            : "";
-        const taskShapeWarning = taskShapeWarnings[0]
-          ? ` ${taskShapeWarnings[0]}`
-          : "";
-        return {
-          taskId: outcome.taskId,
-          outcome: "needs_verification" as const,
-          result: outcome.result,
-          repaired: false as const,
-          warnings: [
-            `Recoverable executor status requires independent verification: needs_followup contained non-blocking followUps but no blocker.${strategyWarning}${taskShapeWarning}`.slice(
-              0,
-              TASK_SHAPE_WARNING_MAX_LENGTH
-            ),
-          ],
-        };
-      }
-      if (
-        evidenceAssessment?.kind === "needs_verification" &&
-        outcome.outcome === "completed"
-      ) {
-        return {
-          taskId: outcome.taskId,
-          outcome: "needs_verification" as const,
-          result: outcome.result,
-          repaired: false as const,
-          warnings: [
-            `TDD strategy deviation requires independent verification: ${evidenceAssessment.message}`.slice(
-              0,
-              TASK_SHAPE_WARNING_MAX_LENGTH
-            ),
-          ],
-        };
-      }
-      if (task.tdd && task.tddShape && outcome.outcome === "completed") {
-        return taskShapeWarnings.length > 0
-          ? { ...outcome, warnings: taskShapeWarnings }
-          : outcome;
-      }
-      return outcome;
+    return result;
+  };
+
+  try {
+    const workflow = await runWorkflowScript(EXECUTOR_WORKFLOW_SCRIPT, {
+      args: {
+        tasks: workflowTasks,
+        schema: EXECUTOR_RESULT_SCHEMA,
+        maxRepairOutputBytes: MAX_REPAIR_OUTPUT_BYTES,
+      },
+      cwd: options.cwd,
+      agentRunner: trackedAgentRunner,
+      signal: options.signal,
+      timeoutMs: EXECUTOR_WORKFLOW_TIMEOUT_MS,
+      budget: {
+        maxAgentCalls:
+          runnableTasks.length +
+          runnableTasks.filter((task) => !task.tdd).length,
+        maxResultBytes: 4 * 1024 * 1024,
+      },
+    });
+
+    if (!Array.isArray(workflow.value)) {
+      throw new Error("Executor workflow returned an invalid result envelope.");
     }
-  );
-  if (seenResultIds.size !== runnableTasks.length) {
-    throw new Error("Executor workflow returned an invalid result envelope.");
-  }
-  const resultsById = new Map(
-    [...rejectedResults.values(), ...runnableResults].map((result) => [
-      result.taskId,
-      result,
-    ])
-  );
-  const results = tasks.map((task) => resultsById.get(task.taskId));
+    const rawResults = workflow.value as Array<
+      ExecutorWorkflowResult & {
+        tddToolCalls?: TddToolCall[];
+        tddRawTrajectoryPath?: string;
+        tddRawTrajectoryError?: string;
+        tddTrajectoryErrors?: string[];
+      }
+    >;
+    const tasksById = new Map(
+      runnableTasks.map((task) => [task.taskId, task] as const)
+    );
+    const seenResultIds = new Set<string>();
+    const runnableResults = rawResults.map(
+      ({
+        tddToolCalls,
+        tddRawTrajectoryPath,
+        tddRawTrajectoryError,
+        tddTrajectoryErrors,
+        ...outcome
+      }) => {
+        try {
+          const task = tasksById.get(outcome.taskId);
+          if (!(task && !seenResultIds.has(outcome.taskId))) {
+            throw new Error(
+              "Executor workflow returned an invalid result envelope."
+            );
+          }
+          seenResultIds.add(outcome.taskId);
+          const toolCalls = Array.isArray(tddToolCalls) ? tddToolCalls : [];
+          const trajectoryErrors = Array.isArray(tddTrajectoryErrors)
+            ? tddTrajectoryErrors
+            : [];
+          if (tddRawTrajectoryError) {
+            trajectoryErrors.push(tddRawTrajectoryError);
+          }
+          const recoverableNeedsFollowup =
+            task.tdd &&
+            outcome.outcome === "completed" &&
+            outcome.result.status === "needs_followup" &&
+            !outcome.result.blockers.some((blocker) => blocker.trim()) &&
+            outcome.result.followUps.some((followUp) => followUp.trim());
+          let evidenceResult: ExecutorResult | undefined;
+          if (outcome.outcome === "completed") {
+            evidenceResult = recoverableNeedsFollowup
+              ? { ...outcome.result, status: "done" }
+              : outcome.result;
+          }
+          const evidenceAssessment =
+            task.tdd && evidenceResult
+              ? assessTddEvidence(
+                  evidenceResult,
+                  toolCalls,
+                  trajectoryErrors,
+                  task.prompt,
+                  task.tddShape?.redGreenCommand
+                )
+              : undefined;
+          const taskShapeWarnings =
+            task.tdd && task.tddShape && outcome.outcome === "completed"
+              ? compareMutationManifest(
+                  task.tddShape.mutations,
+                  toolCalls.flatMap((call) =>
+                    call.isError || call.mutationProven !== true
+                      ? []
+                      : (call.mutationDelta ?? []).map((delta) => delta.path)
+                  )
+                )
+              : [];
+          if (
+            evidenceAssessment?.kind === "failed" &&
+            outcome.outcome === "completed"
+          ) {
+            return {
+              taskId: outcome.taskId,
+              outcome: "failed" as const,
+              error: evidenceAssessment.message,
+              recovery: evidenceRecovery(evidenceAssessment.code),
+              ...retainTddDebugArtifact(
+                options.cwd,
+                task,
+                evidenceAssessment.message,
+                outcome.result,
+                toolCalls,
+                trajectoryErrors,
+                tddRawTrajectoryPath,
+                tddRawTrajectoryError
+              ),
+              invalidResult: {
+                filesTouched: outcome.result.filesTouched,
+                validation: outcome.result.validation,
+                blockers: outcome.result.blockers,
+              },
+            };
+          }
+          if (
+            task.tdd &&
+            outcome.outcome === "failed" &&
+            (tddRawTrajectoryPath ||
+              toolCalls.length > 0 ||
+              trajectoryErrors.length > 0)
+          ) {
+            const diagnosticResult: ExecutorResult = {
+              status: "blocked",
+              summary: "Native TDD structured output was not captured.",
+              filesTouched: [],
+              validation: [],
+              followUps: [],
+              blockers: [outcome.error],
+            };
+            return {
+              ...outcome,
+              recovery: evidenceRecovery("capture_integrity"),
+              ...retainTddDebugArtifact(
+                options.cwd,
+                task,
+                outcome.error,
+                diagnosticResult,
+                toolCalls,
+                trajectoryErrors,
+                tddRawTrajectoryPath,
+                tddRawTrajectoryError
+              ),
+              invalidResult: {
+                filesTouched: diagnosticResult.filesTouched,
+                validation: diagnosticResult.validation,
+                blockers: diagnosticResult.blockers,
+              },
+            };
+          }
+          if (
+            recoverableNeedsFollowup &&
+            evidenceAssessment?.kind !== "failed" &&
+            outcome.outcome === "completed"
+          ) {
+            const strategyWarning =
+              evidenceAssessment?.kind === "needs_verification"
+                ? ` ${evidenceAssessment.message}`
+                : "";
+            const taskShapeWarning = taskShapeWarnings[0]
+              ? ` ${taskShapeWarnings[0]}`
+              : "";
+            return {
+              taskId: outcome.taskId,
+              outcome: "needs_verification" as const,
+              result: outcome.result,
+              repaired: false as const,
+              warnings: [
+                `Recoverable executor status requires independent verification: needs_followup contained non-blocking followUps but no blocker.${strategyWarning}${taskShapeWarning}`.slice(
+                  0,
+                  TASK_SHAPE_WARNING_MAX_LENGTH
+                ),
+              ],
+            };
+          }
+          if (
+            evidenceAssessment?.kind === "needs_verification" &&
+            outcome.outcome === "completed"
+          ) {
+            return {
+              taskId: outcome.taskId,
+              outcome: "needs_verification" as const,
+              result: outcome.result,
+              repaired: false as const,
+              warnings: [
+                `TDD strategy deviation requires independent verification: ${evidenceAssessment.message}`.slice(
+                  0,
+                  TASK_SHAPE_WARNING_MAX_LENGTH
+                ),
+              ],
+            };
+          }
+          if (task.tdd && task.tddShape && outcome.outcome === "completed") {
+            return taskShapeWarnings.length > 0
+              ? { ...outcome, warnings: taskShapeWarnings }
+              : outcome;
+          }
+          return outcome;
+        } finally {
+          if (tddRawTrajectoryPath) {
+            unclaimedRawTrajectoryPaths.delete(tddRawTrajectoryPath);
+          }
+          removeRawTddCapture(tddRawTrajectoryPath);
+        }
+      }
+    );
+    if (seenResultIds.size !== runnableTasks.length) {
+      throw new Error("Executor workflow returned an invalid result envelope.");
+    }
+    const resultsById = new Map(
+      [...rejectedResults.values(), ...runnableResults].map((result) => [
+        result.taskId,
+        result,
+      ])
+    );
+    const results = tasks.map((task) => resultsById.get(task.taskId));
 
-  if (!Check(EXECUTOR_WORKFLOW_RESULT_SCHEMA, results)) {
-    throw new Error("Executor workflow returned an invalid result envelope.");
+    if (!Check(EXECUTOR_WORKFLOW_RESULT_SCHEMA, results)) {
+      throw new Error("Executor workflow returned an invalid result envelope.");
+    }
+    return results as ExecutorWorkflowResult[];
+  } finally {
+    rawTrajectoryCleanupStarted = true;
+    for (const path of unclaimedRawTrajectoryPaths) {
+      removeRawTddCapture(path);
+    }
+    unclaimedRawTrajectoryPaths.clear();
   }
-
-  return results as ExecutorWorkflowResult[];
 }
 
 interface AgentSessionLike {
@@ -1444,6 +1914,46 @@ export interface ExecutorAgentRunnerOptions {
   manager?: SubagentsManagerRegistry;
   agentTimeoutMs?: number;
   cleanupTimeoutMs?: number;
+}
+
+function preflightTddRunner(
+  command: string,
+  cwd: string,
+  signal?: AbortSignal
+): NonNullable<ReturnType<typeof resolveSupportedTestCommand>> {
+  if (signal?.aborted) {
+    throw new Error("TDD runner preflight aborted.");
+  }
+  const resolved = resolveSupportedTestCommand(command, cwd);
+  if (!(resolved?.resolvedPath && resolved.pathPrefix)) {
+    throw new Error(
+      "TDD runner preflight failed: no executable supported runner is installed in the trusted cwd or host PATH; use a direct local runner, not npx or bunx."
+    );
+  }
+  if (signal?.aborted) {
+    throw new Error("TDD runner preflight aborted.");
+  }
+  return resolved;
+}
+
+function createResolvedRunnerBashTool(
+  cwd: string,
+  pathPrefix: string
+): ToolDefinition {
+  return createBashToolDefinition(cwd, {
+    spawnHook: (context) => {
+      const pathEntries = (context.env.PATH ?? "")
+        .split(pathDelimiter)
+        .filter((entry) => entry.length > 0 && entry !== pathPrefix);
+      return {
+        ...context,
+        env: {
+          ...context.env,
+          PATH: [pathPrefix, ...pathEntries].join(pathDelimiter),
+        },
+      };
+    },
+  });
 }
 
 export function isExecutorCwdTrusted(
@@ -1530,6 +2040,14 @@ export function createExecutorAgentRunner(
       throw new Error("Executor structured output schema must be an object.");
     }
 
+    const preflightCommand = (
+      request as typeof request & { preflightCommand?: unknown }
+    ).preflightCommand;
+    const resolvedRunner =
+      typeof preflightCommand === "string"
+        ? preflightTddRunner(preflightCommand, executionCwd, runContext.signal)
+        : undefined;
+
     let structuredOutput: unknown;
     const captureTrajectory =
       (request as typeof request & { captureTrajectory?: unknown })
@@ -1539,6 +2057,27 @@ export function createExecutorAgentRunner(
     const recordTrajectoryError = (error: string) => {
       if (trajectoryErrors.length < MAX_TRAJECTORY_CAPTURE_ERRORS) {
         trajectoryErrors.push(error);
+      }
+    };
+    let rawTrajectory: RawTddTrajectoryCapture | undefined;
+    let rawTrajectoryError: string | undefined;
+    let rawTrajectoryTransferred = false;
+    let rawTrajectoryStopped = false;
+    if (captureTrajectory) {
+      try {
+        rawTrajectory = createRawTddTrajectoryCapture();
+      } catch (error) {
+        rawTrajectoryError = `raw TDD capture unavailable: ${error instanceof Error ? error.message : String(error)}`;
+        recordTrajectoryError(rawTrajectoryError);
+      }
+    }
+    const closeRawTrajectory = () => {
+      const closeError = rawTrajectory?.close();
+      if (closeError) {
+        rawTrajectoryError = rawTrajectoryError
+          ? `${rawTrajectoryError}; ${closeError}`
+          : closeError;
+        recordTrajectoryError(closeError);
       }
     };
     let trajectoryBytes = 0;
@@ -1682,22 +2221,24 @@ export function createExecutorAgentRunner(
             return;
           }
           const result = event.result as
-            | { content?: Array<{ type?: string; text?: string }> }
+            | {
+                content?: Array<{ type?: string; text?: string }>;
+                details?: {
+                  truncation?: { truncated?: unknown };
+                };
+              }
             | undefined;
-          const rawResultText = (result?.content ?? [])
-            .filter(
-              (part) => part.type === "text" && typeof part.text === "string"
-            )
-            .map((part) => part.text)
-            .join("\n");
-          const retainedResultText =
-            pending.name === "bash" ? rawResultText : "";
-          const resultTruncated =
-            Buffer.byteLength(retainedResultText) > MAX_TRAJECTORY_OUTPUT_BYTES;
-          const resultText = truncateUtf8HeadTail(
-            retainedResultText,
+          const rawResultContent =
+            pending.name === "bash" ? result?.content : undefined;
+          const boundedResult = boundedResultText(
+            rawResultContent,
             MAX_TRAJECTORY_OUTPUT_BYTES
           );
+          const upstreamResultTruncated =
+            result?.details?.truncation?.truncated === true;
+          const resultText = boundedResult.text;
+          const resultTruncated =
+            boundedResult.truncated || upstreamResultTruncated;
           const {
             preMutationProofs,
             preRunnerWorkspaceProof,
@@ -1799,10 +2340,28 @@ export function createExecutorAgentRunner(
               : {}),
             ...(resultText ? { resultText } : {}),
             ...(resultTruncated ? { resultTruncated: true } : {}),
+            ...(upstreamResultTruncated
+              ? { captureGap: "upstream_result_truncated" as const }
+              : {}),
           };
+          if (rawTrajectory && !rawTrajectoryStopped) {
+            const captureError = rawTrajectory.append(call, () =>
+              textResultParts(rawResultContent)
+            );
+            if (captureError) {
+              rawTrajectoryStopped = true;
+              rawTrajectoryError ??= captureError;
+              recordTrajectoryError(captureError);
+            }
+          }
           trajectoryBytes += Buffer.byteLength(JSON.stringify(call));
           if (trajectoryBytes > MAX_TRAJECTORY_BYTES) {
-            trajectoryOverflow = true;
+            if (!trajectoryOverflow) {
+              trajectoryOverflow = true;
+              recordTrajectoryError(
+                `TDD evidence trajectory exceeded its bounded ${MAX_TRAJECTORY_BYTES}-byte limit; evidence is rejected.`
+              );
+            }
           } else {
             toolCalls.push(call);
           }
@@ -1853,19 +2412,34 @@ export function createExecutorAgentRunner(
         ? [...PARENT_BRIDGE_TOOL_NAMES, ...BUILT_IN_TOOL_NAMES]
         : [...PARENT_BRIDGE_TOOL_NAMES];
     const deniedTools = deniedToolNames.map(createDeniedExecutorTool);
+    const runnerBashTool =
+      agentType === EXECUTOR_AGENT_TYPE && resolvedRunner
+        ? createResolvedRunnerBashTool(executionCwd, resolvedRunner.pathPrefix!)
+        : undefined;
 
-    const id = manager.spawn(pi, childContext, agentType, prompt, {
-      description:
-        typeof request.description === "string" && request.description.trim()
-          ? request.description
-          : "Execute structured task",
-      isBackground: true,
-      isolated: true,
-      allowAskParent: false,
-      signal,
-      customTools: [...deniedTools, structuredOutputTool],
-      onSessionCreated: observeSession,
-    });
+    let id: string;
+    try {
+      id = manager.spawn(pi, childContext, agentType, prompt, {
+        description:
+          typeof request.description === "string" && request.description.trim()
+            ? request.description
+            : "Execute structured task",
+        isBackground: true,
+        isolated: true,
+        allowAskParent: false,
+        signal,
+        customTools: [
+          ...deniedTools,
+          ...(runnerBashTool ? [runnerBashTool] : []),
+          structuredOutputTool,
+        ],
+        onSessionCreated: observeSession,
+      });
+    } catch (error) {
+      closeRawTrajectory();
+      removeRawTddCapture(rawTrajectory?.path);
+      throw error;
+    }
 
     const stopChild = () => stopSubagent(pi, id);
     signal.addEventListener("abort", stopChild, { once: true });
@@ -1875,7 +2449,8 @@ export function createExecutorAgentRunner(
       record = await waitForAgentRecord(manager, id, signal);
       if (
         structuredOutput === undefined &&
-        !SUCCESSFUL_AGENT_STATUSES.has(record.status)
+        !SUCCESSFUL_AGENT_STATUSES.has(record.status) &&
+        !captureTrajectory
       ) {
         throw new Error(
           `Executor agent failed with status ${record.status}${record.error ? `: ${record.error}` : ""}`
@@ -1888,19 +2463,16 @@ export function createExecutorAgentRunner(
           `pending starts at terminal status: ${pendingToolCalls.size}${pendingIds ? ` (${pendingIds})` : ""}`
         );
       }
-      if (trajectoryOverflow) {
-        throw new Error(
-          `TDD evidence trajectory exceeded bounded capture limits (${MAX_TRAJECTORY_OUTPUT_BYTES} bytes per output, ${MAX_TRAJECTORY_BYTES} bytes aggregate).`
-        );
-      }
+      closeRawTrajectory();
+      rawTrajectoryTransferred = captureTrajectory;
       return {
         id,
         type: record.type,
-        status: SUCCESSFUL_AGENT_STATUSES.has(record.status)
-          ? record.status
-          : "completed",
+        status: record.status,
         result: record.result,
-        structuredOutput,
+        structuredOutput: SUCCESSFUL_AGENT_STATUSES.has(record.status)
+          ? structuredOutput
+          : undefined,
         error: record.error,
         warnings: record.warnings,
         toolUses: record.toolUses ?? 0,
@@ -1909,16 +2481,48 @@ export function createExecutorAgentRunner(
               toolCalls: toolCalls.sort(
                 (left, right) => left.startOrder - right.startOrder
               ),
+              rawTrajectoryPath: rawTrajectory?.path,
+              rawTrajectoryError,
               trajectoryErrors,
             }
           : {}),
       } as WorkflowAgentResult;
     } catch (error) {
+      let failureMessage: string;
       if (timedOut) {
-        throw new Error(`Executor agent timed out after ${agentTimeoutMs}ms.`);
+        failureMessage = `Executor agent timed out after ${agentTimeoutMs}ms.`;
+      } else if (error instanceof Error) {
+        failureMessage = error.message;
+      } else {
+        failureMessage = String(error);
       }
-      throw error;
+      if (captureTrajectory && !runContext.signal?.aborted) {
+        closeRawTrajectory();
+        recordTrajectoryError(failureMessage);
+        rawTrajectoryTransferred = true;
+        return {
+          id,
+          type: record?.type ?? agentType ?? EXECUTOR_AGENT_TYPE,
+          status: record?.status ?? "error",
+          result: record?.result,
+          structuredOutput: undefined,
+          error: failureMessage,
+          warnings: record?.warnings,
+          toolUses: record?.toolUses ?? 0,
+          toolCalls: toolCalls.sort(
+            (left, right) => left.startOrder - right.startOrder
+          ),
+          rawTrajectoryPath: rawTrajectory?.path,
+          rawTrajectoryError,
+          trajectoryErrors,
+        } as WorkflowAgentResult;
+      }
+      throw new Error(failureMessage);
     } finally {
+      closeRawTrajectory();
+      if (!rawTrajectoryTransferred) {
+        removeRawTddCapture(rawTrajectory?.path);
+      }
       unsubscribeEvidence?.();
       clearTimeout(deadline);
       signal.removeEventListener("abort", stopChild);

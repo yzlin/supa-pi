@@ -1,3 +1,13 @@
+import { lstatSync, realpathSync } from "node:fs";
+import {
+  delimiter,
+  dirname,
+  isAbsolute,
+  join,
+  relative,
+  resolve,
+} from "node:path";
+
 export interface TddToolCall {
   name: string;
   args: Record<string, unknown>;
@@ -34,6 +44,8 @@ export interface TddToolCall {
   mutationProven?: boolean;
   /** Capture-owned proof that a shell call was denied before its command started. */
   executionDeniedBeforeStart?: boolean;
+  /** The upstream tool event already omitted part of the received result. */
+  captureGap?: "upstream_result_truncated";
 }
 
 export interface TrustedFixtureRegression {
@@ -317,6 +329,115 @@ function scanShell(command: string): {
 function commandTokens(command: string): string[] {
   const scanned = scanShell(command.trim());
   return scanned.activeControl ? [] : scanned.tokens;
+}
+
+export interface ResolvedSupportedTestCommand {
+  command: string;
+  args: string[];
+  resolvedPath?: string;
+  pathPrefix?: string;
+}
+
+function containedPath(root: string, target: string): boolean {
+  const child = relative(root, target);
+  return child.length > 0 && !child.startsWith("..") && !isAbsolute(child);
+}
+
+function executableCandidate(
+  candidate: string,
+  allowedRoot?: string
+): { path: string; pathPrefix: string } | undefined {
+  try {
+    const resolvedCandidate = realpathSync(candidate);
+    const stat = lstatSync(resolvedCandidate);
+    // biome-ignore lint/suspicious/noBitwiseOperators: executable mode is a POSIX bitmask.
+    if (!stat.isFile() || (stat.mode & 0o111) === 0) {
+      return;
+    }
+    if (allowedRoot) {
+      const resolvedRoot = realpathSync(allowedRoot);
+      if (!containedPath(resolvedRoot, resolvedCandidate)) {
+        return;
+      }
+    }
+    return {
+      path: resolvedCandidate,
+      pathPrefix: realpathSync(dirname(candidate)),
+    };
+  } catch {
+    return;
+  }
+}
+
+function resolveInstalledRunner(
+  executable: string,
+  cwd: string
+): { path: string; pathPrefix: string } | undefined {
+  let root: string;
+  try {
+    root = realpathSync(cwd);
+  } catch {
+    return;
+  }
+  if (executable === "./gradlew") {
+    return executableCandidate(join(root, "gradlew"), root);
+  }
+  if (executable.includes("/") || executable.includes("\\")) {
+    return;
+  }
+  try {
+    const nodeModules = realpathSync(join(root, "node_modules"));
+    if (containedPath(root, nodeModules)) {
+      const localBin = join(nodeModules, ".bin", executable);
+      const local = executableCandidate(localBin, nodeModules);
+      if (local) {
+        return local;
+      }
+    }
+  } catch {
+    // Fall through to the host PATH without executing or resolving a package.
+  }
+  for (const entry of (process.env.PATH ?? "").split(delimiter)) {
+    const directory = entry.length > 0 ? entry : ".";
+    const candidate = resolve(root, directory, executable);
+    const host = executableCandidate(candidate);
+    if (host) {
+      return host;
+    }
+  }
+  return;
+}
+
+/**
+ * Resolves a supported test command without running it. Package wrappers are
+ * intentionally parseable for evidence compatibility but are never expanded
+ * during managed-TDD dispatch. Supplying cwd additionally requires an
+ * executable local runner and returns the PATH prefix used by the worker.
+ */
+export function resolveSupportedTestCommand(
+  command: string,
+  cwd?: string
+): ResolvedSupportedTestCommand | undefined {
+  const tokens = commandTokens(command);
+  if (!isSupportedTestCommand(command)) {
+    return;
+  }
+  const executable = (tokens[0] ?? "").toLowerCase();
+  if (executable === "npx" || executable === "bunx") {
+    return;
+  }
+  const args = tokens.slice(1);
+  const resolved = cwd ? resolveInstalledRunner(tokens[0]!, cwd) : undefined;
+  if (cwd && !resolved) {
+    return;
+  }
+  return {
+    command: tokens[0]!,
+    args,
+    ...(resolved
+      ? { resolvedPath: resolved.path, pathPrefix: resolved.pathPrefix }
+      : {}),
+  };
 }
 
 function isOpaquePackageScript(command: string): boolean {
