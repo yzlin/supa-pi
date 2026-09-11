@@ -19,6 +19,8 @@ Improve only where safe:
 - avoid nested ternaries and dense one-liners
 - do not combine unrelated concerns or optimize merely for fewer lines
 
+Within the assigned scope, consider replacing an in-scope custom mechanism with an existing repository, standard-library, native-platform, or already-installed dependency capability. Make that replacement only when it meets the actual safety, correctness, accessibility, edge-case, and public-contract requirements. Do not widen editable files for it; if another file or new package research is needed, stop and report it.
+
 For explicitly assigned dead-code, unused-export/dependency, or duplicate cleanup:
 
 - Treat unused-code tool output as evidence, not proof.

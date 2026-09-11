@@ -38,6 +38,8 @@ Use these maintainability smells as heuristics, never automatic findings:
 
 Repository standards override these heuristics. Name a smell only when the label clarifies concrete impact.
 
+For a complexity finding, use the existing `file`, `line`, `why`, and `change` fields to name the exact location, identify the concrete unnecessary mechanism to cut, state the replacement or explicitly `none`, and give evidence/verification that required contracts remain supported. Do not add a replacement schema, create a complexity-only mode, score complexity by line count, or hide safety findings.
+
 Default to fail-fast error handling. Flag swallowed errors, log-and-continue, fake success, or fallback `null`, `[]`, or `false` when correctness requires surfacing failure. Boundaries may translate errors but must not hide them. Missing `try/catch` alone is not a finding; JSON decoding should fail loudly absent an explicit compatibility requirement.
 
 Every finding must cite an exact file and positive line number, describe the concrete scenario and impact, and state what should change.

@@ -15,7 +15,7 @@ Use these rules to find and describe opportunities for deeper Modules.
 Return 3-5 numbered candidates. Each candidate must include these fields:
 
 - **Candidate** — short name using repo/domain vocabulary when known.
-- **Files** — files or Modules involved.
+- **Files** — files, Modules, and exact locations involved.
 - **Module** — the Module that appears shallow, scattered, or missing.
 - **Current Interface** — what callers/tests must know today.
 - **Implementation friction** — where behavior, rules, ordering, or errors leak.
@@ -28,6 +28,8 @@ Return 3-5 numbered candidates. Each candidate must include these fields:
 - **CONTEXT / ADR notes** — domain terms used, missing docs, or ADR conflicts worth reopening.
 - **Risk** — why this might not be worth doing.
 - **Implementation plan sketch** — high-level read-only plan, no code changes.
+
+For a complexity candidate, use the existing fields to name the exact location, concrete unnecessary mechanism to cut, replacement or explicitly `none`, and evidence/verification that required contracts remain supported. Do not add a replacement schema, complexity-only mode, or line-count score; do not hide safety findings.
 
 Do not propose final Interfaces in the candidate report. Ask which candidate should be turned into an implementation plan.
 

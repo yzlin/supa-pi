@@ -17,6 +17,8 @@ This command prompt is composed with these required support docs:
 - Report missing `CONTEXT.md`, `CONTEXT-MAP.md`, or `docs/adr/` / ADR docs as missing context. Do not block on missing docs.
 - Use the architecture terms in this document exactly: **Module**, **Interface**, **Implementation**, **Depth**, **Seam**, **Adapter**, **Leverage**, **Locality**.
 - Avoid substitute terms such as component, service, API, or boundary when describing architecture.
+- For complexity findings, use the existing report fields to name the exact location, concrete unnecessary mechanism to cut, replacement or explicitly `none`, and evidence/verification that required contracts remain supported.
+- Keep the existing report/schema: no replacement schema, complexity-only mode, or line-count score; do not hide safety findings.
 - Produce analysis and plans only. Do not implement.
 
 ## WORKFLOW

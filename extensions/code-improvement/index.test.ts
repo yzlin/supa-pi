@@ -221,6 +221,26 @@ describe("code-improvement commands", () => {
     }
   });
 
+  it("makes architecture complexity candidates concrete without changing the report shape", () => {
+    const message =
+      buildImproveCodebaseArchitectureCommandMessage("src/domain");
+
+    for (const requirement of [
+      "name the exact location",
+      "concrete unnecessary mechanism to cut",
+      "replacement or explicitly `none`",
+      "evidence/verification that required contracts remain supported",
+      "Do not add a replacement schema, complexity-only mode, or line-count score",
+      "do not hide safety findings",
+    ]) {
+      expect(message).toContain(requirement);
+    }
+    expect(message).toContain("existing report fields");
+    expect(message).toContain(
+      "**Files** — files, Modules, and exact locations involved."
+    );
+  });
+
   it("keeps bare no-UI /simplify legacy recent-session fallback", async () => {
     const runtime = createMockPiRuntime();
     const { ctx, notifications } = createMockCtx();

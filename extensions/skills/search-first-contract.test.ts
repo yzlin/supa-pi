@@ -47,4 +47,47 @@ describe("search-first skill contract", () => {
       "Before creating a new utility, helper, or abstraction"
     );
   });
+
+  it("checks cheap capabilities in order before external research", () => {
+    const skill = readSkill("search-first");
+    const checks = [
+      "1. **Repository** —",
+      "2. **Stdlib** —",
+      "3. **Native platform** —",
+      "4. **Already-installed dependency** —",
+    ];
+    const positions = checks.map((check) => skill.indexOf(check));
+
+    expect(positions.every((position) => position >= 0)).toBe(true);
+    expect(positions).toEqual(
+      [...positions].sort((left, right) => left - right)
+    );
+    expect(skill).toContain(
+      "If a suitable existing capability meets those requirements, stop and use or reuse it"
+    );
+    expect(skill).toContain("Before external package/web research");
+  });
+
+  it("keeps requirement safeguards and justified research in every route", () => {
+    const skill = readSkill("search-first");
+
+    for (const requirement of [
+      "safety",
+      "correctness",
+      "accessibility",
+      "edge cases",
+    ]) {
+      expect(skill).toContain(requirement);
+    }
+    expect(skill).toContain(
+      "A justified package or research remains appropriate when these checks do not meet the requirements"
+    );
+    expect(skill).toContain(
+      "For non-trivial functionality, run the cheap capability check and relevant local skill/MCP checks first."
+    );
+    expect(skill).toContain("Local checks already completed: [FINDINGS]");
+    expect(skill).toContain(
+      "do not choose a shorter implementation without checking fit"
+    );
+  });
 });
