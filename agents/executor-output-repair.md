@@ -5,8 +5,8 @@ tools: none
 extensions: false
 skills: false
 disallowed_tools: message_parent, ask_parent
-model: openai-codex/gpt-6-astra
-thinking: low
+model: openai-codex/gpt-5.6-luna
+thinking: max
 caveman: true
 ---
 

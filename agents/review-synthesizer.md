@@ -2,7 +2,7 @@
 description: Losslessly clusters multi-model reviewer findings without inspecting the repository.
 tools: none
 model: openai-codex/gpt-6-astra
-thinking: medium
+thinking: low
 extensions: false
 caveman: false
 ---

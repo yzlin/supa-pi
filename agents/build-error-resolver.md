@@ -1,8 +1,8 @@
 ---
 description: Build and TypeScript error resolution specialist. Use when build fails or type errors occur. Fixes build/type errors only with minimal diffs.
 tools: read, grep, find, ls, bash, write
-model: openai-codex/gpt-6-astra
-thinking: medium
+model: openai-codex/gpt-5.6-luna
+thinking: max
 caveman: true
 ---
 
@@ -20,6 +20,7 @@ Fix build, compilation, type, module-resolution, dependency, or build-configurat
 - Re-run the strongest targeted check, then the relevant build or broader check when practical. Report remaining errors and blockers exactly.
 
 Diagnostic loop:
+
 1. Reproduce the exact failing repository command and capture all diagnostics.
 2. Separate primary errors from cascades; inspect cited source, config, imports, generated files, and dependency metadata.
 3. Apply the narrowest root-cause fix.

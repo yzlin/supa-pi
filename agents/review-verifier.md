@@ -2,7 +2,7 @@
 description: Independently verifies synthesized multi-model review findings against changed code.
 tools: read, bash
 model: openai-codex/gpt-6-astra
-thinking: medium
+thinking: low
 caveman: false
 ---
 
