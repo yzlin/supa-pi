@@ -502,9 +502,18 @@
     {
       "id": "build-fix",
       "workload": "focused bug fix",
-      "promptPath": "agents/build-error-resolver.md",
+      "promptPath": "skills/tdd-workflow/SKILL.md",
       "task": "Fix the failing fixture test with the smallest change. Run bun test tests/math.case.ts and report verification.",
-      "tools": ["read", "grep", "find", "ls", "edit", "write", "bash"],
+      "tools": [
+        "read",
+        "grep",
+        "find",
+        "ls",
+        "edit",
+        "write",
+        "bash",
+        "structured_output"
+      ],
       "checks": [
         {
           "type": "fileContains",
@@ -633,7 +642,7 @@
     {
       "id": "docs-update",
       "workload": "multi-file implementation",
-      "promptPath": "agents/doc-updater.md",
+      "promptPath": "skills/context-docs/SKILL.md",
       "task": "Update README.md with a short source map naming src/math.ts, src/auth.ts, and their responsibilities. Do not change code.",
       "tools": ["read", "grep", "find", "ls", "edit", "write"],
       "checks": [
@@ -656,7 +665,7 @@
     {
       "id": "e2e-verification",
       "workload": "focused bug fix",
-      "promptPath": "agents/e2e-runner.md",
+      "promptPath": "skills/e2e-testing/SKILL.md",
       "task": "Run bun test tests/math.case.ts, diagnose the failure, and report exact evidence. Do not edit files.",
       "tools": ["read", "grep", "find", "ls", "bash"],
       "checks": [
@@ -766,7 +775,7 @@
     {
       "id": "remove-dead-code",
       "workload": "focused bug fix",
-      "promptPath": "agents/refactor-cleaner.md",
+      "promptPath": "agents/code-simplifier.md",
       "task": "Remove the unused legacy formatter from src/format.ts without changing formatName. Report the scoped change.",
       "tools": ["read", "grep", "find", "ls", "edit", "write"],
       "checks": [

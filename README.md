@@ -59,12 +59,8 @@ See `package.json` for the full registration list.
 - `code-reviewer`
 - `code-simplifier`
 - `security-reviewer`
-- `build-error-resolver`
 - `database-reviewer`
 - `performance-reviewer`
-- `doc-updater`
-- `e2e-runner`
-- `refactor-cleaner`
 - `executor`
 
 ## Included skills
@@ -73,9 +69,11 @@ See `package.json` for the full registration list.
 
 `skills/showing-me/SKILL.md` adapts the visual-explanation approach from HumanLayer's MIT-licensed [`show-me` skill](https://github.com/humanlayer/skills/blob/3c2629142c5d437428269b1b722b08c0b87f574d/plugins/show-me/skills/show-me/SKILL.md) at commit `3c2629142c5d437428269b1b722b08c0b87f574d`.
 
-Behavior changes and bug fixes use the canonical `skills/tdd-workflow/SKILL.md`. During `/execute`, the generic executor receives it only through trusted `tdd: true` skill injection; there is no separate TDD agent.
+`skills/e2e-testing/SKILL.md` is the canonical main-session Playwright E2E workflow, including test guardrails, artifact handling, and reporting; no dedicated E2E agent is shipped.
 
-Local durable-doc behavior is canonical in `skills/context-docs/SKILL.md`. It alone owns durable-context routing, formats, commands, and persistence while preserving broad product/domain `CONTEXT.md` content, real `CONTEXT-MAP.md` boundaries, and full ADR semantics. The reusable `domain-modeling` skill is the canonical semantic primitive for terminology, scenarios, contradictions, boundaries, and ADR candidacy; context-docs consumes its completed packets without delegating them back. The shared `grilling` skill owns adversarial interviews, including natural-language triggers, and invokes domain-modeling only for explicit domain signals. `grill-me` is the thin wrapper used only by the explicit `/grill-me <plan>` command. It performs a docs-first preflight, drafts only `CONTEXT.md`, `CONTEXT-MAP.md`, or qualifying ADR changes, and writes them only after the user locks the plan. Domain-modeling adds no command or production runtime registration.
+Behavior changes and bug fixes use the canonical `skills/tdd-workflow/SKILL.md`, which also owns exact-command build reproduction, cascade/root-cause isolation, no-suppression, generated-source, and diagnostics-verification safeguards. During `/execute`, the generic executor receives it only through trusted `tdd: true` skill injection; there is no separate TDD agent.
+
+Documentation and codemap work uses the existing `skills/context-docs/SKILL.md` guidance for source truth, verified links and commands, scope, and freshness. Local durable-doc behavior is canonical there: it owns durable-context routing, formats, commands, and persistence while preserving broad product/domain `CONTEXT.md` content, real `CONTEXT-MAP.md` boundaries, and full ADR semantics. The reusable `domain-modeling` skill is the canonical semantic primitive for terminology, scenarios, contradictions, boundaries, and ADR candidacy; context-docs consumes its completed packets without delegating them back. The shared `grilling` skill owns adversarial interviews, including natural-language triggers, and invokes domain-modeling only for explicit domain signals. `grill-me` is the thin wrapper used only by the explicit `/grill-me <plan>` command. It performs a docs-first preflight, drafts only `CONTEXT.md`, `CONTEXT-MAP.md`, or qualifying ADR changes, and writes them only after the user locks the plan. Domain-modeling adds no command or production runtime registration.
 
 Run `/skill` or `/skill list` in a custom UI session to open the Skills Manager. It shows managed and bundled/read-only skills, supports filtering, and includes a preview pane. Select a managed skill and press `d` directly (outside filter input) to remove it through the existing confirmation and trash flow (including dirty-file warnings); no Enter/action menu is needed. The panel returns with fresh inventory after removal or cancellation, preserving the filter. Bundled/read-only skills cannot be removed; panel install/update actions remain unavailable. In degraded or non-custom UI sessions, the same commands fall back to the simple text list. `/skill` commands show a Pi-like animated foreground activity widget while they load, search, install, update, or remove skills, then clear it before any follow-up prompt or notification. Existing `/skill search`, `/skill install`, `/skill update`, and `/skill remove` commands keep their previous prompt-based behavior. GitHub skill installs attempt authenticated skills.sh snapshots before falling back to immutable GitHub files. `/skill update` batches GitHub checks by repo with cached tree metadata, skips skills.sh snapshots, and materializes changed files from immutable GitHub content. When GitHub tree checks are rate-limited, cached trees locate known skills while current skill files still determine update status.
 

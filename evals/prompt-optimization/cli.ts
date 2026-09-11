@@ -396,6 +396,8 @@ export async function changedPromptPaths(
     "extensions/core-prompt/prompt.md",
     "skills/diagnose/SKILL.md",
     "skills/showing-me/SKILL.md",
+    "skills/e2e-testing/SKILL.md",
+    "skills/context-docs/SKILL.md",
     "skills/tdd-workflow/SKILL.md",
   ];
   const pathspecs = ["agents", ...supportedFiles];

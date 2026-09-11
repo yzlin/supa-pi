@@ -10,19 +10,19 @@ This note records sampled compatibility evidence, historical evaluations, and th
 
 ## Current agent defaults (user-approved)
 
-All 17 definitions under `agents/` now default to `openai-codex/gpt-6-astra`. The user explicitly requested `low` for executor and `medium` for reviewer-related agents; other thinking levels remain unchanged.
+All 13 retained definitions under `agents/` now default to `openai-codex/gpt-6-astra`. The user explicitly requested `low` for executor and `medium` for reviewer-related agents; other thinking levels remain unchanged.
 
 | Thinking | Agents |
 | --- | --- |
-| `high` | architect, code-simplifier, planner, researcher |
-| `medium` | build-error-resolver, code-reviewer, database-reviewer, performance-reviewer, refactor-cleaner, review-synthesizer, review-verifier, security-reviewer |
-| `low` | doc-updater, e2e-runner, executor, executor-output-repair, explorer |
+| `high` | architect, planner, researcher |
+| `medium` | code-reviewer, database-reviewer, performance-reviewer, review-synthesizer, review-verifier, security-reviewer |
+| `low` | code-simplifier, executor, executor-output-repair, explorer |
 
 `/review` has its own defaults that otherwise override agent frontmatter. Its built-in reviewer panel, synthesizer, and verifier now use Astra/medium, including downstream structured repairs and model/effort disclosure. Explicit command and saved configuration overrides retain precedence. With separate approval, the existing global `~/.pi/agent/review.json` reviewer panel was also changed from Sol/high to Astra/medium. See [review configuration](../../extensions/review/README.md#configuration-and-disclosure).
 
-This is a user-selected operating configuration, not a benchmark-backed superiority claim. Agent bodies, tools, isolation, and other metadata are unchanged. The main-session and first-run setup defaults remain Sol/high; no active session was reloaded and no comparison was launched. New agent and extension loads use the updated defaults; the saved reviewer panel is reread on the next `/review` invocation. An already-loaded review extension retains its old downstream policy until reloaded. Explicit invocation overrides still apply. Historical results below are not rescored, and further paid calibration remains paused pending separate approval.
+This is a user-selected operating configuration, not a benchmark-backed superiority claim. Agent bodies, tools, isolation, and other metadata for retained agents are unchanged. Main-session E2E work now loads `skills/e2e-testing/SKILL.md`; no dedicated E2E agent is part of current routing. Dead-code cleanup and duplicate/dependency consolidation now use `agents/code-simplifier.md`; no dedicated refactor-cleaner agent is part of current routing. Build and type fixes use the retained TDD/rules guidance, and documentation/codemap work uses `skills/context-docs/SKILL.md`; no dedicated build-error-resolver or doc-updater agent is part of current routing. The main-session and first-run setup defaults remain Sol/high; no active session was reloaded and no comparison was launched. New agent and extension loads use the updated defaults; the saved reviewer panel is reread on the next `/review` invocation. An already-loaded review extension retains its old downstream policy until reloaded. Explicit invocation overrides still apply. Historical results below are not rescored, and further paid calibration remains paused pending separate approval.
 
-Offline verification checked all 17 model/thinking pairs and an unchanged checksum of every other agent field and body. The review workflow regressions passed 122 tests with 571 assertions, covering default dispatch, downstream repair effort, disclosures, and explicit overrides. The effective saved-plus-built-in review configuration resolved to Astra with a medium-thinking panel. Changed TypeScript files had no LSP errors; the review test file retained 15 await-related hints. `bun run check` passed with the existing one warning and 17 informational findings. These checks validate configuration and routing, not comparative model quality.
+The prior offline verification checked all 17 model/thinking pairs before the later E2E-agent, refactor-cleaner, build-error-resolver, and doc-updater consolidations; that historical result remains unchanged. The review workflow regressions passed 122 tests with 571 assertions, covering default dispatch, downstream repair effort, disclosures, and explicit overrides. The effective saved-plus-built-in review configuration resolved to Astra with a medium-thinking panel. Changed TypeScript files had no LSP errors; the review test file retained 15 await-related hints. `bun run check` passed with the existing one warning and 17 informational findings. These checks validate configuration and routing, not comparative model quality.
 
 ## Known compatibility evidence
 

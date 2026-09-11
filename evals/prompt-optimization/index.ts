@@ -632,6 +632,8 @@ export function parseCorpus(value: unknown): EvalCorpus {
       caseValue.promptPath !== "extensions/core-prompt/prompt.md" &&
       caseValue.promptPath !== "skills/diagnose/SKILL.md" &&
       caseValue.promptPath !== "skills/showing-me/SKILL.md" &&
+      caseValue.promptPath !== "skills/e2e-testing/SKILL.md" &&
+      caseValue.promptPath !== "skills/context-docs/SKILL.md" &&
       caseValue.promptPath !== "skills/tdd-workflow/SKILL.md" &&
       !caseValue.promptPath.startsWith("agents/")
     ) {

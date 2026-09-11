@@ -110,6 +110,26 @@ This table preserves the initial audit disposition. Names resolve under `agents/
 | Rules: remaining `common` files; `typescript`, `python`, `swift`, `sql`, `misc` packs | KEEP structure | Work/language-specific guidance remains selectively loaded. No wholesale pruning justified. |
 | `AGENTS.global.md`; core prompt; rules-routing prompt | TRIM exact repetition first within its owner | Global preferences, main orchestration, and rule selection stay distinct. Do not remove worker safeguards by assuming global inheritance. |
 
+### Superseding approved E2E consolidation
+
+The historical inventory above records the initial audit's `KEEP` decision for `e2e-runner`; that decision applied to the earlier bounded pass and remains historical. A later user-approved consolidation supersedes it: `agents/e2e-runner.md` was removed using the repository trash guardrail, and its stronger E2E guardrails and reporting contract were consolidated into `skills/e2e-testing/SKILL.md`.
+
+Main-session E2E work now loads the E2E skill. Active README, TypeScript testing-rule, eval corpus, and eval-runner references point to the skill; the generic executor's skill settings and injection path were not broadened. Historical eval artifacts and benchmark records remain unchanged, and references to the former agent route remain historical.
+
+### Superseding approved refactor-cleaner consolidation
+
+The historical inventory above records the initial audit's `KEEP` decision for `refactor-cleaner`; that decision applied to the earlier bounded pass and remains historical. A later user-approved consolidation supersedes it: `agents/refactor-cleaner.md` was removed using the repository trash guardrail, and its unique dead-code, duplicate, dependency, non-use, uncertainty, and validation safeguards were merged into `agents/code-simplifier.md`.
+
+The code-simplifier keeps its existing frontmatter, model/thinking and other metadata, recently-modified default, and explicit-broader-scope gate. The `remove-dead-code` eval now points to `code-simplifier`. Active in-repository static, dynamic-name, config/registration, generated-path, and public-consumer/eval searches found no remaining use of the retired agent; historical context is intentional. No package dependency changed, so manifests and `bun.lock` remain unchanged. Historical benchmark/eval artifacts and records, including the former `refactor-cleaner` route evidence, remain unchanged; no paid eval was run.
+
+### Superseding approved build-error-resolver and doc-updater retirement
+
+The historical inventory above records the initial audit's `KEEP` decisions for `build-error-resolver` and `doc-updater`; those decisions applied to the earlier bounded pass and remain historical. A later user-approved retirement supersedes them: both agent files were removed using the repository trash guardrail.
+
+Build and debug safeguards now live in the existing `skills/tdd-workflow/SKILL.md` build/diagnostic section, with TypeScript discoverability in `rules/typescript/testing.md`: exact-command reproduction, cascade/root-cause separation, minimal fixes, no type suppression, generated-source fixes, and post-fix diagnostics verification remain required. Documentation and codemap safeguards now live in the existing `skills/context-docs/SKILL.md`, with common workflow routing in `rules/common/development-workflow.md`: source truth, verified links/commands, bounded scope, and freshness only after verification remain required. The generic `executor` and `code-simplifier` roles were not widened.
+
+Active README, rule, skill, eval corpus, and eval-runner references now point to the retained owners. The `build-fix` eval uses `skills/tdd-workflow/SKILL.md`; `docs-update` uses `skills/context-docs/SKILL.md`, and supported prompt-path lists include the context-docs skill. Historical benchmark/eval artifacts and records for the retired routes remain unchanged; no paid eval was run.
+
 The initial plan proposed no entire agent or skill package for removal. **REMOVE** applied to proven misplaced or repeated sections, not a deletion quota.
 
 ### Completed implementation slices
@@ -126,7 +146,7 @@ All six audited cleanup rows were approved and completed as seven independently 
 | 6a | Moved the Solana, SSRF, and AI/LLM recipes into selectively routed references under `skills/security-review/references/`; ordinary validation does not load all three. | `extensions/skills/security-references-contract.test.ts` — `security selective reference contract`: checks per-risk routing and resolvability, selective non-use, retained safety guidance, no entrypoint duplication, and byte-for-byte equality of each moved section to its captured pre-change source. |
 | 6b | Moved Playwright setup/configuration and CI recipes into distinct references under `skills/e2e-testing/references/`; ordinary flow-test work loads neither automatically. | `extensions/skills/e2e-references-contract.test.ts` — `E2E selective reference contract`: checks selective routing and resolvability, retained workflow guidance, no entrypoint duplication, and byte-for-byte equality of both moved blocks to their captured pre-change source. |
 
-The earlier researcher ownership and search-first dispatch repairs remain in place and covered by `extensions/research/output-contract.test.ts` and `extensions/skills/search-first-contract.test.ts`. No entire agent or skill package was removed. Ordinary role differentiation was not expanded into new routing prose.
+The earlier researcher ownership and search-first dispatch repairs remain in place and covered by `extensions/research/output-contract.test.ts` and `extensions/skills/search-first-contract.test.ts`. No entire agent or skill package was removed in that phase. Ordinary role differentiation was not expanded into new routing prose.
 
 ### Deferred decisions and rejected audit suggestions
 

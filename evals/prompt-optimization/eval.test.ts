@@ -95,6 +95,8 @@ describe("parseCorpus", () => {
   it.each([
     "diagnose",
     "showing-me",
+    "e2e-testing",
+    "context-docs",
     "tdd-workflow",
   ])("accepts the %s skill prompt", (skillName) => {
     const promptPath = `skills/${skillName}/SKILL.md`;
@@ -326,18 +328,14 @@ describe("committed corpus", () => {
     const expectedPaths = [
       "extensions/core-prompt/prompt.md",
       "architect",
-      "build-error-resolver",
       "code-reviewer",
       "code-simplifier",
       "database-reviewer",
-      "doc-updater",
-      "e2e-runner",
       "executor",
       "executor-output-repair",
       "explorer",
       "performance-reviewer",
       "planner",
-      "refactor-cleaner",
       "researcher",
       "review-verifier",
       "security-reviewer",
@@ -345,6 +343,8 @@ describe("committed corpus", () => {
     expectedPaths.push(
       "skills/diagnose/SKILL.md",
       "skills/showing-me/SKILL.md",
+      "skills/e2e-testing/SKILL.md",
+      "skills/context-docs/SKILL.md",
       "skills/tdd-workflow/SKILL.md"
     );
     expect(coveredPaths.has("agents/tdd-guide.md")).toBe(false);
@@ -2383,7 +2383,9 @@ describe("changedPromptPaths", () => {
       "agents/explorer.md",
       "extensions/core-prompt/prompt.md",
       "skills/diagnose/SKILL.md",
+      "skills/e2e-testing/SKILL.md",
       "skills/showing-me/SKILL.md",
+      "skills/context-docs/SKILL.md",
       "skills/tdd-workflow/SKILL.md",
       "skills/other/SKILL.md",
     ];
@@ -2400,7 +2402,9 @@ describe("changedPromptPaths", () => {
     expect(await changedPromptPaths(repository)).toEqual([
       "agents/explorer.md",
       "extensions/core-prompt/prompt.md",
+      "skills/context-docs/SKILL.md",
       "skills/diagnose/SKILL.md",
+      "skills/e2e-testing/SKILL.md",
       "skills/showing-me/SKILL.md",
       "skills/tdd-workflow/SKILL.md",
     ]);

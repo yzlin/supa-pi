@@ -10,7 +10,7 @@ Read when changing `/simplify`, `/improve-codebase-architecture`, or code-improv
 
 ## `/simplify` behavior
 
-`/simplify` still delegates implementation work to the `code-simplifier` subagent. The main session may do only minimal preflight before delegation, such as resolving a scope, checking consent, or re-checking that a queued scoped simplify still resolves to the same file allowlist. Delegation should not set `max_turns`; simplification often needs enough turns to inspect, edit, validate, and report.
+`/simplify` still delegates implementation work to the `code-simplifier` subagent. The main session may do only minimal preflight before delegation, such as resolving a scope, checking consent, or re-checking that a queued scoped simplify still resolves to the same file allowlist. Delegation should not set `max_turns`; simplification often needs enough turns to inspect, edit, validate, and report. The code-simplifier also owns the former dead-code, duplicate-consolidation, and dependency-cleanup safeguards; its default remains recently modified code, and broader cleanup requires explicit assignment.
 
 Scoped grammar is strict:
 

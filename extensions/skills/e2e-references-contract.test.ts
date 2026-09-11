@@ -138,6 +138,16 @@ describe("E2E selective reference contract", () => {
     const skill = read(skillPath);
 
     for (const retained of [
+      "Create, maintain, and run reliable Playwright tests for critical user journeys.",
+      "Use this skill for main-session E2E work.",
+      "Inspect existing E2E configuration, fixtures, helpers, selectors, scripts, and CI conventions before editing.",
+      "use resilient accessible locators or established test IDs and Playwright auto-waiting",
+      "Reproduce flakiness before changing a test.",
+      "Run the narrowest relevant test first",
+      "rely on configured failure capture rather than unconditional screenshots",
+      "distinguish product failures, test defects, and environment/setup failures in the report",
+      "When adding coverage, choose a critical end-to-end outcome",
+      "Report flows tested, commands run, pass/fail/skip/flaky counts, failures with file and line, artifact locations, changes made, and remaining environmental blockers.",
       "## Test File Organization",
       "## Page Object Model (POM)",
       "await page.waitForLoadState('networkidle')",

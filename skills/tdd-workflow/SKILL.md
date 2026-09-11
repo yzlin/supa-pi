@@ -8,6 +8,17 @@ origin: ECC
 
 Use this workflow for every behavior change and bug fix. It applies whether work is performed directly or delegated. Documentation-only, configuration-only, generated, and purely mechanical changes are outside this workflow unless they change behavior.
 
+## Build and diagnostic safeguards
+
+For a build, compilation, type, module-resolution, dependency, or build-configuration failure:
+
+- Reproduce the exact failing repository command before editing and capture the complete diagnostics.
+- Separate primary root-cause diagnostics from cascades; inspect the cited source, configuration, imports, dependencies, and generated inputs before changing code.
+- Apply the smallest behavior-preserving root-cause fix. Do not redesign, optimize, rename, or refactor unrelated code.
+- Prefer correct types, imports, guards, and configuration over assertions or suppression. Never use `any`, `@ts-ignore`, disabled checks, or broad casts to hide a diagnostic.
+- When generated source is involved, fix its source or generator rather than hand-editing generated output unless repository guidance explicitly says otherwise.
+- Rerun the exact failing command unchanged after editing, then run the relevant build/check and changed-file diagnostics or LSP verification when available. Confirm that no new diagnostics appeared.
+
 ## Method
 
 1. **Define the behavior.** Identify the observable outcome, relevant failure paths, and the narrowest test level that can prove them.
