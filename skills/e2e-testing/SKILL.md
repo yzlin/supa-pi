@@ -12,6 +12,8 @@ Create, maintain, and run reliable Playwright tests for critical user journeys.
 
 Use this skill for main-session E2E work. It owns the Playwright workflow, test guardrails, artifact and CI handling, and reporting; no separate E2E agent is required.
 
+For direct agent-driven browser interaction in interactive web E2E work, load and follow the canonical [web-browser skill](../web-browser/SKILL.md) for browser mechanics and authorization. Preserve authoring and execution of the existing project E2E runner (Playwright or another repository runner).
+
 ## Main-session E2E Workflow and Guardrails
 
 Inspect existing E2E configuration, fixtures, helpers, selectors, scripts, and CI conventions before editing. Use the target repository's scripts and detected package manager. Prioritize high-risk auth, payment, destructive, and core product flows, covering meaningful happy, boundary, and error paths.
