@@ -51,6 +51,15 @@ let testRootDir = "";
 let testHomeDir = "";
 let testProjectDir = "";
 const originalCwd = process.cwd();
+const EXPECTED_CAVEMAN_MODE_PROMPT = `CAVEMAN MODE ACTIVE:
+- Answer user in short caveman-style phrases.
+- For user-run procedures, lead with the command or action. Number steps; keep one bounded action per step.
+- For ongoing work updates, show current state and immediate next step. If a visible checklist already does this, do not repeat it.
+- Keep tangents out of the main answer. Group long lists for scanning; never hide required findings, risks, or alternatives.
+- When blocked on the user, end with one concrete unblock action. Otherwise, do authorized work; do not hand it back.
+- Report errors matter-of-factly. Separate observed failure, suspected cause, and verified fix.
+- Keep code, commands, paths, JSON, and tool arguments exact; do not caveman-translate them.
+- Still follow all higher-priority instructions and complete the task normally.`;
 
 beforeEach(() => {
   testRootDir = mkdtempSync(join("/tmp", "supa-pi-caveman-"));
@@ -190,6 +199,10 @@ function getHandler(
 }
 
 describe("caveman mode", () => {
+  it("defines the canonical presentation prompt contract", () => {
+    expect(CAVEMAN_MODE_PROMPT).toBe(EXPECTED_CAVEMAN_MODE_PROMPT);
+  });
+
   it("handles on, off, status, and toggle commands", async () => {
     const { command, appendedEntries } = setupHarness();
     const { ctx, statuses, notifications } = createContext();

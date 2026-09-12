@@ -2,10 +2,16 @@
 
 Standalone Pi extension for `/caveman` mode.
 
+## Presentation scope
+
+Caveman mode changes response presentation, not task authority or execution semantics. It keeps the terse caveman voice while preserving exact technical text and all higher-priority instructions. The canonical prompt also favors action-first user procedures, bounded numbered steps, useful current-state and next-step updates, scannable complete findings, concrete unblock requests, and factual separation of failures, suspected causes, and verified fixes.
+
+These are prompt-level presentation instructions. Automated tests verify the canonical text and its transport through the agent-start hook and RPC; they do not evaluate model adherence.
+
 ## Attribution
 
-Inspired by Matt Pocock's caveman skill:
-- https://github.com/mattpocock/skills/blob/main/caveman/SKILL.md
+- The caveman voice was inspired by Matt Pocock's [caveman skill](https://github.com/mattpocock/skills/blob/main/caveman/SKILL.md), available under the MIT License.
+- The presentation refinements paraphrase selected action, progress, focus, and error-reporting ideas from Ayoub Ghriss's [i-have-adhd skill](https://github.com/ayghri/i-have-adhd/blob/main/skills/i-have-adhd/SKILL.md), available under the MIT License. They do not import its medical framing, mandatory estimates, hard list caps, or every-turn narration, and do not alter Caveman commands, state, or RPC.
 
 ## Public contract
 
