@@ -1,5 +1,5 @@
 ---
-summary: "Offline harness audit: completed instruction cleanup and three implemented Astra reassessment priorities; TDD policy remains deferred."
+summary: "Offline harness audit: completed instruction cleanup and approved Astra reassessment alignment; live calibration remains deferred."
 read_when:
   - "Reviewing research-agent artifact ownership or updating search-first delegation instructions."
   - "Removing, trimming, consolidating, or relocating prompts, agents, skills, and injected rules for Astra readiness."
@@ -7,7 +7,7 @@ read_when:
 
 # Harness contract audit
 
-Earlier phases: the initial two findings and the later approved systematic subtraction phase are complete. The subtraction phase covered all six audited cleanup rows as seven offline implementation slices. It changed instruction ownership and added contract tests only; it did not change runtime implementation code, schemas, configured models, defaults, or the whole-agent architecture. No live probe was authorized. The source-guided reassessment below led to separately approved implementation of priorities 1–3; priority 4 remains deferred.
+Earlier phases: the initial two findings and the later approved systematic subtraction phase are complete. The subtraction phase covered all six audited cleanup rows as seven offline implementation slices. It changed instruction ownership and added contract tests only; it did not change runtime implementation code, schemas, configured models, defaults, or the whole-agent architecture. No live probe was authorized. The source-guided reassessment below led to separately approved implementation of priorities 1–4. The current approved A–H instruction alignment is recorded below; live calibration remains separately deferred.
 
 ## Scope and limits
 
@@ -21,7 +21,7 @@ No fresh model session, network probe, startup-token measurement, artifact-colli
 
 ## Operating relationship
 
-The requested audit workflow separated read-only investigation from implementation, preserved human approval for consequential ambiguity and model rollout, and expected independently checked evidence. The initial audit only recommended changes and did not apply them. Subsequent, separate approvals authorized the offline finding 1 and finding 2 changes recorded below, then all six subtraction rows as seven implementation slices. The Markdown report remains the durable review surface.
+The requested audit workflow separated read-only investigation from implementation, preserved human approval for consequential ambiguity and model rollout, and expected independently checked evidence. The initial audit only recommended changes and did not apply them. Subsequent, separate approvals authorized the offline finding 1 and finding 2 changes recorded below, then all six subtraction rows as seven implementation slices, the reassessment priorities, and the final A–H instruction alignment. The Markdown report remains the durable review surface.
 
 ## Existing capabilities to keep
 
@@ -126,9 +126,11 @@ The code-simplifier keeps its existing frontmatter, model/thinking and other met
 
 The historical inventory above records the initial audit's `KEEP` decisions for `build-error-resolver` and `doc-updater`; those decisions applied to the earlier bounded pass and remain historical. A later user-approved retirement supersedes them: both agent files were removed using the repository trash guardrail.
 
-Build and debug safeguards now live in the existing `skills/tdd-workflow/SKILL.md` build/diagnostic section, with TypeScript discoverability in `rules/typescript/testing.md`: exact-command reproduction, cascade/root-cause separation, minimal fixes, no type suppression, generated-source fixes, and post-fix diagnostics verification remain required. Documentation and codemap safeguards now live in the existing `skills/context-docs/SKILL.md`, with common workflow routing in `rules/common/development-workflow.md`: source truth, verified links/commands, bounded scope, and freshness only after verification remain required. The generic `executor` and `code-simplifier` roles were not widened.
+Build and debug safeguards now live in the existing `skills/tdd-workflow/SKILL.md` build/diagnostic section, with TypeScript discoverability in `rules/typescript/testing.md`: exact-command reproduction, cascade/root-cause separation, minimal fixes, no type suppression, generated-source fixes, and post-fix diagnostics verification remain required. Documentation and codemap safeguards now live in `skills/context-docs/references/documentation-safeguards.md`, loaded by the existing `skills/context-docs/SKILL.md` durable workflow, with common workflow routing in `rules/common/development-workflow.md`: source truth, verified links/commands, bounded scope, and freshness only after verification remain required. The generic `executor` and `code-simplifier` roles were not widened.
 
 Active README, rule, skill, eval corpus, and eval-runner references now point to the retained owners. The `build-fix` eval uses `skills/tdd-workflow/SKILL.md`; `docs-update` uses `skills/context-docs/SKILL.md`, and supported prompt-path lists include the context-docs skill. Historical benchmark/eval artifacts and records for the retired routes remain unchanged; no paid eval was run.
+
+A follow-up check for item 7 located the exact active-harness instruction in the installed `@earendil-works/pi-coding-agent@0.84.0` at `dist/core/system-prompt.js`. Its maintained source is external `earendil-works/pi`, under `packages/coding-agent`; it is outside this repository's editable scope, so item 7 remains unavailable. No external file was changed.
 
 The initial plan proposed no entire agent or skill package for removal. **REMOVE** applied to proven misplaced or repeated sections, not a deletion quota.
 
@@ -204,7 +206,7 @@ OpenAI recommends:
 - Keep explicit user boundaries, type safety, truthful verification, and approval for consequential changes. Interpret already-authorized reversible work from conversation context rather than adding routine permission checkpoints. The Ask false positive is a runtime mechanism problem, not a reason to add another global warning.
 - Do not treat the guide's Responses API async tools, steering, and cache controls as capabilities proven on this repository's Codex route. Those require a separate runtime compatibility assessment, not prompt cleanup. The guide recommends preserving current effective reasoning effort during migration; this gives a starting point for effort, not evidence that Sol is the better model.
 
-### Approved follow-through: priorities 1–3
+### Approved follow-through: priorities 1–3 (historical record)
 
 The user authorized continuing with the recommended first three priorities. Implementation removes Ask's automatic correction helper, warning notifications, and follow-up turns; the heuristic now only records uncertain diagnostic candidates. Structured Ask behavior is unchanged. Historical `questionnaire-*` records and redirect fields remain readable by `/ask-stats` until those persisted records are explicitly migrated or retired. See [Ask diagnostics](ask.md#plain-text-clarification-diagnostics).
 
@@ -212,4 +214,17 @@ The user authorized continuing with the recommended first three priorities. Impl
 
 Validation: the Ask worker first observed four expected runtime regression failures, then 67 passing Ask tests. Parent verification of `bun test extensions/ask extensions/skills/global-scope-contract.test.ts` passed 69 tests with 294 assertions, including genuine and sample/quoted/code/rhetorical questions, input-source handling, historical stats, and unchanged Ask UI behavior. The existing global instruction contract failed before the documentation-policy edit and passed afterward. An offline invocation of the actual core prompt loader verified the emitted prompt drops the compulsory preamble while retaining original context, autonomy, scope, and verification. LSP diagnostics were clean for both changed Ask TypeScript files and the updated global instruction test. Scoped formatting changed no files. `bun run check` passed with the existing one warning and 17 informational findings; independent scoped review found no issues. An optional repository-wide `tsc --noEmit` run exited 2 with 178 diagnostics outside the three changed TypeScript files; no repository-wide typecheck success is claimed, and those other files were not repaired. These checks establish runtime and source contracts, not improved Astra behavior.
 
-**Remaining scope:** priority 4's TDD policy change is not authorized or implemented. No model/default change, live reload, stopping-control subsystem, historical regrading, or paid comparison accompanies these changes. Existing links into the live configuration can pick up source changes on future loads; no current session was deliberately reloaded. Calibration remains paused. Further model-behavior claims require separately approved real-task evidence.
+### Current approved instruction alignment (A–H)
+
+The final approved non-runtime alignment is current as follows:
+
+- **A — direct RED exception:** direct main-session work may use a concrete alternative when meaningful RED is unavailable only for a reversible, low-impact change, with the reason and proof reported. It does not cover security, payment, data-integrity, or irreversible work. Meaningful regression and failure-path coverage plus required checks remain mandatory.
+- **B — phased validation:** validate each intermediate phase; the final requested outcome must be usable. Required checks remain required.
+- **C — security scope:** apply affected security controls to directly or indirectly affected boundaries, while inspecting every commit diff for secrets and sensitive-data exposure.
+- **D — security response:** stop affected unsafe work, report critical findings, allow independent demonstrably safe work to continue, and do not automatically rotate secrets or repair the whole repository.
+- **E — scoped local security work:** an explicit scoped request naming the local implementation includes its necessary tests without repeat consent; material scope expansion and external, destructive, production, or credential actions remain separately gated.
+- **F — Diagnose:** plain `/diagnose` remains diagnosis-only. An explicit diagnosis-and-fix request permits only a disclosed, bounded local remedy after `Diagnosis: Proven`; causal proof, targeted revalidation, and probe cleanup remain required, and risky external or deployed actions remain gated.
+- **G — AI SDK:** the authorized external `ai-sdk` skill now avoids dependency installation for read-only questions. Necessary installation is allowed only within explicit SDK implementation scope and existing supply-chain rules; no unrequested major upgrade blocks supported current-version work. Version-matched docs/API validation remains required. The only external file changed was `/Users/yzlin/.pi/agent/skills/ai-sdk/SKILL.md`.
+- **H — Argent:** Argent MCP owns UI interaction and tap discovery remains mandatory. A necessary `xcrun`/`adb` device-administration command is allowed only when MCP lacks that capability and only within the authorized target/task; it is not a UI fallback. Destructive resets, credential actions, and external gates remain separately approved.
+
+No model/default or managed-runtime validation change, live reload, device action, live/paid model evaluation, or historical regrading accompanies this alignment. Existing historical evidence remains historical; further model-behavior claims require separately approved matched real-task evidence.

@@ -2,15 +2,12 @@
 
 ## Skeleton Projects
 
-When implementing new functionality:
-1. Search for battle-tested skeleton projects
-2. Use parallel agents to evaluate options:
-   - Security assessment
-   - Extensibility analysis
-   - Relevance scoring
-   - Implementation planning
-3. Clone best match as foundation
-4. Iterate within proven structure
+When the user explicitly requests a scaffold or skeleton:
+1. Search the repository's existing patterns and capabilities first.
+2. If no suitable local pattern fits, compare relevant battle-tested skeletons; use parallel agents only when the comparisons are independent and materially useful.
+3. Clone or adapt the selected foundation only after choosing it, then iterate within the requested scope and validate incrementally.
+
+For ordinary feature work, reuse existing functionality and repository patterns. Do not search for, parallelize, or clone a skeleton by default.
 
 ## Design Patterns
 

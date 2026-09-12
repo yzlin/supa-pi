@@ -12,14 +12,17 @@ If trust boundaries are unclear, stop and clarify before coding.
 ## Mandatory Security Checks
 
 Before ANY commit:
-- [ ] No hardcoded secrets (API keys, passwords, tokens)
-- [ ] All user inputs validated at system boundaries
-- [ ] SQL injection prevention (parameterized queries)
-- [ ] XSS prevention (sanitized HTML / encoded output)
-- [ ] CSRF protection enabled where cookies authorize state changes
-- [ ] Authentication/authorization verified
-- [ ] Rate limiting on auth, write, and expensive endpoints
-- [ ] Error messages don't leak sensitive data or stack traces
+- [ ] Inspect the diff for secrets and other sensitive-data exposure on every commit.
+- [ ] Apply the following control checks only to directly or indirectly affected boundaries.
+- [ ] Keep actual safeguards in force at those boundaries.
+  - [ ] All user inputs validated at system boundaries
+  - [ ] SQL injection prevention (parameterized queries)
+  - [ ] XSS prevention (sanitized HTML / encoded output)
+  - [ ] CSRF protection enabled where cookies authorize state changes
+  - [ ] Authentication/authorization verified
+  - [ ] Rate limiting on auth, write, and expensive endpoints
+  - [ ] Error messages don't leak sensitive data or stack traces
+- [ ] Verify other applicable security controls at each directly or indirectly affected boundary.
 
 ## Ask First
 
@@ -32,6 +35,8 @@ Get explicit user approval before:
 - adding file upload handlers
 - modifying rate limits or throttling
 - granting elevated permissions or destructive capabilities
+
+An explicit, scoped user request that names the LOCAL implementation authorizes that security-sensitive local implementation and its necessary tests without repeat consent. Material scope expansion and separately gated external, destructive, production, or credential actions require separate explicit approval. Plain or vague goals are not authorization.
 
 ## Never Do
 
@@ -49,14 +54,19 @@ Get explicit user approval before:
 - NEVER hardcode secrets in source code
 - ALWAYS use environment variables or a secret manager
 - Validate that required secrets are present at startup
-- Rotate any secrets that may have been exposed
+- External operational secret rotation requires explicit authorization.
+- If secrets may have been exposed, report the exposure; do not rotate them automatically as part of local work.
 - NEVER edit `.env`, `.env.local`, `.env.*` files — inform the user and let them make the change
 
 ## Security Response Protocol
 
-If security issue found:
-1. STOP immediately
-2. Use **security-reviewer** agent
-3. Fix CRITICAL issues before continuing
-4. Rotate any exposed secrets
-5. Review entire codebase for similar issues
+If a security issue is found:
+1. Stop the affected unsafe work.
+2. Report critical findings immediately.
+3. Use **security-reviewer** agent when the active workflow requires specialist review.
+4. Fix critical issues before resuming affected work, unless an authorized reviewer documents a different disposition.
+5. Independent, demonstrably safe work may continue.
+6. If independence is unclear, pause the affected work and ask for clarification.
+7. Do not proceed with the affected work until clarified.
+8. Do not automatically repair the whole repository or rotate secrets.
+9. Keep local repair within the approved scope; broader repair and external operational actions require explicit authorization.

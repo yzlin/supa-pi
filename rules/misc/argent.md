@@ -1,18 +1,17 @@
 ---
-description: Argent iOS Simulator and Android Emulator Agent — always-on guidance for methodology and tools for working with, interacting, testing and profiling mobile app work
-alwaysApply: true
+description: Argent iOS Simulator and Android Emulator guidance for confirmed mobile-app work
 ---
 
 <description>
-Argent MCP tools are available in this project for iOS simulator and Android emulator control. Argent MCP tools are the preferred form of interaction with the application.
+Argent MCP tools are available in this project for iOS simulator and Android emulator control. Use them for confirmed mobile-app work; do not apply this guidance to web, backend, desktop, or unknown project types.
 Running MCP server and managing the Argent toolkit utilises `argent` command - if asked use `argent --help` for reference.
 To check current version of MCP server run `argent --version` command.
 
 Use cases:
 
-- User mentions iOS simulator, Android emulator, device, or app interaction
-- The app user is working with is a mobile application which can be run in a simulator/emulator
-- Any tapping, swiping, typing, screenshotting, or inspecting a running app
+- User mentions an iOS simulator, Android emulator, or mobile device interaction for a confirmed mobile project
+- The project is confirmed to be a mobile application which can be run in a simulator/emulator
+- Any tapping, swiping, typing, screenshotting, or inspecting a running mobile app
 - Any code change that affects visible mobile UI, layout, styling, copy, navigation, or screen composition
 - Any request to execute manual QA, UI QA, or visual behavior validation for a mobile app
 - Running, debugging, or testing a React Native app (iOS or Android)
@@ -39,7 +38,7 @@ Before starting to interact with the app, read the `argent-device-interact` skil
 </tapping_rule>
 
 <device_selection_rule>
-Before booting, running, or interacting with any app, call `list-devices` first - prefer running devices.
+Before booting, running, or interacting with any mobile app, call `list-devices` first - prefer running devices.
 
 Decision order:
 
@@ -54,8 +53,8 @@ Decision order:
 
 <general_rules>
 
-- All simulator/emulator interactions go through argent MCP tools — never use `xcrun simctl`,
-  raw `curl` to simulator ports, or the simulator-server binary directly.
+- Argent MCP owns UI interaction: use its discovery, tap, swipe, typing, screenshot, launch, and UI-verification tools for those actions. Do not replace UI interaction with `xcrun`, `adb`, or another CLI.
+- If Argent MCP lacks a necessary device-administration capability, use the narrowest required `xcrun` or `adb` command only for that administration action, within the authorized target and task. Destructive resets, credential access or changes, and external side effects or gates remain separately approved.
 - Before calling any gesture tool for the first time, use ToolSearch to load its schema.
 - Interaction tools (`gesture-tap`, `gesture-swipe`, `gesture-pinch`, `gesture-rotate`, `gesture-custom`, `launch-app`, etc.) return a screenshot automatically.
   Call `screenshot` separately only for a baseline before any action or after a delay.
@@ -63,16 +62,13 @@ Decision order:
 - Always use `run-sequence` when performing multiple sequential device actions where you don't need to observe the screen between steps. More in `argent-device-interact` skill.
 - When the session ends or the user says they are done: call `stop-all-simulator-servers`.
   If the user started Metro separately, ask whether to call `stop-metro` (specify the port if not 8081).
-- If tools provided by mcp-server are not sufficient and action can be done using `xcrun`, `adb`, or other commands, use the command. Examples: changing device options, performing a device action such as lock, shake, etc.
 - When waiting for an action, do not call `screenshot` repeatedly without a proper wait mechanism. For example, six consecutive `screenshot` calls with no adequate delay between them will cause context bloat.
   </general_rules>
 
 <react_native_detection>
-Project type is determined by the `argent-environment-inspector` subagent (see `subagents` section).
-When the subagent result is available, use its `is_react_native` field as the authoritative
-source — do not re-inspect files manually.
+Determine project type with the `argent-environment-inspector` subagent when available (see `subagents` section). When its result is available, use its `is_react_native` field as the authoritative source — do not re-inspect files manually.
 
-If the subagent has not run yet and project type is unknown, run it first before proceeding. Always use subagents if available to run `gather-workspace-data` data tool, if possible do not run yourself.
+If the inspector is available and project type is unknown, run it before proceeding. If it is unavailable, inspect only the necessary project configuration directly to establish mobile/platform support; do not assume an unknown project is mobile. Do not call `gather-workspace-data` directly when the inspector is available.
 
 When `is_react_native` is true: load `argent-react-native-app-workflow` skill. Use `debugger-component-tree` for element discovery - if the responses are large or unhelpful, try `describe`.
 </react_native_detection>
@@ -82,7 +78,7 @@ Load the matching skill before starting work and executing tools from argent-mcp
 procedure and edge-case handling for each workflow.
 
 PLATFORM DETECTION
-If the user did not specify a platform, call `list-devices` first and pick the booted target — do not default to iOS.
+If the user did not specify a platform for mobile work, call `list-devices` first and pick the booted target — do not default to iOS.
 
 iOS SIMULATOR SETUP
 Skill: `argent-ios-simulator-setup`
@@ -139,6 +135,7 @@ When:
 - Need to determine build commands, startup scripts, metro port, platform support, or QA tooling
   If the subagent already ran this session (result in memory), use that context directly — do NOT re-run.
 Rules:
-  - Run the `argent-environment-inspector` subagent if possible. Never call `gather-workspace-data` yourself - do only if subagent is not available.
+  - Run the `argent-environment-inspector` subagent when available. If it is unavailable, inspect only the necessary project configuration directly to establish mobile/platform support; do not assume an unknown project is mobile.
+  - Do not call `gather-workspace-data` directly when the inspector is available.
   - The main agent is responsible for persisting the subagent's JSON result to project memory
 </subagents>

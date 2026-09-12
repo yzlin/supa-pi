@@ -52,7 +52,7 @@ Animate between UI states using the browser's native `document.startViewTransiti
 
 Every `<ViewTransition>` should communicate a spatial relationship or continuity. If you can't articulate what it communicates, don't add it.
 
-Implement **all** applicable patterns from this list, in this order:
+For the requested transition, select only the patterns that fit its affected routes and components, in this order:
 
 | Priority | Pattern | What it communicates |
 |----------|---------|---------------------|
@@ -62,7 +62,7 @@ Implement **all** applicable patterns from this list, in this order:
 | 4 | **State change** (`enter`/`exit`) | "Something appeared/disappeared" |
 | 5 | **Route change** (layout-level) | "Going to a new place" |
 
-This is an implementation order, not a "pick one" list. Implement every pattern that fits the app. Only skip a pattern if the app has no use case for it.
+This is a selection order, not a requirement to cover the whole app. Add another pattern only when it supports the requested transition or the user asks for a broader transition audit.
 
 ### Choosing Animation Style
 
@@ -324,20 +324,20 @@ Always add reduced motion CSS to your global stylesheet:
 
 # Implementation Workflow
 
-**Follow these steps in order.** Start with the audit — do not skip it. Copy the CSS recipes from the CSS Recipes section below — do not write your own animation CSS.
+**Follow these steps in order for the affected routes and components.** Start with a scoped audit — do not expand to unrelated app surfaces. Add only the CSS recipes needed by the selected patterns from the CSS Recipes section below; retain the reduced-motion rules and do not write your own animation CSS.
 
 ## Step 1: Audit the App
 
-Before writing any code, scan the codebase thoroughly. Search for:
+Before writing any code, inspect only the routes/components and adjacent navigation or data boundaries affected by the requested transition. Search for:
 
-- **Every `<Link>` and `router.push`** — open every file that contains one
-- **Every `<Suspense>` boundary** — check what its fallback renders
-- **Every page/route component** — each needs a VT placement decision
-- **Persistent elements** (headers, navbars, sidebars) — need `viewTransitionName` isolation
-- **Shared visual elements** on both source and target views
-- **Skeleton-to-content control pairs** — if a fallback renders a control that also exists in the real content, both need a matching `viewTransitionName`
+- **Navigation triggers in the affected scope** — `<Link>` and `router.push` calls that reach or leave the affected route.
+- **Affected `<Suspense>` boundaries** — check what each relevant fallback renders.
+- **Affected page/route components** — decide VT placement only for the pages involved in the request.
+- **Persistent elements in the affected scope** (headers, navbars, sidebars) — need `viewTransitionName` isolation.
+- **Shared visual elements in the affected paths** — images, cards, or avatars that appear on both source and target views.
+- **Skeleton-to-content control pairs in the affected boundaries** — if a relevant fallback renders a control that also exists in real content, check matching `viewTransitionName` values.
 
-Then classify every navigation and produce a navigation map:
+Then classify each affected navigation and produce a scoped navigation map:
 
 ```
 | Route           | Navigates to         | Direction    | VT pattern            |
@@ -349,11 +349,11 @@ Then classify every navigation and produce a navigation map:
 | (Suspense)      | (content loads)      | —            | slide-up reveal       |
 ```
 
-For each shared element (`name` prop), note where a pair forms and where it doesn't — this determines whether you need `enter`/`exit` as a fallback alongside `share`.
+For each shared element (`name` prop), note the affected navigations where a pair forms and where it does not — this determines whether you need `enter`/`exit` as a fallback alongside `share`.
 
 ## Step 2: Add CSS Recipes
 
-Copy the **complete** CSS recipe set from the CSS Animation Recipes section below into your global stylesheet. Don't write your own — the recipes handle staggered timing, motion blur, and reduced motion.
+Add only the CSS recipes needed by the selected patterns from the CSS Animation Recipes section below to the global stylesheet. Always retain the reduced-motion rule. Do not write your own — the recipes handle staggered timing, motion blur, and reduced motion.
 
 ## Step 3: Isolate Persistent Elements
 
@@ -379,7 +379,7 @@ startTransition(() => {
 });
 ```
 
-Wrap each **page component** (not layout) in a type-keyed VT:
+Wrap each affected **page component** (not layout) in a type-keyed VT:
 
 ```jsx
 <ViewTransition
@@ -391,7 +391,7 @@ Wrap each **page component** (not layout) in a type-keyed VT:
 </ViewTransition>
 ```
 
-Extract into a reusable component so every page doesn't repeat the type map:
+Extract into a reusable component so affected pages don't repeat the type map:
 
 ```jsx
 export function DirectionalTransition({ children }: { children: React.ReactNode }) {
@@ -453,7 +453,7 @@ The outer VT handles list reorder/enter. The inner VT handles cross-route shared
 
 ## Step 7: Verify Each Navigation Path
 
-Walk through every row in the navigation map from Step 1:
+Walk through every affected row in the navigation map from Step 1:
 
 - Does the VT mount/unmount, or stay mounted (same-route)?
 - For named VTs: does a shared pair form? If not, does `enter`/`exit` provide a fallback?

@@ -1,11 +1,11 @@
 ---
 name: research-mode
-description: "Strict evidence mode for multi-turn research tasks. Use when accuracy matters more than speed: investigations, comparisons, document analysis, and source-grounded recommendations. Stays active until the user says to exit research mode."
+description: "Strict evidence guidance for research tasks, investigations, comparisons, document analysis, and source-grounded recommendations. Apply it to the current task by default; stay active across turns only when the user explicitly asks for persistent research mode."
 ---
 
 # Research Mode
 
-Enter strict evidence mode. Stay in this mode until the user says to exit.
+Apply strict evidence mode to the current research task. By default, the mode ends with this task. Keep it active across turns only when the user explicitly asks for persistent research mode.
 
 ## Behavior
 
@@ -81,9 +81,11 @@ Do not use by default for:
 - casual coding help
 - quick iteration where strict citation overhead is unnecessary
 
-## Exit
+## Lifetime and Exit
 
-Exit when the user says:
-- "exit research mode"
-- "leave research mode"
-- or clearly switches to a non-research task and asks to proceed normally
+- By default, apply research mode only to the current task and stop when it is complete.
+- Continue across turns only when the user explicitly requests persistent research mode.
+- For persistent mode, exit when the user says:
+  - "exit research mode"
+  - "leave research mode"
+  - or clearly switches to a non-research task and asks to proceed normally

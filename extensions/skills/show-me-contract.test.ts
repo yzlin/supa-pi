@@ -52,6 +52,13 @@ describe("visual explanation skill contracts", () => {
     const skill = readSkill("architecture-diagrams");
 
     expect(skill).toContain("Choose the smallest diagram set");
+    expect(skill).toContain(
+      "An architectural visual or diagram is explicitly requested."
+    );
+    expect(skill).toContain("An architectural visual is needed");
+    expect(skill).not.toContain(
+      '"diagram", "architecture", or "system design" mentioned'
+    );
     expect(skill).not.toContain(
       "For every architectural assessment, create the following diagrams"
     );

@@ -56,4 +56,4 @@ Before adding dependencies:
 
 ## Agent Support
 
-- Use **security-reviewer** skill for comprehensive security audits
+- Use the **`security-review`** skill for comprehensive security audits; delegate to the **`security-reviewer`** agent when the workflow requires specialist review.

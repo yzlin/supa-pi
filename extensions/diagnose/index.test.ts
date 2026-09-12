@@ -11,6 +11,8 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
+import { parseFrontmatter } from "@earendil-works/pi-coding-agent";
+
 import diagnoseExtension, { buildDiagnoseCommandMessage } from "./index";
 
 type CommandHandler = (args: string, ctx: unknown) => Promise<void> | void;
@@ -101,6 +103,18 @@ function readPackageJson(): { pi: { extensions: string[] } } {
 }
 
 describe("diagnose command", () => {
+  it("parses skill metadata containing the Diagnosis: Proven label", () => {
+    const skill = readFileSync(
+      join(import.meta.dir, "../../skills/diagnose/SKILL.md"),
+      "utf8"
+    );
+    const { frontmatter } = parseFrontmatter(skill);
+
+    expect(frontmatter.name).toBe("diagnose");
+    expect(frontmatter.description).toBeString();
+    expect(frontmatter.description).toContain("Diagnosis: Proven");
+  });
+
   it("registers the diagnose extension in package.json", () => {
     const packageJson = readPackageJson();
 
@@ -397,15 +411,51 @@ describe("diagnose command", () => {
     expect(skill).toContain(
       "Incomplete` never offers, recommends, or applies a fix"
     );
+    expect(skill).toContain(
+      "An explicit diagnosis-and-fix request authorizes a bounded local remedy only after `Diagnosis: Proven`."
+    );
+    expect(skill).toContain(
+      "Before fixing, disclose the concrete scoped remedy and test plan."
+    );
+    expect(skill).toContain(
+      "Do not ask for approval again when that request already authorizes the bounded local remedy."
+    );
+    expect(skill).toContain(
+      "Plain `/diagnose`, a diagnosis-only request, general autonomy, or probe authorization alone do not authorize a fix."
+    );
+    expect(skill).toContain(
+      "A materially out-of-scope remedy requires a new proposal and the same approval gate."
+    );
+    expect(skill).toContain(
+      "After authorization through either the explicit diagnosis-and-fix request or `Approve scoped fix`:"
+    );
     expect(skill).toContain("Approve scoped fix");
     expect(skill).toContain("Stop and clean probes");
     expect(skill).toContain("use the public `ask` tool");
     expect(skill).toContain("do not use `multiSelect`");
     expect(skill).toContain("Invocation wording");
     expect(skill).toContain(
-      "If `ask` is unavailable, do not infer approval or edit the fix; report the blocked gate and print both exact choices `Approve scoped fix` and `Stop and clean probes` verbatim."
+      "If `ask` is unavailable on the approval-gated path, do not infer approval or edit the fix; report the blocked gate and print both exact choices `Approve scoped fix` and `Stop and clean probes` verbatim."
     );
     expect(skill).toContain("requires a new proposal and the same gate again");
+    expect(skill).not.toContain(
+      "Do not edit the fix before the user selects `Approve scoped fix`."
+    );
+  });
+
+  it("keeps the extension README aligned with the explicit fix gate", () => {
+    const readme = readRepoFile("extensions", "diagnose", "README.md");
+
+    expect(readme).toContain(
+      "Plain `/diagnose` and diagnosis-only requests do not authorize a fix."
+    );
+    expect(readme).toContain(
+      "An explicit diagnosis-and-fix request authorizes only a bounded local remedy after `Diagnosis: Proven`"
+    );
+    expect(readme).toContain(
+      "Causal proof, targeted revalidation, and probe cleanup remain required."
+    );
+    expect(readme).not.toContain("diagnosis does not authorize a fix");
   });
 
   it("requires cleanup before every terminal incomplete report", () => {

@@ -22,7 +22,7 @@ For a build, compilation, type, module-resolution, dependency, or build-configur
 ## Method
 
 1. **Define the behavior.** Identify the observable outcome, relevant failure paths, and the narrowest test level that can prove them.
-2. **RED.** Add or adjust a test for the requested behavior, then run it before implementation. A valid red must fail for the expected reason because the behavior is missing or the bug is present—not because of syntax, setup, environment, or unrelated failures. For a bug fix, preserve the test as a regression test. If no valid red can be produced during direct work, stop and report the blocker. A managed executor may instead report why RED is unavailable, continue with the safest applicable verification strategy, and require independent parent verification.
+2. **RED.** Add or adjust a test for the requested behavior, then run it before implementation. A valid RED must fail for the expected reason because the behavior is missing or the bug is present—not because of syntax, setup, environment, or unrelated failures. For a bug fix, preserve the test as a regression test. For direct work only, continue without a meaningful RED only for a reversible, low-impact change when a concrete alternative verification is available and you explain why a meaningful RED is unavailable. This exception does not apply to security, payment, data-integrity, or irreversible work. Never fabricate a RED. If alternative verification is unavailable or cannot establish the requested behavior, stop and report a blocker. Meaningful regression coverage, relevant failure-path coverage, and required repository checks remain mandatory. Managed executor evidence rules remain unchanged; do not use this direct-work exception to bypass them. A managed executor may instead report why RED is unavailable, continue with the safest applicable verification strategy, and require independent parent verification.
 3. **GREEN.** Make the smallest implementation change that makes the new test pass. First, rerun the exact RED command without changing its arguments or scope. Then run relevant existing tests to preserve current behavior.
 4. **REFACTOR.** Improve structure only while tests are green. Keep refactoring behavior-preserving and rerun affected tests after each meaningful change.
 5. **COVERAGE.** Use repository-native coverage tooling and the test level appropriate to the changed behavior. Meet existing repository coverage thresholds when they are defined. Otherwise, cover the meaningful changed behavior and failure paths; do not invent a universal percentage. If coverage tooling is unavailable, report that explicitly rather than substituting an arbitrary threshold.
@@ -37,6 +37,7 @@ Prefer observable behavior over implementation details, deterministic isolated t
 
 Report:
 
-- `RED:` command and expected failing result before implementation.
+- `RED:` command and observed expected failing result before implementation for standard TDD work.
+- For eligible direct work, report `RED: unavailable because <specific reason>` and the concrete alternative verification instead of fabricating a failing result. Managed executor evidence rules remain unchanged and still require its existing `RED:`, `GREEN:`, and `COVERAGE:` contract.
 - `GREEN:` command and passing result after implementation, including relevant regression tests.
 - `COVERAGE:` repository threshold/result, meaningful changed-behavior and failure-path coverage, or a concrete reason in the form `coverage tooling unavailable because ...` after a valid focused GREEN run.

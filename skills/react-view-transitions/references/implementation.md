@@ -4,16 +4,16 @@ Follow these steps in order when adding view transitions to an app. Each step bu
 
 ## Step 1: Audit the App
 
-Before writing any code, scan the codebase thoroughly. Search for:
+Before writing any code, inspect only the routes/components and adjacent navigation or data boundaries affected by the requested transition. Search for:
 
-- **Every `<Link>` and `router.push`** — these are your navigation triggers. Open every file that contains one.
-- **Every `<Suspense>` boundary** — each one is a candidate for a reveal animation. Check what its fallback renders.
-- **Every page/route component** — list them all. Each page needs a VT placement decision.
-- **Persistent elements** — headers, navbars, sidebars, sticky controls that stay on screen across navigations. These need `viewTransitionName` isolation.
-- **Shared visual elements** — images, cards, or avatars that appear on both a source and target view (e.g., a thumbnail in a list and the same image on a detail page).
-- **Skeleton-to-content control pairs** — if a Suspense fallback renders a control (search input, tab bar) that also exists in the real content, both need a matching `viewTransitionName`.
+- **Navigation triggers in the affected scope** — `<Link>` and `router.push` calls that reach or leave the affected route.
+- **Affected `<Suspense>` boundaries** — check what each relevant fallback renders.
+- **Affected page/route components** — decide VT placement only for the pages involved in the request.
+- **Persistent elements in the affected scope** — headers, navbars, sidebars, or sticky controls that stay on screen across the relevant navigations.
+- **Shared visual elements in the affected paths** — images, cards, or avatars that appear on both source and target views.
+- **Skeleton-to-content control pairs in the affected boundaries** — if a relevant fallback renders a control that also exists in real content, check matching `viewTransitionName` values.
 
-Then classify every navigation and produce a navigation map:
+Then classify each affected navigation and produce a scoped navigation map:
 
 ```
 | Route           | Navigates to         | Direction    | VT pattern            |
@@ -25,17 +25,17 @@ Then classify every navigation and produce a navigation map:
 | (Suspense)      | (content loads)      | —            | slide-up reveal       |
 ```
 
-For each shared element (`name` prop), note every navigation where a pair forms and where it doesn't — this determines whether you need `enter`/`exit` as a fallback alongside `share`.
+For each shared element (`name` prop), note the affected navigations where a pair forms and where it does not — this determines whether you need `enter`/`exit` as a fallback alongside `share`.
 
 ## Step 2: Add CSS Recipes
 
-Copy the **complete** CSS recipe set from `css-recipes.md` into your global stylesheet. This includes timing variables, shared keyframes, fade, slide (vertical), directional navigation (forward/back), shared element morph, persistent element isolation, and reduced motion.
+Add only the CSS recipes needed by the selected patterns from `css-recipes.md` to the global stylesheet. Always retain the reduced-motion rule.
 
 Do not write your own animation CSS — the recipes handle staggered timing, motion blur on morphs, and reduced motion that are easy to get wrong. You can customize timing variables (`--duration-exit`, `--duration-enter`, `--duration-move`) after the initial setup.
 
 ## Step 3: Isolate Persistent Elements
 
-For every persistent element identified in Step 1, add a `viewTransitionName` style to pull it out of the page content's transition snapshot:
+For each persistent element identified in the affected scope, add a `viewTransitionName` style to pull it out of the page content's transition snapshot:
 
 ```jsx
 <header style={{ viewTransitionName: "site-header" }}>...</header>
@@ -47,7 +47,7 @@ If a Suspense fallback mirrors a persistent control (e.g., a skeleton search inp
 
 ## Step 4: Add Directional Page Transitions
 
-For hierarchical navigations identified in Step 1, tag the navigation direction using `addTransitionType` inside `startTransition`:
+For hierarchical navigations in the affected scope, tag the navigation direction using `addTransitionType` inside `startTransition`:
 
 ```jsx
 startTransition(() => {
@@ -56,7 +56,7 @@ startTransition(() => {
 });
 ```
 
-Then wrap each **page component** (not layout) in a type-keyed `<ViewTransition>`:
+Then wrap each affected **page component** (not layout) in a type-keyed `<ViewTransition>`:
 
 ```jsx
 <ViewTransition
@@ -78,7 +78,7 @@ Then wrap each **page component** (not layout) in a type-keyed `<ViewTransition>
 
 The `nav-forward` and `nav-back` CSS classes from `css-recipes.md` produce horizontal slides. For simpler apps where directional motion isn't needed, a bare `<ViewTransition default="none">` wrapper with `enter="fade-in"` / `exit="fade-out"` works too.
 
-Extract this into a reusable component so every page doesn't repeat the verbose type map:
+Extract this into a reusable component so affected pages don't repeat the verbose type map:
 
 ```jsx
 export function DirectionalTransition({ children }: { children: React.ReactNode }) {
@@ -104,7 +104,7 @@ This also becomes the single place to adjust if you add new transition types lat
 
 ## Step 5: Add Suspense Reveals
 
-For every `<Suspense>` boundary identified in Step 1, wrap the fallback and content in separate `<ViewTransition>`s:
+For each affected `<Suspense>` boundary identified in Step 1, wrap the fallback and content in separate `<ViewTransition>`s:
 
 ```jsx
 <Suspense
@@ -128,7 +128,7 @@ This example uses `slide-down` / `slide-up` for directional vertical motion. For
 
 ## Step 6: Add Shared Element Transitions
 
-For every shared visual element identified in Step 1, add matching named `<ViewTransition>` wrappers on both the source and target views:
+For each shared visual element identified in the affected scope, add matching named `<ViewTransition>` wrappers on both the source and target views:
 
 ```jsx
 // On the source view (e.g., list/grid page)
@@ -152,7 +152,7 @@ When list items contain shared elements, compose both patterns with two nested `
 
 ## Step 7: Verify Each Navigation Path
 
-Walk through every row in the navigation map from Step 1 and confirm:
+Walk through every affected row in the navigation map from Step 1 and confirm:
 
 - Does the VT mount/unmount on this navigation, or does it stay mounted (same-route)?
 - For named VTs: does a shared pair form? If not, does `enter`/`exit` provide a fallback?
@@ -160,7 +160,7 @@ Walk through every row in the navigation map from Step 1 and confirm:
 - Do persistent elements stay static (not sliding with page content)?
 - Do Suspense reveals animate independently from directional navigations?
 
-If any path produces no animation or competing animations, revisit the relevant step.
+If any affected path produces no requested animation or competing animations, revisit the relevant step.
 
 ---
 

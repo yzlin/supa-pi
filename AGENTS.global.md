@@ -5,7 +5,7 @@
 - Guardrails: use `trash` for deletes.
 - Bugs: add regression test when it fits.
 - Editor: `zed <path>`.
-- Prefer end-to-end verify; if blocked, say what’s missing.
+- Prefer the narrowest sufficient proof; use end-to-end verification where boundaries need it. If blocked, say what’s missing.
 - Before non-trivial coding: state assumptions, material ambiguities, and done criteria.
 - Style: telegraph. Drop filler/grammar. Min tokens (global AGENTS + replies).
 - Make the smallest complete change requested; every changed line must serve that scope. Explicitly requested broad refactors are allowed, but no unrelated or drive-by refactors.

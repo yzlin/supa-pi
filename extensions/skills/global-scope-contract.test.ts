@@ -2,10 +2,27 @@ import { describe, expect, it } from "bun:test";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
-const globalAgentsPath = join(process.cwd(), "AGENTS.global.md");
+const repositoryRoot = process.cwd();
+const globalAgentsPath = join(repositoryRoot, "AGENTS.global.md");
+const developmentWorkflowPath = join(
+  repositoryRoot,
+  "rules",
+  "common",
+  "development-workflow.md"
+);
+const tddWorkflowPath = join(
+  repositoryRoot,
+  "skills",
+  "tdd-workflow",
+  "SKILL.md"
+);
+
+function readFile(path: string): string {
+  return readFileSync(path, "utf8");
+}
 
 function readGlobalAgents(): string {
-  return readFileSync(globalAgentsPath, "utf8");
+  return readFile(globalAgentsPath);
 }
 
 function section(
@@ -29,7 +46,7 @@ const expectedAgentProtocol = `## Agent Protocol
 - Guardrails: use \`trash\` for deletes.
 - Bugs: add regression test when it fits.
 - Editor: \`zed <path>\`.
-- Prefer end-to-end verify; if blocked, say what’s missing.
+- Prefer the narrowest sufficient proof; use end-to-end verification where boundaries need it. If blocked, say what’s missing.
 - Before non-trivial coding: state assumptions, material ambiguities, and done criteria.
 - Style: telegraph. Drop filler/grammar. Min tokens (global AGENTS + replies).
 - Make the smallest complete change requested; every changed line must serve that scope. Explicitly requested broad refactors are allowed, but no unrelated or drive-by refactors.
@@ -88,5 +105,65 @@ describe("global scope instruction contract", () => {
     const document = readGlobalAgents();
 
     expect(section(document, "## Docs")).toBe(expectedUnrelatedSections);
+  });
+
+  it("uses the narrowest sufficient proof and reserves E2E for needed boundaries", () => {
+    const document = readGlobalAgents();
+
+    expect(document).toContain(
+      "Prefer the narrowest sufficient proof; use end-to-end verification where boundaries need it."
+    );
+    expect(document).not.toContain("Prefer end-to-end verify;");
+  });
+
+  it("validates intermediate phases without requiring an end-to-end path for each one", () => {
+    const workflow = readFile(developmentWorkflowPath);
+
+    expect(workflow).toContain(
+      "For phased work, validate each intermediate phase; the final requested outcome must be usable."
+    );
+    expect(workflow).not.toContain(
+      "For phased work, each phase must leave a usable, verified end-to-end path."
+    );
+  });
+
+  it("bounds a direct RED alternative to reversible low-impact work", () => {
+    const workflow = readFile(tddWorkflowPath);
+
+    for (const requirement of [
+      "For direct work only",
+      "reversible, low-impact change",
+      "concrete alternative verification",
+      "explain why a meaningful RED is unavailable",
+      "Never fabricate a RED",
+      "stop and report a blocker",
+      "Meaningful regression coverage",
+      "relevant failure-path coverage",
+      "required repository checks remain mandatory",
+      "does not apply to security, payment, data-integrity, or irreversible work",
+    ]) {
+      expect(workflow).toContain(requirement);
+    }
+
+    expect(workflow).not.toContain(
+      "security, payment, data-integrity, or irreversible work is eligible"
+    );
+  });
+
+  it("keeps honest direct RED evidence distinct from the managed contract", () => {
+    const workflow = readFile(tddWorkflowPath);
+
+    expect(workflow).toContain(
+      "For eligible direct work, report `RED: unavailable because <specific reason>`"
+    );
+    expect(workflow).toContain(
+      "Managed executor evidence rules remain unchanged"
+    );
+    expect(workflow).toContain(
+      "`GREEN:` command and passing result after implementation"
+    );
+    expect(workflow).toContain(
+      "`COVERAGE:` repository threshold/result, meaningful changed-behavior and failure-path coverage"
+    );
   });
 });

@@ -3,6 +3,8 @@ description: Investigate a topic with strict evidence, citations, and explicit u
 argument-hint: "<topic>"
 ---
 
+This requests one research brief only. It does not start persistent research mode; apply the requirements to this request and do not carry them into later turns unless the user separately asks for persistent research mode.
+
 Research the following topic in strict evidence mode:
 
 $@

@@ -38,6 +38,18 @@ describe("security policy ownership contract", () => {
       "Never pass unvalidated LLM output into privileged code paths.",
       "NEVER edit `.env`, `.env.local`, `.env.*` files",
       "## Security Response Protocol",
+      "Inspect the diff for secrets and other sensitive-data exposure on every commit.",
+      "only to directly or indirectly affected boundaries",
+      "Keep actual safeguards in force at those boundaries.",
+      "Stop the affected unsafe work.",
+      "Report critical findings immediately.",
+      "Independent, demonstrably safe work may continue.",
+      "If independence is unclear, pause the affected work and ask for clarification.",
+      "Do not automatically repair the whole repository or rotate secrets.",
+      "External operational secret rotation requires explicit authorization.",
+      "An explicit, scoped user request that names the LOCAL implementation authorizes that security-sensitive local implementation and its necessary tests without repeat consent.",
+      "Material scope expansion and separately gated external, destructive, production, or credential actions require separate explicit approval.",
+      "Plain or vague goals are not authorization.",
     ]) {
       expect(policy).toContain(control);
     }

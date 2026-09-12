@@ -1,16 +1,14 @@
 ---
 name: architecture-diagrams
-description: Create focused Mermaid architecture diagrams for assessments and system design tasks, using only the views needed to answer the question.
+description: Create focused Mermaid architecture diagrams when an architectural visual is requested or needed for an assessment or system design task, using only the views needed to answer the question.
 ---
 
 # Architecture Diagrams
 
 ## Trigger Conditions
 
-- Architectural assessment requested
-- New system design task
-- C4 diagrams needed
-- "diagram", "architecture", or "system design" mentioned
+- An architectural visual or diagram is explicitly requested.
+- An architectural visual is needed to answer a system-design or architectural-assessment question, explain a boundary, flow, deployment, state, or trust relationship.
 
 ## Selection
 

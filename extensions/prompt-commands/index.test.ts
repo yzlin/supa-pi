@@ -22,7 +22,7 @@ const expectedMessages = {
   "grill-me": (args: string) =>
     `Use the \`grill-me\` wrapper skill as canonical for this explicit command.\n\nPlan:\n${args}`,
   "research-brief": (args: string) =>
-    `Research the following topic in strict evidence mode:\n\n${args}\n\nRequirements:\n- Do not guess.\n- Cite every factual claim.\n- Prefer primary or official sources.\n- Quote relevant passages before analyzing documents.\n- Separate verified facts from inferences.\n- If evidence is missing or conflicting, say so clearly.\n\nOutput:\n1. Short answer\n2. Evidence\n3. Open uncertainties\n4. Sources`,
+    `This requests one research brief only. It does not start persistent research mode; apply the requirements to this request and do not carry them into later turns unless the user separately asks for persistent research mode.\n\nResearch the following topic in strict evidence mode:\n\n${args}\n\nRequirements:\n- Do not guess.\n- Cite every factual claim.\n- Prefer primary or official sources.\n- Quote relevant passages before analyzing documents.\n- Separate verified facts from inferences.\n- If evidence is missing or conflicting, say so clearly.\n\nOutput:\n1. Short answer\n2. Evidence\n3. Open uncertainties\n4. Sources`,
   "show-me": (args: string) =>
     `Use the \`showing-me\` skill as canonical for this explicit command.\n\nTopic:\n${args}`,
 } as const;

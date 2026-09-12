@@ -2,22 +2,25 @@
 
 ## Immutability (CRITICAL)
 
-ALWAYS create new objects, NEVER mutate existing ones:
+Treat shared and caller-owned values as immutable: do not mutate objects or arrays that other code may observe.
 
-```
+Encapsulated mutation is allowed when ownership is local and clear. Keep it inside the owning function or module and do not expose mutable state.
+
+```text
 // Pseudocode
-WRONG:  modify(original, field, value) → changes original in-place
-CORRECT: update(original, field, value) → returns new copy with change
+WRONG:  modify(callerOwned, field, value) → changes caller-owned value in-place
+CORRECT: update(callerOwned, field, value) → returns new copy with change
+ALLOWED: build local object, mutate it privately, then return it
 ```
 
-Rationale: Immutable data prevents hidden side effects, makes debugging easier, and enables safe concurrency.
+Rationale: protecting shared and caller-owned data prevents hidden side effects while allowing simple local construction.
 
 ## File Organization
 
 MANY SMALL FILES > FEW LARGE FILES:
 - High cohesion, low coupling
-- 200-400 lines typical, 800 max
-- Extract utilities from large modules
+- Treat 200-400 lines as typical and roughly 800 lines as a review signal; do not refactor unrelated files solely to hit a size threshold.
+- Extract utilities from large modules when it improves cohesion or reduces coupling, or when the requested work needs it.
 - Organize by feature/domain, not by type
 
 ## Simplicity & Abstraction
@@ -49,11 +52,11 @@ ALWAYS validate at system boundaries:
 Before marking work complete:
 - [ ] Code is readable and well-named
 - [ ] Functions are small (<50 lines)
-- [ ] Files are focused (<800 lines)
+- [ ] Files are focused; roughly 800 lines is a review signal, not an automatic refactor mandate
 - [ ] No deep nesting (>4 levels)
 - [ ] Proper error handling
-- [ ] No hardcoded values (use constants or config)
-- [ ] No mutation (immutable patterns used)
+- [ ] No unexplained magic values (use named constants or config when appropriate)
+- [ ] Shared and caller-owned values are not mutated; encapsulated local mutation stays private
 
 ## Comment Policy
 

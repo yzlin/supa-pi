@@ -1,6 +1,6 @@
 ---
 name: react-view-transitions
-description: Guide for implementing smooth, native-feeling animations using React's View Transition API (`<ViewTransition>` component, `addTransitionType`, and CSS view transition pseudo-elements). Use for React web or Next.js packages in the target workspace when adding page transitions, shared-element animations, route changes, or animated state changes. Skip native-only work and verify the target app can use the View Transition API.
+description: Guide for implementing smooth, native-feeling animations using React's View Transition API (`<ViewTransition>` component, `addTransitionType`, and CSS view transition pseudo-elements). Use when the user requests a browser-based React View Transition or a specific affected route/component needs one. Skip native-only work and verify the target app can use the View Transition API.
 license: MIT
 metadata:
   author: vercel
@@ -20,7 +20,7 @@ Animate between UI states using the browser's native `document.startViewTransiti
 
 Every `<ViewTransition>` should communicate a spatial relationship or continuity. If you can't articulate what it communicates, don't add it.
 
-Implement **all** applicable patterns from this list, in this order:
+For the requested transition, select only the patterns that fit its affected routes and components, in this order:
 
 | Priority | Pattern | What it communicates |
 |----------|---------|---------------------|
@@ -30,7 +30,7 @@ Implement **all** applicable patterns from this list, in this order:
 | 4 | **State change** (`enter`/`exit`) | "Something appeared/disappeared" |
 | 5 | **Route change** (layout-level) | "Going to a new place" |
 
-This is an implementation order, not a "pick one" list. Implement every pattern that fits the app. Only skip a pattern if the app has no use case for it.
+This is a selection order, not a requirement to cover the whole app. Add another pattern only when it supports the requested transition or the user asks for a broader transition audit.
 
 ### Choosing Animation Style
 
@@ -55,7 +55,7 @@ Reserve directional slides for hierarchical navigation (list → detail) and ord
 
 ## Implementation Workflow
 
-When adding view transitions to an existing app, **follow `references/implementation.md` step by step.** Start with the audit — do not skip it. Copy the CSS recipes from `references/css-recipes.md` into the global stylesheet — do not write your own animation CSS.
+When adding view transitions to an existing app, **follow `references/implementation.md` step by step for the affected routes and components.** Start with a scoped audit — do not expand to unrelated app surfaces. Add only the CSS recipes needed by the selected patterns from `references/css-recipes.md`; retain the reduced-motion rules and do not write your own animation CSS.
 
 ---
 

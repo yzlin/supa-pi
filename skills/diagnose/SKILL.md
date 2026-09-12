@@ -1,21 +1,22 @@
 ---
 name: diagnose
-description: Use only after `/diagnose` or an explicit request to use the named Diagnose skill; ordinary bug reports, debugging requests, and fix requests must not activate it.
+description: 'Use only after `/diagnose` or an explicit request to use the named Diagnose skill; plain `/diagnose` is diagnosis-only, and an explicit diagnosis-and-fix request authorizes only a bounded local remedy after `Diagnosis: Proven`; ordinary bug reports, debugging requests, and unscoped fix requests must not activate it.'
 ---
 
 # Diagnose
 
 ## Activation (explicit only)
 
-Use this heavy protocol only after a `/diagnose` invocation or an explicit request to use the named Diagnose skill. Do not activate it for an ordinary bug report, debugging request, or fix request.
+Use this heavy protocol only after a `/diagnose` invocation or an explicit request to use the named Diagnose skill. Plain `/diagnose` is diagnosis-only. An explicit diagnosis-and-fix request is the narrow exception: it authorizes a bounded local remedy only after `Diagnosis: Proven`, subject to this skill's proof, scope, safety, verification, and cleanup requirements. Do not activate it for an ordinary bug report, debugging request, or fix request.
 
-Diagnose first. An explicit Diagnose invocation asks for diagnosis, not a fix. The words “fix it,” the invocation itself, or prior permission to investigate never preapprove a fix.
+Diagnose first. A plain `/diagnose` invocation or diagnosis-only request asks for diagnosis, not a fix. An explicit diagnosis-and-fix request does not reduce the causal-proof standard. A bare “fix it” request, general autonomy, or probe authorization alone never authorizes a fix. An ordinary fix request means one lacking an explicit request to use Diagnose for both diagnosis and fix.
 
 Adapted for Pi from Matt Pocock's earlier `diagnose` skill (MIT), pinned before its rename at commit `694fa30311e02c2639942308513555e61ee84a6f`: https://github.com/mattpocock/skills/blob/694fa30311e02c2639942308513555e61ee84a6f/skills/engineering/diagnose/SKILL.md. Its current successor, `diagnosing-bugs`, was reviewed at commit `84fdeffd12f2ee307994d1eb6feb48173b6e0502`: https://github.com/mattpocock/skills/tree/84fdeffd12f2ee307994d1eb6feb48173b6e0502/skills/engineering/diagnosing-bugs. Also adapted from LegendApp's `diagnose` skill (MIT), source reviewed at commit `5a4be517989496d0bc59520a93976360dd1bff51`: https://github.com/LegendApp/legend-skills/tree/main/diagnose.
 
 ## Non-negotiable contract
 
 - Evidence precedes remedies. Do not edit production behavior while diagnosing.
+- An explicit diagnosis-and-fix request does not reduce the causal-proof standard; it authorizes only a bounded local remedy after `Diagnosis: Proven`.
 - Establish the **exact anchor**: the precise observed symptom, expected result, trigger/input, environment/version, and code or system boundary under investigation. Do not substitute a nearby failure.
 - If the failure is already observable, attempt a clean reproduction first, before adding instrumentation or changing conditions.
 - Before causal reasoning, establish one red-capable feedback-loop command that has already been run and catches the exact anchored symptom. Without one, do not generate or rank causal candidates from source inspection; user-supplied candidates may only frame the next loop or probe design.
@@ -76,14 +77,14 @@ Correlate evidence structurally across boundaries with a generated run/trace ID 
 
 Do not “log everything and grep.” Define a field allowlist before collection, redact at capture, and retain only what is necessary. Never capture or print secrets, tokens, credentials, private keys, session material, or raw sensitive request/response bodies. Prefer counts, hashes, shapes, classifications, and synthetic fixtures. Preserve only redacted artifacts.
 
-The explicit Diagnose invocation itself authorizes reversible, behavior-neutral temporary probes within the requested diagnosis scope; do not ask a second consent question for those probes. Before adding one, disclose:
+The explicit Diagnose invocation itself authorizes reversible, behavior-neutral temporary probes within the requested diagnosis scope; do not ask a second consent question for those probes. An explicit diagnosis-and-fix request does not expand that probe authorization. Before adding one, disclose:
 
 - exact files/components and environment;
 - the behavior-neutral probe and predicted outcomes;
 - allowlisted fields and redaction;
 - duration, risk, and cleanup plan.
 
-Separate user approval remains mandatory before risky or destructive actions, external mutations or side effects, access to otherwise inaccessible credentials or state, deployed or product-behavior changes, or instrumentation materially outside the invoked scope. Probe authorization is limited to the invoked scope and is not fix approval. Tag temporary probes uniquely (for example `[DIAG-a4f2]`) and maintain an inventory.
+Separate user approval remains mandatory before risky or destructive actions, external mutations or side effects, access to otherwise inaccessible credentials or state, deployed changes, product-behavior changes outside the explicitly authorized bounded local remedy, or instrumentation materially outside the invoked scope. Probe authorization is limited to the invoked scope; probe authorization alone is not fix approval or fix authorization. Tag temporary probes uniquely (for example `[DIAG-a4f2]`) and maintain an inventory.
 
 Route platform-specific collection to an existing specialized skill when available (for example browser, database, deployment, observability, or performance tooling). Give it a bounded evidence request and use its result here; do not duplicate platform operating instructions in this skill.
 
@@ -98,7 +99,7 @@ Classify diagnosis only as:
 - **Proven** — a discriminating causal intervention changes the anchored signal as predicted, an appropriate control does not, and competing live candidates are contradicted or no longer explain all evidence.
 - **Incomplete** — anything less, including correlation alone, reproduction without causal discrimination, blocked access/consent, or conflicting evidence.
 
-Do not publish confidence percentages. `Incomplete` never offers, recommends, or applies a fix. It may state the next discriminating evidence needed. Before every terminal `Diagnosis: Incomplete` / `Fix: Not attempted` report, remove all agent-added probes and temporary state unless the user explicitly approves retaining specific items; preserve only useful redacted artifacts. If no such probe exists, stop.
+Do not publish confidence percentages. `Incomplete` never offers, recommends, or applies a fix, including when an explicit diagnosis-and-fix request was made. It may state the next discriminating evidence needed. Before every terminal `Diagnosis: Incomplete` / `Fix: Not attempted` report, remove all agent-added probes and temporary state unless the user explicitly approves retaining specific items; preserve only useful redacted artifacts. If no such probe exists, stop.
 
 ### Flaky failures
 
@@ -110,29 +111,31 @@ Before intervention, establish a matched baseline and report workload, warm-up, 
 
 ## 5. Required post-Proven fix gate
 
-Only after `Diagnosis: Proven`, prepare a scoped proposal that names:
+Only after `Diagnosis: Proven`, prepare and disclose a scoped proposal that names:
 
 1. the root-cause remedy;
 2. exact files/components expected to change;
 3. the honest regression-test seam, or why none exists;
 4. targeted verification, including the original causal signal and relevant control.
 
-Then use the public `ask` tool for one mandatory single-select question with exactly these two supplied options (do not use `multiSelect` and do not add another option):
+An explicit diagnosis-and-fix request authorizes a bounded local remedy only after `Diagnosis: Proven`. Before fixing, disclose the concrete scoped remedy and test plan. Do not ask for approval again when that request already authorizes the bounded local remedy. This authorization does not cover risky or destructive actions, external mutations or side effects, inaccessible credentials or state, deployed changes, product-behavior changes outside that local remedy, or instrumentation outside scope. A materially out-of-scope remedy requires a new proposal and the same approval gate.
+
+Plain `/diagnose`, a diagnosis-only request, general autonomy, or probe authorization alone do not authorize a fix. For every other activation with a Proven diagnosis, use the public `ask` tool for one mandatory single-select question with exactly these two supplied options (do not use `multiSelect` and do not add another option):
 
 - `Approve scoped fix`
 - `Stop and clean probes`
 
-Do not edit the fix before the user selects `Approve scoped fix`. Invocation wording, “fix it,” general autonomy, and approval of probes do not satisfy this gate. If `ask` is unavailable, do not infer approval or edit the fix; report the blocked gate and print both exact choices `Approve scoped fix` and `Stop and clean probes` verbatim.
+On the approval-gated path, do not edit the fix before the user selects `Approve scoped fix`. Invocation wording other than an explicit diagnosis-and-fix request, “fix it” alone, general autonomy, diagnosis-only permission, and probe authorization do not satisfy this authorization. If `ask` is unavailable on the approval-gated path, do not infer approval or edit the fix; report the blocked gate and print both exact choices `Approve scoped fix` and `Stop and clean probes` verbatim.
 
 Selection of `Stop and clean probes`, refusal, cancellation, or abandonment means remove agent-added probes and temporary state, preserve only redacted artifacts, and stop. A material deviation from the approved remedy, files, regression seam, or verification plan requires a new proposal and the same gate again.
 
 ## 6. Approved fix, targeted revalidation, and cleanup
 
-After approval:
+After authorization through either the explicit diagnosis-and-fix request or `Approve scoped fix`:
 
 1. Keep the diagnostic probes in place through verification.
 2. At an honest seam, first add or run a regression test that exercises the real causal pattern. If no honest seam exists, document the absence; do not add a shallow test and imply coverage.
-3. Apply the smallest approved root-cause fix.
+3. Apply the smallest root-cause fix within the disclosed, authorized scope.
 4. Run targeted causal revalidation: the regression test when available, the original anchored signal, the discriminating probe, and the appropriate reversal/matched control. For flaky or performance issues, repeat the proof controls above.
 5. Only after verification, remove all agent-added probes and temporary state and retain redacted evidence needed for the report.
 
@@ -149,4 +152,4 @@ Diagnosis: Proven | Incomplete
 Fix: Verified | Failed | Not attempted
 ```
 
-State the exact anchor, decisive evidence and controls, redactions/artifacts retained, probe cleanup status, and—when Proven—the causal explanation. Never issue a terminal `Incomplete` / `Fix: Not attempted` report while agent-added probes or temporary state remain unless the user explicitly approved retaining the reported items. `Fix: Verified` requires targeted causal revalidation, not merely a passing broad suite. Use `Fix: Not attempted` when the gate was not approved or diagnosis is incomplete.
+State the exact anchor, decisive evidence and controls, redactions/artifacts retained, probe cleanup status, and—when Proven—the causal explanation. Never issue a terminal `Incomplete` / `Fix: Not attempted` report while agent-added probes or temporary state remain unless the user explicitly approved retaining the reported items. `Fix: Verified` requires targeted causal revalidation, not merely a passing broad suite. Use `Fix: Not attempted` when diagnosis is incomplete, explicit fix authorization or the approval gate is absent, or no fix was applied.

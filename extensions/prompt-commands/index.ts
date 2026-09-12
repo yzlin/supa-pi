@@ -14,7 +14,8 @@ const COMMANDS = {
     suffix: "",
   },
   "research-brief": {
-    prefix: "Research the following topic in strict evidence mode:\n\n",
+    prefix:
+      "This requests one research brief only. It does not start persistent research mode; apply the requirements to this request and do not carry them into later turns unless the user separately asks for persistent research mode.\n\nResearch the following topic in strict evidence mode:\n\n",
     suffix:
       "\n\nRequirements:\n- Do not guess.\n- Cite every factual claim.\n- Prefer primary or official sources.\n- Quote relevant passages before analyzing documents.\n- Separate verified facts from inferences.\n- If evidence is missing or conflicting, say so clearly.\n\nOutput:\n1. Short answer\n2. Evidence\n3. Open uncertainties\n4. Sources",
   },
