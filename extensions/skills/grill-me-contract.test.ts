@@ -18,8 +18,11 @@ describe("grilling skill contract", () => {
       "Discover facts from the environment instead of asking the user",
       "The user owns every decision",
       "Do not act on the plan or make implementation changes before the user confirms the final lock",
-      "Ask exactly one question at a time",
-      "exactly one single-select question per call",
+      "Ask one to three focused questions per round",
+      "one to three single-select questions per call",
+      "Wait for the user's response before the next round",
+      "Batch only questions that can be answered independently",
+      "Resolve prerequisites before asking dependent questions",
       "Add `preview` to every caller-supplied option",
       "Prefix the recommended option label with `Recommend:`",
       "Never re-ask an answered question",
@@ -52,14 +55,16 @@ describe("grilling skill contract", () => {
     expect(skill).not.toContain("`questionnaire`");
   });
 
-  it("requires structured, grounded, and adaptively visual option previews", () => {
+  it("allows short previews for simple choices and structures consequential tradeoffs", () => {
     const skill = readRepositoryFile("skills", "grilling", "SKILL.md");
 
     for (const text of [
       "`Meaning:`",
       "`Outcome:`",
       "`Tradeoff:`",
-      "`Why recommended:`",
+      "For simple choices, use a short plain-language preview without required field labels",
+      "For consequential tradeoffs, use explicit",
+      "brief reason in its preview",
       "known goals or constraints",
       "rather than personal preference",
       "flows, boundaries, states, hierarchies, or comparisons",
@@ -124,6 +129,12 @@ describe("grilling skill contract", () => {
       "must not include any implement/proceed/start-coding wording or option"
     );
     expect(skill).not.toContain("Yes, implement this contract");
+    expect(skill).toContain(
+      "continue with the same one-to-three-question cadence"
+    );
+    expect(skill).not.toContain("Ask exactly one question at a time");
+    expect(skill).not.toContain("exactly one single-select question per call");
+    expect(skill).not.toContain("continue one question at a time");
   });
 });
 

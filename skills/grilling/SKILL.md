@@ -7,6 +7,8 @@ description: Interview users about plans, decisions, ideas, designs, architectur
 
 Use this as the single canonical interview primitive for plans, decisions, and ideas.
 
+Question cadence inspired by [mitsuhiko/agent-stuff's `/discuss`](https://github.com/mitsuhiko/agent-stuff/blob/main/commands/discuss.md) ([Apache-2.0](https://github.com/mitsuhiko/agent-stuff/blob/main/LICENSE)); expressed here with local batching, UI, and lock rules.
+
 ## Ownership
 
 - Walk the user through the decision tree, resolving dependencies between decisions one branch at a time.
@@ -23,12 +25,12 @@ Use its completed packet to guide subsequent interview questions while preservin
 ## Interview Contract
 
 - A custom reply asking for clarification is not a decision or a request to end the interview. Answer the clarification, then use `ask` in the same turn to return to the unresolved decision. Do not wait for the user to say continue.
-- Ask exactly one question at a time.
+- Ask one to three focused questions per round. Batch only questions that can be answered independently; use one when later choices depend on its answer. Resolve prerequisites before asking dependent questions. Wait for the user's response before the next round.
 - Use the public `ask` tool for user answers when interactive UI is available.
-- When using `ask`, ask exactly one single-select question per call; do not use `multiSelect`.
+- When using `ask`, ask one to three single-select questions per call; do not use `multiSelect`.
 - Add `preview` to every caller-supplied option; the injected custom answer row is the only no-preview exception.
-- Keep every preview concise and decision-ready. Format it with compact, explicit `Meaning:`, `Outcome:`, and `Tradeoff:` parts; do not merely repeat the label.
-- Do not put a recommendation in the ask prompt or question description. Prefix the recommended option label with `Recommend:` and its preview with `Recommend:`. Add a `Why recommended:` part tied to known goals or constraints rather than personal preference.
+- Keep every preview concise and decision-ready; do not merely repeat the label. For simple choices, use a short plain-language preview without required field labels. For consequential tradeoffs, use explicit `Meaning:`, `Outcome:`, and `Tradeoff:` parts.
+- For each question, recommend an option. Do not put a recommendation in the ask prompt or question description. Prefix the recommended option label with `Recommend:` and give a brief reason in its preview tied to known goals or constraints rather than personal preference.
 - When a decision involves flows, boundaries, states, hierarchies, or comparisons, include a compact unfenced plain-text diagram. Simple choices need no decorative diagram.
 - Never re-ask an answered question. If it was asked in plain text, accept the answer without repeating it with `ask`; briefly summarize it, then move to the next unresolved decision.
 - Start with the highest-leverage unresolved question. Continue in descending leverage until the plan is clear, risks are exposed, tradeoffs are explicit, and all major decisions are resolved.
@@ -65,4 +67,4 @@ Present recommendations separately from agreed decisions. If blockers remain, co
 
 Once all major decisions are resolved, ask one final `ask` gate with exactly two caller-supplied options: `Lock plan, stop here` and `Keep grilling`. Rely on the injected custom row for `Type something.`; do not supply it yourself.
 
-The final gate must not ask whether to proceed to implementation and must not include any implement/proceed/start-coding wording or option. If the user chooses `Keep grilling`, continue one question at a time. Treat only `Lock plan, stop here` as confirmation that the interview is complete.
+The final gate must not ask whether to proceed to implementation and must not include any implement/proceed/start-coding wording or option. If the user chooses `Keep grilling`, continue with the same one-to-three-question cadence. Treat only `Lock plan, stop here` as confirmation that the interview is complete.
