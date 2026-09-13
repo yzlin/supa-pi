@@ -1689,7 +1689,10 @@ export function testCommandHasWriteOption(command: string): boolean {
   if (
     executable !== "bun" &&
     normalized.some(
-      (token) => token === "--coverage" || token.startsWith("--coverage=")
+      (token, index) =>
+        token === "--coverage" ||
+        (token.startsWith("--coverage=") &&
+          !(executable === "jest" && tokens[index] === "--coverage=false"))
     )
   ) {
     return true;
@@ -1762,7 +1765,10 @@ function isMutationCall(call: TddToolCall): boolean {
   if (call.name !== "bash" || typeof call.args.command !== "string") {
     return false;
   }
-  const command = call.args.command;
+  return isMutationCapableShellCommand(call.args.command);
+}
+
+function isMutationCapableShellCommand(command: string): boolean {
   const scanned = scanShell(command);
   if (scanned.activeControl) {
     return true;
@@ -2560,15 +2566,22 @@ function isAdvisoryInspectionCommand(command: string): boolean {
   );
 }
 
+export function isUnsafeTddShellCommand(command: string): boolean {
+  return (
+    isMutationCapableShellCommand(command) &&
+    !isSupportedTestCommand(command) &&
+    !isAdvisoryInspectionCommand(command)
+  );
+}
+
 function hasUnsafeShellActivity(calls: TddToolCall[]): boolean {
   return calls.some(
     (call) =>
       call.name === "bash" &&
       typeof call.args.command === "string" &&
-      isMutationCall(call) &&
-      !isSupportedTestCommand(call.args.command) &&
-      !isProvenCoverageVerification(call) &&
-      !isAdvisoryInspectionCommand(call.args.command)
+      !isExecutionDeniedBeforeStart(call) &&
+      isUnsafeTddShellCommand(call.args.command) &&
+      !isProvenCoverageVerification(call)
   );
 }
 

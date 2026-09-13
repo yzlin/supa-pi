@@ -14,6 +14,7 @@ import {
   assessTddEvidence,
   coverageVerificationTargets,
   isSupportedTestCommand,
+  isUnsafeTddShellCommand,
   mutationResultProvesDelta,
   normalizeTddToolMetadata,
   resolveSupportedTestCommand,
@@ -590,6 +591,88 @@ describe("TDD evidence validation", () => {
       assistantTurn: 3,
     };
     expect(validateTddEvidence(result(), afterGreen)).toContain("final GREEN");
+  });
+
+  it("allows Jest disabled coverage without weakening write-option classification", () => {
+    for (const flags of ["", " --coverage=false"]) {
+      expect(
+        testCommandHasWriteOption(`jest tests/formatName.test.ts${flags}`)
+      ).toBe(false);
+    }
+    for (const flags of [
+      "--coverage",
+      "--coverage=true",
+      "--coverage=FALSE",
+      "--coverage=unknown",
+      "--coverage=false --coverage=true",
+      "--coverage=false --updateSnapshot",
+      "--coverage=false --outputFile=report.json",
+    ]) {
+      expect(
+        testCommandHasWriteOption(`jest tests/formatName.test.ts ${flags}`)
+      ).toBe(true);
+    }
+    expect(
+      testCommandHasWriteOption(
+        "vitest tests/formatName.test.ts --coverage=false"
+      )
+    ).toBe(true);
+  });
+
+  it("assesses Jest disabled coverage as authentic RED/GREEN while rejecting writes", () => {
+    for (const [flags, expectedKind] of [
+      ["", "verified"],
+      [" --coverage=false", "verified"],
+      [" --coverage=true", "failed"],
+      [" --coverage=false --updateSnapshot", "failed"],
+    ] as const) {
+      const command = `jest --config jestconfig.json --runInBand${flags} tests/formatName.test.ts`;
+      const calls = assessableTrajectory().map((call) =>
+        call.name === "bash" ? { ...call, args: { command } } : call
+      );
+      const evidence = result();
+      evidence.validation = evidence.validation.map((entry) =>
+        entry.replace("bun test tests/formatName.test.ts", command)
+      );
+      const assessment = assessTddEvidence(
+        evidence,
+        calls,
+        [],
+        "Fix formatName empty input",
+        command
+      );
+      expect(assessment.kind).toBe(expectedKind);
+      if (expectedKind === "failed") {
+        expect(assessment).toMatchObject({ code: "unsafe_runner" });
+      }
+    }
+  });
+
+  it("shares the TDD shell gate without blocking runners or advisory inspection", () => {
+    for (const command of [
+      "rm src/endpoint.ts && bun test endpoint.test.ts",
+      "trash src/endpoint.ts",
+      "git restore src/endpoint.ts",
+      "git reset --hard",
+      'bun -e \'Bun.write("src/endpoint.ts", "")\'',
+      "node -e 'process.exit(0)'",
+      "printf replacement > src/endpoint.ts",
+      "find src -delete",
+      "bun run format",
+    ]) {
+      expect(isUnsafeTddShellCommand(command)).toBe(true);
+    }
+    for (const command of [
+      "bun test endpoint.test.ts",
+      "jest --coverage=false endpoint.test.ts",
+      "pytest tests/test_endpoint.py --cov=src --cov-report=term",
+      "git diff --check",
+      "git status --short",
+      "ls src && rg endpoint src",
+      "find src -name '*.ts'",
+    ]) {
+      expect(isUnsafeTddShellCommand(command)).toBe(false);
+    }
   });
 
   it("treats supported test-runner write options as mutations", () => {

@@ -77,13 +77,17 @@ Malformed reports, incomplete/corrupt trajectories, non-terminal structured outp
 
 ### Coverage integrity
 
+Jest's explicit `--coverage=false` is accepted as a non-writing RED/GREEN option. Enabled coverage (`--coverage` or `--coverage=true`), snapshot updates, and explicit output-file options remain write-classified; disabling coverage does not exempt other write options or runner workspace-proof checks.
+
 Coverage is assessed across the whole `COVERAGE:` entry. A tooling-unavailable explanation cannot exempt accompanying numeric assertions from retained successful measurement proof; mixed supported and malformed/unobserved claims remain hard failures. Explicit `not covered` / `not tested` gaps cannot produce strict verification; an otherwise authentic, safe trajectory requires independent verification instead. An unspecified repository threshold is neither a numeric fabrication nor coverage proof: accompanying grounded evidence is still required for strict acceptance.
 
 These are bounded lexical checks, not general semantic grading. Grounded named claims accept both `covers` and `covered` through the same proof gate; negated cover forms still require independent verification. The documented tooling-unavailable form is unchanged.
 
 ### Trusted offline-fixture limits
 
-For errored shell calls, capture-owned `executionDeniedBeforeStart` proves that the command never started; such calls are excluded from mutation inference and RED/GREEN verification. Model arguments and error prose cannot provide this proof. Calls without it retain existing conservative classification, including partial failures.
+Managed TDD workers reject mutation-capable non-runner shell actions before execution, using the same shell classification as settlement. This blocks deletion/rollback shell commands used to recreate RED while preserving direct runners and existing advisory inspection allowances. Denial tells the worker to preserve current code and report fixture or ordering deviations honestly; it is not permission to recreate RED through edit/write. Non-TDD tasks are unchanged. Runner workspace proofs and all settlement integrity checks remain required.
+
+For errored shell calls, capture-owned `executionDeniedBeforeStart` proves that the command never started; such calls are excluded from mutation inference and RED/GREEN verification. The managed worker records this only for a matching pending bash call actually denied by its host wrapper, then consumes the tool-call ID on settlement. Model arguments, result metadata, error prose, and reused IDs cannot provide this proof. Calls without it retain existing conservative classification, including partial failures.
 
 The shared validator also accepts optional trusted `{ command, redOutputIdentity }` fixture metadata. The eval currently supplies it only for `readiness-verification-stop`, after checking the initial immutable fixture and exact allowed command before model dispatch. Preflight is not trajectory evidence: an actual matching RED, valid ordering, GREEN, coverage, and terminal report remain required. General identity thresholds, adaptive settlement, existing callers without metadata, and public tool schemas are unchanged.
 

@@ -66,6 +66,7 @@ import {
   assessTddEvidence,
   coverageVerificationTargets,
   isSupportedTestCommand,
+  isUnsafeTddShellCommand,
   normalizeTddToolMetadata,
   resolveSupportedTestCommand,
   runnerGeneratedArtifactDirectories,
@@ -1938,9 +1939,10 @@ function preflightTddRunner(
 
 function createResolvedRunnerBashTool(
   cwd: string,
-  pathPrefix: string
-): ToolDefinition {
-  return createBashToolDefinition(cwd, {
+  pathPrefix: string,
+  onDenied: (toolCallId: string) => void
+): ReturnType<typeof createBashToolDefinition> {
+  const bash = createBashToolDefinition(cwd, {
     spawnHook: (context) => {
       const pathEntries = (context.env.PATH ?? "")
         .split(pathDelimiter)
@@ -1954,6 +1956,18 @@ function createResolvedRunnerBashTool(
       };
     },
   });
+  return {
+    ...bash,
+    execute(toolCallId, params, signal, onUpdate, ctx) {
+      if (isUnsafeTddShellCommand(params.command)) {
+        onDenied(toolCallId);
+        throw new Error(
+          "Managed TDD shell action denied before execution. Use edit/write for scoped implementation changes and run tests directly. Do not delete or roll back production to recreate RED. Preserve current work and report any test-fixture or ordering deviation honestly for independent verification."
+        );
+      }
+      return bash.execute(toolCallId, params, signal, onUpdate, ctx);
+    },
+  };
 }
 
 export function isExecutorCwdTrusted(
@@ -2094,6 +2108,7 @@ export function createExecutorAgentRunner(
       }
       return proof;
     };
+    const deniedShellCalls = new Set<string>();
     const pendingToolCalls = new Map<
       string,
       Omit<TddToolCall, "endOrder" | "isError" | "resultText"> & {
@@ -2216,6 +2231,7 @@ export function createExecutorAgentRunner(
         ) {
           const pending = pendingToolCalls.get(event.toolCallId);
           pendingToolCalls.delete(event.toolCallId);
+          const deniedBeforeStart = deniedShellCalls.delete(event.toolCallId);
           if (!pending) {
             recordTrajectoryError(`unmatched end: ${event.toolCallId}`);
             return;
@@ -2314,6 +2330,11 @@ export function createExecutorAgentRunner(
             ...retainedPending,
             endOrder: eventOrder,
             isError: event.isError === true,
+            ...(pending.name === "bash" &&
+            event.isError === true &&
+            deniedBeforeStart
+              ? { executionDeniedBeforeStart: true }
+              : {}),
             ...(MUTATION_TOOL_NAMES.has(pending.name)
               ? {
                   mutationProven: authoritativeMutationDelta,
@@ -2414,7 +2435,15 @@ export function createExecutorAgentRunner(
     const deniedTools = deniedToolNames.map(createDeniedExecutorTool);
     const runnerBashTool =
       agentType === EXECUTOR_AGENT_TYPE && resolvedRunner
-        ? createResolvedRunnerBashTool(executionCwd, resolvedRunner.pathPrefix!)
+        ? createResolvedRunnerBashTool(
+            executionCwd,
+            resolvedRunner.pathPrefix!,
+            (toolCallId) => {
+              if (pendingToolCalls.get(toolCallId)?.name === "bash") {
+                deniedShellCalls.add(toolCallId);
+              }
+            }
+          )
         : undefined;
 
     let id: string;

@@ -3422,6 +3422,162 @@ describe("executor agent runner cleanup", () => {
     }
   });
 
+  it("denies TDD shell replay before execution and records only host-owned denials", async () => {
+    const workspace = mkdtempSync(join(tmpdir(), "supa-pi-replay-guard-"));
+    const bin = join(workspace, "node_modules", ".bin");
+    const marker = join(workspace, "replay-ran");
+    mkdirSync(bin, { recursive: true });
+    for (const [name, script] of [
+      ["vitest", "#!/bin/sh\nprintf '1 passed\\n'\n"],
+      ["rm", `#!/bin/sh\nprintf called > '${marker}'\n`],
+    ]) {
+      const path = join(bin, name!);
+      writeFileSync(path, script!);
+      chmodSync(path, 0o755);
+    }
+    let listener: ((event: Record<string, unknown>) => void) | undefined;
+    const session = {
+      subscribe(next: (event: Record<string, unknown>) => void) {
+        listener = next;
+        return () => {
+          listener = undefined;
+        };
+      },
+      dispose() {
+        listener = undefined;
+      },
+    };
+    const record = {
+      type: "executor",
+      status: "running",
+      toolUses: 4,
+      session,
+      promise: Promise.resolve(),
+    };
+    let denial: unknown;
+    let controlResult: unknown;
+    let rawTrajectoryPath: string | undefined;
+    const command = "rm src/endpoint.ts && vitest --run unit.test.ts";
+    const manager: SubagentsManagerRegistry = {
+      spawn(_pi, _ctx, _type, _prompt, options) {
+        (options.onSessionCreated as (value: typeof session) => void)(session);
+        const tools = options.customTools as Array<{
+          name: string;
+          execute: (id: string, params: unknown) => Promise<unknown>;
+        }>;
+        const bash = tools.find((tool) => tool.name === "bash")!;
+        const output = tools.find((tool) => tool.name === "structured_output")!;
+        record.promise = (async () => {
+          listener?.({
+            type: "tool_execution_start",
+            toolName: "bash",
+            toolCallId: "denied",
+            args: { command },
+          });
+          try {
+            await bash.execute("denied", { command });
+          } catch (error) {
+            denial = error;
+          }
+          listener?.({
+            type: "tool_execution_end",
+            toolCallId: "denied",
+            isError: denial !== undefined,
+          });
+          listener?.({
+            type: "tool_execution_start",
+            toolName: "bash",
+            toolCallId: "spoofed",
+            args: { command, executionDeniedBeforeStart: true },
+          });
+          listener?.({
+            type: "tool_execution_end",
+            toolCallId: "spoofed",
+            isError: true,
+            result: { details: { executionDeniedBeforeStart: true } },
+          });
+          // Reusing an already-consumed ID must not inherit denial authority.
+          listener?.({
+            type: "tool_execution_start",
+            toolName: "bash",
+            toolCallId: "denied",
+            args: { command },
+          });
+          listener?.({
+            type: "tool_execution_end",
+            toolCallId: "denied",
+            isError: true,
+          });
+          listener?.({
+            type: "tool_execution_start",
+            toolName: "bash",
+            toolCallId: "control",
+            args: { command: "vitest --run unit.test.ts" },
+          });
+          controlResult = await bash.execute("control", {
+            command: "vitest --run unit.test.ts",
+          });
+          listener?.({
+            type: "tool_execution_end",
+            toolCallId: "control",
+            isError: false,
+            result: controlResult,
+          });
+          await output.execute("result", validResult);
+          record.status = "completed";
+        })();
+        return "replay-guard-agent";
+      },
+      getRecord() {
+        return record;
+      },
+    };
+    try {
+      const runner = createExecutorAgentRunner(
+        {
+          events: {
+            emit() {
+              // Completed synthetic sessions need no stop event.
+            },
+          },
+        } as never,
+        { cwd: workspace } as never,
+        { manager, agentTimeoutMs: 5000, cleanupTimeoutMs: 20 }
+      );
+      const result = (await runner(
+        {
+          agent: "executor",
+          prompt: "Guard replay",
+          executorOutputSchema: EXECUTOR_RESULT_SCHEMA,
+          preflightCommand: "vitest --run unit.test.ts",
+          captureTrajectory: true,
+        } as never,
+        { cwd: workspace, signal: new AbortController().signal } as never
+      )) as WorkflowAgentResult & {
+        toolCalls: TddToolCall[];
+        rawTrajectoryPath?: string;
+      };
+      rawTrajectoryPath = result.rawTrajectoryPath;
+      expect(denial).toBeInstanceOf(Error);
+      expect(String(denial)).toContain("before execution");
+      expect(String(denial)).toContain(
+        "Do not delete or roll back production to recreate RED"
+      );
+      expect(existsSync(marker)).toBe(false);
+      expect(
+        result.toolCalls.map((call) => call.executionDeniedBeforeStart)
+      ).toEqual([true, undefined, undefined, undefined]);
+      expect(
+        (controlResult as { content: Array<{ text: string }> }).content[0]!.text
+      ).toContain("1 passed");
+    } finally {
+      execFileSync("trash", [workspace]);
+      if (rawTrajectoryPath) {
+        execFileSync("trash", [dirname(rawTrajectoryPath)]);
+      }
+    }
+  });
+
   it("fails closed before worker spawn when runner preflight cannot resolve", async () => {
     const workspace = mkdtempSync(join(tmpdir(), "supa-pi-runner-blocked-"));
     let spawned = false;
