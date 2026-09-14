@@ -30,6 +30,12 @@ import {
   scaffoldGlobalConfig,
   serversForExtension,
 } from "./config";
+import {
+  attachLspPresentation,
+  cleanupLspPresentation,
+  cleanupLspPresentationTimers,
+  getLspPresentationForCall,
+} from "./presentation";
 import { fg, padVisibleText, paletteTheme } from "./theme.js";
 import { registerLspTool, type ServerManager } from "./tools";
 import type { ConfiguredServerConfig, ResolvedServerConfig } from "./types";
@@ -611,6 +617,17 @@ export default function lspExtension(pi: ExtensionAPI) {
 
   registerLspTool(pi, serverManager);
 
+  pi.on("tool_result", (event) => {
+    if (event.toolName !== "lsp") {
+      return;
+    }
+    const metadata = getLspPresentationForCall(event.toolCallId);
+    if (!metadata) {
+      return;
+    }
+    return { details: attachLspPresentation(event.details, metadata) };
+  });
+
   // ── Session lifecycle ─────────────────────────────────────────────────
 
   pi.on("session_start", async (_event, ctx) => {
@@ -630,6 +647,8 @@ export default function lspExtension(pi: ExtensionAPI) {
   });
 
   pi.on("session_shutdown", async () => {
+    cleanupLspPresentationTimers();
+    cleanupLspPresentation();
     await shutdownAll();
     config = null;
   });

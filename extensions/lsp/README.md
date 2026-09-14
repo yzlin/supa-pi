@@ -111,6 +111,12 @@ By default, the scaffolded global config includes a conservative starter set ins
 - **Diagnostics availability**: A diagnostics request fails as unavailable when no server matches or every matching server fails. If at least one server succeeds and another fails, it fails as incomplete while retaining useful partial diagnostics and each failed server's cause. Fully successful empty and populated results are unchanged.
 - **Lazy probe + start**: Server commands are checked only when needed for a matching request, then spawned on first tool use and kept alive for the session.
 - **Config merge**: Project `.pi/lsp.json` overrides global `~/.pi/agent/lsp.json`.
+- **Local rendering**: `tools.ts` registers the LSP tool's render hooks, backed by `presentation.ts`. While a call is pending, its local shell uses two rows: a themed `🔎 LSP <operation>` status row and a target row with the file/query and elapsed time. The settled result uses a status icon and a compact summary; expanded output remains below it.
+- **Semantic summaries**: Execution attaches structured presentation metadata instead of making the renderer parse result text. Count summaries use the operation result (including nested document symbols); hover reports found/no information; diagnostics report separate error, warning, information, hint, and other finding counts.
+- **Diagnostic status**: Diagnostic finding counts are separate from availability status. Successful results can say `no diagnostics`; incomplete results retain successful findings and add `incomplete`; unavailable results say `diagnostics unavailable` rather than implying zero findings.
+- **Expanded output**: When the host expands a settled result with Ctrl+O, the renderer keeps all existing text, preserves blank lines, and wraps it to the available width.
+- **Persistence and fallback**: `index.ts` copies the call's structured metadata into persisted `tool_result` details, including the semantic outcome and duration, so replay can reproduce the summary. Results without `lspPresentation` metadata—such as results from older sessions—use only the generic `result available` or `error` fallback.
+- **Presentation scope**: This adds no LSP configuration settings or public tool schema fields and does not change operation routing or execution behavior; it only supplies local display metadata alongside the existing results.
 
 ## Commands
 
@@ -128,7 +134,8 @@ extensions/lsp/
 ├── protocol.ts    — JSON-RPC over stdio transport
 ├── client.ts      — High-level LSP client (all 11 operations)
 ├── config.ts      — Config loading, merging, server resolution
-├── tools.ts       — Single unified `lsp` tool registration
+├── tools.ts       — Single unified `lsp` tool registration and result metadata
+├── presentation.ts — Local tool rendering, semantic summaries, timers, and replay metadata
 ├── formatting.ts  — Format all LSP responses for LLM consumption
 └── types.ts       — LSP protocol types, config types, operation enums
 ```
