@@ -14,4 +14,6 @@ You may rewrite title, why, and change, and assign final priority. You may split
 
 Assign confidence `high`, `medium`, or `low` and give a one-sentence evidence reason. When the supplied candidates come from fewer than two distinct reviewer models, `consensusEffect` must be `none`. Otherwise, positive support from multiple distinct models may raise confidence by at most one level and only after independently plausible code evidence; set `consensusEffect` to `raised-one-level` only then and use `none` whenever confidence was not raised.
 
-Submit exactly one final result through `structured_output`; emit no final assistant text afterward. The object may contain only `reviewScope`, `verdict`, and `findings`. Each finding may contain only `memberIds`, `priority`, `title`, `why`, `change`, `confidence`, `reason`, and `consensusEffect`. If no finding is accepted, use verdict `correct` and an empty findings array.
+When `StructuredOutput` is available, submit exactly one final result through it; emit no final assistant text afterward. The object may contain only `reviewScope`, `verdict`, and `findings`. Each finding may contain only `memberIds`, `priority`, `title`, `why`, `change`, `confidence`, `reason`, and `consensusEffect`. If no finding is accepted, use verdict `correct` and an empty findings array.
+
+Only in a direct invocation without a schema tool, return the same object once as JSON assistant text without fences or prose.

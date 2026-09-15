@@ -127,11 +127,11 @@ describe("global scope instruction contract", () => {
     );
   });
 
-  it("bounds a direct RED alternative to reversible low-impact work", () => {
+  it("bounds a RED alternative to reversible low-impact work", () => {
     const workflow = readFile(tddWorkflowPath);
 
     for (const requirement of [
-      "For direct work only",
+      "Continue without a meaningful RED only",
       "reversible, low-impact change",
       "concrete alternative verification",
       "explain why a meaningful RED is unavailable",
@@ -150,20 +150,20 @@ describe("global scope instruction contract", () => {
     );
   });
 
-  it("keeps honest direct RED evidence distinct from the managed contract", () => {
+  it("keeps honest RED evidence and independent verification", () => {
     const workflow = readFile(tddWorkflowPath);
 
     expect(workflow).toContain(
-      "For eligible direct work, report `RED: unavailable because <specific reason>`"
+      "For eligible work, report `RED: unavailable because <specific reason>`"
     );
     expect(workflow).toContain(
-      "Managed executor evidence rules remain unchanged"
+      "the main session independently inspects the result and runs current tests"
     );
     expect(workflow).toContain(
-      "`GREEN:` command and passing result after implementation"
+      "`GREEN:` the command and passing result after implementation"
     );
     expect(workflow).toContain(
-      "`COVERAGE:` repository threshold/result, meaningful changed-behavior and failure-path coverage"
+      "`COVERAGE:` the repository threshold/result, meaningful changed-behavior and failure-path coverage"
     );
   });
 });

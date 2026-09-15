@@ -28,7 +28,7 @@ The requested audit workflow separated read-only investigation from implementati
 - **Native:** file tools, progressive skill discovery/loading, and prompt-template expansion already exist in Pi. Do not rebuild these as new extensions.
 - **Active repository additions:** `package.json` registers execute, research, prompt-command, context, and skills extensions. `extensions/context/index.ts:30` exposes context inspection; `extensions/skills/index.ts:1278` exposes skill management. These user controls are not substitutes for native discovery.
 - **External/session capabilities:** the current session exposes `Agent`, pi-task tools, and web tools. `docs/context/extension-registration.md` identifies web access as a companion package. Do not treat those capabilities as missing merely because they are not native Pi tools.
-- **Workflow boundaries:** `skills/execute/SKILL.md` owns main-session task/checkpoint control, bounded recovery, concrete worker references, and independent verification. The reviewed grilling, context, review, and showing-me skills already separate their responsibilities; no additional confirmed defect was identified in that bounded pass. This is not an exhaustive correctness guarantee.
+- **Workflow boundaries:** `skills/execute/SKILL.md` owns the explicit `/execute` opt-in, native `SubagentWorkflow` dispatch, main-session task/result reconciliation, cancellation policy, bounded recovery, and independent verification. The reviewed grilling, context, review, and showing-me skills already separate their responsibilities; no additional confirmed defect was identified in that bounded pass. This is not an exhaustive correctness guarantee.
 
 ## Ranked findings
 
@@ -93,7 +93,7 @@ This table preserves the initial audit disposition. Names resolve under `agents/
 | Agents: `architect`, `planner` | KEEP | Design decisions/trade-offs versus dependency-ordered implementation planning. |
 | Agents: `build-error-resolver`, `executor`, `refactor-cleaner`, `code-simplifier` | KEEP | Build repair, assigned execution, proven dead-code cleanup, and scoped simplification remain distinct. |
 | Agents: `code-reviewer`, `security-reviewer`, `database-reviewer`, `performance-reviewer` | KEEP | General review and selected specialist concerns; reviewer selection belongs to orchestration, not added role prose. |
-| Agents: `executor-output-repair`, `review-synthesizer`, `review-verifier` | KEEP | Report normalization, lossless clustering, and independent truth verification must not collapse into one authority. |
+| Agents: `review-synthesizer`, `review-verifier` | KEEP | Lossless clustering and independent truth verification remain separate. The former `executor-output-repair` was retired by the upstream-native execute migration. |
 | Agents: `explorer`, `researcher`, `doc-updater`, `e2e-runner` | KEEP | Distinct work products and tool boundaries. Research output ownership was already repaired. |
 | Skills: `context-docs`, `domain-modeling`, `grilling`, `grill-me` | KEEP | Persistence, semantic analysis, interview procedure, and explicit-command write gates. |
 | Skills: `diagnose`, `research-mode`, `review-fix`, `review-orchestration` | KEEP | Explicit diagnosis, multi-turn evidence mode, implementation of findings, and review orchestration. |
@@ -170,6 +170,10 @@ Parent validation after all seven slices recorded:
 - Managed validation retained 64 hard pre-RED and 67 hard RED-capture truncation failures rather than weakening them. Other coverage-correlation warnings were independently checked. This is current source-contract validation, not historical recertification or model-quality evidence.
 
 Remaining gates are unchanged: preserve historical Astra/Sol evidence; use separately approved matched live calibration before claiming selection quality, latency, token, cost, or behavioral improvement; and require explicit user approval before model adoption, default changes, or route changes. Further subtraction needs a new evidenced scope rather than a size target.
+
+## Current execute migration note
+
+The later approved migration is separate from the historical subtraction audit: `/execute` registers only its command and delegates authorized worker orchestration to upstream `SubagentWorkflow`. Parent stop does not cancel a background workflow; users stop it through `/agents` → `Workflows`, and no automatic resume or dispatch follows a user stop. Null or missing results remain unresolved originating tasks, while terminal blockers are recorded in metadata with `pending` or `in_progress` status because `pi-tasks` has no `blocked` status. The later review cutover also removes the unused fork SDK dependency. `/review` prepares one exact INLINE public native workflow; `review_finalize({runId})` binds the observed call/result/native completion and complete bounded journal, revalidates/rederives report fields, and checks freshness before/after at-most-once publication. Schema retries are native only; semantic failures get no local repair. Synthesizer `tools: none` is configuration, not override-proof enforcement. Cancellation invalidates publication; native Workflows UI stops workers, with no automatic resume. Missing/incompatible journals fail closed; the public artifact contract is version-sensitive (inspected 0.19.0), without private imports. Setup retains the duplicate-fork guard. This records implementation, not live activation or full live E2E.
 
 ## Source-guided Astra reassessment
 

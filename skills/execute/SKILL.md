@@ -1,118 +1,117 @@
 ---
 name: execute
-description: Execute a safe, unambiguous plan in the current main session using checkpointed pi-task orchestration and executor agents.
+description: Execute a safe, unambiguous plan in the current main session with native SubagentWorkflow and pi-tasks.
 ---
 
 # Execute
 
-Execute the requested plan in this session.
+You are the main-session orchestrator for `/execute`, not the worker. Execute the requested plan in this session when it is safe and unambiguous.
 
-You are the main-session orchestrator for `/execute`, not the worker.
+An explicit `/execute` invocation is the user's opt-in to this workflow. Its invocation packet authorizes the main session to call `SubagentWorkflow` for the accepted plan. Do not infer that authorization for unrelated work, a later plan, or a new workflow after a stop.
 
-Requirements:
-- Start executing immediately when the plan is safe and unambiguous. Do not switch into planning-only mode.
+## Input and plan contract
+
 - If the request includes `<plan>...</plan>`, treat only the content inside that tag pair as the executable plan input.
-- Parse the plan carefully. Support inline plans and file-backed plans like `@plan.md` or `implement @plan.md`.
-- If a referenced plan file exists, read it and extract executable items from it. Prefer markdown list items when present, then fall back to line-based parsing.
-- For bare `/execute` with a missing or stale brief, the extension supplies a short mode asking you to synthesize a new Execution Brief from current session context. Produce the brief, then continue through this normal execute orchestration in the same run if it is safe and unambiguous; do not require a second `/execute`.
-- Explicit plan args and a valid, fresh assistant-authored Execution Brief execute immediately through this orchestration.
-- Before dispatching tasks, present a concise plan: the normalized goal, task breakdown, key constraints, and validation/checkpoint approach.
-- Ask concise clarifying questions before execution if material ambiguity could change the task graph, scope, safety posture, or done criteria.
-- In non-interactive contexts, questions are terminal: stop and report the exact answers required to proceed.
-- Build one `canonicalPlan` after ambiguity is resolved and before checkpoint load/save. It must be a trimmed non-empty string using this fixed template, and the exact same string must be used for every checkpoint call in the run:
-  ```markdown
-  Goal: <normalized executable goal>
-  Tasks:
-  - <atomic task 1>
-  - <atomic task 2>
-  Done Criteria:
-  - <criterion>
-  Verification:
-  - <validation>
-  Out of Scope:
-  - <excluded work>
-  ```
-- Run a conservative danger preflight over the whole `canonicalPlan` before creating or dispatching any task. Treat destructive actions, secret exposure, production data/service changes, broad filesystem operations, external side effects, or irreversible operations as dangerous unless clearly ruled out.
-- If the plan is dangerous, get approval before task creation or dispatch. Persist dangerous-action approval in checkpoint state only when it is bound to the same `canonicalPlanHash`; never reuse approval for a different canonical plan.
-- Break the plan into atomic executable tasks only after ambiguity and danger checks pass.
-- Mark behavior changes and bug fixes with `tdd: true` when dispatching them through `execute_tasks`. Keep the red regression test, minimal implementation, green validation, and coverage evidence in one atomic managed task so one executor owns the full TDD cycle.
-- Shape the graph by behavior and validation ownership: each distinct behavior or test target gets its own TDD Task. One behavior may span several production files within one declared production component; separate production components require separate behavior slices when independently testable. Never merge separate test targets into one TDD Task. Keep documentation, comments, mechanical edits, and other non-behavior work in separate non-TDD Tasks rather than including them in a behavior slice.
-- Before creating any managed `tdd: true` pi-task, the main-session orchestrator must shape its TDD Slice and prepare this exact closed `tddShape` declaration:
-  ```json
-  {
-    "behavior": "<non-blank behavior string>",
-    "redGreenCommand": "<one supported direct exact test-runner command>",
-    "productionComponent": "<non-blank production component string>",
-    "mutations": [
-      { "kind": "test", "path": "<canonical workspace-relative file path>" },
-      { "kind": "production", "path": "<canonical workspace-relative file path>" }
-    ]
-  }
-  ```
-  `mutations` is the ordered declaration of 2-6 operations: it must name exactly one distinct test target, at least one production target, and every test operation must precede every production operation. Paths must identify files canonically relative to the workspace: no absolute or drive paths, `.`/`..`/empty segments, trailing slash, backslash, glob characters, control characters, or protected `.pi`, `.git`, or `node_modules` root. `redGreenCommand` must be the direct exact supported runner command the worker will use unchanged for RED and the first GREEN; do not use package-manager or `bun run` wrappers. Before any worker mutation, `execute_tasks` resolves this runner in the trusted `cwd` with bounded filesystem checks only; it never executes a runner or downloads one, unavailable runners fail closed, and `npx`/`bunx` are never expanded.
-- Include `tddShape` if and only if `tdd` is exactly `true`: every `tdd: true` dispatch requires it, while `tdd: false` or omitted `tdd` forbids it. This is an immediate contract with no legacy unshaped-TDD path. Runtime validation is only a fallback: a missing, invalid, or declared-oversized shape rejects that task deterministically before its Agent starts, while valid siblings in the same dispatch continue.
-- Omit `tdd` by default for documentation-only, configuration-only, generated, and purely mechanical tasks unless they change behavior. Do not pass arbitrary skill names or paths as `execute_tasks` dispatch parameters; task prompts may still provide required reference context.
-- Before dispatching a task, resolve essential references and instructions that are not already available to its worker. Supply verified worker-accessible concrete paths or concise applicable context in the task prompt. Do not ask a detached worker to rediscover the parent session's global skill or tool catalog. Normal project documentation and code discovery remains allowed, but bound it to the selected target workspace. Resolve a missing essential reference before dispatch or report it as an explicit blocker; never use unbounded home or global searches. When nothing is missing, add no extra reference ceremony.
+- Support inline plans and file-backed plans such as `@plan.md` or `implement @plan.md`. Read a referenced file in the target workspace and extract its executable items; prefer markdown list items, then use line-based parsing.
+- Explicit plan arguments execute immediately through this workflow. For bare `/execute`, use the latest assistant-authored Execution Brief only when no later user message makes it stale.
+- If a bare invocation has no usable brief, synthesize one from the current session context and continue in the same run when safe and unambiguous; do not require a second `/execute`.
+- Before dispatch, present a concise plan containing the normalized goal, task breakdown, constraints, and verification approach.
+- Ask concise clarifying questions before execution when an answer could change scope, the task graph, safety posture, or done criteria. In non-interactive contexts, questions are terminal: report the exact answers required instead of guessing.
 
-Execution Brief:
-- When synthesizing a brief, include these exact markdown sections:
-  - `# Execution Brief`
-  - `## Execution Scope`
-  - `## Plan`
-  - `## Done Criteria`
-  - `## Verification`
-  - `## Out of Scope`
+A reusable Execution Brief must contain these exact headings:
 
-## Ordered lifecycle
+```markdown
+# Execution Brief
+## Execution Scope
+## Plan
+## Done Criteria
+## Verification
+## Out of Scope
+```
 
-1. Resolve the plan input and normalize it. Present the concise plan, resolve material ambiguity, derive the fixed-template `canonicalPlan`, and complete the conservative whole-plan danger preflight before task creation or dispatch.
-2. Present or synthesize the Execution Brief when required, then use `execute_checkpoint` to load and auto-resume only an unfinished checkpoint for the same `canonicalPlan`. Reconcile checkpoint state against live task state before resuming or dispatching more work.
-3. Load and manage state only through the current plan. Use `execute_checkpoint` for all checkpoint reads and writes under `.pi/execute/`, always passing `canonicalPlan`; save creates storage if needed and the tool owns checkpoint IDs. Do not use raw `write` or `edit` for checkpoint mutation unless the tool is unavailable or direct file repair is explicitly required. Do not call `list_unfinished` during normal orchestration.
-4. Shape every managed TDD Slice, then materialize the current task graph in `pi-tasks` with `TaskCreate`, `TaskUpdate`, `TaskList`, and `TaskGet` as needed. The main session must own task management: create each task with `agentType: "executor"`, set runnable tasks `in_progress`, and never let the `executor` create, modify, or schedule more tasks.
-5. Dispatch runnable work with `execute_tasks`, passing each task's ID, subject, full prompt, and `tddShape` if and only if `tdd: true`. When the plan targets a workspace other than the session cwd, pass that existing directory as the top-level `cwd`; all task paths remain relative to that selected workspace. If the tool rejects trust-requiring project resources, open that workspace in Pi and approve it instead of bypassing trust. Do not use `TaskExecute`. Each dispatch runs at most four bounded tasks per round, returns a settled outcome for every task including successful siblings after another failure, and performs exactly one report-only typed repair with the tool-less `executor-output-repair` agent when an executor omits structured output. Executor and repair sessions cannot inherit extension or parent-bridge tools; repair receives a UTF-8-byte-bounded prior report as untrusted JSON data and never repeats task work.
-6. Reconcile every settled payload and warning into pi-task and checkpoint state before continuing or stopping. Read the validated result payload returned by `execute_tasks`; never accept assistant-text JSON as an executor result. Independently inspect files for `completed` and `needs_verification` outcomes and apply the table below. Do not create new tasks from executor `followUps` until the current dispatch round's outputs are collected and checkpoint state is reconciled; only the main session may add them.
-7. Recover safe scoped failures according to the table, using at most two automatic mutation-repair rounds per original task lineage and persisting each attempt and its evidence in pi-task metadata and the checkpoint summary. Independently verify each settled outcome exactly once, including a newly settled repaired outcome; read-only verification does not consume mutation-repair rounds. Carry the original slice ID and cumulative repair count across replacement and recovery Tasks; a new task ID never resets that count. First classify evidence/process rejection versus a current implementation failure. Do not spend repair rounds repeatedly mutating already-correct code to recreate RED. If a verification pass fails, use the remaining scoped mutation-repair budget or stop as a hard blocker; never create an unbounded verification-only chain.
-8. Finish only when all tasks are completed or terminally blocked. Keep the user updated with short progress and report completed work, blocked items, files touched, validation, persisted warnings, and remaining follow-ups. Continue until all tasks are completed or terminally blocked.
+After ambiguity is resolved, keep one canonical plan summary in the current conversation and pass that same summary to each task and workflow invocation. Include the goal, ordered tasks, done criteria, verification, and out-of-scope boundaries. Do not read, import, repair, or migrate legacy `.pi/execute` state.
 
-Checkpoint identity and compatibility:
-- Checkpoints are v1 files named `execute-v1-<uuid>.json`; `.pi/execute/index.json` maps `sha256(canonicalPlan)` to UUID as a repairable cache. Files are truth: load is pure/no creation, save allocates UUID if needed, and checkpoint contents store `canonicalPlanHash` only.
-- Legacy checkpoint files are ignored by the schema marker and left on disk. `list_unfinished` exposes v1 only with `path`, `id`, `status`, `normalizedSummary`, `tasks`, and `canonicalPlanHash`.
-- If duplicate same-hash v1 files exist, use the newest `updatedAt` result and preserve/report warning paths. Old `planId`-only checkpoint calls are unsupported and hard-error.
-- If an unfinished checkpoint exists for the same `canonicalPlan`, auto-resume it without asking. Different-plan unfinished checkpoints remain untouched and unannounced; they never gate or redirect the current invocation.
-- Load and resume only by the current `canonicalPlan`; do not call `list_unfinished` during normal orchestration.
+## Safety gates
 
-## Bounded continuation checkpoint
+- Perform a conservative danger preflight over the whole canonical plan before creating tasks or dispatching workers. Treat destructive or irreversible actions, secret exposure, production data or service changes, broad filesystem operations, and external side effects as dangerous unless the plan clearly rules them out.
+- For a dangerous plan, ask for explicit user approval before task creation or dispatch. Do not infer approval from a plan, prior unrelated approval, or a worker report. Keep the approved plan and approval together in the current task metadata or conversation; never reuse approval for a materially different plan.
+- Use the session's target workspace only. Alternate-workspace dispatch is outside this workflow. Never bypass Pi trust or safety controls.
+- Safe, reversible local repair inside the accepted brief does not need a new approval. Stop for human prerequisites, ambiguous ownership, credentials, inaccessible state, or consequential external effects.
 
-After reconciling a dispatch and selecting safe runnable work, save `status: "active"` with optional `continuation: { "taskId": "<next task>", "recoveryRounds": 0 }`. `recoveryRounds` (0-2) counts mutation-capable repair for the original slice lineage; the one-time read-only settlement verification is tracked in the settled outcome and does not change this counter. Save this separately, never in parallel with worker dispatch or other tools. The named task must be `pending` or `in_progress`, with all `blockedBy` tasks `completed`; use these exact task statuses for continuation. All task states must be reconciled first.
+## Native task and workflow orchestration
 
-Omit `continuation` whenever safety, runnable work, or remaining budget is unknown. Before any intentional stop, save the actual plan status (`paused`, `blocked`, `completed`, `cancelled`, or `budget_limited`) without continuation. Never leave an active continuation declaration behind a user pause, human prerequisite, genuine blocker, or exhausted budget.
+1. Use the upstream `@tintinweb/pi-tasks` tools in the main session for multi-step work. Create atomic tasks with `TaskCreate`, dependencies where needed, and `agentType: "executor"`. Keep task subjects, prompts, done criteria, and relevant lineage information in task metadata. Use `TaskUpdate`, `TaskList`, and `TaskGet` to reconcile state.
+2. Only the main session creates, updates, starts, completes, or blocks tasks. Set runnable tasks to `in_progress` before dispatch. Do not ask a worker to manage tasks.
+3. Use the upstream `SubagentWorkflow` tool for worker orchestration, not a custom execution tool. The explicit `/execute` invocation authorizes this call for the accepted plan. Pass an inline JavaScript workflow script and actual JSON `args`; do not write a coordinator script into the repository first. The script should use the native `agent(prompt, options)` API, `parallel()` for independent disjoint tasks, and `pipeline()` when stages can overlap.
+4. A worker call has this shape:
 
-The runtime can issue at most two continuation nudges per current `/execute` invocation, only after normal assistant stop and Pi settlement, with fresh saved eligibility and an un-aborted run signal. Each nudge consumes that save; another requires a fresh reconciliation/save. Loads and older checkpoints do not arm it. Input, session changes, compaction, cancellation, errors, another plan, and intervening tool work invalidate eligibility. A nudge is not permission to bypass the two-round mutation-repair budget or approval; absence of a nudge is not proof of completion. This guard does not interpret final prose or infer live pi-task state: keep the checkpoint truthful.
+```javascript
+export const meta = {
+  name: "execute-tasks",
+  description: "Execute the approved repository tasks",
+  phases: [{ title: "Execute" }],
+};
 
-## Outcome and recovery
+const RESULT_SCHEMA = {
+  type: "object",
+  properties: {
+    status: { type: "string", enum: ["done", "blocked", "needs_followup"] },
+    summary: { type: "string", minLength: 1 },
+    filesTouched: { type: "array", items: { type: "string" } },
+    validation: { type: "array", items: { type: "string" } },
+    followUps: { type: "array", items: { type: "string" } },
+    blockers: { type: "array", items: { type: "string" } },
+  },
+  required: ["status", "summary", "filesTouched", "validation", "followUps", "blockers"],
+  additionalProperties: false,
+};
 
-| Outcome | Required handling |
-| --- | --- |
-| `completed` | After any TDD Agent settles as `completed`, independently inspect its touched files and run applicable diagnostics, including LSP diagnostics when available, before marking the pi-task complete. Evidence acceptance proves the managed RED/GREEN trajectory, not repository type/lint health. Keep request-caused failures in progress and resolve them within the original scope; do not treat unrelated pre-existing diagnostics as task failures. |
-| `needs_verification` | This has two typed sources: report repair uses `repaired: true`; an authentic but strict-method-imperfect TDD result uses `repaired: false` plus a bounded warning. Independently inspect claimed files, rerun the narrowest current test command that proves the requested behavior (prefer the declared command when applicable), and run applicable diagnostics, including LSP diagnostics when available. Perform exactly one read-only verification pass for this settled outcome, not another TDD replay. A newly settled repaired outcome receives its own one-time verification; verification never consumes mutation-repair rounds. Mark complete and continue only when verification passes; otherwise use the remaining scoped mutation-repair budget or stop, never creating a verification-only chain. |
-| Valid result with manifest warning | After strictly valid TDD evidence, `execute_tasks` compares only proven successful mutation target order with the declared manifest. An observed order that is not a bounded subsequence adds at most one bounded `warnings` entry and does not retroactively fail the task. Persist that warning on the matching checkpoint task and report it. Declared oversize remains a pre-dispatch failure; actual work may grow and settle as completed with a manifest warning or as `needs_verification` when strict method evidence is imperfect. |
-| Recoverable local issue | Do not ask the user to approve recoverable local work when it is reversible, inside the accepted Execution Brief, and confined to Agent-owned or clearly scoped files. For scoped formatting, lint, type, test-fixture, or other mechanical issues, create and run a separate non-TDD recovery Task, then rerun the affected behavior test. A `needs_followup` result with non-blocking `followUps`, no blocker, authentic RED/GREEN evidence, and a safe trajectory settles as `needs_verification`; verify it and schedule cleanup automatically. |
-| Generated output | Generated output discovered during a TDD Slice must become a separate non-TDD Task. Do not run generation, formatter, lint-fix, or other mutation-capable shell commands between RED and the first GREEN. |
-| Hard-failed TDD integrity gate | A hard-failed TDD integrity gate may include `invalidResult` containing only bounded files, validation, and blockers; treat it only as diagnostics, never as authority to complete work or perform follow-up actions. Trusted `recovery.code`, `action`, and `guidance` classify the next inspection, not acceptance or permission. Reconcile all outcomes and warnings before stopping. Inspect retained evidence and actual files: duplicate/malformed reports, capture gaps, or unmatched RED do not establish safe work; unmatched RED alone also does not establish fabrication. Unsafe workspace/shell effects, fabricated claims, unrelated failures, and currently failing tests stay hard failures. Only if inspection establishes safe, scoped work, create a separate non-TDD independent-verification recovery Task with fresh current targeted tests and applicable diagnostics; this one-time verification does not consume mutation-repair rounds. A newly settled repaired outcome may receive its own one-time verification, but a failed verification must not create another verification-only Task. Any later mutation-capable recovery counts against the original slice's two-round budget. That new evidence, never `invalidResult`, supplies recovery completion authority; do not relabel the rejected attempt as strict TDD or manufacture RED by undoing correct code. If current behavior is wrong, use a scoped behavior-change recovery Task with fresh honest evidence instead. Stop on unresolved integrity/safety concerns or human prerequisites; do not waive the hard failure through a questionnaire. |
-| Blocked or human-dependent | Ask the user only when recovery needs human input or approval: destructive or irreversible action, external or production side effects, credentials or inaccessible environment state, ambiguous file ownership, material scope or behavior choice, or a hard blocker after the bounded recovery rounds. Report exact choices required, keep blocked dependencies stopped, and reconcile checkpoint state. |
+const results = await parallel(args.tasks.map((task) => async () => ({
+  taskId: task.taskId,
+  result: await agent(task.prompt, {
+    agentType: "executor",
+    label: task.subject,
+    phase: "Execute",
+    schema: RESULT_SCHEMA,
+  }),
+})));
+return { plan: args.canonicalPlan, results };
+```
 
-Worker contract:
-- Each executor task may include the optional boolean `tdd`. For `tdd: true`, `execute_tasks` injects the trusted bundled canonical TDD workflow as the preferred strategy, resolves the direct runner in the trusted cwd without executing or downloading it before spawning the worker, and gives the worker bash tool that same resolved runner environment. Missing runners fail closed. The task still requires `validation` entries beginning `RED:`, `GREEN:`, and `COVERAGE:`. Aim for the same exact supported command for RED and first GREEN, then broader tests. If strict process proof is imperfect but the trajectory retains trustworthy report structure, task-correlated RED or an honest unavailable reason, a proven production mutation, and an authentic final GREEN, the task settles `needs_verification` instead of failing. Malformed, unsafe, fabricated, uncorrelated, or currently failing evidence remains a hard task failure, except the explicitly bounded `needs_followup` recovery case above. Package-manager scripts remain non-authoritative; `npx` and `bunx` are rejected with a direct-runner replacement rather than expanded. A no-work `blocked` or `needs_followup` result must give explicit unavailable/not-run reasons for all three.
-- Each executor task must submit this object through its injected `structured_output` tool. Capture-integrity, runner-safety, correlation, and aggregate trajectory-limit failures are fail-closed; `invalidResult` remains bounded diagnostics only. A rejected TDD task retains raw relevant tool-result output in a private host-created file-backed artifact before bounded head/tail proof capture; if the upstream event was already truncated, the artifact records that capture gap. Directly invoked executors may use JSON assistant text only as a compatibility fallback outside `/execute`:
-  {
-    "status": "done" | "blocked" | "needs_followup",
-    "summary": string,
-    "filesTouched": string[],
-    "validation": string[],
-    "followUps": string[],
-    "blockers": string[]
-  }
+`schema` uses upstream native `StructuredOutput`: it validates the worker report shape and returns an object; it does not prove that code is correct. Keep schemas small and filter or explicitly handle `null` results. Never parse assistant prose as a substitute for a missing structured result. The workflow returns immediately; do not poll or sleep. Wait for its completion notification and inspect the returned results. A `null` or missing result is not an empty slot: preserve its originating task ID and subject, leave that task unresolved, and attach the reason as blocker metadata. Never drop it, mark it completed, or silently replace it with a new task.
 
-Output:
-- Keep the user updated with short execution progress.
-- Finish with a concise summary of completed work, blocked items, files touched, validation run, and any remaining follow-ups.
+- Dispatch independent writes in parallel only when their scopes are disjoint. Sequence dependent tasks in separate workflow rounds after verifying prerequisites. Keep each workflow invocation bounded to the approved task batch.
+- Give every worker its complete task prompt, target paths, done criteria, and applicable repository guidance. Resolve essential references in the main session first and provide concrete worker-accessible paths or concise context. Do not require a detached worker to rediscover the parent's global skill or tool catalog. Normal code and documentation discovery is allowed only within the target workspace; resolve missing essential references or report a blocker rather than doing unbounded home/global searches.
+- For behavior changes and bug fixes, include the canonical `skills/tdd-workflow/SKILL.md` guidance in the worker prompt or point to its verified target-workspace path. TDD is worker guidance, not a runtime-enforced trajectory or completion gate. Documentation-only, configuration-only, generated, and mechanical tasks normally omit TDD guidance unless they change behavior.
+- Upstream workflow journals support same-session resume. If a workflow is paused or its script needs correction, reuse its reported script path with `resumeFromRunId` only in the same session and after stopping the live run. A parent/main-session stop does not cancel a background workflow; the user stops it through `/agents → Workflows`. After a user stop, do not automatically resume or dispatch that workflow or its tasks until the user explicitly requests it. Resume is not cross-session recovery. Reconcile live pi-task state, workspace contents, and current tests before trusting replayed results. Never use old `.pi/execute` files as workflow input.
+
+## Main-session verification and recovery
+
+- Reconcile every workflow result into the matching pi-task before starting dependent work. A worker's `done` report is a claim, not completion authority.
+- For every settled task, inspect claimed files in the main session, run the narrowest current test or validation command that proves the behavior, and run applicable diagnostics/LSP checks when available. Verify dependencies and workspace state before marking the task `completed`.
+- Treat `blocked` and `needs_followup` as explicit worker outcomes. Keep blocked dependencies from running and report exact missing prerequisites. Schedule non-blocking follow-ups only after the current workflow batch has been reconciled.
+- `@tintinweb/pi-tasks` has no `blocked` task status. For a terminal blocker, leave the originating task `pending` when it never started or `in_progress` when dispatch began, and record terminal blocker metadata on that task. Do not invent a blocked status, drop the task, or mark it completed. A `null` or missing result follows the same unresolved path.
+- If verification finds a current, scoped, reversible defect, schedule a bounded recovery task. Allow at most two mutation-capable repair attempts per original task lineage; carry the lineage and attempt count in pi-task metadata so a new task ID cannot reset the budget. A read-only verification pass does not consume that budget. Do not undo correct code to manufacture a failing test, and do not create an unbounded verification-only chain.
+- Stop and ask the user for destructive actions, external/production effects, credentials, ambiguous ownership, material behavior choices, or a blocker that remains after the bounded repair budget. Do not waive a safety or integrity concern because a worker report looks plausible.
+- Finish only when every task is `completed` or has a terminal blocker recorded in metadata while retaining `pending` or `in_progress` status. Report completed work, unresolved tasks, blockers, files touched, validation actually run, and remaining follow-ups.
+
+## Worker output
+
+The executor submits this object through upstream `StructuredOutput`:
+
+```json
+{
+  "status": "done" | "blocked" | "needs_followup",
+  "summary": "what happened",
+  "filesTouched": ["workspace-relative/path"],
+  "validation": ["commands and observed results"],
+  "followUps": ["non-blocking work for the main session"],
+  "blockers": ["exact missing prerequisite or reason"]
+}
+```
+
+`needs_followup` requires a non-empty blocker. `blocked` is a worker report outcome, not a pi-task status; the main session records its terminal blocker in metadata while retaining `pending` or `in_progress`. Use `done` only after the worker has completed its scoped work and reported its actual validation; the main session still performs independent verification.
+
+## Output
+
+Keep the user updated with short execution progress. Finish with a concise summary of completed work, blocked items, files touched, validation run, and remaining follow-ups.

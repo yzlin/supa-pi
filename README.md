@@ -27,7 +27,7 @@ Documented extensions in this repo include:
 - **`extensions/context-docs`** — deterministic `/context-setup`, `/context-note`, `/adr`, and `/context-review` workflows for durable project context docs; canonical workflow behavior lives in `skills/context-docs/SKILL.md`
 - **`extensions/docs-list`** — `docs_list` tool for discovering project markdown docs before coding; backed by the same implementation as the `docs-list` CLI
 - **`extensions/code-improvement`** — scoped `/simplify` code-simplifier delegation with strict target grammar, `--extra` guidance, `--yes` consent bypass for large/PR scopes, hard file allowlists, and `/improve-codebase-architecture` read-only architecture review workflow
-- **`extensions/review`** — interactive current-session `/review` workflow with `/review-summary` and `/review-fix` follow-ups plus reviewer-agent orchestration; adapted in part from `@earendil-works/pi-review`
+- **`extensions/review`** — current-session `/review` prepares one public native workflow and locally validates publication via `review_finalize`, with `/review-summary` and `/review-fix` follow-ups (see `extensions/review/README.md`); adapted in part from `@earendil-works/pi-review`
 - **`extensions/smart-docs`** — deterministic `/smart-docs` command flow for codebase documentation generation
 - **`extensions/tool-display`** — compact tool renderers and the `read` override that returns exact loaded skill files in full, ignores pagination for those skill reads, and marks results so RTK does not compact them
 
@@ -72,6 +72,8 @@ See `package.json` for the full registration list.
 `skills/e2e-testing/SKILL.md` is the canonical main-session Playwright E2E workflow, including test guardrails, artifact handling, and reporting; no dedicated E2E agent is shipped.
 
 Behavior changes and bug fixes use the canonical `skills/tdd-workflow/SKILL.md`, which also owns exact-command build reproduction, cascade/root-cause isolation, no-suppression, generated-source, and diagnostics-verification safeguards. Direct main-session work may use a concrete alternative to RED only for a reversible, low-impact change when it explains why RED is unavailable; meaningful regression and failure-path coverage plus required checks remain mandatory, and the exception does not cover security, payment, data-integrity, or irreversible work. During `/execute`, the managed TDD evidence contract remains unchanged; the generic executor receives the skill only through trusted `tdd: true` injection, and there is no separate TDD agent. Phased work validates each intermediate phase, while the final requested outcome must be usable.
+
+`/execute` is a command-only entrypoint: an explicit invocation authorizes native `SubagentWorkflow` for that plan. It does not register retired execution tools or hooks. A stopped background workflow is controlled through `/agents` → `Workflows`; it is not automatically resumed or redispatched, and null worker results remain unresolved task records with blocker metadata.
 
 `/diagnose` is diagnosis-only by default. An explicit diagnosis-and-fix request authorizes only a bounded local remedy after `Diagnosis: Proven`, with the disclosed scope and test plan; causal proof, targeted revalidation, and probe cleanup remain required.
 
@@ -148,12 +150,16 @@ Fresh setup uses Pi's official fullscreen TUI by default. Existing `settings.jso
 
 After setup, restart Pi to pick up the changes.
 
+### Existing subagents registration migration
+
+If an older live config still registers the fork runtime, run `pi remove npm:@yzlin/pi-subagents` when that registration is present, rerun `./setup.sh`, and restart Pi. Verify `pi list` contains only the upstream `npm:@tintinweb/pi-subagents` subagents runtime. The unused fork SDK dependency has been removed: execute and review use public tools from the setup/global upstream companion, without adding a repository npm dependency on that runtime. The duplicate-fork setup guard remains. This is manual migration guidance, not a claim that live settings were changed.
+
 ## Companion packages installed by setup
 
 The setup script installs or reconciles these Pi packages. It no longer installs `pi-skill-palette`; uninstall that global package yourself if it is still present from an older setup.
 
 - `npm:@yzlin/pieditor@2.0.0` — exact required compositor-free release
-- `@yzlin/pi-subagents`
+- `@tintinweb/pi-subagents`
 - `pi-mcp-adapter`
 - `pi-rewind`
 - `pi-web-access`

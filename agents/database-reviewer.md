@@ -31,9 +31,9 @@ Every finding must cite an exact file and positive line number, describe the con
 
 ## Structured output
 
-When `structured_output` is available, submit exactly one final result through it, emit no assistant-text result, and do not respond afterward.
+When `StructuredOutput` is available, submit exactly one final result through it, emit no assistant-text result, and do not respond afterward.
 
-When `structured_output` is unavailable in a direct agent invocation, emit exactly one assistant response containing the same object as JSON, without prose or a Markdown fence.
+When `StructuredOutput` is unavailable in a direct agent invocation, emit exactly one assistant response containing the same object as JSON, without prose or a Markdown fence.
 
 The object may contain only:
 

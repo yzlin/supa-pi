@@ -1,15 +1,4 @@
-import { createHash } from "node:crypto";
-import {
-  closeSync,
-  existsSync,
-  constants as fsConstants,
-  fstatSync,
-  lstatSync,
-  openSync,
-  readFileSync,
-  readSync,
-  realpathSync,
-} from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { cp, mkdir, mkdtemp, readdir, realpath, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import {
@@ -44,9 +33,6 @@ import {
 } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
 
-import { EXECUTOR_RESULT_SCHEMA } from "../../extensions/execute/executor-prompt";
-import { validateTaskShape } from "../../extensions/execute/task-shape";
-import { normalizeTddToolMetadata } from "../../extensions/execute/tdd-evidence";
 import {
   type AssistantMessageRecord,
   composeEvalRequest,
@@ -59,112 +45,9 @@ import {
   snapshotWorkspace,
   type ToolCallRecord,
 } from "./index";
-import {
-  composeTaskShapeRequest,
-  type ExecuteDiagnosticOwnership,
-  scoreTaskShapeRun,
-  simulatedCheckpointSchema,
-  simulatedExecuteTasksSchema,
-  simulatedTaskCreateSchema,
-  simulatedTaskIdSchema,
-  simulatedTaskUpdateSchema,
-  type TaskShapeCase,
-  type TaskShapeRunEvidence,
-} from "./task-shape";
 
 const LEADING_AT_PATTERN = /^@/;
 const LEADING_WHITESPACE_PATTERN = /^\s*/;
-const EVAL_PROOF_MAX_BYTES = 8 * 1024 * 1024;
-const EVAL_PROOF_BUFFER_BYTES = 64 * 1024;
-const EVAL_MUTATION_TOOLS = new Set(["edit", "write"]);
-
-type EvalFileProof =
-  | { kind: "absent" }
-  | { kind: "file"; size: number; sha256: string };
-
-function evalFileProof(
-  workspace: string,
-  target: string
-): EvalFileProof | undefined {
-  const noFollow = fsConstants.O_NOFOLLOW;
-  if (typeof noFollow !== "number" || noFollow === 0) {
-    return;
-  }
-  const root = realpathSync(workspace);
-  const absolute = resolve(root, target);
-  const child = relative(root, absolute);
-  if (!child || child.startsWith("..") || isAbsolute(child)) {
-    return;
-  }
-  try {
-    const pathStat = lstatSync(absolute);
-    if (pathStat.isSymbolicLink()) {
-      return;
-    }
-  } catch (error) {
-    return (error as NodeJS.ErrnoException).code === "ENOENT"
-      ? { kind: "absent" }
-      : undefined;
-  }
-  let descriptor: number | undefined;
-  try {
-    // biome-ignore lint/suspicious/noBitwiseOperators: open(2) flags are bitmasks.
-    const flags = fsConstants.O_RDONLY | fsConstants.O_NONBLOCK | noFollow;
-    descriptor = openSync(absolute, flags);
-    const before = fstatSync(descriptor);
-    if (!before.isFile() || before.size > EVAL_PROOF_MAX_BYTES) {
-      return;
-    }
-    const hash = createHash("sha256");
-    const buffer = Buffer.allocUnsafe(EVAL_PROOF_BUFFER_BYTES);
-    let offset = 0;
-    while (offset < before.size) {
-      const read = readSync(
-        descriptor,
-        buffer,
-        0,
-        Math.min(buffer.length, before.size - offset),
-        offset
-      );
-      if (read <= 0) {
-        return;
-      }
-      hash.update(buffer.subarray(0, read));
-      offset += read;
-    }
-    const after = fstatSync(descriptor);
-    const pathAfter = lstatSync(absolute);
-    if (
-      after.dev !== before.dev ||
-      after.ino !== before.ino ||
-      after.size !== before.size ||
-      after.mtimeMs !== before.mtimeMs ||
-      pathAfter.dev !== after.dev ||
-      pathAfter.ino !== after.ino ||
-      realpathSync(absolute) !== absolute
-    ) {
-      return;
-    }
-    return { kind: "file", size: after.size, sha256: hash.digest("hex") };
-  } catch {
-    return;
-  } finally {
-    if (descriptor !== undefined) {
-      closeSync(descriptor);
-    }
-  }
-}
-
-function sameEvalProof(left: EvalFileProof, right: EvalFileProof): boolean {
-  return (
-    left.kind === right.kind &&
-    (left.kind === "absent" ||
-      (right.kind === "file" &&
-        left.size === right.size &&
-        left.sha256 === right.sha256))
-  );
-}
-
 const codexServiceTierStream: StreamFn = (model, context, options) => {
   const serviceTierOptions = options as typeof options & {
     serviceTier?: "priority";
@@ -233,7 +116,6 @@ export interface RunRecord {
   toolCalls: ToolCallRecord[];
   trajectoryErrors: string[];
   assistantMessages: AssistantMessageRecord[];
-  taskShapeEvidence?: TaskShapeRunEvidence;
 }
 
 export interface RunVariantOptions {
@@ -250,7 +132,6 @@ export interface RunVariantOptions {
   maxTurns: number;
   getApiKey: (provider: string) => Promise<string | undefined>;
   streamFn?: StreamFn;
-  taskShapeCase?: TaskShapeCase;
 }
 
 async function copyFixture(source: string, destination: string): Promise<void> {
@@ -266,15 +147,6 @@ const IMMUTABLE_MATH_TEST = readFileSync(
   new URL("./fixtures/sample-project/tests/math.case.ts", import.meta.url),
   "utf8"
 );
-export const CANONICAL_SUBTRACT_TEST = `import { expect, test } from "bun:test";
-
-import { subtract } from "../src/math";
-
-test("subtracts the right operand", () => {
-  expect(subtract(7, 5)).toBe(2);
-});
-`;
-
 function stripComments(source: string): string | undefined {
   let output = "";
   let state: "code" | "line" | "block" = "code";
@@ -384,17 +256,6 @@ export function runAllowedFixtureTest(
       failure:
         "tests/math.case.ts > math > adds numbers\nExpected: 12\nReceived: 2\n1 failed, 1 passed\n",
     },
-    "bun test tests/subtract.case.ts": {
-      tests: [
-        { path: "tests/math.case.ts", content: IMMUTABLE_MATH_TEST },
-        { path: "tests/subtract.case.ts", content: CANONICAL_SUBTRACT_TEST },
-      ],
-      operations: { add: "+", multiply: "*", subtract: "-" },
-      success:
-        "tests/subtract.case.ts > subtracts the right operand\n1 passed, 0 failed\n",
-      failure:
-        "tests/subtract.case.ts > subtracts the right operand\nExpected: 2\nReceived: missing or incorrect subtract\n1 failed, 0 passed\n",
-    },
   } as const;
   const specification = specifications[command as keyof typeof specifications];
   if (!specification) {
@@ -429,7 +290,7 @@ export function runAllowedFixtureTest(
       readFileSync(join(cwd, "src/math.ts"), "utf8")
     );
     const declaration =
-      /export\s+function\s+(add|multiply|subtract)\s*\(\s*([A-Za-z_$][\w$]*)\s*:\s*number\s*,\s*([A-Za-z_$][\w$]*)\s*:\s*number\s*\)\s*:\s*number\s*\{\s*return\s+([^;{}\n]{1,200});\s*\}/gy;
+      /export\s+function\s+(add|multiply)\s*\(\s*([A-Za-z_$][\w$]*)\s*:\s*number\s*,\s*([A-Za-z_$][\w$]*)\s*:\s*number\s*\)\s*:\s*number\s*\{\s*return\s+([^;{}\n]{1,200});\s*\}/gy;
     const operations = new Map<
       string,
       { leftParameter: string; rightParameter: string; expression: string }
@@ -458,7 +319,7 @@ export function runAllowedFixtureTest(
     const fullyParsed =
       source !== undefined && source.slice(offset).trim() === "";
     const expected = Object.entries(specification.operations);
-    const supportedOperators = ["+", "*", "-"];
+    const supportedOperators = ["+", "*"];
     const hasOnlyClosedExpressions = [...operations.values()].every(
       (implementation) =>
         supportedOperators.some((operator) =>
@@ -499,10 +360,7 @@ export function runAllowedFixtureTest(
   }
 }
 
-const ALLOWED_FIXTURE_TEST_COMMANDS = new Set([
-  "bun test tests/math.case.ts",
-  "bun test tests/subtract.case.ts",
-]);
+const ALLOWED_FIXTURE_TEST_COMMANDS = new Set(["bun test tests/math.case.ts"]);
 
 export function isAllowedFixtureTestCommand(command: string): boolean {
   return ALLOWED_FIXTURE_TEST_COMMANDS.has(
@@ -656,21 +514,6 @@ function createAskTool(
   };
 }
 
-const structuredOutputTool: AgentTool<typeof EXECUTOR_RESULT_SCHEMA> = {
-  name: "structured_output",
-  label: "Structured output",
-  description:
-    "Submit the final executor result exactly once. This must be the final action.",
-  parameters: EXECUTOR_RESULT_SCHEMA,
-  execute() {
-    return Promise.resolve({
-      content: [{ type: "text" as const, text: "Structured result accepted." }],
-      details: {},
-      terminate: true,
-    });
-  },
-};
-
 const fetchContentTool: AgentTool = {
   name: "fetch_content",
   label: "Fetch content",
@@ -733,254 +576,7 @@ async function isSafeWorkspacePath(
   return isWithinDirectory(workspacePath, await realpath(existingAncestor));
 }
 
-export function createSimulatedOrchestrationTools(
-  reconciliation?: ExecuteDiagnosticOwnership
-): AgentTool[] {
-  let nextTaskId = 1;
-  let reconciliationTasks: Array<{ taskId: string; filesTouched: string[] }> =
-    [];
-  const diagnosedFiles = new Set<string>();
-  const taskCreate: AgentTool<typeof simulatedTaskCreateSchema> = {
-    name: "TaskCreate",
-    label: "Create Task (simulated)",
-    description:
-      "Validate a bounded executor-owned task proposal. No pi-task is created.",
-    parameters: simulatedTaskCreateSchema,
-    execute(_id, params) {
-      const taskId = `sim-task-${nextTaskId}`;
-      nextTaskId += 1;
-      return Promise.resolve({
-        content: [
-          {
-            type: "text" as const,
-            text: JSON.stringify({
-              taskId,
-              subject: params.subject,
-              simulated: true,
-            }),
-          },
-        ],
-        details: { taskId, simulated: true },
-      });
-    },
-  };
-  const taskUpdate: AgentTool<typeof simulatedTaskUpdateSchema> = {
-    name: "TaskUpdate",
-    label: "Update Task (simulated)",
-    description:
-      "Validate a simulated task status transition. No task state is persisted.",
-    parameters: simulatedTaskUpdateSchema,
-    execute(_id, params) {
-      const task = reconciliationTasks.find(
-        (candidate) => candidate.taskId === params.taskId
-      );
-      const diagnosticsComplete =
-        task?.filesTouched.every((filePath) => diagnosedFiles.has(filePath)) ??
-        false;
-      const expectedStatus =
-        reconciliation === "request-caused" ? "in_progress" : "completed";
-      const evaluationComplete =
-        reconciliation !== undefined &&
-        diagnosticsComplete &&
-        params.status === expectedStatus;
-      return Promise.resolve({
-        content: [
-          {
-            type: "text" as const,
-            text: JSON.stringify({
-              ...params,
-              diagnosticsComplete,
-              evaluationComplete,
-              simulated: true,
-            }),
-          },
-        ],
-        details: { diagnosticsComplete, evaluationComplete, simulated: true },
-        ...(reconciliation !== undefined && !evaluationComplete
-          ? { isError: true }
-          : {}),
-      });
-    },
-  };
-  const taskList: AgentTool = {
-    name: "TaskList",
-    label: "List Tasks (simulated)",
-    description:
-      "Return the bounded simulated task list. No pi-task store is accessed.",
-    parameters: Type.Object({}, { additionalProperties: false }),
-    execute() {
-      return Promise.resolve({
-        content: [
-          {
-            type: "text" as const,
-            text: JSON.stringify({ tasks: [], simulated: true }),
-          },
-        ],
-        details: { simulated: true },
-      });
-    },
-  };
-  const taskGet: AgentTool<typeof simulatedTaskIdSchema> = {
-    name: "TaskGet",
-    label: "Get Task (simulated)",
-    description:
-      "Read one simulated task identifier. No pi-task store is accessed.",
-    parameters: simulatedTaskIdSchema,
-    execute(_id, params) {
-      return Promise.resolve({
-        content: [
-          {
-            type: "text" as const,
-            text: JSON.stringify({
-              ...params,
-              status: "in_progress",
-              simulated: true,
-            }),
-          },
-        ],
-        details: { simulated: true },
-      });
-    },
-  };
-  const checkpoint: AgentTool<typeof simulatedCheckpointSchema> = {
-    name: "execute_checkpoint",
-    label: "Execute Checkpoint (simulated)",
-    description:
-      "Validate a bounded checkpoint request without reading or writing files.",
-    parameters: simulatedCheckpointSchema,
-    execute(_id, params) {
-      return Promise.resolve({
-        content: [
-          {
-            type: "text" as const,
-            text: JSON.stringify({
-              op: params.op,
-              found: false,
-              simulated: true,
-            }),
-          },
-        ],
-        details: { simulated: true },
-      });
-    },
-  };
-  const diagnosticsSchema = Type.Object(
-    {
-      operation: Type.Literal("diagnostics"),
-      filePath: Type.String({ minLength: 1, maxLength: 500 }),
-    },
-    { additionalProperties: false }
-  );
-  const diagnostics: AgentTool<typeof diagnosticsSchema> = {
-    name: "lsp",
-    label: "LSP diagnostics (simulated)",
-    description:
-      "Inspect one returned touched file after completed simulated execution.",
-    parameters: diagnosticsSchema,
-    execute(_id, params) {
-      const filePath = (params as { filePath: string }).filePath;
-      const expected = reconciliationTasks.some((task) =>
-        task.filesTouched.includes(filePath)
-      );
-      if (expected) {
-        diagnosedFiles.add(filePath);
-      }
-      const text =
-        reconciliation === "request-caused"
-          ? `${filePath}: request-caused type diagnostic`
-          : `${filePath}: no request-caused diagnostics; unrelated diagnostic exists elsewhere`;
-      return Promise.resolve({
-        content: [{ type: "text" as const, text }],
-        details: { expected, ownership: reconciliation, simulated: true },
-        ...(expected ? {} : { isError: true }),
-      });
-    },
-  };
-  const executeTasks: AgentTool<typeof simulatedExecuteTasksSchema> = {
-    name: "execute_tasks",
-    label: "Execute Tasks (capture only)",
-    description:
-      "Validate and capture the complete pre-dispatch graph of up to four closed executor requests. An accepted capture completes this shape evaluation successfully; no real Agent is requested or launched.",
-    parameters: simulatedExecuteTasksSchema,
-    execute(_id, params) {
-      const errors = params.tasks.flatMap((task, index) => {
-        if (task.tdd === true) {
-          const validation = validateTaskShape(task.tddShape);
-          return validation.ok === false
-            ? validation.errors.map((error) => `tasks[${index}]: ${error}`)
-            : [];
-        }
-        return task.tddShape === undefined
-          ? []
-          : [`tasks[${index}]: tddShape requires tdd:true`];
-      });
-      const accepted = errors.length === 0;
-      reconciliationTasks =
-        accepted && reconciliation
-          ? params.tasks.flatMap((task) => {
-              if (task.tdd !== true) {
-                return [];
-              }
-              const validation = validateTaskShape(task.tddShape);
-              return validation.ok
-                ? [
-                    {
-                      taskId: task.taskId,
-                      filesTouched: validation.value.mutations.map(
-                        (mutation) => mutation.path
-                      ),
-                    },
-                  ]
-                : [];
-            })
-          : [];
-      const results = reconciliationTasks.map((task) => ({
-        taskId: task.taskId,
-        outcome: "completed",
-        result: { filesTouched: task.filesTouched },
-      }));
-      const evaluationComplete = accepted && reconciliation === undefined;
-      const payload = {
-        accepted,
-        captured: true,
-        evaluationComplete,
-        agentLaunch: "not_requested_in_shape_evaluation",
-        errors: errors.slice(0, 8),
-        ...(reconciliation
-          ? { diagnosticOwnership: reconciliation, results }
-          : {}),
-      };
-      return Promise.resolve({
-        content: [
-          {
-            type: "text" as const,
-            text: JSON.stringify(payload),
-          },
-        ],
-        details: payload,
-        ...(accepted ? {} : { isError: true }),
-      });
-    },
-  };
-  return [
-    taskCreate,
-    taskUpdate,
-    taskList,
-    taskGet,
-    checkpoint,
-    ...(reconciliation ? [diagnostics] : []),
-    executeTasks,
-  ];
-}
-
-function createTools(
-  workspace: string,
-  evalCase: EvalCase,
-  taskShapeCase?: TaskShapeCase
-): AgentTool[] {
-  if (taskShapeCase) {
-    return createSimulatedOrchestrationTools(taskShapeCase.reconciliation);
-  }
+function createTools(workspace: string, evalCase: EvalCase): AgentTool[] {
   const names = evalCase.tools;
   const builtInsByName = new Map(
     [
@@ -993,12 +589,9 @@ function createTools(
   const builtIns = [...builtInsByName.values()].filter((tool) =>
     names.includes(tool.name as EvalCase["tools"][number])
   );
-  const extras = [
-    agentTool,
-    webSearchTool,
-    fetchContentTool,
-    structuredOutputTool,
-  ].filter((tool) => names.includes(tool.name as EvalCase["tools"][number]));
+  const extras = [agentTool, webSearchTool, fetchContentTool].filter((tool) =>
+    names.includes(tool.name as EvalCase["tools"][number])
+  );
   const askTools = evalCase.askResponse
     ? [createAskTool(evalCase.askResponse)]
     : [];
@@ -1021,55 +614,18 @@ export async function runVariant(
   const sessionId = SessionManager.inMemory().getSessionId();
   await copyFixture(options.fixturePath, workspace);
   const initialWorkspaceSnapshot = await snapshotWorkspace(workspace);
-  const trustedFixtureRegressions = options.evalCase.checks.flatMap((check) =>
-    check.type === "tddEvidence" && check.trustedFixtureRegression
-      ? [check.trustedFixtureRegression]
-      : []
+  const tools = createTools(workspace, options.evalCase);
+  const request = composeEvalRequest(
+    options.evalCase.promptPath,
+    options.promptContent,
+    options.evalCase.task
   );
-  for (const trustedFixtureRegression of trustedFixtureRegressions) {
-    const preflight = runAllowedFixtureTest(
-      workspace,
-      trustedFixtureRegression.command
-    );
-    if (
-      !(
-        options.evalCase.tools.includes("bash") &&
-        isAllowedFixtureTestCommand(trustedFixtureRegression.command)
-      ) ||
-      preflight.exitCode === 0 ||
-      !preflight.output
-        .toString("utf8")
-        .includes(trustedFixtureRegression.redOutputIdentity)
-    ) {
-      await rm(workspace, { force: true, recursive: true });
-      throw new Error("trusted fixture regression preflight failed");
-    }
-  }
-  const tools = createTools(workspace, options.evalCase, options.taskShapeCase);
-  const request = options.taskShapeCase
-    ? {
-        ...composeTaskShapeRequest(
-          options.promptContent,
-          readFileSync(
-            new URL("../../extensions/core-prompt/prompt.md", import.meta.url),
-            "utf8"
-          ),
-          options.evalCase.task,
-          options.taskShapeCase.reconciliation
-        ),
-        structuredOutput: false,
-      }
-    : composeEvalRequest(
-        options.evalCase.promptPath,
-        options.promptContent,
-        options.evalCase.task
-      );
   const context: AgentContext = {
     systemPrompt: [
       request.systemPrompt,
       "# Eval environment",
       `Working directory: ${workspace}`,
-      "Fixture restriction: `tests/math.case.ts` must remain byte-for-byte unchanged. Do not edit, replace, or add assertions to this file. This is a closed-simulator constraint, not a general TDD rule.",
+      "Fixture restriction: `tests/math.case.ts` must remain byte-for-byte unchanged. Do not edit, replace, or add assertions to this file.",
     ].join("\n\n"),
     messages: [],
     tools,
@@ -1096,10 +652,7 @@ export async function runVariant(
     }
   };
   const assistantMessages: AssistantMessageRecord[] = [];
-  const pendingToolCalls = new Map<
-    string,
-    ToolCallRecord & { preMutationProofs?: EvalFileProof[] }
-  >();
+  const pendingToolCalls = new Map<string, ToolCallRecord>();
   let eventOrder = 0;
   const serviceTier = options.serviceTier ?? "default";
   const payloadServiceTiers = new Set<string>();
@@ -1165,24 +718,11 @@ export async function runVariant(
           event.args && typeof event.args === "object"
             ? (event.args as Record<string, unknown>)
             : {};
-        const metadata = normalizeTddToolMetadata(event.toolName, rawArgs);
-        const mutationTargets = metadata.mutationTargets;
-        const preMutationProofs = EVAL_MUTATION_TOOLS.has(event.toolName)
-          ? mutationTargets
-              ?.slice(0, 16)
-              .map((target) => evalFileProof(workspace, target))
-          : undefined;
-        const call = {
+        const call: ToolCallRecord = {
           name: event.toolName,
-          ...metadata,
           args: rawArgs,
           assistantTurn: observedTurns,
           startOrder: eventOrder,
-          ...(preMutationProofs?.every(
-            (proof): proof is EvalFileProof => proof !== undefined
-          )
-            ? { preMutationProofs }
-            : {}),
         };
         pendingToolCalls.set(event.toolCallId, call);
       }
@@ -1202,52 +742,10 @@ export async function runVariant(
             ? (event.result?.details?.answers?.[0]?.label as unknown)
             : undefined;
         const resultText = textFromContent(event.result?.content);
-        const { preMutationProofs, ...retainedCall } = call;
-        const postMutationProofs = call.mutationTargets
-          ?.slice(0, 16)
-          .map((target) => evalFileProof(workspace, target));
-        const mutationDelta =
-          preMutationProofs &&
-          postMutationProofs?.every(
-            (proof): proof is EvalFileProof => proof !== undefined
-          )
-            ? preMutationProofs.flatMap((proof, index) => {
-                const post = postMutationProofs[index]!;
-                if (sameEvalProof(proof, post)) {
-                  return [];
-                }
-                let status: "changed" | "created" | "deleted" = "changed";
-                if (proof.kind === "absent") {
-                  status = "created";
-                } else if (post.kind === "absent") {
-                  status = "deleted";
-                }
-                return [
-                  {
-                    path: call.mutationTargets![index]!,
-                    status,
-                  },
-                ];
-              })
-            : undefined;
-        const executionDeniedBeforeStart =
-          call.name === "bash" &&
-          typeof call.args.command === "string" &&
-          !isAllowedFixtureTestCommand(call.args.command);
-        const completedCall = {
-          ...retainedCall,
+        const completedCall: ToolCallRecord = {
+          ...call,
           endOrder: eventOrder,
           isError: event.isError,
-          ...(executionDeniedBeforeStart
-            ? { executionDeniedBeforeStart: true }
-            : {}),
-          ...(EVAL_MUTATION_TOOLS.has(call.name)
-            ? {
-                mutationProven:
-                  event.isError !== true && (mutationDelta?.length ?? 0) > 0,
-                ...(mutationDelta?.length ? { mutationDelta } : {}),
-              }
-            : {}),
           ...(resultText ? { resultText } : {}),
           ...(typeof askResponse === "string" ? { askResponse } : {}),
         };
@@ -1290,15 +788,6 @@ export async function runVariant(
     );
   }
 
-  if (request.structuredOutput) {
-    const structuredCall = toolCalls.find(
-      (call) => call.name === "structured_output" && !call.isError
-    );
-    if (structuredCall) {
-      output = JSON.stringify(structuredCall.args);
-    }
-  }
-
   const { failedToolKeys: _failedToolKeys, ...publicMetrics } =
     metrics as RunMetrics & {
       failedToolKeys?: string[];
@@ -1313,7 +802,6 @@ export async function runVariant(
         assistantMessages,
         trajectoryErrors,
         taskIntent: options.evalCase.task,
-        availableTools: tools.map((tool) => tool.name),
       },
       options.evalCase.checks
     );
@@ -1358,15 +846,6 @@ export async function runVariant(
       toolCalls,
       trajectoryErrors,
       assistantMessages,
-      ...(options.taskShapeCase
-        ? {
-            taskShapeEvidence: scoreTaskShapeRun(
-              options.taskShapeCase,
-              toolCalls,
-              completed
-            ),
-          }
-        : {}),
     };
   } finally {
     await rm(workspace, { force: true, recursive: true });

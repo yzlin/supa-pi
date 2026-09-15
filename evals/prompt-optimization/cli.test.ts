@@ -1,29 +1,19 @@
 import { describe, expect, it } from "bun:test";
-import { mkdir, mkdtemp, readdir, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { spawn } from "bun";
 
 import {
-  configuredPrimaryModel,
   createComparison,
   createVariantConfigs,
   modelForVariant,
-  modelSelectionRecord,
   parseCliOptions,
-  plannedCallMessage,
   resolveModelComparison,
-  singleArmManifestFields,
-  TASK_SHAPE_CASE_IDS,
-  taskShapeSummaryMarkdown,
   validateReasoningComparison,
   validateServiceTierComparison,
   validateServiceTierEvidence,
 } from "./cli";
-import {
-  aggregatePersistedTaskShapeRuns,
-  loadTaskShapeCorpus,
-} from "./task-shape";
 
 const PROMPT_HASHES_PATTERN =
   /Prompt agents\/explorer\.md: baseline working-tree sha256=[a-f0-9]{64}; candidate working-tree sha256=[a-f0-9]{64}/;
@@ -44,65 +34,6 @@ async function snapshotDirectory(path: string): Promise<string[] | null> {
     throw error;
   }
 }
-
-describe("Task-shape artifact summaries", () => {
-  it("aggregates persisted taskShapeEvidence into JSON and Markdown counts", async () => {
-    const runsDirectory = await mkdtemp(join(tmpdir(), "task-shape-runs-"));
-    try {
-      const corpus = loadTaskShapeCorpus();
-      const records = corpus.cases.flatMap((evalCase) =>
-        Array.from({ length: 3 }, (_, index) => ({
-          caseId: evalCase.id,
-          repetition: index + 1,
-          variant: "candidate",
-          taskShapeEvidence: {
-            structurallyValid: true,
-            classificationCorrect: true,
-            shapeCorrect: true,
-            invalidOrOversizedTddAttempts: 0,
-            attemptedTaskCount: evalCase.expected.length,
-            expectedTaskCount: evalCase.expected.length,
-            attempts: [],
-          },
-        }))
-      );
-      records[0]!.taskShapeEvidence.structurallyValid = false;
-      for (const record of records.slice(0, 9)) {
-        record.taskShapeEvidence.classificationCorrect = false;
-      }
-      await Promise.all(
-        records.map((record) =>
-          writeFile(
-            join(
-              runsDirectory,
-              `${record.caseId}-${record.variant}-r${record.repetition}.json`
-            ),
-            `${JSON.stringify(record, null, 2)}\n`
-          )
-        )
-      );
-
-      const summary = await aggregatePersistedTaskShapeRuns(
-        runsDirectory,
-        corpus
-      );
-      expect(JSON.parse(JSON.stringify(summary))).toMatchObject({
-        plannedRunsValid: true,
-        structuralValidRuns: 23,
-        classificationCorrectRuns: 15,
-        invalidOrOversizedTddAttempts: 0,
-      });
-      expect(taskShapeSummaryMarkdown(summary)).toContain(
-        "| Structurally valid runs | 23/24 |"
-      );
-      expect(taskShapeSummaryMarkdown(summary)).toContain(
-        "| Correct classification and shape | 15/24 |"
-      );
-    } finally {
-      await rm(runsDirectory, { recursive: true, force: true });
-    }
-  });
-});
 
 describe("dry-run CLI", () => {
   it("prints an offline bounded model-comparison preview before live side effects", async () => {
@@ -255,62 +186,6 @@ describe("parseCliOptions", () => {
     });
   });
 
-  it("parses the bounded single-arm Task-shape suite", () => {
-    const options = parseCliOptions(["--task-shape-suite"]);
-
-    expect(options).toMatchObject({
-      taskShapeSuite: true,
-      repetitions: 3,
-      caseIds: [],
-    });
-    expect(TASK_SHAPE_CASE_IDS).toHaveLength(8);
-    expect(plannedCallMessage(8, options.repetitions, true)).toBe(
-      "Running 24 live calls: 8 case(s) × 3 repetition(s) × 1 candidate arm\n"
-    );
-    expect(singleArmManifestFields(24)).toEqual({
-      mode: "task-shape-suite",
-      plannedCalls: 24,
-      arm: { variant: "candidate", promptSource: "working-tree" },
-    });
-  });
-
-  it("rejects flags incompatible with the Task-shape suite", () => {
-    expect(() =>
-      parseCliOptions(["--task-shape-suite", "--case", "build-fix"])
-    ).toThrow("cannot be combined with --case");
-    expect(() =>
-      parseCliOptions(["--task-shape-suite", "--candidate-thinking", "low"])
-    ).toThrow("cannot be combined with paired comparison flags");
-    expect(() =>
-      parseCliOptions(["--task-shape-suite", "--repetitions", "2"])
-    ).toThrow("requires exactly 3 repetitions");
-  });
-
-  it("resolves the Task-shape model from the configured primary or override", () => {
-    const settings = {
-      getDefaultProvider: () => "configured-provider",
-      getDefaultModel: () => "configured-model",
-    };
-
-    expect(configuredPrimaryModel(undefined, settings)).toBe(
-      "configured-provider/configured-model"
-    );
-    expect(configuredPrimaryModel("override/model", settings)).toBe(
-      "override/model"
-    );
-    expect(
-      modelSelectionRecord(
-        "configured-provider/configured-model",
-        "configured-provider/exact-model-id",
-        false
-      )
-    ).toEqual({
-      source: "configured-primary",
-      selectedAtStart: "configured-provider/configured-model",
-      resolved: "configured-provider/exact-model-id",
-    });
-  });
-
   it("parses an exact model comparison", () => {
     const options = parseCliOptions([
       "--model",
@@ -366,15 +241,6 @@ describe("parseCliOptions", () => {
         "--compare-service-tier",
       ])
     ).toThrow("cannot combine model comparison");
-    expect(() =>
-      parseCliOptions([
-        "--model",
-        "synthetic/baseline",
-        "--candidate-model",
-        "synthetic/candidate",
-        "--task-shape-suite",
-      ])
-    ).toThrow("cannot be combined with paired comparison flags");
   });
 
   it("resolves both model arms exactly and preserves arm identity", () => {

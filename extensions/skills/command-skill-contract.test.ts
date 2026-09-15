@@ -10,7 +10,7 @@ describe("skill-backed command contracts", () => {
   it("keeps /review static orchestration rules in review-orchestration skill", () => {
     const skill = readSkill("review-orchestration");
 
-    expect(skill).toContain("direct pi-subagents orchestration");
+    expect(skill).toContain("public `SubagentWorkflow` orchestration");
     expect(skill).toContain("Do not use pi task tools");
     expect(skill).toContain("## Reviewer Coverage");
   });

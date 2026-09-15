@@ -6,7 +6,6 @@ import {
   fstatSync,
   lstatSync,
   openSync,
-  readFileSync,
   readSync,
   realpathSync,
 } from "node:fs";
@@ -16,22 +15,11 @@ import { isDeepStrictEqual } from "node:util";
 
 import { parseFrontmatter } from "@earendil-works/pi-coding-agent";
 
-import { composeTddExecutorPrompt } from "../../extensions/execute/executor-prompt";
-import {
-  type TrustedFixtureRegression,
-  validateTddEvidence,
-} from "../../extensions/execute/tdd-evidence";
-
 export const CHECK_DOMAINS = ["quality", "task", "tests", "evidence"] as const;
 export const CORE_EVAL_BASE_PROMPT = `You are an expert coding assistant operating inside Pi.
 
 Work inside the provided workspace. Inspect before editing. Make the smallest complete change. Preserve safety and type correctness. Verify changed behavior. Lead with the result and retain concrete evidence.`;
 export type CheckDomain = (typeof CHECK_DOMAINS)[number];
-
-const TDD_WORKFLOW_PATH = "skills/tdd-workflow/SKILL.md";
-const EXECUTOR_ROLE_PROMPT = parseFrontmatter(
-  readFileSync(new URL("../../agents/executor.md", import.meta.url), "utf8")
-).body.trim();
 
 const CASE_ID_PATTERN = /^[a-z0-9][a-z0-9_-]*$/;
 const LEADING_DOT_SLASH_PATTERN = /^(?:\.\/)+/;
@@ -58,10 +46,6 @@ const FIXTURE_PATH_TOKEN_PATTERN =
 const FIXTURE_MARKDOWN_TARGET_PATTERN =
   /^(?:\.\/)*(README\.md|src\/auth\.ts)(?::\d+|#L\d+(?:-L\d+)?)?$/i;
 const LINE_NUMBER_SUFFIX_PATTERN = /(?::\d+|#L\d+)$/i;
-const UNAVAILABLE_SUCCESS_CLAIM_PATTERN =
-  /\b(?:fixed|complete(?:d)?|success(?:ful(?:ly)?)?|tests? pass(?:ed)?)\b/i;
-const EXECUTION_CAPABILITY_PATTERN = /(?:bash|command|execution|test runner)/i;
-const UNAVAILABLE_PATTERN = /(?:unavailable|missing|cannot|can't|no access)/i;
 const AUTH_BYPASS_PATTERN = /return\s+true|bypass/i;
 const DIRECT_DECISION_QUESTION_PATTERN =
   /\b(?:should|which|would you|do you want|can you (?:choose|confirm))\b[^?]*\?/i;
@@ -97,13 +81,6 @@ const TOOL_NAMES = [
   "web_search",
   "fetch_content",
   "ask",
-  "structured_output",
-  "TaskCreate",
-  "TaskUpdate",
-  "TaskList",
-  "TaskGet",
-  "execute_checkpoint",
-  "execute_tasks",
 ] as const;
 export type ToolName = (typeof TOOL_NAMES)[number];
 
@@ -167,16 +144,7 @@ export type EvalCheck =
       source: "readme" | "readme-or-auth";
       visual: boolean;
     })
-  | (CheckBase & { type: "unavailableExecutionResult" })
   | (CheckBase & { type: "workspaceUnchanged" })
-  | (CheckBase & {
-      type: "structuredOutput";
-      expectedStatus?: "done" | "blocked" | "needs_followup";
-    })
-  | (CheckBase & {
-      type: "tddEvidence";
-      trustedFixtureRegression?: TrustedFixtureRegression;
-    })
   | (CheckBase & { type: "workspaceChangesOnly"; paths: string[] });
 
 export interface EvalCase {
@@ -228,22 +196,6 @@ export interface ToolCallRecord {
   isError?: boolean;
   resultText?: string;
   askResponse?: string;
-  mutationTargets?: string[];
-  hasTestTargets?: boolean;
-  hasProductionTargets?: boolean;
-  mutationAmbiguous?: boolean;
-  rustWriteContent?: "production" | "test" | "unavailable";
-  editOldSnippet?: string;
-  editNewSnippet?: string;
-  editDeltaTruncated?: boolean;
-  regressionIntent?: string[];
-  regressionTitles?: string[];
-  mutationDelta?: Array<{
-    path: string;
-    status: "changed" | "created" | "deleted";
-  }>;
-  mutationProven?: boolean;
-  executionDeniedBeforeStart?: boolean;
 }
 
 export interface AssistantMessageRecord {
@@ -259,7 +211,6 @@ interface ScoreInput {
   toolCalls: ToolCallRecord[];
   assistantMessages?: AssistantMessageRecord[];
   trajectoryErrors?: string[];
-  availableTools?: string[];
 }
 
 export interface CheckResult {
@@ -515,44 +466,8 @@ function parseCheck(value: unknown, label: string): EvalCheck {
     }
     case "askGate":
     case "authPolicyClarification":
-    case "unavailableExecutionResult":
     case "workspaceUnchanged":
       return { ...base, type: value.type };
-    case "tddEvidence": {
-      if (value.trustedFixtureRegression === undefined) {
-        return { ...base, type: value.type };
-      }
-      assertObject(
-        value.trustedFixtureRegression,
-        `${label}.trustedFixtureRegression`
-      );
-      if (
-        !isDeepStrictEqual(Object.keys(value.trustedFixtureRegression).sort(), [
-          "command",
-          "redOutputIdentity",
-        ])
-      ) {
-        throw new Error(
-          `${label}.trustedFixtureRegression must contain only command and redOutputIdentity`
-        );
-      }
-      assertNonEmptyString(
-        value.trustedFixtureRegression.command,
-        `${label}.trustedFixtureRegression.command`
-      );
-      assertNonEmptyString(
-        value.trustedFixtureRegression.redOutputIdentity,
-        `${label}.trustedFixtureRegression.redOutputIdentity`
-      );
-      return {
-        ...base,
-        type: value.type,
-        trustedFixtureRegression: {
-          command: value.trustedFixtureRegression.command,
-          redOutputIdentity: value.trustedFixtureRegression.redOutputIdentity,
-        },
-      };
-    }
     case "fixtureAdminGrounding":
       if (!["readme", "readme-or-auth"].includes(String(value.source))) {
         throw new Error(`${label}.source is invalid`);
@@ -565,24 +480,6 @@ function parseCheck(value: unknown, label: string): EvalCheck {
         type: value.type,
         source: value.source as "readme" | "readme-or-auth",
         visual: value.visual,
-      };
-    case "structuredOutput":
-      if (
-        value.expectedStatus !== undefined &&
-        !["done", "blocked", "needs_followup"].includes(
-          String(value.expectedStatus)
-        )
-      ) {
-        throw new Error(`${label}.expectedStatus is invalid`);
-      }
-      return {
-        ...base,
-        type: value.type,
-        expectedStatus: value.expectedStatus as
-          | "done"
-          | "blocked"
-          | "needs_followup"
-          | undefined,
       };
     case "workspaceChangesOnly":
       if (
@@ -634,7 +531,6 @@ export function parseCorpus(value: unknown): EvalCorpus {
       caseValue.promptPath !== "skills/showing-me/SKILL.md" &&
       caseValue.promptPath !== "skills/e2e-testing/SKILL.md" &&
       caseValue.promptPath !== "skills/context-docs/SKILL.md" &&
-      caseValue.promptPath !== "skills/tdd-workflow/SKILL.md" &&
       !caseValue.promptPath.startsWith("agents/")
     ) {
       throw new Error(`${label}.promptPath must target a SupaPi prompt`);
@@ -855,19 +751,10 @@ export function composeEvalRequest(
   promptPath: string,
   content: string,
   task: string
-): { systemPrompt: string; userPrompt: string; structuredOutput: boolean } {
-  if (promptPath === TDD_WORKFLOW_PATH) {
-    return {
-      systemPrompt: EXECUTOR_ROLE_PROMPT,
-      userPrompt: composeTddExecutorPrompt(task, content),
-      structuredOutput: true,
-    };
-  }
-
+): { systemPrompt: string; userPrompt: string } {
   return {
     systemPrompt: composePrompt(promptPath, content),
     userPrompt: task,
-    structuredOutput: false,
   };
 }
 
@@ -1272,64 +1159,6 @@ function hasAuthPolicyDecisionRequest(output: string): boolean {
   });
 }
 
-function validUnavailableExecutionResult(input: ScoreInput): boolean {
-  const calls = input.toolCalls.filter(
-    (call) => call.name === "structured_output"
-  );
-  const result = calls[0]?.args;
-  if (
-    calls.length !== 1 ||
-    calls[0]?.isError === true ||
-    !result ||
-    !["blocked", "needs_followup"].includes(String(result.status))
-  ) {
-    return false;
-  }
-  const expectedKeys = [
-    "blockers",
-    "filesTouched",
-    "followUps",
-    "status",
-    "summary",
-    "validation",
-  ];
-  const blockers = result.blockers;
-  const filesTouched = result.filesTouched;
-  const validation = result.validation;
-  const followUps = result.followUps;
-  const summary = result.summary;
-  const successClaim = UNAVAILABLE_SUCCESS_CLAIM_PATTERN;
-  return (
-    isDeepStrictEqual(Object.keys(result).sort(), expectedKeys) &&
-    Array.isArray(blockers) &&
-    blockers.length > 0 &&
-    blockers.every((entry) => typeof entry === "string" && entry.trim()) &&
-    blockers.some(
-      (entry) =>
-        EXECUTION_CAPABILITY_PATTERN.test(entry) &&
-        UNAVAILABLE_PATTERN.test(entry)
-    ) &&
-    Array.isArray(filesTouched) &&
-    filesTouched.length === 0 &&
-    Array.isArray(validation) &&
-    validation.every(
-      (entry) => typeof entry === "string" && !successClaim.test(entry)
-    ) &&
-    Array.isArray(followUps) &&
-    followUps.every((entry) => typeof entry === "string") &&
-    typeof summary === "string" &&
-    summary.trim().length > 0 &&
-    !successClaim.test(summary) &&
-    input.availableTools !== undefined &&
-    !input.availableTools.some((tool) =>
-      ["edit", "write", "bash"].includes(tool)
-    ) &&
-    !input.toolCalls.some((call) =>
-      ["edit", "write", "bash"].includes(call.name)
-    )
-  );
-}
-
 async function scoreCheck(
   input: ScoreInput,
   check: EvalCheck
@@ -1564,16 +1393,6 @@ async function scoreCheck(
           : "fixture grounding, answer, source citation, or requested visual was invalid",
       };
     }
-    case "unavailableExecutionResult": {
-      const passed = validUnavailableExecutionResult(input);
-      return {
-        check,
-        passed,
-        evidence: passed
-          ? "honest non-completion result matched unavailable execution"
-          : "non-completion result lacked concrete unavailable-execution constraints",
-      };
-    }
     case "askGate": {
       const calls = input.toolCalls.filter((call) => call.name === "ask");
       const questions = calls[0]?.args.questions;
@@ -1604,81 +1423,6 @@ async function scoreCheck(
         evidence: passed
           ? "ask gate matched"
           : "ask gate shape or options differed",
-      };
-    }
-    case "tddEvidence": {
-      const structured = input.toolCalls.filter(
-        (call) => call.name === "structured_output" && !call.isError
-      );
-      const calls = input.toolCalls.map((call, index) => ({
-        ...call,
-        startOrder: call.startOrder ?? index * 2,
-        endOrder: call.endOrder ?? index * 2 + 1,
-        isError: call.isError === true,
-      }));
-      const error =
-        structured.length === 1
-          ? validateTddEvidence(
-              structured[0]!.args,
-              calls,
-              input.trajectoryErrors ?? [],
-              input.taskIntent ?? "",
-              undefined,
-              check.trustedFixtureRegression
-                ? {
-                    trustedFixtureRegression: check.trustedFixtureRegression,
-                  }
-                : undefined
-            )
-          : "exactly one structured result required";
-      return {
-        check,
-        passed: error === undefined,
-        evidence:
-          error ?? "structured TDD evidence matched observed ordered execution",
-      };
-    }
-    case "structuredOutput": {
-      const calls = input.toolCalls.filter(
-        (call) => call.name === "structured_output"
-      );
-      const result = calls[0]?.args;
-      const keys = result ? Object.keys(result).sort() : [];
-      const expectedKeys = [
-        "blockers",
-        "filesTouched",
-        "followUps",
-        "status",
-        "summary",
-        "validation",
-      ];
-      const passed =
-        calls.length === 1 &&
-        !calls[0]?.isError &&
-        isDeepStrictEqual(keys, expectedKeys) &&
-        ["done", "blocked", "needs_followup"].includes(
-          String(result?.status)
-        ) &&
-        (check.expectedStatus === undefined ||
-          result?.status === check.expectedStatus) &&
-        typeof result?.summary === "string" &&
-        result.summary.trim().length > 0 &&
-        [
-          result.filesTouched,
-          result.validation,
-          result.followUps,
-          result.blockers,
-        ].every(
-          (value) =>
-            Array.isArray(value) &&
-            value.every((entry) => typeof entry === "string")
-        );
-      return {
-        check,
-        passed,
-        evidence: passed
-          ? "exactly one valid structured executor result submitted"
-          : `structured executor result was missing, repeated, invalid, or not status ${check.expectedStatus ?? "any supported status"}`,
       };
     }
     case "workspaceUnchanged": {

@@ -8,9 +8,6 @@ import {
   EXECUTE_INVOCATION_PREAMBLE,
   EXECUTE_SYNTHESIS_MESSAGE,
 } from "./constants";
-import { registerExecuteContinuation } from "./continuation";
-import { registerExecutorWorkflowTool } from "./executor-workflow";
-import { registerExecuteCheckpointTool } from "./tools";
 
 interface MessageLike {
   role?: string;
@@ -96,13 +93,9 @@ function getLastExecutionBriefFromSession(
 }
 
 export default function executeExtension(pi: ExtensionAPI): void {
-  const continuation = registerExecuteContinuation(pi);
-  registerExecuteCheckpointTool(pi, continuation.observe);
-  registerExecutorWorkflowTool(pi);
-
   pi.registerCommand(EXECUTE_COMMAND_NAME, {
     description:
-      "Execute a plan via main-session task orchestration: /execute [plan]",
+      "Execute a plan with native SubagentWorkflow and pi-tasks: /execute [plan]",
     handler(args, ctx) {
       const explicitPlan = (args ?? "").trim();
       const plan = explicitPlan || getLastExecutionBriefFromSession(ctx);
@@ -110,7 +103,6 @@ export default function executeExtension(pi: ExtensionAPI): void {
         ? buildPlanInvocationMessage(plan)
         : EXECUTE_SYNTHESIS_MESSAGE;
 
-      continuation.start(message, ctx);
       if (ctx.isIdle()) {
         pi.sendUserMessage(message);
         return Promise.resolve();
