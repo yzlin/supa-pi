@@ -64,9 +64,30 @@ The approved migration is implemented after public-sandbox and local lifecycle v
 - Synthesizer tool isolation becomes upstream agent configuration rather than override-proof local enforcement. `/review cancel` invalidates report publication; native Workflows UI stops workers. Parent cancellation no longer guarantees worker termination.
 - Interrupted reviews require a fresh invocation; workflow resume is outside this migration. The unused fork SDK dependency is removed; setup retains the duplicate-runtime guard. Missing/incompatible journals fail closed; at most one report is published. No private upstream API adapter is used.
 
+## Wayfinder: implemented product direction
+
+Wayfinder is a SupaPi workflow for carrying unresolved decisions across sessions until the route to a destination is clear. It does not own implementation planning or delivery. The canonical workflow is implemented in `skills/wayfinder/SKILL.md`, with a thin prompt entrypoint at `prompts/wayfinder.md`; this does not claim live installation or end-to-end UX validation.
+
+- **Decision map** — a project-local planning record containing a destination, standing notes, decision links, unspecified areas, and explicit exclusions. _Avoid_: execution plan.
+- **Decision question** — a precise question with its own evidence, dependencies, answer, and revision history. A blocked but precise question is still recorded; areas not yet precise enough remain unspecified. _Avoid_: implementation task.
+- **Ready question** — an unresolved question whose dependencies are resolved. _Avoid_: unblocked execution task.
+- **Decision branch** — a coherent set of related questions suitable for one planning session. _Avoid_: one-ticket session.
+
+Approved boundaries:
+
+- Maps live in versioned `.pi/wayfinder/<name>/` directories, with `MAP.md` as the index and separate question files as the authoritative answer records. Planning records remain separate from canonical context docs and execution task state.
+- V1 supports one active session per map, not concurrent decision writers. Research workers return findings to the owning session rather than editing shared map state. Skill-level ownership checks are not atomic locking guarantees.
+- Agents may resolve verified factual questions; the human owns preferences, scope, and tradeoffs. Question types are research, grilling, prototype, and prerequisite task. Prerequisite tasks exist only to unblock decisions, not to deliver the destination.
+- Each prototype or prerequisite task requires approval of its actions, artifact location, edits, side effects, verification, and cleanup before work. External or destructive actions require specific approval. Prototype acceptance requires human feedback; prerequisite-task completion requires verification against agreed criteria.
+- Progress is saved incrementally. Changed decisions retain history and reopen affected questions for revalidation. Resume verifies saved state and relevant evidence, then continues the active branch or selects the first ready question in explicit map order; ambiguous map selection requires clarification.
+- A map is complete when no unresolved in-scope choices or unexplained unspecified areas remain. Its output is a decision summary and handoff to separate execution planning, not automatic implementation.
+- Promotion into canonical context docs is proposed separately and requires explicit approval. Context-docs retains persistence ownership; domain-modeling retains ADR qualification ownership.
+
+The implementation is a canonical workflow skill with a thin `/wayfinder` entrypoint, composing existing grilling, domain-modeling, and research guidance rather than introducing a dedicated state engine. The shipped schema and ownership/checkpoint representation are canonical in `skills/wayfinder/templates/MAP.md`, `skills/wayfinder/templates/QUESTION.md`, and `skills/wayfinder/SKILL.md`. The design is adapted from [Matt Pocock's MIT-licensed Wayfinder skill at pinned commit `74ca5fe077456a0b3b2f5310cf9430999fd0b5fd`](https://github.com/mattpocock/skills/blob/74ca5fe077456a0b3b2f5310cf9430999fd0b5fd/skills/engineering/wayfinder/SKILL.md); the retained notice is `skills/wayfinder/LICENSE.upstream`.
+
 ## Open questions
 
-- None currently documented.
+- Live installation and end-to-end Wayfinder UX remain unverified. Integrated tests, loader checks, and static scenarios verify repository behavior and resources, but static scenarios do not prove model adherence.
 
 ## Context map
 

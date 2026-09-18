@@ -24,6 +24,11 @@ const COMMANDS = {
       "Use the `showing-me` skill as canonical for this explicit command.\n\nTopic:\n",
     suffix: "",
   },
+  wayfinder: {
+    prefix:
+      "Use the `wayfinder` skill as canonical for this explicit command.\n\nRequest:\n",
+    suffix: "",
+  },
 } as const;
 
 type PromptCommandName = keyof typeof COMMANDS;

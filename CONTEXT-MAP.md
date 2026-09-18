@@ -6,6 +6,7 @@
 - `AGENTS.md` — read before coding in this repo; contains project workflow, docs, verification, and deletion guardrails.
 - `extensions/AGENTS.md` — read before changing any Extension under `extensions/`; contains extension-boundary and validation rules.
 - `skills/domain-modeling/SKILL.md` — read before changing domain terminology, scenario testing, contradiction handling, boundary analysis, ADR candidacy, or domain-modeling composition with other skills.
+- `skills/wayfinder/SKILL.md`, its `templates/`, and `prompts/wayfinder.md` — read before Wayfinder planning, record formats, resume/ownership behavior, or `/wayfinder` command changes.
 
 ## Architecture decisions
 

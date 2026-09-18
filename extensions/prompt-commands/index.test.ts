@@ -25,6 +25,8 @@ const expectedMessages = {
     `This requests one research brief only. It does not start persistent research mode; apply the requirements to this request and do not carry them into later turns unless the user separately asks for persistent research mode.\n\nResearch the following topic in strict evidence mode:\n\n${args}\n\nRequirements:\n- Do not guess.\n- Cite every factual claim.\n- Prefer primary or official sources.\n- Quote relevant passages before analyzing documents.\n- Separate verified facts from inferences.\n- If evidence is missing or conflicting, say so clearly.\n\nOutput:\n1. Short answer\n2. Evidence\n3. Open uncertainties\n4. Sources`,
   "show-me": (args: string) =>
     `Use the \`showing-me\` skill as canonical for this explicit command.\n\nTopic:\n${args}`,
+  wayfinder: (args: string) =>
+    `Use the \`wayfinder\` skill as canonical for this explicit command.\n\nRequest:\n${args}`,
 } as const;
 
 type CommandName = keyof typeof expectedMessages;
@@ -103,6 +105,12 @@ describe("raw prompt pipeline commands", () => {
     }
   });
 
+  it("expands a bare wayfinder invocation without inventing a request", () => {
+    expect(buildPromptCommandMessage("wayfinder", "")).toBe(
+      expectedMessages.wayfinder("")
+    );
+  });
+
   it("preserves RPC input metadata and images while queueing a streaming prompt", async () => {
     const inputEvents: unknown[] = [];
     const { session } = await createSession(inputEvents);
@@ -114,7 +122,7 @@ describe("raw prompt pipeline commands", () => {
     (session as unknown as { _isAgentRunActive: boolean })._isAgentRunActive =
       true;
 
-    await session.prompt(`/show-me ${rawArgument}`, {
+    await session.prompt(`/wayfinder ${rawArgument}`, {
       images: [image],
       source: "rpc",
       streamingBehavior: "steer",
@@ -122,7 +130,7 @@ describe("raw prompt pipeline commands", () => {
 
     expect(inputEvents).toEqual([
       expect.objectContaining({
-        text: `/show-me ${rawArgument}`,
+        text: `/wayfinder ${rawArgument}`,
         images: [image],
         source: "rpc",
         streamingBehavior: "steer",
@@ -131,7 +139,7 @@ describe("raw prompt pipeline commands", () => {
     expect(queued).toEqual([
       expect.objectContaining({
         content: [
-          { type: "text", text: expectedMessages["show-me"](rawArgument) },
+          { type: "text", text: expectedMessages.wayfinder(rawArgument) },
           image,
         ],
       }),
@@ -151,7 +159,7 @@ describe("raw prompt pipeline commands", () => {
       true;
 
     for (const text of [
-      `/show-me ${rawArgument}`,
+      `/wayfinder ${rawArgument}`,
       `/grill-me\n${rawArgument}`,
     ]) {
       await session.prompt(text, {
@@ -167,7 +175,7 @@ describe("raw prompt pipeline commands", () => {
     );
 
     const literalTexts = [
-      `/show-me ${rawArgument}`,
+      `/wayfinder ${rawArgument}`,
       `/grill-me\n${rawArgument}`,
       `/research-brief\t${rawArgument}`,
     ];
@@ -217,13 +225,13 @@ describe("raw prompt pipeline commands", () => {
     agent.steer = (message) => steering.push(message);
     agent.followUp = (message) => followUps.push(message);
 
-    await session.steer(`/grill-me ${rawArgument}`, [image]);
-    await session.followUp(`/research-brief ${rawArgument}`, [image]);
+    await session.steer(`/wayfinder ${rawArgument}`, [image]);
+    await session.followUp(`/wayfinder ${rawArgument}`, [image]);
 
     expect(steering).toEqual([
       expect.objectContaining({
         content: [
-          { type: "text", text: expectedMessages["grill-me"](rawArgument) },
+          { type: "text", text: expectedMessages.wayfinder(rawArgument) },
           image,
         ],
       }),
@@ -233,7 +241,7 @@ describe("raw prompt pipeline commands", () => {
         content: [
           {
             type: "text",
-            text: expectedMessages["research-brief"](rawArgument),
+            text: expectedMessages.wayfinder(rawArgument),
           },
           image,
         ],
@@ -394,7 +402,7 @@ describe("raw prompt pipeline commands", () => {
     expect(prototype.prompt).toBe(originalPrompt);
   });
 
-  it("keeps all three prompt templates functional when extensions are disabled or fail to load", async () => {
+  it("keeps all four prompt templates functional when extensions are disabled or fail to load", async () => {
     for (const additionalExtensionPaths of [
       [],
       [join(import.meta.dir, "missing-extension.ts")],
@@ -433,17 +441,21 @@ describe("raw prompt pipeline commands", () => {
       for (const name of Object.keys(expectedMessages) as CommandName[]) {
         await result.session.steer(`/${name} first\n  second`);
       }
+      await result.session.steer("/wayfinder");
 
       expect(
         queued.map(
           (message) =>
             (message as { content: Array<{ text?: string }> }).content[0]?.text
         )
-      ).toEqual(
-        (Object.keys(expectedMessages) as CommandName[]).map((name) =>
+      ).toEqual([
+        ...(Object.keys(expectedMessages) as CommandName[]).map((name) =>
           expectedMessages[name]("first second")
-        )
-      );
+        ),
+        expectedMessages.wayfinder(
+          "Start a new decision map or resume an existing one."
+        ),
+      ]);
       expect(
         queued.every(
           (message) =>
@@ -456,7 +468,7 @@ describe("raw prompt pipeline commands", () => {
     }
   });
 
-  it("exposes all three names as queueable prompt templates, not extension commands", async () => {
+  it("exposes all four names as queueable prompt templates, not extension commands", async () => {
     const { loader, session } = await createSession([]);
     const prompts = loader
       .getPrompts()
