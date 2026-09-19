@@ -30,6 +30,8 @@ The repository is optimized for local workflow quality and maintainable agent be
 - **Workflow skill** — reusable task procedure loaded only when the work matches, shared by direct and delegated execution when applicable. _Avoid_: specialist worker, routing policy.
 - **Task rule** — selectively loaded user or project policy defining when guidance applies and which outcomes are required; it does not own always-on orchestration routing. _Avoid_: dispatcher, agent catalog.
 - **TDD Slice** — an atomic behavior-change task that uses the canonical TDD skill as implementation guidance; completion requires independent main-session verification. _Avoid_: TDD phase.
+- **Sift** — an active SupaPi Extension that screens explicit workspace file candidates for relevance before the main agent reads their full contents. _Avoid_: search, index.
+- **File judgment** — one independent Jev evaluation assigning a probability of relevance to one bounded file against the caller's query. _Avoid_: proof, authorization.
 - **Matt-compatible context docs** — `CONTEXT.md`, `CONTEXT-MAP.md`, `docs/adr/`, and optional `docs/context/` notes.
 
 ## Product constraints
@@ -84,6 +86,18 @@ Approved boundaries:
 - Promotion into canonical context docs is proposed separately and requires explicit approval. Context-docs retains persistence ownership; domain-modeling retains ADR qualification ownership.
 
 The implementation is a canonical workflow skill with a thin `/wayfinder` entrypoint, composing existing grilling, domain-modeling, and research guidance rather than introducing a dedicated state engine. The shipped schema and ownership/checkpoint representation are canonical in `skills/wayfinder/templates/MAP.md`, `skills/wayfinder/templates/QUESTION.md`, and `skills/wayfinder/SKILL.md`. The design is adapted from [Matt Pocock's MIT-licensed Wayfinder skill at pinned commit `74ca5fe077456a0b3b2f5310cf9430999fd0b5fd`](https://github.com/mattpocock/skills/blob/74ca5fe077456a0b3b2f5310cf9430999fd0b5fd/skills/engineering/wayfinder/SKILL.md); the retained notice is `skills/wayfinder/LICENSE.upstream`.
+
+## Sift: implemented product direction
+
+Sift is implemented and registered as an active Extension. Focused mocked integration tests pass, paired isolated Pi scenarios verify tool selection and non-selection, and a user-consented `/sift login` completed one live synthetic Jev judgment without repository content.
+
+- V1 is a repo-owned Extension with one agent tool, `sift_files`, and one human command, `/sift`. The tool accepts one relevance query plus explicit local file paths and returns ordered per-file `P(relevant)` judgments, truncation state, and failures. It does not scan automatically, filter by a caller threshold, explain judgments, or expose Jev's general Choice/Score question types.
+- Each file is evaluated independently through the fixed TypeSafe Jev REST integration. V1 does not add a TypeSafe SDK dependency or copy code from the unlicensed `jev-sift` repository. Any auth implementation adapted from MIT-licensed `pi-typesafe` must retain attribution.
+- The trust boundary is the current workspace: real paths must remain under `ctx.cwd`, including after symlink resolution. Only the canonical workspace-relative path, bounded text content, and query are sent; only bounded text files are eligible. Known sensitive filenames and obvious private-key or token markers are blocked locally, with an explicit warning that this is not complete secret detection.
+- Workspace content may leave the machine only after session-scoped `/sift enable` consent. `/sift` owns hidden login, verification-before-save, logout, status, enable, and disable behavior. `TYPESAFE_API_KEY` takes precedence over an owner-only credential store under `PI_CODING_AGENT_DIR/sift/`. File contents and judgments are neither persisted nor logged.
+- V1 permits at most 20 files per call, four concurrent requests, 50 KB per file, no automatic retries, and 100 attempted file judgments per session. Cancellation stops new work; one file's failure does not erase other results.
+- Completion requires mocked unit/integration coverage, inspection of the exact agent-facing schema, isolated Pi tests for appropriate use and non-use plus auth UX, one user-consented live Jev smoke request, targeted tests, `bun format`, and `bun run check`.
+- Deferred from V1: URLs, inline text, outside-workspace roots, typed questions, configurable providers or limits, and persistent daily cost caps.
 
 ## Open questions
 

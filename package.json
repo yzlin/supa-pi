@@ -32,6 +32,7 @@
       "./extensions/init-deep",
       "./extensions/smart-docs",
       "./extensions/docs-list",
+      "./extensions/sift",
       "./extensions/lsp",
       "./extensions/skills",
       "./extensions/obsidian",
