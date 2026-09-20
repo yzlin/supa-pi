@@ -4,7 +4,7 @@ import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { resolveAgentDir } from "./credentials";
-import siftExtension, { createSiftExtension } from "./index";
+import { createSiftExtension } from "./index";
 
 interface Command {
   handler: (args: string, ctx: TestContext) => Promise<void>;
@@ -42,7 +42,14 @@ interface Tool {
 }
 type TestContext = ReturnType<typeof context>;
 
-function runtime(extension = siftExtension) {
+function runtime(
+  extension = createSiftExtension({
+    configStore: {
+      load: async () => false,
+      save: () => Promise.resolve(),
+    },
+  })
+) {
   const tools: Tool[] = [];
   const commands = new Map<string, Command>();
   const events = new Map<string, () => void>();
@@ -62,8 +69,29 @@ function runtime(extension = siftExtension) {
   } as never);
   return { tools, commands, events, messages };
 }
+interface PromptComponent {
+  render(width: number): string[];
+}
+interface PromptTheme {
+  fg(name: string, text: string): string;
+  bold(text: string): string;
+}
+type CustomPrompt = (
+  factory: (
+    tui: unknown,
+    theme: PromptTheme,
+    keybindings: unknown,
+    done: (value: string | undefined) => void
+  ) => PromptComponent
+) => Promise<string | undefined>;
+
 function context(
-  options: { cwd?: string; hasUI?: boolean; confirm?: boolean } = {}
+  options: {
+    cwd?: string;
+    hasUI?: boolean;
+    confirm?: boolean;
+    custom?: CustomPrompt;
+  } = {}
 ) {
   const notifications: string[] = [];
   return {
@@ -74,7 +102,7 @@ function context(
     ui: {
       notify: (message: string) => notifications.push(message),
       confirm: async () => options.confirm ?? true,
-      custom: async () => undefined,
+      custom: options.custom ?? (async () => undefined),
     },
   };
 }
@@ -135,11 +163,120 @@ describe("sift extension", () => {
     ).rejects.toThrow("enable");
   });
 
+  it("persists enablement globally and reuses it headlessly", async () => {
+    const cwd = await mkdtemp(join(tmpdir(), "sift-config-"));
+    await writeFile(join(cwd, "a.txt"), "ordinary content");
+    let enabled = false;
+    const configStore = {
+      load: async () => enabled,
+      save: (value: boolean) => {
+        enabled = value;
+        return Promise.resolve();
+      },
+    };
+    const dependencies = {
+      configStore,
+      credentialStore: {
+        status: async () => ({ source: "stored", usable: true }) as const,
+        resolve: async () => ({
+          apiKey: "secret-key-123456",
+          source: "stored" as const,
+        }),
+        save: () => Promise.resolve(),
+        clear: () => Promise.resolve(),
+      },
+      createClient: () => ({
+        judge: async () => ({ probability: 1, model: "jev-latest" }),
+      }),
+      env: {},
+    };
+
+    const interactive = runtime(createSiftExtension(dependencies));
+    await interactive.commands.get("sift")?.handler("enable", context());
+    expect(enabled).toBe(true);
+
+    const headless = runtime(createSiftExtension(dependencies));
+    const result = await headless.tools[0].execute(
+      "x",
+      { query: "q", paths: ["a.txt"] },
+      new AbortController().signal,
+      undefined,
+      context({ cwd, hasUI: false })
+    );
+    expect(result.content[0].text).toContain("P(relevant)=1.000");
+
+    await headless.commands
+      .get("sift")
+      ?.handler("disable", context({ hasUI: false }));
+    expect(enabled).toBe(false);
+    await expect(
+      interactive.tools[0].execute(
+        "x",
+        { query: "q", paths: ["a.txt"] },
+        new AbortController().signal,
+        undefined,
+        context({ cwd })
+      )
+    ).rejects.toThrow("enable");
+  });
+
+  it("explains which TypeSafe key to enter and where to get it", async () => {
+    let prompt = "";
+    const ctx = context({
+      custom: (factory) => {
+        const component = factory(
+          {},
+          {
+            fg: (_name, text) => text,
+            bold: (text) => text,
+          },
+          {},
+          () => undefined
+        );
+        prompt = component.render(100).join("\n");
+        return Promise.resolve("");
+      },
+    });
+    const app = runtime(
+      createSiftExtension({
+        configStore: {
+          load: async () => false,
+          save: () => Promise.resolve(),
+        },
+        credentialStore: {
+          status: async () => ({ source: "missing", usable: false }) as const,
+          resolve: () => Promise.reject(new Error("not used")),
+          save: () => Promise.resolve(),
+          clear: () => Promise.resolve(),
+        },
+        env: {},
+      })
+    );
+
+    await app.commands.get("sift")?.handler("login", ctx);
+
+    const normalizedPrompt = prompt.replace(/\s+/g, " ");
+    expect(normalizedPrompt).toContain("TypeSafe API key");
+    expect(normalizedPrompt).toContain("console.typesafe.ai");
+    expect(normalizedPrompt).toContain("API Keys");
+    expect(normalizedPrompt).toContain("Input is hidden");
+    expect(normalizedPrompt).toContain("Enter verifies and saves");
+    expect(normalizedPrompt).toContain("Esc cancels");
+  });
+
   it("supports verified login, safe status, successful output, logout, and session reset", async () => {
     const cwd = await mkdtemp(join(tmpdir(), "sift-extension-"));
     await writeFile(join(cwd, "a.txt"), "ordinary content");
     let saved = "";
+    let configEnabled = false;
     const extension = createSiftExtension({
+      configStore: {
+        load: async () => configEnabled,
+        save: (value: boolean) => {
+          configEnabled = value;
+          return Promise.resolve();
+        },
+      },
       credentialStore: {
         status: async () =>
           saved
@@ -193,17 +330,17 @@ describe("sift extension", () => {
     await app.commands.get("sift")?.handler("status", ctx);
     expect(ctx.notifications.join(" ")).not.toContain(saved);
     app.events.get("session_start")?.();
-    await expect(
-      app.tools[0].execute(
-        "x",
-        { query: "q", paths: ["a.txt"] },
-        new AbortController().signal,
-        undefined,
-        ctx
-      )
-    ).rejects.toThrow("enable");
+    const afterReset = await app.tools[0].execute(
+      "x",
+      { query: "q", paths: ["a.txt"] },
+      new AbortController().signal,
+      undefined,
+      ctx
+    );
+    expect(afterReset.content[0].text).toContain("remaining=99");
     await app.commands.get("sift")?.handler("logout", ctx);
     expect(saved).toBe("");
+    expect(configEnabled).toBe(false);
   });
 
   it("renders mixed results without changing error or truncation text", () => {
@@ -240,7 +377,10 @@ describe("sift extension", () => {
     const seen: string[] = [];
     const app = runtime(
       createSiftExtension({
-        env: { PI_SIFT_ENABLED: "1" },
+        configStore: {
+          load: async () => true,
+          save: () => Promise.resolve(),
+        },
         credentialStore: {
           status: async () => ({ source: "stored", usable: true }) as const,
           resolve: async () => ({
@@ -295,9 +435,46 @@ describe("sift extension", () => {
     expect(ctx.notifications.join(" ")).not.toContain(secret);
   });
 
+  it("fails closed when persisted enablement cannot be read", async () => {
+    const failure = new Error("Sift config is invalid");
+    const app = runtime(
+      createSiftExtension({
+        configStore: {
+          load: () => Promise.reject(failure),
+          save: () => Promise.resolve(),
+        },
+        credentialStore: {
+          status: async () => ({ source: "stored", usable: true }) as const,
+          resolve: async () => ({
+            apiKey: "secret-key-123456",
+            source: "stored" as const,
+          }),
+          save: () => Promise.resolve(),
+          clear: () => Promise.resolve(),
+        },
+      })
+    );
+    await expect(
+      app.commands.get("sift")?.handler("status", context({ hasUI: false }))
+    ).rejects.toThrow("Sift config is invalid");
+    await expect(
+      app.tools[0].execute(
+        "x",
+        { query: "q", paths: ["a"] },
+        new AbortController().signal,
+        undefined,
+        context({ hasUI: false })
+      )
+    ).rejects.toThrow("Sift config is invalid");
+  });
+
   it("reports status headlessly without triggering a turn", async () => {
     const app = runtime(
       createSiftExtension({
+        configStore: {
+          load: async () => false,
+          save: () => Promise.resolve(),
+        },
         env: {},
         credentialStore: {
           status: async () => ({ source: "missing", usable: false }) as const,
@@ -320,9 +497,13 @@ describe("sift extension", () => {
     expect(resolveAgentDir("~/custom")).toBe(join(homedir(), "custom"));
   });
 
-  it("honors explicit headless opt-in", async () => {
+  it("honors persisted headless opt-in", async () => {
     const extension = createSiftExtension({
-      env: { PI_SIFT_ENABLED: "1" },
+      configStore: {
+        load: async () => true,
+        save: () => Promise.resolve(),
+      },
+      env: {},
       credentialStore: {
         status: async () => ({ source: "stored", usable: true }) as const,
         resolve: async () => ({

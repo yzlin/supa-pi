@@ -4,7 +4,7 @@ Sift screens explicit workspace files for relevance before the agent reads them 
 
 ## First action and consent
 
-Run `/sift status`, then `/sift login` if needed, and `/sift enable`. Enabling interactively explains the transfer and charge boundary and requires confirmation. Enablement and the 100-judgment budget reset each session. Headless use requires the explicit `PI_SIFT_ENABLED=1` environment opt-in; `/sift enable` never silently opts in outside the TUI.
+Run `/sift status`, then `/sift login` if needed, and `/sift enable`. Enabling interactively explains the transfer and charge boundary, requires confirmation, and persists `{ "enabled": true }` in `$PI_CODING_AGENT_DIR/sift/config.json` (or the default `~/.pi/agent/sift/config.json`). `/sift disable` persists `false`, and `/sift logout` also disables Sift globally. The config is written atomically with owner-only permissions; missing config defaults to disabled, while invalid, unreadable, or unsafely permissioned config fails closed. Headless sessions honor the persisted setting but cannot change it to enabled because they cannot show the consent prompt. The 100-judgment budget still resets each session.
 
 ## Data boundary and limits
 
@@ -14,7 +14,7 @@ Sensitive filenames and obvious key/token markers are blocked locally, but **sec
 
 ## Authentication
 
-`/sift login` uses hidden TUI input, validates locally, sends one synthetic Noul verification request, and saves only a verified key in an owner-only store under `$PI_CODING_AGENT_DIR/sift/` (or the default Pi agent directory). `TYPESAFE_API_KEY` always takes precedence and login will not overwrite stored auth while it is present. `/sift logout` clears only the stored credential and disables future calls; it cannot clear an environment credential.
+`/sift login` asks for a TypeSafe API key and points to [console.typesafe.ai](https://console.typesafe.ai) › **API Keys**. Input is hidden; Enter verifies and saves, while Esc cancels. Verification validates locally, then sends one synthetic Noul request and saves only a verified key in an owner-only store under `$PI_CODING_AGENT_DIR/sift/` (or the default Pi agent directory). `TYPESAFE_API_KEY` always takes precedence and login will not overwrite stored auth while it is present. `/sift logout` clears only the stored credential, persists global disablement, and cannot clear an environment credential.
 
 Commands are `/sift login`, `logout`, `status`, `enable`, and `disable`; bare `/sift` shows status.
 

@@ -2,7 +2,15 @@ import type {
   ExtensionAPI,
   ExtensionContext,
 } from "@earendil-works/pi-coding-agent";
-import { CURSOR_MARKER, Input, Text } from "@earendil-works/pi-tui";
+import {
+  Container,
+  CURSOR_MARKER,
+  type Focusable,
+  Input,
+  Key,
+  matchesKey,
+  Text,
+} from "@earendil-works/pi-tui";
 import { Type } from "typebox";
 
 import {
@@ -10,6 +18,7 @@ import {
   classifyFiles,
   SessionBudget,
 } from "./classify";
+import { SiftConfigStore } from "./config";
 import {
   type CredentialStatus,
   CredentialStore,
@@ -30,6 +39,10 @@ interface Store {
   save(value: string): Promise<void>;
   clear(): Promise<void>;
 }
+interface ConfigStore {
+  load(): Promise<boolean>;
+  save(enabled: boolean): Promise<void>;
+}
 interface Client {
   judge(
     query: string,
@@ -39,6 +52,7 @@ interface Client {
   ): Promise<JevJudgment>;
 }
 interface Dependencies {
+  configStore?: ConfigStore;
   credentialStore?: Store;
   createClient?: (apiKey: string) => Client;
   readSecret?: (ctx: ExtensionContext) => Promise<string | undefined>;
@@ -68,12 +82,13 @@ const parameters = Type.Object(
 export function createSiftExtension(dependencies: Dependencies = {}) {
   return (pi: ExtensionAPI): void => {
     const env = dependencies.env ?? process.env;
+    const configStore =
+      dependencies.configStore ?? new SiftConfigStore({ env });
     const store = dependencies.credentialStore ?? new CredentialStore({ env });
     const createClient =
       dependencies.createClient ??
       ((apiKey: string) => new JevClient({ apiKey }));
     const readSecret = dependencies.readSecret ?? hiddenInput;
-    let enabled = env.PI_SIFT_ENABLED === "1";
     let budget = new SessionBudget(100);
     const report = (
       ctx: ExtensionContext,
@@ -91,7 +106,6 @@ export function createSiftExtension(dependencies: Dependencies = {}) {
     };
 
     pi.on("session_start", () => {
-      enabled = env.PI_SIFT_ENABLED === "1";
       budget = new SessionBudget(100);
     });
 
@@ -99,15 +113,15 @@ export function createSiftExtension(dependencies: Dependencies = {}) {
       name: "sift_files",
       label: "Sift Files",
       description:
-        "Send workspace file contents to TypeSafe for paid relevance judgments. Requires explicit session opt-in; judgments are advisory, never authorization.",
+        "Send workspace file contents to TypeSafe for paid relevance judgments. Requires explicit persisted opt-in; judgments are advisory, never authorization.",
       promptSnippet:
-        "Use session-enabled TypeSafe Sift only to rank explicit candidate files before reading them",
+        "Use user-enabled TypeSafe Sift only to rank explicit candidate files before reading them",
       promptGuidelines: [
-        "Use only after the user enables Sift for this session. Treat probabilities as advisory and never as authorization for an action.",
+        "Use only after the user enables Sift. Treat probabilities as advisory and never as authorization for an action.",
       ],
       parameters,
       async execute(_id, params, signal, _update, ctx) {
-        if (!enabled) {
+        if (!(await configStore.load())) {
           throw new Error(
             "Sift is disabled; the user must run /sift enable first"
           );
@@ -158,7 +172,7 @@ export function createSiftExtension(dependencies: Dependencies = {}) {
     });
 
     pi.registerCommand("sift", {
-      description: "Manage TypeSafe Sift authentication and session consent",
+      description: "Manage TypeSafe Sift authentication and persisted consent",
       getArgumentCompletions(prefix) {
         return ACTIONS.filter((action) => action.startsWith(prefix)).map(
           (action) => ({ value: action, label: action })
@@ -175,17 +189,21 @@ export function createSiftExtension(dependencies: Dependencies = {}) {
           return;
         }
         if (action === "status") {
-          report(ctx, await statusText(enabled, budget, store), "info");
+          report(
+            ctx,
+            await statusText(await configStore.load(), budget, store),
+            "info"
+          );
           return;
         }
         if (action === "disable") {
-          enabled = false;
-          report(ctx, "Sift disabled for future calls.", "info");
+          await configStore.save(false);
+          report(ctx, "Sift disabled globally.", "info");
           return;
         }
         if (action === "logout") {
+          await configStore.save(false);
           await store.clear();
-          enabled = false;
           const environmentRemains = env.TYPESAFE_API_KEY !== undefined;
           report(
             ctx,
@@ -207,21 +225,21 @@ export function createSiftExtension(dependencies: Dependencies = {}) {
           if (!ctx.hasUI || ctx.mode !== "tui") {
             report(
               ctx,
-              "Noninteractive enablement requires PI_SIFT_ENABLED=1; restart the session with that environment opt-in.",
+              "Persistent enablement requires interactive TUI; run /sift enable there.",
               "error"
             );
             return;
           }
           const confirmed = await ctx.ui.confirm(
-            "Enable TypeSafe Sift?",
-            "Selected file contents will leave this machine for paid TypeSafe Jev judgments. Secret detection is incomplete. Enable for this session?"
+            "Enable TypeSafe Sift globally?",
+            "Selected file contents will leave this machine for paid TypeSafe Jev judgments. Secret detection is incomplete. Enable for this and future sessions?"
           );
           if (!confirmed) {
             report(ctx, "Sift remains disabled.", "info");
             return;
           }
-          enabled = true;
-          report(ctx, "Sift enabled for this session.", "info");
+          await configStore.save(true);
+          report(ctx, "Sift enabled globally.", "info");
           return;
         }
         const current = await store.status();
@@ -316,6 +334,53 @@ function formatResults(details: SiftDetails): string {
   const lines = details.results.map(formatResult);
   return `${lines.join("\n")}\nSession budget: attempted=${details.attempted}, remaining=${details.remaining}/${details.limit}`;
 }
+class SiftLoginPrompt extends Container implements Focusable {
+  readonly #input = new MaskedKeyInput();
+  #focused = false;
+
+  constructor(
+    theme: {
+      fg(color: string, text: string): string;
+      bold(text: string): string;
+    },
+    done: (value: string | undefined) => void
+  ) {
+    super();
+    this.addChild(
+      new Text(theme.fg("accent", theme.bold("TypeSafe API key")), 1, 0)
+    );
+    this.addChild(
+      new Text(
+        theme.fg(
+          "muted",
+          "Get one at console.typesafe.ai › API Keys, then paste it here. Input is hidden. Enter verifies and saves; Esc cancels."
+        ),
+        1,
+        0
+      )
+    );
+    this.addChild(this.#input);
+    this.#input.onSubmit = (value) => done(value);
+    this.#input.onEscape = () => done(undefined);
+  }
+
+  get focused(): boolean {
+    return this.#focused;
+  }
+
+  set focused(value: boolean) {
+    this.#focused = value;
+    this.#input.focused = value;
+  }
+
+  handleInput(data: string): void {
+    if (matchesKey(data, Key.escape)) {
+      this.#input.onEscape?.();
+      return;
+    }
+    this.#input.handleInput(data);
+  }
+}
 class MaskedKeyInput extends Input {
   override handleInput(data: string): void {
     super.handleInput(data);
@@ -332,12 +397,9 @@ class MaskedKeyInput extends Input {
   }
 }
 function hiddenInput(ctx: ExtensionContext): Promise<string | undefined> {
-  return ctx.ui.custom<string | undefined>((_tui, _theme, _keys, done) => {
-    const input = new MaskedKeyInput();
-    input.onSubmit = (value) => done(value);
-    input.onEscape = () => done(undefined);
-    return input;
-  });
+  return ctx.ui.custom<string | undefined>(
+    (_tui, theme, _keys, done) => new SiftLoginPrompt(theme, done)
+  );
 }
 
 export default createSiftExtension();
