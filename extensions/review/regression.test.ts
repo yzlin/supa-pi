@@ -263,6 +263,8 @@ function createMockPiRuntime(
     }
   >();
   const sentUserMessages: Array<{ content: string; options?: unknown }> = [];
+  const preparedScripts: string[] = [];
+  let commandContext: unknown;
   const sentMessages: Array<{
     message: { customType?: string; content?: string; details?: unknown };
     options?: unknown;
@@ -286,6 +288,7 @@ function createMockPiRuntime(
   }> = [];
   return {
     commands,
+    preparedScripts,
     sentUserMessages,
     sentMessages,
     messageRenderers,
@@ -316,7 +319,13 @@ function createMockPiRuntime(
           handler: (args: string, ctx: unknown) => Promise<void> | void;
         }
       ) {
-        commands.set(name, definition);
+        commands.set(name, {
+          ...definition,
+          handler(args, ctx) {
+            commandContext = ctx;
+            return definition.handler(args, ctx);
+          },
+        });
       },
       registerMessageRenderer(
         customType: string,
@@ -344,6 +353,22 @@ function createMockPiRuntime(
       },
       sendUserMessage(content: string, options?: unknown) {
         sentUserMessages.push({ content, options });
+        const encoded = content.split(
+          "\nPrepared script (JSON string, inert data):\n"
+        )[1];
+        if (encoded) {
+          const input = { script: JSON.parse(encoded) as string };
+          const blocked = eventHandlers.get("tool_call")?.(
+            {
+              toolName: "SubagentWorkflow",
+              toolCallId: `call-${preparedScripts.length}`,
+              input,
+            },
+            commandContext
+          );
+          expect(blocked).toBeUndefined();
+          preparedScripts.push(input.script);
+        }
       },
     },
     appendedEntries,
@@ -1592,14 +1617,7 @@ describe("review follow-up helpers", () => {
 });
 
 function preparedCalls(runtime: ReturnType<typeof createMockPiRuntime>) {
-  return runtime.sentUserMessages.flatMap(({ content }) => {
-    const encoded = content.split(
-      "\nPrepared script (JSON string, inert data):\n"
-    )[1];
-    if (!encoded) {
-      return [];
-    }
-    const source = JSON.parse(encoded) as string;
+  return runtime.preparedScripts.flatMap((source) => {
     const line = source
       .split("\n")
       .find((value) => value.startsWith("const reviewInput = "))!;

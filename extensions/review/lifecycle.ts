@@ -31,6 +31,7 @@ interface PendingRun {
   plan: PublicReviewWorkflowInput;
   script: string;
   scriptHash: string;
+  handoffScript: string;
   invalid: boolean;
   finalizing: boolean;
   published: boolean;
@@ -189,14 +190,18 @@ export class ReviewRunController {
       const abort = () => {
         this.cancel();
       };
+      const id = randomUUID();
+      const scriptHash = digest(script);
+      const handoffScript = `/* supa-pi-review:${id}:${scriptHash} */`;
       const run: PendingRun = {
-        id: randomUUID(),
+        id,
         sessionId,
         cwd,
         target: savedTarget,
         plan: savedPlan,
         script,
-        scriptHash: digest(script),
+        scriptHash,
+        handoffScript,
         fingerprint: fingerprint.digest,
         invalid: false,
         finalizing: false,
@@ -209,7 +214,7 @@ export class ReviewRunController {
       this.pending = run;
       signal?.addEventListener("abort", abort, { once: true });
       parentSignal?.addEventListener("abort", abort, { once: true });
-      return Object.freeze({ id: run.id, script });
+      return Object.freeze({ id: run.id, script: handoffScript });
     } finally {
       this.preparing = false;
     }
@@ -227,7 +232,11 @@ export class ReviewRunController {
     if (!run || event.toolName !== "SubagentWorkflow") {
       return;
     }
-    if (!this.running && event.input.script !== run.script) {
+    if (
+      !this.running &&
+      event.input.script !== run.handoffScript &&
+      event.input.script !== run.script
+    ) {
       return;
     }
     // While a review is pending, no alternate native call can stand in for it.
@@ -235,17 +244,20 @@ export class ReviewRunController {
       !this.running ||
       run.toolCallId ||
       Object.keys(event.input).some((key) => key !== "script") ||
-      event.input.script !== run.script ||
-      digest(String(event.input.script)) !== run.scriptHash ||
+      event.input.script !== run.handoffScript ||
+      digest(run.script) !== run.scriptHash ||
       !this.sameContext(run, ctx)
     ) {
       this.cancel();
       return {
         block: true,
         reason:
-          "Review requires exactly one unchanged INLINE SubagentWorkflow script, with no alternate arguments. Run /review again.",
+          "Review requires exactly one unchanged prepared SubagentWorkflow marker, with no alternate arguments. Run /review again.",
       };
     }
+    // Pi's public tool_call contract applies input mutations before execution.
+    // Expand only the bound marker; native artifacts still capture the full source.
+    event.input.script = run.script;
     run.toolCallId = event.toolCallId;
   }
 

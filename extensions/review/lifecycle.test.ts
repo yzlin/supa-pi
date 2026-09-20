@@ -3,7 +3,20 @@ import { promises as fs } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
-import { SessionManager } from "@earendil-works/pi-coding-agent";
+import {
+  fauxAssistantMessage,
+  fauxProvider,
+  fauxToolCall,
+  InMemoryCredentialStore,
+} from "@earendil-works/pi-ai";
+import {
+  createAgentSession,
+  DefaultResourceLoader,
+  ModelRuntime,
+  SessionManager,
+  SettingsManager,
+} from "@earendil-works/pi-coding-agent";
+import { Type } from "typebox";
 
 import reviewExtension from "./index";
 
@@ -183,19 +196,26 @@ async function fixture(
       }
     );
   }
+  let nativeSource = source;
   const save = async () => {
-    await fs.writeFile(scriptPath, source);
+    await fs.writeFile(scriptPath, nativeSource);
     await fs.writeFile(
       journalPath,
       `${records.map((entry) => JSON.stringify(entry)).join("\n")}\n`
     );
   };
   await save();
-  const dispatch = (input = { script: source }, id = "call-1") =>
-    events.get("tool_call")!(
+  const dispatch = async (input = { script: source }, id = "call-1") => {
+    const blocked = await events.get("tool_call")!(
       { toolName: "SubagentWorkflow", toolCallId: id, input },
       ctx
     );
+    if (!blocked) {
+      nativeSource = input.script;
+      await fs.writeFile(scriptPath, nativeSource);
+    }
+    return blocked;
+  };
   const result = (id = "call-1", details = { taskId }) =>
     events.get("tool_result")!(
       {
@@ -258,6 +278,125 @@ async function fixture(
     },
   };
 }
+
+test("compact handoff expands to the full authorized script before native execution", async () => {
+  const f = await fixture();
+  expect(f.handoffs[0].length).toBeLessThan(1500);
+  expect(f.source.length).toBeLessThan(200);
+  const input = { script: f.source };
+  expect(await f.dispatch(input)).toBeUndefined();
+  expect(input.script.length).toBeGreaterThan(25_000);
+  expect(input.script).toStartWith("export const meta =");
+  expect(input.script).toContain("const reviewInput =");
+  await fs.writeFile(f.scriptPath, input.script);
+  await f.result();
+  f.complete();
+  await f.finalize();
+  expect(f.messages).toHaveLength(1);
+});
+
+test("Pi executes expanded arguments through its public tool_call hook", async () => {
+  const f = await fixture();
+  const provider = fauxProvider();
+  provider.setResponses([
+    fauxAssistantMessage(
+      fauxToolCall("SubagentWorkflow", { script: f.source })
+    ),
+    fauxAssistantMessage("Done"),
+  ]);
+  const modelRuntime = await ModelRuntime.create({
+    credentials: new InMemoryCredentialStore(),
+    modelsPath: null,
+    modelsStorePath: path.join(f.root, "models-store.json"),
+    allowModelNetwork: false,
+  });
+  modelRuntime.registerNativeProvider(provider.provider);
+  const settingsManager = SettingsManager.inMemory({
+    compaction: { enabled: false },
+    retry: { enabled: false },
+  });
+  let receivedScript = "";
+  const resourceLoader = new DefaultResourceLoader({
+    cwd: f.root,
+    agentDir: f.root,
+    settingsManager,
+    noExtensions: true,
+    noSkills: true,
+    noPromptTemplates: true,
+    noThemes: true,
+    noContextFiles: true,
+    extensionFactories: [
+      (pi) => {
+        pi.on("tool_call", (event) => f.events.get("tool_call")!(event, f.ctx));
+        pi.registerTool({
+          name: "SubagentWorkflow",
+          label: "Workflow capture",
+          description:
+            "Capture the authorized source without launching workers.",
+          parameters: Type.Object({ script: Type.String() }),
+          execute(_id, args) {
+            receivedScript = args.script;
+            return Promise.resolve({
+              content: [
+                { type: "text", text: "Captured; no workers launched." },
+              ],
+              details: {},
+              terminate: true,
+            });
+          },
+        });
+      },
+    ],
+  });
+  await resourceLoader.reload();
+  const { session } = await createAgentSession({
+    cwd: f.root,
+    agentDir: f.root,
+    modelRuntime,
+    model: provider.getModel(),
+    resourceLoader,
+    settingsManager,
+    sessionManager: SessionManager.inMemory(f.root),
+    tools: ["SubagentWorkflow"],
+  });
+  try {
+    await session.bindExtensions({ mode: "print" });
+    await session.prompt("Dispatch the prepared review marker.");
+    expect(receivedScript).toStartWith("export const meta =");
+    expect(receivedScript.length).toBeGreaterThan(25_000);
+    expect(provider.state.callCount).toBe(1);
+  } finally {
+    session.dispose();
+  }
+});
+
+test("markers from another prepared review cannot dispatch", async () => {
+  const first = await fixture();
+  const second = await fixture();
+  const input = { script: first.source };
+  expect((await second.dispatch(input)).block).toBe(true);
+  expect(input.script).toBe(first.source);
+});
+
+test("the marker itself cannot substitute for the native saved source", async () => {
+  const f = await fixture();
+  await f.ready();
+  await fs.writeFile(f.scriptPath, f.source);
+  await expect(f.finalize()).rejects.toThrow("differs from authorized source");
+  expect(f.messages).toHaveLength(0);
+});
+
+test("published marker and expanded-source replays remain blocked", async () => {
+  const f = await fixture();
+  const input = { script: f.source };
+  await f.dispatch(input);
+  await f.result();
+  f.complete();
+  await f.finalize();
+  expect((await f.dispatch()).block).toBe(true);
+  expect((await f.dispatch(input)).block).toBe(true);
+  expect(f.messages).toHaveLength(1);
+});
 
 test("finalization refuses publication after reviewed .pi configuration changes", async () => {
   const f = await fixture(
