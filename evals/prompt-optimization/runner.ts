@@ -621,13 +621,18 @@ export async function runVariant(
     options.evalCase.task
   );
   const context: AgentContext = {
-    systemPrompt: [
-      request.systemPrompt,
-      "# Eval environment",
-      `Working directory: ${workspace}`,
-      "Fixture restriction: `tests/math.case.ts` must remain byte-for-byte unchanged. Do not edit, replace, or add assertions to this file.",
-    ].join("\n\n"),
-    messages: [],
+    messages: [
+      {
+        role: "system",
+        content: [
+          request.systemPrompt,
+          "# Eval environment",
+          `Working directory: ${workspace}`,
+          "Fixture restriction: `tests/math.case.ts` must remain byte-for-byte unchanged. Do not edit, replace, or add assertions to this file.",
+        ].join("\n\n"),
+        timestamp: Date.now(),
+      },
+    ],
     tools,
   };
   const prompt: AgentMessage = {

@@ -4,7 +4,8 @@ import {
   parseKey,
   ScrollView,
   type TUI,
-  type TuiInputListener,
+  TuiAltScreen,
+  type TuiMouseEvent,
   truncateToWidth,
   visibleWidth,
 } from "@earendil-works/pi-tui";
@@ -127,49 +128,6 @@ function selectionDeltaForInput(
     case "pageUp":
       return -pageStep;
   }
-}
-
-const FULLSCREEN_WHEEL_COMPATIBILITY_ERROR =
-  "Skills fullscreen wheel routing requires @earendil-works/pi-tui 0.84.0 with TuiBase inputListeners storage. Reinstall the pinned version or disable fullscreen mode.";
-
-interface PiTui084FullscreenInternals {
-  inputListeners: Set<TuiInputListener>;
-}
-
-function piTui084FullscreenInternals(tui: TUI): PiTui084FullscreenInternals {
-  // pi-tui 0.84.0 has no public listener-priority or overlay wheel-routing API.
-  // Remove this private compatibility adapter when either API becomes public.
-  const inputListeners = (tui as unknown as { inputListeners?: unknown })
-    .inputListeners;
-  if (
-    !(inputListeners instanceof Set) ||
-    [...inputListeners].some((candidate) => typeof candidate !== "function")
-  ) {
-    throw new Error(FULLSCREEN_WHEEL_COMPATIBILITY_ERROR);
-  }
-  return { inputListeners };
-}
-
-function prioritizeFullscreenInputListener(
-  tui: TUI,
-  listener: TuiInputListener
-): () => void {
-  const { inputListeners } = piTui084FullscreenInternals(tui);
-  const remove = tui.addInputListener(listener);
-  if (!inputListeners.delete(listener)) {
-    remove();
-    throw new Error(FULLSCREEN_WHEEL_COMPATIBILITY_ERROR);
-  }
-
-  // The fullscreen viewport handler consumes wheel input before focused overlay
-  // dispatch. Keep all existing order while prepending this overlay listener.
-  const existing = [...inputListeners];
-  inputListeners.clear();
-  inputListeners.add(listener);
-  for (const existingListener of existing) {
-    inputListeners.add(existingListener);
-  }
-  return remove;
 }
 
 interface WheelInput {
@@ -870,7 +828,6 @@ export function createSkillsManagerComponent({
   const inventoryScrollView = createInventoryScrollView(inventoryContent);
   let lastRenderedSelection: string | undefined;
   let lastRenderedHeight = 0;
-  let removeHostInputListener: (() => void) | undefined;
 
   function normalizeSelection(): void {
     state.selectedIndex = clampIndex(
@@ -886,8 +843,7 @@ export function createSkillsManagerComponent({
       // Component owns local state only.
     },
     dispose() {
-      removeHostInputListener?.();
-      removeHostInputListener = undefined;
+      // Component owns no external resources.
     },
     render(width = 100) {
       normalizeSelection();
@@ -905,9 +861,39 @@ export function createSkillsManagerComponent({
       lastRenderedHeight = lines.length;
       return lines;
     },
+    handleMouse(event: TuiMouseEvent) {
+      if (
+        event.type !== "wheel" ||
+        event.wheelDelta === undefined ||
+        event.x < 1 ||
+        event.x >= event.width - 1 ||
+        event.y < INVENTORY_FIRST_OVERLAY_ROW ||
+        event.y >=
+          INVENTORY_FIRST_OVERLAY_ROW + inventoryScrollView.viewportHeight
+      ) {
+        return;
+      }
+      inventoryScrollView.scrollBy(event.wheelDelta);
+      hostTui?.requestRender();
+      return { handled: true };
+    },
     handleInput(data: string) {
       const wheelInput = wheelInputForData(data);
       if (wheelInput) {
+        if (hostTui && lastRenderedHeight > 0) {
+          const bounds = skillsManagerInventoryBounds(
+            hostTui.terminal.columns,
+            hostTui.terminal.rows,
+            lastRenderedHeight,
+            inventoryScrollView.viewportHeight
+          );
+          if (!pointIsWithinInventory(wheelInput, bounds)) {
+            if (hostTui instanceof TuiAltScreen) {
+              hostTui.scrollBy(wheelInput.direction);
+            }
+            return;
+          }
+        }
         inventoryScrollView.scrollBy(wheelInput.direction);
         return;
       }
@@ -974,30 +960,6 @@ export function createSkillsManagerComponent({
       }
     },
   };
-
-  if (hostTui?.mode === "fullscreen") {
-    removeHostInputListener = prioritizeFullscreenInputListener(
-      hostTui,
-      (data) => {
-        const wheelInput = wheelInputForData(data);
-        if (!wheelInput || lastRenderedHeight === 0) {
-          return;
-        }
-        const bounds = skillsManagerInventoryBounds(
-          hostTui.terminal.columns,
-          hostTui.terminal.rows,
-          lastRenderedHeight,
-          inventoryScrollView.viewportHeight
-        );
-        if (!pointIsWithinInventory(wheelInput, bounds)) {
-          return;
-        }
-        inventoryScrollView.scrollBy(wheelInput.direction);
-        hostTui.requestRender();
-        return { consume: true };
-      }
-    );
-  }
 
   return component;
 }

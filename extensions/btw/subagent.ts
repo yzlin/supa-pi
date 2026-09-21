@@ -12,6 +12,7 @@ import type {
   AgentLoopConfig,
   AgentMessage,
   AgentTool,
+  StreamFn,
 } from "@earendil-works/pi-agent-core";
 import { agentLoop } from "@earendil-works/pi-agent-core";
 import { convertToLlm } from "@earendil-works/pi-coding-agent";
@@ -267,7 +268,8 @@ export async function runSubagent(
   thinkingLevel: string,
   apiKeyResolver: (provider: string) => Promise<string | undefined>,
   signal: AbortSignal | undefined,
-  onProgress: (result: SingleResult) => void
+  onProgress: (result: SingleResult) => void,
+  streamFn?: StreamFn
 ): Promise<SingleResult> {
   const result: SingleResult = {
     task,
@@ -295,10 +297,15 @@ export async function runSubagent(
     timestamp: Date.now(),
   };
 
-  // Fresh context: just the system prompt, no message history
+  // Fresh context: instructions must be part of the transcript consumed by providers.
   const context: AgentContext = {
-    systemPrompt,
-    messages: [],
+    messages: [
+      {
+        role: "system",
+        content: systemPrompt,
+        timestamp: Date.now(),
+      },
+    ],
     tools,
   };
 
@@ -310,7 +317,13 @@ export async function runSubagent(
   };
 
   try {
-    const stream = agentLoop([subagentPrompt], context, config, signal);
+    const stream = agentLoop(
+      [subagentPrompt],
+      context,
+      config,
+      signal,
+      streamFn as StreamFn
+    );
 
     for await (const event of stream) {
       if (signal?.aborted) {

@@ -25,6 +25,7 @@ Documented extensions in this repo include:
 - **`extensions/prompt-commands`** — active raw-input transformer for the queueable `/grill-me`, `/research-brief`, `/show-me`, and `/wayfinder` prompt entrypoints; canonical behavior remains in their delegated skills or prompt instructions
 - **`extensions/ask`** — active Ask Extension providing the `ask` structured clarification tool and `/ask-stats` session command, with bounded schema, single/multi-question TUI flows, preview notes, validation, and locally documented rpiv divergences in `docs/context/ask.md`; no legacy tool or command aliases are registered
 - **`extensions/context-docs`** — deterministic `/context-setup`, `/context-note`, `/adr`, and `/context-review` workflows for durable project context docs; canonical workflow behavior lives in `skills/context-docs/SKILL.md`
+- **[`extensions/skill-router`](extensions/skill-router/README.md)** — registered-first, default-off paid JEV skill selection with bounded conversation transfer, separate authentication and explicit consent, and native fallback
 - **`extensions/docs-list`** — `docs_list` tool for discovering project markdown docs before coding; backed by the same implementation as the `docs-list` CLI
 - **`extensions/code-improvement`** — scoped `/simplify` code-simplifier delegation with strict target grammar, `--extra` guidance, `--yes` consent bypass for large/PR scopes, hard file allowlists, and `/improve-codebase-architecture` read-only architecture review workflow
 - **`extensions/review`** — current-session `/review` prepares one public native workflow and locally validates publication via `review_finalize`, with `/review-summary` and `/review-fix` follow-ups (see `extensions/review/README.md`); adapted in part from `@earendil-works/pi-review`
@@ -188,11 +189,11 @@ The setup script installs or reconciles these Pi packages. It no longer installs
   - `bun run check:write`
 - This repo uses Bun (`bun.lock` present)
 - Peer dependencies include:
-  - `@earendil-works/pi-coding-agent` (`>=0.84.0`)
-  - `@earendil-works/pi-ai` (`>=0.84.0`)
-  - `@earendil-works/pi-tui` (`>=0.84.0`)
+  - `@earendil-works/pi-coding-agent` (`>=0.86.1`)
+  - `@earendil-works/pi-ai` (`>=0.86.1`)
+  - `@earendil-works/pi-tui` (`>=0.86.1`)
   - `typebox` (`^1.1.34`)
-- Pi version policy: consumers must provide Pi `0.84.0` or newer. Local development pins `@earendil-works/pi-agent-core`, `@earendil-works/pi-ai`, `@earendil-works/pi-coding-agent`, and `@earendil-works/pi-tui` together at exactly `0.84.0`; upgrade that set together and regenerate `bun.lock`.
+- Pi version policy: consumers must provide Pi `0.86.1` or newer. Local development pins `@earendil-works/pi-agent-core`, `@earendil-works/pi-ai`, `@earendil-works/pi-coding-agent`, and `@earendil-works/pi-tui` together at exactly `0.86.1`; upgrade that set together and regenerate `bun.lock`.
 
 ## When to use this repo
 

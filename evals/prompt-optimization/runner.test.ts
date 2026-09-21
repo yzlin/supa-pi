@@ -227,14 +227,18 @@ describe("runVariant", () => {
       getApiKey: () => Promise.resolve("test-key"),
       streamFn: (selectedModel, context, options) => {
         observedSessionId = options?.sessionId;
-        initialSystemPrompt = context.systemPrompt;
+        initialSystemPrompt = context.messages
+          .filter((message) => message.role === "system")
+          .map((message) => message.content)
+          .join("\n");
         initialMessageRoles = context.messages.map((message) => message.role);
         return createSuccessfulStream(selectedModel);
       },
     });
 
     expect(result.completed).toBe(true);
-    expect(initialMessageRoles).toEqual(["user"]);
+    expect(initialMessageRoles).toEqual(["system", "user"]);
+    expect(initialSystemPrompt).toContain("Be evidence driven.");
     expect(initialSystemPrompt).toContain(
       "`tests/math.case.ts` must remain byte-for-byte unchanged."
     );

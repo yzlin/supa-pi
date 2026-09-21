@@ -1,6 +1,5 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 
-import type { ImageContent } from "@earendil-works/pi-ai";
 import {
   AgentSession,
   type ExtensionAPI,
@@ -33,22 +32,16 @@ const COMMANDS = {
 
 type PromptCommandName = keyof typeof COMMANDS;
 type PromptMethod = (text: string, options?: PromptOptions) => Promise<void>;
-type QueueMethod = (text: string, images?: ImageContent[]) => Promise<void>;
 type Transformer = (text: string) => string;
 type QueueOwner = symbol;
 
 const whitespaceDelimiter = /\s/u;
-const identityTransformer: Transformer = (text) => text;
 
 interface QueuePatchRegistry {
   originalPrompt: PromptMethod;
-  originalSteer: QueueMethod;
-  originalFollowUp: QueueMethod;
   prompt: PromptMethod;
-  steer: QueueMethod;
-  followUp: QueueMethod;
   promptExpansion: AsyncLocalStorage<boolean>;
-  owners: Map<QueueOwner, Transformer>;
+  owners: Set<QueueOwner>;
 }
 
 const queuePatch = Symbol.for("supa-pi.prompt-pipeline-commands.queue-patch");
@@ -58,8 +51,6 @@ type GlobalWithQueuePatch = typeof globalThis & {
 };
 type QueuePrototype = AgentSession & {
   prompt: PromptMethod;
-  steer: QueueMethod;
-  followUp: QueueMethod;
 };
 
 export function buildPromptCommandMessage(
@@ -86,26 +77,15 @@ export function expandRawPromptCommand(text: string): string {
   return text;
 }
 
-function currentTransformer(registry: QueuePatchRegistry): Transformer {
-  const transformers = [...registry.owners.values()];
-  return transformers.at(-1) ?? identityTransformer;
-}
-
-function addQueueOwner(owner: QueueOwner, transform: Transformer): void {
+function addQueueOwner(owner: QueueOwner): void {
   const globals = globalThis as GlobalWithQueuePatch;
   const prototype = AgentSession.prototype as QueuePrototype;
   const registries = globals[queuePatch] ?? new Map();
   const existing = registries.get(prototype);
   if (existing) {
-    existing.owners.set(owner, transform);
+    existing.owners.add(owner);
     if (prototype.prompt === existing.originalPrompt) {
       prototype.prompt = existing.prompt;
-    }
-    if (prototype.steer === existing.originalSteer) {
-      prototype.steer = existing.steer;
-    }
-    if (prototype.followUp === existing.originalFollowUp) {
-      prototype.followUp = existing.followUp;
     }
     return;
   }
@@ -117,41 +97,19 @@ function addQueueOwner(owner: QueueOwner, transform: Transformer): void {
       () => registry.originalPrompt.call(this, text, options)
     );
   };
-  const steer: QueueMethod = function steer(text, images) {
-    return registry.originalSteer.call(
-      this,
-      currentTransformer(registry)(text),
-      images
-    );
-  };
-  const followUp: QueueMethod = function followUp(text, images) {
-    return registry.originalFollowUp.call(
-      this,
-      currentTransformer(registry)(text),
-      images
-    );
-  };
   registry = {
     originalPrompt: prototype.prompt,
-    originalSteer: prototype.steer,
-    originalFollowUp: prototype.followUp,
     prompt,
-    steer,
-    followUp,
     promptExpansion: new AsyncLocalStorage<boolean>(),
-    owners: new Map([[owner, transform]]),
+    owners: new Set([owner]),
   };
 
   try {
     prototype.prompt = prompt;
-    prototype.steer = steer;
-    prototype.followUp = followUp;
     registries.set(prototype, registry);
     globals[queuePatch] = registries;
   } catch (error) {
     prototype.prompt = registry.originalPrompt;
-    prototype.steer = registry.originalSteer;
-    prototype.followUp = registry.originalFollowUp;
     registries.delete(prototype);
     if (registries.size === 0) {
       delete globals[queuePatch];
@@ -181,17 +139,7 @@ function removeQueueOwner(owner: QueueOwner): void {
     if (prototype.prompt === registry.prompt) {
       prototype.prompt = registry.originalPrompt;
     }
-    if (prototype.steer === registry.steer) {
-      prototype.steer = registry.originalSteer;
-    }
-    if (prototype.followUp === registry.followUp) {
-      prototype.followUp = registry.originalFollowUp;
-    }
-    if (
-      prototype.prompt !== registry.originalPrompt ||
-      prototype.steer !== registry.originalSteer ||
-      prototype.followUp !== registry.originalFollowUp
-    ) {
+    if (prototype.prompt !== registry.originalPrompt) {
       return;
     }
     registries.delete(prototype);
@@ -219,13 +167,13 @@ export function createPromptCommandsExtension(
   return (pi) => {
     const owner = Symbol("prompt-commands-owner");
     let active = true;
-    addQueueOwner(owner, transform);
+    addQueueOwner(owner);
 
     pi.on("session_start", () => {
       if (active) {
         return;
       }
-      addQueueOwner(owner, transform);
+      addQueueOwner(owner);
       active = true;
     });
     pi.on("session_shutdown", () => {

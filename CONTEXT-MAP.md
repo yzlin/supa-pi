@@ -25,6 +25,7 @@
 
 ## Major extension docs
 
+- `extensions/skill-router/README.md` — read before changing skill-router registration/order, effective-catalog policy, TypeSafe authentication or paid consent, privacy/limits, lifecycle fallback, or rollout claims.
 - `extensions/auto-rename/README.md` — read before changing automatic session naming, `/auto-rename`, its global configuration, title safety/privacy boundaries, or session/tree concurrency protections.
 - `extensions/sift/README.md` — read before changing Sift, `sift_files`, `/sift`, TypeSafe authentication/consent, data-transfer limits, or its security boundary.
 - `extensions/caveman/README.md` — read before changing `/caveman`, caveman-mode persistence, or generic extension status behavior.

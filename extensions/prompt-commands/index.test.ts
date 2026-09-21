@@ -282,14 +282,25 @@ describe("raw prompt pipeline commands", () => {
         expect(textOf(steering)).toBe(expected);
         expect(textOf(followUps)).toBe(expected);
         expect(inputEvents).toEqual([
-          expect.objectContaining({ text: invocation }),
+          expect.objectContaining({
+            text: invocation,
+            streamingBehavior: "steer",
+          }),
+          expect.objectContaining({
+            text: invocation,
+            streamingBehavior: "steer",
+          }),
+          expect.objectContaining({
+            text: invocation,
+            streamingBehavior: "followUp",
+          }),
         ]);
         session.dispose();
       }
     }
   });
 
-  it("restores queue methods after shutdown and uses a new owner's current transformer", async () => {
+  it("keeps native queue methods intact while owners reload and shut down", async () => {
     const prototype = AgentSession.prototype as unknown as {
       steer: unknown;
       followUp: unknown;
@@ -306,7 +317,8 @@ describe("raw prompt pipeline commands", () => {
     expect(
       (AgentSession.prototype as unknown as { prompt: unknown }).prompt
     ).not.toBe(originalPrompt);
-    expect(prototype.steer).not.toBe(originalSteer);
+    expect(prototype.steer).toBe(originalSteer);
+    expect(prototype.followUp).toBe(originalFollowUp);
 
     const current = await createSession(
       [],
@@ -333,7 +345,8 @@ describe("raw prompt pipeline commands", () => {
       }
     ).extensionRunner.emit({ type: "session_shutdown", reason: "reload" });
     current.session.dispose();
-    expect(prototype.steer).not.toBe(originalSteer);
+    expect(prototype.steer).toBe(originalSteer);
+    expect(prototype.followUp).toBe(originalFollowUp);
 
     const oldQueued: unknown[] = [];
     (old.session.agent as unknown as { steer(message: unknown): void }).steer =

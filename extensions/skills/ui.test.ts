@@ -445,27 +445,6 @@ describe("skills manager UI", () => {
   });
 
   it.each([
-    ["missing", undefined],
-    ["wrong shape", []],
-  ])("fails clearly when fullscreen listener storage is %s", (_description, inputListeners) => {
-    const unsupportedHost = {
-      mode: "fullscreen",
-      addInputListener: () => () => undefined,
-      inputListeners,
-    } as unknown as TuiAltScreen;
-
-    expect(() =>
-      createSkillsManagerComponent({
-        inventory: inventoryWithManyBundled(40),
-        done: () => undefined,
-        hostTui: unsupportedHost,
-      })
-    ).toThrow(
-      "Skills fullscreen wheel routing requires @earendil-works/pi-tui 0.84.0"
-    );
-  });
-
-  it.each([
     ["SGR", "\u001b[<65;12;8M", "\u001b[<64;12;40M"],
     ["legacy X10", "\u001b[Ma,(", "\u001b[M`,H"],
   ])("routes %s wheel input by inventory pointer bounds on the host terminal path", (_protocol, insideWheelDown, outsideWheelUp) => {
