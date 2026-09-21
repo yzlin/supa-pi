@@ -12,7 +12,7 @@ import type {
 
 import { expandHome, loadObsidianConfig } from "./config";
 import {
-  discoverClaudeChain,
+  discoverContextChain,
   loadContextFiles,
   OBSIDIAN_CONTEXT_ENTRY,
 } from "./context";
@@ -169,26 +169,43 @@ describe("obsidian config", () => {
 });
 
 describe("obsidian context", () => {
-  it("discovers only parent-to-child CLAUDE.md chain", () => {
+  it("discovers one context file per directory in native precedence and parent-to-child order", () => {
     const root = makeVault("chain");
-    const child = join(root, "area", "project");
-    mkdirSync(child, { recursive: true });
-    writeFileSync(join(root, "CLAUDE.md"), "root");
-    writeFileSync(join(root, "area", "CLAUDE.MD"), "area");
-    writeFileSync(join(child, "CLAUDE.md"), "project");
-    mkdirSync(join(child, "descendant"), { recursive: true });
-    writeFileSync(join(child, "descendant", "CLAUDE.md"), "ignored");
+    const directories = [
+      root,
+      join(root, "claude"),
+      join(root, "claude", "agents-upper"),
+      join(root, "claude", "agents-upper", "agents"),
+      join(root, "claude", "agents-upper", "agents", "override"),
+    ];
+    const candidates = [
+      "CLAUDE.MD",
+      "CLAUDE.md",
+      "AGENTS.MD",
+      "AGENTS.md",
+      "AGENTS.override.md",
+    ];
+    mkdirSync(directories.at(-1)!, { recursive: true });
+
+    directories.forEach((directory, index) => {
+      for (const candidate of candidates.slice(0, index + 1).reverse()) {
+        writeFileSync(join(directory, candidate), candidate);
+      }
+    });
 
     expect(
-      discoverClaudeChain(realVault(root), join(child, "note.md"))
-    ).toEqual([
-      realpathSync(join(root, "CLAUDE.md")),
-      realpathSync(join(root, "area", "CLAUDE.MD")),
-      realpathSync(join(child, "CLAUDE.md")),
-    ]);
+      discoverContextChain(
+        realVault(root),
+        join(directories.at(-1)!, "note.md")
+      )
+    ).toEqual(
+      directories.map((directory, index) =>
+        realpathSync(join(directory, candidates[index]!))
+      )
+    );
   });
 
-  it("discovers CLAUDE.md chain for missing target directories", () => {
+  it("discovers context chain for missing target directories", () => {
     const root = makeVault("missing-target");
     const child = join(root, "area");
     mkdirSync(child, { recursive: true });
@@ -196,14 +213,35 @@ describe("obsidian context", () => {
     writeFileSync(join(child, "CLAUDE.md"), "area");
 
     expect(
-      discoverClaudeChain(realVault(root), join(child, "new", "note.md"))
+      discoverContextChain(realVault(root), join(child, "new", "note.md"))
     ).toEqual([
       realpathSync(join(root, "CLAUDE.md")),
       realpathSync(join(child, "CLAUDE.md")),
     ]);
   });
 
-  it("dedupes CLAUDE paths when loading context", () => {
+  it("keeps a directory's persisted selection stable when a higher-priority file appears", () => {
+    const root = makeVault("stable-selection");
+    const claude = join(root, "CLAUDE.md");
+    writeFileSync(claude, "claude");
+
+    expect(discoverContextChain(realVault(root), root)).toEqual([
+      realpathSync(claude),
+    ]);
+    writeFileSync(join(root, "AGENTS.override.md"), "agents");
+    expect(
+      discoverContextChain(
+        realVault(root),
+        root,
+        new Set([realpathSync(claude)])
+      )
+    ).toEqual([realpathSync(claude)]);
+    expect(discoverContextChain(realVault(root), root)).toEqual([
+      realpathSync(join(root, "AGENTS.override.md")),
+    ]);
+  });
+
+  it("dedupes context paths when loading context", () => {
     const root = makeVault("dedupe");
     const claude = join(root, "CLAUDE.md");
     writeFileSync(claude, "root");
@@ -328,6 +366,36 @@ describe("obsidian extension behavior", () => {
     expect(result.system.match(/root rules/g)).toHaveLength(1);
   });
 
+  it("does not double-load a directory when a higher-priority file appears mid-session", () => {
+    useTempConfig("stable-runtime");
+    const root = makeVault("stable-runtime");
+    const claude = join(root, "CLAUDE.md");
+    writeFileSync(claude, "claude rules");
+    writeConfig({ enabled: true, vaults: [{ path: root }] });
+
+    const harness = createExtensionHarness();
+    harness.beforeAgentStart(root);
+    writeFileSync(join(root, "AGENTS.override.md"), "agents rules");
+
+    expect(
+      harness.toolCall(
+        { toolName: "read", input: { path: join(root, "note.md") } },
+        root
+      )
+    ).toBeUndefined();
+    expect(harness.entries).toEqual([
+      {
+        customType: OBSIDIAN_CONTEXT_ENTRY,
+        data: { paths: [realpathSync(claude)] },
+      },
+    ]);
+    expect(
+      harness.beforeProviderRequest({ system: "base provider prompt" }, root)
+    ).toEqual({
+      system: expect.stringContaining("claude rules"),
+    });
+  });
+
   it("injects context loaded by a guarded tool call into provider retry payloads", () => {
     useTempConfig("provider-retry");
     const root = makeVault("provider-retry");
@@ -405,13 +473,13 @@ describe("obsidian extension behavior", () => {
     expect(harness.entries).toEqual([]);
   });
 
-  it("blocks the first structured tool call to load missing context, then allows retry", () => {
+  it("blocks the first structured tool call to load missing AGENTS context, then allows retry", () => {
     useTempConfig("guard");
     const root = makeVault("guard");
     const child = join(root, "child");
     mkdirSync(child, { recursive: true });
-    const claude = join(child, "CLAUDE.md");
-    writeFileSync(claude, "child rules");
+    const agents = join(child, "AGENTS.md");
+    writeFileSync(agents, "child rules");
     writeConfig({ enabled: true, vaults: [{ path: root }] });
 
     const harness = createExtensionHarness();
@@ -419,7 +487,7 @@ describe("obsidian extension behavior", () => {
 
     expect(harness.toolCall(event, root)).toEqual({
       block: true,
-      reason: `Obsidian loaded missing CLAUDE context for ${join(
+      reason: `Obsidian loaded missing context for ${join(
         child,
         "note.md"
       )}. Retry the same structured tool call now.`,
@@ -428,7 +496,7 @@ describe("obsidian extension behavior", () => {
     expect(harness.entries).toEqual([
       {
         customType: OBSIDIAN_CONTEXT_ENTRY,
-        data: { paths: [realpathSync(claude)] },
+        data: { paths: [realpathSync(agents)] },
       },
     ]);
   });
@@ -479,7 +547,7 @@ describe("obsidian extension behavior", () => {
           "enabled: true",
           "configured vaults: 2",
           "active vault: nested",
-          "loaded CLAUDE paths: 1",
+          "loaded context paths: 1",
           `  - ${realpathSync(join(nested, "CLAUDE.md"))}`,
           "warning: Rejected Obsidian vault with non-absolute path",
           "warning: Overlapping Obsidian vaults detected; deepest root wins",
@@ -500,7 +568,7 @@ describe("obsidian extension behavior", () => {
           "enabled: false",
           "configured vaults: 0",
           "active vault: none",
-          "loaded CLAUDE paths: 0",
+          "loaded context paths: 0",
         ].join("\n"),
       },
     ]);

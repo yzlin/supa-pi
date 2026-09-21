@@ -8,7 +8,7 @@ import type {
 
 import { type LoadedConfig, loadObsidianConfig } from "./config";
 import {
-  discoverClaudeChain,
+  discoverContextChain,
   type LoadedContextState,
   loadContextFiles,
   persistLoadedPaths,
@@ -40,7 +40,7 @@ function getRuntime(ctx: ExtensionContext): {
 }
 
 function buildObsidianPrompt(paths: string[]): string {
-  return `Obsidian vault context loaded from CLAUDE.md files. Follow these instructions in parent-to-child order.\n\n${loadContextFiles(paths)}`;
+  return `Obsidian vault context loaded from context files. Follow these instructions in parent-to-child order.\n\n${loadContextFiles(paths)}`;
 }
 
 function activeContextPaths(
@@ -56,7 +56,7 @@ function addMissingContext(
   state: LoadedContextState,
   targetPath: string
 ): string[] {
-  const chain = discoverClaudeChain(active.vault, targetPath);
+  const chain = discoverContextChain(active.vault, targetPath, state.paths);
   const missing = chain.filter((item) => !state.paths.has(item));
   if (missing.length === 0) {
     return [];
@@ -215,7 +215,7 @@ export default function obsidianExtension(pi: ExtensionAPI): void {
 
       return {
         block: true,
-        reason: `Obsidian loaded missing CLAUDE context for ${targetPath}. Retry the same structured tool call now.`,
+        reason: `Obsidian loaded missing context for ${targetPath}. Retry the same structured tool call now.`,
       };
     } catch (error) {
       return {
@@ -246,7 +246,7 @@ export default function obsidianExtension(pi: ExtensionAPI): void {
         `enabled: ${config.enabled}`,
         `configured vaults: ${config.vaults.length}`,
         `active vault: ${active?.vault.name ?? active?.vault.path ?? "none"}`,
-        `loaded CLAUDE paths: ${loadedPaths.length}`,
+        `loaded context paths: ${loadedPaths.length}`,
         ...loadedPaths.map((path) => `  - ${path}`),
         ...warnings.map((warning) => `warning: ${warning}`),
       ].join("\n");

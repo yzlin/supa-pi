@@ -12,7 +12,13 @@ import { assertContained } from "./vault";
 export const OBSIDIAN_CONTEXT_ENTRY = "obsidian.loadedContextPaths";
 const FILE_LIMIT = 64 * 1024;
 const TOTAL_LIMIT = 256 * 1024;
-const CLAUDE_NAMES = ["CLAUDE.md", "CLAUDE.MD"];
+const CONTEXT_NAMES = [
+  "AGENTS.override.md",
+  "AGENTS.md",
+  "AGENTS.MD",
+  "CLAUDE.md",
+  "CLAUDE.MD",
+];
 
 export interface LoadedContextState {
   paths: Set<string>;
@@ -39,8 +45,19 @@ export function stateFromSession(ctx: ExtensionContext): LoadedContextState {
   return { paths };
 }
 
-function findClaudeFile(directory: string): string | null {
-  for (const name of CLAUDE_NAMES) {
+function findContextFile(
+  directory: string,
+  loadedPaths: ReadonlySet<string>
+): string | null {
+  const realDirectory = realpathSync(directory);
+  const persisted = [...loadedPaths].find(
+    (filePath) => dirname(filePath) === realDirectory
+  );
+  if (persisted) {
+    return persisted;
+  }
+
+  for (const name of CONTEXT_NAMES) {
     const candidate = join(directory, name);
     if (existsSync(candidate) && statSync(candidate).isFile()) {
       return realpathSync(candidate);
@@ -66,9 +83,10 @@ function nearestExistingDirectory(targetPath: string): string {
   return current;
 }
 
-export function discoverClaudeChain(
+export function discoverContextChain(
   vault: ValidatedVault,
-  targetPath: string
+  targetPath: string,
+  loadedPaths: ReadonlySet<string> = new Set()
 ): string[] {
   if (!assertContained(vault, targetPath)) {
     return [];
@@ -89,7 +107,7 @@ export function discoverClaudeChain(
   }
   return dirs
     .reverse()
-    .map(findClaudeFile)
+    .map((directory) => findContextFile(directory, loadedPaths))
     .filter((item): item is string => item !== null);
 }
 
