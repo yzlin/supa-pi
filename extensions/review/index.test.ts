@@ -263,6 +263,14 @@ async function withReviewConfigSandbox(
 }
 
 describe.serial("review model config", () => {
+  it("keeps Astra reviewers and verifier while defaulting synthesis to Luna", () => {
+    expect(DEFAULT_REVIEWER_PANEL).toEqual([
+      { model: "openai-codex/gpt-6-astra", thinkingLevel: "medium" },
+    ]);
+    expect(DEFAULT_SYNTHESIZER_MODEL).toBe("openai-codex/gpt-6-luna");
+    expect(DEFAULT_VERIFIER_MODEL).toBe("openai-codex/gpt-6-astra");
+  });
+
   it("layers each field as flags, project, global, then defaults", async () => {
     await withReviewConfigSandbox(async (cwd) => {
       await writeReviewConfigField(

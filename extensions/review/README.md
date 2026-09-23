@@ -10,12 +10,12 @@ One native run performs the reviewer role × model matrix → shared-code covera
 
 Reviewer and verifier tool configurations are retained. The report-only synthesizer is configured with `tools: none` and `extensions: false`, with native `StructuredOutput` injected for its schema. This is upstream agent configuration, **not override-proof enforcement** against project-local agent definitions. It is instructed not to inspect code or decide truth/priority.
 
-The default matrix uses GPT-6 Astra at medium thinking for every review stage:
+The default matrix keeps reviewers and verification on GPT-6 Astra while routing synthesis to GPT-6 Luna; every stage uses medium thinking:
 
 | role | default model | thinking |
 | --- | --- | --- |
 | each selected reviewer | `openai-codex/gpt-6-astra` | `medium` |
-| synthesizer | `openai-codex/gpt-6-astra` | fixed `medium` |
+| synthesizer | `openai-codex/gpt-6-luna` | fixed `medium` |
 | verifier | `openai-codex/gpt-6-astra` | fixed `medium` |
 
 The panel accepts 1–4 distinct model IDs. Supported reviewer thinking levels are `minimal`, `low`, `medium`, `high`, and `xhigh`, passed through unchanged. Saved config schemas still accept legacy `off`, but command preflight and script preparation reject it with instructions to choose a supported level; entries are never silently changed. Duplicate IDs normalize to one run, using the first entry, so one model cannot gain multiple support votes. Inside one workflow, reviewer jobs run in awaited native `parallel` batches of at most four. This intentional batch barrier caps concurrency at four and preserves role/model dispatch indices and output order. Synthesizer and verifier calls run afterward, not concurrently with the reviewer matrix.
@@ -35,7 +35,7 @@ Each file may contain any subset of the three fields, which layer independently.
   "reviewerPanel": [
     { "model": "openai-codex/gpt-6-astra", "thinkingLevel": "medium" }
   ],
-  "synthesizerModel": "openai-codex/gpt-6-astra",
+  "synthesizerModel": "openai-codex/gpt-6-luna",
   "verifierModel": "openai-codex/gpt-6-astra"
 }
 ```

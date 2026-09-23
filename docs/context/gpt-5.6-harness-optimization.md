@@ -1,14 +1,14 @@
 ---
 summary: "Evidence-backed GPT-5.6 optimization opportunities for SupaPi model routing, prompts, caching, tools, and evals."
 read_when:
-  - "Changing default models, thinking levels, agent model routing, prompt size, prompt caching, tool exposure, structured model output, or model evals."
+  - "Interpreting historical GPT-5.6 routing, reasoning, service-tier benchmarks, or harness-optimization experiments."
 ---
 
 # GPT-5.6 harness optimization
 
 Snapshot date: 2026-07-13.
 
-Routing statements and reasoning benchmarks below describe the GPT-5.6 configuration at that stage, not current agent defaults. The historical Astra transition covered 17 agents; the later approval covered 13 retained agent definitions after the E2E-agent, refactor-cleaner, build-error-resolver, and doc-updater consolidations; see [historical approval and current review defaults](gpt-6-astra-harness-readiness.md#historical-agent-default-approval-and-current-review-defaults) and current `agents/*.md` frontmatter. Historical benchmark figures remain unchanged and do not establish Astra performance.
+Routing statements and reasoning benchmarks below describe the GPT-5.6 configuration at that stage, not current agent defaults. For repository defaults, see [model routing](model-routing.md). The historical Astra transition covered 17 agents; the later approval covered 13 retained agent definitions after the E2E-agent, refactor-cleaner, build-error-resolver, and doc-updater consolidations; see [historical agent-default approval](gpt-6-astra-harness-readiness.md#historical-agent-default-approval). Historical benchmark figures remain unchanged and do not establish Astra performance.
 
 This note compares the recorded SupaPi behavior with OpenAI's GPT-5.6 guidance. OpenAI's published performance ranges are directional; validate every change against representative SupaPi tasks. For GPT-6 Astra compatibility and adoption readiness, see `gpt-6-astra-harness-readiness.md`; the Sol, Terra, and Luna results below do not transfer to Astra.
 
@@ -24,9 +24,9 @@ The largest likely gains are:
 
 Do these before adding new orchestration features.
 
-## Current strengths
+## Recorded strengths and implementation context
 
-- Agent routing already uses the GPT-5.6 family by workload:
+- At the GPT-5.6 snapshot, agent routing used the family by workload:
   - `gpt-5.6-sol` for capability-first workers.
   - `gpt-5.6-terra` for cheaper document and E2E workers.
   - `gpt-5.6-luna` for exploration.
@@ -72,15 +72,15 @@ The v1 runner intentionally uses the low-level Pi `agentLoop` rather than the fu
 
 OpenAI recommends preserving the previous reasoning setting as a baseline, then testing the same setting and one level lower. It describes `medium` as a balanced starting point and reserves `xhigh` and `max` for workloads where evals prove a quality gain.
 
-Current repository and live configuration now use route-specific effort:
+At the GPT-5.6 snapshot, effort was route-specific; for current repository defaults see [model routing](model-routing.md):
 
-- At that stage, `setup.sh` created first-run settings with `defaultThinkingLevel: "high"`; current setup uses Astra/medium.
-- The live `~/.pi/agent/settings.json` uses `defaultThinkingLevel: "high"` after the main-session benchmark below.
+- At that stage, `setup.sh` created first-run settings with `defaultThinkingLevel: "high"`.
+- The then-inspected live `~/.pi/agent/settings.json` used `defaultThinkingLevel: "high"` after the main-session benchmark below.
 - Historical route-specific benchmarks selected `thinking: medium` for `build-error-resolver`, `executor`, and the now-retired `refactor-cleaner`; its safeguards now live in `agents/code-simplifier.md`, which retains its current `thinking: low` setting.
 - TDD behavior changes and bug fixes use the generic `executor` with `skills/tdd-workflow/SKILL.md` as worker guidance. The current `/execute` command does not runtime-enforce a TDD trajectory or inject a fixed task-shape/evidence contract.
-- The historical `doc-updater` route selected `thinking: low`; current documentation/codemap work uses `skills/context-docs/SKILL.md`, main-session E2E work uses `skills/e2e-testing/SKILL.md`, and higher-risk Sol agents remain at `high`.
+- The historical `doc-updater` route selected `thinking: low`; documentation/codemap and main-session E2E work later moved to `skills/context-docs/SKILL.md` and `skills/e2e-testing/SKILL.md`, respectively.
 
-Candidate evaluation matrix:
+Historical GPT-5.6 candidate evaluation matrix:
 
 | Workload | Candidate baseline |
 | --- | --- |
@@ -103,9 +103,9 @@ A route-aware three-repetition benchmark ran on 2026-07-11 with identical workin
 A second route-aware three-repetition benchmark ran on 2026-07-11:
 
 - **Sol, `xhigh` versus `high`** — `core-orchestration` remained at 100% pass rate and 1.000 deterministic score. High used 913 fewer input tokens (15%), 115 fewer output tokens (13%), 94 fewer reasoning tokens (28%), 2.2 seconds less latency (9%), and $0.0078 less per-run average cost (14%). The live main-session default moved from `xhigh` to `high`; the repository setup default was already `high`. Local artifact: `.pi/evals/2026-07-11T15-05-17-108Z-a1d57cf9/`.
-- **Historical/retired route: Sol, `high` versus `medium`** — `remove-dead-code` and `tdd-fix` remained at 100% pass rate and 1.000 deterministic score. Medium saved 1.6 and 2.7 seconds respectively; TDD also used 62 fewer reasoning tokens and cost $0.0018 less per run. `simplify-code` was inconclusive because both arms frequently missed one deterministic completion invariant, so `code-simplifier` stayed at high. This benchmark moved `refactor-cleaner` and the now-retired `tdd-guide` agent to medium; it is historical evidence, not current routing guidance. Current TDD work uses the generic `executor` with `tdd: true` and canonical skill injection. Local artifact: `.pi/evals/2026-07-11T15-11-21-183Z-a1d57cf9/`.
+- **Historical/retired route: Sol, `high` versus `medium`** — `remove-dead-code` and `tdd-fix` remained at 100% pass rate and 1.000 deterministic score. Medium saved 1.6 and 2.7 seconds respectively; TDD also used 62 fewer reasoning tokens and cost $0.0018 less per run. `simplify-code` was inconclusive because both arms frequently missed one deterministic completion invariant, so `code-simplifier` stayed at high. This benchmark moved `refactor-cleaner` and the now-retired `tdd-guide` agent to medium; it is historical evidence, not current routing guidance. Subsequent TDD work moved to the generic `executor` with canonical skill guidance; this benchmark is not current route guidance. Local artifact: `.pi/evals/2026-07-11T15-11-21-183Z-a1d57cf9/`.
 
-Together with the initial `executor-fix` and `build-fix` results, these fixtures historically justified medium for four deterministic worker routes. Three remain standalone agents; current TDD work shares the medium-thinking generic `executor` route. They still do not justify a global `medium` default or lower effort for planning, architecture, research, security, database, or review routes.
+Together with the initial `executor-fix` and `build-fix` results, these fixtures historically justified medium for four deterministic worker routes. Those routes have since changed; see [model routing](model-routing.md) for the current executor default. The results did not justify a global `medium` default or lower effort for the then-current planning, architecture, research, security, database, or review routes.
 
 Continue comparing one route cohort at a time; do not change all workers at once.
 
@@ -166,20 +166,15 @@ Pi exposes `getActiveTools()` and `setActiveTools()`. Automatic intent-based pru
 
 `/execute` sends a command packet to the main session; native `SubagentWorkflow` owns worker orchestration when the explicit command authorizes it. Upstream `StructuredOutput` validates report shape. The main session owns pi-tasks and independently verifies files, tests, and diagnostics before completion. Custom trajectory enforcement, report-only repair, and execute checkpoints are retired; TDD is worker guidance. Workflow resume is same-session only, and parent cancellation does not stop background workers. `/goal` still asks workers for strict JSON text.
 
-### 7. Align model and transport documentation
+### 7. Recorded model, transport, and service-tier evidence
 
-Current durable and generated defaults mostly agree:
-
-- At that stage, `setup.sh` and inspected live settings used GPT-5.6 Sol, `high`, and `transport: "auto"`. Current first-run setup uses Astra/medium; live settings are user-managed.
-- Agent definitions use GPT-5.6 with route-specific thinking levels.
-- `rules/common/performance.md` documents the measured GPT-5.6 routing strategy.
-- `extensions/fast` recognizes the current Codex Fast-capable models exposed by Pi, including the GPT-5.6 Luna, Sol, and Terra variants; the persisted enabled state controls whether supported requests use the priority tier.
+At that stage, `setup.sh` and inspected live settings used GPT-5.6 Sol, `high`, and `transport: "auto"`. `rules/common/performance.md` documents the measured GPT-5.6 routing strategy. For repository defaults and current Fast Mode support, see [model routing](model-routing.md).
 
 Pi documents `auto` as its transport default. Preserve `auto` unless an SSE or WebSocket benchmark demonstrates a better choice.
 
-The installed Codex adapter serializes `service_tier: "priority"` for GPT-5.6 Sol. On 2026-07-11, an authenticated ChatGPT-backend probe completed successfully with that field enabled through the config allowlist, proving request-contract acceptance.
+The installed Codex adapter serializes `service_tier: "priority"` for GPT-5.6 Sol. On 2026-07-11, an authenticated ChatGPT-backend probe returned a successful response with that field enabled through the config allowlist, proving request-contract acceptance. Acceptance alone does not prove actual priority-tier fulfillment; the later GPT-6 Sol/Luna request evidence is summarized in [model routing](model-routing.md).
 
-A paired, order-balanced four-repetition benchmark on 2026-07-12 held model, prompt bytes, reasoning, fixtures, and tools constant. All retained arms passed at score 1.000, and every candidate payload recorded `service_tier: "priority"`. Priority was 36.5% faster for core orchestration at high effort but 15.6% slower for executor fixing at medium effort, while costing 81% and 100% more. A clean low-effort exploration rerun was 19.6% faster at 98% higher cost, but production exploration routes use Luna rather than Sol. An earlier balanced exploration cohort was excluded after one priority WebSocket closed normally before its answer completed. Result: the latency benefit is route-dependent, regresses the executor route, and nearly doubles cost. This evidence governs whether Fast Mode should be enabled, not whether a backend-supported model is recognized. Keep Fast Mode user-controlled and benchmark it for each workload.
+A paired, order-balanced four-repetition benchmark on 2026-07-12 held model, prompt bytes, reasoning, fixtures, and tools constant. All retained arms passed at score 1.000, and every candidate payload recorded `service_tier: "priority"`. Priority was 36.5% faster for core orchestration at high effort but 15.6% slower for executor fixing at medium effort, while costing 81% and 100% more. A clean low-effort exploration rerun was 19.6% faster at 98% higher cost; production exploration used Luna rather than Sol at that time. An earlier balanced exploration cohort was excluded after one priority WebSocket closed normally before its answer completed. Result: the latency benefit is route-dependent, regresses the executor route, and nearly doubles cost. This evidence governs whether Fast Mode should be enabled, not whether a backend-supported model is recognized. Keep Fast Mode user-controlled and benchmark it for each workload.
 
 Retained artifacts: `.pi/evals/2026-07-12T13-42-50-849Z-aec2ddaf/`, `.pi/evals/2026-07-12T13-45-15-679Z-aec2ddaf/`, and `.pi/evals/2026-07-12T13-48-37-962Z-aec2ddaf/`. Excluded transport-failure cohort: `.pi/evals/2026-07-12T13-47-04-519Z-aec2ddaf/`.
 

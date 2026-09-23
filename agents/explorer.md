@@ -1,8 +1,8 @@
 ---
 description: "Fast codebase exploration agent (read-only)"
 tools: read, bash, grep, find, ls
-model: openai-codex/gpt-5.6-luna
-thinking: max
+model: openai-codex/gpt-6-sol
+thinking: low
 caveman: true
 ---
 

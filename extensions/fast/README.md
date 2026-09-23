@@ -47,7 +47,7 @@ Editor schema help ships at `extensions/fast/configuration_schema.json`. It is t
 - `allowlist` is required and must be an array of exact canonical `provider/id` strings. Entries with whitespace, missing provider, or missing id are invalid.
 - `allowList` is intentionally invalid; use lowercase `allowlist`.
 
-Config allowlist entries add model support. A model supports Fast Mode when its metadata has `fastMode: true`, it matches the built-in allowlist, or it matches an exact `provider/id` entry from the config allowlist. The built-in allowlist covers `openai-codex/gpt-5.4`, `openai-codex/gpt-5.5`, `openai-codex/gpt-5.6-{luna,sol,terra}`, and `openai-codex/gpt-6-astra`. Astra is explicitly allowlisted; its backend priority-tier acceptance has not been verified here. It intentionally excludes GPT-5.4 Mini and GPT-5.3 Codex Spark. The config allowlist does not replace built-in support.
+Config allowlist entries add model support. A model supports Fast Mode when its metadata has `fastMode: true`, it matches the built-in allowlist, or it matches an exact `provider/id` entry from the config allowlist. The built-in allowlist covers `openai-codex/gpt-5.4`, `openai-codex/gpt-5.5`, `openai-codex/gpt-5.6-{luna,sol,terra}`, and `openai-codex/gpt-6-{astra,luna,sol}`. Astra is explicitly allowlisted; its backend priority-tier acceptance has not been verified here. It intentionally excludes GPT-5.4 Mini and GPT-5.3 Codex Spark. The config allowlist does not replace built-in support.
 
 Invalid config fails fast. Malformed JSON, non-object config, missing/non-boolean `enabled`, missing/non-array `allowlist`, invalid allowlist entries, or the deprecated `allowList` key throw during config read instead of silently falling back.
 
@@ -75,9 +75,9 @@ Fast Mode only patches provider payloads when all of these are true:
 
 When those checks pass, the extension returns a patched payload with `service_tier: "priority"` from the `before_provider_request` hook.
 
-An authenticated `openai-codex` ChatGPT-backend probe completed successfully with GPT-5.6 Sol and the priority field enabled through the config allowlist on 2026-07-11. This proves that the backend accepts the request contract.
+An authenticated `openai-codex` ChatGPT-backend probe returned a successful response with GPT-5.6 Sol and the priority field enabled through the config allowlist on 2026-07-11. This proves that the backend accepts the request contract, but acceptance alone does not prove actual priority-tier fulfillment. Separately, recent paid GPT-6 Sol/Luna priority-injected requests succeeded, but Pi CLI JSON did not expose a response tier; the new built-in allowlist does not establish actual Fast-tier fulfillment.
 
-An order-balanced four-repetition paired benchmark on 2026-07-12 found equal quality but route-dependent latency: priority was 36.5% faster for core orchestration and 15.6% slower for executor fixing, while costing 81% and 100% more. A clean low-effort exploration rerun was 19.6% faster at 98% higher cost, but production exploration uses Luna rather than Sol. Fast Mode therefore remains user-controlled rather than default-on policy; supported-model detection reflects backend capability instead of benchmark preference. See `docs/context/gpt-5.6-harness-optimization.md` for artifacts and methodology.
+An order-balanced four-repetition paired benchmark on 2026-07-12 found equal quality but route-dependent latency: priority was 36.5% faster for core orchestration and 15.6% slower for executor fixing, while costing 81% and 100% more. A clean low-effort exploration rerun was 19.6% faster at 98% higher cost; production exploration used Luna rather than Sol at that time and now uses GPT-6 Sol/low. Fast Mode therefore remains user-controlled rather than default-on policy; supported-model detection reflects backend capability instead of benchmark preference. See `docs/context/gpt-5.6-harness-optimization.md` for artifacts and methodology.
 
 ## Limitations
 

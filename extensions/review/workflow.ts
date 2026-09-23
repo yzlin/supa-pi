@@ -6,7 +6,7 @@ export {
 
 export const REVIEW_REPORT_MESSAGE_TYPE = "review-report";
 export const REVIEWER_MODEL_POLICY_MODEL = "openai-codex/gpt-6-astra";
-export const DEFAULT_SYNTHESIZER_MODEL = "openai-codex/gpt-6-astra";
+export const DEFAULT_SYNTHESIZER_MODEL = "openai-codex/gpt-6-luna";
 export const DEFAULT_VERIFIER_MODEL = "openai-codex/gpt-6-astra";
 export const REVIEW_WORKFLOW_CONCURRENCY = 4;
 

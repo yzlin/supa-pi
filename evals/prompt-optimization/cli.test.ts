@@ -158,6 +158,13 @@ describe("dry-run CLI", () => {
 });
 
 describe("parseCliOptions", () => {
+  it("uses the GPT-6 Sol high default", () => {
+    expect(parseCliOptions([])).toMatchObject({
+      model: "openai-codex/gpt-6-sol",
+      thinking: "high",
+    });
+  });
+
   it("keeps thinking shared in prompt comparison mode", () => {
     const options = parseCliOptions(["--thinking", "medium"]);
 
