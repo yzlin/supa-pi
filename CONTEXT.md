@@ -119,9 +119,22 @@ Implemented boundaries:
 
 Live JEV batching compatibility, threshold calibration, latency, actual automatic/overflow compactors, real upstream worker-process E2E, task success/required-skill coverage, and combined JEV/main/worker dollars or provider-cache effects remain unverified. No live router experiment, login, activation, or actual credential was used; Sift's prior live verification is not router validation. Rollout requires user-approved representative live comparisons, not a small-prompt claim.
 
+## PR workflow: implemented product direction
+
+The canonical `skills/pr/SKILL.md` workflow uses the plain `prompts/pr.md` template, not the prompt-commands transformer. Live push/PR end-to-end behavior remains unverified.
+
+- **PR body** — Summary (smallest useful diff visual, view choice delegated to `showing-me`), Evidence (real Before/After; missing evidence marked not captured, never invented), and Merge Danger (one-way or two-way door, blast radius). Uses `CONTEXT.md` domain language. _Avoid_: PR description essay, test-plan TODO list.
+- Loads for `/pr` and natural write/open-PR requests. Base is `--base` or origin's default branch. Review uses the fetched base diff and full branch history; GitHub CLI operations target origin's repository.
+- Preflight stops on the base branch, with uncommitted or untracked changes, or with no commits ahead of base; the command never commits, stashes, or branches.
+- Evidence comes from targeted tests and the repo check run on HEAD. Failing checks are reported and flagged, not blocking; the user decides.
+- Titles use conventional-commit types. Exactly one confirmation precedes the outward-facing `git push -u` plus `gh pr create` (ready for review) or, for an existing open PR, `gh pr edit`; that confirmation also covers a prominently displayed retarget when the existing PR's base differs. The draft title and body print in chat first; the confirmation prompt stays short and does not repeat them.
+- `rules/common/git-workflow.md` PR guidance defers to the `pr` skill as the single PR-body source.
+- Adapted from [Matt Pocock's MIT-licensed in-progress `pr` skill at commit `c55ee46073ed923f86ce59a5eb3b6d895095d1b7`](https://github.com/mattpocock/skills/tree/c55ee46073ed923f86ce59a5eb3b6d895095d1b7/skills/in-progress/pr); its HumanLayer `show-me` credit is carried by `showing-me`.
+
 ## Open questions
 
 - Live installation and end-to-end Wayfinder UX remain unverified. Integrated tests, loader checks, and static scenarios verify repository behavior and resources, but static scenarios do not prove model adherence.
+- PR workflow (deferred): feasibility of cheap base-branch Before evidence, screenshots, and fork→upstream PR support.
 
 ## Context map
 

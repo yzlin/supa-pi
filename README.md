@@ -88,6 +88,8 @@ Run `/skill` or `/skill list` in a custom UI session to open the Skills Manager.
 
 `prompts/grill-me.md`, `prompts/research-brief.md`, `prompts/show-me.md`, and `prompts/wayfinder.md` provide queueable prompt entrypoints and complete `$@`-based fallbacks when Extensions are disabled or fail to load. Bare `/wayfinder` uses the fallback's default start-or-resume text. Before normal template expansion, `extensions/prompt-commands` replaces each invocation from its untouched raw argument substring; space-, tab-, and newline-separated arguments preserve their remaining layout, images, input source/events, and both steering and follow-up delivery. That raw argument preservation applies only while the transformer is active; the standalone fallback uses Pi's normal template expansion. Queue interception is removed when its final Extension owner shuts down, so reloads use current code without leaving a process-wide transformer behind. `/grill-me`, `/show-me`, and `/wayfinder` delegate canonical behavior to the `grill-me`, `showing-me`, and `wayfinder` skills respectively.
 
+`/pr [--base <branch>]` delegates through the plain `prompts/pr.md` template to `skills/pr/SKILL.md`, not the prompt-commands transformer. It checks branch state, gathers real evidence, and drafts a Summary/Evidence/Merge Danger body. One confirmation covers push and PR creation or update, including any base retarget. GitHub CLI commands target origin's repository.
+
 `prompts/wait-what.md` adapts Matt Pocock's MIT-licensed [`skills/productivity/wait-what/SKILL.md`](https://github.com/mattpocock/skills/blob/84fdeffd12f2ee307994d1eb6feb48173b6e0502/skills/productivity/wait-what/SKILL.md) at commit `84fdeffd12f2ee307994d1eb6feb48173b6e0502`.
 
 `extensions/context-docs/prompt.md` is the narrow runtime envelope for the canonical context-docs skill; it does not duplicate command behavior.
@@ -97,6 +99,8 @@ The local grilling, wrapper, and domain-modeling guidance is adapted—not copie
 The implemented `domain-modeling` skill also carries direct provenance to Matt Pocock's MIT-licensed [`skills/engineering/domain-modeling/SKILL.md`](https://github.com/mattpocock/skills/blob/84fdeffd12f2ee307994d1eb6feb48173b6e0502/skills/engineering/domain-modeling/SKILL.md) at immutable commit `84fdeffd12f2ee307994d1eb6feb48173b6e0502`.
 
 The `wayfinder` skill is adapted from Matt Pocock's MIT-licensed [`skills/engineering/wayfinder/SKILL.md`](https://github.com/mattpocock/skills/blob/74ca5fe077456a0b3b2f5310cf9430999fd0b5fd/skills/engineering/wayfinder/SKILL.md) at pinned commit `74ca5fe077456a0b3b2f5310cf9430999fd0b5fd`; its retained MIT notice is [`skills/wayfinder/LICENSE.upstream`](skills/wayfinder/LICENSE.upstream).
+
+The `pr` skill is adapted from Matt Pocock's MIT-licensed in-progress [`skills/in-progress/pr`](https://github.com/mattpocock/skills/tree/c55ee46073ed923f86ce59a5eb3b6d895095d1b7/skills/in-progress/pr) at commit `c55ee46073ed923f86ce59a5eb3b6d895095d1b7`.
 
 `extensions/code-improvement/IMPROVE-CODEBASE-ARCHITECTURE.md` plus its uppercase support docs (`LANGUAGE.md`, `DEEPENING.md`, and `INTERFACE-DESIGN.md`) adapt Matt Pocock's `improve-codebase-architecture` workflow, licensed under the MIT License, from https://github.com/mattpocock/skills/blob/main/skills/engineering/improve-codebase-architecture/SKILL.md
 

@@ -19,12 +19,7 @@ Types: feat, fix, refactor, build, ci, chore, docs, style, perf, test
 
 ## Pull Request Workflow
 
-When creating PRs:
-1. Analyze full commit history (not just latest commit)
-2. Use `git diff [base-branch]...HEAD` to see all changes
-3. Draft comprehensive PR summary
-4. Include test plan with TODOs
-5. Push with `-u` flag if new branch
+Use the canonical `pr` skill (`/pr`) as the single source for PR preflight, diff review against base, evidence, the PR body template, and one-confirm submission.
 
 > For the full development process (planning, TDD, code review) before git operations,
 > see [development-workflow.md](./development-workflow.md).
