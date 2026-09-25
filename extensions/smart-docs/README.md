@@ -2,10 +2,12 @@
 title: smart-docs extension command
 read_when:
   - changing /smart-docs command syntax, routing, or generated documentation behavior
-status: active
+status: deprecated
 ---
 
 # `/smart-docs`
+
+> **Deprecated.** Disabled Extension: not listed in `package.json -> pi.extensions`, so Pi does not register `/smart-docs`. Code and tests remain for reference; do not re-register without a new decision.
 
 `/smart-docs` deterministically resolves a target, output directory, and documentation scope, then asks the main agent to inspect the target and create or update grounded Markdown documentation.
 
@@ -93,4 +95,4 @@ Claims and Mermaid diagrams must be grounded in inspected files. Matching docs a
 
 ## Registration
 
-The command is active through `./extensions/smart-docs` in `package.json -> pi.extensions`. There is no parallel `smart-docs` skill or prompt-template entrypoint.
+The command is not registered; `./extensions/smart-docs` was removed from `package.json -> pi.extensions`. There is no parallel `smart-docs` skill or prompt-template entrypoint.

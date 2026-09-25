@@ -31,7 +31,6 @@
       "./extensions/rtk",
       "./extensions/tool-display",
       "./extensions/init-deep",
-      "./extensions/smart-docs",
       "./extensions/docs-list",
       "./extensions/sift",
       "./extensions/lsp",

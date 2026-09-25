@@ -29,7 +29,6 @@ Documented extensions in this repo include:
 - **`extensions/docs-list`** — `docs_list` tool for discovering project markdown docs before coding; backed by the same implementation as the `docs-list` CLI
 - **`extensions/code-improvement`** — scoped `/simplify` code-simplifier delegation with strict target grammar, `--extra` guidance, `--yes` consent bypass for large/PR scopes, hard file allowlists, and `/improve-codebase-architecture` read-only architecture review workflow
 - **`extensions/review`** — current-session `/review` prepares one public native workflow and locally validates publication via `review_finalize`, with `/review-summary` and `/review-fix` follow-ups (see `extensions/review/README.md`); adapted in part from `@earendil-works/pi-review`
-- **`extensions/smart-docs`** — deterministic `/smart-docs` command flow for codebase documentation generation
 - **`extensions/tool-display`** — compact tool renderers and the `read` override that returns exact loaded skill files in full, ignores pagination for those skill reads, and marks results so RTK does not compact them
 
 The configured extension set also includes workflow and utility modules such as:

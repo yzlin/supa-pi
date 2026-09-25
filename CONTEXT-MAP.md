@@ -46,7 +46,7 @@
 - `@yzlin/pieditor` — external npm-installed Pi package for editor UX behavior; `setup.sh` requires the compositor-free 2.0.0 release via `npm:@yzlin/pieditor@2.0.0`. Pi 0.84+ owns regular/fullscreen viewport composition; read `docs/adr/0002-use-pi-fullscreen.md` before adding editor-surface coordination.
 - `extensions/tool-display/README.md` — read before changing tool renderer ownership, config, skill-file `read` override behavior, tool-display metadata, or RTK full-skill-read compaction exemptions.
 - `extensions/rtk/README.md` — read before changing output compaction, `bash` ownership, or `/rtk` behavior.
-- `extensions/smart-docs/README.md` — read before changing smart documentation generation workflows.
+- `extensions/smart-docs/README.md` — deprecated, disabled Extension; read before re-registering or removing `/smart-docs`.
 
 ## Maintenance rules
 
