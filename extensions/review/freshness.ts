@@ -1102,7 +1102,7 @@ async function runGitResult(
   signal?: AbortSignal,
 ): Promise<GitResult> {
   throwIfCancelled(signal);
-  return await new Promise((resolve, reject) => {
+  return new Promise((resolve, reject) => {
     execFile(
       "git",
       [

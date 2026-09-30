@@ -44,6 +44,10 @@ import {
 } from "./core";
 import skillsExtension from "./index";
 
+function fetchUrl(input: string | URL | Request): string {
+  return input instanceof Request ? input.url : input.toString();
+}
+
 function tempRoot(name: string) {
   const root = join(tmpdir(), `skills-${name}-${crypto.randomUUID()}`);
   mkdirSync(root, { recursive: true });
@@ -245,7 +249,7 @@ describe("skills core", () => {
       ],
     ]);
     const fetcher = (url: string | URL | Request) => {
-      const response = responses.get(String(url));
+      const response = responses.get(fetchUrl(url));
       if (!response) {
         return Promise.resolve(new Response("missing", { status: 404 }));
       }
@@ -274,12 +278,12 @@ describe("skills core", () => {
     const resolved = parseSkillSource("owner/repo/tree/main/skills/demo");
     const requestedUrls: string[] = [];
     const fetcher = (url: string | URL | Request) => {
-      requestedUrls.push(String(url));
-      if (String(url).includes("api.github.com")) {
+      requestedUrls.push(fetchUrl(url));
+      if (fetchUrl(url).includes("api.github.com")) {
         return Promise.resolve(new Response("rate limited", { status: 403 }));
       }
       if (
-        String(url) === "https://github.com/owner/repo/tree/main/skills/demo"
+        fetchUrl(url) === "https://github.com/owner/repo/tree/main/skills/demo"
       ) {
         return Promise.resolve(
           new Response(
@@ -288,7 +292,7 @@ describe("skills core", () => {
         );
       }
       if (
-        String(url) ===
+        fetchUrl(url) ===
         "https://raw.githubusercontent.com/owner/repo/main/skills/demo/SKILL.md"
       ) {
         return Promise.resolve(
@@ -349,7 +353,7 @@ describe("skills core", () => {
       ],
     ]);
     const fetcher = (url: string | URL | Request) => {
-      const value = String(url);
+      const value = fetchUrl(url);
       requestedUrls.push(value);
       return Promise.resolve(
         responses.get(value)?.clone() ??
@@ -386,10 +390,10 @@ describe("skills core", () => {
     const calls: RequestInit[] = [];
     const fetcher = (url: string | URL | Request, init?: RequestInit) => {
       calls.push(init ?? {});
-      if (String(url).includes("api.github.com") && calls.length === 1) {
+      if (fetchUrl(url).includes("api.github.com") && calls.length === 1) {
         return Promise.resolve(new Response("rate limited", { status: 403 }));
       }
-      if (String(url).includes("api.github.com")) {
+      if (fetchUrl(url).includes("api.github.com")) {
         return Promise.resolve(
           Response.json({
             tree: [{ path: "skills/demo/SKILL.md", type: "blob" }],
@@ -618,6 +622,34 @@ describe("skills core", () => {
     });
   });
 
+  it("serializes structured search metadata without default object stringification", async () => {
+    const cache = await fetchSkillsShSearchCache("demo", () =>
+      Promise.resolve(
+        Response.json({
+          skills: [
+            {
+              source: { url: "https://github.com/owner/repo" },
+              name: { text: "Demo" },
+              description: { text: "Does demo work." },
+            },
+            { source: 42, name: true, description: 0 },
+            { skillId: "fallback", repository: "owner/repo" },
+          ],
+        }),
+      ),
+    );
+
+    expect(cache.skills).toMatchObject([
+      {
+        source: '{"url":"https://github.com/owner/repo"}',
+        name: '{"text":"Demo"}',
+        description: '{"text":"Does demo work."}',
+      },
+      { source: "42", name: "true", description: "0" },
+      { source: "owner/repo", name: "fallback", description: "owner/repo" },
+    ]);
+  });
+
   it("ignores stale search cache versions so bad source mappings refresh", () => {
     const paths = createSkillsManagerPaths(
       join(tempRoot("stale-cache"), ".pi", "agent"),
@@ -649,7 +681,7 @@ describe("skills core", () => {
   it("parses skills.sh HTML leaderboard fallback", async () => {
     const requestedUrls: string[] = [];
     const cache = await fetchSkillsShSearchCache("react", (url) => {
-      requestedUrls.push(String(url));
+      requestedUrls.push(fetchUrl(url));
       return Promise.resolve(
         new Response(
           '<html><a href="/acme/demo-repo/demo-skill"><h3>Demo Skill</h3><p>acme/demo-repo</p></a></html>',
@@ -675,7 +707,7 @@ describe("skills core", () => {
   it("resolves skills.sh JSON skill IDs by declared GitHub skill name", async () => {
     const requestedUrls: string[] = [];
     const cache = await fetchSkillsShSearchCache("ai-sdk", (url) => {
-      requestedUrls.push(String(url));
+      requestedUrls.push(fetchUrl(url));
       return Promise.resolve(
         Response.json({
           skills: [{ skillId: "ai-sdk", name: "ai-sdk", source: "vercel/ai" }],
@@ -698,7 +730,7 @@ describe("skills core", () => {
       parseSkillSource(source),
       paths,
       (url) => {
-        const value = String(url);
+        const value = fetchUrl(url);
         requestedUrls.push(value);
         if (value.includes("/git/trees/")) {
           return Promise.resolve(
@@ -764,7 +796,7 @@ describe("skills core", () => {
     const rawRequests: string[] = [];
 
     const fetcher = (url: string | URL | Request) => {
-      const value = String(url);
+      const value = fetchUrl(url);
       if (value.includes("/git/trees/")) {
         return Promise.resolve(
           Response.json({
@@ -807,12 +839,12 @@ describe("skills core", () => {
     const root = tempRoot("github-duplicate-folder-name");
     const paths = createSkillsManagerPaths(join(root, ".pi", "agent"));
 
-    await expect(
+    expect(
       materializeResolvedSkillSource(
         parseSkillSource("acme/repo"),
         paths,
         (url) => {
-          const value = String(url);
+          const value = fetchUrl(url);
           if (value.includes("/git/trees/")) {
             return Promise.resolve(
               Response.json({
@@ -838,12 +870,12 @@ describe("skills core", () => {
     const root = tempRoot("github-duplicate-skill-name");
     const paths = createSkillsManagerPaths(join(root, ".pi", "agent"));
 
-    await expect(
+    expect(
       materializeResolvedSkillSource(
         parseSkillSource("acme/repo"),
         paths,
         (url) => {
-          const value = String(url);
+          const value = fetchUrl(url);
           if (value.includes("/git/trees/")) {
             return Promise.resolve(
               Response.json({
@@ -878,12 +910,12 @@ describe("skills core", () => {
     const root = tempRoot("github-folder-and-skill-name-duplicate");
     const paths = createSkillsManagerPaths(join(root, ".pi", "agent"));
 
-    await expect(
+    expect(
       materializeResolvedSkillSource(
         parseSkillSource("acme/repo"),
         paths,
         (url) => {
-          const value = String(url);
+          const value = fetchUrl(url);
           if (value.includes("/git/trees/")) {
             return Promise.resolve(
               Response.json({
@@ -916,12 +948,12 @@ describe("skills core", () => {
     const root = tempRoot("github-ambiguous-metadata-fetch-fails");
     const paths = createSkillsManagerPaths(join(root, ".pi", "agent"));
 
-    await expect(
+    expect(
       materializeResolvedSkillSource(
         parseSkillSource("acme/repo"),
         paths,
         (url) => {
-          const value = String(url);
+          const value = fetchUrl(url);
           if (value.includes("/git/trees/")) {
             return Promise.resolve(
               Response.json({
@@ -950,12 +982,12 @@ describe("skills core", () => {
     const root = tempRoot("github-html-folder-and-skill-name-duplicate");
     const paths = createSkillsManagerPaths(join(root, ".pi", "agent"));
 
-    await expect(
+    expect(
       materializeResolvedSkillSource(
         parseSkillSource("acme/repo"),
         paths,
         (url) => {
-          const value = String(url);
+          const value = fetchUrl(url);
           if (value.includes("/git/trees/")) {
             return Promise.resolve(
               new Response("rate limited", { status: 403 }),
@@ -995,7 +1027,7 @@ describe("skills core", () => {
       parseSkillSource("acme/repo"),
       paths,
       (url) => {
-        const value = String(url);
+        const value = fetchUrl(url);
         if (value.includes("/git/trees/")) {
           return Promise.resolve(new Response("rate limited", { status: 403 }));
         }
@@ -1034,7 +1066,7 @@ describe("skills core", () => {
       resolved,
       paths,
       (url) => {
-        const value = String(url);
+        const value = fetchUrl(url);
         if (value.includes("/git/trees/")) {
           return Promise.resolve(
             Response.json({
@@ -1094,7 +1126,7 @@ describe("skills core", () => {
       ),
       paths,
       (url) => {
-        const value = String(url);
+        const value = fetchUrl(url);
         requestedUrls.push(value);
         if (value.includes("/git/trees/")) {
           return Promise.resolve(
@@ -1146,7 +1178,7 @@ describe("skills core", () => {
       parseSkillSource("owner/repo/tree/HEAD/skills"),
       paths,
       (url) => {
-        const value = String(url);
+        const value = fetchUrl(url);
         requestedUrls.push(value);
         if (value.includes("/git/trees/")) {
           return Promise.resolve(
@@ -1221,7 +1253,7 @@ describe("skills core", () => {
       parseSkillSource("owner/repo/tree/HEAD/skills/demo"),
       paths,
       (url) => {
-        const value = String(url);
+        const value = fetchUrl(url);
         if (value.includes("/git/trees/")) {
           return Promise.resolve(
             Response.json({
@@ -1287,7 +1319,7 @@ describe("skills core", () => {
       parseSkillSource("owner/repo/tree/HEAD/skills/demo"),
       paths,
       (url) => {
-        const value = String(url);
+        const value = fetchUrl(url);
         requestedUrls.push(value);
         if (value.includes("/git/trees/")) {
           return Promise.resolve(
@@ -1368,7 +1400,7 @@ describe("skills core", () => {
         parseSkillSource("owner/repo/tree/HEAD/skills/demo"),
         paths,
         (url) => {
-          const value = String(url);
+          const value = fetchUrl(url);
           requestedUrls.push(value);
           if (value.includes("/git/trees/")) {
             return Promise.resolve(
@@ -1426,7 +1458,7 @@ describe("skills core", () => {
       parseSkillSource("owner/repo/tree/v1/skills/demo"),
       paths,
       (url) => {
-        const value = String(url);
+        const value = fetchUrl(url);
         requestedUrls.push(value);
         if (value.includes("/git/trees/")) {
           return Promise.resolve(
@@ -1470,13 +1502,13 @@ describe("skills core", () => {
     const root = tempRoot("github-tree-uncached-rate-limit");
     const paths = createSkillsManagerPaths(join(root, ".pi", "agent"));
     const fetcher = (url: string | URL | Request) => {
-      if (String(url).includes("/git/trees/")) {
+      if (fetchUrl(url).includes("/git/trees/")) {
         return Promise.resolve(new Response("rate limited", { status: 403 }));
       }
       return Promise.resolve(new Response("missing", { status: 404 }));
     };
 
-    await expect(
+    expect(
       materializeResolvedSkillSource(
         parseSkillSource("expo/skills"),
         paths,
@@ -1680,7 +1712,7 @@ describe("skills core", () => {
     );
     const requestedUrls: string[] = [];
     const fetcher = (url: string | URL | Request) => {
-      const value = String(url);
+      const value = fetchUrl(url);
       requestedUrls.push(value);
       if (value.includes("/git/trees/")) {
         return Promise.resolve(new Response("rate limited", { status: 403 }));
@@ -1750,7 +1782,7 @@ describe("skills core", () => {
       "main",
       fetcher as typeof fetch,
     );
-    await expect(
+    expect(
       fetchGithubRepoTreeSnapshot(
         paths,
         "owner",
@@ -1800,7 +1832,7 @@ describe("skills core", () => {
       "main",
       fetcher as typeof fetch,
     );
-    await expect(
+    expect(
       fetchGithubRepoTreeSnapshot(
         paths,
         "owner",
@@ -1847,7 +1879,7 @@ describe("skills core", () => {
       fetcher as typeof fetch,
     );
 
-    await expect(
+    expect(
       fetchGithubRepoTreeSnapshot(
         paths,
         "owner",
@@ -1866,7 +1898,7 @@ describe("skills core", () => {
       parseSkillSource("acme/repo/tree/main/skills/demo"),
       paths,
       (url) => {
-        const value = String(url);
+        const value = fetchUrl(url);
         if (value.includes("/git/trees/")) {
           return Promise.resolve(
             Response.json({
@@ -1901,12 +1933,12 @@ describe("skills core", () => {
       parseSkillSource("acme/repo/tree/main/skills/demo").identity.id,
     );
 
-    await expect(
+    expect(
       materializeResolvedSkillSource(
         parseSkillSource("acme/repo/tree/main/skills/demo"),
         paths,
         (url) => {
-          const value = String(url);
+          const value = fetchUrl(url);
           if (value.includes("/git/trees/")) {
             return Promise.resolve(
               Response.json({
@@ -2230,7 +2262,7 @@ describe("skills extension", () => {
       ]);
       globalThis.fetch = ((url: string | URL | Request) =>
         Promise.resolve(
-          responses.get(String(url)) ??
+          responses.get(fetchUrl(url)) ??
             new Response("missing", { status: 404 }),
         )) as typeof fetch;
       const commands = new Map<
@@ -2298,7 +2330,7 @@ describe("skills extension", () => {
     let treeRequests = 0;
     try {
       globalThis.fetch = ((url: string | URL | Request) => {
-        const value = String(url);
+        const value = fetchUrl(url);
         if (value.includes("/git/trees/")) {
           treeRequests += 1;
           return Promise.resolve(
@@ -2386,7 +2418,7 @@ describe("skills extension", () => {
           `command-single-repo-picker-${source.replaceAll(/[^a-z0-9]/gi, "-")}`,
         );
         globalThis.fetch = ((url: string | URL | Request) => {
-          const value = String(url);
+          const value = fetchUrl(url);
           if (value.includes("/git/trees/")) {
             return Promise.resolve(
               Response.json({
@@ -2443,7 +2475,7 @@ describe("skills extension", () => {
     process.env.HOME = home;
     try {
       globalThis.fetch = ((url: string | URL | Request) => {
-        const value = String(url);
+        const value = fetchUrl(url);
         if (value.includes("/git/trees/")) {
           return Promise.resolve(
             Response.json({
@@ -2518,7 +2550,7 @@ describe("skills extension", () => {
       ]);
       globalThis.fetch = ((url: string | URL | Request) =>
         Promise.resolve(
-          responses.get(String(url)) ??
+          responses.get(fetchUrl(url)) ??
             new Response("missing", { status: 404 }),
         )) as typeof fetch;
       const commands = new Map<
@@ -2580,7 +2612,7 @@ describe("skills extension", () => {
     process.env.HOME = home;
     try {
       globalThis.fetch = ((url: string | URL | Request) => {
-        if (String(url).includes("/git/trees/")) {
+        if (fetchUrl(url).includes("/git/trees/")) {
           return Promise.resolve(
             Response.json({
               tree: [
@@ -2590,12 +2622,12 @@ describe("skills extension", () => {
             }),
           );
         }
-        if (String(url).includes("/skills/one/SKILL.md")) {
+        if (fetchUrl(url).includes("/skills/one/SKILL.md")) {
           return Promise.resolve(
             new Response("# One Skill\n\ndescription: First.\n"),
           );
         }
-        if (String(url).includes("/skills/two/SKILL.md")) {
+        if (fetchUrl(url).includes("/skills/two/SKILL.md")) {
           return Promise.resolve(
             new Response("# Two Skill\n\ndescription: Second.\n"),
           );
@@ -2686,7 +2718,7 @@ describe("skills extension", () => {
     process.env.HOME = home;
     try {
       globalThis.fetch = ((url: string | URL | Request) => {
-        if (String(url).includes("/git/trees/")) {
+        if (fetchUrl(url).includes("/git/trees/")) {
           return Promise.resolve(
             Response.json({
               tree: [
@@ -2696,12 +2728,12 @@ describe("skills extension", () => {
             }),
           );
         }
-        if (String(url).includes("/skills/one/SKILL.md")) {
+        if (fetchUrl(url).includes("/skills/one/SKILL.md")) {
           return Promise.resolve(
             new Response("# One Skill\n\ndescription: First.\n"),
           );
         }
-        if (String(url).includes("/skills/two/SKILL.md")) {
+        if (fetchUrl(url).includes("/skills/two/SKILL.md")) {
           return Promise.resolve(
             new Response("# Two Skill\n\ndescription: Second.\n"),
           );
@@ -3140,7 +3172,7 @@ describe("skills extension", () => {
     process.env.HOME = home;
     try {
       globalThis.fetch = ((url: string | URL | Request) => {
-        const value = String(url);
+        const value = fetchUrl(url);
         if (value === "https://skills.sh/api/search?q=ai-sdk") {
           return Promise.resolve(
             Response.json({
@@ -3222,7 +3254,7 @@ describe("skills extension", () => {
     process.env.HOME = home;
     try {
       globalThis.fetch = ((url: string | URL | Request) => {
-        const value = String(url);
+        const value = fetchUrl(url);
         if (value === "https://skills.sh/api/search?q=display") {
           return Promise.resolve(
             Response.json({
@@ -3318,7 +3350,7 @@ describe("skills extension", () => {
         ],
       });
       globalThis.fetch = ((url: string | URL | Request) => {
-        const value = String(url);
+        const value = fetchUrl(url);
         if (value.includes("/git/trees/")) {
           return Promise.resolve(
             Response.json({
@@ -3451,7 +3483,7 @@ describe("skills extension", () => {
       });
       const requestedUrls: string[] = [];
       globalThis.fetch = ((url: string | URL | Request) => {
-        const value = String(url);
+        const value = fetchUrl(url);
         requestedUrls.push(value);
         if (value.includes("/git/trees/")) {
           return Promise.resolve(new Response("rate limited", { status: 403 }));
@@ -3545,7 +3577,7 @@ describe("skills extension", () => {
       let rootVersion: "initial" | "updated" = "initial";
       let siblingVersion: "initial" | "updated" = "initial";
       globalThis.fetch = ((url: string | URL | Request) => {
-        const value = String(url);
+        const value = fetchUrl(url);
         if (value.includes("/git/trees/")) {
           return Promise.resolve(
             Response.json({
@@ -3731,7 +3763,7 @@ describe("skills extension", () => {
       });
       const requestedUrls: string[] = [];
       globalThis.fetch = ((url: string | URL | Request) => {
-        const value = String(url);
+        const value = fetchUrl(url);
         requestedUrls.push(value);
         if (value.includes("/git/trees/")) {
           return Promise.resolve(Response.json({ tree }));
@@ -3820,7 +3852,7 @@ describe("skills extension", () => {
       });
       const requestedUrls: string[] = [];
       globalThis.fetch = ((url: string | URL | Request) => {
-        const value = String(url);
+        const value = fetchUrl(url);
         requestedUrls.push(value);
         if (value.includes("/git/trees/")) {
           return Promise.resolve(
@@ -3921,7 +3953,7 @@ describe("skills extension", () => {
       });
       const requestedUrls: string[] = [];
       globalThis.fetch = ((url: string | URL | Request) => {
-        const value = String(url);
+        const value = fetchUrl(url);
         requestedUrls.push(value);
         if (value.includes("/git/trees/")) {
           return Promise.resolve(Response.json({ sha: revision, tree }));
@@ -4037,7 +4069,7 @@ describe("skills extension", () => {
       const revision = "89abcdef0123456789abcdef0123456789abcdef";
       const requestedUrls: string[] = [];
       globalThis.fetch = ((url: string | URL | Request) => {
-        const value = String(url);
+        const value = fetchUrl(url);
         requestedUrls.push(value);
         if (value.includes("/git/trees/")) {
           return Promise.resolve(Response.json({ sha: revision, tree }));
@@ -4150,7 +4182,7 @@ describe("skills extension", () => {
       let siblingState: "initial" | "changed" | "deleted" = "initial";
       const requestedUrls: string[] = [];
       globalThis.fetch = ((url: string | URL | Request) => {
-        const value = String(url);
+        const value = fetchUrl(url);
         requestedUrls.push(value);
         if (value.includes("/git/trees/")) {
           return Promise.resolve(
@@ -4282,7 +4314,7 @@ describe("skills extension", () => {
         ],
       });
       globalThis.fetch = ((url: string | URL | Request) => {
-        const value = String(url);
+        const value = fetchUrl(url);
         if (value.includes("/git/trees/")) {
           return Promise.resolve(
             Response.json({
@@ -4378,7 +4410,7 @@ describe("skills extension", () => {
       });
       const requestedUrls: string[] = [];
       globalThis.fetch = ((url: string | URL | Request) => {
-        const value = String(url);
+        const value = fetchUrl(url);
         requestedUrls.push(value);
         if (value.includes("/git/trees/")) {
           return Promise.resolve(
@@ -4481,7 +4513,7 @@ describe("skills extension", () => {
       });
       const requestedUrls: string[] = [];
       globalThis.fetch = ((url: string | URL | Request) => {
-        const value = String(url);
+        const value = fetchUrl(url);
         requestedUrls.push(value);
         if (value.includes("/git/trees/")) {
           return Promise.resolve(
@@ -4588,7 +4620,7 @@ describe("skills extension", () => {
       });
       const requestedUrls: string[] = [];
       globalThis.fetch = ((url: string | URL | Request) => {
-        const value = String(url);
+        const value = fetchUrl(url);
         requestedUrls.push(value);
         if (value === "https://skills.sh/api/download/stored/remote/demo") {
           return Promise.resolve(
@@ -4723,7 +4755,7 @@ describe("skills extension", () => {
       });
       const requestedUrls: string[] = [];
       globalThis.fetch = ((url: string | URL | Request) => {
-        const value = String(url);
+        const value = fetchUrl(url);
         requestedUrls.push(value);
         if (value === "https://skills.sh/api/download/owner/repo/demo") {
           return Promise.resolve(
@@ -4846,7 +4878,7 @@ describe("skills extension", () => {
       });
       const requestedUrls: string[] = [];
       globalThis.fetch = ((url: string | URL | Request) => {
-        const value = String(url);
+        const value = fetchUrl(url);
         requestedUrls.push(value);
         if (value === "https://skills.sh/api/download/owner/repo/demo") {
           return Promise.resolve(new Response("missing", { status: 404 }));
@@ -4938,7 +4970,7 @@ describe("skills extension", () => {
         ],
       });
       globalThis.fetch = ((url: string | URL | Request) => {
-        const value = String(url);
+        const value = fetchUrl(url);
         if (value.includes("/git/trees/")) {
           return Promise.resolve(
             Response.json({
@@ -5034,7 +5066,7 @@ describe("skills extension", () => {
         ],
       });
       globalThis.fetch = ((url: string | URL | Request) => {
-        const value = String(url);
+        const value = fetchUrl(url);
         if (value.includes("/git/trees/")) {
           return Promise.resolve(
             Response.json({
@@ -5126,7 +5158,7 @@ describe("skills extension", () => {
         ],
       });
       globalThis.fetch = ((url: string | URL | Request) => {
-        const value = String(url);
+        const value = fetchUrl(url);
         if (value.includes("/git/trees/")) {
           return Promise.resolve(
             Response.json({
@@ -5289,7 +5321,7 @@ describe("skills extension", () => {
       });
       const requestedUrls: string[] = [];
       globalThis.fetch = ((url: string | URL | Request) => {
-        const value = String(url);
+        const value = fetchUrl(url);
         requestedUrls.push(value);
         if (value.includes("/git/trees/")) {
           return Promise.resolve(
@@ -5375,7 +5407,7 @@ describe("skills extension", () => {
         ],
       });
       globalThis.fetch = ((url: string | URL | Request) => {
-        const value = String(url);
+        const value = fetchUrl(url);
         if (value.includes("/git/trees/")) {
           return Promise.resolve(
             Response.json({
@@ -5487,7 +5519,7 @@ describe("skills extension", () => {
         ],
       ]);
       globalThis.fetch = ((url: string | URL | Request) => {
-        const value = String(url);
+        const value = fetchUrl(url);
         requestedUrls.push(value);
         return Promise.resolve(
           responses.get(value) ?? new Response("missing", { status: 404 }),
@@ -5618,7 +5650,7 @@ describe("skills extension", () => {
         ],
       ]);
       globalThis.fetch = ((url: string | URL | Request) => {
-        const value = String(url);
+        const value = fetchUrl(url);
         requestedUrls.push(value);
         return Promise.resolve(
           responses.get(value)?.clone() ??
@@ -5742,7 +5774,7 @@ describe("skills extension", () => {
         ],
       ]);
       globalThis.fetch = ((url: string | URL | Request) => {
-        const value = String(url);
+        const value = fetchUrl(url);
         requestedUrls.push(value);
         return Promise.resolve(
           responses.get(value)?.clone() ??
@@ -5842,7 +5874,7 @@ describe("skills extension", () => {
         ],
       });
       globalThis.fetch = ((url: string | URL | Request) => {
-        const value = String(url);
+        const value = fetchUrl(url);
         if (value.includes("/git/trees/")) {
           return Promise.resolve(
             Response.json({
@@ -6022,7 +6054,7 @@ describe("skills extension", () => {
       ]);
       globalThis.fetch = ((url: string | URL | Request) =>
         Promise.resolve(
-          responses.get(String(url)) ??
+          responses.get(fetchUrl(url)) ??
             new Response("missing", { status: 404 }),
         )) as typeof fetch;
       const commands = new Map<
@@ -6160,7 +6192,7 @@ describe("skills extension", () => {
     process.env.HOME = home;
     try {
       globalThis.fetch = ((url: string | URL | Request) => {
-        const query = String(url).includes("missing")
+        const query = fetchUrl(url).includes("missing")
           ? []
           : [
               {
@@ -6232,7 +6264,7 @@ describe("skills extension", () => {
     process.env.HOME = home;
     try {
       globalThis.fetch = ((url: string | URL | Request) => {
-        const value = String(url);
+        const value = fetchUrl(url);
         if (value.startsWith("https://skills.sh/api/search")) {
           return Promise.resolve(
             Response.json({

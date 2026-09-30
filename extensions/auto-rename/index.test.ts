@@ -235,19 +235,23 @@ async function disposeRealSession(
 
 describe("auto-rename prompt lifecycle", () => {
   it("restores the native prompt after composed extension shutdown", async () => {
+    // oxlint-disable-next-line typescript/unbound-method -- Capturing method identity, never invoking it unbound.
     const originalPrompt = AgentSession.prototype.prompt;
     const session = await createRealSession(
       [promptCommandsExtension, autoRenameExtension],
       [join(import.meta.dir, "..", "..", "prompts")],
     );
 
+    // oxlint-disable-next-line typescript/unbound-method -- Comparing method identity, not invoking it.
     expect(AgentSession.prototype.prompt).not.toBe(originalPrompt);
     await disposeRealSession(session);
     await settleBackgroundWork();
+    // oxlint-disable-next-line typescript/unbound-method -- Comparing method identity, not invoking it.
     expect(AgentSession.prototype.prompt).toBe(originalPrompt);
   });
 
   it("restores native prompt after reload removes auto-rename", async () => {
+    // oxlint-disable-next-line typescript/unbound-method -- Capturing method identity, never invoking it unbound.
     const originalPrompt = AgentSession.prototype.prompt;
     const composed = await createRealSession([
       promptCommandsExtension,
@@ -261,6 +265,7 @@ describe("auto-rename prompt lifecycle", () => {
     await disposeRealSession(promptCommandsOnly);
     await settleBackgroundWork();
 
+    // oxlint-disable-next-line typescript/unbound-method -- Comparing method identity, not invoking it.
     expect(AgentSession.prototype.prompt).toBe(originalPrompt);
   });
 
@@ -302,7 +307,7 @@ describe("auto-rename prompt lifecycle", () => {
       true;
 
     try {
-      await expect(
+      expect(
         session.prompt("rejected private prompt", { source: "rpc" }),
       ).rejects.toThrow("streamingBehavior");
       await settleBackgroundWork();

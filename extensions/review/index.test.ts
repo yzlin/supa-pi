@@ -331,7 +331,7 @@ describe.serial("review model config", () => {
     await withReviewConfigSandbox(async (cwd) => {
       const projectPath = await getProjectReviewConfigPath(cwd);
       await fs.writeFile(projectPath, '{"accidentalBehavior":true}');
-      await expect(resolveReviewConfig(cwd)).rejects.toThrow(
+      expect(resolveReviewConfig(cwd)).rejects.toThrow(
         `${projectPath} field 'accidentalBehavior'`,
       );
       await fs.writeFile(
@@ -348,9 +348,7 @@ describe.serial("review model config", () => {
         projectPath,
         JSON.stringify({ synthesizerModel: "provider/model\nspoof" }),
       );
-      await expect(resolveReviewConfig(cwd)).rejects.toThrow(
-        "without whitespace",
-      );
+      expect(resolveReviewConfig(cwd)).rejects.toThrow("without whitespace");
       for (const unsafeModel of [
         "provider/model\u001b",
         "provider/model\u202e",
@@ -359,7 +357,7 @@ describe.serial("review model config", () => {
           projectPath,
           JSON.stringify({ synthesizerModel: unsafeModel }),
         );
-        await expect(resolveReviewConfig(cwd)).rejects.toThrow(
+        expect(resolveReviewConfig(cwd)).rejects.toThrow(
           "control, or Unicode format characters",
         );
       }
@@ -375,7 +373,7 @@ describe.serial("review model config", () => {
       ctx.cwd = cwd;
       reviewExtension(runtime.pi as never);
 
-      await expect(
+      expect(
         runtime.commands.get("review")?.handler("", ctx as never),
       ).resolves.toBeUndefined();
 
@@ -442,7 +440,7 @@ describe.serial("review model config", () => {
         projectPath,
         JSON.stringify({ synthesizerModel: "three/model" }),
       );
-      await expect(approveProjectReviewConfig(changed)).rejects.toThrow(
+      expect(approveProjectReviewConfig(changed)).rejects.toThrow(
         "changed before approval",
       );
       const trust = JSON.parse(await fs.readFile(getReviewTrustPath(), "utf8"));
@@ -462,7 +460,7 @@ describe.serial("review model config", () => {
       await fs.mkdir(path.dirname(globalPath), { recursive: true });
       await fs.symlink(path.dirname(globalPath), path.join(cwd, ".pi"));
 
-      await expect(
+      expect(
         writeReviewConfigField(
           await getProjectReviewConfigPath(cwd),
           "synthesizerModel",
@@ -610,7 +608,7 @@ describe.serial("review model config", () => {
           (await resolveReviewConfig(cwd)).project,
         ),
       ).toBe(false);
-      await expect(fs.readFile(getReviewTrustPath(), "utf8")).rejects.toThrow();
+      expect(fs.readFile(getReviewTrustPath(), "utf8")).rejects.toThrow();
     });
   });
 
@@ -1146,6 +1144,35 @@ describe.serial("/review command settings and disclosure", () => {
     expect(
       notifications.some(({ message }) => message.includes("not available")),
     ).toBe(true);
+  });
+
+  it("renders review-report text blocks instead of object placeholders", () => {
+    const runtime = createRuntime();
+    reviewExtension(runtime.pi as never);
+    const render = (message: unknown) =>
+      (
+        runtime.renderers.get(REVIEW_REPORT_MESSAGE_TYPE)!(message, {
+          expanded: false,
+          outputPad: 1,
+        }) as Markdown
+      ).render(80);
+
+    expect(
+      render({
+        content: [
+          { type: "text", text: "First paragraph" },
+          { type: "image", data: "ignored", mimeType: "image/png" },
+          { type: "text", text: "Second paragraph" },
+        ],
+      }),
+    ).toEqual(render({ content: "First paragraph\nSecond paragraph" }));
+    expect(
+      render({
+        details: { report: "Preferred report" },
+        content: [{ type: "text", text: "Fallback report" }],
+      }),
+    ).toEqual(render({ content: "Preferred report" }));
+    expect(render({ content: [] })).toEqual(render({ content: "" }));
   });
 
   it("renders review-report messages and leaves /review-fix delegation behavior intact", async () => {

@@ -54,7 +54,7 @@ describe("edit helper compatibility", () => {
       controller.signal,
     );
     controller.abort();
-    await expect(second).rejects.toThrow("Operation aborted");
+    expect(second).rejects.toThrow("Operation aborted");
     expect(ran).toBe(false);
     release();
     await first;
@@ -78,7 +78,7 @@ describe("edit helper compatibility", () => {
       controller.signal,
     );
     controller.abort();
-    await expect(second).rejects.toThrow("Operation aborted");
+    expect(second).rejects.toThrow("Operation aborted");
     let thirdStarted = false;
     const third = withFileMutationQueue([path], () => {
       thirdStarted = true;
@@ -97,7 +97,7 @@ describe("edit helper compatibility", () => {
       tempDir(),
       ...Array.from({ length: 300 }, (_, index) => `x-${index}`),
     );
-    await expect(
+    expect(
       withFileMutationQueue([path], async () => undefined),
     ).rejects.toThrow("Path exceeds maximum canonicalization size");
   });

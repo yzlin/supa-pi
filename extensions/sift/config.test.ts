@@ -45,11 +45,11 @@ describe("Sift config", () => {
     }
     const store = new SiftConfigStore({ agentDir });
 
-    await expect(store.load()).rejects.toThrow("invalid");
+    expect(store.load()).rejects.toThrow("invalid");
     if (process.platform !== "win32") {
       await writeFile(path, JSON.stringify({ enabled: true }));
       await chmod(path, 0o666);
-      await expect(store.load()).rejects.toThrow("unsafe permissions");
+      expect(store.load()).rejects.toThrow("unsafe permissions");
     }
   });
 });

@@ -8,7 +8,12 @@ import {
 } from "@earendil-works/pi-ai/compat";
 import { ModelRegistry, ModelRuntime } from "@earendil-works/pi-coding-agent";
 
-import { appendFinalOutput, resolveExitCode, runSubagent } from "./subagent";
+import {
+  appendFinalOutput,
+  renderProgressPlainLines,
+  resolveExitCode,
+  runSubagent,
+} from "./subagent";
 
 const modelRegistry = new ModelRegistry(await ModelRuntime.create());
 
@@ -68,6 +73,35 @@ describe("runSubagent", () => {
     ]);
     expect(providerMessages[0]?.content).toBe("Inherited parent instructions");
     expect(result.finalOutput).toBe("done");
+  });
+});
+
+describe("renderProgressPlainLines", () => {
+  it("serializes structured path arguments without object placeholders", () => {
+    const lines = renderProgressPlainLines("Inspect files", {
+      task: "Inspect files",
+      exitCode: 0,
+      finalOutput: "",
+      usage: {
+        input: 0,
+        output: 0,
+        cacheRead: 0,
+        cacheWrite: 0,
+        cost: 0,
+        contextTokens: 0,
+        turns: 0,
+      },
+      displayItems: ["read", "write", "edit"].map((name) => ({
+        type: "toolCall" as const,
+        name,
+        args: { path: { file: "src/main.ts" } },
+      })),
+    });
+    expect(lines.slice(1)).toEqual([
+      '  read {"file":"src/main.ts"}',
+      '  write {"file":"src/main.ts"}',
+      '  edit {"file":"src/main.ts"}',
+    ]);
   });
 });
 

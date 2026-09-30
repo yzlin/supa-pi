@@ -190,7 +190,7 @@ export function validateAskParams(
   }
 
   const questionIds = new Set<string>();
-  questions.forEach((question, questionIndex) => {
+  for (const [questionIndex, question] of questions.entries()) {
     addDuplicateIssue(
       issues,
       questionIds,
@@ -210,7 +210,7 @@ export function validateAskParams(
 
     const optionValues = new Set<string>();
     const optionLabels = new Set<string>();
-    question.options.forEach((option, optionIndex) => {
+    for (const [optionIndex, option] of question.options.entries()) {
       const valuePath = `questions[${questionIndex}].options[${optionIndex}].value`;
       const labelPath = `questions[${questionIndex}].options[${optionIndex}].label`;
       addDuplicateIssue(
@@ -243,8 +243,8 @@ export function validateAskParams(
           message: `Option label ${option.label} is reserved.`,
         });
       }
-    });
-  });
+    }
+  }
 
   if (issues.length > 0) {
     return { valid: false, issues };
@@ -721,9 +721,7 @@ export default function ask(pi: ExtensionAPI): void {
     }
 
     return {
-      systemPrompt:
-        event.systemPrompt +
-        `
+      systemPrompt: `${event.systemPrompt}
 
 QUESTION-ASKING RULES:
 - If you need clarification from the user and interactive UI is available, prefer the ask tool over asking plain-text questions.

@@ -187,11 +187,11 @@ describe("obsidian context", () => {
     ];
     mkdirSync(directories.at(-1)!, { recursive: true });
 
-    directories.forEach((directory, index) => {
+    for (const [index, directory] of directories.entries()) {
       for (const candidate of candidates.slice(0, index + 1).reverse()) {
         writeFileSync(join(directory, candidate), candidate);
       }
-    });
+    }
 
     expect(
       discoverContextChain(

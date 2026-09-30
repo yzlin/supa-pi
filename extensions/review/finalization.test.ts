@@ -198,7 +198,7 @@ describe("prepared review raw result derivation", () => {
     for (const json of [
       "{",
       " ".repeat(1_048_577),
-      JSON.stringify({ reviewerRuns: new Array(257).fill(null) }),
+      JSON.stringify({ reviewerRuns: Array.from({ length: 257 }, () => null) }),
     ]) {
       expect(() => derivePreparedReviewResult(prepared, json)).toThrow(
         "Invalid raw review result",

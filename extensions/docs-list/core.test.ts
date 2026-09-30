@@ -95,6 +95,22 @@ describe("docs-list core", () => {
     });
   });
 
+  test("serializes structured inline read_when values without object placeholders", () => {
+    const cwd = makeTempDir();
+    mkdirSync(join(cwd, "docs"));
+    writeFileSync(
+      join(cwd, "docs", "structured.md"),
+      '---\nsummary: Structured\nread_when: [{"topic":"testing"}, ["nested"], 42, true, null]\n---\n',
+    );
+
+    expect(listDocs({ cwd }).docs[0]?.readWhen).toEqual([
+      '{"topic":"testing"}',
+      '["nested"]',
+      "42",
+      "true",
+    ]);
+  });
+
   test("uses optional relative path", () => {
     const cwd = makeTempDir();
     mkdirSync(join(cwd, "knowledge"), { recursive: true });

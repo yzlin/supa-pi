@@ -40,7 +40,9 @@ function compactStrings(values: unknown[]): string[] {
     if (value === null || value === undefined) {
       continue;
     }
-    const normalized = String(value).trim();
+    const normalized = (
+      typeof value === "string" ? value : JSON.stringify(value)
+    ).trim();
     if (normalized.length > 0) {
       result.push(normalized);
     }

@@ -317,7 +317,7 @@ describe("setup managed-directory symlink reconciliation", () => {
     });
 
     expect(result.status, result.error?.message ?? result.stderr).toBe(0);
-    await expect(lstat(managedDanglingLink)).rejects.toMatchObject({
+    expect(lstat(managedDanglingLink)).rejects.toMatchObject({
       code: "ENOENT",
     });
     expect(await readlink(unrelatedDanglingLink)).toBe(

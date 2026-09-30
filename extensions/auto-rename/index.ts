@@ -46,7 +46,6 @@ function addPromptObserver(owner: PromptOwner, observer: PromptObserver): void {
     return;
   }
 
-  let registry: PromptCaptureRegistry;
   const prompt: PromptMethod = function observedPrompt(text, options) {
     return registry.originalPrompt.call(this, text, {
       ...options,
@@ -61,7 +60,7 @@ function addPromptObserver(owner: PromptOwner, observer: PromptObserver): void {
       },
     });
   };
-  registry = {
+  const registry: PromptCaptureRegistry = {
     originalPrompt: prototype.prompt,
     prompt,
     owners: new Map([[owner, observer]]),

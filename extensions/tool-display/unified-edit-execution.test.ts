@@ -92,7 +92,7 @@ describe("unified edit plan execution", () => {
     writeFileSync(target, `${"x".repeat(210_000)}\n`);
     let confirmed = false;
 
-    await expect(
+    expect(
       execute(
         dir,
         "*** Begin Patch\n*** Delete File: large-delete.txt\n*** End Patch",
@@ -112,13 +112,13 @@ describe("unified edit plan execution", () => {
   test("rejects add on existing path and add when write is disabled", async () => {
     const dir = tempDir();
     writeFileSync(join(dir, "exists.txt"), "old\n");
-    await expect(
+    expect(
       execute(
         dir,
         "*** Begin Patch\n*** Add File: exists.txt\n+x\n*** End Patch",
       ),
     ).rejects.toThrow("already exists");
-    await expect(
+    expect(
       execute(
         dir,
         "*** Begin Patch\n*** Add File: new.txt\n+x\n*** End Patch",
@@ -142,9 +142,7 @@ describe("unified edit plan execution", () => {
 +added
 *** End Patch`;
 
-    await expect(
-      execute(dir, patch("not-a-directory/added.txt")),
-    ).rejects.toThrow();
+    expect(execute(dir, patch("not-a-directory/added.txt"))).rejects.toThrow();
     expect(readFileSync(target, "utf8")).toBe("old\n");
 
     const locked = join(dir, "locked");
@@ -158,7 +156,7 @@ describe("unified edit plan execution", () => {
       permissionsEnforced = true;
     }
     if (permissionsEnforced) {
-      await expect(execute(dir, patch("locked/added.txt"))).rejects.toThrow();
+      expect(execute(dir, patch("locked/added.txt"))).rejects.toThrow();
       expect(readFileSync(target, "utf8")).toBe("old\n");
       expect(existsSync(join(locked, "added.txt"))).toBe(false);
     }
@@ -170,11 +168,11 @@ describe("unified edit plan execution", () => {
     const target = join(dir, "gone.txt");
     writeFileSync(target, "gone\n");
     const patch = "*** Begin Patch\n*** Delete File: gone.txt\n*** End Patch";
-    await expect(execute(dir, patch)).rejects.toThrow("disabled");
-    await expect(
+    expect(execute(dir, patch)).rejects.toThrow("disabled");
+    expect(
       execute(dir, patch, { allowDelete: true, mode: "json" }),
     ).rejects.toThrow("JSON/print");
-    await expect(
+    expect(
       execute(dir, patch, {
         allowDelete: true,
         confirm: () => Promise.resolve(false),
@@ -204,7 +202,7 @@ describe("unified edit plan execution", () => {
     symlinkSync(target, link);
     let confirmed = false;
 
-    await expect(
+    expect(
       execute(
         dir,
         "*** Begin Patch\n*** Delete File: link.txt\n*** End Patch",
@@ -230,7 +228,7 @@ describe("unified edit plan execution", () => {
     writeFileSync(planned, "planned\n");
     writeFileSync(referent, "referent survives\n");
 
-    await expect(
+    expect(
       execute(
         dir,
         "*** Begin Patch\n*** Delete File: planned.txt\n*** End Patch",
@@ -270,7 +268,7 @@ describe("unified edit plan execution", () => {
     writeFileSync(target, "old\n");
     const patch =
       "*** Begin Patch\n*** Update File: target.txt\n@@\n-old\n+new\n*** Delete File: target.txt\n*** End Patch";
-    await expect(
+    expect(
       execute(dir, patch, {
         allowDelete: true,
         confirm: () => {
@@ -283,7 +281,7 @@ describe("unified edit plan execution", () => {
 
     writeFileSync(target, "old\n");
     symlinkSync(target, join(dir, "alias.txt"));
-    await expect(
+    expect(
       execute(
         dir,
         "[target.txt]\n@REPLACE\n-old\n+one\n[alias.txt]\n@REPLACE\n-old\n+two",
@@ -298,7 +296,7 @@ describe("unified edit plan execution", () => {
     writeFileSync(target, "old\n");
     const controller = new AbortController();
     controller.abort();
-    await expect(
+    expect(
       execute(dir, "[a.txt]\n@REPLACE\n-old\n+new", {
         signal: controller.signal,
       }),

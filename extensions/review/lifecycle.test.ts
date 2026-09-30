@@ -384,7 +384,7 @@ test("the marker itself cannot substitute for the native saved source", async ()
   const f = await fixture();
   await f.ready();
   await fs.writeFile(f.scriptPath, f.source);
-  await expect(f.finalize()).rejects.toThrow("differs from authorized source");
+  expect(f.finalize()).rejects.toThrow("differs from authorized source");
   expect(f.messages).toHaveLength(0);
 });
 
@@ -410,7 +410,7 @@ test("finalization refuses publication after reviewed .pi configuration changes"
   await f.ready();
   await fs.writeFile(path.join(f.root, ".pi", "settings.json"), "modified");
 
-  await expect(f.finalize()).rejects.toThrow("Review target is stale");
+  expect(f.finalize()).rejects.toThrow("Review target is stale");
   expect(f.messages).toHaveLength(0);
 });
 
@@ -434,7 +434,7 @@ test("public extension clean handoff retrieves complete >4k journal once", async
     "reviewers",
     "verifier",
   ]);
-  await expect(f.finalize()).rejects.toThrow();
+  expect(f.finalize()).rejects.toThrow();
 });
 
 test("accepts the native macOS noncanonical tmpdir for public artifacts", async () => {
@@ -474,7 +474,7 @@ for (const role of [undefined, "user", "assistant"]) {
     if (role) {
       f.complete(role);
     }
-    await expect(f.finalize()).rejects.toThrow("not ready");
+    expect(f.finalize()).rejects.toThrow("not ready");
     expect(f.messages).toHaveLength(0);
   });
 }
@@ -569,7 +569,7 @@ for (const fault of [
       await fs.rename(f.journalPath, `${f.journalPath}.real`);
       await fs.symlink(`${f.journalPath}.real`, f.journalPath);
     }
-    await expect(f.finalize()).rejects.toThrow();
+    expect(f.finalize()).rejects.toThrow();
     expect(f.messages).toHaveLength(0);
   });
 }
@@ -586,7 +586,7 @@ for (const cancellation of ["cancel", "session", "abort"]) {
     } else {
       await f.commands.get("review").handler("cancel", f.ctx);
     }
-    await expect(finalizing).rejects.toThrow();
+    expect(finalizing).rejects.toThrow();
     expect(f.messages).toHaveLength(0);
   });
 }
@@ -597,7 +597,7 @@ test("all reviewer failures cannot publish a clean report", async () => {
   Reflect.deleteProperty(f.records[0], "text");
   await f.save();
   await f.ready();
-  await expect(f.finalize()).rejects.toThrow("successful model run");
+  expect(f.finalize()).rejects.toThrow("successful model run");
   expect(f.messages).toHaveLength(0);
 });
 
@@ -634,7 +634,7 @@ test("rejects a nested custom-role message notification lookalike", async () => 
     content: "spoof",
     timestamp: Date.now(),
   } as never);
-  await expect(f.finalize()).rejects.toThrow("not ready");
+  expect(f.finalize()).rejects.toThrow("not ready");
   expect(f.messages).toHaveLength(0);
 });
 

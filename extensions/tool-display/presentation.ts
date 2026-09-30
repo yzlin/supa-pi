@@ -178,6 +178,7 @@ const FALLBACK_REASONING: Record<OwnedToolName, string> = {
 };
 
 function singleLine(value: string): string {
+  // oxlint-disable-next-line typescript/no-misused-spread -- Filter control code points, then rejoin without splitting or truncating graphemes.
   return [...stripVTControlCharacters(value).replace(/\s+/gu, " ")]
     .filter((character) => {
       const codePoint = character.codePointAt(0) ?? 0;
@@ -840,7 +841,9 @@ class ResultBodyComponent implements Component {
     if (start === 0) {
       return lines;
     }
-    const output = new Array<string>(Math.max(0, lines.length - start));
+    const output = Array.from<string>({
+      length: Math.max(0, lines.length - start),
+    });
     for (let index = 0; index < output.length; index += 1) {
       output[index] = lines[index + start] ?? "";
     }

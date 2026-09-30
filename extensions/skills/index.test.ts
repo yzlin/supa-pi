@@ -75,6 +75,7 @@ describe("skills panel removal", () => {
           custom(
             factory: Parameters<ExtensionCommandContext["ui"]["custom"]>[0],
           ) {
+            expect(this).toBe(ctx.ui);
             return new Promise((resolve) => {
               const component = factory(
                 { mode: "regular" } as never,

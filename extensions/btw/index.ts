@@ -282,7 +282,7 @@ export default function (pi: ExtensionAPI) {
           }
           ctx.ui.setWidget(widgetKey, undefined);
         })
-        .catch((err) => {
+        .catch((err: unknown) => {
           ctx.ui.setWidget(widgetKey, undefined);
           ctx.ui.notify(
             `btw failed: ${err instanceof Error ? err.message : String(err)}`,

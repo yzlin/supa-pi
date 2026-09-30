@@ -255,7 +255,9 @@ export async function withFileMutationQueue<T>(
   }
   const previousEntries = keys.map((key) => fileMutationQueues.get(key));
   const previous = Promise.all(
-    previousEntries.map((entry) => entry?.tail.catch(() => undefined)),
+    previousEntries.map(
+      (entry) => entry?.tail.catch(() => undefined) ?? Promise.resolve(),
+    ),
   );
   let release!: () => void;
   const gate = new Promise<void>((resolve) => {

@@ -18,7 +18,7 @@ import type {
 const originalHomeDir = osHomedir();
 const originalHostname = osHostname();
 let currentHomeDir = originalHomeDir;
-mock.module("node:os", () => ({
+await mock.module("node:os", () => ({
   homedir: () => currentHomeDir,
   hostname: () => originalHostname,
 }));
@@ -222,10 +222,10 @@ describe("fast mode", () => {
     ]);
   });
 
-  it("restores branch state over global fallback", () => {
+  it("restores branch state over global fallback", async () => {
     const { command } = setupHarness();
     const { ctx } = createContext();
-    command.handler("on", ctx);
+    await command.handler("on", ctx);
 
     const { handlers } = setupHarness();
     const restored = createContext([
@@ -243,10 +243,10 @@ describe("fast mode", () => {
     ]);
   });
 
-  it("restores branch state on session tree navigation", () => {
+  it("restores branch state on session tree navigation", async () => {
     const { command } = setupHarness();
     const { ctx } = createContext();
-    command.handler("on", ctx);
+    await command.handler("on", ctx);
 
     const { handlers } = setupHarness();
     const restored = createContext([
@@ -546,12 +546,12 @@ describe("fast mode", () => {
     ).toHaveLength(1);
   });
 
-  it("applies priority service tier from provider hook", () => {
+  it("applies priority service tier from provider hook", async () => {
     const { command, handlers } = setupHarness();
     const ctx = createContext([], { fastMode: true }).ctx;
     const request = { payload: { model: "x" } };
 
-    command.handler("on", ctx);
+    await command.handler("on", ctx);
     const result = getHandler(handlers, "before_provider_request")(
       request,
       ctx as ExtensionContext,

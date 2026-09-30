@@ -167,9 +167,14 @@ function assertProviderSchema(schema: Record<string, any>): void {
   }
   if (schema.type === "object") {
     expect(schema.additionalProperties).toBe(false);
-    expect([...schema.required].sort()).toEqual(
-      Object.keys(schema.properties).sort(),
-    );
+    expect(
+      [...schema.required].sort((a: string, b: string) => {
+        if (a === b) {
+          return 0;
+        }
+        return a < b ? -1 : 1;
+      }),
+    ).toEqual(Object.keys(schema.properties).sort());
     for (const property of Object.values(schema.properties)) {
       assertProviderSchema(property as Record<string, unknown>);
     }

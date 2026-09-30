@@ -423,7 +423,7 @@ function resolveSelectedSet(
     selectedSet: DEFAULT_SET_NAME,
     requestedSet: state.selectedSet,
     source: "fallback",
-    warning: `Whimsical message set "${state.selectedSet}" is unavailable; using default.`,
+    warning: `Whimsical message set "${String(state.selectedSet)}" is unavailable; using default.`,
   };
 }
 

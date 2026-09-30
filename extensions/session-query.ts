@@ -33,6 +33,15 @@ Focus on:
 
 Be concise and direct. If the information isn't in the session, say so.`;
 
+function errorText(error: unknown): string {
+  if (error instanceof Error) {
+    return String(error);
+  }
+  return typeof error === "object" && error !== null
+    ? JSON.stringify(error)
+    : String(error);
+}
+
 export default function (pi: ExtensionAPI) {
   pi.registerTool({
     name: "session_query",
@@ -73,7 +82,7 @@ export default function (pi: ExtensionAPI) {
           return errorResult(`Error: Session file not found: ${sessionPath}`);
         }
       } catch (err) {
-        return errorResult(`Error checking session file: ${err}`);
+        return errorResult(`Error checking session file: ${errorText(err)}`);
       }
 
       onUpdate?.({
@@ -91,7 +100,7 @@ export default function (pi: ExtensionAPI) {
       try {
         sessionManager = SessionManager.open(sessionPath);
       } catch (err) {
-        return errorResult(`Error loading session: ${err}`);
+        return errorResult(`Error loading session: ${errorText(err)}`);
       }
 
       // Get conversation from the session
@@ -198,7 +207,7 @@ export default function (pi: ExtensionAPI) {
           },
         };
       } catch (err) {
-        return errorResult(`Error querying session: ${err}`);
+        return errorResult(`Error querying session: ${errorText(err)}`);
       }
     },
 

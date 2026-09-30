@@ -204,12 +204,12 @@ function startTimer(state: LspPresentationState, invalidate: () => void): void {
   timers.set(timer, state);
 }
 
-function singleLine(value: unknown): string {
-  return [
-    ...stripVTControlCharacters(String(value ?? "")).replace(/\s+/gu, " "),
-  ]
+function singleLine(value: string | undefined): string {
+  return stripVTControlCharacters(value ?? "")
+    .replace(/\s+/gu, " ")
+    .split("")
     .filter((character) => {
-      const codePoint = character.codePointAt(0) ?? 0;
+      const codePoint = character.charCodeAt(0);
       return !(codePoint <= 0x1f || (codePoint >= 0x7f && codePoint <= 0x9f));
     })
     .join("")

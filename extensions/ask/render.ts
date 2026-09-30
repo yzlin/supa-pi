@@ -443,7 +443,8 @@ function renderSubmitPicker(args: {
   selectedIndex: number;
   allAnswered: boolean;
 }) {
-  const { add, theme, selectedIndex, allAnswered } = args;
+  const { theme, selectedIndex, allAnswered } = args;
+  const add = (text: string) => args.add(text);
   const items = [
     {
       label: allAnswered ? "Submit" : "Submit (answer all questions first)",
@@ -467,7 +468,8 @@ function renderTabs(args: {
   questions: Question[];
   state: AskRuntimeState;
 }) {
-  const { add, theme, questions, state } = args;
+  const { theme, questions, state } = args;
+  const add = (text: string) => args.add(text);
   const tabs: string[] = ["← "];
   for (let index = 0; index < questions.length; index++) {
     const active = index === state.currentTab;

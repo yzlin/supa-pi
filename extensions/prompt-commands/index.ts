@@ -90,14 +90,13 @@ function addQueueOwner(owner: QueueOwner): void {
     return;
   }
 
-  let registry: QueuePatchRegistry;
   const prompt: PromptMethod = function prompt(text, options) {
     return registry.promptExpansion.run(
       options?.expandPromptTemplates ?? true,
       () => registry.originalPrompt.call(this, text, options),
     );
   };
-  registry = {
+  const registry: QueuePatchRegistry = {
     originalPrompt: prototype.prompt,
     prompt,
     promptExpansion: new AsyncLocalStorage<boolean>(),

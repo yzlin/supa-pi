@@ -114,9 +114,11 @@ describe("changed path resolution", () => {
       });
     };
 
-    await expect(
-      getChangedPaths({ type: "uncommitted" }, gitExec),
-    ).resolves.toEqual(["src/index.ts", "new.ts", "newdir/file.ts"]);
+    expect(getChangedPaths({ type: "uncommitted" }, gitExec)).resolves.toEqual([
+      "src/index.ts",
+      "new.ts",
+      "newdir/file.ts",
+    ]);
   });
 
   it("resolves branch paths via upstream merge base", async () => {
@@ -132,7 +134,7 @@ describe("changed path resolution", () => {
       return Promise.resolve({ stdout: "src/a.ts\ndb/schema.sql\n", code: 0 });
     };
 
-    await expect(
+    expect(
       getChangedPaths({ type: "baseBranch", branch: "main" }, gitExec),
     ).resolves.toEqual(["src/a.ts", "db/schema.sql"]);
     expect(calls).toEqual([
@@ -149,14 +151,14 @@ describe("changed path resolution", () => {
       return Promise.resolve({ stdout: "src/commit.ts\n", code: 0 });
     };
 
-    await expect(
+    expect(
       getChangedPaths({ type: "commit", sha: "abc123" }, gitExec),
     ).resolves.toEqual(["src/commit.ts"]);
     expect(commitCalls).toEqual([
       ["diff-tree", "--root", "--no-commit-id", "--name-only", "-r", "abc123"],
     ]);
 
-    await expect(
+    expect(
       getChangedPaths({ type: "folder", paths: ["src"] }, gitExec),
     ).resolves.toEqual(["src"]);
   });

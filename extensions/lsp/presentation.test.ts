@@ -244,6 +244,7 @@ function executeTool(
   id: string,
   params: Record<string, unknown>,
 ): Promise<ToolResult> {
+  // oxlint-disable-next-line typescript/unbound-method -- Reflect.apply explicitly supplies the method receiver.
   return Reflect.apply(tool.execute, tool, [
     id,
     params,
@@ -554,7 +555,7 @@ describe("LSP tool registration and presentation", () => {
 
       const tool = captureTool([createClient(overrides)]);
       const toolCallId = `error-${operation}`;
-      await expect(
+      expect(
         executeTool(tool, toolCallId, operationArgs(operation)),
       ).rejects.toThrow(error.message);
       const lines = renderResult(
@@ -597,7 +598,7 @@ describe("LSP tool registration and presentation", () => {
     ).toContain("1 error · 1 warning");
 
     const unavailableTool = captureTool([]);
-    await expect(
+    expect(
       executeTool(unavailableTool, "diagnostics-unavailable", {
         operation: "diagnostics",
         ...FILE_ONLY_ARGS,

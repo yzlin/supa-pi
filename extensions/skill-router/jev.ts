@@ -75,7 +75,7 @@ export class JevClient {
     if (Buffer.byteLength(body) > 65_536) {
       throw new JevError("malformed", "Jev batch is too large");
     }
-    return await this.#deadline(async (combined) => {
+    return this.#deadline(async (combined) => {
       let response: Response;
       try {
         response = await this.#fetch(JEV_ENDPOINT, {
@@ -137,7 +137,6 @@ export class JevClient {
       throw new JevError("cancelled", "Jev request cancelled");
     }
     const controller = new AbortController();
-    let timeout: ReturnType<typeof setTimeout> | undefined;
     let rejectDeadline!: (reason: JevError) => void;
     const deadline = new Promise<never>((_, reject) => {
       rejectDeadline = reject;
@@ -154,7 +153,7 @@ export class JevClient {
     };
     const listener = () => abort("cancelled");
     external?.addEventListener("abort", listener, { once: true });
-    timeout = setTimeout(() => abort("timeout"), this.#timeoutMs);
+    const timeout = setTimeout(() => abort("timeout"), this.#timeoutMs);
     try {
       return await Promise.race([operation(controller.signal), deadline]);
     } catch (error) {

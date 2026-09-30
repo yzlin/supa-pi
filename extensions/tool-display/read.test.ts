@@ -70,10 +70,10 @@ describe("tool-display read", () => {
       ]);
       const targets = [target({ name: "skills", source: "registeredSkills" })];
 
-      await expect(
+      expect(
         resolveFullReadPath(skillPath, dir, targets, skillPaths),
       ).resolves.toMatchObject({ path: await realpath(skillPath) });
-      await expect(
+      expect(
         resolveFullReadPath("README.md", dir, targets, skillPaths),
       ).resolves.toBeNull();
     });
@@ -86,7 +86,7 @@ describe("tool-display read", () => {
       const rulePath = join(ruleDir, "rule.md");
       await writeFile(rulePath, "# Rule\n");
 
-      await expect(
+      expect(
         resolveFullReadPath(
           ".pi/rules/rule.md",
           dir,
@@ -119,10 +119,10 @@ describe("tool-display read", () => {
         }),
       ];
 
-      await expect(
+      expect(
         resolveFullReadPath(publicRule, dir, targets, new Set()),
       ).resolves.toMatchObject({ path: await realpath(publicRule) });
-      await expect(
+      expect(
         resolveFullReadPath(privateRule, dir, targets, new Set()),
       ).resolves.toBeNull();
     });
@@ -174,7 +174,7 @@ describe("tool-display read", () => {
         target: target({ name: "small", maxBytes: 5 }),
       };
 
-      await expect(readFullReadText(match, {})).rejects.toThrow(
+      expect(readFullReadText(match, {})).rejects.toThrow(
         "exceeds tool-display read cap",
       );
     });
@@ -234,7 +234,7 @@ describe("tool-display read", () => {
       const filePath = join(dir, "rule.md");
       await writeFile(filePath, "x".repeat(TOOL_DISPLAY_READ_MAX_BYTES + 1));
 
-      await expect(
+      expect(
         readFullReadText(
           {
             path: filePath,
@@ -254,7 +254,7 @@ describe("tool-display read", () => {
         const outsideRule = join(outsideDir, "secret.md");
         await writeFile(outsideRule, "secret\n");
 
-        await expect(
+        expect(
           resolveFullReadPath(
             outsideRule,
             dir,
@@ -282,7 +282,7 @@ describe("tool-display read", () => {
         const outsideRule = join(outsideDir, "global.md");
         await writeFile(outsideRule, "global\n");
 
-        await expect(
+        expect(
           resolveFullReadPath(
             outsideRule,
             dir,
@@ -313,7 +313,7 @@ describe("tool-display read", () => {
       await writeFile(outsideRule, "secret\n");
       await symlink(outsideRule, linkPath);
 
-      await expect(
+      expect(
         resolveFullReadPath(
           linkPath,
           dir,
@@ -333,7 +333,7 @@ describe("tool-display read", () => {
       await writeFile(rulePath, "rule\n");
       await symlink(realBase, linkBase);
 
-      await expect(
+      expect(
         resolveFullReadPath(
           join(linkBase, "rule.md"),
           dir,

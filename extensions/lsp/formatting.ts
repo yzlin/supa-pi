@@ -29,6 +29,8 @@ function severityLabel(severity?: number): string {
       return "INFO";
     case DiagnosticSeverity.Hint:
       return "HINT";
+    case undefined:
+      return "UNKNOWN";
     default:
       return "UNKNOWN";
   }

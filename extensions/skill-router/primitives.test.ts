@@ -56,8 +56,8 @@ test("config absent disabled, strict invalid fails closed and save is owner-only
   await store.save(true);
   expect(await store.load()).toBe(true);
   await writeFile(store.path, "{}");
-  await expect(store.load()).rejects.toThrow("unusable");
-  await expect(store.save(false)).rejects.toThrow("unusable");
+  expect(store.load()).rejects.toThrow("unusable");
+  expect(store.save(false)).rejects.toThrow("unusable");
 });
 test("credentials are isolated, env wins, status does not expose key, unsafe store rejected", async () => {
   const r = await makeRoot();
@@ -97,7 +97,7 @@ test("credential FIFO and symlink destinations are rejected without outside muta
   const outside = join(r, "outside.json");
   await writeFile(outside, "untouched");
   await symlink(outside, auth);
-  await expect(store.clear()).rejects.toThrow("unsafe");
+  expect(store.clear()).rejects.toThrow("unsafe");
   expect(await readFile(outside, "utf8")).toBe("untouched");
 });
 
@@ -108,14 +108,14 @@ test("Jev schema has only bounded text/metadata and validates exact answers", as
     apiKey: "ABCDEFGHIJKLMNOP",
     fetch: (_url, init) => {
       calls++;
-      body = String(init?.body);
+      if (typeof init?.body !== "string") {
+        throw new TypeError("Expected a JSON string request body");
+      }
+      body = init.body;
       return Promise.resolve(
-        new Response(
-          JSON.stringify({
-            answers: { applicable_s0: { type: "noul", noul: 1 } },
-          }),
-          { status: 200 },
-        ),
+        Response.json({
+          answers: { applicable_s0: { type: "noul", noul: 1 } },
+        }),
       );
     },
   });
@@ -141,7 +141,7 @@ test("deadline covers response json that ignores abort and cancellation is sanit
         { status: 200 },
       ),
   });
-  await expect(
+  expect(
     client.judgeBatch([{ id: "s0", name: "x", description: "x" }], {
       currentRequest: "x",
       recentText: "",
@@ -157,9 +157,7 @@ test("deadline covers response json that ignores abort and cancellation is sanit
       return Promise.resolve(Response.json({ answers: {} }));
     },
   });
-  await expect(preAborted.verify(controller.signal)).rejects.toBeInstanceOf(
-    JevError,
-  );
+  expect(preAborted.verify(controller.signal)).rejects.toBeInstanceOf(JevError);
   expect(preAbortedCalls).toBe(0);
 });
 test("Jev failures are categorized and malformed answer/usage matrices are rejected without retries", async () => {
@@ -178,7 +176,7 @@ test("Jev failures are categorized and malformed answer/usage matrices are rejec
         return Promise.resolve(new Response("failure", { status }));
       },
     });
-    await expect(client.judgeBatch(candidate, context)).rejects.toMatchObject({
+    expect(client.judgeBatch(candidate, context)).rejects.toMatchObject({
       category,
     });
     expect(calls).toBe(1);
@@ -213,7 +211,7 @@ test("Jev failures are categorized and malformed answer/usage matrices are rejec
         );
       },
     });
-    await expect(client.judgeBatch(candidate, context)).rejects.toMatchObject({
+    expect(client.judgeBatch(candidate, context)).rejects.toMatchObject({
       category: "malformed",
     });
     expect(calls).toBe(1);
@@ -226,12 +224,10 @@ test("Jev failures are categorized and malformed answer/usage matrices are rejec
       return Promise.reject(new Error("secret transport detail"));
     },
   });
-  await expect(connection.judgeBatch(candidate, context)).rejects.toMatchObject(
-    {
-      category: "connection",
-      message: "Jev connection failed",
-    },
-  );
+  expect(connection.judgeBatch(candidate, context)).rejects.toMatchObject({
+    category: "connection",
+    message: "Jev connection failed",
+  });
   expect(connectionCalls).toBe(1);
 });
 
@@ -245,8 +241,8 @@ test("Jev request and payload bounds fail before fetch", async () => {
     },
   });
   const context = { currentRequest: "x", recentText: "" };
-  await expect(client.judgeBatch([], context)).rejects.toThrow("1 to 16");
-  await expect(
+  expect(client.judgeBatch([], context)).rejects.toThrow("1 to 16");
+  expect(
     client.judgeBatch(
       Array.from({ length: 17 }, (_, index) => ({
         id: `s${index}`,
@@ -256,7 +252,7 @@ test("Jev request and payload bounds fail before fetch", async () => {
       context,
     ),
   ).rejects.toThrow("1 to 16");
-  await expect(
+  expect(
     client.judgeBatch(
       [{ id: "s0", name: "x", description: "x".repeat(70_000) }],
       context,

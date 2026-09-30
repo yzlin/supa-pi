@@ -30,7 +30,7 @@ afterEach(async () => {
   );
 });
 
-test("loads an ordinary workspace file with Node descriptor semantics", async () => {
+await test("loads an ordinary workspace file with Node descriptor semantics", async () => {
   const workspace = await temporaryDirectory();
   await writeFile(join(workspace, "ordinary.txt"), "ordinary");
 
@@ -40,7 +40,7 @@ test("loads an ordinary workspace file with Node descriptor semantics", async ()
   );
 });
 
-test("rejects an outside file reached by a concurrently replaced parent", async () => {
+await test("rejects an outside file reached by a concurrently replaced parent", async () => {
   const workspace = await temporaryDirectory();
   const outside = await temporaryDirectory();
   const parent = join(workspace, "parent");

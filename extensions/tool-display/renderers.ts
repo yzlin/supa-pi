@@ -1811,14 +1811,16 @@ export async function capturePreviousWriteContent(
   }
 
   try {
-    const stats = await stat(absolutePath).catch(
-      (error: NodeJS.ErrnoException) => {
-        if (error.code === "ENOENT") {
-          return null;
-        }
-        throw error;
-      },
-    );
+    const stats = await stat(absolutePath).catch((error: unknown) => {
+      if (
+        error instanceof Error &&
+        "code" in error &&
+        error.code === "ENOENT"
+      ) {
+        return null;
+      }
+      throw error;
+    });
     if (!stats) {
       return { ok: true, content: null };
     }

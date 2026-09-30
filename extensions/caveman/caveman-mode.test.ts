@@ -9,7 +9,7 @@ import type {
 } from "@earendil-works/pi-coding-agent";
 
 let currentHomeDir = "";
-mock.module("node:os", () => ({
+await mock.module("node:os", () => ({
   homedir: () => currentHomeDir,
 }));
 

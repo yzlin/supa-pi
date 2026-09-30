@@ -169,7 +169,7 @@ interface SessionManagerWithNewSession {
 }
 
 function onSessionSwitch(pi: ExtensionAPI, listener: () => void): void {
-  const on = pi.on as unknown as (
+  const on = pi.on.bind(pi) as unknown as (
     event: "session_switch",
     handler: () => void,
   ) => void;
@@ -321,7 +321,7 @@ async function performHandoff(
 
     doGenerate()
       .then(done)
-      .catch((err) => {
+      .catch((err: unknown) => {
         console.error("Handoff generation failed:", err);
         done(null);
       });
@@ -452,7 +452,7 @@ export default function (pi: ExtensionAPI) {
     // the old agent loop's _runLoop cleanup has fully completed (isStreaming
     // reset, runningPrompt resolved). Without this, we'd have two concurrent
     // _runLoop instances with conflicting state.
-    setTimeout(async () => {
+    const switchSession = async () => {
       if (!(await applyHandoffOptions(pi, ctx, options))) {
         if (ctx.hasUI) {
           ctx.ui.notify(
@@ -473,6 +473,17 @@ export default function (pi: ExtensionAPI) {
         ctx.sessionManager as unknown as SessionManagerWithNewSession
       ).newSession({ parentSession });
       pi.sendUserMessage(prompt);
+    };
+    setTimeout(() => {
+      switchSession().catch((error: unknown) => {
+        console.error("Handoff failed:", error);
+        if (ctx.hasUI) {
+          ctx.ui.notify(
+            `Handoff failed: ${error instanceof Error ? error.message : String(error)}`,
+            "error",
+          );
+        }
+      });
     }, 0);
   });
 

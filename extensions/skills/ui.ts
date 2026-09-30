@@ -97,6 +97,8 @@ function navigationInputForKey(
   key: string | undefined,
 ): SkillsNavigationInput | undefined {
   switch (key) {
+    case undefined:
+      return;
     case "down":
     case "j":
       return "down";
@@ -690,6 +692,8 @@ export function reduceSkillsInstallPickerState(
         },
       };
     }
+    case "confirm":
+      break;
   }
   const confirmedIds = items
     .map((item) => item.id)

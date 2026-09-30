@@ -1128,7 +1128,7 @@ export async function main(): Promise<void> {
 }
 
 if (import.meta.main) {
-  main().catch((error) => {
+  main().catch((error: unknown) => {
     process.stderr.write(
       `${error instanceof Error ? error.message : String(error)}\n`,
     );

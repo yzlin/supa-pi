@@ -229,7 +229,14 @@ describe("runVariant", () => {
         observedSessionId = options?.sessionId;
         initialSystemPrompt = context.messages
           .filter((message) => message.role === "system")
-          .map((message) => message.content)
+          .map((message) =>
+            typeof message.content === "string"
+              ? message.content
+              : message.content
+                  .filter((block) => block.type === "text")
+                  .map((block) => block.text)
+                  .join("\n"),
+          )
           .join("\n");
         initialMessageRoles = context.messages.map((message) => message.role);
         return createSuccessfulStream(selectedModel);

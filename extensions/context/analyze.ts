@@ -503,6 +503,8 @@ export function analyzeMessages({
         );
         break;
       }
+      case "system":
+        break;
     }
   }
 

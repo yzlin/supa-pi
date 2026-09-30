@@ -140,7 +140,7 @@ describe("sift extension", () => {
   it("fails while disabled and enable requires confirmation", async () => {
     const app = runtime();
     const ctx = context();
-    await expect(
+    expect(
       app.tools[0].execute(
         "x",
         { query: "q", paths: ["a"] },
@@ -152,7 +152,7 @@ describe("sift extension", () => {
     await app.commands
       .get("sift")
       ?.handler("enable", context({ confirm: false }));
-    await expect(
+    expect(
       app.tools[0].execute(
         "x",
         { query: "q", paths: ["a"] },
@@ -209,7 +209,7 @@ describe("sift extension", () => {
       .get("sift")
       ?.handler("disable", context({ hasUI: false }));
     expect(enabled).toBe(false);
-    await expect(
+    expect(
       interactive.tools[0].execute(
         "x",
         { query: "q", paths: ["a.txt"] },
@@ -454,10 +454,10 @@ describe("sift extension", () => {
         },
       }),
     );
-    await expect(
+    expect(
       app.commands.get("sift")?.handler("status", context({ hasUI: false })),
     ).rejects.toThrow("Sift config is invalid");
-    await expect(
+    expect(
       app.tools[0].execute(
         "x",
         { query: "q", paths: ["a"] },

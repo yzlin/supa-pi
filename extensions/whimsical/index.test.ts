@@ -20,7 +20,7 @@ import type {
 
 const realHomeDir = osHomedir();
 let currentHomeDir = realHomeDir;
-mock.module("node:os", () => ({
+await mock.module("node:os", () => ({
   default: {
     homedir: () => currentHomeDir,
     tmpdir: osTmpdir,

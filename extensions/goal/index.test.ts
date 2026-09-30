@@ -32,7 +32,7 @@ interface AppendEntry {
   data: unknown;
 }
 
-function createHarness(
+async function createHarness(
   options: { cwd?: string; branchEntries?: unknown[]; reset?: boolean } = {},
 ) {
   const commands = new Map<string, CommandOptions>();
@@ -110,7 +110,7 @@ function createHarness(
     throw new Error("goal command was not registered");
   }
   if (options.reset !== false) {
-    command.handler("clear", makeCtx(true));
+    await command.handler("clear", makeCtx(true));
     statuses.length = 0;
     notifications.length = 0;
     messages.length = 0;
@@ -134,7 +134,7 @@ function createHarness(
   };
 }
 
-function getTool(harness: ReturnType<typeof createHarness>) {
+function getTool(harness: Awaited<ReturnType<typeof createHarness>>) {
   const tool = harness.tools.find(
     (registered) => registered.name === "goal_checkpoint",
   );
@@ -145,17 +145,17 @@ function getTool(harness: ReturnType<typeof createHarness>) {
 }
 
 describe("goal extension", () => {
-  it("registers the command and goal checkpoint tool", () => {
-    const harness = createHarness();
+  it("registers the command and goal checkpoint tool", async () => {
+    const harness = await createHarness();
 
     expect(harness.command.description).toContain("/goal <objective>");
     expect(harness.tools.map((tool) => tool.name)).toContain("goal_checkpoint");
   });
 
-  it("starts classic goals, updates status, and sends prompt immediately when idle", () => {
-    const harness = createHarness();
+  it("starts classic goals, updates status, and sends prompt immediately when idle", async () => {
+    const harness = await createHarness();
 
-    harness.command.handler("write tests", harness.ctx(true));
+    await harness.command.handler("write tests", harness.ctx(true));
 
     expect(harness.getActiveTools()).toEqual([
       "bash",
@@ -176,10 +176,13 @@ describe("goal extension", () => {
     });
   });
 
-  it("queues task mode continuation as follow-up when not idle", () => {
-    const harness = createHarness();
+  it("queues task mode continuation as follow-up when not idle", async () => {
+    const harness = await createHarness();
 
-    harness.command.handler("task --tasks 2 build feature", harness.ctx(false));
+    await harness.command.handler(
+      "task --tasks 2 build feature",
+      harness.ctx(false),
+    );
 
     expect(harness.messages).toHaveLength(1);
     expect(harness.messages[0]?.options).toEqual({ deliverAs: "followUp" });
@@ -195,11 +198,11 @@ describe("goal extension", () => {
     });
   });
 
-  it("reports status/statusbar without starting a new prompt", () => {
-    const harness = createHarness();
+  it("reports status/statusbar without starting a new prompt", async () => {
+    const harness = await createHarness();
 
-    harness.command.handler("status", harness.ctx(true));
-    harness.command.handler("statusbar", harness.ctx(true));
+    await harness.command.handler("status", harness.ctx(true));
+    await harness.command.handler("statusbar", harness.ctx(true));
 
     expect(harness.notifications).toEqual([
       { message: "goal: none", level: "info" },
@@ -208,17 +211,17 @@ describe("goal extension", () => {
     expect(harness.messages).toEqual([]);
   });
 
-  it("pauses, resumes, clears, and restores active tools", () => {
-    const harness = createHarness();
+  it("pauses, resumes, clears, and restores active tools", async () => {
+    const harness = await createHarness();
 
-    harness.command.handler("task --tasks 1 ship", harness.ctx(true));
-    harness.command.handler("pause", harness.ctx(true));
+    await harness.command.handler("task --tasks 1 ship", harness.ctx(true));
+    await harness.command.handler("pause", harness.ctx(true));
     expect(harness.getActiveTools()).toEqual(["bash", "read"]);
     expect(harness.statuses.at(-1)).toBe(
       "goal:paused pending:0 active:1 blocked:0 budget_limited:0 complete:0",
     );
 
-    harness.command.handler("resume", harness.ctx(false));
+    await harness.command.handler("resume", harness.ctx(false));
     expect(harness.getActiveTools()).toEqual([
       "bash",
       "read",
@@ -226,16 +229,16 @@ describe("goal extension", () => {
     ]);
     expect(harness.messages.at(-1)?.options).toEqual({ deliverAs: "followUp" });
 
-    harness.command.handler("clear", harness.ctx(true));
+    await harness.command.handler("clear", harness.ctx(true));
     expect(harness.getActiveTools()).toEqual(["bash", "read"]);
     expect(harness.statuses.at(-1)).toBeUndefined();
   });
 
-  it("stops like clear and restores active tools", () => {
-    const harness = createHarness();
+  it("stops like clear and restores active tools", async () => {
+    const harness = await createHarness();
 
-    harness.command.handler("task --tasks 1 ship", harness.ctx(true));
-    harness.command.handler("stop", harness.ctx(true));
+    await harness.command.handler("task --tasks 1 ship", harness.ctx(true));
+    await harness.command.handler("stop", harness.ctx(true));
 
     expect(harness.getActiveTools()).toEqual(["bash", "read"]);
     expect(harness.statuses.at(-1)).toBeUndefined();
@@ -246,10 +249,10 @@ describe("goal extension", () => {
   });
 
   it("goal_checkpoint persists valid status patches and rejects budget rewrites", async () => {
-    const harness = createHarness();
+    const harness = await createHarness();
     const tool = getTool(harness);
 
-    harness.command.handler("task --tasks 1 ship", harness.ctx(true));
+    await harness.command.handler("task --tasks 1 ship", harness.ctx(true));
     const rewriteResult = await tool.execute?.(
       "call-rewrite",
       {
@@ -295,10 +298,10 @@ describe("goal extension", () => {
   });
 
   it("adds task budget on resume after budget limit", async () => {
-    const harness = createHarness();
+    const harness = await createHarness();
     const tool = getTool(harness);
 
-    harness.command.handler("task --tasks 1 ship", harness.ctx(true));
+    await harness.command.handler("task --tasks 1 ship", harness.ctx(true));
     await tool.execute?.(
       "call-budget",
       { status: "budget_limited" },
@@ -307,7 +310,7 @@ describe("goal extension", () => {
       harness.ctx(true),
     );
 
-    harness.command.handler("resume --tasks 2", harness.ctx(true));
+    await harness.command.handler("resume --tasks 2", harness.ctx(true));
 
     expect(harness.messages.at(-1)?.message).toContain(
       "You are executing goal task task-1: Task 1",
@@ -317,14 +320,20 @@ describe("goal extension", () => {
     );
   });
 
-  it("restores active goals on reload as paused from session checkpoint", () => {
-    const initial = createHarness();
-    initial.command.handler("task --tasks 1 reload me", initial.ctx(true));
+  it("restores active goals on reload as paused from session checkpoint", async () => {
+    const initial = await createHarness();
+    await initial.command.handler(
+      "task --tasks 1 reload me",
+      initial.ctx(true),
+    );
     const state = initial.appendEntries.at(-1);
-    const goalId = (state?.data as { goalId: string }).goalId;
+    if (!state) {
+      throw new Error("goal state was not persisted");
+    }
+    const goalId = (state.data as { goalId: string }).goalId;
     expect(goalId).toBeTruthy();
 
-    const restored = createHarness({
+    const restored = await createHarness({
       cwd: initial.cwd,
       branchEntries: [
         { type: "custom", customType: "goal-state", data: state?.data },
@@ -345,11 +354,14 @@ describe("goal extension", () => {
     ).toContain('"status": "paused"');
   });
 
-  it("does not expose active goal state across cwd boundaries", () => {
-    const initial = createHarness();
-    initial.command.handler("task --tasks 1 private goal", initial.ctx(true));
+  it("does not expose active goal state across cwd boundaries", async () => {
+    const initial = await createHarness();
+    await initial.command.handler(
+      "task --tasks 1 private goal",
+      initial.ctx(true),
+    );
     const state = initial.appendEntries.at(-1);
-    const other = createHarness({
+    const other = await createHarness({
       branchEntries: [
         { type: "custom", customType: "goal-state", data: state?.data },
       ],
@@ -366,9 +378,9 @@ describe("goal extension", () => {
   });
 
   it("queues autonomous continuation on agent end", async () => {
-    const harness = createHarness();
+    const harness = await createHarness();
 
-    harness.command.handler("write tests", harness.ctx(true));
+    await harness.command.handler("write tests", harness.ctx(true));
     harness.handlers.get("agent_end")?.({}, harness.ctx(true));
     await Promise.resolve();
 

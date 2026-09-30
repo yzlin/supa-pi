@@ -64,19 +64,15 @@ describe("init-deep command", () => {
 
     expect(harness.sentUserMessages).toHaveLength(1);
     expect(harness.sentUserMessages[0]?.options).toBeUndefined();
-    expect(String(harness.sentUserMessages[0]?.content)).toContain(
+    expect(harness.sentUserMessages[0]?.content).toContain(
       "Resolved command input:",
     );
-    expect(String(harness.sentUserMessages[0]?.content)).toContain(
+    expect(harness.sentUserMessages[0]?.content).toContain(
       `target root: ${path.join(process.cwd(), "extensions")}`,
     );
-    expect(String(harness.sentUserMessages[0]?.content)).toContain(
-      "mode: create-new",
-    );
-    expect(String(harness.sentUserMessages[0]?.content)).toContain(
-      "max depth: 2",
-    );
-    expect(String(harness.sentUserMessages[0]?.content)).toContain(
+    expect(harness.sentUserMessages[0]?.content).toContain("mode: create-new");
+    expect(harness.sentUserMessages[0]?.content).toContain("max depth: 2");
+    expect(harness.sentUserMessages[0]?.content).toContain(
       "instruction: focus on extension boundaries",
     );
     expect(harness.notifications).toEqual([]);

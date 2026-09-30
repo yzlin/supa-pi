@@ -280,7 +280,7 @@ async function assertSafeProjectConfigWrite(file: string): Promise<void> {
   const piDirectory = path.dirname(absoluteFile);
   const piStat: Stats | undefined = await fs
     .lstat(piDirectory)
-    .catch((error): Stats | undefined => {
+    .catch((error: unknown): Stats | undefined => {
       if ((error as NodeJS.ErrnoException).code === "ENOENT") {
         return;
       }
@@ -300,12 +300,14 @@ async function assertSafeProjectConfigWrite(file: string): Promise<void> {
     );
   }
 
-  const resolvedFile = await fs.realpath(absoluteFile).catch((error) => {
-    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
-      return absoluteFile;
-    }
-    throw error;
-  });
+  const resolvedFile = await fs
+    .realpath(absoluteFile)
+    .catch((error: unknown) => {
+      if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+        return absoluteFile;
+      }
+      throw error;
+    });
   if (
     !isWithin(canonicalRoot, resolvedFile) ||
     resolvedFile === path.resolve(getGlobalReviewConfigPath())
@@ -326,7 +328,7 @@ export async function writeReviewConfigField(
   if (project) {
     await assertSafeProjectConfigWrite(file);
   }
-  return await withFileLock(file, async () => {
+  return withFileLock(file, async () => {
     if (project) {
       await assertSafeProjectConfigWrite(file);
     }

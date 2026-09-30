@@ -818,20 +818,20 @@ describe("tool-display renderers", () => {
     writeFileSync(join(cwd, "old.txt"), "old", "utf8");
     writeFileSync(join(cwd, "large.txt"), "x".repeat(512 * 1024 + 1), "utf8");
 
-    await expect(capturePreviousWriteContent(cwd, "new.txt")).resolves.toEqual({
+    expect(capturePreviousWriteContent(cwd, "new.txt")).resolves.toEqual({
       ok: true,
       content: null,
     });
-    await expect(capturePreviousWriteContent(cwd, "old.txt")).resolves.toEqual({
+    expect(capturePreviousWriteContent(cwd, "old.txt")).resolves.toEqual({
       ok: true,
       content: "old",
     });
-    await expect(
-      capturePreviousWriteContent(cwd, "../outside.txt"),
-    ).resolves.toEqual({
-      ok: false,
-      summary: "previous content unavailable: outside workspace",
-    });
+    expect(capturePreviousWriteContent(cwd, "../outside.txt")).resolves.toEqual(
+      {
+        ok: false,
+        summary: "previous content unavailable: outside workspace",
+      },
+    );
     const large = await capturePreviousWriteContent(cwd, "large.txt");
     expect(large.ok).toBe(false);
     expect(large.ok ? "" : large.summary).toContain(

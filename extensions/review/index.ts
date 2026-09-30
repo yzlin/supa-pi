@@ -374,7 +374,7 @@ async function getMergeBase(
   branch: string,
   signal?: AbortSignal,
 ): Promise<string | null> {
-  return await getSharedMergeBase(createGitExec(pi, signal), branch);
+  return getSharedMergeBase(createGitExec(pi, signal), branch);
 }
 
 /**
@@ -820,6 +820,10 @@ const MODEL_CONFIG_FIELDS = [
 ] as const;
 type ModelConfigAction = (typeof MODEL_CONFIG_ACTIONS)[number];
 type ModelConfigField = (typeof MODEL_CONFIG_FIELDS)[number];
+
+function isModelConfigAction(value: string): value is ModelConfigAction {
+  return MODEL_CONFIG_ACTIONS.includes(value as ModelConfigAction);
+}
 
 function modelConfigField(action: ModelConfigAction): ModelConfigField {
   if (action.endsWith("ReviewerPanel")) {
@@ -1503,7 +1507,10 @@ export default function reviewExtension(pi: ExtensionAPI) {
     REVIEW_REPORT_MESSAGE_TYPE,
     (message, { outputPad }) =>
       new Markdown(
-        String(message.details?.report ?? message.content ?? ""),
+        message.details?.report ??
+          (typeof message.content === "string"
+            ? message.content
+            : extractTextContent(message.content)),
         outputPad,
         0,
         getMarkdownTheme(),
@@ -1886,8 +1893,8 @@ export default function reviewExtension(pi: ExtensionAPI) {
         result = selectedAction;
       }
 
-      if (MODEL_CONFIG_ACTIONS.includes(result as ModelConfigAction)) {
-        const action = result as ModelConfigAction;
+      if (isModelConfigAction(result)) {
+        const action = result;
         const project = action.startsWith("project");
         const field = modelConfigField(action);
         const layer = project ? resolvedConfig.project : resolvedConfig.global;
@@ -2354,7 +2361,7 @@ export default function reviewExtension(pi: ExtensionAPI) {
   }
 
   async function getChangedPaths(target: ReviewTarget): Promise<string[]> {
-    return await getSharedChangedPaths(target, createGitExec(pi));
+    return getSharedChangedPaths(target, createGitExec(pi));
   }
 
   async function detectReviewers(
@@ -2504,7 +2511,7 @@ export default function reviewExtension(pi: ExtensionAPI) {
       return null;
     }
 
-    return await resolvePullRequestTarget(ctx, prRef, {
+    return resolvePullRequestTarget(ctx, prRef, {
       skipInitialPendingChangesCheck: true,
     });
   }
@@ -2717,7 +2724,7 @@ export default function reviewExtension(pi: ExtensionAPI) {
     const controller = new AbortController();
     const promise = executeReview(ctx, target, options, controller)
       .then(() => undefined)
-      .catch((error) => {
+      .catch((error: unknown) => {
         if (!(controller.signal.aborted || sessionShuttingDown)) {
           ctx.ui.notify(
             error instanceof Error ? error.message : String(error),
@@ -2829,7 +2836,7 @@ export default function reviewExtension(pi: ExtensionAPI) {
     ctx: ExtensionContext,
     ref: string,
   ): Promise<ReviewTarget | null> {
-    return await resolvePullRequestTarget(ctx, ref);
+    return resolvePullRequestTarget(ctx, ref);
   }
 
   // Register the /review command

@@ -72,11 +72,8 @@ export default function rulesExtension(pi: ExtensionAPI) {
     const prompt = fs.readFileSync(promptPath, "utf8").trim();
 
     return {
-      systemPrompt:
-        event.systemPrompt +
-        "\n\n" +
-        prompt +
-        (userRuleFiles.length > 0
+      systemPrompt: `${event.systemPrompt}\n\n${prompt}${
+        userRuleFiles.length > 0
           ? `
 <rules>
 
@@ -86,8 +83,9 @@ The following user rules are available:
 
 ${userRuleFiles.map((f) => `- ${path.join(USER_RULES_DIR, f)}`).join("\n")}
 `
-          : "") +
-        (projectRuleFiles.length > 0
+          : ""
+      }${
+        projectRuleFiles.length > 0
           ? `
 
 ## Project Rules
@@ -96,8 +94,8 @@ The following project rules are available:
 
 ${projectRuleFiles.map((f) => `- ${path.join(".pi", "rules", f)}`).join("\n")}
 `
-          : "") +
-        `
+          : ""
+      }
 
 When working on tasks related to these rules, use the read tool to load the relevant rule files for guidance.
 </rules>

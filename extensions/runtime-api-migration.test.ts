@@ -102,12 +102,12 @@ describe("Pi 0.84 runtime APIs", () => {
       ui: {
         custom(render: (...args: unknown[]) => unknown) {
           return new Promise((resolve) => {
-            let loader: { stop?: () => void } | undefined;
+            const loader: { current?: { stop?: () => void } } = {};
             const done = (value: unknown) => {
-              loader?.stop?.();
+              loader.current?.stop?.();
               resolve(value);
             };
-            loader = render(
+            loader.current = render(
               {
                 requestRender() {
                   // Rendering is not observed by this regression.
@@ -142,7 +142,7 @@ describe("Pi 0.84 runtime APIs", () => {
     expect(completionCalls).toHaveLength(1);
     expect(completionCalls[0]?.[0]).toBe(model);
     expect(
-      (completionCalls[0]?.[2] as { signal?: AbortSignal }).signal,
+      (completionCalls[0]?.[2] as { signal?: AbortSignal } | undefined)?.signal,
     ).toBeInstanceOf(AbortSignal);
     expect(replacementCalls).toEqual(["sendUserMessage"]);
     expect(oldCalls).toEqual([]);
@@ -217,109 +217,116 @@ describe("Pi 0.84 runtime APIs", () => {
     expect(customCalls).toBe(0);
   });
 
-  it("aborts deferred handoff when the requested model cannot be applied", async () => {
-    let tool:
-      | {
-          execute: (...args: unknown[]) => Promise<{ content: unknown[] }>;
-        }
-      | undefined;
-    let agentEnd:
-      | ((event: unknown, ctx: Record<string, unknown>) => void)
-      | undefined;
-    let newSessionCalls = 0;
-    let sendCalls = 0;
-    const notifications: [string, string][] = [];
-    const requestedModel = { provider: "test", id: "requested" };
-    const pi = {
-      on(
-        event: string,
-        handler: (event: unknown, ctx: Record<string, unknown>) => void,
-      ) {
-        if (event === "agent_end") {
-          agentEnd = handler;
-        }
-      },
-      registerCommand() {
-        // Command path is outside this regression.
-      },
-      registerTool(registeredTool: typeof tool) {
-        tool = registeredTool;
-      },
-      setModel() {
-        return Promise.resolve(false);
-      },
-      sendUserMessage() {
-        sendCalls++;
-      },
-    } as unknown as ExtensionAPI;
-    handoffExtension(pi);
+  it.each([false, true])(
+    "aborts deferred handoff when model application fails (rejects=%s)",
+    async (rejects) => {
+      let tool:
+        | {
+            execute: (...args: unknown[]) => Promise<{ content: unknown[] }>;
+          }
+        | undefined;
+      let agentEnd:
+        | ((event: unknown, ctx: Record<string, unknown>) => void)
+        | undefined;
+      let newSessionCalls = 0;
+      let sendCalls = 0;
+      const notifications: [string, string][] = [];
+      const requestedModel = { provider: "test", id: "requested" };
+      const pi = {
+        on(
+          event: string,
+          handler: (event: unknown, ctx: Record<string, unknown>) => void,
+        ) {
+          if (event === "agent_end") {
+            agentEnd = handler;
+          }
+        },
+        registerCommand() {
+          // Command path is outside this regression.
+        },
+        registerTool(registeredTool: typeof tool) {
+          tool = registeredTool;
+        },
+        setModel() {
+          return rejects
+            ? Promise.reject(new Error("model unavailable"))
+            : Promise.resolve(false);
+        },
+        sendUserMessage() {
+          sendCalls++;
+        },
+      } as unknown as ExtensionAPI;
+      handoffExtension(pi);
 
-    const ctx = {
-      hasUI: true,
-      model,
-      scopedModels: [{ model: requestedModel, thinkingLevel: "low" }],
-      modelRegistry: {
-        find() {
-          return requestedModel;
+      const ctx = {
+        hasUI: true,
+        model,
+        scopedModels: [{ model: requestedModel, thinkingLevel: "low" }],
+        modelRegistry: {
+          find() {
+            return requestedModel;
+          },
+          complete() {
+            return assistantResponse("# Handoff\n\nContinue safely.");
+          },
         },
-        complete() {
-          return assistantResponse("# Handoff\n\nContinue safely.");
+        sessionManager: {
+          getBranch() {
+            return [
+              { type: "message", message: { role: "user", content: "Old" } },
+            ];
+          },
+          getSessionFile() {
+            return "/tmp/parent.jsonl";
+          },
+          newSession() {
+            newSessionCalls++;
+          },
         },
-      },
-      sessionManager: {
-        getBranch() {
-          return [
-            { type: "message", message: { role: "user", content: "Old" } },
-          ];
-        },
-        getSessionFile() {
-          return "/tmp/parent.jsonl";
-        },
-        newSession() {
-          newSessionCalls++;
-        },
-      },
-      ui: {
-        custom(render: (...args: unknown[]) => unknown) {
-          return new Promise((resolve) => {
-            render(
-              {
-                requestRender() {
-                  // Rendering is not observed by this regression.
+        ui: {
+          custom(render: (...args: unknown[]) => unknown) {
+            return new Promise((resolve) => {
+              render(
+                {
+                  requestRender() {
+                    // Rendering is not observed by this regression.
+                  },
                 },
-              },
-              { fg: (_color: string, text: string) => text },
-              undefined,
-              resolve,
-            );
-          });
+                { fg: (_color: string, text: string) => text },
+                undefined,
+                resolve,
+              );
+            });
+          },
+          notify(message: string, level: string) {
+            notifications.push([message, level]);
+          },
         },
-        notify(message: string, level: string) {
-          notifications.push([message, level]);
-        },
-      },
-    };
+      };
 
-    if (!(tool && agentEnd)) {
-      throw new Error("Expected handoff tool and agent_end handler");
-    }
-    await tool.execute(
-      "call-1",
-      { goal: "continue", model: "test/requested" },
-      undefined,
-      undefined,
-      ctx,
-    );
-    agentEnd({}, ctx);
-    await new Promise((resolve) => setTimeout(resolve, 10));
+      if (!(tool && agentEnd)) {
+        throw new Error("Expected handoff tool and agent_end handler");
+      }
+      await tool.execute(
+        "call-1",
+        { goal: "continue", model: "test/requested" },
+        undefined,
+        undefined,
+        ctx,
+      );
+      agentEnd({}, ctx);
+      await new Promise((resolve) => setTimeout(resolve, 10));
 
-    expect(newSessionCalls).toBe(0);
-    expect(sendCalls).toBe(0);
-    expect(notifications).toContainEqual([
-      "Handoff aborted because the requested model could not be applied.",
-      "error",
-    ]);
-  });
+      expect(newSessionCalls).toBe(0);
+      expect(sendCalls).toBe(0);
+      expect(notifications).toContainEqual([
+        rejects
+          ? "Handoff failed: model unavailable"
+          : "Handoff aborted because the requested model could not be applied.",
+        "error",
+      ]);
+    },
+  );
 
   it("rejects command model overrides before generating or replacing the session", async () => {
     let commandHandler:
@@ -455,6 +462,46 @@ describe("Pi 0.84 runtime APIs", () => {
       );
 
       expect(completionModels).toEqual([scopedModel]);
+    } finally {
+      openSpy.mockRestore();
+      rmSync(cwd, { recursive: true, force: true });
+    }
+  });
+
+  it("renders structured session loading errors as JSON", async () => {
+    const cwd = mkdtempSync(join(tmpdir(), "session-query-error-test-"));
+    const sessionPath = join(cwd, "session.jsonl");
+    writeFileSync(sessionPath, "fixture");
+    const openSpy = spyOn(SessionManager, "open").mockImplementation(() => {
+      // oxlint-disable-next-line eslint/no-throw-literal, typescript/only-throw-error -- Simulate a non-Error thrown by the session-loading boundary.
+      throw { code: "INVALID_SESSION" };
+    });
+    try {
+      let tool:
+        | {
+            execute: (
+              ...args: unknown[]
+            ) => Promise<{ content: Array<{ text: string }> }>;
+          }
+        | undefined;
+      sessionQueryExtension({
+        registerTool(registeredTool: typeof tool) {
+          tool = registeredTool;
+        },
+      } as unknown as ExtensionAPI);
+      if (!tool) {
+        throw new Error("Expected session_query tool");
+      }
+      const result = await tool.execute(
+        "call-1",
+        { sessionPath, question: "Why?" },
+        undefined,
+        undefined,
+        {},
+      );
+      expect(result.content[0]?.text).toBe(
+        'Error loading session: {"code":"INVALID_SESSION"}',
+      );
     } finally {
       openSpy.mockRestore();
       rmSync(cwd, { recursive: true, force: true });

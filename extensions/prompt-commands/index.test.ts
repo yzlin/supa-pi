@@ -491,9 +491,7 @@ describe("raw prompt pipeline commands", () => {
       Object.keys(expectedMessages) as CommandName[],
     );
     for (const name of Object.keys(expectedMessages) as CommandName[]) {
-      await expect(
-        session.steer(`/${name} ${rawArgument}`),
-      ).resolves.toBeUndefined();
+      expect(session.steer(`/${name} ${rawArgument}`)).resolves.toBeUndefined();
     }
     session.dispose();
   });

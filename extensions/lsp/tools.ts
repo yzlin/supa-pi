@@ -130,6 +130,9 @@ function countDiagnosticGroups(
         case DiagnosticSeverity.Hint:
           counts.hints += 1;
           break;
+        case undefined:
+          counts.other += 1;
+          break;
         default:
           counts.other += 1;
           break;
@@ -513,7 +516,7 @@ export function registerLspTool(
             }
 
             default:
-              throw new Error(`Unknown operation: ${operation}`);
+              throw new Error(`Unknown operation: ${String(operation)}`);
           }
         })();
         const metadata = getLspPresentation(result.details);

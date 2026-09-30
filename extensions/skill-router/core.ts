@@ -10,12 +10,12 @@ import {
 } from "./jev";
 import { EXPLICIT_ONLY_SKILLS } from "./policy";
 
-export const MAX_SKILLS = 256,
-  MAX_TEXT_BYTES = 8192,
-  MAX_SELECTED = 8,
-  MAX_SELECTED_BODY_BYTES = 65_536;
-export const SELECT_THRESHOLD = 0.9,
-  REJECT_THRESHOLD = 0.1; // Provisional and intentionally conservative; not calibrated.
+export const MAX_SKILLS = 256;
+export const MAX_TEXT_BYTES = 8192;
+export const MAX_SELECTED = 8;
+export const MAX_SELECTED_BODY_BYTES = 65_536;
+export const SELECT_THRESHOLD = 0.9;
+export const REJECT_THRESHOLD = 0.1; // Provisional and intentionally conservative; not calibrated.
 export interface RouteCandidate extends JevCandidate {
   skill: Skill;
 }

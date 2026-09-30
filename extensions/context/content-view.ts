@@ -110,7 +110,7 @@ function buildBodyLines(
     return lines;
   }
 
-  snapshot.messages.forEach((message, index) => {
+  for (const [index, message] of snapshot.messages.entries()) {
     if (index > 0) {
       lines.push("");
     }
@@ -124,7 +124,7 @@ function buildBodyLines(
         formatLabel,
       ),
     );
-  });
+  }
 
   return lines;
 }

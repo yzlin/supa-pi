@@ -2120,7 +2120,7 @@ describe("changedPromptPaths", () => {
 
   it("fails closed when the changed path set moves during startup snapshot establishment", async () => {
     let discovery = 0;
-    await expect(
+    expect(
       establishChangedPromptSnapshot("/repo", {
         discover: () => {
           discovery += 1;
@@ -2231,7 +2231,7 @@ describe("loadPromptPair", () => {
       join(repository, ".git", "objects", blob.slice(0, 2), blob.slice(2)),
     );
 
-    await expect(loadPromptPair(repository, "prompt.md")).rejects.toThrow(
+    expect(loadPromptPair(repository, "prompt.md")).rejects.toThrow(
       "cannot read HEAD:prompt.md",
     );
   });
@@ -2277,7 +2277,7 @@ describe("loadPromptPair", () => {
     rmSync(join(repository, "prompt.md"));
     symlinkSync(join(external, "secret.txt"), join(repository, "prompt.md"));
 
-    await expect(loadPromptPair(repository, "prompt.md")).rejects.toThrow(
+    expect(loadPromptPair(repository, "prompt.md")).rejects.toThrow(
       "cannot safely read prompt.md",
     );
   });

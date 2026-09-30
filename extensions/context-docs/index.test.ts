@@ -190,18 +190,16 @@ describe("context-docs command registration", () => {
 
     expect(harness.sentUserMessages).toHaveLength(1);
     expect(harness.sentUserMessages[0]?.options).toBeUndefined();
-    expect(String(harness.sentUserMessages[0]?.content)).toContain(
+    expect(harness.sentUserMessages[0]?.content).toContain(
       "Resolved command input:",
     );
-    expect(String(harness.sentUserMessages[0]?.content)).toContain(
+    expect(harness.sentUserMessages[0]?.content).toContain(
       "- command: /context-review",
     );
-    expect(String(harness.sentUserMessages[0]?.content)).toContain(
+    expect(harness.sentUserMessages[0]?.content).toContain(
       `- target root: ${path.join(process.cwd(), "extensions")}`,
     );
-    expect(String(harness.sentUserMessages[0]?.content)).toContain(
-      "- scope: all",
-    );
+    expect(harness.sentUserMessages[0]?.content).toContain("- scope: all");
   });
 
   it("queues a follow-up prompt when busy", async () => {

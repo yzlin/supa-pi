@@ -233,20 +233,14 @@ export function renderProgressPlainLines(
           break;
         }
         case "read":
-          lines.push(
-            `  read ${item.args.file_path || item.args.path || "..."}`,
-          );
-          break;
         case "write":
-          lines.push(
-            `  write ${item.args.file_path || item.args.path || "..."}`,
-          );
+        case "edit": {
+          const path = item.args.file_path || item.args.path || "...";
+          const pathText =
+            typeof path === "string" ? path : JSON.stringify(path);
+          lines.push(`  ${item.name} ${pathText}`);
           break;
-        case "edit":
-          lines.push(
-            `  edit ${item.args.file_path || item.args.path || "..."}`,
-          );
-          break;
+        }
         default:
           lines.push(`  → ${item.name}`);
       }
@@ -377,6 +371,16 @@ export async function runSubagent(
           onProgress(result);
           break;
         }
+        case "agent_end":
+        case "agent_start":
+        case "message_start":
+        case "message_update":
+        case "tool_execution_start":
+        case "tool_execution_update":
+        case "turn_end":
+        case "turn_start":
+          // Other streaming events do not change the display or usage totals.
+          break;
       }
     }
 

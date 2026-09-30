@@ -74,7 +74,7 @@ describe("credentials", () => {
       usable: false,
       reason: "invalid",
     });
-    await expect(invalid.resolve()).rejects.toThrow("unusable");
+    expect(invalid.resolve()).rejects.toThrow("unusable");
     const stored = new CredentialStore({ agentDir: root, env: {} });
     await stored.save(diskKey);
     if (process.platform !== "win32") {
@@ -84,9 +84,9 @@ describe("credentials", () => {
         usable: false,
         reason: "permissions",
       });
-      await expect(stored.resolve()).rejects.toThrow("permissions");
+      expect(stored.resolve()).rejects.toThrow("permissions");
     }
-    await expect(stored.save("bad\nkey-that-is-long-enough")).rejects.toThrow(
+    expect(stored.save("bad\nkey-that-is-long-enough")).rejects.toThrow(
       "valid",
     );
   });
@@ -104,12 +104,12 @@ describe("workspace files", () => {
     await writeFile(join(outside, "secret"), "no");
     await symlink(join(outside, "secret"), join(root, "link"));
     for (const path of [join(outside, "secret"), "link"]) {
-      await expect(loadWorkspaceFile(root, path)).rejects.toThrow("workspace");
+      expect(loadWorkspaceFile(root, path)).rejects.toThrow("workspace");
     }
     await writeFile(join(root, "binary"), new Uint8Array([1, 0, 2]));
     await writeFile(join(root, "empty"), "");
-    await expect(loadWorkspaceFile(root, "binary")).rejects.toThrow("binary");
-    await expect(loadWorkspaceFile(root, "empty")).rejects.toThrow("empty");
+    expect(loadWorkspaceFile(root, "binary")).rejects.toThrow("binary");
+    expect(loadWorkspaceFile(root, "empty")).rejects.toThrow("empty");
     await writeFile(join(root, "large"), "abcdef");
     expect(await loadWorkspaceFile(root, "large", 4)).toMatchObject({
       content: "abcd\n[truncated]",
@@ -121,7 +121,7 @@ describe("workspace files", () => {
       truncated: true,
     });
     await writeFile(join(root, "invalid"), new Uint8Array([0x61, 0xff, 0x62]));
-    await expect(loadWorkspaceFile(root, "invalid")).rejects.toThrow("UTF-8");
+    expect(loadWorkspaceFile(root, "invalid")).rejects.toThrow("UTF-8");
   });
   it("never reads a symlink swapped in after validation", async () => {
     const root = await temp();
@@ -162,7 +162,7 @@ describe("workspace files", () => {
     await writeFile(join(parent, "race.txt"), "inside");
     await writeFile(join(outside, "race.txt"), "outside");
 
-    await expect(
+    expect(
       loadWorkspaceFile(root, "parent/race.txt", undefined, {
         afterRealpath: async () => {
           await rename(parent, original);
@@ -215,17 +215,15 @@ describe("workspace files", () => {
     ] as const;
     for (const [name, content] of credentialFiles) {
       await writeFile(join(root, name), content);
-      await expect(loadWorkspaceFile(root, name)).rejects.toThrow(
-        "sensitive marker",
-      );
+      expect(loadWorkspaceFile(root, name)).rejects.toThrow("sensitive marker");
     }
-    await expect(loadWorkspaceFile(root, ".env.production")).rejects.toThrow(
+    expect(loadWorkspaceFile(root, ".env.production")).rejects.toThrow(
       "not complete",
     );
-    await expect(loadWorkspaceFile(root, "server.pem")).rejects.toThrow(
+    expect(loadWorkspaceFile(root, "server.pem")).rejects.toThrow(
       "sensitive filename",
     );
-    await expect(loadWorkspaceFile(root, "key.txt")).rejects.toThrow(
+    expect(loadWorkspaceFile(root, "key.txt")).rejects.toThrow(
       "sensitive marker",
     );
   });
@@ -292,7 +290,7 @@ describe("Jev client", () => {
         apiKey: "valid-key-1234567",
         fetch: async () => Response.json(value),
       });
-      await expect(malformed.judge("q", "p", "c")).rejects.toThrow(
+      expect(malformed.judge("q", "p", "c")).rejects.toThrow(
         "Malformed Jev response",
       );
     }
@@ -303,22 +301,20 @@ describe("Jev client", () => {
         apiKey: "top-secret-123456",
         fetch: async () => new Response("top-secret server detail", { status }),
       });
-      await expect(client.judge("q", "p", "c")).rejects.toThrow(
+      expect(client.judge("q", "p", "c")).rejects.toThrow(
         status === 401 ? "authentication failed" : "request failed (500)",
       );
-      await expect(client.judge("q", "p", "c")).rejects.not.toThrow(
-        "top-secret",
-      );
+      expect(client.judge("q", "p", "c")).rejects.not.toThrow("top-secret");
     }
     const connection = new JevClient({
       apiKey: "valid-key-1234567",
       fetch: () =>
         Promise.reject(new Error("connection secret=do-not-display")),
     });
-    await expect(connection.judge("q", "p", "c")).rejects.toThrow(
+    expect(connection.judge("q", "p", "c")).rejects.toThrow(
       "Jev connection failed",
     );
-    await expect(connection.judge("q", "p", "c")).rejects.not.toThrow(
+    expect(connection.judge("q", "p", "c")).rejects.not.toThrow(
       "do-not-display",
     );
   });
@@ -328,20 +324,21 @@ describe("Jev client", () => {
       timeoutMs: 5,
       fetch: (_input, init) =>
         new Promise((_resolve, reject) =>
-          init?.signal?.addEventListener("abort", () =>
-            reject(init.signal?.reason),
-          ),
+          init?.signal?.addEventListener("abort", () => {
+            // oxlint-disable-next-line typescript/prefer-promise-reject-errors -- Emulate fetch rejecting with the caller's arbitrary abort reason.
+            reject(init.signal?.reason);
+          }),
         ),
     });
-    await expect(client.judge("q", "p", "c")).rejects.toThrow("timed out");
+    expect(client.judge("q", "p", "c")).rejects.toThrow("timed out");
     const controller = new AbortController();
     controller.abort(new Error("cancel secret=do-not-display"));
-    await expect(
-      client.judge("q", "p", "c", controller.signal),
-    ).rejects.toThrow("Jev request cancelled");
-    await expect(
-      client.judge("q", "p", "c", controller.signal),
-    ).rejects.not.toThrow("do-not-display");
+    expect(client.judge("q", "p", "c", controller.signal)).rejects.toThrow(
+      "Jev request cancelled",
+    );
+    expect(client.judge("q", "p", "c", controller.signal)).rejects.not.toThrow(
+      "do-not-display",
+    );
   });
 });
 
@@ -355,19 +352,19 @@ describe("classification", () => {
       return Promise.resolve({ probability: 1, model: "jev-latest" });
     };
     const budget = new SessionBudget(1);
-    await expect(
+    expect(
       classifyFiles({ cwd: root, query: "", paths: ["a"], budget, judge }),
     ).rejects.toThrow("query");
-    await expect(
+    expect(
       classifyFiles({
         cwd: root,
         query: "q",
-        paths: new Array(21).fill("a"),
+        paths: Array.from({ length: 21 }, () => "a"),
         budget,
         judge,
       }),
     ).rejects.toThrow("20");
-    await expect(
+    expect(
       classifyFiles({
         cwd: root,
         query: "q",
@@ -376,7 +373,7 @@ describe("classification", () => {
         judge,
       }),
     ).rejects.toThrow("unique");
-    await expect(
+    expect(
       classifyFiles({
         cwd: root,
         query: "q",

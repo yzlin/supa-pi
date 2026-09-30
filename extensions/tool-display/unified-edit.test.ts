@@ -128,7 +128,7 @@ describe("local unified-edit parser and planner", () => {
       reader({ "a.txt": "\uFEFFHello — “world”  \r\nkeep\r\n" }),
     );
     expect(plan.changes[0].newText).toBe("\uFEFFchanged\r\nkeep\r\n");
-    await expect(
+    expect(
       buildUnifiedEditPlan(
         "[a.txt]\n@REPLACE\n-same\n+x",
         "/tmp",
@@ -139,7 +139,7 @@ describe("local unified-edit parser and planner", () => {
 
   test("deletion-only replacements require a unique row anchor", async () => {
     for (const content of ["same\nsame\n", "same\nsame"]) {
-      await expect(
+      expect(
         buildUnifiedEditPlan(
           "[a.txt]\n@REPLACE\n-same",
           "/tmp",
@@ -197,7 +197,7 @@ describe("local unified-edit parser and planner", () => {
   });
 
   test("enforces global input, operation, target, and matcher ceilings", async () => {
-    await expect(
+    expect(
       buildUnifiedEditPlan(
         `[a.txt]\n${"\n".repeat(20_000)}`,
         "/tmp",
@@ -210,7 +210,7 @@ describe("local unified-edit parser and planner", () => {
     const operations = Array.from({ length: 1001 }, () => "@APPEND\n+x").join(
       "\n",
     );
-    await expect(
+    expect(
       buildUnifiedEditPlan(
         `[a.txt]\n${operations}`,
         "/tmp",
@@ -220,7 +220,7 @@ describe("local unified-edit parser and planner", () => {
       ),
     ).rejects.toThrow("1000 operations");
 
-    await expect(
+    expect(
       buildUnifiedEditPlan(
         "[a.txt]\n@REPLACE\n-missing\n+x",
         "/tmp",
@@ -232,7 +232,7 @@ describe("local unified-edit parser and planner", () => {
   });
 
   test("rejects contextless insertion-only patch hunks", async () => {
-    await expect(
+    expect(
       buildUnifiedEditPlan(
         `*** Begin Patch
 *** Update File: a.txt
@@ -243,7 +243,7 @@ describe("local unified-edit parser and planner", () => {
       ),
     ).rejects.toThrow("needs locating context");
 
-    await expect(
+    expect(
       buildUnifiedEditPlan(
         `*** Begin Patch
 *** Update File: a.txt
@@ -296,7 +296,7 @@ describe("local unified-edit parser and planner", () => {
   });
 
   test("does not choose ambiguous patch hunks", async () => {
-    await expect(
+    expect(
       buildUnifiedEditPlan(
         `*** Begin Patch
 *** Update File: a.txt

@@ -148,7 +148,7 @@ describe("extension registration compatibility", () => {
     }
     const edit = harness.tools.find((tool) => tool.name === "edit");
 
-    await expect(
+    expect(
       edit?.execute(
         "tool-call-id",
         {

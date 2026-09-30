@@ -108,7 +108,7 @@ function withSkillOperationPromptsSuspended(
     },
   };
   if (typeof ctx.ui.custom === "function") {
-    const custom = ctx.ui.custom;
+    const custom = ctx.ui.custom.bind(ctx.ui);
     ui.custom = (async (...args: Parameters<typeof custom>) => {
       suspend();
       const result = await custom(...args);
@@ -1337,7 +1337,7 @@ export default function skillsExtension(pi: ExtensionAPI): void {
           case "remove":
             await removeManaged(activityCtx, operand);
             break;
-          default:
+          case "unknown":
             activity.suspendBeforePrompt();
             ctx.ui.notify(
               "Usage: /skill list|search|install|update|remove",

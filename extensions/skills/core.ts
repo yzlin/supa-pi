@@ -2106,6 +2106,12 @@ function numericInstallCount(value: unknown): number | undefined {
     : undefined;
 }
 
+function searchMetadataText(value: unknown): string {
+  return typeof value === "object" && value !== null
+    ? JSON.stringify(value)
+    : String(value);
+}
+
 function skillsFromJsonPayload(payload: unknown): RemoteSkillMetadata[] {
   let rows: unknown[] = [];
   if (Array.isArray(payload)) {
@@ -2114,12 +2120,14 @@ function skillsFromJsonPayload(payload: unknown): RemoteSkillMetadata[] {
     rows = payload.skills;
   }
   return rows.filter(isRecord).map((row) => {
-    const source = String(row.source ?? row.url ?? row.repository ?? "");
+    const source = searchMetadataText(
+      row.source ?? row.url ?? row.repository ?? "",
+    );
     const skillId = typeof row.skillId === "string" ? row.skillId : undefined;
-    const name = String(row.name ?? skillId ?? "");
+    const name = searchMetadataText(row.name ?? skillId ?? "");
     return {
       name,
-      description: String(row.description ?? source),
+      description: searchMetadataText(row.description ?? source),
       source,
       skillName: name || skillId,
       installs: numericInstallCount(row.installs),

@@ -62,6 +62,7 @@ function captureTool(clients: DiagnosticClientMock[]): RegisteredTool {
 
 function executeDiagnostics(tool: RegisteredTool): Promise<unknown> {
   return Promise.resolve(
+    // oxlint-disable-next-line typescript/unbound-method -- Reflect.apply explicitly supplies the method receiver.
     Reflect.apply(tool.execute, tool, [
       "test-call",
       { operation: "diagnostics", filePath: "src/example.ts" },

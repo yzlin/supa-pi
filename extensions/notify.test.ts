@@ -45,6 +45,7 @@ const expectHerdrFailure = (runtime: TestRuntime) => {
 
   handler({ messages: [{ role: "assistant", content: "Finished" }] }, context);
 
+  // oxlint-disable-next-line typescript/unbound-method -- Inspecting a mock, not invoking an unbound method.
   expect(runtime.write).not.toHaveBeenCalled();
   expect(context.ui.notify).toHaveBeenCalledWith(
     "Desktop notification failed.",
@@ -67,11 +68,13 @@ describe("notify extension", () => {
 
     handler({ messages: [{ role: "assistant", content: "Finished" }] });
 
+    // oxlint-disable-next-line typescript/unbound-method -- Inspecting a mock, not invoking an unbound method.
     expect(runtime.execFile).toHaveBeenCalledWith(
       "herdr",
       ["notification", "show", "π", "--body", "Finished", "--sound", "none"],
       expect.any(Function),
     );
+    // oxlint-disable-next-line typescript/unbound-method -- Inspecting a mock, not invoking an unbound method.
     expect(runtime.write).not.toHaveBeenCalled();
   });
 
@@ -81,6 +84,7 @@ describe("notify extension", () => {
 
     handler({ messages: [] });
 
+    // oxlint-disable-next-line typescript/unbound-method -- Inspecting a mock, not invoking an unbound method.
     expect(runtime.execFile).toHaveBeenCalledWith(
       "herdr",
       [
@@ -115,6 +119,7 @@ describe("notify extension", () => {
       ],
     });
 
+    // oxlint-disable-next-line typescript/unbound-method -- Inspecting a mock, not invoking an unbound method.
     expect(runtime.execFile).toHaveBeenCalledWith(
       "herdr",
       [
@@ -137,12 +142,14 @@ describe("notify extension", () => {
     handler({ messages: [{ role: "assistant", content: "First" }] });
     handler({ messages: [{ role: "assistant", content: "Second" }] });
 
+    // oxlint-disable-next-line typescript/unbound-method -- Inspecting a mock, not invoking an unbound method.
     expect(runtime.execFile).toHaveBeenNthCalledWith(
       1,
       "herdr",
       ["notification", "show", "π", "--body", "First", "--sound", "none"],
       expect.any(Function),
     );
+    // oxlint-disable-next-line typescript/unbound-method -- Inspecting a mock, not invoking an unbound method.
     expect(runtime.execFile).toHaveBeenNthCalledWith(
       2,
       "herdr",
@@ -199,7 +206,9 @@ describe("notify extension", () => {
 
     handler({ messages: [{ role: "assistant", content: "Finished" }] });
 
+    // oxlint-disable-next-line typescript/unbound-method -- Inspecting a mock, not invoking an unbound method.
     expect(runtime.execFile).not.toHaveBeenCalled();
+    // oxlint-disable-next-line typescript/unbound-method -- Inspecting a mock, not invoking an unbound method.
     expect(runtime.write).toHaveBeenCalledWith(oscNotification);
   });
 });

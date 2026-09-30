@@ -78,7 +78,7 @@ export function registerModelProfiles(
     ctx: ExtensionContext,
     action: () => void | Promise<void>,
   ): Promise<void> {
-    queue = queue.then(action).catch((error) => {
+    queue = queue.then(action).catch((error: unknown) => {
       ctx.ui.notify(
         String(error instanceof Error ? error.message : error),
         "error",

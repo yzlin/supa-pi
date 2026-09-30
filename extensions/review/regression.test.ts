@@ -396,7 +396,7 @@ describe.serial("review direct targets", () => {
     const runtime = createMockPiRuntime(async (_command, args, options) => {
       if (args.join(" ") === "status --porcelain --untracked-files=all") {
         preflightStarted = true;
-        return await new Promise((resolve) => {
+        return new Promise((resolve) => {
           options?.signal?.addEventListener(
             "abort",
             () => {

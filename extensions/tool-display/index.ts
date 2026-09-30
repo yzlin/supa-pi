@@ -79,6 +79,7 @@ export default function toolDisplayExtension(pi: ExtensionAPI): void {
   pi.on("session_start", (_event, ctx) => {
     reloadSession(ctx.cwd);
   });
+  // oxlint-disable-next-line typescript/unbound-method -- Reflect.apply explicitly supplies pi as the method's receiver.
   Reflect.apply(pi.on, pi, [
     "session_switch",
     (_event: { type: "session_switch" }, ctx: ExtensionContext) => {

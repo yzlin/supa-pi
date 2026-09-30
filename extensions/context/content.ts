@@ -217,6 +217,8 @@ function normalizeMessage(
         metadata: [`tokensBefore=${message.tokensBefore}`],
         blocks: [{ label: "summary", content: message.summary || "(empty)" }],
       };
+    case "system":
+      break;
   }
 
   return {

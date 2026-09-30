@@ -291,7 +291,7 @@ describe("ask custom UI execution", () => {
   });
 
   it("propagates errors thrown by the custom UI", async () => {
-    await expect(
+    expect(
       executeAskWithCustom(() => {
         throw new Error("custom UI failed");
       }),
@@ -1064,6 +1064,7 @@ describe("ask reducer and key router", () => {
     };
     const state = createAskRuntimeState();
     state.noteDrafts.set("format", "note ".repeat(10_000));
+    // oxlint-disable-next-line typescript/unbound-method -- Preserve the prototype method and invoke it with the original receiver via .call.
     const originalTrim = String.prototype.trim;
     String.prototype.trim = function trimWithoutLongInputs() {
       if (this.length > 1000) {
@@ -1102,6 +1103,7 @@ describe("ask reducer and key router", () => {
         },
       ],
     };
+    // oxlint-disable-next-line typescript/unbound-method -- Preserve the prototype method and invoke it with the original receiver via .call.
     const originalTrim = String.prototype.trim;
     String.prototype.trim = function trimWithoutLongInputs() {
       if (this.length > 1000) {
@@ -1439,6 +1441,7 @@ describe("ask reducer and key router", () => {
         },
       ],
     };
+    // oxlint-disable-next-line typescript/unbound-method -- Preserve the prototype method and invoke it with the original receiver via .call.
     const originalSplit = String.prototype.split;
     let largeSplitCount = 0;
     String.prototype.split = function split(separator, limit) {

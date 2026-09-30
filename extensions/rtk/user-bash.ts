@@ -42,70 +42,68 @@ export function createLocalBashOperations(): BashOperations {
 
       const { shell, args } = getShellConfig();
 
-      return await new Promise<{ exitCode: number | null }>(
-        (resolve, reject) => {
-          const child = spawn(shell, [...args, command], {
-            cwd,
-            detached: true,
-            env: env ?? process.env,
-            stdio: ["ignore", "pipe", "pipe"],
-          });
+      return new Promise<{ exitCode: number | null }>((resolve, reject) => {
+        const child = spawn(shell, [...args, command], {
+          cwd,
+          detached: true,
+          env: env ?? process.env,
+          stdio: ["ignore", "pipe", "pipe"],
+        });
 
-          let timedOut = false;
-          let timeoutHandle: NodeJS.Timeout | undefined;
+        let timedOut = false;
+        let timeoutHandle: NodeJS.Timeout | undefined;
 
-          if (timeout !== undefined && timeout > 0) {
-            timeoutHandle = setTimeout(() => {
-              timedOut = true;
-              killChild(child);
-            }, timeout * 1000);
-          }
-
-          child.stdout?.on("data", onData);
-          child.stderr?.on("data", onData);
-
-          child.on("error", (error) => {
-            if (timeoutHandle) {
-              clearTimeout(timeoutHandle);
-            }
-
-            signal?.removeEventListener("abort", onAbort);
-            reject(error);
-          });
-
-          const onAbort = () => {
+        if (timeout !== undefined && timeout > 0) {
+          timeoutHandle = setTimeout(() => {
+            timedOut = true;
             killChild(child);
-          };
+          }, timeout * 1000);
+        }
 
-          if (signal) {
-            if (signal.aborted) {
-              onAbort();
-            } else {
-              signal.addEventListener("abort", onAbort, { once: true });
-            }
+        child.stdout?.on("data", onData);
+        child.stderr?.on("data", onData);
+
+        child.on("error", (error) => {
+          if (timeoutHandle) {
+            clearTimeout(timeoutHandle);
           }
 
-          child.on("close", (exitCode) => {
-            if (timeoutHandle) {
-              clearTimeout(timeoutHandle);
-            }
+          signal?.removeEventListener("abort", onAbort);
+          reject(error);
+        });
 
-            signal?.removeEventListener("abort", onAbort);
+        const onAbort = () => {
+          killChild(child);
+        };
 
-            if (signal?.aborted) {
-              reject(new Error("aborted"));
-              return;
-            }
+        if (signal) {
+          if (signal.aborted) {
+            onAbort();
+          } else {
+            signal.addEventListener("abort", onAbort, { once: true });
+          }
+        }
 
-            if (timedOut) {
-              reject(new Error(`timeout:${timeout}`));
-              return;
-            }
+        child.on("close", (exitCode) => {
+          if (timeoutHandle) {
+            clearTimeout(timeoutHandle);
+          }
 
-            resolve({ exitCode });
-          });
-        },
-      );
+          signal?.removeEventListener("abort", onAbort);
+
+          if (signal?.aborted) {
+            reject(new Error("aborted"));
+            return;
+          }
+
+          if (timedOut) {
+            reject(new Error(`timeout:${timeout}`));
+            return;
+          }
+
+          resolve({ exitCode });
+        });
+      });
     },
   };
 }
