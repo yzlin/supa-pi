@@ -22,7 +22,7 @@ function createHarness() {
       options: {
         handler: (...args: any[]) => unknown;
         getArgumentCompletions?: (prefix: string) => unknown;
-      }
+      },
     ) {
       commands.set(name, options);
     },
@@ -58,19 +58,19 @@ describe("smart-docs command", () => {
     expect(harness.command?.handler).toBeDefined();
     await harness.command?.handler(
       "./extensions -- focus on command architecture",
-      harness.ctx as never
+      harness.ctx as never,
     );
 
     expect(harness.sentUserMessages).toHaveLength(1);
     expect(harness.sentUserMessages[0]?.options).toBeUndefined();
     expect(String(harness.sentUserMessages[0]?.content)).toContain(
-      "Resolved command input:"
+      "Resolved command input:",
     );
     expect(String(harness.sentUserMessages[0]?.content)).toContain(
-      `target root: ${path.join(process.cwd(), "extensions")}`
+      `target root: ${path.join(process.cwd(), "extensions")}`,
     );
     expect(String(harness.sentUserMessages[0]?.content)).toContain(
-      "instruction: focus on command architecture"
+      "instruction: focus on command architecture",
     );
     expect(harness.notifications).toEqual([]);
   });
@@ -125,10 +125,10 @@ describe("smart-docs completions", () => {
 
     expect(completions).not.toBeNull();
     expect(completions).toContainEqual(
-      expect.objectContaining({ value: "--out ", label: "--out" })
+      expect.objectContaining({ value: "--out ", label: "--out" }),
     );
     expect(completions).toContainEqual(
-      expect.objectContaining({ value: "extensions/", label: "extensions/" })
+      expect.objectContaining({ value: "extensions/", label: "extensions/" }),
     );
   });
 
@@ -165,28 +165,28 @@ describe("smart-docs completions", () => {
     const completions = getSmartDocsArgumentCompletions("./extensions ", cwd);
 
     expect(completions).toContainEqual(
-      expect.objectContaining({ value: "--update", label: "--update" })
+      expect.objectContaining({ value: "--update", label: "--update" }),
     );
     expect(completions).not.toContainEqual(
-      expect.objectContaining({ value: "extensions/", label: "extensions/" })
+      expect.objectContaining({ value: "extensions/", label: "extensions/" }),
     );
   });
 
   it("suggests output directory paths relative to the resolved target", () => {
     const completions = getSmartDocsArgumentCompletions(
       "./extensions --out s",
-      cwd
+      cwd,
     );
 
     expect(completions).toContainEqual(
-      expect.objectContaining({ value: "smart-docs/", label: "smart-docs/" })
+      expect.objectContaining({ value: "smart-docs/", label: "smart-docs/" }),
     );
   });
 
   it("stops suggesting once freeform instruction text begins", () => {
     const completions = getSmartDocsArgumentCompletions(
       "./extensions -- architecture",
-      cwd
+      cwd,
     );
 
     expect(completions).toBeNull();

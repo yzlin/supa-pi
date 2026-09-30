@@ -9,7 +9,7 @@ const safeguardsPath = join(
   "skills",
   "context-docs",
   "references",
-  "documentation-safeguards.md"
+  "documentation-safeguards.md",
 );
 
 const originalDocumentationSafeguards = `## Documentation and codemap safeguards
@@ -34,10 +34,10 @@ describe("context-docs selective reference contract", () => {
     const link = "references/documentation-safeguards.md";
 
     expect(skill).toContain(
-      `For README, guide, codemap, or durable context changes, load and follow the [Documentation and codemap safeguards](${link}) reference as part of this workflow.`
+      `For README, guide, codemap, or durable context changes, load and follow the [Documentation and codemap safeguards](${link}) reference as part of this workflow.`,
     );
     expect(
-      skill.match(/references\/documentation-safeguards\.md/g)
+      skill.match(/references\/documentation-safeguards\.md/g),
     ).toHaveLength(1);
 
     const referencePath = resolve(dirname(skillPath), link);
@@ -47,14 +47,14 @@ describe("context-docs selective reference contract", () => {
 
   it("routes ordinary documentation work directly to the reference", () => {
     const rule = read(
-      join(repositoryRoot, "rules", "common", "development-workflow.md")
+      join(repositoryRoot, "rules", "common", "development-workflow.md"),
     );
 
     expect(rule).toContain(
-      "../../skills/context-docs/references/documentation-safeguards.md"
+      "../../skills/context-docs/references/documentation-safeguards.md",
     );
     expect(rule).not.toContain(
-      "skills/context-docs/SKILL.md#documentation-and-codemap-safeguards"
+      "skills/context-docs/SKILL.md#documentation-and-codemap-safeguards",
     );
   });
 
@@ -64,10 +64,10 @@ describe("context-docs selective reference contract", () => {
 
     expect(safeguards).toBe(originalDocumentationSafeguards);
     expect(skill).not.toContain(
-      "- Treat code, configuration, scripts, and existing project context as sources of truth."
+      "- Treat code, configuration, scripts, and existing project context as sources of truth.",
     );
     expect(skill).not.toContain(
-      "- Validate changed links, paths, snippets, and commands where practical"
+      "- Validate changed links, paths, snippets, and commands where practical",
     );
   });
 });

@@ -46,6 +46,7 @@ The repository is optimized for local workflow quality and maintainable agent be
 - Do not document secrets, credentials, tokens, private keys, or raw sensitive logs.
 - Root project license is MIT. Copied or adapted upstream materials must carry source and license notices in durable docs or README entries.
 - Domain modeling is skill composition, not a command or production runtime registration; grilling invokes it only when explicit domain signals arise.
+- Linting and formatting use oxlint (type-aware) and oxfmt extending Ultracite presets, tuned to prior Biome intent (Biome-equivalent strictness, Biome-style output, grouped imports) over all repo TypeScript and JSON; `bun run check` is the gate. Vendored upstream skill examples stay verbatim.
 
 ## Upstream-native execution
 

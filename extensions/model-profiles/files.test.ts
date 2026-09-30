@@ -33,7 +33,7 @@ function plan(overrides = true) {
   return planAgents(
     readRepoAgents(repo),
     overrides ? { agents: { worker: { model: "p/new" } } } : {},
-    observeLive(live, repo)
+    observeLive(live, repo),
   );
 }
 function apply(overrides = true) {
@@ -101,7 +101,7 @@ test("foreign directory symlink and repo aliases fail safely", () => {
   const alias = join(root, "alias");
   symlinkSync(repo, alias);
   expect(() => applyPlan(join(alias, "nested"), repo, actions)).toThrow(
-    "repository agents"
+    "repository agents",
   );
   mkdirSync(join(root, "agent"));
   const foreign = join(root, "foreign");

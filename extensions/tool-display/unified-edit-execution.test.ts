@@ -39,7 +39,7 @@ function execute(
     mode?: "tui" | "rpc" | "json" | "print";
     confirm?: (title: string, message: string) => Promise<boolean>;
     signal?: AbortSignal;
-  } = {}
+  } = {},
 ) {
   const mode = options.mode ?? "tui";
   return editTool.execute("call", { text }, options.signal, undefined, {
@@ -59,7 +59,7 @@ describe("unified edit plan execution", () => {
     writeFileSync(target, "\uFEFFold\r\nkeep\r\n");
     const result = await execute(
       dir,
-      `[${pathToFileURL(target).href}]\n@REPLACE\n-old\n+new`
+      `[${pathToFileURL(target).href}]\n@REPLACE\n-old\n+new`,
     );
     expect(readFileSync(target, "utf8")).toBe("\uFEFFnew\r\nkeep\r\n");
     expect(result.details.files).toEqual([pathToFileURL(target).href]);
@@ -76,7 +76,7 @@ describe("unified edit plan execution", () => {
 
     const result = await execute(
       dir,
-      `[large.txt]\n@REPLACE\n-${oldText}\n+${newText}`
+      `[large.txt]\n@REPLACE\n-${oldText}\n+${newText}`,
     );
 
     expect(readFileSync(target, "utf8")).toBe(`${newText}\n`);
@@ -102,8 +102,8 @@ describe("unified edit plan execution", () => {
             confirmed = true;
             return Promise.resolve(true);
           },
-        }
-      )
+        },
+      ),
     ).rejects.toThrow("global diff ceiling");
     expect(confirmed).toBe(false);
     expect(existsSync(target)).toBe(true);
@@ -115,15 +115,15 @@ describe("unified edit plan execution", () => {
     await expect(
       execute(
         dir,
-        "*** Begin Patch\n*** Add File: exists.txt\n+x\n*** End Patch"
-      )
+        "*** Begin Patch\n*** Add File: exists.txt\n+x\n*** End Patch",
+      ),
     ).rejects.toThrow("already exists");
     await expect(
       execute(
         dir,
         "*** Begin Patch\n*** Add File: new.txt\n+x\n*** End Patch",
-        { allowAdd: false }
-      )
+        { allowAdd: false },
+      ),
     ).rejects.toThrow("write tool");
     expect(existsSync(join(dir, "new.txt"))).toBe(false);
   });
@@ -143,7 +143,7 @@ describe("unified edit plan execution", () => {
 *** End Patch`;
 
     await expect(
-      execute(dir, patch("not-a-directory/added.txt"))
+      execute(dir, patch("not-a-directory/added.txt")),
     ).rejects.toThrow();
     expect(readFileSync(target, "utf8")).toBe("old\n");
 
@@ -152,7 +152,7 @@ describe("unified edit plan execution", () => {
     chmodSync(locked, 0o555);
     let permissionsEnforced = false;
     try {
-      // biome-ignore lint/suspicious/noBitwiseOperators: fs.access modes are bit flags.
+      // oxlint-disable-next-line no-bitwise -- fs.access modes are bit flags.
       accessSync(locked, constants.W_OK | constants.X_OK);
     } catch {
       permissionsEnforced = true;
@@ -172,13 +172,13 @@ describe("unified edit plan execution", () => {
     const patch = "*** Begin Patch\n*** Delete File: gone.txt\n*** End Patch";
     await expect(execute(dir, patch)).rejects.toThrow("disabled");
     await expect(
-      execute(dir, patch, { allowDelete: true, mode: "json" })
+      execute(dir, patch, { allowDelete: true, mode: "json" }),
     ).rejects.toThrow("JSON/print");
     await expect(
       execute(dir, patch, {
         allowDelete: true,
         confirm: () => Promise.resolve(false),
-      })
+      }),
     ).rejects.toThrow("not approved");
     expect(existsSync(target)).toBe(true);
     let prompt = "";
@@ -214,8 +214,8 @@ describe("unified edit plan execution", () => {
             confirmed = true;
             return Promise.resolve(true);
           },
-        }
-      )
+        },
+      ),
     ).rejects.toThrow("Refusing to delete symbolic link");
 
     expect(confirmed).toBe(false);
@@ -241,8 +241,8 @@ describe("unified edit plan execution", () => {
             symlinkSync(referent, planned);
             return Promise.resolve(true);
           },
-        }
-      )
+        },
+      ),
     ).rejects.toThrow("Refusing to delete symbolic link");
 
     expect(readFileSync(referent, "utf8")).toBe("referent survives\n");
@@ -258,7 +258,7 @@ describe("unified edit plan execution", () => {
     await execute(
       dir,
       "*** Begin Patch\n*** Delete File: read-only.txt\n*** End Patch",
-      { allowDelete: true }
+      { allowDelete: true },
     );
 
     expect(existsSync(target)).toBe(false);
@@ -277,7 +277,7 @@ describe("unified edit plan execution", () => {
           writeFileSync(target, "changed elsewhere\n");
           return Promise.resolve(true);
         },
-      })
+      }),
     ).rejects.toThrow("Source changed after planning");
     expect(readFileSync(target, "utf8")).toBe("changed elsewhere\n");
 
@@ -286,8 +286,8 @@ describe("unified edit plan execution", () => {
     await expect(
       execute(
         dir,
-        "[target.txt]\n@REPLACE\n-old\n+one\n[alias.txt]\n@REPLACE\n-old\n+two"
-      )
+        "[target.txt]\n@REPLACE\n-old\n+one\n[alias.txt]\n@REPLACE\n-old\n+two",
+      ),
     ).rejects.toThrow("same target");
     expect(readFileSync(target, "utf8")).toBe("old\n");
   });
@@ -301,7 +301,7 @@ describe("unified edit plan execution", () => {
     await expect(
       execute(dir, "[a.txt]\n@REPLACE\n-old\n+new", {
         signal: controller.signal,
-      })
+      }),
     ).rejects.toThrow("Operation aborted");
     expect(readFileSync(target, "utf8")).toBe("old\n");
   });

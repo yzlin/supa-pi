@@ -33,7 +33,7 @@ function createMockPiRuntime() {
         name: string,
         definition: {
           handler: (args: string, ctx: unknown) => Promise<void> | void;
-        }
+        },
       ) {
         commands.set(name, definition);
       },
@@ -47,13 +47,13 @@ function createMockPiRuntime() {
 describe("research command", () => {
   it("builds a pi-tasks orchestration message for the researcher agent", () => {
     const message = buildResearchCommandMessage(
-      "compare Bun and Node for CLI tooling"
+      "compare Bun and Node for CLI tooling",
     );
 
     expect(message).toContain("Run the requested research through pi-tasks");
     expect(message).toContain('agentType: "researcher"');
     expect(message).toContain(
-      "Research request: compare Bun and Node for CLI tooling"
+      "Research request: compare Bun and Node for CLI tooling",
     );
   });
 
@@ -70,7 +70,7 @@ describe("research command", () => {
     expect(runtime.sentUserMessages).toEqual([
       {
         content: buildResearchCommandMessage(
-          "compare Bun and Node for CLI tooling"
+          "compare Bun and Node for CLI tooling",
         ),
         options: undefined,
       },
@@ -94,7 +94,7 @@ describe("research command", () => {
     expect(runtime.sentUserMessages).toEqual([
       {
         content: buildResearchCommandMessage(
-          "compare Bun and Node for CLI tooling"
+          "compare Bun and Node for CLI tooling",
         ),
         options: { deliverAs: "followUp" },
       },

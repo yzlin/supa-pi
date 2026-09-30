@@ -9,7 +9,7 @@ export interface GoalTaskPacket {
 
 export function buildGoalTaskPacket(
   checkpoint: GoalCheckpoint,
-  task: GoalTask
+  task: GoalTask,
 ): GoalTaskPacket {
   return {
     goalId: checkpoint.goalId,

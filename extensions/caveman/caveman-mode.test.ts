@@ -81,7 +81,7 @@ function writeConfig(configDir: string, data: unknown): void {
   mkdirSync(configDir, { recursive: true });
   writeFileSync(
     join(configDir, "caveman.json"),
-    typeof data === "string" ? data : JSON.stringify(data)
+    typeof data === "string" ? data : JSON.stringify(data),
   );
 }
 
@@ -95,7 +95,7 @@ function writeProjectConfig(projectDir: string, data: unknown): void {
 
 function createContext(
   entries: readonly SessionEntryLike[] = [],
-  options: { cwd?: string } = {}
+  options: { cwd?: string } = {},
 ): {
   ctx: ExtensionCommandContext;
   statuses: StatusUpdate[];
@@ -126,7 +126,7 @@ function createContext(
 }
 
 function setupHarness(
-  flags: Record<string, boolean | string | undefined> = {}
+  flags: Record<string, boolean | string | undefined> = {},
 ): {
   handlers: Map<string, ExtensionEventHandler>;
   eventHandlers: Map<string, ExtensionEventHandler>;
@@ -188,7 +188,7 @@ function setupHarness(
 
 function getHandler(
   handlers: Map<string, ExtensionEventHandler>,
-  eventName: string
+  eventName: string,
 ): ExtensionEventHandler {
   const handler = handlers.get(eventName);
   if (!handler) {
@@ -498,7 +498,7 @@ describe("caveman mode", () => {
     const { eventHandlers } = setupHarness();
     const capabilities = getHandler(
       eventHandlers,
-      CAVEMAN_RPC_CAPABILITIES_CHANNEL
+      CAVEMAN_RPC_CAPABILITIES_CHANNEL,
     );
 
     expect(capabilities({ requestId: "capabilities-1" })).toEqual({
@@ -517,7 +517,7 @@ describe("caveman mode", () => {
         version: 1,
         enabled: true,
         systemPrompt: "base",
-      })
+      }),
     ).toEqual({
       success: true,
       data: { version: 1, systemPrompt: `base\n\n${CAVEMAN_MODE_PROMPT}` },
@@ -534,7 +534,7 @@ describe("caveman mode", () => {
         version: 1,
         enabled: false,
         systemPrompt: `base\n\n${CAVEMAN_MODE_PROMPT}`,
-      })
+      }),
     ).toEqual({
       success: true,
       data: { version: 1, systemPrompt: "base" },
@@ -552,7 +552,7 @@ describe("caveman mode", () => {
         version: 1,
         enabled: true,
         systemPrompt: duplicatePrompt,
-      })
+      }),
     ).toEqual({
       success: true,
       data: { version: 1, systemPrompt: `base\n\n${CAVEMAN_MODE_PROMPT}` },

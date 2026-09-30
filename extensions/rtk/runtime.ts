@@ -12,7 +12,7 @@ function cloneStatus(status: RtkRuntimeStatus): RtkRuntimeStatus {
 }
 
 export function createRtkRuntime(
-  initialConfig: RtkConfig = DEFAULT_RTK_CONFIG
+  initialConfig: RtkConfig = DEFAULT_RTK_CONFIG,
 ): RtkRuntime {
   let config = cloneConfig(initialConfig);
   let status: RtkRuntimeStatus = { rtkAvailable: false };

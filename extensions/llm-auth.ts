@@ -9,7 +9,7 @@ interface ProviderAuthRegistry {
 
 export function getProviderApiKeyForModel(
   modelRegistry: ProviderAuthRegistry,
-  model: ModelLike
+  model: ModelLike,
 ): Promise<string | undefined> {
   if (modelRegistry.getApiKeyForProvider) {
     return modelRegistry.getApiKeyForProvider(model.provider);

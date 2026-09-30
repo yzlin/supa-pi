@@ -99,7 +99,7 @@ function registerAskTool() {
 }
 
 function executeAskWithCustom(
-  custom: (renderFactory: unknown) => unknown | Promise<unknown>
+  custom: (renderFactory: unknown) => unknown | Promise<unknown>,
 ) {
   const tool = registerAskTool();
   return tool.execute("tool-call", VALID_EXECUTE_PARAMS, undefined, undefined, {
@@ -151,13 +151,13 @@ describe("ask public runtime boundary", () => {
     expect(commands.keys().toArray()).toEqual(["ask-stats"]);
     expect(tools[0]?.label).toBe("Ask");
     expect(
-      tools[0]?.renderCall(VALID_EXECUTE_PARAMS, PLAIN_THEME).render(80)
+      tools[0]?.renderCall(VALID_EXECUTE_PARAMS, PLAIN_THEME).render(80),
     ).toEqual([expect.stringContaining("ask ")]);
 
     const beforeAgentStart = handlers.get("before_agent_start");
     const guidance = await beforeAgentStart?.(
       { systemPrompt: "Base prompt" },
-      { hasUI: true }
+      { hasUI: true },
     );
     const askFacingCopy = [
       tools[0]?.description,
@@ -189,7 +189,7 @@ describe("ask public runtime boundary", () => {
             return;
           },
         },
-      }
+      },
     );
     expect(appendEntryCalls).toEqual([]);
 
@@ -213,7 +213,7 @@ describe("ask public runtime boundary", () => {
             return;
           },
         },
-      }
+      },
     );
     expect(appendEntryCalls[0]?.type).toBe("questionnaire-plain-text-miss");
     expect(sendMessageCalls).toEqual([]);
@@ -251,7 +251,7 @@ describe("ask custom UI execution", () => {
           tui: { requestRender(): void },
           theme: typeof PLAIN_THEME,
           keybindings: unknown,
-          done: (value: unknown) => void
+          done: (value: unknown) => void,
         ) => {
           render(width: number): string[];
           handleInput(data: string): void;
@@ -266,7 +266,7 @@ describe("ask custom UI execution", () => {
         {},
         (value) => {
           submitted = value;
-        }
+        },
       );
 
       expect(component.render(80).join("\n")).toContain("Which format?");
@@ -294,7 +294,7 @@ describe("ask custom UI execution", () => {
     await expect(
       executeAskWithCustom(() => {
         throw new Error("custom UI failed");
-      })
+      }),
     ).rejects.toThrow("custom UI failed");
   });
 
@@ -315,7 +315,7 @@ describe("ask custom UI execution", () => {
             return;
           },
         },
-      }
+      },
     );
 
     expect(result).toMatchObject({
@@ -346,7 +346,7 @@ describe("wrapAskText", () => {
 
     expect(lines.length).toBeGreaterThan(1);
     expect(lines.join(" ").replace(/\s+/g, " ").trim()).toBe(
-      text.replace(/\s+/g, " ").trim()
+      text.replace(/\s+/g, " ").trim(),
     );
     for (const line of lines) {
       expect(visibleWidth(line)).toBeLessThanOrEqual(24);
@@ -356,7 +356,7 @@ describe("wrapAskText", () => {
   it("strips terminal control sequences from ask text", () => {
     const lines = wrapAskText(
       "Safe\u001b[2J text\u001b]52;c;SGVsbG8=\u0007 done",
-      80
+      80,
     );
 
     expect(lines.join("\n")).toBe("Safe text done");
@@ -482,7 +482,7 @@ describe("validateAskParams", () => {
           "duplicate_option_label",
           "reserved_option_value",
           "reserved_option_label",
-        ])
+        ]),
       );
       return;
     }
@@ -503,7 +503,7 @@ describe("validateAskParams", () => {
             ],
           },
         ],
-      })
+      }),
     ).toMatchObject({ valid: true });
   });
 });
@@ -536,12 +536,12 @@ describe("ask reducer and key router", () => {
     const upResult = reduceAskRuntime(
       state,
       { type: "moveOption", delta: -1, optionCount: 2 },
-      questions
+      questions,
     );
     const downResult = reduceAskRuntime(
       upResult.state,
       { type: "moveOption", delta: 1, optionCount: 2 },
-      questions
+      questions,
     );
 
     expect(upResult.state.optionIndex).toBe(1);
@@ -560,7 +560,7 @@ describe("ask reducer and key router", () => {
         option: questions[0].options[1],
         optionIndex: 1,
       },
-      questions
+      questions,
     );
 
     expect(result.state.currentTab).toBe(1);
@@ -592,7 +592,7 @@ describe("ask reducer and key router", () => {
           questions,
           options,
           allAnswered: false,
-        })
+        }),
       ).toEqual(action);
     }
   });
@@ -620,7 +620,7 @@ describe("ask reducer and key router", () => {
             questions,
             options: getRenderOptions(questions[0]),
             allAnswered: false,
-          })
+          }),
         ).toEqual({ type: "editor" });
       }
     }
@@ -654,7 +654,7 @@ describe("ask reducer and key router", () => {
     const result = reduceAskRuntime(
       state,
       { type: "saveCustomAnswer", questionId: "format", value: "   " },
-      questions
+      questions,
     );
 
     expect(result.state.inputMode).toBe(true);
@@ -679,7 +679,7 @@ describe("ask reducer and key router", () => {
     const result = reduceAskRuntime(
       state,
       action as Parameters<typeof reduceAskRuntime>[1],
-      questions
+      questions,
     );
 
     expect(action).toEqual({ type: "submitIfReady", ready: false });
@@ -720,7 +720,7 @@ describe("ask reducer and key router", () => {
     const result = reduceAskRuntime(
       state,
       action as Parameters<typeof reduceAskRuntime>[1],
-      questions
+      questions,
     );
 
     expect(action).toEqual({ type: "moveOption", delta: -1, optionCount: 2 });
@@ -770,7 +770,7 @@ describe("ask reducer and key router", () => {
     let result = reduceAskRuntime(
       state,
       firstAction as Parameters<typeof reduceAskRuntime>[1],
-      [multiQuestion]
+      [multiQuestion],
     );
     state = { ...result.state, optionIndex: 2 };
 
@@ -784,7 +784,7 @@ describe("ask reducer and key router", () => {
     result = reduceAskRuntime(
       state,
       secondAction as Parameters<typeof reduceAskRuntime>[1],
-      [multiQuestion]
+      [multiQuestion],
     );
     state = { ...result.state, optionIndex: 3 };
 
@@ -798,7 +798,7 @@ describe("ask reducer and key router", () => {
     result = reduceAskRuntime(
       state,
       nextAction as Parameters<typeof reduceAskRuntime>[1],
-      [multiQuestion]
+      [multiQuestion],
     );
 
     expect(result.effect).toEqual({ type: "submit", cancelled: false });
@@ -905,7 +905,7 @@ describe("ask reducer and key router", () => {
     expect(wideOutput).not.toContain("Docs preview");
     expect(narrowOutput).toContain("☑ Docs");
     expect(narrowOutput.indexOf("☐ Tests")).toBeLessThan(
-      narrowOutput.indexOf("Preview")
+      narrowOutput.indexOf("Preview"),
     );
     expect(narrowOutput).not.toContain("│");
     expect(narrowOutput).toContain("Tests preview");
@@ -915,7 +915,7 @@ describe("ask reducer and key router", () => {
   it("caps stacked narrow previews at exactly 12 wrapped lines", () => {
     const preview = Array.from(
       { length: 13 },
-      (_, index) => `preview line ${index + 1}`
+      (_, index) => `preview line ${index + 1}`,
     ).join("\n");
     const question = {
       id: "scope",
@@ -934,15 +934,15 @@ describe("ask reducer and key router", () => {
       previewEnabled: true,
     });
     const previewHeaderIndex = lines.findIndex(
-      (line) => line.trim() === "Preview"
+      (line) => line.trim() === "Preview",
     );
     const previewEndIndex = lines.findIndex(
-      (line, index) => index > previewHeaderIndex && line === ""
+      (line, index) => index > previewHeaderIndex && line === "",
     );
     const previewLines = lines.slice(previewHeaderIndex + 1, previewEndIndex);
 
     expect(previewHeaderIndex).toBeGreaterThan(
-      lines.findIndex((line) => line.includes("1. Docs"))
+      lines.findIndex((line) => line.includes("1. Docs")),
     );
     expect(previewLines).toHaveLength(12);
     expect(previewLines.join("\n")).toContain("preview line 12");
@@ -1046,7 +1046,7 @@ describe("ask reducer and key router", () => {
     });
     const noteIndex = lines.findIndex((line) => line.includes("Note"));
     const noteEndIndex = lines.findIndex(
-      (line, index) => index > noteIndex && line === ""
+      (line, index) => index > noteIndex && line === "",
     );
     const noteLines = lines.slice(noteIndex + 1, noteEndIndex);
 
@@ -1082,7 +1082,7 @@ describe("ask reducer and key router", () => {
           options: getRenderOptions(question),
           editor: EMPTY_EDITOR as never,
           previewEnabled: true,
-        })
+        }),
       ).not.toThrow();
     } finally {
       String.prototype.trim = originalTrim;
@@ -1120,7 +1120,7 @@ describe("ask reducer and key router", () => {
           options: getRenderOptions(question),
           editor: EMPTY_EDITOR as never,
           previewEnabled: true,
-        })
+        }),
       ).not.toThrow();
     } finally {
       String.prototype.trim = originalTrim;
@@ -1194,23 +1194,23 @@ describe("ask reducer and key router", () => {
     });
 
     const previewMinBreakRows = previewMinBreakLines.filter((line) =>
-      line.includes("│")
+      line.includes("│"),
     );
     const titleMinBreakRows = titleMinBreakLines.filter((line) =>
-      line.includes("│")
+      line.includes("│"),
     );
 
     expect(previewMinBreakRows.length).toBeGreaterThan(0);
     expect(titleMinBreakRows.length).toBeGreaterThan(0);
     expect(
       visibleWidth(
-        previewMinBreakRows[0].slice(0, previewMinBreakRows[0].indexOf("│"))
-      )
+        previewMinBreakRows[0].slice(0, previewMinBreakRows[0].indexOf("│")),
+      ),
     ).toBe(36);
     expect(
       visibleWidth(
-        titleMinBreakRows[0].slice(0, titleMinBreakRows[0].indexOf("│"))
-      )
+        titleMinBreakRows[0].slice(0, titleMinBreakRows[0].indexOf("│")),
+      ),
     ).toBe(32);
     for (const row of previewMinBreakRows) {
       expect(visibleWidth(row)).toBeLessThanOrEqual(80);
@@ -1251,7 +1251,7 @@ describe("ask reducer and key router", () => {
     expect(rows.some((line) => line.startsWith("     \u001b[34m"))).toBe(true);
     expect(selectedRows.length).toBeGreaterThan(1);
     expect(selectedRows.every((line) => line.includes("\u001b[34m"))).toBe(
-      true
+      true,
     );
     for (const row of rows) {
       expect(visibleWidth(row)).toBeLessThanOrEqual(80);
@@ -1261,7 +1261,7 @@ describe("ask reducer and key router", () => {
   it("caps wide active previews at exactly 12 wrapped lines", () => {
     const preview = Array.from(
       { length: 13 },
-      (_, index) => `preview line ${index + 1}`
+      (_, index) => `preview line ${index + 1}`,
     ).join("\n");
     const question = {
       id: "large-preview",
@@ -1350,7 +1350,7 @@ describe("ask reducer and key router", () => {
     const sanitized = stripTerminalControlsUpTo(
       "\u001b[2J".repeat(10_000),
       20,
-      100
+      100,
     );
 
     expect(sanitized).toEqual({ text: "", truncated: true });
@@ -1360,7 +1360,7 @@ describe("ask reducer and key router", () => {
     const sanitized = stripTerminalControlsUpTo(
       `\u001b]${"x".repeat(500_000)}`,
       20,
-      100
+      100,
     );
 
     expect(sanitized).toEqual({ text: "", truncated: true });
@@ -1483,7 +1483,7 @@ describe("ask reducer and key router", () => {
     });
     const optionStart = lines.findIndex((line) => line.startsWith("> 1. "));
     const customOptionStart = lines.findIndex((line) =>
-      line.startsWith("  2. ")
+      line.startsWith("  2. "),
     );
     const largeOptionRows = lines.slice(optionStart, customOptionStart);
 
@@ -1544,7 +1544,7 @@ describe("ask reducer and key router", () => {
       previewEnabled: true,
     }).filter((line) => line.includes("│"));
     const customOptionRowIndex = rows.findIndex((line) =>
-      line.startsWith("  2. ")
+      line.startsWith("  2. "),
     );
     const largeOptionRows = rows.slice(1, customOptionRowIndex);
 
@@ -1609,7 +1609,7 @@ describe("ask reducer and key router", () => {
     });
     const previewRows = lines.filter((line) => line.includes("│"));
     const separatorColumns = previewRows.map((line) =>
-      visibleWidth(line.slice(0, line.indexOf("│")))
+      visibleWidth(line.slice(0, line.indexOf("│"))),
     );
 
     expect(new Set(separatorColumns).size).toBe(1);
@@ -1632,14 +1632,14 @@ describe("ask reducer and key router", () => {
     let result = reduceAskRuntime(
       state,
       { type: "startNote", questionId: "format" },
-      [question]
+      [question],
     );
     expect(result.state.notesMode).toBe(true);
 
     result = reduceAskRuntime(
       result.state,
       { type: "saveNoteDraft", questionId: "format", value: "Prefer schemas" },
-      [question]
+      [question],
     );
     state = result.state;
 
@@ -1651,7 +1651,7 @@ describe("ask reducer and key router", () => {
         option: question.options[0],
         optionIndex: 0,
       },
-      [question]
+      [question],
     );
 
     expect(result.state.noteDrafts.get("format")).toBe("Prefer schemas");
@@ -1675,7 +1675,7 @@ describe("ask reducer and key router", () => {
         options: getRenderOptions(question),
         allAnswered: false,
         previewNotesEnabled: true,
-      })
+      }),
     ).toEqual({ type: "startNote", questionId: "format" });
     expect(
       routeAskKey({
@@ -1684,7 +1684,7 @@ describe("ask reducer and key router", () => {
         questions: [question],
         options: getRenderOptions(question),
         allAnswered: false,
-      })
+      }),
     ).toBeNull();
   });
 
@@ -1837,7 +1837,7 @@ describe("ask result renderer", () => {
     const component = tool.renderResult(
       { content: [{ type: "text", text: "one\ttwo three four" }] },
       { expanded: false },
-      PLAIN_THEME
+      PLAIN_THEME,
     );
 
     const narrowLines = component.render(8);
@@ -1854,7 +1854,7 @@ describe("ask result renderer", () => {
     const component = tool.renderResult(
       { content: [{ type: "text", text: "result text" }] },
       { expanded: false },
-      PLAIN_THEME
+      PLAIN_THEME,
     );
     const cachedLines = component.render(80);
 
@@ -1873,7 +1873,7 @@ describe("ask result renderer", () => {
       "✓ internal-format-id: 1. JSON\n" +
         "✓ internal-custom-id: (wrote) Use tabs, then keep ALL punctuation: [x] / {y}!\n" +
         "✓ internal-scope-id: 1. Docs, 3. Code\n" +
-        "✓ internal-empty-id: (none)"
+        "✓ internal-empty-id: (none)",
     );
     expect(output).not.toContain(longPrompt);
     expect(output).not.toContain("Machine-readable structured data.");
@@ -1911,10 +1911,10 @@ describe("ask result renderer", () => {
     }
 
     expect(output.indexOf("Output format")).toBeLessThan(
-      output.indexOf(longPrompt)
+      output.indexOf(longPrompt),
     );
     expect(output.indexOf(longPrompt)).toBeLessThan(
-      output.indexOf("Machine-readable structured data.")
+      output.indexOf("Machine-readable structured data."),
     );
     for (const hidden of [
       "internal-format-id",
@@ -2018,7 +2018,7 @@ describe("ask result renderer", () => {
 
     expect(output).toContain("✓ Optional extras: (none)\n\nOutput format\n");
     expect(output).not.toContain(
-      "✓ Optional extras: (none)\n\n\nOutput format\n"
+      "✓ Optional extras: (none)\n\n\nOutput format\n",
     );
   });
 
@@ -2029,16 +2029,16 @@ describe("ask result renderer", () => {
           content: [{ type: "text", text: "cancelled content" }],
           details: { questions: [], answers: [], cancelled: true },
         },
-        true
-      )
+        true,
+      ),
     ).toBe("Cancelled");
     expect(
       renderAskResult(
         {
           content: [{ type: "text", text: "Error: invalid ask request" }],
         },
-        true
-      )
+        true,
+      ),
     ).toBe("Error: invalid ask request");
   });
 });
@@ -2071,7 +2071,7 @@ describe("createAskEnvelope", () => {
     });
 
     expect(result.content[0]?.text).toBe(
-      "User has answered your questions:\nFormat: user selected: 1. JSON\n\nYou can now continue with the user's answers in mind."
+      "User has answered your questions:\nFormat: user selected: 1. JSON\n\nYou can now continue with the user's answers in mind.",
     );
     expect(result.details.summary).toBe("Format: user selected: 1. JSON");
     expect(result.details.answersByQuestion?.format).toMatchObject({
@@ -2109,7 +2109,7 @@ describe("createAskEnvelope", () => {
     });
 
     expect(result.content[0]?.text).toBe(
-      "User has answered your questions:\nFormat: user selected: 1. JSON Preview: Structured output Note: Use schemas\n\nYou can now continue with the user's answers in mind."
+      "User has answered your questions:\nFormat: user selected: 1. JSON Preview: Structured output Note: Use schemas\n\nYou can now continue with the user's answers in mind.",
     );
     expect(result.details.answersByQuestion?.format).toMatchObject({
       preview: "Structured output",
@@ -2150,7 +2150,7 @@ describe("createAskEnvelope", () => {
     });
 
     expect(result.content[0]?.text).toBe(
-      "User has answered your questions:\nScope: user selected: 1. Docs, 3. Code\n\nYou can now continue with the user's answers in mind."
+      "User has answered your questions:\nScope: user selected: 1. Docs, 3. Code\n\nYou can now continue with the user's answers in mind.",
     );
     expect(result.details.answersByQuestion?.scope).toMatchObject({
       value: ["docs", "code"],
@@ -2213,7 +2213,7 @@ describe("ask clarification diagnostics", () => {
           notify: (message: string, level: string) =>
             harness.notifyCalls.push({ message, level }),
         },
-      }
+      },
     );
 
     expect(harness.appendEntryCalls).toHaveLength(1);
@@ -2250,7 +2250,7 @@ describe("ask clarification diagnostics", () => {
             notify: (message: string, level: string) =>
               harness.notifyCalls.push({ message, level }),
           },
-        }
+        },
       );
 
       expect(harness.appendEntryCalls).toHaveLength(1);
@@ -2273,7 +2273,7 @@ describe("ask clarification diagnostics", () => {
           assistantMessage("Which output format do you prefer?"),
         ],
       },
-      { hasUI: true, ui: { notify: () => undefined } }
+      { hasUI: true, ui: { notify: () => undefined } },
     );
 
     expect(harness.appendEntryCalls).toEqual([]);
@@ -2285,7 +2285,7 @@ describe("ask clarification diagnostics", () => {
     await noUi.inputHandler?.({ source: "interactive" });
     await noUi.agentEndHandler?.(
       { messages: [assistantMessage("Which format do you prefer?")] },
-      { hasUI: false, ui: { notify: () => undefined } }
+      { hasUI: false, ui: { notify: () => undefined } },
     );
     expect(noUi.appendEntryCalls).toEqual([]);
 
@@ -2294,7 +2294,7 @@ describe("ask clarification diagnostics", () => {
       await harness.inputHandler?.({ source });
       await harness.agentEndHandler?.(
         { messages: [assistantMessage("Which format do you prefer?")] },
-        { hasUI: true, ui: { notify: () => undefined } }
+        { hasUI: true, ui: { notify: () => undefined } },
       );
       expect(harness.appendEntryCalls[0]?.data).toMatchObject({
         source,
@@ -2331,10 +2331,10 @@ describe("ask clarification diagnostics", () => {
       display: true,
     });
     expect(harness.sendMessageCalls[0]?.message.content).toContain(
-      "Auto-redirected: 1"
+      "Auto-redirected: 1",
     );
     expect(harness.sendMessageCalls[0]?.message.content).toContain(
-      "Repeated after redirect: 1"
+      "Repeated after redirect: 1",
     );
   });
 });

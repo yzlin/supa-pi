@@ -157,7 +157,7 @@ export function parseCliOptions(args: string[]): CliOptions {
       case "--thinking":
         if (!THINKING_LEVELS.includes(value as ThinkingLevel)) {
           throw new Error(
-            `--thinking must be one of: ${THINKING_LEVELS.join(", ")}`
+            `--thinking must be one of: ${THINKING_LEVELS.join(", ")}`,
           );
         }
         options.thinking = value as ThinkingLevel;
@@ -169,7 +169,7 @@ export function parseCliOptions(args: string[]): CliOptions {
       case "--candidate-thinking":
         if (!THINKING_LEVELS.includes(value as ThinkingLevel)) {
           throw new Error(
-            `--candidate-thinking must be one of: ${THINKING_LEVELS.join(", ")}`
+            `--candidate-thinking must be one of: ${THINKING_LEVELS.join(", ")}`,
           );
         }
         options.candidateThinking = value as ThinkingLevel;
@@ -206,7 +206,7 @@ export function parseCliOptions(args: string[]): CliOptions {
     (options.candidateThinking || options.compareServiceTier)
   ) {
     throw new Error(
-      "cannot combine model comparison with reasoning or service-tier comparisons"
+      "cannot combine model comparison with reasoning or service-tier comparisons",
     );
   }
   if (options.candidateThinking === options.thinking) {
@@ -217,7 +217,7 @@ export function parseCliOptions(args: string[]): CliOptions {
   }
   if (options.compareServiceTier && options.repetitions % 2 !== 0) {
     throw new Error(
-      "service-tier comparison requires an even repetition count to balance arm ordering"
+      "service-tier comparison requires an even repetition count to balance arm ordering",
     );
   }
 
@@ -231,7 +231,7 @@ export function createVariantConfigs(
     "thinking" | "candidateThinking" | "candidateModel"
   > & {
     compareServiceTier?: boolean;
-  }
+  },
 ): Record<EvalVariant, VariantConfig> {
   if (options.compareServiceTier) {
     return {
@@ -296,7 +296,7 @@ export function createVariantConfigs(
 
 async function gitOutput(
   repositoryRoot: string,
-  args: string[]
+  args: string[],
 ): Promise<string> {
   const process = spawn("git", args, {
     cwd: repositoryRoot,
@@ -320,7 +320,7 @@ async function gitOutput(
 
 export async function snapshotPromptCandidates(
   repositoryRoot: string,
-  promptPaths: string[]
+  promptPaths: string[],
 ): Promise<string> {
   const states = await Promise.resolve(
     [...new Set(promptPaths)].sort().map((promptPath) => {
@@ -346,13 +346,13 @@ export async function snapshotPromptCandidates(
         }
         throw error;
       }
-    })
+    }),
   );
   return createHash("sha256").update(JSON.stringify(states)).digest("hex");
 }
 
 export async function changedPromptPaths(
-  repositoryRoot: string
+  repositoryRoot: string,
 ): Promise<string[]> {
   const supportedFiles = [
     "extensions/core-prompt/prompt.md",
@@ -390,8 +390,8 @@ export async function changedPromptPaths(
             supportedFiles.includes(path) ||
             (path.startsWith("agents/") &&
               path.endsWith(".md") &&
-              existsSync(resolve(repositoryRoot, path)))
-        )
+              existsSync(resolve(repositoryRoot, path))),
+        ),
     ),
   ].sort();
 }
@@ -401,7 +401,7 @@ export async function establishChangedPromptSnapshot(
   operations: {
     discover?: typeof changedPromptPaths;
     snapshot?: typeof snapshotPromptCandidates;
-  } = {}
+  } = {},
 ): Promise<{ paths: string[]; stateSha256: string }> {
   const discover = operations.discover ?? changedPromptPaths;
   const snapshot = operations.snapshot ?? snapshotPromptCandidates;
@@ -410,7 +410,7 @@ export async function establishChangedPromptSnapshot(
   const pathsAfterSnapshot = await discover(repositoryRoot);
   if (JSON.stringify(pathsAfterSnapshot) !== JSON.stringify(paths)) {
     throw new Error(
-      "changed prompt path set changed while establishing the protected startup snapshot; discard results and rerun"
+      "changed prompt path set changed while establishing the protected startup snapshot; discard results and rerun",
     );
   }
   return { paths, stateSha256 };
@@ -419,7 +419,7 @@ export async function establishChangedPromptSnapshot(
 export async function changedPromptSnapshotMatches(
   repositoryRoot: string,
   startingPaths: string[],
-  startingStateSha256: string
+  startingStateSha256: string,
 ): Promise<boolean> {
   const currentPaths = await changedPromptPaths(repositoryRoot);
   if (JSON.stringify(currentPaths) !== JSON.stringify(startingPaths)) {
@@ -427,7 +427,7 @@ export async function changedPromptSnapshotMatches(
   }
   const currentState = await snapshotPromptCandidates(
     repositoryRoot,
-    currentPaths
+    currentPaths,
   );
   const pathsAfterSnapshot = await changedPromptPaths(repositoryRoot);
   return (
@@ -438,15 +438,15 @@ export async function changedPromptSnapshotMatches(
 
 function assertCorpusCoverage(
   corpus: EvalCorpus,
-  changedPaths: string[]
+  changedPaths: string[],
 ): void {
   const coveredPaths = new Set(
-    corpus.cases.map((evalCase) => evalCase.promptPath)
+    corpus.cases.map((evalCase) => evalCase.promptPath),
   );
   const missing = changedPaths.filter((path) => !coveredPaths.has(path));
   if (missing.length > 0) {
     throw new Error(
-      `corpus does not cover changed prompts: ${missing.join(", ")}`
+      `corpus does not cover changed prompts: ${missing.join(", ")}`,
     );
   }
 }
@@ -481,14 +481,14 @@ function createSummary(records: RunRecord[]): EvalSummary {
       caseIds.map((caseId) => [
         caseId,
         aggregateRecords(records.filter((record) => record.caseId === caseId)),
-      ])
+      ]),
     ),
   };
 }
 
 export function plannedCallMessage(
   caseCount: number,
-  repetitions: number
+  repetitions: number,
 ): string {
   return `Running ${caseCount * repetitions * 2} live calls: ${caseCount} case(s) × ${repetitions} repetition(s) × 2 variants\n`;
 }
@@ -545,14 +545,14 @@ export function createComparison(options: CliOptions): Comparison {
 
 function exactModelChoice<T extends ModelChoice>(
   requested: string,
-  models: readonly T[]
+  models: readonly T[],
 ): T {
   const normalized = requested.trim().toLowerCase();
   const canonicalMatches = models.filter(
-    (model) => `${model.provider}/${model.id}`.toLowerCase() === normalized
+    (model) => `${model.provider}/${model.id}`.toLowerCase() === normalized,
   );
   const idMatches = models.filter(
-    (model) => model.id.toLowerCase() === normalized
+    (model) => model.id.toLowerCase() === normalized,
   );
   const matches = canonicalMatches.length > 0 ? canonicalMatches : idMatches;
   if (matches.length !== 1) {
@@ -564,14 +564,14 @@ function exactModelChoice<T extends ModelChoice>(
 function effectiveThinkingEffort(
   model: ModelChoice,
   thinking: ThinkingLevel,
-  arm: "baseline" | "candidate"
+  arm: "baseline" | "candidate",
 ): string {
   if (!model.reasoning) {
     if (thinking === "off") {
       return "off";
     }
     throw new Error(
-      `${arm} model does not support thinking level: ${thinking}`
+      `${arm} model does not support thinking level: ${thinking}`,
     );
   }
   const mapped = model.thinkingLevelMap?.[thinking];
@@ -580,7 +580,7 @@ function effectiveThinkingEffort(
     (mapped === undefined && (thinking === "xhigh" || thinking === "max"))
   ) {
     throw new Error(
-      `${arm} model does not support thinking level: ${thinking}`
+      `${arm} model does not support thinking level: ${thinking}`,
     );
   }
   return mapped ?? thinking;
@@ -590,7 +590,7 @@ export function resolveModelComparison<T extends ModelChoice>(
   baselineRequested: string,
   candidateRequested: string,
   thinking: ThinkingLevel,
-  models: readonly T[]
+  models: readonly T[],
 ): ModelComparisonSelection<T> {
   const baseline = exactModelChoice(baselineRequested, models);
   const candidate = exactModelChoice(candidateRequested, models);
@@ -602,16 +602,16 @@ export function resolveModelComparison<T extends ModelChoice>(
   const baselineEffort = effectiveThinkingEffort(
     baseline,
     thinking,
-    "baseline"
+    "baseline",
   );
   const candidateEffort = effectiveThinkingEffort(
     candidate,
     thinking,
-    "candidate"
+    "candidate",
   );
   if (baselineEffort !== candidateEffort) {
     throw new Error(
-      `effective thinking efforts are not comparable: ${baselineEffort} versus ${candidateEffort}`
+      `effective thinking efforts are not comparable: ${baselineEffort} versus ${candidateEffort}`,
     );
   }
   return {
@@ -640,21 +640,21 @@ export function modelForVariant<T>(
     ModelComparisonSelection<T & ModelChoice>,
     "baseline" | "candidate"
   >,
-  variant: EvalVariant
+  variant: EvalVariant,
 ): T {
   return models[variant];
 }
 
 export function validateServiceTierComparison(
   model: { api?: string },
-  comparison: Comparison
+  comparison: Comparison,
 ): void {
   if (comparison.kind !== "service-tier") {
     return;
   }
   if (model.api !== "openai-codex-responses") {
     throw new Error(
-      "service-tier comparison currently requires an openai-codex Responses model"
+      "service-tier comparison currently requires an openai-codex Responses model",
     );
   }
 }
@@ -664,7 +664,7 @@ export function validateServiceTierEvidence(
     RunRecord,
     "caseId" | "variant" | "repetition" | "payloadServiceTier"
   >[],
-  comparison: Comparison
+  comparison: Comparison,
 ): void {
   if (comparison.kind !== "service-tier") {
     return;
@@ -673,7 +673,7 @@ export function validateServiceTierEvidence(
     const expected = record.variant === "candidate" ? "priority" : "absent";
     if (record.payloadServiceTier !== expected) {
       throw new Error(
-        `invalid service-tier payload evidence for ${record.caseId} ${record.variant} r${record.repetition}: expected ${expected}, got ${record.payloadServiceTier ?? "missing"}`
+        `invalid service-tier payload evidence for ${record.caseId} ${record.variant} r${record.repetition}: expected ${expected}, got ${record.payloadServiceTier ?? "missing"}`,
       );
     }
   }
@@ -681,7 +681,7 @@ export function validateServiceTierEvidence(
 
 export function validateReasoningComparison(
   model: ReasoningModelSupport,
-  comparison: Comparison
+  comparison: Comparison,
 ): void {
   if (comparison.kind !== "reasoning") {
     return;
@@ -696,12 +696,12 @@ export function validateReasoningComparison(
   const candidateEffort = model.thinkingLevelMap?.[candidateLevel];
   if (baselineEffort === null) {
     throw new Error(
-      `selected model does not support baseline thinking level: ${baselineLevel}`
+      `selected model does not support baseline thinking level: ${baselineLevel}`,
     );
   }
   if (candidateEffort === null) {
     throw new Error(
-      `selected model does not support candidate thinking level: ${candidateLevel}`
+      `selected model does not support candidate thinking level: ${candidateLevel}`,
     );
   }
   if (
@@ -709,7 +709,7 @@ export function validateReasoningComparison(
     baselineEffort === candidateEffort
   ) {
     throw new Error(
-      `${baselineLevel} and ${candidateLevel} map to the same provider effort`
+      `${baselineLevel} and ${candidateLevel} map to the same provider effort`,
     );
   }
 }
@@ -762,7 +762,7 @@ function summaryMarkdown(summary: EvalSummary, comparison: Comparison): string {
   ];
   for (const [caseId, result] of Object.entries(summary.cases)) {
     lines.push(
-      `| ${caseId} | ${signed(result.passRateDelta * 100, 1)} pp | ${signed(result.scoreDelta, 3)} | ${signed(result.inputTokenDelta, 0)} | ${signed(result.latencyMsDelta, 0)} ms |`
+      `| ${caseId} | ${signed(result.passRateDelta * 100, 1)} pp | ${signed(result.scoreDelta, 3)} | ${signed(result.inputTokenDelta, 0)} | ${signed(result.latencyMsDelta, 0)} ms |`,
     );
   }
   return `${lines.join("\n")}\n`;
@@ -772,7 +772,7 @@ async function writePromptSnapshot(
   outputDirectory: string,
   variant: EvalVariant,
   path: string,
-  content: string
+  content: string,
 ): Promise<void> {
   const target = join(outputDirectory, "prompts", variant, path);
   await mkdir(dirname(target), { recursive: true });
@@ -785,7 +785,7 @@ function dryRunPreview(
   selectedModel: string,
   comparison: Comparison,
   variantConfigs: ReadonlyMap<string, Record<EvalVariant, VariantConfig>>,
-  totalRuns: number
+  totalRuns: number,
 ): string {
   const arms: EvalVariant[] = ["baseline", "candidate"];
   const mode = `${comparison.kind} comparison`;
@@ -801,7 +801,7 @@ function dryRunPreview(
       ? `; service tier ${arm.serviceTier}`
       : "";
     lines.push(
-      `${variant}: requested ${requestedModel} (unresolved/unverified); effort ${arm.thinking}; prompt ${arm.promptSource}${serviceTier}`
+      `${variant}: requested ${requestedModel} (unresolved/unverified); effort ${arm.thinking}; prompt ${arm.promptSource}${serviceTier}`,
     );
   }
   lines.push(
@@ -809,19 +809,19 @@ function dryRunPreview(
     `RUNS: ${totalRuns} (${selectedCases.length} case(s) × ${options.repetitions} repetition(s) × ${arms.length} arms)`,
     `MODEL RESPONSE turns: at most ${totalRuns * options.maxTurns} (${totalRuns} runs × maxTurns ${options.maxTurns})`,
     `maxTurns: ${options.maxTurns} per run; timeout: ${options.timeoutMs} ms per run (abort deadline)`,
-    "Transport attempts/retries: not bounded by maxTurns; provider retry behavior is unresolved/unverified."
+    "Transport attempts/retries: not bounded by maxTurns; provider retry behavior is unresolved/unverified.",
   );
   for (const [path, configs] of variantConfigs) {
     const hashes = arms.map(
       (variant) =>
-        `${variant} ${comparison[variant].promptSource} sha256=${configs[variant].promptSha256}`
+        `${variant} ${comparison[variant].promptSource} sha256=${configs[variant].promptSha256}`,
     );
     lines.push(`Prompt ${path}: ${hashes.join("; ")}`);
   }
   lines.push(
     `Core eval base prompt sha256=${createHash("sha256").update(CORE_EVAL_BASE_PROMPT).digest("hex")}`,
     "Live transmission: evaluated system prompt, case task, conversation messages, tool calls/results, and fixture contents exposed through tools go to each requested model provider.",
-    "Cost: unknown; token budget: none."
+    "Cost: unknown; token budget: none.",
   );
   return `${lines.join("\n")}\n`;
 }
@@ -830,7 +830,7 @@ export async function main(): Promise<void> {
   const options = parseCliOptions(process.argv.slice(2));
   if (options.help) {
     process.stdout.write(
-      "Usage: bun run eval:prompts -- [options]\n\nOptions:\n  --case <id> (repeatable)\n  --model <provider/model> (baseline in model comparison)\n  --candidate-model <provider/model> (compare exact models)\n  --thinking <level>\n  --candidate-thinking <level>\n  --compare-service-tier\n  --repetitions <count>\n  --timeout-ms <milliseconds>\n  --max-turns <count>\n  --dry-run (offline approval preview; no model calls or artifacts)\n"
+      "Usage: bun run eval:prompts -- [options]\n\nOptions:\n  --case <id> (repeatable)\n  --model <provider/model> (baseline in model comparison)\n  --candidate-model <provider/model> (compare exact models)\n  --thinking <level>\n  --candidate-thinking <level>\n  --compare-service-tier\n  --repetitions <count>\n  --timeout-ms <milliseconds>\n  --max-turns <count>\n  --dry-run (offline approval preview; no model calls or artifacts)\n",
     );
     return;
   }
@@ -841,14 +841,14 @@ export async function main(): Promise<void> {
   const corpusContent = await readFile(corpusPath, "utf8");
   const corpusSha256 = createHash("sha256").update(corpusContent).digest("hex");
   const standardCorpus = parseCorpus(
-    JSON.parse(await readFile(corpusPath, "utf8"))
+    JSON.parse(await readFile(corpusPath, "utf8")),
   );
   const activeCases = standardCorpus.cases;
   const casesById = new Map(
-    activeCases.map((evalCase) => [evalCase.id, evalCase])
+    activeCases.map((evalCase) => [evalCase.id, evalCase]),
   );
   const unknownCaseIds = options.caseIds.filter(
-    (caseId) => !casesById.has(caseId)
+    (caseId) => !casesById.has(caseId),
   );
   if (unknownCaseIds.length > 0) {
     throw new Error(`unknown eval case: ${unknownCaseIds.join(", ")}`);
@@ -888,7 +888,7 @@ export async function main(): Promise<void> {
     .digest("hex");
   const candidatePromptStateSha256 = await snapshotPromptCandidates(
     repositoryRoot,
-    selectedPromptPaths
+    selectedPromptPaths,
   );
 
   const selectedModel = options.model;
@@ -900,7 +900,7 @@ export async function main(): Promise<void> {
       pair.baseline.sha256 === pair.candidate.sha256
     ) {
       throw new Error(
-        `prompt is unchanged between HEAD and working tree: ${path}`
+        `prompt is unchanged between HEAD and working tree: ${path}`,
       );
     }
     variantConfigs.set(path, createVariantConfigs(pair, options));
@@ -908,7 +908,7 @@ export async function main(): Promise<void> {
 
   const plannedRuns = planRuns(
     selectedCases.map((evalCase) => evalCase.id),
-    options.repetitions
+    options.repetitions,
   );
   const totalCalls = plannedRuns.length;
   if (options.dryRun) {
@@ -919,8 +919,8 @@ export async function main(): Promise<void> {
         selectedModel,
         comparison,
         variantConfigs,
-        totalCalls
-      )
+        totalCalls,
+      ),
     );
     return;
   }
@@ -938,7 +938,7 @@ export async function main(): Promise<void> {
       selectedModel,
       options.candidateModel,
       options.thinking,
-      [...modelRuntime.getModels()]
+      [...modelRuntime.getModels()],
     );
     baselineModel = modelComparison.baseline;
     comparison = modelComparison.comparison;
@@ -950,7 +950,7 @@ export async function main(): Promise<void> {
     });
     if (resolvedModel.error || !resolvedModel.model) {
       throw new Error(
-        resolvedModel.error ?? `model not found: ${selectedModel}`
+        resolvedModel.error ?? `model not found: ${selectedModel}`,
       );
     }
     baselineModel = resolvedModel.model;
@@ -971,7 +971,7 @@ export async function main(): Promise<void> {
     }
   }
   process.stdout.write(
-    plannedCallMessage(selectedCases.length, options.repetitions)
+    plannedCallMessage(selectedCases.length, options.repetitions),
   );
 
   const records: RunRecord[] = [];
@@ -986,7 +986,7 @@ export async function main(): Promise<void> {
     }
     const { variant, repetition } = plannedRun;
     process.stdout.write(
-      `[${records.length + 1}/${totalCalls}] ${evalCase.id} ${variant} r${repetition}\n`
+      `[${records.length + 1}/${totalCalls}] ${evalCase.id} ${variant} r${repetition}\n`,
     );
     const config = configs[variant];
     records.push(
@@ -1003,7 +1003,7 @@ export async function main(): Promise<void> {
         timeoutMs: options.timeoutMs,
         maxTurns: options.maxTurns,
         getApiKey: (provider) => modelRegistry.getApiKeyForProvider(provider),
-      })
+      }),
     );
   }
 
@@ -1023,12 +1023,12 @@ export async function main(): Promise<void> {
     .digest("hex");
   const endedAtPromptStateSha256 = await snapshotPromptCandidates(
     repositoryRoot,
-    selectedPromptPaths
+    selectedPromptPaths,
   );
   const changedPromptsUnchanged = await changedPromptSnapshotMatches(
     repositoryRoot,
     startingChangedPromptPaths,
-    startingChangedPromptStateSha256
+    startingChangedPromptStateSha256,
   );
   if (
     endedAtHead !== startedFromHead ||
@@ -1038,7 +1038,7 @@ export async function main(): Promise<void> {
     !changedPromptsUnchanged
   ) {
     throw new Error(
-      "repository prompts, HEAD, or eval corpus changed during the run; discard results and rerun"
+      "repository prompts, HEAD, or eval corpus changed during the run; discard results and rerun",
     );
   }
   validateServiceTierEvidence(records, comparison);
@@ -1047,7 +1047,7 @@ export async function main(): Promise<void> {
     repositoryRoot,
     ".pi",
     "evals",
-    `${timestamp}-${startedFromHead.slice(0, 8)}`
+    `${timestamp}-${startedFromHead.slice(0, 8)}`,
   );
   await mkdir(join(outputDirectory, "runs"), { recursive: true });
   for (const [path, configs] of variantConfigs) {
@@ -1055,13 +1055,13 @@ export async function main(): Promise<void> {
       outputDirectory,
       "baseline",
       path,
-      configs.baseline.promptContent
+      configs.baseline.promptContent,
     );
     await writePromptSnapshot(
       outputDirectory,
       "candidate",
       path,
-      configs.candidate.promptContent
+      configs.candidate.promptContent,
     );
   }
   for (const record of records) {
@@ -1069,9 +1069,9 @@ export async function main(): Promise<void> {
       join(
         outputDirectory,
         "runs",
-        `${record.caseId}-${record.variant}-r${record.repetition}.json`
+        `${record.caseId}-${record.variant}-r${record.repetition}.json`,
       ),
-      `${JSON.stringify(record, null, 2)}\n`
+      `${JSON.stringify(record, null, 2)}\n`,
     );
   }
   const summary = createSummary(records);
@@ -1107,30 +1107,30 @@ export async function main(): Promise<void> {
           baseline: configs.baseline.promptSha256,
           candidate: configs.candidate.promptSha256,
         },
-      ])
+      ]),
     ),
   };
   await Promise.all([
     writeFile(
       join(outputDirectory, "manifest.json"),
-      `${JSON.stringify(manifest, null, 2)}\n`
+      `${JSON.stringify(manifest, null, 2)}\n`,
     ),
     writeFile(
       join(outputDirectory, "summary.json"),
-      `${JSON.stringify(summary, null, 2)}\n`
+      `${JSON.stringify(summary, null, 2)}\n`,
     ),
     writeFile(join(outputDirectory, "summary.md"), summaryMarkdownContent),
   ]);
 
   process.stdout.write(
-    `\n${summaryMarkdownContent}\nArtifacts: ${outputDirectory}\n`
+    `\n${summaryMarkdownContent}\nArtifacts: ${outputDirectory}\n`,
   );
 }
 
 if (import.meta.main) {
   main().catch((error) => {
     process.stderr.write(
-      `${error instanceof Error ? error.message : String(error)}\n`
+      `${error instanceof Error ? error.message : String(error)}\n`,
     );
     process.exitCode = 1;
   });

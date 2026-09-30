@@ -1,8 +1,8 @@
+import { spawn } from "bun";
 import { describe, expect, it } from "bun:test";
 import { mkdir, mkdtemp, readdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
-import { spawn } from "bun";
 
 import {
   createComparison,
@@ -84,40 +84,40 @@ describe("dry-run CLI", () => {
       expect(exitCode).toBe(0);
       expect(stderr).toBe("");
       expect(stdout).toContain(
-        "DRY RUN — no model runtime, credentials, network, fixture copies, or eval artifacts"
+        "DRY RUN — no model runtime, credentials, network, fixture copies, or eval artifacts",
       );
       expect(stdout).toContain("Cases (1): explore-root-cause");
       expect(stdout).toContain("Mode: model comparison");
       expect(stdout).toContain(
-        "baseline: requested synthetic/baseline (unresolved/unverified); effort high; prompt working-tree"
+        "baseline: requested synthetic/baseline (unresolved/unverified); effort high; prompt working-tree",
       );
       expect(stdout).toContain(
-        "candidate: requested synthetic/candidate (unresolved/unverified); effort high; prompt working-tree"
+        "candidate: requested synthetic/candidate (unresolved/unverified); effort high; prompt working-tree",
       );
       expect(stdout).toContain("Repetitions: 2");
       expect(stdout).toContain(
-        "RUNS: 4 (1 case(s) × 2 repetition(s) × 2 arms)"
+        "RUNS: 4 (1 case(s) × 2 repetition(s) × 2 arms)",
       );
       expect(stdout).toContain(
-        "MODEL RESPONSE turns: at most 12 (4 runs × maxTurns 3)"
+        "MODEL RESPONSE turns: at most 12 (4 runs × maxTurns 3)",
       );
       expect(stdout).toContain(
-        "maxTurns: 3 per run; timeout: 1234 ms per run (abort deadline)"
+        "maxTurns: 3 per run; timeout: 1234 ms per run (abort deadline)",
       );
       expect(stdout).toContain(
-        "Transport attempts/retries: not bounded by maxTurns; provider retry behavior is unresolved/unverified"
+        "Transport attempts/retries: not bounded by maxTurns; provider retry behavior is unresolved/unverified",
       );
       expect(stdout).toMatch(PROMPT_HASHES_PATTERN);
       expect(stdout).toMatch(CORE_PROMPT_HASH_PATTERN);
       expect(stdout).toContain(
-        "Live transmission: evaluated system prompt, case task, conversation messages, tool calls/results, and fixture contents exposed through tools go to each requested model provider"
+        "Live transmission: evaluated system prompt, case task, conversation messages, tool calls/results, and fixture contents exposed through tools go to each requested model provider",
       );
       expect(stdout).toContain("Cost: unknown; token budget: none");
       expect(await snapshotDirectory(artifactsDirectory)).toEqual(
-        artifactsBefore
+        artifactsBefore,
       );
       expect(await snapshotDirectory(isolatedTmp)).toEqual(
-        temporaryEntriesBefore
+        temporaryEntriesBefore,
       );
     } finally {
       await rm(isolatedRoot, { recursive: true, force: true });
@@ -146,7 +146,7 @@ describe("dry-run CLI", () => {
         new Response(help.stdout).text(),
         invalid.exited,
         new Response(invalid.stderr).text(),
-      ]
+      ],
     );
 
     expect(helpCode).toBe(0);
@@ -185,7 +185,7 @@ describe("parseCliOptions", () => {
         "executor-fix",
         "--case",
         "core-orchestration",
-      ])
+      ]),
     ).toMatchObject({
       caseIds: ["core-orchestration", "executor-fix"],
       thinking: "high",
@@ -227,7 +227,7 @@ describe("parseCliOptions", () => {
 
   it("rejects incomplete or combined model comparison modes", () => {
     expect(() =>
-      parseCliOptions(["--candidate-model", "synthetic/candidate"])
+      parseCliOptions(["--candidate-model", "synthetic/candidate"]),
     ).toThrow("requires an explicit --model baseline");
     expect(() =>
       parseCliOptions([
@@ -237,7 +237,7 @@ describe("parseCliOptions", () => {
         "synthetic/candidate",
         "--candidate-thinking",
         "medium",
-      ])
+      ]),
     ).toThrow("cannot combine model comparison");
     expect(() =>
       parseCliOptions([
@@ -246,7 +246,7 @@ describe("parseCliOptions", () => {
         "--candidate-model",
         "synthetic/candidate",
         "--compare-service-tier",
-      ])
+      ]),
     ).toThrow("cannot combine model comparison");
   });
 
@@ -267,7 +267,7 @@ describe("parseCliOptions", () => {
       "synthetic/baseline",
       "synthetic/candidate",
       "high",
-      [baseline, candidate]
+      [baseline, candidate],
     );
 
     expect(modelForVariant(selection, "baseline")).toBe(baseline);
@@ -291,7 +291,7 @@ describe("parseCliOptions", () => {
       resolveModelComparison("synthetic/base", "synthetic/candidate", "high", [
         baseline,
         candidate,
-      ])
+      ]),
     ).toThrow("exact model not found: synthetic/base");
   });
 
@@ -313,26 +313,26 @@ describe("parseCliOptions", () => {
         "synthetic/baseline",
         "SYNTHETIC/BASELINE",
         "high",
-        [baseline, candidate]
-      )
+        [baseline, candidate],
+      ),
     ).toThrow("must resolve to different models");
     expect(() =>
       resolveModelComparison(
         "synthetic/baseline",
         "synthetic/candidate",
         "high",
-        [baseline, candidate]
-      )
+        [baseline, candidate],
+      ),
     ).toThrow("candidate model does not support thinking level: high");
     expect(() =>
       resolveModelComparison(
         "synthetic/baseline",
         "synthetic/candidate",
         "minimal",
-        [baseline, candidate]
-      )
+        [baseline, candidate],
+      ),
     ).toThrow(
-      "effective thinking efforts are not comparable: minimal versus low"
+      "effective thinking efforts are not comparable: minimal versus low",
     );
   });
 
@@ -371,19 +371,19 @@ describe("parseCliOptions", () => {
         "medium",
         "--candidate-thinking",
         "medium",
-      ])
+      ]),
     ).toThrow("reasoning comparison requires different thinking levels");
   });
 
   it("rejects an invalid candidate thinking level", () => {
     expect(() => parseCliOptions(["--candidate-thinking"])).toThrow(
-      "--candidate-thinking must be one of:"
+      "--candidate-thinking must be one of:",
     );
   });
 
   it("rejects odd service-tier repetitions", () => {
     expect(() =>
-      parseCliOptions(["--compare-service-tier", "--repetitions", "3"])
+      parseCliOptions(["--compare-service-tier", "--repetitions", "3"]),
     ).toThrow("requires an even repetition count");
   });
 
@@ -395,23 +395,23 @@ describe("parseCliOptions", () => {
         "high",
         "--candidate-thinking",
         "medium",
-      ])
+      ]),
     ).toThrow("cannot combine");
   });
 
   it("limits service-tier comparison to Codex Responses models", () => {
     const comparison = createComparison(
-      parseCliOptions(["--compare-service-tier", "--repetitions", "4"])
+      parseCliOptions(["--compare-service-tier", "--repetitions", "4"]),
     );
 
     expect(() =>
-      validateServiceTierComparison({ api: "openai-responses" }, comparison)
+      validateServiceTierComparison({ api: "openai-responses" }, comparison),
     ).toThrow("requires an openai-codex Responses model");
     expect(() =>
       validateServiceTierComparison(
         { api: "openai-codex-responses" },
-        comparison
-      )
+        comparison,
+      ),
     ).not.toThrow();
   });
 
@@ -432,20 +432,20 @@ describe("parseCliOptions", () => {
 
   it("rejects unsupported or equivalent provider efforts", () => {
     const comparison = createComparison(
-      parseCliOptions(["--thinking", "high", "--candidate-thinking", "medium"])
+      parseCliOptions(["--thinking", "high", "--candidate-thinking", "medium"]),
     );
 
     expect(() =>
       validateReasoningComparison(
         { reasoning: false, thinkingLevelMap: undefined },
-        comparison
-      )
+        comparison,
+      ),
     ).toThrow("does not support reasoning");
     expect(() =>
       validateReasoningComparison(
         { reasoning: true, thinkingLevelMap: { medium: null } },
-        comparison
-      )
+        comparison,
+      ),
     ).toThrow("does not support candidate thinking level: medium");
     expect(() =>
       validateReasoningComparison(
@@ -453,15 +453,15 @@ describe("parseCliOptions", () => {
           reasoning: true,
           thinkingLevelMap: { high: "same", medium: "same" },
         },
-        comparison
-      )
+        comparison,
+      ),
     ).toThrow("map to the same provider effort");
   });
 });
 
 describe("validateServiceTierEvidence", () => {
   const comparison = createComparison(
-    parseCliOptions(["--compare-service-tier", "--repetitions", "4"])
+    parseCliOptions(["--compare-service-tier", "--repetitions", "4"]),
   );
 
   it("accepts observed default and priority payload arms", () => {
@@ -481,30 +481,31 @@ describe("validateServiceTierEvidence", () => {
             payloadServiceTier: "priority",
           },
         ],
-        comparison
-      )
+        comparison,
+      ),
     ).not.toThrow();
   });
 
-  it.each([
-    undefined,
-    "absent",
-    "mixed",
-  ])("rejects candidate payload evidence: %s", (payloadServiceTier) => {
-    expect(() =>
-      validateServiceTierEvidence(
-        [
-          {
-            caseId: "case-a",
-            variant: "candidate",
-            repetition: 2,
-            payloadServiceTier,
-          },
-        ],
-        comparison
-      )
-    ).toThrow("invalid service-tier payload evidence for case-a candidate r2");
-  });
+  it.each([undefined, "absent", "mixed"])(
+    "rejects candidate payload evidence: %s",
+    (payloadServiceTier) => {
+      expect(() =>
+        validateServiceTierEvidence(
+          [
+            {
+              caseId: "case-a",
+              variant: "candidate",
+              repetition: 2,
+              payloadServiceTier,
+            },
+          ],
+          comparison,
+        ),
+      ).toThrow(
+        "invalid service-tier payload evidence for case-a candidate r2",
+      );
+    },
+  );
 
   it("rejects a priority baseline payload", () => {
     expect(() =>
@@ -517,8 +518,8 @@ describe("validateServiceTierEvidence", () => {
             payloadServiceTier: "priority",
           },
         ],
-        comparison
-      )
+        comparison,
+      ),
     ).toThrow("expected absent, got priority");
   });
 });
@@ -533,7 +534,7 @@ describe("createVariantConfigs", () => {
     expect(
       createVariantConfigs(promptPair, {
         thinking: "high",
-      })
+      }),
     ).toEqual({
       baseline: {
         promptContent: "HEAD bytes\n",
@@ -553,7 +554,7 @@ describe("createVariantConfigs", () => {
       createVariantConfigs(promptPair, {
         thinking: "medium",
         compareServiceTier: true,
-      })
+      }),
     ).toEqual({
       baseline: {
         promptContent: "working-tree bytes",
@@ -575,7 +576,7 @@ describe("createVariantConfigs", () => {
       createVariantConfigs(promptPair, {
         thinking: "high",
         candidateModel: "synthetic/candidate",
-      })
+      }),
     ).toEqual({
       baseline: {
         promptContent: "working-tree bytes",
@@ -595,7 +596,7 @@ describe("createVariantConfigs", () => {
       createVariantConfigs(promptPair, {
         thinking: "high",
         candidateThinking: "medium",
-      })
+      }),
     ).toEqual({
       baseline: {
         promptContent: "working-tree bytes",

@@ -135,7 +135,7 @@ function validateAllowlist(allowlist: unknown, configPath: string): string[] {
 
 function parseFastModeConfig(
   data: unknown,
-  configPath: string
+  configPath: string,
 ): FastModeConfig {
   if (!data || typeof data !== "object" || Array.isArray(data)) {
     throw new Error(`Invalid Fast Mode config file: ${configPath}`);
@@ -144,7 +144,7 @@ function parseFastModeConfig(
   const raw = data as Record<string, unknown>;
   if ("allowList" in raw) {
     throw new Error(
-      `Invalid Fast Mode config key "allowList" in: ${configPath}`
+      `Invalid Fast Mode config key "allowList" in: ${configPath}`,
     );
   }
   if (typeof raw.enabled !== "boolean") {
@@ -161,13 +161,13 @@ function parseFastModeConfig(
 }
 
 function isFastModeEntry(
-  entry: SessionEntryLike | undefined
+  entry: SessionEntryLike | undefined,
 ): entry is SessionEntryLike {
   return entry?.type === "custom" && entry.customType === FAST_MODE_CUSTOM_TYPE;
 }
 
 function getLatestFastModeState(
-  entries: readonly SessionEntryLike[]
+  entries: readonly SessionEntryLike[],
 ): FastModeState | null {
   for (let i = entries.length - 1; i >= 0; i--) {
     const entry = entries[i];
@@ -196,7 +196,7 @@ function loadFastModeConfigFile(configPath: string): FastModeState | null {
 
   const config = parseFastModeConfig(
     JSON.parse(readFileSync(configPath, "utf8")),
-    configPath
+    configPath,
   );
   configFastModeAllowlist = new Set(config.allowlist);
 
@@ -210,13 +210,13 @@ function readFastModeConfigForWrite(configPath: string): FastModeConfig | null {
 
   return parseFastModeConfig(
     JSON.parse(readFileSync(configPath, "utf8")),
-    configPath
+    configPath,
   );
 }
 
 function writeFastModeConfigFile(
   state: FastModeState,
-  homeDir = homedir()
+  homeDir = homedir(),
 ): void {
   const configPath = getGlobalFastModeConfigPath(homeDir);
   const existingConfig = readFastModeConfigForWrite(configPath);
@@ -236,10 +236,10 @@ function writeFastModeConfigFile(
 function resolveFastModeState(
   entries: readonly SessionEntryLike[],
   flagEnabled: boolean,
-  homeDir = homedir()
+  homeDir = homedir(),
 ): FastModeState {
   const configState = loadFastModeConfigFile(
-    getGlobalFastModeConfigPath(homeDir)
+    getGlobalFastModeConfigPath(homeDir),
   );
   if (flagEnabled) {
     return { enabled: true, warned: false };
@@ -271,13 +271,13 @@ function refreshFastStatus(ctx: ExtensionContext): void {
 
 function notifyFastModeStatus(
   ctx: ExtensionCommandContext,
-  enabled: boolean
+  enabled: boolean,
 ): void {
   const supportSource = getFastModeSupportSource(ctx.model);
   const suffix = enabled ? ` (current model: ${supportSource})` : "";
   ctx.ui.notify(
     `Fast mode ${enabled ? "enabled" : "disabled"}${suffix}`,
-    "info"
+    "info",
   );
 }
 
@@ -286,7 +286,7 @@ function setEnabled(
   ctx: ExtensionContext,
   nextEnabled: boolean,
   persist: boolean,
-  warned = fastModeWarned
+  warned = fastModeWarned,
 ): void {
   const state = { enabled: nextEnabled, warned };
   if (persist) {
@@ -302,7 +302,7 @@ function setEnabled(
 function persistFastModeCommand(
   pi: ExtensionAPI,
   ctx: ExtensionCommandContext,
-  nextEnabled: boolean
+  nextEnabled: boolean,
 ): void {
   const shouldWarn = nextEnabled && !fastModeWarned;
   setEnabled(pi, ctx, nextEnabled, true, fastModeWarned || shouldWarn);
@@ -315,7 +315,7 @@ function persistFastModeCommand(
 export function applyFastModeToPayload(
   payload: unknown,
   enabled: boolean,
-  model: unknown
+  model: unknown,
 ): unknown | undefined {
   if (!(enabled && modelSupportsFastMode(model))) {
     return;
@@ -345,7 +345,7 @@ export function registerFastMode(pi: ExtensionAPI): void {
     const fastFlagEnabled = Boolean(pi.getFlag("fast"));
     const state = resolveFastModeState(
       ctx.sessionManager.getEntries() as readonly SessionEntryLike[],
-      fastFlagEnabled
+      fastFlagEnabled,
     );
     setEnabled(pi, ctx, state.enabled, fastFlagEnabled, state.warned);
   }
@@ -363,7 +363,7 @@ export function registerFastMode(pi: ExtensionAPI): void {
   });
 
   pi.on("before_provider_request", (event, ctx) =>
-    applyFastModeToPayload(event.payload, fastModeEnabled, ctx.model)
+    applyFastModeToPayload(event.payload, fastModeEnabled, ctx.model),
   );
 
   pi.registerCommand("fast", {

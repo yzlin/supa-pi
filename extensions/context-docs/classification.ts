@@ -88,7 +88,7 @@ function countBoundarySignals(text: string): number {
 
 export function reachesContextMapThreshold(
   text: string,
-  threshold = CONTEXT_MAP_BOUNDARY_THRESHOLD
+  threshold = CONTEXT_MAP_BOUNDARY_THRESHOLD,
 ): boolean {
   return countBoundarySignals(text) >= threshold;
 }

@@ -57,7 +57,7 @@ async function preflightAddParent(absolutePath: string): Promise<void> {
         throw new Error(`Add parent is not a directory: ${parent}.`);
       }
       // POSIX creation requires write and search permission on the directory.
-      // biome-ignore lint/suspicious/noBitwiseOperators: fs.access modes are bit flags.
+      // oxlint-disable-next-line no-bitwise -- fs.access modes are bit flags.
       await fsAccess(parent, constants.W_OK | constants.X_OK);
       return;
     } catch (error) {
@@ -75,7 +75,7 @@ async function preflightAddParent(absolutePath: string): Promise<void> {
 
 function findFirstChangedLine(
   oldContent: string,
-  newContent: string
+  newContent: string,
 ): number | undefined {
   if (oldContent === newContent) {
     return;
@@ -95,7 +95,7 @@ function generateDiffString(
   oldContent: string,
   newContent: string,
   missing: { old: boolean; new: boolean },
-  requireComplete: boolean
+  requireComplete: boolean,
 ): {
   diff: string;
   diffOmitted: boolean;
@@ -109,7 +109,7 @@ function generateDiffString(
   if (inputBytes > MAX_DIFF_BYTES || inputLines > MAX_DIFF_LINES) {
     if (requireComplete) {
       throw new Error(
-        `Planned diff for ${filePath} exceeds the global diff ceiling.`
+        `Planned diff for ${filePath} exceeds the global diff ceiling.`,
       );
     }
     return {
@@ -126,7 +126,7 @@ function generateDiffString(
       newContent,
       undefined,
       undefined,
-      { context: 4 }
+      { context: 4 },
     ),
     diffOmitted: false,
     firstChangedLine: findFirstChangedLine(oldContent, newContent),
@@ -135,7 +135,7 @@ function generateDiffString(
 
 function buildCombinedDiff(
   results: Array<{ diff: string; diffOmitted: boolean }>,
-  requireComplete: boolean
+  requireComplete: boolean,
 ): { diff: string; omitted: boolean } {
   if (results.some((result) => result.diffOmitted)) {
     return { diff: "", omitted: true };
@@ -168,7 +168,7 @@ function createCanonicalizeMutationPathContext(): CanonicalizeMutationPathContex
 }
 async function canonicalizeMutationPath(
   path: string,
-  context = createCanonicalizeMutationPathContext()
+  context = createCanonicalizeMutationPathContext(),
 ): Promise<string> {
   let current = resolvePath(path);
   if (
@@ -177,7 +177,7 @@ async function canonicalizeMutationPath(
       MAX_CANONICALIZE_PATH_SEGMENTS
   ) {
     throw new Error(
-      `Path exceeds maximum canonicalization size of ${MAX_CANONICALIZE_PATH_LENGTH} characters / ${MAX_CANONICALIZE_PATH_SEGMENTS} segments`
+      `Path exceeds maximum canonicalization size of ${MAX_CANONICALIZE_PATH_LENGTH} characters / ${MAX_CANONICALIZE_PATH_SEGMENTS} segments`,
     );
   }
   const cached = context.cache.get(current);
@@ -198,7 +198,7 @@ async function canonicalizeMutationPath(
     context.realpathAttempts++;
     if (context.realpathAttempts > MAX_CANONICALIZE_REALPATH_ATTEMPTS) {
       throw new Error(
-        `Path canonicalization exceeds maximum realpath attempts of ${MAX_CANONICALIZE_REALPATH_ATTEMPTS}`
+        `Path canonicalization exceeds maximum realpath attempts of ${MAX_CANONICALIZE_REALPATH_ATTEMPTS}`,
       );
     }
     try {
@@ -229,7 +229,7 @@ export async function withFileMutationQueue<T>(
   paths: string[],
   fn: () => Promise<T>,
   signal?: AbortSignal,
-  canonicalizeContext = createCanonicalizeMutationPathContext()
+  canonicalizeContext = createCanonicalizeMutationPathContext(),
 ): Promise<T> {
   if (signal?.aborted) {
     throw new Error("Operation aborted");
@@ -240,7 +240,7 @@ export async function withFileMutationQueue<T>(
       throw new Error("Operation aborted");
     }
     canonicalPaths.push(
-      await canonicalizeMutationPath(path, canonicalizeContext)
+      await canonicalizeMutationPath(path, canonicalizeContext),
     );
   }
   const keys = [...new Set(canonicalPaths)].sort();
@@ -249,13 +249,13 @@ export async function withFileMutationQueue<T>(
       (fileMutationQueues.get(key)?.depth ?? 0) >= MAX_FILE_MUTATION_QUEUE_DEPTH
     ) {
       throw new Error(
-        `File mutation queue for ${key} exceeds maximum depth of ${MAX_FILE_MUTATION_QUEUE_DEPTH}`
+        `File mutation queue for ${key} exceeds maximum depth of ${MAX_FILE_MUTATION_QUEUE_DEPTH}`,
       );
     }
   }
   const previousEntries = keys.map((key) => fileMutationQueues.get(key));
   const previous = Promise.all(
-    previousEntries.map((entry) => entry?.tail.catch(() => undefined))
+    previousEntries.map((entry) => entry?.tail.catch(() => undefined)),
   );
   let release!: () => void;
   const gate = new Promise<void>((resolve) => {
@@ -429,7 +429,7 @@ export const editTool = {
     params: UnifiedEditParameters,
     signal,
     _onUpdate,
-    ctx
+    ctx,
   ) {
     if (signal?.aborted) {
       throw new Error("Operation aborted");
@@ -442,7 +442,7 @@ export const editTool = {
     }
     if (deletes.length && ctx.toolDisplayAllowPermanentDelete !== true) {
       throw new Error(
-        "Permanent delete is disabled. Set tools.edit.allowPermanentDelete=true to enable confirmed deletes."
+        "Permanent delete is disabled. Set tools.edit.allowPermanentDelete=true to enable confirmed deletes.",
       );
     }
     for (const change of deletes) {
@@ -460,19 +460,19 @@ export const editTool = {
           old: change.kind === "add",
           new: change.kind === "delete",
         },
-        deletes.length > 0
+        deletes.length > 0,
       ),
     }));
     const combinedDiff = buildCombinedDiff(results, deletes.length > 0);
     if (deletes.length) {
       if (!ctx.hasUI || (ctx.mode !== "tui" && ctx.mode !== "rpc")) {
         throw new Error(
-          "Permanent delete requires confirmation and is unavailable in JSON/print mode."
+          "Permanent delete requires confirmation and is unavailable in JSON/print mode.",
         );
       }
       const approved = await ctx.ui.confirm(
         "Confirm permanent file deletion",
-        `Deleted paths:\n${deletes.map((change) => `- ${change.path}`).join("\n")}\n\nComplete planned diff:\n${combinedDiff.diff}`
+        `Deleted paths:\n${deletes.map((change) => `- ${change.path}`).join("\n")}\n\nComplete planned diff:\n${combinedDiff.diff}`,
       );
       if (!approved) {
         throw new Error("Permanent delete was not approved; no files changed.");
@@ -489,11 +489,11 @@ export const editTool = {
         for (const change of plan.changes) {
           const canonical = await canonicalizeMutationPath(
             change.absolutePath,
-            canonicalizeContext
+            canonicalizeContext,
           );
           if (canonicalChanges.has(canonical)) {
             throw new Error(
-              `Multiple planned paths resolve to the same target: ${change.path}.`
+              `Multiple planned paths resolve to the same target: ${change.path}.`,
             );
           }
           canonicalChanges.set(canonical, change);
@@ -504,15 +504,15 @@ export const editTool = {
             if (
               pathsHaveAncestorDescendantConflict(
                 canonicalPaths[i],
-                canonicalPaths[j]
+                canonicalPaths[j],
               ) ||
               pathsHaveAncestorDescendantConflict(
                 canonicalPaths[j],
-                canonicalPaths[i]
+                canonicalPaths[i],
               )
             ) {
               throw new Error(
-                "Planned targets overlap as ancestor and descendant paths."
+                "Planned targets overlap as ancestor and descendant paths.",
               );
             }
           }
@@ -530,7 +530,7 @@ export const editTool = {
             (await fsLstat(mutationPath)).isSymbolicLink()
           ) {
             throw new Error(
-              `Refusing to delete symbolic link: ${change.path}.`
+              `Refusing to delete symbolic link: ${change.path}.`,
             );
           }
           if (change.kind === "add") {
@@ -543,17 +543,17 @@ export const editTool = {
             (await fsReadFile(mutationPath, "utf8")) !== change.oldText
           ) {
             throw new Error(
-              `Source changed after planning: ${change.path}; no files changed.`
+              `Source changed after planning: ${change.path}; no files changed.`,
             );
           } else if (change.kind === "delete") {
             // POSIX unlink permission is controlled by the parent directory.
             await fsAccess(
               dirname(change.absolutePath),
-              // biome-ignore lint/suspicious/noBitwiseOperators: fs.access modes are bit flags.
-              constants.W_OK | constants.X_OK
+              // oxlint-disable-next-line no-bitwise -- fs.access modes are bit flags.
+              constants.W_OK | constants.X_OK,
             );
           } else {
-            // biome-ignore lint/suspicious/noBitwiseOperators: fs.access modes are bit flags.
+            // oxlint-disable-next-line no-bitwise -- fs.access modes are bit flags.
             await fsAccess(canonical, constants.R_OK | constants.W_OK);
           }
         }
@@ -590,13 +590,13 @@ export const editTool = {
             diffOmitted: combinedDiff.omitted,
             files: collectFilesInOrder(results),
             firstChangedLine: results.find(
-              (result) => result.firstChangedLine !== undefined
+              (result) => result.firstChangedLine !== undefined,
             )?.firstChangedLine,
           },
         };
       },
       signal,
-      canonicalizeContext
+      canonicalizeContext,
     );
   },
 };

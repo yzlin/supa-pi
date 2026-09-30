@@ -30,7 +30,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 function nonEmptyString(value: unknown, field: string): string {
   if (typeof value !== "string" || value.trim().length === 0) {
     throw new Error(
-      `Invalid goal checkpoint: ${field} must be a non-empty string.`
+      `Invalid goal checkpoint: ${field} must be a non-empty string.`,
     );
   }
   return value.trim();
@@ -42,7 +42,7 @@ function nullableString(value: unknown, field: string): string | null {
   }
   if (typeof value !== "string" || value.trim().length === 0) {
     throw new Error(
-      `Invalid goal checkpoint: ${field} must be a string or null.`
+      `Invalid goal checkpoint: ${field} must be a string or null.`,
     );
   }
   return value.trim();
@@ -51,7 +51,7 @@ function nullableString(value: unknown, field: string): string | null {
 function arrayOf<T>(
   value: unknown,
   field: string,
-  parseEntry: (entry: unknown, index: number) => T
+  parseEntry: (entry: unknown, index: number) => T,
 ): T[] {
   if (!Array.isArray(value)) {
     throw new Error(`Invalid goal checkpoint: ${field} must be an array.`);
@@ -62,18 +62,18 @@ function arrayOf<T>(
 function stringArray(value: unknown, field: string): string[] {
   if (!Array.isArray(value)) {
     throw new Error(
-      `Invalid goal checkpoint: ${field} must be an array of strings.`
+      `Invalid goal checkpoint: ${field} must be an array of strings.`,
     );
   }
   return value.map((entry, index) =>
-    nonEmptyString(entry, `${field}[${index}]`)
+    nonEmptyString(entry, `${field}[${index}]`),
   );
 }
 
 function nonNegativeInteger(value: unknown, field: string): number {
   if (!Number.isSafeInteger(value) || (value as number) < 0) {
     throw new Error(
-      `Invalid goal checkpoint: ${field} must be a non-negative integer.`
+      `Invalid goal checkpoint: ${field} must be a non-negative integer.`,
     );
   }
   return value as number;
@@ -99,7 +99,7 @@ const MODES = new Set<GoalMode>(["classic", "task"]);
 function status(value: unknown, field: string): GoalStatus {
   if (typeof value !== "string" || !GOAL_STATUSES.has(value as GoalStatus)) {
     throw new Error(
-      `Invalid goal checkpoint: ${field} has unsupported status.`
+      `Invalid goal checkpoint: ${field} has unsupported status.`,
     );
   }
   return value as GoalStatus;
@@ -111,7 +111,7 @@ function taskStatus(value: unknown, field: string): GoalTaskStatus {
     !TASK_STATUSES.has(value as GoalTaskStatus)
   ) {
     throw new Error(
-      `Invalid goal checkpoint: ${field} has unsupported status.`
+      `Invalid goal checkpoint: ${field} has unsupported status.`,
     );
   }
   return value as GoalTaskStatus;
@@ -132,22 +132,22 @@ function budget(value: unknown, field: string): GoalTaskBudget {
     maxAttempts: nonNegativeInteger(value.maxAttempts, `${field}.maxAttempts`),
     usedAttempts: nonNegativeInteger(
       value.usedAttempts,
-      `${field}.usedAttempts`
+      `${field}.usedAttempts`,
     ),
     usedToolCalls: nonNegativeInteger(
       value.usedToolCalls,
-      `${field}.usedToolCalls`
+      `${field}.usedToolCalls`,
     ),
   };
   if (value.maxToolCalls !== undefined) {
     normalized.maxToolCalls = nonNegativeInteger(
       value.maxToolCalls,
-      `${field}.maxToolCalls`
+      `${field}.maxToolCalls`,
     );
   }
   if (normalized.maxAttempts <= 0) {
     throw new Error(
-      `Invalid goal checkpoint: ${field}.maxAttempts must be positive.`
+      `Invalid goal checkpoint: ${field}.maxAttempts must be positive.`,
     );
   }
   return normalized;
@@ -156,7 +156,7 @@ function budget(value: unknown, field: string): GoalTaskBudget {
 function task(value: unknown, index: number): GoalTask {
   if (!isRecord(value)) {
     throw new Error(
-      `Invalid goal checkpoint: tasks[${index}] must be an object.`
+      `Invalid goal checkpoint: tasks[${index}] must be an object.`,
     );
   }
   const normalized: GoalTask = {
@@ -175,7 +175,7 @@ function task(value: unknown, index: number): GoalTask {
 function dirtyBaseline(value: unknown): DirtyBaseline {
   if (!isRecord(value)) {
     throw new Error(
-      "Invalid goal checkpoint: dirtyBaseline must be an object."
+      "Invalid goal checkpoint: dirtyBaseline must be an object.",
     );
   }
   return {
@@ -187,7 +187,7 @@ function dirtyBaseline(value: unknown): DirtyBaseline {
 function milestone(value: unknown, index: number): GoalMilestone {
   if (!isRecord(value)) {
     throw new Error(
-      `Invalid goal checkpoint: milestones[${index}] must be an object.`
+      `Invalid goal checkpoint: milestones[${index}] must be an object.`,
     );
   }
   return {
@@ -200,7 +200,7 @@ function milestone(value: unknown, index: number): GoalMilestone {
 function evidenceEntry(value: unknown, index: number): GoalEvidenceEntry {
   if (!isRecord(value)) {
     throw new Error(
-      `Invalid goal checkpoint: evidenceLedger[${index}] must be an object.`
+      `Invalid goal checkpoint: evidenceLedger[${index}] must be an object.`,
     );
   }
   return {
@@ -209,17 +209,17 @@ function evidenceEntry(value: unknown, index: number): GoalEvidenceEntry {
       : {
           taskId: nonEmptyString(
             value.taskId,
-            `evidenceLedger[${index}].taskId`
+            `evidenceLedger[${index}].taskId`,
           ),
         }),
     summary: nonEmptyString(value.summary, `evidenceLedger[${index}].summary`),
     filesTouched: stringArray(
       value.filesTouched,
-      `evidenceLedger[${index}].filesTouched`
+      `evidenceLedger[${index}].filesTouched`,
     ),
     validation: stringArray(
       value.validation,
-      `evidenceLedger[${index}].validation`
+      `evidenceLedger[${index}].validation`,
     ),
     risks: stringArray(value.risks, `evidenceLedger[${index}].risks`),
   };
@@ -241,7 +241,7 @@ function blockerState(value: unknown): GoalBlockerState {
 function executorSummary(value: unknown, index: number): GoalExecutorSummary {
   if (!isRecord(value)) {
     throw new Error(
-      `Invalid goal checkpoint: executorSummaries[${index}] must be an object.`
+      `Invalid goal checkpoint: executorSummaries[${index}] must be an object.`,
     );
   }
   const resultStatus = value.status;
@@ -252,7 +252,7 @@ function executorSummary(value: unknown, index: number): GoalExecutorSummary {
     resultStatus !== "failed"
   ) {
     throw new Error(
-      `Invalid goal checkpoint: executorSummaries[${index}].status has unsupported status.`
+      `Invalid goal checkpoint: executorSummaries[${index}].status has unsupported status.`,
     );
   }
   return {
@@ -261,45 +261,45 @@ function executorSummary(value: unknown, index: number): GoalExecutorSummary {
       : {
           taskId: nonEmptyString(
             value.taskId,
-            `executorSummaries[${index}].taskId`
+            `executorSummaries[${index}].taskId`,
           ),
         }),
     status: resultStatus,
     summary: nonEmptyString(
       value.summary,
-      `executorSummaries[${index}].summary`
+      `executorSummaries[${index}].summary`,
     ),
     filesTouched: stringArray(
       value.filesTouched,
-      `executorSummaries[${index}].filesTouched`
+      `executorSummaries[${index}].filesTouched`,
     ),
     validation: stringArray(
       value.validation,
-      `executorSummaries[${index}].validation`
+      `executorSummaries[${index}].validation`,
     ),
     followUps: stringArray(
       value.followUps,
-      `executorSummaries[${index}].followUps`
+      `executorSummaries[${index}].followUps`,
     ),
     blockers: stringArray(
       value.blockers,
-      `executorSummaries[${index}].blockers`
+      `executorSummaries[${index}].blockers`,
     ),
     evidence: stringArray(
       value.evidence,
-      `executorSummaries[${index}].evidence`
+      `executorSummaries[${index}].evidence`,
     ),
     risks: stringArray(value.risks, `executorSummaries[${index}].risks`),
     suggestedNextTask: nullableString(
       value.suggestedNextTask,
-      `executorSummaries[${index}].suggestedNextTask`
+      `executorSummaries[${index}].suggestedNextTask`,
     ),
   };
 }
 
 export function parseGoalCheckpoint(
   value: unknown,
-  expectedGoalId?: string
+  expectedGoalId?: string,
 ): Result<GoalCheckpoint> {
   try {
     if (!isRecord(value)) {
@@ -311,7 +311,7 @@ export function parseGoalCheckpoint(
     const goalId = nonEmptyString(value.goalId, "goalId");
     if (expectedGoalId && goalId !== expectedGoalId) {
       throw new Error(
-        `Invalid goal checkpoint: expected goalId ${expectedGoalId}, got ${goalId}.`
+        `Invalid goal checkpoint: expected goalId ${expectedGoalId}, got ${goalId}.`,
       );
     }
     const taskBudget =
@@ -321,7 +321,7 @@ export function parseGoalCheckpoint(
     const checkpointMode = mode(value.mode);
     if (checkpointMode === "task" && (taskBudget === null || taskBudget <= 0)) {
       throw new Error(
-        "Invalid goal checkpoint: task mode requires positive taskBudget."
+        "Invalid goal checkpoint: task mode requires positive taskBudget.",
       );
     }
     const tasks = arrayOf(value.tasks, "tasks", task);
@@ -333,7 +333,7 @@ export function parseGoalCheckpoint(
       objective: nonEmptyString(value.objective, "objective"),
       normalizedObjective: nonEmptyString(
         value.normalizedObjective,
-        "normalizedObjective"
+        "normalizedObjective",
       ),
       createdAt: nonEmptyString(value.createdAt, "createdAt"),
       updatedAt: nonEmptyString(value.updatedAt, "updatedAt"),
@@ -341,25 +341,25 @@ export function parseGoalCheckpoint(
       milestones: arrayOf(value.milestones, "milestones", milestone),
       currentMilestone: nullableString(
         value.currentMilestone,
-        "currentMilestone"
+        "currentMilestone",
       ),
       taskBudget,
       attemptsUsed: nonNegativeInteger(value.attemptsUsed, "attemptsUsed"),
       evidenceLedger: arrayOf(
         value.evidenceLedger,
         "evidenceLedger",
-        evidenceEntry
+        evidenceEntry,
       ),
       candidateFollowups: stringArray(
         value.candidateFollowups,
-        "candidateFollowups"
+        "candidateFollowups",
       ),
       blockerState: blockerState(value.blockerState),
       dirtyBaseline: dirtyBaseline(value.dirtyBaseline),
       executorSummaries: arrayOf(
         value.executorSummaries,
         "executorSummaries",
-        executorSummary
+        executorSummary,
       ),
       tasks,
     };
@@ -374,14 +374,14 @@ export function parseGoalCheckpoint(
 
 export function getGoalCheckpointPath(
   goalId: string,
-  cwd = process.cwd()
+  cwd = process.cwd(),
 ): string {
   return join(cwd, ".pi", "goal", `${goalId}.json`);
 }
 
 export function loadGoalCheckpoint(
   goalId: string,
-  cwd = process.cwd()
+  cwd = process.cwd(),
 ): Result<{ found: boolean; path: string; checkpoint?: GoalCheckpoint }> {
   const path = getGoalCheckpointPath(goalId, cwd);
   if (!existsSync(path)) {
@@ -407,7 +407,7 @@ export function loadGoalCheckpoint(
 
 export function saveGoalCheckpoint(
   checkpoint: GoalCheckpoint,
-  cwd = process.cwd()
+  cwd = process.cwd(),
 ): Result<{ path: string; checkpoint: GoalCheckpoint }> {
   const normalized = parseGoalCheckpoint(checkpoint, checkpoint.goalId);
   if (!normalized.ok) {
@@ -419,7 +419,7 @@ export function saveGoalCheckpoint(
   writeFileSync(
     tempPath,
     `${JSON.stringify(normalized.value, null, 2)}\n`,
-    "utf8"
+    "utf8",
   );
   renameSync(tempPath, path);
   return { ok: true, value: { path, checkpoint: normalized.value } };

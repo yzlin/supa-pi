@@ -98,20 +98,20 @@ describe("tool-display commands", () => {
         "show",
         createContext(cwd, (message) => {
           messages.push(message);
-        })
+        }),
       );
 
       expect(messages[0]).toContain("tool-display");
       expect(messages[0]).toContain("tools.search.enabled: on");
       expect(messages[0]).toContain("tools.read.fullRead.targets:");
       expect(messages[0]).toContain(
-        "name | source | enabled | provenance | cap | pagination | patterns"
+        "name | source | enabled | provenance | cap | pagination | patterns",
       );
       expect(messages[0]).toContain(
-        "skills | registeredSkills | on | default | 262144 | full | -"
+        "skills | registeredSkills | on | default | 262144 | full | -",
       );
       expect(messages[0]).toContain(
-        "user-rules | patterns | on | default | 262144 | full | base=~/.pi/agent/rules include=**/*.md"
+        "user-rules | patterns | on | default | 262144 | full | base=~/.pi/agent/rules include=**/*.md",
       );
       expect(messages[0]).toContain("output.bash: enabled=on, compact");
     } finally {
@@ -154,35 +154,35 @@ describe("tool-display commands", () => {
               },
             },
           },
-        })
+        }),
       );
 
       await command.handler(
         "show",
         createContext(cwd, (message) => {
           messages.push(message);
-        })
+        }),
       );
 
       expect(messages[0]).toContain(
-        "docs | patterns | off | project | 42 | paged | base=docs include=**/*.md exclude=drafts/**"
+        "docs | patterns | off | project | 42 | paged | base=docs include=**/*.md exclude=drafts/**",
       );
       expect(messages[0]).toContain(
-        "tools.read.fullRead.warning: target broken: pattern target missing baseDir"
+        "tools.read.fullRead.warning: target broken: pattern target missing baseDir",
       );
       expect(messages[0]).toContain(
-        "tools.read.fullRead.warning: target broken: pattern target missing include"
+        "tools.read.fullRead.warning: target broken: pattern target missing include",
       );
       expect(messages[0]).toContain(
-        "tools.read.fullRead.warning: target at index 2: missing name ignored"
+        "tools.read.fullRead.warning: target at index 2: missing name ignored",
       );
       expect(messages[0]).toContain(
-        "tools.read.fullRead.warning: target at index 3: invalid target ignored"
+        "tools.read.fullRead.warning: target at index 3: invalid target ignored",
       );
       expect(
         messages[0].match(
-          /tools\.read\.fullRead\.warning: target broken: pattern target missing baseDir/g
-        ) ?? []
+          /tools\.read\.fullRead\.warning: target broken: pattern target missing baseDir/g,
+        ) ?? [],
       ).toHaveLength(1);
     } finally {
       rmSync(cwd, { force: true, recursive: true });
@@ -199,13 +199,13 @@ describe("tool-display commands", () => {
         "reset",
         createContext(cwd, (message) => {
           messages.push(message);
-        })
+        }),
       );
       const configPath = getProjectToolDisplayConfigPath(cwd);
 
       expect(existsSync(configPath)).toBe(true);
       expect(JSON.parse(readFileSync(configPath, "utf8"))).toEqual(
-        DEFAULT_TOOL_DISPLAY_CONFIG
+        DEFAULT_TOOL_DISPLAY_CONFIG,
       );
     } finally {
       rmSync(cwd, { force: true, recursive: true });
@@ -222,10 +222,10 @@ describe("tool-display commands", () => {
         "preset off",
         createContext(cwd, (message) => {
           messages.push(message);
-        })
+        }),
       );
       const config = JSON.parse(
-        readFileSync(getProjectToolDisplayConfigPath(cwd), "utf8")
+        readFileSync(getProjectToolDisplayConfigPath(cwd), "utf8"),
       );
 
       expect(config.tools.read.enabled).toBe(false);

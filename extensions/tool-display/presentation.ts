@@ -68,18 +68,18 @@ interface ComposableTool<P extends TProperties, D, S> {
     params: Static<TObject<P>>,
     signal: AbortSignal | undefined,
     onUpdate: AgentToolUpdateCallback<D> | undefined,
-    context: ExtensionContext
+    context: ExtensionContext,
   ): Promise<AgentToolResult<D>>;
   renderCall?(
     args: Static<TObject<P>>,
     theme: Theme,
-    context: ToolRenderContext<S, Static<TObject<P>>>
+    context: ToolRenderContext<S, Static<TObject<P>>>,
   ): Component;
   renderResult?(
     result: AgentToolResult<D>,
     options: ToolRenderResultOptions,
     theme: Theme,
-    context: ToolRenderContext<S, Static<TObject<P>>>
+    context: ToolRenderContext<S, Static<TObject<P>>>,
   ): Component;
 }
 
@@ -205,7 +205,7 @@ export function composeReasonedTool<
   S extends PresentationState = PresentationState,
 >(
   tool: ComposableTool<P, D, S>,
-  options: ComposeOptions
+  options: ComposeOptions,
 ): ToolDefinition<ReasonedSchema<P>, D, S> {
   const parameters = Type.Object({
     reasoning: Type.String({ description: options.reasoningDescription }),
@@ -248,7 +248,7 @@ export function composeReasonedTool<
         delegated as Static<TObject<P>>,
         signal,
         onUpdate,
-        ctx
+        ctx,
       );
       const priorDetails =
         result.details && typeof result.details === "object"
@@ -304,7 +304,7 @@ export function cleanupToolDisplayTimers(owner?: TimerOwner): void {
 }
 
 function stateFor(
-  state: PresentationState
+  state: PresentationState,
 ): NonNullable<PresentationState["toolDisplayPresentation"]> {
   state.toolDisplayPresentation ??= {};
   return state.toolDisplayPresentation;
@@ -322,7 +322,7 @@ function stopTimer(state: PresentationState): void {
 function startTimer(
   state: PresentationState,
   invalidate: () => void,
-  owner: TimerOwner
+  owner: TimerOwner,
 ): void {
   const presentation = stateFor(state);
   presentation.startedAt ??= Date.now();
@@ -440,7 +440,7 @@ function summaryFor(
     content?: Array<{ type: string; text?: string }>;
     details?: unknown;
     isError?: boolean;
-  }
+  },
 ): string {
   const output = firstText(result);
   const details = (result.details ?? {}) as ToolDisplayDetails;
@@ -474,7 +474,7 @@ function summaryFor(
           .map((line) => ({ line, match: line.match(GREP_FILE_PATTERN) }))
           .filter(
             (row): row is { line: string; match: RegExpMatchArray } =>
-              row.match !== null
+              row.match !== null,
           )
       : [];
     const files = new Set(matchRows.map((row) => row.match[1]));
@@ -490,7 +490,7 @@ function summaryFor(
 function fitTail(
   text: string,
   width: number,
-  measuredWidth = visibleWidth(text)
+  measuredWidth = visibleWidth(text),
 ): string {
   const textWidth = measuredWidth;
   if (textWidth <= width) {
@@ -504,7 +504,7 @@ function fitTail(
     text,
     textWidth - requestedTailWidth,
     requestedTailWidth,
-    true
+    true,
   );
   return `${truncateToWidth(text, width - visibleWidth(tail) - 1, "")}…${tail}`;
 }
@@ -513,7 +513,7 @@ function fitMiddle(
   prefix: string,
   middle: string,
   suffix: string,
-  width: number
+  width: number,
 ): string {
   const full = `${prefix}${middle}${suffix}`;
   if (visibleWidth(full) <= width) {
@@ -528,7 +528,7 @@ function fitMiddle(
     middle,
     Math.max(0, middleWidth - available + 1),
     available - 1,
-    true
+    true,
   );
   return `${prefix}…${tail}${suffix}`;
 }
@@ -538,7 +538,7 @@ function backgroundLine(
   width: number,
   theme: ThemeLike,
   error: boolean,
-  settled: boolean
+  settled: boolean,
 ): string {
   let token = "toolPendingBg";
   if (error) {
@@ -553,21 +553,21 @@ function backgroundLine(
 }
 
 function buildPlannedDiff(
-  changes: Awaited<ReturnType<typeof buildUnifiedEditPlan>>["changes"]
+  changes: Awaited<ReturnType<typeof buildUnifiedEditPlan>>["changes"],
 ): { omitted?: string; preview?: string } {
   const inputBytes = changes.reduce(
     (total, change) =>
       total +
       Buffer.byteLength(change.oldText, "utf8") +
       Buffer.byteLength(change.newText, "utf8"),
-    0
+    0,
   );
   const inputLines = changes.reduce(
     (total, change) =>
       total +
       change.oldText.split("\n").length +
       change.newText.split("\n").length,
-    0
+    0,
   );
   const omitted = `exceeds ${MAX_DIFF_BYTES} bytes / ${MAX_DIFF_LINES} lines preview limit`;
   if (inputBytes > MAX_DIFF_BYTES || inputLines > MAX_DIFF_LINES) {
@@ -582,8 +582,8 @@ function buildPlannedDiff(
         change.newText,
         undefined,
         undefined,
-        { context: 4 }
-      )
+        { context: 4 },
+      ),
     )
     .join("\n");
   if (
@@ -600,7 +600,7 @@ function requestEditPreview(
   context: Pick<
     RenderContextLike<ArgsLike>,
     "argsComplete" | "cwd" | "invalidate" | "state"
-  >
+  >,
 ): void {
   if (!(context.argsComplete && typeof args.text === "string")) {
     return;
@@ -638,7 +638,7 @@ function requestEditPreview(
 function plannedPreviewLines(
   presentationState: PresentationState,
   theme: ThemeLike,
-  width: number
+  width: number,
 ): string[] {
   const state = stateFor(presentationState);
   if (state.settled) {
@@ -647,7 +647,7 @@ function plannedPreviewLines(
   if (state.plannedPreview) {
     const heading = theme.fg("dim", "┊   planned diff");
     return [heading, ...state.plannedPreview.split("\n")].map((line) =>
-      truncateToWidth(line, width, "")
+      truncateToWidth(line, width, ""),
     );
   }
   if (state.plannedPreviewOmitted) {
@@ -655,10 +655,10 @@ function plannedPreviewLines(
       truncateToWidth(
         theme.fg(
           "warning",
-          `┊   planned diff omitted: ${state.plannedPreviewOmitted}`
+          `┊   planned diff omitted: ${state.plannedPreviewOmitted}`,
         ),
         width,
-        ""
+        "",
       ),
     ];
   }
@@ -667,10 +667,10 @@ function plannedPreviewLines(
       truncateToWidth(
         theme.fg(
           "warning",
-          `┊   preview unavailable: ${singleLine(state.plannedPreviewError)}`
+          `┊   preview unavailable: ${singleLine(state.plannedPreviewError)}`,
         ),
         width,
-        ""
+        "",
       ),
     ];
   }
@@ -692,7 +692,7 @@ class HeaderComponent implements Component {
     state: PresentationState,
     invalidateCallback: () => void,
     expanded = false,
-    argsComplete = true
+    argsComplete = true,
   ) {
     this.name = name;
     this.args = args;
@@ -740,8 +740,8 @@ class HeaderComponent implements Component {
           this.theme.fg("dim", "┊   "),
           target,
           ` ${this.theme.fg("dim", `→ ${formatToolDuration(elapsed)}`)}`,
-          width
-        )
+          width,
+        ),
       );
     }
     const previewLines =
@@ -757,8 +757,8 @@ class HeaderComponent implements Component {
         width,
         this.theme,
         state.error === true,
-        state.settled === true
-      )
+        state.settled === true,
+      ),
     );
   }
 }
@@ -777,7 +777,7 @@ class ResultComponent implements Component {
     error: boolean,
     body?: Component,
     settled = true,
-    showSummary = true
+    showSummary = true,
   ) {
     this.text = text;
     this.theme = theme;
@@ -805,7 +805,7 @@ class ResultComponent implements Component {
       const text =
         typeof this.text === "function" ? this.text(width) : this.text;
       output.push(
-        backgroundLine(text, width, this.theme, this.error, this.settled)
+        backgroundLine(text, width, this.theme, this.error, this.settled),
       );
     }
     const lines = bodyLines ?? [];
@@ -816,8 +816,8 @@ class ResultComponent implements Component {
           width,
           this.theme,
           this.error,
-          this.settled
-        )
+          this.settled,
+        ),
       );
     }
     return output;
@@ -857,7 +857,7 @@ class ResultBodyComponent implements Component {
 /** Keep an existing expanded renderer full-width beneath the shared header. */
 export function toolResultBody(
   component: Component,
-  dropsSummary = false
+  dropsSummary = false,
 ): Component {
   return new ResultBodyComponent(component, dropsSummary);
 }
@@ -865,14 +865,14 @@ export function toolResultBody(
 export function renderBashToolCall(
   args: ArgsLike,
   theme: ThemeLike,
-  context: Pick<RenderContextLike<ArgsLike>, "state" | "invalidate">
+  context: Pick<RenderContextLike<ArgsLike>, "state" | "invalidate">,
 ): Component {
   return new HeaderComponent(
     "bash",
     args,
     theme,
     context.state,
-    context.invalidate
+    context.invalidate,
   );
 }
 
@@ -881,7 +881,7 @@ export function renderBashToolResult(
   options: RenderOptionsLike,
   theme: ThemeLike,
   context: Pick<RenderContextLike<ArgsLike>, "args" | "state" | "isError">,
-  body?: Component
+  body?: Component,
 ): Component {
   const state = stateFor(context.state);
   const details = (result.details ?? {}) as ToolDisplayDetails;
@@ -909,13 +909,13 @@ export function renderBashToolResult(
         theme.fg("dim", "┊   "),
         command,
         ` ${theme.fg("dim", "→")} ${theme.fg(token, `${status} in ${formatToolDuration(durationMs)}${badges}`)}`,
-        width
+        width,
       ),
     theme,
     error,
     body,
     !options.isPartial,
-    !options.isPartial
+    !options.isPartial,
   );
 }
 
@@ -926,7 +926,7 @@ export function renderOwnedToolCall(
   context: Pick<
     RenderContextLike<ArgsLike>,
     "argsComplete" | "cwd" | "expanded" | "invalidate" | "state"
-  >
+  >,
 ): Component {
   if (name === "edit" && context.expanded === true) {
     requestEditPreview(args, context);
@@ -938,7 +938,7 @@ export function renderOwnedToolCall(
     context.state,
     context.invalidate,
     name === "edit" && context.expanded === true,
-    context.argsComplete !== false
+    context.argsComplete !== false,
   );
 }
 
@@ -948,7 +948,7 @@ export function renderOwnedToolResult(
   options: RenderOptionsLike,
   theme: ThemeLike,
   context: Pick<RenderContextLike<ArgsLike>, "args" | "state" | "isError">,
-  body?: Component
+  body?: Component,
 ): Component {
   const state = stateFor(context.state);
   const error = result.isError === true || context.isError === true;
@@ -964,7 +964,7 @@ export function renderOwnedToolResult(
   const target = singleLine(targetFor(name, context.args));
   const resultWithError = error ? { ...result, isError: true } : result;
   const baseSummary = singleLine(
-    summaryFor(name, context.args, resultWithError)
+    summaryFor(name, context.args, resultWithError),
   );
   const summary =
     name === "edit"
@@ -977,11 +977,11 @@ export function renderOwnedToolResult(
         theme.fg("dim", "┊   "),
         target,
         ` ${theme.fg("dim", "→")} ${theme.fg(token, summary)}`,
-        width
+        width,
       ),
     theme,
     error,
     body,
-    !options.isPartial
+    !options.isPartial,
   );
 }

@@ -12,14 +12,14 @@ import {
 import type { RtkConfig, RtkRuntime, RtkToolName } from "./types";
 
 function isTextOnlyContent(
-  content: ToolResultEvent["content"]
+  content: ToolResultEvent["content"],
 ): content is [TextContent] {
   return content.length === 1 && content[0]?.type === "text";
 }
 
 function getTrackedToolName(
   toolName: string,
-  config: RtkConfig
+  config: RtkConfig,
 ): RtkToolName | null {
   const { outputCompaction } = config;
   if (!(outputCompaction.enabled && outputCompaction.trackSavings)) {
@@ -56,7 +56,7 @@ interface RtkCompactionMetadata {
 
 function mergeRtkCompactionDetails(
   details: ToolResultEvent["details"],
-  metadata: RtkCompactionMetadata
+  metadata: RtkCompactionMetadata,
 ): ToolResultEvent["details"] {
   return {
     ...(details && typeof details === "object" ? details : {}),
@@ -66,7 +66,7 @@ function mergeRtkCompactionDetails(
 
 function getCompactionTarget(
   event: ToolResultEvent,
-  config: RtkConfig
+  config: RtkConfig,
 ): RtkToolName | null {
   if (event.toolName === "read" && isToolDisplayFullRead(event.details)) {
     return null;
@@ -114,7 +114,7 @@ function clampTail(text: string, maxChars: number): string {
 function compactText(
   toolName: RtkToolName,
   text: string,
-  config: RtkConfig
+  config: RtkConfig,
 ): string {
   const { maxLines, maxChars } = config.outputCompaction;
   const lines = text.split("\n");
@@ -127,7 +127,7 @@ function compactText(
 }
 
 export function createRtkToolExecutionStartHandler(
-  runtime: RtkRuntime
+  runtime: RtkRuntime,
 ): ExtensionHandler<ToolExecutionStartEvent> {
   return (event) => {
     const config = runtime.getConfig();
@@ -142,7 +142,7 @@ export function createRtkToolExecutionStartHandler(
 }
 
 export function createRtkToolResultHandler(
-  runtime: RtkRuntime
+  runtime: RtkRuntime,
 ): ExtensionHandler<ToolResultEvent, ToolResultEventResult> {
   return (event) => {
     const config = runtime.getConfig();
@@ -162,7 +162,7 @@ export function createRtkToolResultHandler(
     runtime.metrics.recordToolSavings(
       toolName,
       originalText.length,
-      compactedText.length
+      compactedText.length,
     );
     runtime.metrics.completeCommand(event.toolCallId, {
       inputText: originalText,

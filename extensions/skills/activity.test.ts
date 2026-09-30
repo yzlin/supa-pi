@@ -48,11 +48,11 @@ describe("skill operation activity", () => {
 
     const factory = widgets[0]?.content as (
       tui: { requestRender(): void },
-      activeTheme: typeof theme
+      activeTheme: typeof theme,
     ) => { render(width: number): string[]; dispose(): void };
     const component = factory(
       { requestRender: () => (renderRequests += 1) },
-      theme
+      theme,
     );
 
     const initialLines = component.render(80);
@@ -62,12 +62,12 @@ describe("skill operation activity", () => {
       renderSkillActivityLine(
         SKILL_ACTIVITY_FRAMES[0],
         "Installing skill…",
-        theme as never
-      )
+        theme as never,
+      ),
     );
 
     await new Promise((resolve) =>
-      setTimeout(resolve, SKILL_ACTIVITY_INTERVAL_MS + 20)
+      setTimeout(resolve, SKILL_ACTIVITY_INTERVAL_MS + 20),
     );
 
     expect(renderRequests).toBeGreaterThan(0);
@@ -75,8 +75,8 @@ describe("skill operation activity", () => {
       renderSkillActivityLine(
         SKILL_ACTIVITY_FRAMES[1],
         "Installing skill…",
-        theme as never
-      )
+        theme as never,
+      ),
     );
 
     component.dispose();
@@ -92,7 +92,7 @@ describe("skill operation activity", () => {
         },
         setWidget(_key: string, content: unknown) {
           calls.push(
-            `widget:${typeof content === "function" ? "factory" : ""}`
+            `widget:${typeof content === "function" ? "factory" : ""}`,
           );
         },
       },

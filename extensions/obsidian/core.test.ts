@@ -74,7 +74,7 @@ function createExtensionHarness() {
   obsidianExtension({
     on(
       name: string,
-      handler: (event: unknown, context: ExtensionContext) => unknown
+      handler: (event: unknown, context: ExtensionContext) => unknown,
     ) {
       hooks.set(name as HookName, handler);
     },
@@ -196,12 +196,12 @@ describe("obsidian context", () => {
     expect(
       discoverContextChain(
         realVault(root),
-        join(directories.at(-1)!, "note.md")
-      )
+        join(directories.at(-1)!, "note.md"),
+      ),
     ).toEqual(
       directories.map((directory, index) =>
-        realpathSync(join(directory, candidates[index]!))
-      )
+        realpathSync(join(directory, candidates[index]!)),
+      ),
     );
   });
 
@@ -213,7 +213,7 @@ describe("obsidian context", () => {
     writeFileSync(join(child, "CLAUDE.md"), "area");
 
     expect(
-      discoverContextChain(realVault(root), join(child, "new", "note.md"))
+      discoverContextChain(realVault(root), join(child, "new", "note.md")),
     ).toEqual([
       realpathSync(join(root, "CLAUDE.md")),
       realpathSync(join(child, "CLAUDE.md")),
@@ -233,8 +233,8 @@ describe("obsidian context", () => {
       discoverContextChain(
         realVault(root),
         root,
-        new Set([realpathSync(claude)])
-      )
+        new Set([realpathSync(claude)]),
+      ),
     ).toEqual([realpathSync(claude)]);
     expect(discoverContextChain(realVault(root), root)).toEqual([
       realpathSync(join(root, "AGENTS.override.md")),
@@ -284,7 +284,7 @@ describe("obsidian context", () => {
     expect(harness.beforeAgentStart(child)).toBeUndefined();
     expect(harness.beforeAgentStart(child)).toBeUndefined();
     expect(
-      harness.beforeProviderRequest({ system: "base provider prompt" }, child)
+      harness.beforeProviderRequest({ system: "base provider prompt" }, child),
     ).toEqual({
       system: expect.stringContaining(`## ${realpathSync(childClaude)}`),
     });
@@ -314,7 +314,7 @@ describe("obsidian vault resolution", () => {
     const root = makeVault("outside-vault");
     const outside = join(
       tmpdir(),
-      `obsidian-outside-cwd-${crypto.randomUUID()}`
+      `obsidian-outside-cwd-${crypto.randomUUID()}`,
     );
     mkdirSync(outside, { recursive: true });
     writeConfig({ enabled: true, vaults: [{ path: root }] });
@@ -325,8 +325,8 @@ describe("obsidian vault resolution", () => {
     expect(
       harness.toolCall(
         { toolName: "read", input: { path: join(root, "note.md") } },
-        outside
-      )
+        outside,
+      ),
     ).toBeUndefined();
   });
 
@@ -359,7 +359,7 @@ describe("obsidian extension behavior", () => {
     expect(harness.beforeAgentStart(root, "base prompt")).toBeUndefined();
     const result = harness.beforeProviderRequest(
       { system: "base provider prompt" },
-      root
+      root,
     ) as { system: string };
 
     expect(result.system).toStartWith("base provider prompt\n\n");
@@ -380,8 +380,8 @@ describe("obsidian extension behavior", () => {
     expect(
       harness.toolCall(
         { toolName: "read", input: { path: join(root, "note.md") } },
-        root
-      )
+        root,
+      ),
     ).toBeUndefined();
     expect(harness.entries).toEqual([
       {
@@ -390,7 +390,7 @@ describe("obsidian extension behavior", () => {
       },
     ]);
     expect(
-      harness.beforeProviderRequest({ system: "base provider prompt" }, root)
+      harness.beforeProviderRequest({ system: "base provider prompt" }, root),
     ).toEqual({
       system: expect.stringContaining("claude rules"),
     });
@@ -407,19 +407,19 @@ describe("obsidian extension behavior", () => {
     const harness = createExtensionHarness();
     harness.toolCall(
       { toolName: "read", input: { path: join(child, "note.md") } },
-      root
+      root,
     );
 
     expect(
-      harness.beforeProviderRequest({ system: "base provider prompt" }, root)
+      harness.beforeProviderRequest({ system: "base provider prompt" }, root),
     ).toEqual({
       system: expect.stringContaining("base provider prompt\n\nObsidian"),
     });
     expect(
       harness.beforeProviderRequest(
         { messages: [{ role: "system", content: "base message prompt" }] },
-        root
-      )
+        root,
+      ),
     ).toEqual({
       messages: [
         {
@@ -436,8 +436,8 @@ describe("obsidian extension behavior", () => {
             { type: "text", text: "base provider prompt" },
           ],
         },
-        root
-      )
+        root,
+      ),
     ).toEqual({
       system: [
         { type: "text", text: "oauth identity" },
@@ -462,12 +462,12 @@ describe("obsidian extension behavior", () => {
     expect(
       harness.toolCall(
         { toolName: "read", input: { path: join(child, "note.md") } },
-        root
-      )
+        root,
+      ),
     ).toEqual({
       block: true,
       reason: `Obsidian context file exceeds 64KB: ${realpathSync(
-        join(child, "CLAUDE.md")
+        join(child, "CLAUDE.md"),
       )}`,
     });
     expect(harness.entries).toEqual([]);
@@ -489,7 +489,7 @@ describe("obsidian extension behavior", () => {
       block: true,
       reason: `Obsidian loaded missing context for ${join(
         child,
-        "note.md"
+        "note.md",
       )}. Retry the same structured tool call now.`,
     });
     expect(harness.toolCall(event, root)).toBeUndefined();
@@ -506,7 +506,7 @@ describe("obsidian extension behavior", () => {
     const root = makeVault("guard-outside");
     const outside = join(
       tmpdir(),
-      `obsidian-guard-outside-${crypto.randomUUID()}`
+      `obsidian-guard-outside-${crypto.randomUUID()}`,
     );
     mkdirSync(outside, { recursive: true });
     writeConfig({ enabled: true, vaults: [{ path: root }] });
@@ -514,7 +514,7 @@ describe("obsidian extension behavior", () => {
     const harness = createExtensionHarness();
 
     expect(
-      harness.toolCall({ toolName: "read", input: { path: outside } }, root)
+      harness.toolCall({ toolName: "read", input: { path: outside } }, root),
     ).toEqual({
       block: true,
       reason: "Obsidian guard blocked path outside the active vault.",

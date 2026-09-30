@@ -41,7 +41,7 @@ export async function loadWorkspaceFile(
   cwd: string,
   candidate: string,
   maxBytes = MAX_FILE_BYTES,
-  hooks: FileValidationHooks = {}
+  hooks: FileValidationHooks = {},
 ): Promise<LoadedFile> {
   if (!candidate || maxBytes < 1) {
     throw new Error("Invalid file input");
@@ -70,7 +70,7 @@ export async function loadWorkspaceFile(
     SENSITIVE_NAME_PATTERNS.some((pattern) => pattern.test(filename))
   ) {
     throw new Error(
-      "Blocked sensitive filename (secret detection is not complete)"
+      "Blocked sensitive filename (secret detection is not complete)",
     );
   }
   if (info.size === 0) {
@@ -84,7 +84,7 @@ export async function loadWorkspaceFile(
   // replaced parent directory from redirecting the open outside the workspace.
   // OS open flags are combined as a bitmask.
   const openFlags =
-    // biome-ignore lint/suspicious/noBitwiseOperators: OS API requires bitwise flags.
+    // oxlint-disable-next-line no-bitwise -- OS API requires bitwise flags.
     constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK;
   const handle = await open(actual, openFlags);
   try {
@@ -130,7 +130,7 @@ export async function loadWorkspaceFile(
     }
     if (SENSITIVE_MARKERS.some((marker) => marker.test(content))) {
       throw new Error(
-        "Blocked sensitive marker (secret detection is not complete)"
+        "Blocked sensitive marker (secret detection is not complete)",
       );
     }
     const truncated = info.size > maxBytes;

@@ -48,7 +48,7 @@ function reasoningGuideline(name: OwnedToolName): string {
 
 function expandedBody(
   expanded: boolean,
-  render: () => Component
+  render: () => Component,
 ): Component | undefined {
   return expanded ? toolResultBody(render(), true) : undefined;
 }
@@ -91,7 +91,7 @@ export default function toolDisplayExtension(pi: ExtensionAPI): void {
 
   pi.on("before_agent_start", async (event) => {
     skillFilePaths = await normalizeSkillFilePaths(
-      event.systemPromptOptions.skills ?? []
+      event.systemPromptOptions.skills ?? [],
     );
   });
 
@@ -109,7 +109,7 @@ export default function toolDisplayExtension(pi: ExtensionAPI): void {
             params.path,
             cwd,
             config.tools.read.fullRead.targets,
-            skillFilePaths
+            skillFilePaths,
           );
           if (!fullReadMatch) {
             return readTool.execute(toolCallId, params, signal, onUpdate);
@@ -133,7 +133,7 @@ export default function toolDisplayExtension(pi: ExtensionAPI): void {
                 fullReadMatch.path,
                 fullReadMatch.target.name,
                 0,
-                params
+                params,
               ),
             };
           }
@@ -155,16 +155,16 @@ export default function toolDisplayExtension(pi: ExtensionAPI): void {
                 result,
                 { ...options, expanded: true },
                 theme,
-                config.output.read
-              )
-            )
+                config.output.read,
+              ),
+            ),
           );
         },
       },
       {
         reasoningDescription: REASONING_DESCRIPTION,
         promptGuidelines: [reasoningGuideline("read")],
-      }
+      },
     );
     pi.registerTool(definition);
   }
@@ -191,15 +191,15 @@ export default function toolDisplayExtension(pi: ExtensionAPI): void {
                     result,
                     { ...options, expanded: true },
                     theme,
-                    config.output.search
-                  )
-              )
+                    config.output.search,
+                  ),
+              ),
             ),
         },
         {
           reasoningDescription: REASONING_DESCRIPTION,
           promptGuidelines: [reasoningGuideline("grep")],
-        }
+        },
       ),
       composeReasonedTool(
         {
@@ -221,15 +221,15 @@ export default function toolDisplayExtension(pi: ExtensionAPI): void {
                     result,
                     { ...options, expanded: true },
                     theme,
-                    config.output.search
-                  )
-              )
+                    config.output.search,
+                  ),
+              ),
             ),
         },
         {
           reasoningDescription: REASONING_DESCRIPTION,
           promptGuidelines: [reasoningGuideline("find")],
-        }
+        },
       ),
       composeReasonedTool(
         {
@@ -251,15 +251,15 @@ export default function toolDisplayExtension(pi: ExtensionAPI): void {
                     result,
                     { ...options, expanded: true },
                     theme,
-                    config.output.search
-                  )
-              )
+                    config.output.search,
+                  ),
+              ),
             ),
         },
         {
           reasoningDescription: REASONING_DESCRIPTION,
           promptGuidelines: [reasoningGuideline("ls")],
-        }
+        },
       ),
     ];
     for (const definition of registrations) {
@@ -278,7 +278,7 @@ export default function toolDisplayExtension(pi: ExtensionAPI): void {
             "edit",
             args as never,
             theme,
-            context as never
+            context as never,
           );
         },
         renderResult(result, options, theme, context) {
@@ -294,9 +294,9 @@ export default function toolDisplayExtension(pi: ExtensionAPI): void {
                 result,
                 { ...options, expanded: true },
                 theme,
-                config.diff
-              )
-            )
+                config.diff,
+              ),
+            ),
           );
         },
       });
@@ -310,7 +310,7 @@ export default function toolDisplayExtension(pi: ExtensionAPI): void {
         params,
         signal,
         onUpdate,
-        ctx: ExtensionContext
+        ctx: ExtensionContext,
       ) {
         const startedAt = Date.now();
         const activeCwd = ctx.cwd ?? cwd;
@@ -325,7 +325,7 @@ export default function toolDisplayExtension(pi: ExtensionAPI): void {
             toolDisplayAllowPatchAdd: config.tools.write.enabled === true,
             toolDisplayAllowPermanentDelete:
               config.tools.edit.allowPermanentDelete === true,
-          }
+          },
         );
         return {
           ...result,
@@ -344,7 +344,7 @@ export default function toolDisplayExtension(pi: ExtensionAPI): void {
           "edit",
           args as never,
           theme,
-          context as never
+          context as never,
         );
       },
       renderResult(result, options, theme, context) {
@@ -360,9 +360,9 @@ export default function toolDisplayExtension(pi: ExtensionAPI): void {
               result,
               { ...options, expanded: true },
               theme,
-              config.diff
-            )
-          )
+              config.diff,
+            ),
+          ),
         );
       },
     });
@@ -381,7 +381,7 @@ export default function toolDisplayExtension(pi: ExtensionAPI): void {
             params: WriteToolInput,
             signal,
             onUpdate,
-            ctx: ExtensionContext
+            ctx: ExtensionContext,
           ) {
             const activeCwd = ctx.cwd ?? cwd;
             const targetPath = resolveToCwd(activeCwd, params.path);
@@ -391,13 +391,13 @@ export default function toolDisplayExtension(pi: ExtensionAPI): void {
               async () => {
                 const previous = await capturePreviousWriteContent(
                   activeCwd,
-                  targetPath
+                  targetPath,
                 );
                 const result = await activeWriteTool.execute(
                   toolCallId,
                   params,
                   signal,
-                  onUpdate
+                  onUpdate,
                 );
                 if ((result as { isError?: boolean }).isError) {
                   return result;
@@ -407,11 +407,11 @@ export default function toolDisplayExtension(pi: ExtensionAPI): void {
                   details: createWriteDiffDetails(
                     params.path,
                     params.content,
-                    previous
+                    previous,
                   ),
                 };
               },
-              signal
+              signal,
             );
           },
           renderCall(args, theme, context) {
@@ -431,17 +431,17 @@ export default function toolDisplayExtension(pi: ExtensionAPI): void {
                   result,
                   { ...options, expanded: true },
                   theme,
-                  config.diff
-                )
-              )
+                  config.diff,
+                ),
+              ),
             );
           },
         },
         {
           reasoningDescription: REASONING_DESCRIPTION,
           promptGuidelines: [reasoningGuideline("write")],
-        }
-      )
+        },
+      ),
     );
   }
 }

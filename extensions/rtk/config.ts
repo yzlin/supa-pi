@@ -47,7 +47,7 @@ function normalizeBoolean(value: unknown, fallback: boolean): boolean {
 function normalizeInteger(
   value: unknown,
   fallback: number,
-  minimum = 0
+  minimum = 0,
 ): number {
   if (typeof value !== "number" || !Number.isFinite(value)) {
     return fallback;
@@ -73,46 +73,46 @@ export function normalizeRtkConfig(input: unknown): RtkConfig {
     mode: normalizeMode(config.mode, DEFAULT_RTK_CONFIG.mode),
     guardWhenRtkMissing: normalizeBoolean(
       config.guardWhenRtkMissing,
-      DEFAULT_RTK_CONFIG.guardWhenRtkMissing
+      DEFAULT_RTK_CONFIG.guardWhenRtkMissing,
     ),
     showRewriteNotifications: normalizeBoolean(
       config.showRewriteNotifications,
-      DEFAULT_RTK_CONFIG.showRewriteNotifications
+      DEFAULT_RTK_CONFIG.showRewriteNotifications,
     ),
     outputCompaction: {
       enabled: normalizeBoolean(
         outputCompaction.enabled,
-        DEFAULT_RTK_CONFIG.outputCompaction.enabled
+        DEFAULT_RTK_CONFIG.outputCompaction.enabled,
       ),
       compactBash: normalizeBoolean(
         outputCompaction.compactBash,
-        DEFAULT_RTK_CONFIG.outputCompaction.compactBash
+        DEFAULT_RTK_CONFIG.outputCompaction.compactBash,
       ),
       compactGrep: normalizeBoolean(
         outputCompaction.compactGrep,
-        DEFAULT_RTK_CONFIG.outputCompaction.compactGrep
+        DEFAULT_RTK_CONFIG.outputCompaction.compactGrep,
       ),
       compactRead: normalizeBoolean(
         outputCompaction.compactRead,
-        DEFAULT_RTK_CONFIG.outputCompaction.compactRead
+        DEFAULT_RTK_CONFIG.outputCompaction.compactRead,
       ),
       readSourceFilteringEnabled: normalizeBoolean(
         outputCompaction.readSourceFilteringEnabled,
-        DEFAULT_RTK_CONFIG.outputCompaction.readSourceFilteringEnabled
+        DEFAULT_RTK_CONFIG.outputCompaction.readSourceFilteringEnabled,
       ),
       maxLines: normalizeInteger(
         outputCompaction.maxLines,
         DEFAULT_RTK_CONFIG.outputCompaction.maxLines,
-        1
+        1,
       ),
       maxChars: normalizeInteger(
         outputCompaction.maxChars,
         DEFAULT_RTK_CONFIG.outputCompaction.maxChars,
-        1
+        1,
       ),
       trackSavings: normalizeBoolean(
         outputCompaction.trackSavings,
-        DEFAULT_RTK_CONFIG.outputCompaction.trackSavings
+        DEFAULT_RTK_CONFIG.outputCompaction.trackSavings,
       ),
     },
   };

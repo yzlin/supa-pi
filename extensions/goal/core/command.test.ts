@@ -25,7 +25,7 @@ describe("goal command parser", () => {
 
   it("parses task mode budget and flags", () => {
     const parsed = parseGoalCommand(
-      "task --tasks=3 --max-attempts-per-task 4 --checkpoint cp-1 --dry-run finish work"
+      "task --tasks=3 --max-attempts-per-task 4 --checkpoint cp-1 --dry-run finish work",
     );
 
     expect(parsed.ok).toBe(true);

@@ -183,8 +183,8 @@ The setup script installs or reconciles these Pi packages. It no longer installs
 - Installing this package globally exposes `docs-list`, which runs `scripts/docs-list.ts` against the current working directory's `docs/` folder.
 - Active Pi registers `docs_list`, a tool for the same docs-discovery behavior. It defaults to `cwd/docs`, accepts an optional safe relative docs path, strips a leading `@`, rejects absolute or escaping paths, skips `archive` and `research` directories, and returns readable output plus structured doc metadata and front matter warnings.
 - Use `docs_list` first when it is available; otherwise run `docs-list` or inspect the docs folder directly before coding.
-- Formatting/linting is configured via `biome.jsonc`
-- Biome scripts:
+- Linting uses type-aware oxlint; formatting uses oxfmt (TypeScript and JSON only). Both extend Ultracite presets with local overrides in `oxlint.config.ts` and `oxfmt.config.ts`.
+- Development scripts:
   - `bun run format`
   - `bun run lint`
   - `bun run lint:fix`

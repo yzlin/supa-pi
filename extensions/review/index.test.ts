@@ -62,7 +62,7 @@ afterAll(async () => {
 
 function createCtx(
   entries: SessionEntry[] = [],
-  available: (model: string) => boolean = () => true
+  available: (model: string) => boolean = () => true,
 ) {
   const sessionManager = SessionManager.inMemory(testProjectCwd);
   for (const entry of entries) {
@@ -71,7 +71,7 @@ function createCtx(
         entry.customType!,
         entry.content ?? "",
         true,
-        entry.details
+        entry.details,
       );
     } else if (entry.type === "custom") {
       sessionManager.appendCustomEntry(entry.customType!, entry.data);
@@ -128,11 +128,11 @@ function createCtx(
 function createRuntime(
   exec: (
     command: string,
-    args: string[]
+    args: string[],
   ) => { stdout: string; code: number; stderr?: string } = () => ({
     stdout: "",
     code: 0,
-  })
+  }),
 ) {
   const commands = new Map<
     string,
@@ -155,7 +155,7 @@ function createRuntime(
     string,
     (
       message: unknown,
-      options: { expanded: boolean; outputPad: number }
+      options: { expanded: boolean; outputPad: number },
     ) => unknown
   >();
   return {
@@ -174,7 +174,7 @@ function createRuntime(
         name: string,
         definition: {
           handler: (args: string, ctx: unknown) => Promise<void> | void;
-        }
+        },
       ) {
         commands.set(name, {
           ...definition,
@@ -188,8 +188,8 @@ function createRuntime(
         type: string,
         renderer: (
           message: unknown,
-          options: { expanded: boolean; outputPad: number }
-        ) => unknown
+          options: { expanded: boolean; outputPad: number },
+        ) => unknown,
       ) {
         renderers.set(type, renderer);
       },
@@ -205,7 +205,7 @@ function createRuntime(
       sendUserMessage(content: string, options?: unknown) {
         sentUserMessages.push({ content, options });
         const encoded = content.split(
-          "\nPrepared script (JSON string, inert data):\n"
+          "\nPrepared script (JSON string, inert data):\n",
         )[1];
         if (encoded) {
           const input = { script: JSON.parse(encoded) as string };
@@ -215,7 +215,7 @@ function createRuntime(
               toolCallId: `call-${preparedScripts.length}`,
               input,
             },
-            commandContext
+            commandContext,
           );
           expect(blocked).toBeUndefined();
           preparedScripts.push(input.script);
@@ -236,12 +236,12 @@ function changedFilesRuntime() {
 
 function reports(runtime: ReturnType<typeof createRuntime>) {
   return runtime.sentMessages.filter(
-    ({ message }) => message.customType === REVIEW_REPORT_MESSAGE_TYPE
+    ({ message }) => message.customType === REVIEW_REPORT_MESSAGE_TYPE,
   );
 }
 
 async function withReviewConfigSandbox(
-  run: (cwd: string) => Promise<void>
+  run: (cwd: string) => Promise<void>,
 ): Promise<void> {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "supa-pi-review-"));
   const oldHome = process.env.HOME;
@@ -276,18 +276,18 @@ describe.serial("review model config", () => {
       await writeReviewConfigField(
         getGlobalReviewConfigPath(),
         "reviewerPanel",
-        [{ model: "global/reviewer", thinkingLevel: "low" }]
+        [{ model: "global/reviewer", thinkingLevel: "low" }],
       );
       await writeReviewConfigField(
         getGlobalReviewConfigPath(),
         "synthesizerModel",
-        "global/synth"
+        "global/synth",
       );
       const projectPath = await getProjectReviewConfigPath(cwd);
       await writeReviewConfigField(
         projectPath,
         "verifierModel",
-        "project/verify"
+        "project/verify",
       );
 
       const layered = await resolveReviewConfig(cwd);
@@ -311,17 +311,17 @@ describe.serial("review model config", () => {
       await writeReviewConfigField(
         globalPath,
         "synthesizerModel",
-        "global/synth"
+        "global/synth",
       );
       await writeReviewConfigField(
         projectPath,
         "synthesizerModel",
-        "project/synth"
+        "project/synth",
       );
       await writeReviewConfigField(projectPath, "synthesizerModel", undefined);
 
       expect((await resolveReviewConfig(cwd)).effective.synthesizerModel).toBe(
-        "global/synth"
+        "global/synth",
       );
       expect(await fs.stat(projectPath).catch(() => null)).toBeNull();
     });
@@ -332,24 +332,24 @@ describe.serial("review model config", () => {
       const projectPath = await getProjectReviewConfigPath(cwd);
       await fs.writeFile(projectPath, '{"accidentalBehavior":true}');
       await expect(resolveReviewConfig(cwd)).rejects.toThrow(
-        `${projectPath} field 'accidentalBehavior'`
+        `${projectPath} field 'accidentalBehavior'`,
       );
       await fs.writeFile(
         projectPath,
         JSON.stringify({
           reviewerPanel: [{ model: "same/model", thinkingLevel: "high" }],
           verifierModel: "same/model",
-        })
+        }),
       );
       expect((await resolveReviewConfig(cwd)).effective.verifierModel).toBe(
-        "same/model"
+        "same/model",
       );
       await fs.writeFile(
         projectPath,
-        JSON.stringify({ synthesizerModel: "provider/model\nspoof" })
+        JSON.stringify({ synthesizerModel: "provider/model\nspoof" }),
       );
       await expect(resolveReviewConfig(cwd)).rejects.toThrow(
-        "without whitespace"
+        "without whitespace",
       );
       for (const unsafeModel of [
         "provider/model\u001b",
@@ -357,10 +357,10 @@ describe.serial("review model config", () => {
       ]) {
         await fs.writeFile(
           projectPath,
-          JSON.stringify({ synthesizerModel: unsafeModel })
+          JSON.stringify({ synthesizerModel: unsafeModel }),
         );
         await expect(resolveReviewConfig(cwd)).rejects.toThrow(
-          "control, or Unicode format characters"
+          "control, or Unicode format characters",
         );
       }
     });
@@ -376,14 +376,14 @@ describe.serial("review model config", () => {
       reviewExtension(runtime.pi as never);
 
       await expect(
-        runtime.commands.get("review")?.handler("", ctx as never)
+        runtime.commands.get("review")?.handler("", ctx as never),
       ).resolves.toBeUndefined();
 
       expect(preparedCalls(runtime)).toHaveLength(0);
       expect(notifications).toHaveLength(1);
       expect(notifications[0]).toEqual({
         message: expect.stringContaining(
-          `Invalid review config ${projectPath} field '$': malformed JSON (`
+          `Invalid review config ${projectPath} field '$': malformed JSON (`,
         ),
         level: "error",
       });
@@ -406,13 +406,13 @@ describe.serial("review model config", () => {
         expect(preparedCalls(runtime)).toHaveLength(0);
         expect(
           notifications.some(({ message }) =>
-            message.includes("control, or Unicode format characters")
-          )
+            message.includes("control, or Unicode format characters"),
+          ),
         ).toBe(true);
         expect(
           notifications.every(
-            ({ message }) => !MODEL_CONTROL_OR_FORMAT_RE.test(message)
-          )
+            ({ message }) => !MODEL_CONTROL_OR_FORMAT_RE.test(message),
+          ),
         ).toBe(true);
       }
     });
@@ -424,7 +424,7 @@ describe.serial("review model config", () => {
       await writeReviewConfigField(
         projectPath,
         "synthesizerModel",
-        "one/model"
+        "one/model",
       );
       const first = (await resolveReviewConfig(cwd)).project;
       expect(await isProjectReviewConfigApproved(first)).toBe(false);
@@ -434,16 +434,16 @@ describe.serial("review model config", () => {
       await writeReviewConfigField(
         projectPath,
         "synthesizerModel",
-        "two/model"
+        "two/model",
       );
       const changed = (await resolveReviewConfig(cwd)).project;
       expect(await isProjectReviewConfigApproved(changed)).toBe(false);
       await fs.writeFile(
         projectPath,
-        JSON.stringify({ synthesizerModel: "three/model" })
+        JSON.stringify({ synthesizerModel: "three/model" }),
       );
       await expect(approveProjectReviewConfig(changed)).rejects.toThrow(
-        "changed before approval"
+        "changed before approval",
       );
       const trust = JSON.parse(await fs.readFile(getReviewTrustPath(), "utf8"));
       expect(JSON.stringify(trust)).not.toContain("one/model");
@@ -456,7 +456,7 @@ describe.serial("review model config", () => {
       await writeReviewConfigField(
         globalPath,
         "synthesizerModel",
-        "global/original"
+        "global/original",
       );
       await fs.rm(path.join(cwd, ".pi"), { recursive: true });
       await fs.mkdir(path.dirname(globalPath), { recursive: true });
@@ -466,8 +466,8 @@ describe.serial("review model config", () => {
         writeReviewConfigField(
           await getProjectReviewConfigPath(cwd),
           "synthesizerModel",
-          "project/escaped"
-        )
+          "project/escaped",
+        ),
       ).rejects.toThrow("symlinked directory");
       expect(JSON.parse(await fs.readFile(globalPath, "utf8"))).toEqual({
         synthesizerModel: "global/original",
@@ -482,7 +482,7 @@ describe.serial("review model config", () => {
         writeReviewConfigField(
           projectPath,
           "synthesizerModel",
-          "project/synth"
+          "project/synth",
         ),
         writeReviewConfigField(projectPath, "verifierModel", "project/verify"),
       ]);
@@ -503,15 +503,15 @@ describe.serial("review model config", () => {
           await writeReviewConfigField(
             await getProjectReviewConfigPath(project),
             "synthesizerModel",
-            `project/model-${index}`
+            `project/model-${index}`,
           );
           return (await resolveReviewConfig(project)).project;
-        })
+        }),
       );
 
       await Promise.all(layers.map(approveProjectReviewConfig));
       expect(
-        await Promise.all(layers.map(isProjectReviewConfigApproved))
+        await Promise.all(layers.map(isProjectReviewConfigApproved)),
       ).toEqual([true, true]);
     });
   });
@@ -521,18 +521,18 @@ describe.serial("review model config", () => {
       await writeReviewConfigField(
         getGlobalReviewConfigPath(),
         "reviewerPanel",
-        [{ model: TEST_VERIFIER, thinkingLevel: "high" }]
+        [{ model: TEST_VERIFIER, thinkingLevel: "high" }],
       );
       await writeReviewConfigField(
         await getProjectReviewConfigPath(cwd),
         "verifierModel",
-        TEST_VERIFIER
+        TEST_VERIFIER,
       );
       expect((await resolveReviewConfig(cwd)).effective).toEqual(
         expect.objectContaining({
           reviewerPanel: [{ model: TEST_VERIFIER, thinkingLevel: "high" }],
           verifierModel: TEST_VERIFIER,
-        })
+        }),
       );
 
       const runtime = changedFilesRuntime();
@@ -556,7 +556,7 @@ describe.serial("review model config", () => {
       await writeReviewConfigField(
         await getProjectReviewConfigPath(cwd),
         "synthesizerModel",
-        TEST_SYNTHESIZER
+        TEST_SYNTHESIZER,
       );
       const runtime = changedFilesRuntime();
       const { ctx, notifications } = createCtx();
@@ -569,7 +569,7 @@ describe.serial("review model config", () => {
 
       expect(preparedCalls(runtime)).toHaveLength(0);
       expect(
-        notifications.some(({ message }) => message.includes("unapproved"))
+        notifications.some(({ message }) => message.includes("unapproved")),
       ).toBe(true);
     });
   });
@@ -583,12 +583,12 @@ describe.serial("review model config", () => {
       await writeReviewConfigField(
         projectPath,
         "synthesizerModel",
-        "project/synth"
+        "project/synth",
       );
       await writeReviewConfigField(
         projectPath,
         "verifierModel",
-        "project/verify"
+        "project/verify",
       );
       const runtime = changedFilesRuntime();
       const { ctx, notifications } = createCtx();
@@ -600,15 +600,15 @@ describe.serial("review model config", () => {
         .get("review")
         ?.handler(
           "uncommitted --reviewers code-reviewer --reviewer-models test/flag-reviewer=high --synthesizer-model test/flag-synth --verifier-model test/flag-verify",
-          ctx as never
+          ctx as never,
         );
 
       expect(preparedCalls(runtime)).toHaveLength(1);
       expect(notifications.some(({ level }) => level === "error")).toBe(false);
       expect(
         await isProjectReviewConfigApproved(
-          (await resolveReviewConfig(cwd)).project
-        )
+          (await resolveReviewConfig(cwd)).project,
+        ),
       ).toBe(false);
       await expect(fs.readFile(getReviewTrustPath(), "utf8")).rejects.toThrow();
     });
@@ -620,12 +620,12 @@ describe.serial("review model config", () => {
       await writeReviewConfigField(
         projectPath,
         "synthesizerModel",
-        "project/synth"
+        "project/synth",
       );
       await writeReviewConfigField(
         projectPath,
         "verifierModel",
-        "project/verify"
+        "project/verify",
       );
       const runtime = changedFilesRuntime();
       const { ctx, notifications } = createCtx();
@@ -637,17 +637,17 @@ describe.serial("review model config", () => {
         .get("review")
         ?.handler(
           "uncommitted --reviewers code-reviewer --synthesizer-model test/flag-synth",
-          ctx as never
+          ctx as never,
         );
 
       expect(preparedCalls(runtime)).toHaveLength(0);
       expect(
-        notifications.some(({ message }) => message.includes("unapproved"))
+        notifications.some(({ message }) => message.includes("unapproved")),
       ).toBe(true);
       expect(
         await isProjectReviewConfigApproved(
-          (await resolveReviewConfig(cwd)).project
-        )
+          (await resolveReviewConfig(cwd)).project,
+        ),
       ).toBe(false);
     });
   });
@@ -661,7 +661,7 @@ describe.serial("review model config", () => {
       await writeReviewConfigField(
         projectPath,
         "verifierModel",
-        "project/disclosed-verifier"
+        "project/disclosed-verifier",
       );
       const runtime = changedFilesRuntime();
       const { ctx, notifications } = createCtx();
@@ -677,7 +677,7 @@ describe.serial("review model config", () => {
         .get("review")
         ?.handler(
           "uncommitted --reviewers code-reviewer --reviewer-models test/flag-reviewer=high",
-          ctx as never
+          ctx as never,
         );
 
       expect(preparedCalls(runtime)).toHaveLength(1);
@@ -686,8 +686,8 @@ describe.serial("review model config", () => {
       expect(disclosure).not.toContain("project/hidden-reviewer");
       expect(
         await isProjectReviewConfigApproved(
-          (await resolveReviewConfig(cwd)).project
-        )
+          (await resolveReviewConfig(cwd)).project,
+        ),
       ).toBe(false);
 
       await runtime.commands.get("review")?.handler("cancel", ctx);
@@ -698,12 +698,12 @@ describe.serial("review model config", () => {
 
       expect(preparedCalls(runtime)).toHaveLength(1);
       expect(
-        notifications.some(({ message }) => message.includes("unapproved"))
+        notifications.some(({ message }) => message.includes("unapproved")),
       ).toBe(true);
       expect(
         await isProjectReviewConfigApproved(
-          (await resolveReviewConfig(cwd)).project
-        )
+          (await resolveReviewConfig(cwd)).project,
+        ),
       ).toBe(false);
     });
   });
@@ -714,7 +714,7 @@ describe.serial("review model config", () => {
       await writeReviewConfigField(
         projectPath,
         "synthesizerModel",
-        TEST_SYNTHESIZER
+        TEST_SYNTHESIZER,
       );
       const runtime = changedFilesRuntime();
       const { ctx } = createCtx();
@@ -729,25 +729,25 @@ describe.serial("review model config", () => {
         .get("review")
         ?.handler("uncommitted --reviewers code-reviewer", ctx as never);
       expect(preparedCalls(runtime)).toHaveLength(
-        DEFAULT_REVIEWER_PANEL.length
+        DEFAULT_REVIEWER_PANEL.length,
       );
       expect(disclosure).toContain(`synthesizer ${TEST_SYNTHESIZER}`);
       expect(disclosure).toContain("provider: test");
       expect(
         await isProjectReviewConfigApproved(
-          (await resolveReviewConfig(cwd)).project
-        )
+          (await resolveReviewConfig(cwd)).project,
+        ),
       ).toBe(true);
 
       await writeReviewConfigField(
         projectPath,
         "synthesizerModel",
-        "test/changed"
+        "test/changed",
       );
       expect(
         await isProjectReviewConfigApproved(
-          (await resolveReviewConfig(cwd)).project
-        )
+          (await resolveReviewConfig(cwd)).project,
+        ),
       ).toBe(false);
       const selectorRuntime = createRuntime();
       const selectorCtx = createCtx().ctx;
@@ -771,7 +771,7 @@ describe.serial("review model config", () => {
       selectorCtx.ui.editor = ((prompt: string) => {
         editorPrompts.push(prompt);
         return Promise.resolve(
-          editorPrompts.length === 1 ? null : "test/saved"
+          editorPrompts.length === 1 ? null : "test/saved",
         );
       }) as never;
       reviewExtension(selectorRuntime.pi as never);
@@ -780,8 +780,8 @@ describe.serial("review model config", () => {
         ?.handler("", selectorCtx as never);
       expect(
         await isProjectReviewConfigApproved(
-          (await resolveReviewConfig(cwd)).project
-        )
+          (await resolveReviewConfig(cwd)).project,
+        ),
       ).toBe(true);
       expect(editorPrompts).toEqual([
         `Enter global verifier model (provider/model; blank clears):\nDefault: ${DEFAULT_VERIFIER_MODEL}`,
@@ -796,12 +796,12 @@ describe.serial("review model config", () => {
       await writeReviewConfigField(
         projectPath,
         "synthesizerModel",
-        "test/existing-synth"
+        "test/existing-synth",
       );
       await writeReviewConfigField(
         projectPath,
         "verifierModel",
-        "test/existing-verifier"
+        "test/existing-verifier",
       );
       const runtime = createRuntime();
       const { ctx, notifications } = createCtx();
@@ -822,15 +822,15 @@ describe.serial("review model config", () => {
       const resolved = await resolveReviewConfig(cwd);
       expect(resolved.project.config.synthesizerModel).toBe("test/saved-synth");
       expect(resolved.project.config.verifierModel).toBe(
-        "test/existing-verifier"
+        "test/existing-verifier",
       );
       expect(await isProjectReviewConfigApproved(resolved.project)).toBe(false);
       expect(disclosure).toContain("synthesizer test/saved-synth");
       expect(disclosure).toContain("verifier test/existing-verifier");
       expect(
         notifications.some(({ message }) =>
-          message.includes("project models remain unapproved")
-        )
+          message.includes("project models remain unapproved"),
+        ),
       ).toBe(true);
     });
   });
@@ -844,12 +844,12 @@ describe.serial("review model config", () => {
       await writeReviewConfigField(
         projectPath,
         "synthesizerModel",
-        "project/synth"
+        "project/synth",
       );
       await writeReviewConfigField(
         projectPath,
         "verifierModel",
-        "project/verify"
+        "project/verify",
       );
       const runtime = changedFilesRuntime();
       const { ctx } = createCtx();
@@ -861,14 +861,14 @@ describe.serial("review model config", () => {
         .get("review")
         ?.handler(
           "uncommitted --reviewers code-reviewer --reviewer-models test/flag-reviewer=high --synthesizer-model test/flag-synth --verifier-model test/flag-verify",
-          ctx as never
+          ctx as never,
         );
 
       expect(preparedCalls(runtime)).toHaveLength(1);
       expect(
         await isProjectReviewConfigApproved(
-          (await resolveReviewConfig(cwd)).project
-        )
+          (await resolveReviewConfig(cwd)).project,
+        ),
       ).toBe(false);
     });
   });
@@ -885,20 +885,20 @@ describe.serial("/review command settings and disclosure", () => {
     expect(
       preparedCalls(runtime)
         .map((call) => call.model)
-        .sort()
+        .sort(),
     ).toEqual(DEFAULT_REVIEWER_PANEL.map((entry) => entry.model).sort());
     expect(
       notifications.some(
         ({ message }) =>
           message.includes("initial calls: 1 reviewer call") &&
           message.includes(
-            "Possible structured-repair retries: up to 1 reviewer retry, plus up to 2 downstream retries when those stages run"
+            "Possible structured-repair retries: up to 1 reviewer retry, plus up to 2 downstream retries when those stages run",
           ) &&
           message.includes(
-            `Synthesizer: ${DEFAULT_SYNTHESIZER_MODEL}=medium`
+            `Synthesizer: ${DEFAULT_SYNTHESIZER_MODEL}=medium`,
           ) &&
-          message.includes(`Verifier: ${DEFAULT_VERIFIER_MODEL}=medium`)
-      )
+          message.includes(`Verifier: ${DEFAULT_VERIFIER_MODEL}=medium`),
+      ),
     ).toBe(true);
     expect(reports(runtime)).toHaveLength(0);
     expect(runtime.sentUserMessages).toHaveLength(1);
@@ -912,12 +912,12 @@ describe.serial("/review command settings and disclosure", () => {
       .get("review")
       ?.handler(
         "uncommitted --reviewers code-reviewer --reviewer-models test/alpha=low,test/alpha=xhigh,test/beta=minimal --synthesizer-model test/synth",
-        ctx as never
+        ctx as never,
       );
     expect(
       preparedCalls(runtime)
         .map(({ model, thinking }) => `${model}=${thinking}`)
-        .sort()
+        .sort(),
     ).toEqual(["test/alpha=low", "test/beta=minimal"]);
   });
 
@@ -934,19 +934,19 @@ describe.serial("/review command settings and disclosure", () => {
         .get("review")
         ?.handler(
           `uncommitted --reviewers code-reviewer --extra "${extra}"`,
-          ctx as never
+          ctx as never,
         );
 
       expect(preparedCalls(runtime)).toHaveLength(
-        DEFAULT_REVIEWER_PANEL.length
+        DEFAULT_REVIEWER_PANEL.length,
       );
       expect(preparedCalls(runtime)[0]?.prompt).toContain(
-        `Additional user-provided review instruction:\n${extra}`
+        `Additional user-provided review instruction:\n${extra}`,
       );
       expect(
         notifications.some(({ message }) =>
-          message.includes(`Synthesizer: ${DEFAULT_SYNTHESIZER_MODEL}=medium`)
-        )
+          message.includes(`Synthesizer: ${DEFAULT_SYNTHESIZER_MODEL}=medium`),
+        ),
       ).toBe(true);
     }
   });
@@ -975,7 +975,7 @@ describe.serial("/review command settings and disclosure", () => {
     expect(preparedCalls(runtime)).toHaveLength(DEFAULT_REVIEWER_PANEL.length);
     expect(preparedCalls(runtime)[0]?.prompt).toContain("legacy focus");
     expect(runtime.appendedEntries.at(-1)?.data).not.toHaveProperty(
-      "reviewerPanel"
+      "reviewerPanel",
     );
   });
 
@@ -996,7 +996,7 @@ describe.serial("/review command settings and disclosure", () => {
       .get("review")
       ?.handler(
         `uncommitted --reviewers code-reviewer --reviewer-models test/alpha=high --verifier-model ${TEST_VERIFIER}`,
-        ctx as never
+        ctx as never,
       );
 
     expect(preparedCalls(runtime).map((call) => call.model)).toEqual([
@@ -1018,7 +1018,7 @@ describe.serial("/review command settings and disclosure", () => {
       .get("review")
       ?.handler(
         `uncommitted --reviewers code-reviewer --reviewer-models ${TEST_VERIFIER}=high --verifier-model ${TEST_VERIFIER}`,
-        ctx as never
+        ctx as never,
       );
 
     expect(preparedCalls(runtime).map(({ model }) => model)).toEqual([
@@ -1045,8 +1045,8 @@ describe.serial("/review command settings and disclosure", () => {
     expect(preparedCalls(runtime)).toHaveLength(DEFAULT_REVIEWER_PANEL.length);
     expect(
       notifications.some(({ message }) =>
-        message.includes(`Verifier: ${DEFAULT_VERIFIER_MODEL}=medium`)
-      )
+        message.includes(`Verifier: ${DEFAULT_VERIFIER_MODEL}=medium`),
+      ),
     ).toBe(true);
     expect(runtime.appendedEntries).toContainEqual({
       type: "review-settings",
@@ -1062,19 +1062,19 @@ describe.serial("/review command settings and disclosure", () => {
       .get("review")
       ?.handler(
         "uncommitted --reviewers code-reviewer --reviewer-models test/alpha=off",
-        ctx as never
+        ctx as never,
       );
     expect(runtime.sentUserMessages).toHaveLength(0);
     expect(
       notifications.some(({ message }) =>
-        message.includes("choose minimal, low, medium, high, or xhigh")
-      )
+        message.includes("choose minimal, low, medium, high, or xhigh"),
+      ),
     ).toBe(true);
     await runtime.commands
       .get("review")
       ?.handler(
         "uncommitted --reviewers code-reviewer --reviewer-models test/alpha=low",
-        ctx as never
+        ctx as never,
       );
     expect(runtime.sentUserMessages).toHaveLength(1);
   });
@@ -1092,7 +1092,7 @@ describe.serial("/review command settings and disclosure", () => {
         .get("review")
         ?.handler(
           `uncommitted --reviewers code-reviewer --reviewer-models=${panel}`,
-          ctx as never
+          ctx as never,
         );
       expect(preparedCalls(runtime)).toHaveLength(0);
       expect(notifications.some(({ level }) => level === "error")).toBe(true);
@@ -1119,7 +1119,7 @@ describe.serial("/review command settings and disclosure", () => {
       preparedCalls(runtime)
         .filter((call) => call.type === "security-reviewer")
         .map((call) => call.model)
-        .sort()
+        .sort(),
     ).toEqual(DEFAULT_REVIEWER_PANEL.map((entry) => entry.model).sort());
     expect(runtime.appendedEntries.at(-1)?.data).toEqual({
       customInstructions: undefined,
@@ -1132,19 +1132,19 @@ describe.serial("/review command settings and disclosure", () => {
     const runtime = changedFilesRuntime();
     const { ctx, notifications } = createCtx(
       [],
-      (model) => model !== "missing/model"
+      (model) => model !== "missing/model",
     );
     reviewExtension(runtime.pi as never);
     await runtime.commands
       .get("review")
       ?.handler(
         "uncommitted --reviewers code-reviewer --reviewer-models missing/model=high",
-        ctx as never
+        ctx as never,
       );
     expect(preparedCalls(runtime)).toHaveLength(0);
     expect(runtime.appendedEntries).toHaveLength(0);
     expect(
-      notifications.some(({ message }) => message.includes("not available"))
+      notifications.some(({ message }) => message.includes("not available")),
     ).toBe(true);
   });
 
@@ -1163,22 +1163,22 @@ describe.serial("/review command settings and disclosure", () => {
     expect(
       runtime.renderers.get(REVIEW_REPORT_MESSAGE_TYPE)?.(
         { content: "## report" },
-        { expanded: false, outputPad: 1 }
-      )
+        { expanded: false, outputPad: 1 },
+      ),
     ).toBeInstanceOf(Markdown);
     await runtime.commands
       .get("review-fix")
       ?.handler("keep scope", ctx as never);
     const message = String(runtime.sentUserMessages[0]?.content);
     expect(message).toContain(
-      "Use the `review-fix` skill behavior as canonical."
+      "Use the `review-fix` skill behavior as canonical.",
     );
     expect(message).not.toContain("<untrusted_review_report>");
     expect(message).toContain(
-      "Report delivery: already present in active model context; not duplicated here."
+      "Report delivery: already present in active model context; not duplicated here.",
     );
     expect(message).toContain(
-      "<untrusted_review_fix_context>\n## Verdict\n- needs attention\n\n## Findings\n- finding\n\n## Fix Queue\n1. fix\n</untrusted_review_fix_context>"
+      "<untrusted_review_fix_context>\n## Verdict\n- needs attention\n\n## Findings\n- finding\n\n## Fix Queue\n1. fix\n</untrusted_review_fix_context>",
     );
     expect(message).not.toContain("Human Reviewer Callouts");
     expect(message).not.toContain("Reviewer Coverage");
@@ -1192,7 +1192,7 @@ function preparedPlans(runtime: ReturnType<typeof createRuntime>) {
       .split("\n")
       .find((value) => value.startsWith("const reviewInput = "))!;
     const plan = JSON.parse(
-      line.slice("const reviewInput = ".length, -1)
+      line.slice("const reviewInput = ".length, -1),
     ) as PublicReviewWorkflowInput;
     expect(source).toContain('effort: "medium"');
     return plan;
@@ -1207,8 +1207,8 @@ function preparedCalls(runtime: ReturnType<typeof createRuntime>) {
         model,
         thinking: thinkingLevel,
         prompt: plan.invocationPacket,
-      }))
-    )
+      })),
+    ),
   );
 }
 
@@ -1231,9 +1231,9 @@ for (const failure of ["scope", "auth"]) {
         message.includes(
           failure === "scope"
             ? "outside the current model scope"
-            : "authentication is not configured"
-        )
-      )
+            : "authentication is not configured",
+        ),
+      ),
     ).toBe(true);
   });
 }
@@ -1246,7 +1246,7 @@ it("locks explicit role/model/default downstream configuration into prepared sou
     .get("review")
     ?.handler(
       "uncommitted --reviewers code-reviewer,security-reviewer --reviewer-models test/alpha=high,test/beta=xhigh --synthesizer-model test/explicit-synth --verifier-model test/explicit-verify",
-      ctx
+      ctx,
     );
   expect(preparedPlans(runtime)[0]).toMatchObject({
     reviewers: ["code-reviewer", "security-reviewer"],
@@ -1268,6 +1268,6 @@ it("locks explicit role/model/default downstream configuration into prepared sou
     verifierModel: DEFAULT_VERIFIER_MODEL,
   });
   expect(runtime.appendedEntries.at(-1)?.data).not.toHaveProperty(
-    "reviewerPanel"
+    "reviewerPanel",
   );
 });

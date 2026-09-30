@@ -58,7 +58,7 @@ function harness(
     complete?: (...args: any[]) => Promise<any>;
     setSessionName?: (name: string) => void;
     config?: unknown | "malformed";
-  } = {}
+  } = {},
 ) {
   const home = mkdtempSync(join(tmpdir(), "auto-rename-"));
   homes.push(home);
@@ -66,7 +66,7 @@ function harness(
     mkdirSync(join(home, ".pi", "agent"), { recursive: true });
     writeFileSync(
       join(home, ".pi", "agent", "auto-rename.json"),
-      options.config === "malformed" ? "{" : JSON.stringify(options.config)
+      options.config === "malformed" ? "{" : JSON.stringify(options.config),
     );
   }
 
@@ -183,7 +183,7 @@ async function start(h: ReturnType<typeof harness>, reason = "startup") {
 async function input(
   h: ReturnType<typeof harness>,
   text: string,
-  source = "interactive"
+  source = "interactive",
 ) {
   await h.emit("input", { text, source });
 }
@@ -192,7 +192,7 @@ async function createRealSession(
   extensionFactories: Array<(pi: ExtensionAPI) => void>,
   additionalPromptTemplatePaths: string[] = [],
   sessionId?: string,
-  model?: SessionModel
+  model?: SessionModel,
 ) {
   const directory = mkdtempSync(join(tmpdir(), "auto-rename-real-"));
   homes.push(directory);
@@ -212,7 +212,7 @@ async function createRealSession(
     model,
     sessionManager: SessionManager.inMemory(
       directory,
-      sessionId ? { id: sessionId } : undefined
+      sessionId ? { id: sessionId } : undefined,
     ),
     settingsManager,
   });
@@ -224,7 +224,7 @@ async function createRealSession(
 }
 
 async function disposeRealSession(
-  session: Awaited<ReturnType<typeof createRealSession>>
+  session: Awaited<ReturnType<typeof createRealSession>>,
 ): Promise<void> {
   await session.extensionRunner.emit({
     type: "session_shutdown",
@@ -238,7 +238,7 @@ describe("auto-rename prompt lifecycle", () => {
     const originalPrompt = AgentSession.prototype.prompt;
     const session = await createRealSession(
       [promptCommandsExtension, autoRenameExtension],
-      [join(import.meta.dir, "..", "..", "prompts")]
+      [join(import.meta.dir, "..", "..", "prompts")],
     );
 
     expect(AgentSession.prototype.prompt).not.toBe(originalPrompt);
@@ -274,12 +274,12 @@ describe("auto-rename prompt lifecycle", () => {
     const first = await createRealSession(
       [autoRenameExtension, reviewCommand],
       [],
-      "shared-session-id"
+      "shared-session-id",
     );
     const second = await createRealSession(
       [autoRenameExtension, reviewCommand],
       [],
-      "shared-session-id"
+      "shared-session-id",
     );
 
     try {
@@ -303,7 +303,7 @@ describe("auto-rename prompt lifecycle", () => {
 
     try {
       await expect(
-        session.prompt("rejected private prompt", { source: "rpc" })
+        session.prompt("rejected private prompt", { source: "rpc" }),
       ).rejects.toThrow("streamingBehavior");
       await settleBackgroundWork();
       expect(session.sessionName).toBeUndefined();
@@ -389,7 +389,7 @@ describe("auto-rename prompt lifecycle", () => {
       [namingSpy, promptCommandsExtension, autoRenameExtension],
       [join(import.meta.dir, "..", "..", "prompts")],
       undefined,
-      model
+      model,
     );
     const queued: unknown[] = [];
     session.agent.steer = (message) => queued.push(message);
@@ -529,7 +529,7 @@ describe("auto-rename lifecycle", () => {
     await h.emit("agent_settled");
     h.setBranch(
       [user("first request"), user("same branch follow-up")],
-      "advanced-leaf"
+      "advanced-leaf",
     );
     await h.emit("agent_settled");
     expect(h.calls).toHaveLength(1);
@@ -703,7 +703,7 @@ describe("/auto-rename command and configuration", () => {
     await start(noSession);
     await noSession.command("regen");
     expect(noSession.notifications.at(-1)?.message).toContain(
-      "No current session"
+      "No current session",
     );
     expect(noSession.name).toBe("Keep Name");
   });
@@ -724,7 +724,7 @@ describe("/auto-rename command and configuration", () => {
     expect(h.calls).toHaveLength(0);
     expect(h.notifications).toHaveLength(1);
     expect(h.notifications[0]?.message).toBe(
-      "Auto-rename disabled: invalid global configuration."
+      "Auto-rename disabled: invalid global configuration.",
     );
     await h.command("status");
     expect(h.notifications.at(-1)?.message).toContain("disabled-invalid");

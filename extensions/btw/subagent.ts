@@ -58,7 +58,7 @@ export function appendFinalOutput(currentOutput: string, nextOutput: string) {
 
 export function resolveExitCode(
   stopReason: string | undefined,
-  aborted: boolean
+  aborted: boolean,
 ) {
   return stopReason === "error" || stopReason === "aborted" || aborted ? 1 : 0;
 }
@@ -133,7 +133,7 @@ export function shortenPath(p: string): string {
 export function formatToolCall(
   toolName: string,
   args: Record<string, unknown>,
-  fg: (color: unknown, text: string) => string
+  fg: (color: unknown, text: string) => string,
 ): string {
   switch (toolName) {
     case "bash": {
@@ -202,7 +202,7 @@ export function btwTaskPreview(task: string): string {
 
 export function renderProgressPlainLines(
   task: string,
-  result: SingleResult
+  result: SingleResult,
 ): string[] {
   const taskPreview = btwTaskPreview(task);
   const lines: string[] = [];
@@ -234,17 +234,17 @@ export function renderProgressPlainLines(
         }
         case "read":
           lines.push(
-            `  read ${item.args.file_path || item.args.path || "..."}`
+            `  read ${item.args.file_path || item.args.path || "..."}`,
           );
           break;
         case "write":
           lines.push(
-            `  write ${item.args.file_path || item.args.path || "..."}`
+            `  write ${item.args.file_path || item.args.path || "..."}`,
           );
           break;
         case "edit":
           lines.push(
-            `  edit ${item.args.file_path || item.args.path || "..."}`
+            `  edit ${item.args.file_path || item.args.path || "..."}`,
           );
           break;
         default:
@@ -269,7 +269,7 @@ export async function runSubagent(
   apiKeyResolver: (provider: string) => Promise<string | undefined>,
   signal: AbortSignal | undefined,
   onProgress: (result: SingleResult) => void,
-  streamFn?: StreamFn
+  streamFn?: StreamFn,
 ): Promise<SingleResult> {
   const result: SingleResult = {
     task,
@@ -322,7 +322,7 @@ export async function runSubagent(
       context,
       config,
       signal,
-      streamFn as StreamFn
+      streamFn as StreamFn,
     );
 
     for await (const event of stream) {
@@ -359,7 +359,7 @@ export async function runSubagent(
                 result.displayItems.push({ type: "text", text: part.text });
                 result.finalOutput = appendFinalOutput(
                   result.finalOutput,
-                  part.text
+                  part.text,
                 );
               } else if (part.type === "toolCall") {
                 result.displayItems.push({
@@ -386,7 +386,7 @@ export async function runSubagent(
     if (result.exitCode === -1) {
       result.exitCode = resolveExitCode(
         result.stopReason,
-        signal?.aborted === true
+        signal?.aborted === true,
       );
     }
   } catch (err) {

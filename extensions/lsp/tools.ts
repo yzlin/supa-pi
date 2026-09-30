@@ -56,7 +56,7 @@ function validateParams(
   filePath?: string,
   line?: number,
   character?: number,
-  query?: string
+  query?: string,
 ): string | null {
   if (POSITION_OPERATIONS.includes(operation)) {
     if (!filePath) {
@@ -91,7 +91,7 @@ export interface ServerManager {
   /** Get the first LSP client that handles a file and has a capability. */
   clientForFileWithCapability: (
     filePath: string,
-    capability: string
+    capability: string,
   ) => LspClient | null;
   /** Get any initialized client (for workspace-wide ops). */
   anyClient: () => LspClient | null;
@@ -111,7 +111,7 @@ function emptyDiagnosticCounts(): DiagnosticCounts {
 }
 
 function countDiagnosticGroups(
-  groups: { diagnostics: Diagnostic[] }[]
+  groups: { diagnostics: Diagnostic[] }[],
 ): DiagnosticCounts {
   const counts = emptyDiagnosticCounts();
   for (const group of groups) {
@@ -140,7 +140,7 @@ function countDiagnosticGroups(
 }
 
 function countDocumentSymbols(
-  symbols: DocumentSymbol[] | SymbolInformation[]
+  symbols: DocumentSymbol[] | SymbolInformation[],
 ): number {
   return symbols.reduce((count, symbol) => {
     if ("selectionRange" in symbol) {
@@ -154,7 +154,7 @@ function countOutcome(
   operation: LspOperation,
   noun: string,
   count: number,
-  emptyLabel?: string
+  emptyLabel?: string,
 ): LspPresentationDetails {
   return {
     operation,
@@ -164,7 +164,7 @@ function countOutcome(
 
 function informationOutcome(
   operation: LspOperation,
-  found: boolean
+  found: boolean,
 ): LspPresentationDetails {
   return { operation, result: { kind: "information", found } };
 }
@@ -172,7 +172,7 @@ function informationOutcome(
 function diagnosticsOutcome(
   status: "success" | "incomplete" | "unavailable",
   counts: DiagnosticCounts,
-  failures?: string[]
+  failures?: string[],
 ): LspPresentationDetails {
   return {
     operation: "diagnostics",
@@ -191,7 +191,7 @@ class LspExecutionError extends Error {
 
 function errorPresentation(
   operation: LspOperation,
-  error: unknown
+  error: unknown,
 ): LspPresentationDetails {
   if (error instanceof LspExecutionError) {
     return error.presentation;
@@ -225,7 +225,7 @@ function withPresentationDuration<T extends { details?: unknown }>(
   result: T,
   presentation: LspPresentationDetails,
   durationMs: number,
-  toolCallId: string
+  toolCallId: string,
 ): T {
   const settledPresentation = { ...presentation, durationMs };
   rememberLspPresentation(toolCallId, settledPresentation);
@@ -255,7 +255,7 @@ const CAPABILITY_MAP: Record<LspOperation, string> = {
 
 export function registerLspTool(
   pi: Pick<ExtensionAPI, "registerTool">,
-  mgr: ServerManager
+  mgr: ServerManager,
 ) {
   pi.registerTool({
     name: "lsp",
@@ -294,16 +294,16 @@ export function registerLspTool(
     parameters: Type.Object({
       operation: StringEnum(LSP_OPERATIONS),
       filePath: Type.Optional(
-        Type.String({ description: "File path relative to project root" })
+        Type.String({ description: "File path relative to project root" }),
       ),
       line: Type.Optional(
-        Type.Number({ description: "Line number (1-indexed)" })
+        Type.Number({ description: "Line number (1-indexed)" }),
       ),
       character: Type.Optional(
-        Type.Number({ description: "Column number (1-indexed)" })
+        Type.Number({ description: "Column number (1-indexed)" }),
       ),
       query: Type.Optional(
-        Type.String({ description: "Search query (for workspaceSymbol)" })
+        Type.String({ description: "Search query (for workspaceSymbol)" }),
       ),
     }),
     renderShell: "self" as const,
@@ -332,7 +332,7 @@ export function registerLspTool(
             filePath,
             line,
             character,
-            query
+            query,
           );
           if (validationError) {
             throw new Error(validationError);
@@ -353,7 +353,7 @@ export function registerLspTool(
           const client = mgr.clientForFileWithCapability(filePath!, capability);
           if (!client) {
             throw new Error(
-              `No LSP server with '${operation}' capability found for ${filePath}. Check /lsp status.`
+              `No LSP server with '${operation}' capability found for ${filePath}. Check /lsp status.`,
             );
           }
 
@@ -367,7 +367,7 @@ export function registerLspTool(
               const hoverResult = await client.hover(filePath!, pos);
               return ok(
                 formatHover(hoverResult, filePath!, pos.line, pos.character),
-                informationOutcome("hover", hoverResult !== null)
+                informationOutcome("hover", hoverResult !== null),
               );
             }
 
@@ -380,9 +380,9 @@ export function registerLspTool(
                   filePath!,
                   pos.line,
                   pos.character,
-                  rootPath
+                  rootPath,
                 ),
-                countOutcome("goToDefinition", "definition", locs.length)
+                countOutcome("goToDefinition", "definition", locs.length),
               );
             }
 
@@ -395,9 +395,9 @@ export function registerLspTool(
                   filePath!,
                   pos.line,
                   pos.character,
-                  rootPath
+                  rootPath,
                 ),
-                countOutcome("findReferences", "reference", locs.length)
+                countOutcome("findReferences", "reference", locs.length),
               );
             }
 
@@ -410,13 +410,13 @@ export function registerLspTool(
                   filePath!,
                   pos.line,
                   pos.character,
-                  rootPath
+                  rootPath,
                 ),
                 countOutcome(
                   "goToImplementation",
                   "implementation",
-                  locs.length
-                )
+                  locs.length,
+                ),
               );
             }
 
@@ -427,8 +427,8 @@ export function registerLspTool(
                 countOutcome(
                   "documentSymbol",
                   "symbol",
-                  countDocumentSymbols(symbols)
-                )
+                  countDocumentSymbols(symbols),
+                ),
               );
             }
 
@@ -440,14 +440,14 @@ export function registerLspTool(
                   filePath!,
                   pos.line,
                   pos.character,
-                  rootPath
+                  rootPath,
                 ),
                 countOutcome(
                   "prepareCallHierarchy",
                   "call hierarchy item",
                   items.length,
-                  "call hierarchy information"
-                )
+                  "call hierarchy information",
+                ),
               );
             }
 
@@ -460,14 +460,14 @@ export function registerLspTool(
                     "incomingCalls",
                     "incoming call",
                     0,
-                    "call hierarchy information"
-                  )
+                    "call hierarchy information",
+                  ),
                 );
               }
               const calls = await client.incomingCalls(items[0]);
               return ok(
                 formatIncomingCalls(calls, items[0], rootPath),
-                countOutcome("incomingCalls", "incoming call", calls.length)
+                countOutcome("incomingCalls", "incoming call", calls.length),
               );
             }
 
@@ -480,14 +480,14 @@ export function registerLspTool(
                     "outgoingCalls",
                     "outgoing call",
                     0,
-                    "call hierarchy information"
-                  )
+                    "call hierarchy information",
+                  ),
                 );
               }
               const calls = await client.outgoingCalls(items[0]);
               return ok(
                 formatOutgoingCalls(calls, items[0], rootPath),
-                countOutcome("outgoingCalls", "outgoing call", calls.length)
+                countOutcome("outgoingCalls", "outgoing call", calls.length),
               );
             }
 
@@ -496,7 +496,8 @@ export function registerLspTool(
               const zeroLine = toZeroIndexed(line!);
               const lineDiags = diagsForFile.filter(
                 (d) =>
-                  d.range.start.line <= zeroLine && d.range.end.line >= zeroLine
+                  d.range.start.line <= zeroLine &&
+                  d.range.end.line >= zeroLine,
               );
               const range = {
                 start: { line: zeroLine, character: 0 },
@@ -507,7 +508,7 @@ export function registerLspTool(
               });
               return ok(
                 formatCodeActions(actions, filePath!, zeroLine),
-                countOutcome("codeActions", "code action", actions.length)
+                countOutcome("codeActions", "code action", actions.length),
               );
             }
 
@@ -521,7 +522,7 @@ export function registerLspTool(
               result,
               metadata,
               Date.now() - startedAt,
-              toolCallId
+              toolCallId,
             )
           : result;
       } catch (error) {
@@ -541,7 +542,7 @@ export function registerLspTool(
 async function executeDiagnostics(
   mgr: ServerManager,
   filePath: string,
-  _rootPath: string
+  _rootPath: string,
 ) {
   const groups: { source: string; diagnostics: Diagnostic[] }[] = [];
   const errors: string[] = [];
@@ -550,7 +551,7 @@ async function executeDiagnostics(
   if (clients.length === 0) {
     throw new LspExecutionError(
       `LSP diagnostics unavailable for ${filePath}: no matching LSP servers. Check /lsp status.`,
-      diagnosticsOutcome("unavailable", emptyDiagnosticCounts())
+      diagnosticsOutcome("unavailable", emptyDiagnosticCounts()),
     );
   }
 
@@ -570,7 +571,7 @@ async function executeDiagnostics(
   if (successfulSources.length === 0) {
     throw new LspExecutionError(
       `LSP diagnostics unavailable for ${filePath}: all matching servers failed.\nServer errors: ${errors.join("; ")}`,
-      diagnosticsOutcome("unavailable", emptyDiagnosticCounts(), errors)
+      diagnosticsOutcome("unavailable", emptyDiagnosticCounts(), errors),
     );
   }
 
@@ -582,7 +583,7 @@ async function executeDiagnostics(
         : `${successfulSources.join(", ")} returned no diagnostics.`;
     throw new LspExecutionError(
       `LSP diagnostics incomplete for ${filePath}.\n\n${successfulResult}\n\nServer errors: ${errors.join("; ")}`,
-      diagnosticsOutcome("incomplete", counts, errors)
+      diagnosticsOutcome("incomplete", counts, errors),
     );
   }
 
@@ -598,7 +599,7 @@ async function executeDiagnostics(
         })),
         errors,
       },
-      presentation
+      presentation,
     ),
   };
 }
@@ -606,7 +607,7 @@ async function executeDiagnostics(
 async function executeWorkspaceSymbol(
   mgr: ServerManager,
   query: string,
-  rootPath: string
+  rootPath: string,
 ) {
   const client = mgr.anyClient();
   if (!client) {
@@ -616,7 +617,7 @@ async function executeWorkspaceSymbol(
   const symbols = await client.workspaceSymbol(query);
   return ok(
     formatWorkspaceSymbols(symbols, query, rootPath),
-    countOutcome("workspaceSymbol", "symbol", symbols.length)
+    countOutcome("workspaceSymbol", "symbol", symbols.length),
   );
 }
 

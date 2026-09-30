@@ -78,14 +78,14 @@ let warnedCustomDirectory = false;
 export function validateMessageSet(name: string, data: unknown): string[] {
   if (!Array.isArray(data) || data.length === 0) {
     throw new Error(
-      `Invalid whimsical message set "${name}": expected non-empty string array`
+      `Invalid whimsical message set "${name}": expected non-empty string array`,
     );
   }
 
   for (const message of data) {
     if (typeof message !== "string" || message.trim().length === 0) {
       throw new Error(
-        `Invalid whimsical message set "${name}": expected non-whitespace strings`
+        `Invalid whimsical message set "${name}": expected non-whitespace strings`,
       );
     }
   }
@@ -108,7 +108,7 @@ function hasOwn<T extends object>(object: T, key: PropertyKey): key is keyof T {
 }
 
 function isBundledMessageSetName(
-  value: string
+  value: string,
 ): value is BundledMessageSetName {
   return MESSAGE_SET_NAMES.includes(value as BundledMessageSetName);
 }
@@ -158,14 +158,14 @@ function validateCustomMessageSet(name: string, data: unknown): string[] {
   const messages = validateMessageSet(name, data);
   if (messages.length > MAX_CUSTOM_SET_MESSAGES) {
     throw new Error(
-      `Invalid whimsical message set "${name}": too many messages`
+      `Invalid whimsical message set "${name}": too many messages`,
     );
   }
 
   for (const message of messages) {
     if (hasControlCharacter(message)) {
       throw new Error(
-        `Invalid whimsical message set "${name}": expected strings without control characters`
+        `Invalid whimsical message set "${name}": expected strings without control characters`,
       );
     }
   }
@@ -173,7 +173,7 @@ function validateCustomMessageSet(name: string, data: unknown): string[] {
   const messageBytes = Buffer.byteLength(messages.join(""), "utf8");
   if (messageBytes > MAX_CUSTOM_SET_MESSAGE_BYTES) {
     throw new Error(
-      `Invalid whimsical message set "${name}": messages too large`
+      `Invalid whimsical message set "${name}": messages too large`,
     );
   }
 
@@ -184,7 +184,7 @@ function warnUnreadableCustomDirectory(): void {
   if (!warnedCustomDirectory) {
     warnedCustomDirectory = true;
     console.warn(
-      "Whimsical custom message directory is not readable; ignoring custom sets."
+      "Whimsical custom message directory is not readable; ignoring custom sets.",
     );
   }
 }
@@ -332,13 +332,13 @@ function parseWhimsicalState(data: unknown): WhimsicalState | null {
 }
 
 function isWhimsicalEntry(
-  entry: SessionEntryLike | undefined
+  entry: SessionEntryLike | undefined,
 ): entry is SessionEntryLike {
   return entry?.type === "custom" && entry.customType === WHIMSICAL_CUSTOM_TYPE;
 }
 
 function getLatestWhimsicalState(
-  entries: readonly SessionEntryLike[]
+  entries: readonly SessionEntryLike[],
 ): WhimsicalState | null {
   for (let i = entries.length - 1; i >= 0; i--) {
     const entry = entries[i];
@@ -365,7 +365,7 @@ function loadWhimsicalConfigFile(configPath: string): WhimsicalState | null {
   }
 
   const state = parseWhimsicalState(
-    JSON.parse(readFileSync(configPath, "utf8"))
+    JSON.parse(readFileSync(configPath, "utf8")),
   );
   if (!state) {
     throw new Error(`Invalid whimsical config file: ${configPath}`);
@@ -376,7 +376,7 @@ function loadWhimsicalConfigFile(configPath: string): WhimsicalState | null {
 
 function writeWhimsicalConfigFile(
   state: WhimsicalState,
-  homeDir = homedir()
+  homeDir = homedir(),
 ): void {
   const configPath = getGlobalWhimsicalConfigPath(homeDir);
   mkdirSync(dirname(configPath), { recursive: true });
@@ -385,7 +385,7 @@ function writeWhimsicalConfigFile(
 
 function resolveSelectedSet(
   state: WhimsicalState | null,
-  source: SelectionSource
+  source: SelectionSource,
 ): ResolvedWhimsicalState {
   if (!state) {
     return {
@@ -429,7 +429,7 @@ function resolveSelectedSet(
 
 function resolveWhimsicalState(
   entries: readonly SessionEntryLike[],
-  options: { refreshMessageSets?: boolean } = {}
+  options: { refreshMessageSets?: boolean } = {},
 ): ResolvedWhimsicalState {
   if (options.refreshMessageSets !== false) {
     refreshMessageSets();
@@ -445,7 +445,7 @@ function resolveWhimsicalState(
 
 function applyResolvedState(
   state: ResolvedWhimsicalState,
-  ctx?: ExtensionContext
+  ctx?: ExtensionContext,
 ): void {
   selectedSet = state.selectedSet;
   selectedSetSource = state.source;
@@ -464,28 +464,28 @@ function applyResolvedState(
 
 function notifyWhimsicalStatus(
   ctx: ExtensionCommandContext,
-  options: { refresh?: boolean } = {}
+  options: { refresh?: boolean } = {},
 ): void {
   if (options.refresh !== false) {
     applyResolvedState(
       resolveWhimsicalState(
-        ctx.sessionManager.getEntries() as readonly SessionEntryLike[]
+        ctx.sessionManager.getEntries() as readonly SessionEntryLike[],
       ),
-      ctx
+      ctx,
     );
   }
   const fallbackSuffix =
     selectedSetSource === "fallback" ? ` (requested: ${requestedSet})` : "";
   ctx.ui.notify(
     `Whimsical message set: ${selectedSet} (${selectedSetSource}${fallbackSuffix}). Available: ${getAvailableMessageSetNames().join(", ")}`,
-    "info"
+    "info",
   );
 }
 
 function persistSelectedSet(
   pi: ExtensionAPI,
   ctx: ExtensionCommandContext,
-  nextSelectedSet: string
+  nextSelectedSet: string,
 ): void {
   const state = { selectedSet: nextSelectedSet };
   writeWhimsicalConfigFile(state);
@@ -499,14 +499,14 @@ export default function whimsicalExtension(pi: ExtensionAPI): void {
 
   function refreshRuntimeState(
     ctx: ExtensionContext,
-    options: { refreshMessageSets?: boolean } = {}
+    options: { refreshMessageSets?: boolean } = {},
   ): void {
     applyResolvedState(
       resolveWhimsicalState(
         ctx.sessionManager.getEntries() as readonly SessionEntryLike[],
-        options
+        options,
       ),
-      ctx
+      ctx,
     );
   }
 
@@ -546,12 +546,12 @@ export default function whimsicalExtension(pi: ExtensionAPI): void {
       const hasMessageSet = hasOwn(messageSets, command);
       const hasInvalidCustomSet = hasOwn(
         customMessageSets.invalidReasons,
-        command
+        command,
       );
       if (!(hasMessageSet || hasInvalidCustomSet)) {
         ctx.ui.notify(
           `Usage: /whimsical [${getAvailableMessageSetNames().join("|")}]`,
-          "warning"
+          "warning",
         );
         return Promise.resolve();
       }

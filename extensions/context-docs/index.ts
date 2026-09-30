@@ -34,7 +34,7 @@ const PROJECT_WORK_PATTERN =
 const SHARED_PROMPT = fs
   .readFileSync(
     path.join(path.dirname(fileURLToPath(import.meta.url)), "prompt.md"),
-    "utf8"
+    "utf8",
   )
   .trim();
 
@@ -152,7 +152,7 @@ function splitCompletionTokens(argumentPrefix: string): {
 
 function resolvePathSearch(
   token: string,
-  cwd: string
+  cwd: string,
 ): {
   searchDir: string;
   valuePrefix: string;
@@ -183,14 +183,14 @@ function resolvePathSearch(
 }
 
 function nonEmptyCompletions(
-  items: AutocompleteItem[]
+  items: AutocompleteItem[],
 ): AutocompleteItem[] | null {
   return items.length > 0 ? items : null;
 }
 
 function completeDirectories(
   token: string,
-  cwd: string
+  cwd: string,
 ): AutocompleteItem[] | null {
   const { searchDir, valuePrefix, namePrefix } = resolvePathSearch(token, cwd);
 
@@ -255,7 +255,7 @@ function getExpectedValueFlag(tokens: string[]): string | null {
 
 function getAvailableFlags(
   command: ContextDocsCommand,
-  usedFlags: Set<string>
+  usedFlags: Set<string>,
 ): AutocompleteItem[] {
   return FLAG_COMPLETIONS[command].filter((item) => {
     if (item.label === "--") {
@@ -268,7 +268,7 @@ function getAvailableFlags(
 export function getContextDocsArgumentCompletions(
   command: ContextDocsCommand,
   argumentPrefix: string,
-  cwd: string
+  cwd: string,
 ): AutocompleteItem[] | null {
   const { currentToken, precedingTokens } =
     splitCompletionTokens(argumentPrefix);
@@ -283,7 +283,7 @@ export function getContextDocsArgumentCompletions(
       return null;
     }
     const matches = values.filter((item) =>
-      item.value.startsWith(currentToken)
+      item.value.startsWith(currentToken),
     );
     return nonEmptyCompletions(matches);
   }
@@ -291,13 +291,13 @@ export function getContextDocsArgumentCompletions(
   const usedFlags = getUsedFlags(precedingTokens);
   if (currentToken.startsWith("--")) {
     const matches = getAvailableFlags(command, usedFlags).filter((item) =>
-      item.value.startsWith(currentToken)
+      item.value.startsWith(currentToken),
     );
     return nonEmptyCompletions(matches);
   }
 
   const hasTarget = precedingTokens.some(
-    (token) => !token.startsWith("--") && token !== "--"
+    (token) => !token.startsWith("--") && token !== "--",
   );
 
   if (hasTarget && currentToken.length === 0) {
@@ -327,7 +327,7 @@ function formatOptions(options: ContextDocsCommandInput["options"]): string {
 }
 
 export function buildContextDocsMessage(
-  input: ContextDocsCommandInput
+  input: ContextDocsCommandInput,
 ): string {
   const instruction = input.instruction ?? DEFAULT_INSTRUCTIONS[input.command];
 
@@ -348,7 +348,7 @@ export function buildContextDocsMessage(
 }
 
 export function matchNaturalLanguageInput(
-  text: string
+  text: string,
 ): NaturalLanguageMatch | null {
   if (text.trimStart().startsWith("/")) {
     return null;
@@ -366,7 +366,7 @@ export function matchNaturalLanguageInput(
 
 function hasContextDocs(targetRoot: string): boolean {
   return ["CONTEXT.md", "CONTEXT-MAP.md", "docs/adr", "docs/context"].some(
-    (entry) => fs.existsSync(path.join(targetRoot, entry))
+    (entry) => fs.existsSync(path.join(targetRoot, entry)),
   );
 }
 
@@ -380,7 +380,7 @@ function promptLooksLikeProjectWork(prompt: string): boolean {
 
 export function shouldInjectContextDocsReminder(
   prompt: string,
-  targetRoot: string
+  targetRoot: string,
 ): boolean {
   const relevant =
     hasContextDocs(targetRoot) || promptLooksLikeContextDocsWork(prompt);
@@ -388,10 +388,10 @@ export function shouldInjectContextDocsReminder(
 }
 
 function detectCommandSecret(
-  input: Pick<ContextDocsCommandInput, "instruction" | "options">
+  input: Pick<ContextDocsCommandInput, "instruction" | "options">,
 ): string | null {
   const secret = detectSecret(
-    JSON.stringify({ instruction: input.instruction, options: input.options })
+    JSON.stringify({ instruction: input.instruction, options: input.options }),
   );
 
   return secret.hasSecret ? (secret.reason ?? "secret") : null;
@@ -400,7 +400,7 @@ function detectCommandSecret(
 function buildNaturalLanguageInput(
   command: ContextDocsCommand,
   instruction: string,
-  cwd: string
+  cwd: string,
 ): ContextDocsCommandInput | null {
   const parsed = parseContextDocsArgs(command, NATURAL_LANGUAGE_ARGS, cwd);
 
@@ -422,7 +422,7 @@ function dispatchContextDocsCommand(
   command: ContextDocsCommand,
   args: string,
   ctx: ExtensionContext,
-  pi: ExtensionAPI
+  pi: ExtensionAPI,
 ): Promise<void> {
   const parsed = parseContextDocsArgs(command, args ?? "", ctx.cwd);
   if (!parsed.ok) {
@@ -455,7 +455,7 @@ export default function contextDocsExtension(pi: ExtensionAPI): void {
         return getContextDocsArgumentCompletions(
           command.name,
           argumentPrefix,
-          process.cwd()
+          process.cwd(),
         );
       },
       handler: async (args, ctx) => {
@@ -477,7 +477,7 @@ export default function contextDocsExtension(pi: ExtensionAPI): void {
     const input = buildNaturalLanguageInput(
       matched.command,
       matched.instruction,
-      ctx.cwd
+      ctx.cwd,
     );
     if (!input) {
       ctx.ui.notify("Unable to parse context-docs input.", "warning");
@@ -493,7 +493,7 @@ export default function contextDocsExtension(pi: ExtensionAPI): void {
     const commandText = `/${matched.command} -- ${matched.instruction}`;
     const confirmed = await ctx.ui.confirm(
       "Run context-docs command?",
-      `Interpret this input as ${commandText}`
+      `Interpret this input as ${commandText}`,
     );
 
     if (!confirmed) {
@@ -517,10 +517,7 @@ export default function contextDocsExtension(pi: ExtensionAPI): void {
   });
 }
 
-export {
-  buildContextDocsBlockMarkers,
-  planMarkedBlockUpdate,
-} from "./blocks";
+export { buildContextDocsBlockMarkers, planMarkedBlockUpdate } from "./blocks";
 export {
   classifyContextDocNote,
   reachesContextMapThreshold,

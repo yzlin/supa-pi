@@ -8,7 +8,7 @@ const skillPath = join(
   repositoryRoot,
   "skills",
   "performance-optimization",
-  "SKILL.md"
+  "SKILL.md",
 );
 
 function readFile(path: string): string {
@@ -61,7 +61,7 @@ describe("performance workflow ownership contract", () => {
     expect(rule).toContain("reported or suspected regression");
     expect(rule).toContain("measured bottleneck");
     expect(rule).toContain(
-      "Routine work that is already bounded and has no concrete performance signal does not require a performance investigation."
+      "Routine work that is already bounded and has no concrete performance signal does not require a performance investigation.",
     );
     expect(rule).not.toContain("all tasks must perform performance work");
     expect(rule).not.toContain("every task must perform performance work");
@@ -71,18 +71,18 @@ describe("performance workflow ownership contract", () => {
     const rule = readFile(rulePath);
 
     expect(rule).toContain(
-      "Measure before optimizing. Do not add complexity for speculative performance gains."
+      "Measure before optimizing. Do not add complexity for speculative performance gains.",
     );
     expect(rule).toContain("## Mandatory Performance Checks");
     expect(rule).toContain(
-      "For non-trivial features or suspected regressions, check for:"
+      "For non-trivial features or suspected regressions, check for:",
     );
     expect(rule).toContain(
-      "unbounded fetches, list endpoints, result sets, queues, or file reads"
+      "unbounded fetches, list endpoints, result sets, queues, or file reads",
     );
     expect(rule).toContain("## Review Standard");
     expect(rule).toContain(
-      "If measurement is blocked, state what is missing and why the risk still matters."
+      "If measurement is blocked, state what is missing and why the risk still matters.",
     );
   });
 });

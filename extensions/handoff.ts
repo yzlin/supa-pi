@@ -90,7 +90,7 @@ async function generateContextSummary(
   modelRegistry: ModelRegistry,
   messages: AgentMessage[],
   goal: string,
-  signal?: AbortSignal
+  signal?: AbortSignal,
 ): Promise<string | null> {
   const conversationText = serializeConversation(convertToLlm(messages));
 
@@ -108,7 +108,7 @@ async function generateContextSummary(
   const response = await modelRegistry.complete(
     model,
     { systemPrompt: CONTEXT_SUMMARY_SYSTEM_PROMPT, messages: [userMessage] },
-    { signal }
+    { signal },
   );
 
   if (response.stopReason === "aborted") {
@@ -124,7 +124,7 @@ async function generateContextSummary(
 function buildHandoffDocument(
   goal: string,
   body: string,
-  parentSession: string | undefined
+  parentSession: string | undefined,
 ): string {
   const metadata = [
     `Generated: ${new Date().toISOString()}`,
@@ -154,7 +154,7 @@ async function writeHandoffDocument(document: string): Promise<string> {
 }
 
 function hasNumericTimestamp(
-  message: unknown
+  message: unknown,
 ): message is { timestamp: number } {
   return (
     typeof message === "object" &&
@@ -171,7 +171,7 @@ interface SessionManagerWithNewSession {
 function onSessionSwitch(pi: ExtensionAPI, listener: () => void): void {
   const on = pi.on as unknown as (
     event: "session_switch",
-    handler: () => void
+    handler: () => void,
   ) => void;
 
   on("session_switch", listener);
@@ -180,7 +180,7 @@ function onSessionSwitch(pi: ExtensionAPI, listener: () => void): void {
 function buildHandoffPrompt(
   goal: string,
   handoffPath: string,
-  parentSession: string | undefined
+  parentSession: string | undefined,
 ): string {
   const parentContext = parentSession
     ? `/skill:session-query\n\n**Parent session:** \`${parentSession}\`\n\n`
@@ -195,7 +195,7 @@ interface HandoffOptions {
 
 function resolveHandoffModel(
   ctx: ExtensionContext,
-  requestedModel: string
+  requestedModel: string,
 ):
   | { model: Model<Api>; thinkingLevel?: ExtensionContext["thinkingLevel"] }
   | string {
@@ -209,7 +209,7 @@ function resolveHandoffModel(
   const scopedModels = ctx.scopedModels ?? [];
   const scoped = scopedModels.find(
     ({ model: scopedModel }) =>
-      scopedModel.provider === provider && scopedModel.id === modelId
+      scopedModel.provider === provider && scopedModel.id === modelId,
   );
   if (scopedModels.length > 0 && !scoped) {
     return `Handoff: model ${requestedModel} is outside the current model scope`;
@@ -226,7 +226,7 @@ function resolveHandoffModel(
 async function applyHandoffOptions(
   pi: ExtensionAPI,
   ctx: ExtensionContext,
-  options?: HandoffOptions
+  options?: HandoffOptions,
 ): Promise<boolean> {
   const requestedModel = options?.model;
   if (!requestedModel) {
@@ -265,10 +265,10 @@ async function performHandoff(
       prompt: string;
       parentSession: string | undefined;
       options?: HandoffOptions;
-    } | null
+    } | null,
   ) => void,
   fromTool = false,
-  options?: HandoffOptions
+  options?: HandoffOptions,
 ): Promise<string | undefined> {
   if (!ctx.hasUI) {
     return "Handoff requires interactive mode.";
@@ -289,7 +289,7 @@ async function performHandoff(
   const messages = branch
     .filter(
       (entry): entry is SessionEntry & { type: "message" } =>
-        entry.type === "message"
+        entry.type === "message",
     )
     .map((entry) => entry.message);
 
@@ -304,7 +304,7 @@ async function performHandoff(
     const loader = new BorderedLoader(
       tui,
       theme,
-      "Generating handoff document..."
+      "Generating handoff document...",
     );
     loader.onAbort = () => done(null);
 
@@ -315,7 +315,7 @@ async function performHandoff(
         ctx.modelRegistry,
         messages,
         goal,
-        loader.signal
+        loader.signal,
       );
     };
 
@@ -336,7 +336,7 @@ async function performHandoff(
   const handoffDocument = buildHandoffDocument(
     goal,
     result,
-    currentSessionFile
+    currentSessionFile,
   );
   let handoffPath: string;
   try {
@@ -393,7 +393,7 @@ export default function (pi: ExtensionAPI) {
       prompt: string;
       parentSession: string | undefined;
       options?: HandoffOptions;
-    } | null
+    } | null,
   ) => {
     pendingHandoff = v;
   };
@@ -457,7 +457,7 @@ export default function (pi: ExtensionAPI) {
         if (ctx.hasUI) {
           ctx.ui.notify(
             "Handoff aborted because the requested model could not be applied.",
-            "error"
+            "error",
           );
         }
         return;
@@ -495,7 +495,7 @@ export default function (pi: ExtensionAPI) {
     const ts = handoffTimestamp;
 
     const newMessages = event.messages.filter(
-      (m: unknown) => hasNumericTimestamp(m) && m.timestamp >= ts
+      (m: unknown) => hasNumericTimestamp(m) && m.timestamp >= ts,
     );
     if (newMessages.length > 0) {
       return { messages: newMessages };
@@ -518,7 +518,7 @@ export default function (pi: ExtensionAPI) {
       if (TOP_LEVEL_REGEX_1.test(args)) {
         ctx.ui.notify(
           "/handoff does not support -model; use /handoff <goal>",
-          "error"
+          "error",
         );
         return;
       }
@@ -534,7 +534,7 @@ export default function (pi: ExtensionAPI) {
         ctx,
         goal,
         pendingHandoff,
-        setPendingHandoff
+        setPendingHandoff,
       );
       if (error) {
         ctx.ui.notify(error, "error");
@@ -554,13 +554,13 @@ export default function (pi: ExtensionAPI) {
         Type.String({
           description:
             "Amplike mode name to start the new session with (e.g. 'rush', 'smart', 'deep')",
-        })
+        }),
       ),
       model: Type.Optional(
         Type.String({
           description:
             "Model to start the new session with, as provider/modelId (e.g. 'anthropic/claude-haiku-4-5')",
-        })
+        }),
       ),
     }),
 
@@ -577,7 +577,7 @@ export default function (pi: ExtensionAPI) {
         pendingHandoff,
         setPendingHandoff,
         true,
-        hasOptions ? options : undefined
+        hasOptions ? options : undefined,
       );
       return {
         content: [

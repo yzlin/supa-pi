@@ -7,7 +7,7 @@ import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 const PROMPT = fs
   .readFileSync(
     path.join(path.dirname(fileURLToPath(import.meta.url)), "prompt.md"),
-    "utf8"
+    "utf8",
   )
   .trim();
 

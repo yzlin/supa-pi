@@ -184,7 +184,7 @@ const REVIEW_THINKING_LEVELS = new Set<ReviewThinkingLevel>([
 ]);
 
 function normalizeReviewerPanelSetting(
-  value: readonly ReviewPanelEntry[] | undefined
+  value: readonly ReviewPanelEntry[] | undefined,
 ): ReviewPanelEntry[] {
   if (value === undefined) {
     return createDefaultReviewerPanel();
@@ -197,7 +197,7 @@ function normalizeReviewerPanelSetting(
     const model = typeof entry?.model === "string" ? entry.model.trim() : "";
     if (!(model && REVIEW_THINKING_LEVELS.has(entry?.thinkingLevel))) {
       throw new Error(
-        "Each reviewer panel entry needs a nonblank model and Pi thinking level (off, minimal, low, medium, high, or xhigh)."
+        "Each reviewer panel entry needs a nonblank model and Pi thinking level (off, minimal, low, medium, high, or xhigh).",
       );
     }
     if (!panel.some((existing) => existing.model === model)) {
@@ -220,7 +220,7 @@ function parseReviewerPanel(value: string): ReviewPanelEntry[] {
     const level = separator < 0 ? "" : raw.slice(separator + 1).trim();
     if (!(model && REVIEW_THINKING_LEVELS.has(level as ReviewThinkingLevel))) {
       throw new Error(
-        `Invalid reviewer model pair '${sanitizeModelForUi(raw.trim())}'. Use model=level with level off|minimal|low|medium|high|xhigh.`
+        `Invalid reviewer model pair '${sanitizeModelForUi(raw.trim())}'. Use model=level with level off|minimal|low|medium|high|xhigh.`,
       );
     }
     return { model, thinkingLevel: level as ReviewThinkingLevel };
@@ -231,7 +231,7 @@ function parseReviewerPanel(value: string): ReviewPanelEntry[] {
 function assertReviewModelAvailable(
   ctx: ExtensionContext,
   model: string,
-  role: string
+  role: string,
 ): void {
   const [provider, ...idParts] = model.split("/");
   const id = idParts.join("/");
@@ -242,11 +242,11 @@ function assertReviewModelAvailable(
   if (
     scopedModels.length > 0 &&
     !scopedModels.some(
-      ({ model: scoped }) => scoped.provider === provider && scoped.id === id
+      ({ model: scoped }) => scoped.provider === provider && scoped.id === id,
     )
   ) {
     throw new Error(
-      `${role} model '${model}' is outside the current model scope.`
+      `${role} model '${model}' is outside the current model scope.`,
     );
   }
   const resolved = ctx.modelRegistry.find(provider, id);
@@ -255,7 +255,7 @@ function assertReviewModelAvailable(
   }
   if (!ctx.modelRegistry.hasConfiguredAuth(resolved)) {
     throw new Error(
-      `${role} model '${model}' is unavailable because authentication is not configured.`
+      `${role} model '${model}' is unavailable because authentication is not configured.`,
     );
   }
 }
@@ -271,7 +271,7 @@ function createGitExec(pi: ExtensionAPI, signal?: AbortSignal): GitExec {
 }
 
 function normalizeReviewerSelection(
-  reviewers: readonly string[]
+  reviewers: readonly string[],
 ): ReviewerAgent[] {
   const normalized: ReviewerAgent[] = [];
 
@@ -295,7 +295,7 @@ function getReviewSettings(ctx: ExtensionContext): ReviewSettingsState {
   return {
     customInstructions: state?.customInstructions?.trim() || undefined,
     selectedReviewers: normalizeReviewerSelection(
-      state?.selectedReviewers ?? []
+      state?.selectedReviewers ?? [],
     ),
     reviewerSelectionMode:
       state?.reviewerSelectionMode === "manual" ? "manual" : "auto",
@@ -335,7 +335,7 @@ const FOLDER_REVIEW_PROMPT =
   "Review the code in the following paths: {paths}\nThis is a snapshot review (not a diff). Read the files directly in these paths and provide prioritized, actionable findings.";
 
 async function loadProjectReviewGuidelines(
-  cwd: string
+  cwd: string,
 ): Promise<string | null> {
   let currentDir = path.resolve(cwd);
 
@@ -372,7 +372,7 @@ async function loadProjectReviewGuidelines(
 async function getMergeBase(
   pi: ExtensionAPI,
   branch: string,
-  signal?: AbortSignal
+  signal?: AbortSignal,
 ): Promise<string | null> {
   return await getSharedMergeBase(createGitExec(pi, signal), branch);
 }
@@ -399,7 +399,7 @@ async function getLocalBranches(pi: ExtensionAPI): Promise<string[]> {
  */
 async function getRecentCommits(
   pi: ExtensionAPI,
-  limit = 10
+  limit = 10,
 ): Promise<Array<{ sha: string; title: string }>> {
   const { stdout, code } = await pi.exec("git", [
     "log",
@@ -454,7 +454,7 @@ async function hasPendingChanges(pi: ExtensionAPI): Promise<boolean> {
  */
 async function getPrInfo(
   pi: ExtensionAPI,
-  prNumber: number
+  prNumber: number,
 ): Promise<{ baseBranch: string; title: string; headBranch: string } | null> {
   const { stdout, code } = await pi.exec("gh", [
     "pr",
@@ -485,7 +485,7 @@ async function getPrInfo(
  */
 async function checkoutPr(
   pi: ExtensionAPI,
-  prNumber: number
+  prNumber: number,
 ): Promise<{ success: boolean; error?: string }> {
   const { stdout, stderr, code } = await pi.exec("gh", [
     "pr",
@@ -546,7 +546,7 @@ async function getDefaultBranch(pi: ExtensionAPI): Promise<string> {
 async function buildReviewPrompt(
   pi: ExtensionAPI,
   target: ReviewTarget,
-  signal?: AbortSignal
+  signal?: AbortSignal,
 ): Promise<string> {
   switch (target.type) {
     case "uncommitted":
@@ -557,7 +557,7 @@ async function buildReviewPrompt(
       const basePrompt = mergeBase
         ? BASE_BRANCH_PROMPT_WITH_MERGE_BASE.replace(
             /{baseBranch}/g,
-            target.branch
+            target.branch,
           ).replace(/{mergeBaseSha}/g, mergeBase)
         : BASE_BRANCH_PROMPT_FALLBACK.replace(/{branch}/g, target.branch);
       return basePrompt;
@@ -567,7 +567,7 @@ async function buildReviewPrompt(
       if (target.title) {
         return COMMIT_PROMPT_WITH_TITLE.replace("{sha}", target.sha).replace(
           "{title}",
-          target.title
+          target.title,
         );
       }
       return COMMIT_PROMPT.replace("{sha}", target.sha);
@@ -581,7 +581,7 @@ async function buildReviewPrompt(
             .replace(/{mergeBaseSha}/g, mergeBase)
         : PULL_REQUEST_PROMPT_FALLBACK.replace(
             /{prNumber}/g,
-            String(target.prNumber)
+            String(target.prNumber),
           )
             .replace(/{title}/g, target.title)
             .replace(/{baseBranch}/g, target.baseBranch);
@@ -636,7 +636,7 @@ async function getValidatedChangedPaths(
   ctx: ExtensionCommandContext,
   target: DiffReviewTarget,
   gitExec: GitExec,
-  signal?: AbortSignal
+  signal?: AbortSignal,
 ): Promise<string[] | null> {
   try {
     const changedPaths = await getChangedPathsOrThrow(target, gitExec);
@@ -663,7 +663,7 @@ async function getReviewPreflightMetadata(
   pi: ExtensionAPI,
   ctx: ExtensionCommandContext,
   target: DiffReviewTarget,
-  signal?: AbortSignal
+  signal?: AbortSignal,
 ): Promise<ReviewPreflightMetadata | null> {
   const gitExec = createGitExec(pi, signal);
 
@@ -672,7 +672,7 @@ async function getReviewPreflightMetadata(
       ctx,
       target,
       gitExec,
-      signal
+      signal,
     );
     if (!changedPaths) {
       return null;
@@ -699,7 +699,7 @@ async function getReviewPreflightMetadata(
       ctx,
       target,
       gitExec,
-      signal
+      signal,
     );
     if (!changedPaths) {
       return null;
@@ -725,7 +725,7 @@ async function getReviewPreflightMetadata(
     ctx,
     target,
     gitExec,
-    signal
+    signal,
   );
   if (!changedPaths) {
     return null;
@@ -747,7 +747,7 @@ async function getReviewPreflightMetadata(
 
 function formatReviewPreflightMetadata(
   metadata: ReviewPreflightMetadata,
-  target: DiffReviewTarget
+  target: DiffReviewTarget,
 ): string {
   const lines = [
     "- Changed paths:",
@@ -757,20 +757,20 @@ function formatReviewPreflightMetadata(
   if (metadata.inspectCommands.length > 0) {
     lines.push(
       "- Exact inspect commands (run these; do not expect full diff output in this packet):",
-      ...metadata.inspectCommands.map((command) => `  - ${command}`)
+      ...metadata.inspectCommands.map((command) => `  - ${command}`),
     );
   }
 
   if (target.type === "uncommitted") {
     lines.push(
-      "- Note: read untracked paths directly from the changed path list above."
+      "- Note: read untracked paths directly from the changed path list above.",
     );
   }
 
   if (metadata.commitList) {
     lines.push(
       "- Commit list:",
-      ...metadata.commitList.split("\n").map((commit) => `  - ${commit}`)
+      ...metadata.commitList.split("\n").map((commit) => `  - ${commit}`),
     );
   }
 
@@ -846,7 +846,7 @@ function formatModelConfigValue(value: ReviewPanelEntry[] | string): string {
 }
 
 function builtInModelConfigValue(
-  field: ModelConfigField
+  field: ModelConfigField,
 ): ReviewPanelEntry[] | string {
   if (field === "reviewerPanel") {
     return [...DEFAULT_REVIEWER_PANEL];
@@ -874,7 +874,7 @@ function persistReviewSettings(pi: ExtensionAPI) {
 function setReviewSelection(
   pi: ExtensionAPI,
   reviewers: ReviewerAgent[],
-  selectionMode: ReviewerSelectionMode
+  selectionMode: ReviewerSelectionMode,
 ) {
   reviewSelectedAgents = normalizeReviewerSelection(reviewers);
   reviewReviewerSelectionMode = selectionMode;
@@ -883,7 +883,7 @@ function setReviewSelection(
 
 function setReviewCustomInstructions(
   pi: ExtensionAPI,
-  instructions: string | undefined
+  instructions: string | undefined,
 ) {
   reviewCustomInstructions = instructions?.trim() || undefined;
   persistReviewSettings(pi);
@@ -891,7 +891,7 @@ function setReviewCustomInstructions(
 
 function assertEffectiveReviewModelsAvailable(
   ctx: ExtensionContext,
-  models: EffectiveReviewModels
+  models: EffectiveReviewModels,
 ): void {
   for (const entry of models.reviewerPanel) {
     assertReviewModelAvailable(ctx, entry.model, "Reviewer");
@@ -899,7 +899,7 @@ function assertEffectiveReviewModelsAvailable(
   assertReviewModelAvailable(
     ctx,
     models.synthesizerModel,
-    "Review synthesizer"
+    "Review synthesizer",
   );
   assertReviewModelAvailable(ctx, models.verifierModel, "Review verifier");
 }
@@ -907,7 +907,7 @@ function assertEffectiveReviewModelsAvailable(
 function formatModelDisclosure(
   role: string,
   model: string,
-  thinkingLevel: ReviewThinkingLevel
+  thinkingLevel: ReviewThinkingLevel,
 ): string {
   const safeModel = sanitizeModelForUi(model);
   const provider = safeModel.split("/")[0];
@@ -917,7 +917,7 @@ function formatModelDisclosure(
 function formatEffectiveModelDisclosure(models: EffectiveReviewModels): string {
   return [
     ...models.reviewerPanel.map((entry) =>
-      formatModelDisclosure("reviewer", entry.model, entry.thinkingLevel)
+      formatModelDisclosure("reviewer", entry.model, entry.thinkingLevel),
     ),
     formatModelDisclosure("synthesizer", models.synthesizerModel, "medium"),
     formatModelDisclosure("verifier", models.verifierModel, "medium"),
@@ -974,7 +974,7 @@ function extractTextContent(content: SessionMessageLike["content"]): string {
 
   return content
     .flatMap((part) =>
-      part?.type === "text" && typeof part.text === "string" ? [part.text] : []
+      part?.type === "text" && typeof part.text === "string" ? [part.text] : [],
     )
     .join("\n")
     .trim();
@@ -1056,7 +1056,7 @@ function extractReviewFixContext(reviewReport: string): string {
 function getReviewReportByHash(
   ctx: ExtensionContext,
   expectedHash: string,
-  supplementalReports: readonly SupplementalReviewReport[] = []
+  supplementalReports: readonly SupplementalReviewReport[] = [],
 ): string {
   const branch = ctx.sessionManager.getBranch();
   for (let index = branch.length - 1; index >= 0; index--) {
@@ -1073,7 +1073,7 @@ function getReviewReportByHash(
     .filter(
       (entry) =>
         entry.sessionId === ctx.sessionManager.getSessionId() &&
-        entry.cwd === ctx.cwd
+        entry.cwd === ctx.cwd,
     )
     .sort((left, right) => right.order - left.order)) {
     if (
@@ -1090,7 +1090,7 @@ function getReviewReportByHash(
 function getLatestReviewReport(
   ctx: ExtensionContext,
   options: { preferSummary?: boolean; excludeSummary?: boolean } = {},
-  supplementalReports: readonly SupplementalReviewReport[] = []
+  supplementalReports: readonly SupplementalReviewReport[] = [],
 ): string {
   const branch = ctx.sessionManager.getBranch();
   let fallback = "";
@@ -1119,7 +1119,7 @@ function getLatestReviewReport(
     .filter(
       (entry) =>
         entry.sessionId === ctx.sessionManager.getSessionId() &&
-        entry.cwd === ctx.cwd
+        entry.cwd === ctx.cwd,
     )
     .sort((left, right) => right.order - left.order);
   for (const supplemental of currentSupplementalReports) {
@@ -1159,7 +1159,7 @@ Required sections (in order):
 
 function buildReviewSummaryMessage(
   reviewReport: string,
-  extraInstruction?: string
+  extraInstruction?: string,
 ): string {
   let message = `${REVIEW_SUMMARY_FROM_REPORT_PROMPT}\n\n<review_report>\n${reviewReport}\n</review_report>`;
 
@@ -1172,7 +1172,7 @@ function buildReviewSummaryMessage(
 
 function buildReviewFixMessage(
   reviewReport: string,
-  extraInstruction?: string
+  extraInstruction?: string,
 ): string {
   const reviewFixContext = extractReviewFixContext(reviewReport);
   let message = `${REVIEW_FIX_INVOCATION_PREAMBLE}\n- Report reference SHA-256: ${hashReviewReport(reviewReport)}\n\n<untrusted_review_fix_context>\n${reviewFixContext}\n</untrusted_review_fix_context>`;
@@ -1189,7 +1189,7 @@ function dispatchFollowUpMessage(
   pi: ExtensionAPI,
   ctx: ExtensionCommandContext,
   message: string,
-  queuedNotice: string
+  queuedNotice: string,
 ): void {
   if (ctx.isIdle()) {
     pi.sendUserMessage(message);
@@ -1223,7 +1223,7 @@ export default function reviewExtension(pi: ExtensionAPI) {
 
   function sameSummaryContext(
     request: PendingReviewSummary,
-    ctx: ExtensionContext
+    ctx: ExtensionContext,
   ): boolean {
     return (
       request.sessionId === ctx.sessionManager.getSessionId() &&
@@ -1233,20 +1233,20 @@ export default function reviewExtension(pi: ExtensionAPI) {
 
   function hasSummarySource(
     request: PendingReviewSummary,
-    ctx: ExtensionContext
+    ctx: ExtensionContext,
   ): boolean {
     return Boolean(
       getReviewReportByHash(
         ctx,
         request.sourceReportHash,
-        authorizedReviewSummaries
-      )
+        authorizedReviewSummaries,
+      ),
     );
   }
 
   function findQueuedSummaryRequest(
     prompt: string,
-    ctx: ExtensionContext
+    ctx: ExtensionContext,
   ): PendingReviewSummary | undefined {
     const promptHash = hashText(prompt);
     return pendingReviewSummaries.find(
@@ -1254,13 +1254,13 @@ export default function reviewExtension(pi: ExtensionAPI) {
         !(request.started || request.invalid || request.authorized) &&
         sameSummaryContext(request, ctx) &&
         request.promptHash === promptHash &&
-        request.prompt === prompt
+        request.prompt === prompt,
     );
   }
 
   function bindSummaryRequest(
     prompt: string,
-    ctx: ExtensionContext
+    ctx: ExtensionContext,
   ): PendingReviewSummary | undefined {
     const request = findQueuedSummaryRequest(prompt, ctx);
     if (!request) {
@@ -1275,7 +1275,7 @@ export default function reviewExtension(pi: ExtensionAPI) {
   }
 
   function findActiveSummaryRequest(
-    ctx: ExtensionContext
+    ctx: ExtensionContext,
   ): PendingReviewSummary | undefined {
     return pendingReviewSummaries.find(
       (request) =>
@@ -1283,13 +1283,13 @@ export default function reviewExtension(pi: ExtensionAPI) {
         !request.invalid &&
         !request.authorized &&
         !request.response &&
-        sameSummaryContext(request, ctx)
+        sameSummaryContext(request, ctx),
     );
   }
 
   function captureCompletedSummaryResponse(
     request: PendingReviewSummary,
-    message: SessionMessageLike
+    message: SessionMessageLike,
   ): void {
     if (
       request.response ||
@@ -1313,7 +1313,7 @@ export default function reviewExtension(pi: ExtensionAPI) {
 
   function authorizeCompletedSummary(
     request: PendingReviewSummary,
-    ctx: ExtensionContext
+    ctx: ExtensionContext,
   ): void {
     if (
       request.invalid ||
@@ -1405,7 +1405,7 @@ export default function reviewExtension(pi: ExtensionAPI) {
         (message, index) =>
           index >= searchFrom &&
           message.role === "user" &&
-          extractTextContent(message.content) === request.prompt
+          extractTextContent(message.content) === request.prompt,
       );
       if (requestUserIndex < 0) {
         continue;
@@ -1459,7 +1459,7 @@ export default function reviewExtension(pi: ExtensionAPI) {
           pattern: "^[a-f0-9-]{36}$",
         }),
       },
-      { additionalProperties: false }
+      { additionalProperties: false },
     ),
     async execute(_toolCallId, params, signal, _onUpdate, ctx) {
       if (
@@ -1488,7 +1488,7 @@ export default function reviewExtension(pi: ExtensionAPI) {
             ctx.ui.notify("Review workflow complete", "info");
           }
         },
-        signal
+        signal,
       );
       return {
         content: [{ type: "text", text: "Review report published." }],
@@ -1506,13 +1506,13 @@ export default function reviewExtension(pi: ExtensionAPI) {
         String(message.details?.report ?? message.content ?? ""),
         outputPad,
         0,
-        getMarkdownTheme()
-      )
+        getMarkdownTheme(),
+      ),
   );
 
   pi.on("context", (event, ctx) => {
     const lastUserMessageIndex = event.messages.findLastIndex(
-      (message) => message.role === "user"
+      (message) => message.role === "user",
     );
     const userMessage = event.messages[lastUserMessageIndex];
     if (userMessage?.role !== "user") {
@@ -1531,7 +1531,7 @@ export default function reviewExtension(pi: ExtensionAPI) {
     const reviewReport = getReviewReportByHash(
       ctx,
       reportHash,
-      authorizedReviewSummaries
+      authorizedReviewSummaries,
     );
     if (!reviewReport) {
       return;
@@ -1540,14 +1540,14 @@ export default function reviewExtension(pi: ExtensionAPI) {
     const latestReviewReport = getLatestReviewReport(
       ctx,
       { preferSummary: true },
-      authorizedReviewSummaries
+      authorizedReviewSummaries,
     );
     const reportAlreadyUnambiguous =
       latestReviewReport === reviewReport &&
       event.messages.some((message) =>
         extractTextContent(
-          (message as unknown as SessionMessageLike).content
-        ).includes(reviewReport)
+          (message as unknown as SessionMessageLike).content,
+        ).includes(reviewReport),
       );
     if (reportAlreadyUnambiguous) {
       return;
@@ -1584,7 +1584,7 @@ export default function reviewExtension(pi: ExtensionAPI) {
       ctx.ui.setEditorText(event.text);
       ctx.ui.notify(
         "Review is still running. Prompt kept in the editor; submit it after the review finishes.",
-        "info"
+        "info",
       );
       return { action: "handled" };
     }
@@ -1623,7 +1623,7 @@ export default function reviewExtension(pi: ExtensionAPI) {
     if (ghVersion.code !== 0) {
       ctx.ui.notify(
         `PR review requires GitHub CLI (\`gh\`). ${GH_SETUP_INSTRUCTIONS}`,
-        "error"
+        "error",
       );
       return false;
     }
@@ -1632,7 +1632,7 @@ export default function reviewExtension(pi: ExtensionAPI) {
     if (ghAuthStatus.code !== 0) {
       ctx.ui.notify(
         "GitHub CLI is installed, but you're not signed in. Run `gh auth login`, then verify with `gh auth status`.",
-        "error"
+        "error",
       );
       return false;
     }
@@ -1643,7 +1643,7 @@ export default function reviewExtension(pi: ExtensionAPI) {
   async function resolvePullRequestTarget(
     ctx: ExtensionContext,
     ref: string,
-    options: { skipInitialPendingChangesCheck?: boolean } = {}
+    options: { skipInitialPendingChangesCheck?: boolean } = {},
   ): Promise<ReviewTarget | null> {
     if (!(await ensureGithubCliReady(ctx))) {
       return null;
@@ -1661,7 +1661,7 @@ export default function reviewExtension(pi: ExtensionAPI) {
     if (!prNumber) {
       ctx.ui.notify(
         "Invalid PR reference. Enter a number or GitHub PR URL.",
-        "error"
+        "error",
       );
       return null;
     }
@@ -1672,7 +1672,7 @@ export default function reviewExtension(pi: ExtensionAPI) {
     if (!prInfo) {
       ctx.ui.notify(
         `Could not fetch PR #${prNumber}. Make sure it exists and your GitHub auth has access (check with \`gh auth status\`).`,
-        "error"
+        "error",
       );
       return null;
     }
@@ -1759,7 +1759,7 @@ export default function reviewExtension(pi: ExtensionAPI) {
    * Show the review preset selector
    */
   async function showReviewSelector(
-    ctx: ExtensionContext
+    ctx: ExtensionContext,
   ): Promise<ReviewTarget | null> {
     // Config is deliberately re-read immediately before opening the selector.
     let resolvedConfig = await resolveReviewConfig(ctx.cwd);
@@ -1771,7 +1771,7 @@ export default function reviewExtension(pi: ExtensionAPI) {
       description: preset.description,
     }));
     const smartDefaultIndex = presetItems.findIndex(
-      (item) => item.value === smartDefault
+      (item) => item.value === smartDefault,
     );
 
     while (true) {
@@ -1799,10 +1799,10 @@ export default function reviewExtension(pi: ExtensionAPI) {
         (tui, theme, _kb, done) => {
           const container = new Container();
           container.addChild(
-            new DynamicBorder((str) => theme.fg("accent", str))
+            new DynamicBorder((str) => theme.fg("accent", str)),
           );
           container.addChild(
-            new Text(theme.fg("accent", theme.bold("Select a review preset")))
+            new Text(theme.fg("accent", theme.bold("Select a review preset"))),
           );
 
           const selectList = new SelectList(items, Math.min(items.length, 10), {
@@ -1824,11 +1824,11 @@ export default function reviewExtension(pi: ExtensionAPI) {
           container.addChild(selectList);
           container.addChild(
             new Text(
-              theme.fg("dim", "Press enter to confirm or esc to go back")
-            )
+              theme.fg("dim", "Press enter to confirm or esc to go back"),
+            ),
           );
           container.addChild(
-            new DynamicBorder((str) => theme.fg("accent", str))
+            new DynamicBorder((str) => theme.fg("accent", str)),
           );
 
           return {
@@ -1843,7 +1843,7 @@ export default function reviewExtension(pi: ExtensionAPI) {
               tui.requestRender();
             },
           };
-        }
+        },
       );
 
       if (!result) {
@@ -1859,7 +1859,7 @@ export default function reviewExtension(pi: ExtensionAPI) {
 
         const customInstructions = await ctx.ui.editor(
           "Enter custom review instructions (applies to all review modes):",
-          ""
+          "",
         );
 
         if (!customInstructions?.trim()) {
@@ -1876,7 +1876,7 @@ export default function reviewExtension(pi: ExtensionAPI) {
         const actionLabels = MODEL_CONFIG_ACTIONS.map(modelConfigActionLabel);
         const selectedLabel = await ctx.ui.select(
           "Configure review models:",
-          actionLabels
+          actionLabels,
         );
         const selectedAction =
           MODEL_CONFIG_ACTIONS[actionLabels.indexOf(selectedLabel ?? "")];
@@ -1906,7 +1906,7 @@ export default function reviewExtension(pi: ExtensionAPI) {
             : `Enter ${project ? "project" : "global"} ${field === "synthesizerModel" ? "synthesizer" : "verifier"} model (provider/model; blank clears):`;
         const value = await ctx.ui.editor(
           `${instruction}\n${current === undefined ? "Default" : "Current"}: ${formatModelConfigValue(current ?? fallback)}`,
-          initial
+          initial,
         );
         if (value === null || value === undefined) {
           continue;
@@ -1932,7 +1932,7 @@ export default function reviewExtension(pi: ExtensionAPI) {
             !priorProjectApproved &&
             MODEL_CONFIG_FIELDS.some(
               (candidate) =>
-                candidate !== field && layer.config[candidate] !== undefined
+                candidate !== field && layer.config[candidate] !== undefined,
             );
           const changedConfig = { ...layer.config, [field]: fieldValue };
           if (fieldValue === undefined) {
@@ -1962,7 +1962,7 @@ export default function reviewExtension(pi: ExtensionAPI) {
               synthesizerModel: prospectiveSynthesizer,
               verifierModel: prospectiveVerifier,
             },
-            "<effective review configuration>"
+            "<effective review configuration>",
           );
           for (const entry of prospectivePanel) {
             assertReviewModelAvailable(ctx, entry.model, "Reviewer");
@@ -1970,12 +1970,12 @@ export default function reviewExtension(pi: ExtensionAPI) {
           assertReviewModelAvailable(
             ctx,
             prospectiveSynthesizer,
-            "Review synthesizer"
+            "Review synthesizer",
           );
           assertReviewModelAvailable(
             ctx,
             prospectiveVerifier,
-            "Review verifier"
+            "Review verifier",
           );
           const written = await writeReviewConfigField(file, field, fieldValue);
           resolvedConfig = await resolveReviewConfig(ctx.cwd);
@@ -1987,7 +1987,7 @@ export default function reviewExtension(pi: ExtensionAPI) {
               (candidate) =>
                 candidate !== field &&
                 JSON.stringify(layer.config[candidate]) !==
-                  JSON.stringify(written.config[candidate])
+                  JSON.stringify(written.config[candidate]),
             );
           let projectApprovalDeclined = false;
           if (project && written.hash) {
@@ -1998,7 +1998,7 @@ export default function reviewExtension(pi: ExtensionAPI) {
             ) {
               approveWrittenConfig = await ctx.ui.confirm(
                 "Approve project review models?",
-                `Project config: ${written.path}\nExact effective models/providers:\n${formatEffectiveModelDisclosure(effective)}`
+                `Project config: ${written.path}\nExact effective models/providers:\n${formatEffectiveModelDisclosure(effective)}`,
               );
             }
             if (approveWrittenConfig) {
@@ -2011,12 +2011,12 @@ export default function reviewExtension(pi: ExtensionAPI) {
             projectApprovalDeclined
               ? `Project review ${field} ${normalized ? "saved" : "cleared"}, but project models remain unapproved`
               : `${project ? "Project" : "Global"} review ${field} ${normalized ? "saved" : "cleared"}`,
-            projectApprovalDeclined ? "warning" : "info"
+            projectApprovalDeclined ? "warning" : "info",
           );
         } catch (error) {
           ctx.ui.notify(
             error instanceof Error ? error.message : String(error),
-            "error"
+            "error",
           );
         }
         continue;
@@ -2069,7 +2069,7 @@ export default function reviewExtension(pi: ExtensionAPI) {
    * Show branch selector for base branch review
    */
   async function showBranchSelector(
-    ctx: ExtensionContext
+    ctx: ExtensionContext,
   ): Promise<ReviewTarget | null> {
     const branches = await getLocalBranches(pi);
     const currentBranch = await getCurrentBranch(pi);
@@ -2085,7 +2085,7 @@ export default function reviewExtension(pi: ExtensionAPI) {
         currentBranch
           ? `No other branches found (current branch: ${currentBranch})`
           : "No branches found",
-        "error"
+        "error",
       );
       return null;
     }
@@ -2112,7 +2112,7 @@ export default function reviewExtension(pi: ExtensionAPI) {
         const container = new Container();
         container.addChild(new DynamicBorder((str) => theme.fg("accent", str)));
         container.addChild(
-          new Text(theme.fg("accent", theme.bold("Select base branch")))
+          new Text(theme.fg("accent", theme.bold("Select base branch"))),
         );
 
         const searchInput = new Input();
@@ -2123,8 +2123,8 @@ export default function reviewExtension(pi: ExtensionAPI) {
         container.addChild(listContainer);
         container.addChild(
           new Text(
-            theme.fg("dim", "Type to filter • enter to select • esc to cancel")
-          )
+            theme.fg("dim", "Type to filter • enter to select • esc to cancel"),
+          ),
         );
         container.addChild(new DynamicBorder((str) => theme.fg("accent", str)));
 
@@ -2135,7 +2135,7 @@ export default function reviewExtension(pi: ExtensionAPI) {
           listContainer.clear();
           if (filteredItems.length === 0) {
             listContainer.addChild(
-              new Text(theme.fg("warning", "  No matching branches"))
+              new Text(theme.fg("warning", "  No matching branches")),
             );
             selectList = null;
             return;
@@ -2150,7 +2150,7 @@ export default function reviewExtension(pi: ExtensionAPI) {
               description: (text) => theme.fg("muted", text),
               scrollInfo: (text) => theme.fg("dim", text),
               noMatch: (text) => theme.fg("warning", text),
-            }
+            },
           );
 
           selectList.onSelect = (item) => done(item.value);
@@ -2165,7 +2165,7 @@ export default function reviewExtension(pi: ExtensionAPI) {
                 items,
                 query,
                 (item) =>
-                  `${item.label} ${item.value} ${item.description ?? ""}`
+                  `${item.label} ${item.value} ${item.description ?? ""}`,
               )
             : items;
           updateList();
@@ -2201,7 +2201,7 @@ export default function reviewExtension(pi: ExtensionAPI) {
             tui.requestRender();
           },
         };
-      }
+      },
     );
 
     if (!result) {
@@ -2214,7 +2214,7 @@ export default function reviewExtension(pi: ExtensionAPI) {
    * Show commit selector
    */
   async function showCommitSelector(
-    ctx: ExtensionContext
+    ctx: ExtensionContext,
   ): Promise<ReviewTarget | null> {
     const commits = await getRecentCommits(pi, 20);
 
@@ -2234,7 +2234,7 @@ export default function reviewExtension(pi: ExtensionAPI) {
         const container = new Container();
         container.addChild(new DynamicBorder((str) => theme.fg("accent", str)));
         container.addChild(
-          new Text(theme.fg("accent", theme.bold("Select commit to review")))
+          new Text(theme.fg("accent", theme.bold("Select commit to review"))),
         );
 
         const searchInput = new Input();
@@ -2245,8 +2245,8 @@ export default function reviewExtension(pi: ExtensionAPI) {
         container.addChild(listContainer);
         container.addChild(
           new Text(
-            theme.fg("dim", "Type to filter • enter to select • esc to cancel")
-          )
+            theme.fg("dim", "Type to filter • enter to select • esc to cancel"),
+          ),
         );
         container.addChild(new DynamicBorder((str) => theme.fg("accent", str)));
 
@@ -2257,7 +2257,7 @@ export default function reviewExtension(pi: ExtensionAPI) {
           listContainer.clear();
           if (filteredItems.length === 0) {
             listContainer.addChild(
-              new Text(theme.fg("warning", "  No matching commits"))
+              new Text(theme.fg("warning", "  No matching commits")),
             );
             selectList = null;
             return;
@@ -2272,7 +2272,7 @@ export default function reviewExtension(pi: ExtensionAPI) {
               description: (text) => theme.fg("muted", text),
               scrollInfo: (text) => theme.fg("dim", text),
               noMatch: (text) => theme.fg("warning", text),
-            }
+            },
           );
 
           selectList.onSelect = (item) => {
@@ -2294,7 +2294,7 @@ export default function reviewExtension(pi: ExtensionAPI) {
                 items,
                 query,
                 (item) =>
-                  `${item.label} ${item.value} ${item.description ?? ""}`
+                  `${item.label} ${item.value} ${item.description ?? ""}`,
               )
             : items;
           updateList();
@@ -2330,7 +2330,7 @@ export default function reviewExtension(pi: ExtensionAPI) {
             tui.requestRender();
           },
         };
-      }
+      },
     );
 
     if (!result) {
@@ -2348,7 +2348,7 @@ export default function reviewExtension(pi: ExtensionAPI) {
 
   function matchesAnyPattern(
     value: string,
-    patterns: readonly RegExp[]
+    patterns: readonly RegExp[],
   ): boolean {
     return patterns.some((pattern) => pattern.test(value));
   }
@@ -2358,7 +2358,7 @@ export default function reviewExtension(pi: ExtensionAPI) {
   }
 
   async function detectReviewers(
-    target: ReviewTarget
+    target: ReviewTarget,
   ): Promise<ReviewerAgent[]> {
     const paths = await getChangedPaths(target);
     const reviewers = new Set<ReviewerAgent>(["code-reviewer"]);
@@ -2382,7 +2382,7 @@ export default function reviewExtension(pi: ExtensionAPI) {
     ctx: ExtensionContext,
     target: ReviewTarget,
     preselectedReviewers?: ReviewerAgent[],
-    useAutoReviewers?: boolean
+    useAutoReviewers?: boolean,
   ): Promise<{
     reviewers: ReviewerAgent[];
     selectionMode: ReviewerSelectionMode;
@@ -2442,7 +2442,7 @@ export default function reviewExtension(pi: ExtensionAPI) {
 
     const customReviewers = await ctx.ui.editor(
       "Enter reviewers (comma-separated): code-reviewer, security-reviewer, database-reviewer, performance-reviewer",
-      reviewSelectedAgents.join(", ")
+      reviewSelectedAgents.join(", "),
     );
     if (!customReviewers?.trim()) {
       return null;
@@ -2464,11 +2464,11 @@ export default function reviewExtension(pi: ExtensionAPI) {
    * Show folder input
    */
   async function showFolderInput(
-    ctx: ExtensionContext
+    ctx: ExtensionContext,
   ): Promise<ReviewTarget | null> {
     const result = await ctx.ui.editor(
       "Enter folders/files to review (space-separated or one per line):",
-      "."
+      ".",
     );
 
     if (!result?.trim()) {
@@ -2486,7 +2486,7 @@ export default function reviewExtension(pi: ExtensionAPI) {
    * Show PR input and handle checkout
    */
   async function showPrInput(
-    ctx: ExtensionContext
+    ctx: ExtensionContext,
   ): Promise<ReviewTarget | null> {
     // First check for pending changes that would prevent branch switching
     if (await hasPendingChanges(pi)) {
@@ -2497,7 +2497,7 @@ export default function reviewExtension(pi: ExtensionAPI) {
     // Get PR reference from user
     const prRef = await ctx.ui.editor(
       "Enter PR number or URL (e.g. 123 or https://github.com/owner/repo/pull/123):",
-      ""
+      "",
     );
 
     if (!prRef?.trim()) {
@@ -2522,7 +2522,7 @@ export default function reviewExtension(pi: ExtensionAPI) {
       synthesizerModel?: string;
       verifierModel?: string;
     },
-    reviewController = new AbortController()
+    reviewController = new AbortController(),
   ): Promise<boolean> {
     const parentSessionId = ctx.sessionManager.getSessionId();
     const parentCwd = ctx.cwd;
@@ -2558,7 +2558,7 @@ export default function reviewExtension(pi: ExtensionAPI) {
           pi,
           ctx,
           target,
-          reviewController.signal
+          reviewController.signal,
         );
         if (reviewController.signal.aborted) {
           notifyCancellation();
@@ -2569,14 +2569,14 @@ export default function reviewExtension(pi: ExtensionAPI) {
         }
         metadataPacket = `\n${formatReviewPreflightMetadata(
           preflightMetadata,
-          target
+          target,
         )}`;
       }
 
       const prompt = await buildReviewPrompt(
         pi,
         target,
-        reviewController.signal
+        reviewController.signal,
       );
       if (reviewController.signal.aborted) {
         notifyCancellation();
@@ -2589,7 +2589,7 @@ export default function reviewExtension(pi: ExtensionAPI) {
         return false;
       }
       const reviewers = normalizeReviewerSelection(
-        options?.reviewers ?? reviewSelectedAgents
+        options?.reviewers ?? reviewSelectedAgents,
       );
       // No watcher: every review resolves both files again, then applies invocation flags.
       const resolvedConfig = await resolveReviewConfig(ctx.cwd, {
@@ -2609,25 +2609,25 @@ export default function reviewExtension(pi: ExtensionAPI) {
         ] as const;
         const projectConfigHasMaskedFields = projectFieldOverrides.some(
           ([field, override]) =>
-            projectConfig[field] !== undefined && override !== undefined
+            projectConfig[field] !== undefined && override !== undefined,
         );
         const projectConfigFullyMaskedByFlags = projectFieldOverrides.every(
           ([field, override]) =>
-            projectConfig[field] === undefined || override !== undefined
+            projectConfig[field] === undefined || override !== undefined,
         );
         if (!projectConfigFullyMaskedByFlags) {
           if (ctx.hasUI === false) {
             throw new Error(
-              `Project review config ${resolvedConfig.project.path} has an unapproved content hash. Run interactive /review to inspect and approve it.`
+              `Project review config ${resolvedConfig.project.path} has an unapproved content hash. Run interactive /review to inspect and approve it.`,
             );
           }
           const approved = await ctx.ui.confirm(
             "Approve project review models?",
-            `Project config: ${resolvedConfig.project.path}\nExact effective models/providers:\n${formatEffectiveModelDisclosure(resolvedConfig.effective)}`
+            `Project config: ${resolvedConfig.project.path}\nExact effective models/providers:\n${formatEffectiveModelDisclosure(resolvedConfig.effective)}`,
           );
           if (!approved) {
             throw new Error(
-              "Project review config was not approved; no model calls were made."
+              "Project review config was not approved; no model calls were made.",
             );
           }
           // A flag-masked project field was not disclosed. Consent is one-shot so
@@ -2659,12 +2659,13 @@ export default function reviewExtension(pi: ExtensionAPI) {
         reviewerPanel.length === 1 ? "model" : "models";
       const plannedModels = reviewerPanel
         .map(
-          (entry) => `${sanitizeModelForUi(entry.model)}=${entry.thinkingLevel}`
+          (entry) =>
+            `${sanitizeModelForUi(entry.model)}=${entry.thinkingLevel}`,
         )
         .join(", ");
       ctx.ui.notify(
         `Review plan: initial calls: ${reviewerRunCount} reviewer ${reviewerCallLabel} (${reviewers.length} ${reviewerRoleLabel} × ${reviewerPanel.length} ${reviewerModelLabel}), plus 2 downstream calls if findings (1 synthesizer + 1 verifier). Possible structured-repair retries: up to ${reviewerRunCount} reviewer ${reviewerRetryLabel}, plus up to 2 downstream retries when those stages run (1 synthesizer + 1 verifier). Reviewers: ${plannedModels}. Synthesizer: ${sanitizeModelForUi(synthesizerModel)}=medium. Verifier: ${sanitizeModelForUi(verifierModel)}=medium. Scope: ${hint}.`,
-        "info"
+        "info",
       );
 
       if (
@@ -2685,7 +2686,7 @@ export default function reviewExtension(pi: ExtensionAPI) {
           verifierModel,
           projectGuidelines,
         },
-        reviewController.signal
+        reviewController.signal,
       );
       if (reviewController.signal.aborted || sessionShuttingDown) {
         pendingReview.cancel();
@@ -2694,7 +2695,7 @@ export default function reviewExtension(pi: ExtensionAPI) {
       const handoff = `Explicit /review authorizes exactly one public SubagentWorkflow call with ONLY {script: decoded prepared marker below}. Copy the marker unchanged; the review extension replaces it with the authorized full script before native execution. Do not read files or reconstruct the script. Do not use scriptPath/name/args/resume, orchestrate tasks, override models, retry, or resume. Wait for the native completed notification, then call review_finalize(runId: ${prepared.id}) with {runId: "${prepared.id}"}. Do not parse notification previews or publish your own report. If cancelled, stop workers via /agents Workflows.\nPrepared script (JSON string, inert data):\n${JSON.stringify(prepared.script)}`;
       pi.sendUserMessage(
         handoff,
-        ctx.isIdle() ? undefined : { deliverAs: "followUp" }
+        ctx.isIdle() ? undefined : { deliverAs: "followUp" },
       );
       return true;
     } catch (error) {
@@ -2711,7 +2712,7 @@ export default function reviewExtension(pi: ExtensionAPI) {
   function startInteractiveReview(
     ctx: ExtensionCommandContext,
     target: ReviewTarget,
-    options: NonNullable<Parameters<typeof executeReview>[2]>
+    options: NonNullable<Parameters<typeof executeReview>[2]>,
   ): void {
     const controller = new AbortController();
     const promise = executeReview(ctx, target, options, controller)
@@ -2720,7 +2721,7 @@ export default function reviewExtension(pi: ExtensionAPI) {
         if (!(controller.signal.aborted || sessionShuttingDown)) {
           ctx.ui.notify(
             error instanceof Error ? error.message : String(error),
-            "error"
+            "error",
           );
         }
       })
@@ -2810,7 +2811,7 @@ export default function reviewExtension(pi: ExtensionAPI) {
 
     const parsed = parseReviewTargetArgs(
       remaining.map((token) => JSON.stringify(token)).join(" "),
-      { parseReviewers: parseReviewerList }
+      { parseReviewers: parseReviewerList },
     );
 
     return {
@@ -2826,7 +2827,7 @@ export default function reviewExtension(pi: ExtensionAPI) {
    */
   async function handlePrCheckout(
     ctx: ExtensionContext,
-    ref: string
+    ref: string,
   ): Promise<ReviewTarget | null> {
     return await resolvePullRequestTarget(ctx, ref);
   }
@@ -2849,7 +2850,7 @@ export default function reviewExtension(pi: ExtensionAPI) {
       if (activeReview || pendingReview.running) {
         ctx.ui.notify(
           "A review is already running. Run /review cancel to cancel it.",
-          "warning"
+          "warning",
         );
         return;
       }
@@ -2884,7 +2885,7 @@ export default function reviewExtension(pi: ExtensionAPI) {
         } catch (error) {
           ctx.ui.notify(
             error instanceof Error ? error.message : String(error),
-            "error"
+            "error",
           );
           return;
         }
@@ -2907,7 +2908,7 @@ export default function reviewExtension(pi: ExtensionAPI) {
               isHeadless
                 ? "PR review failed."
                 : "PR review failed. Returning to review menu.",
-              "warning"
+              "warning",
             );
           }
         } else {
@@ -2920,7 +2921,7 @@ export default function reviewExtension(pi: ExtensionAPI) {
         if (isHeadless) {
           ctx.ui.notify(
             "Headless /review requires a direct target and reviewer mode (--reviewers or --auto-reviewers).",
-            "error"
+            "error",
           );
           return;
         }
@@ -2930,7 +2931,7 @@ export default function reviewExtension(pi: ExtensionAPI) {
       if (isHeadless && !reviewers?.length && !useAutoReviewers) {
         ctx.ui.notify(
           "Headless /review requires a direct target and reviewer mode (--reviewers or --auto-reviewers).",
-          "error"
+          "error",
         );
         return;
       }
@@ -2942,7 +2943,7 @@ export default function reviewExtension(pi: ExtensionAPI) {
           } catch (error) {
             ctx.ui.notify(
               error instanceof Error ? error.message : String(error),
-              "error"
+              "error",
             );
             return;
           }
@@ -2957,7 +2958,7 @@ export default function reviewExtension(pi: ExtensionAPI) {
           ctx,
           target,
           reviewers,
-          useAutoReviewers
+          useAutoReviewers,
         );
         if (!reviewerSelection) {
           ctx.ui.notify("Review cancelled", "info");
@@ -2975,7 +2976,7 @@ export default function reviewExtension(pi: ExtensionAPI) {
           setReviewSelection(
             pi,
             reviewerSelection.reviewers,
-            reviewerSelection.selectionMode
+            reviewerSelection.selectionMode,
           );
           const reviewOptions = {
             extraInstruction,
@@ -2992,7 +2993,7 @@ export default function reviewExtension(pi: ExtensionAPI) {
         } catch (error) {
           ctx.ui.notify(
             error instanceof Error ? error.message : String(error),
-            "error"
+            "error",
           );
         }
         return;
@@ -3008,13 +3009,13 @@ export default function reviewExtension(pi: ExtensionAPI) {
         getLatestReviewReport(
           ctx,
           { excludeSummary: true },
-          authorizedReviewSummaries
+          authorizedReviewSummaries,
         ) || getLatestReviewReport(ctx, {}, authorizedReviewSummaries);
 
       if (!reviewReport) {
         ctx.ui.notify(
           "No review report found in this session. Run /review first.",
-          "warning"
+          "warning",
         );
         return Promise.resolve();
       }
@@ -3035,7 +3036,7 @@ export default function reviewExtension(pi: ExtensionAPI) {
         pi,
         ctx,
         message,
-        "Queued /review-summary as a follow-up"
+        "Queued /review-summary as a follow-up",
       );
       return Promise.resolve();
     },
@@ -3049,13 +3050,13 @@ export default function reviewExtension(pi: ExtensionAPI) {
         getLatestReviewReport(
           ctx,
           { preferSummary: true },
-          authorizedReviewSummaries
+          authorizedReviewSummaries,
         ) || getLatestReviewReport(ctx, {}, authorizedReviewSummaries);
 
       if (!reviewReport) {
         ctx.ui.notify(
           "No review report found in this session. Run /review first.",
-          "warning"
+          "warning",
         );
         return Promise.resolve();
       }
@@ -3064,7 +3065,7 @@ export default function reviewExtension(pi: ExtensionAPI) {
         pi,
         ctx,
         buildReviewFixMessage(reviewReport, args),
-        "Queued /review-fix as a follow-up"
+        "Queued /review-fix as a follow-up",
       );
       return Promise.resolve();
     },

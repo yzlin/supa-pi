@@ -140,10 +140,10 @@ const WHITESPACE_RE = /\s+/g;
 
 export function renderReviewReport(
   report: VerifierJsonContract,
-  coverage?: ReviewWorkflowCoverage
+  coverage?: ReviewWorkflowCoverage,
 ): string {
   const renderedFindings = report.findings.filter(
-    (finding) => finding.confidence !== "low"
+    (finding) => finding.confidence !== "low",
   );
   const renderedVerdict = renderedFindings.length
     ? "needs attention"
@@ -171,7 +171,7 @@ export function renderReviewReport(
         `- Consensus effect: ${finding.consensusEffect ?? "none"}`,
         `- Why it matters: ${sanitizeMarkdownText(finding.why)}`,
         `- What should change: ${sanitizeMarkdownText(finding.change)}`,
-        ""
+        "",
       );
     }
     if (lines.at(-1) === "") {
@@ -184,16 +184,16 @@ export function renderReviewReport(
     "## Human Reviewer Callouts (Non-Blocking)",
     ...formatBullets(
       report.humanReviewerCallouts.map(sanitizeMarkdownText),
-      "- (none)"
+      "- (none)",
     ),
     "",
-    "## Reviewer Coverage"
+    "## Reviewer Coverage",
   );
 
   if (coverage) {
     lines.push(
       `- Panel size: ${coverage.configuredPanelSize}`,
-      `- Degraded: ${coverage.degraded ? "yes — one or more reviewer runs failed" : "no"}`
+      `- Degraded: ${coverage.degraded ? "yes — one or more reviewer runs failed" : "no"}`,
     );
     for (const reviewer of [
       "code-reviewer",
@@ -206,13 +206,13 @@ export function renderReviewReport(
         continue;
       }
       for (const run of coverage.runs.filter(
-        (candidate) => candidate.reviewer === reviewer
+        (candidate) => candidate.reviewer === reviewer,
       )) {
         const failure = run.error
           ? ` — ${sanitizeMarkdownText(run.error).slice(0, 160)}`
           : "";
         lines.push(
-          `- ${reviewer} · \`${sanitizeInlineCode(run.model)}\`: ${run.status === "succeeded" ? "used" : "failed"}${failure}`
+          `- ${reviewer} · \`${sanitizeInlineCode(run.model)}\`: ${run.status === "succeeded" ? "used" : "failed"}${failure}`,
         );
       }
     }
@@ -221,7 +221,7 @@ export function renderReviewReport(
       `- code-reviewer: ${report.reviewerCoverage["code-reviewer"]}`,
       `- security-reviewer: ${report.reviewerCoverage["security-reviewer"]}`,
       `- database-reviewer: ${report.reviewerCoverage["database-reviewer"]}`,
-      `- performance-reviewer: ${report.reviewerCoverage["performance-reviewer"]}`
+      `- performance-reviewer: ${report.reviewerCoverage["performance-reviewer"]}`,
     );
   }
 

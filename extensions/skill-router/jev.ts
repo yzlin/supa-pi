@@ -13,7 +13,7 @@ export interface JevBatchResult {
 }
 type FetchFunction = (
   input: string | URL | Request,
-  init?: RequestInit
+  init?: RequestInit,
 ) => Promise<Response>;
 export type JevFailureCategory =
   | "cancelled"
@@ -49,7 +49,7 @@ export class JevClient {
   async judgeBatch(
     candidates: readonly JevCandidate[],
     context: { currentRequest: string; recentText: string },
-    signal?: AbortSignal
+    signal?: AbortSignal,
   ): Promise<JevBatchResult> {
     if (candidates.length < 1 || candidates.length > 16) {
       throw new Error("Jev batch must contain 1 to 16 candidates");
@@ -101,7 +101,7 @@ export class JevClient {
             : "http",
           response.status === 401 || response.status === 403
             ? "TypeSafe authentication failed"
-            : "Jev request failed"
+            : "Jev request failed",
         );
       }
       let value: unknown;
@@ -126,12 +126,12 @@ export class JevClient {
         currentRequest: "Is this synthetic verification skill applicable?",
         recentText: "",
       },
-      signal
+      signal,
     );
   }
   async #deadline<T>(
     operation: (signal: AbortSignal) => Promise<T>,
-    external?: AbortSignal
+    external?: AbortSignal,
   ): Promise<T> {
     if (external?.aborted) {
       throw new JevError("cancelled", "Jev request cancelled");
@@ -147,7 +147,7 @@ export class JevClient {
         category,
         category === "timeout"
           ? "Jev request timed out"
-          : "Jev request cancelled"
+          : "Jev request cancelled",
       );
       controller.abort(error);
       rejectDeadline(error);
@@ -178,7 +178,7 @@ export class JevClient {
 }
 function parse(
   value: unknown,
-  candidates: readonly JevCandidate[]
+  candidates: readonly JevCandidate[],
 ): JevBatchResult {
   if (
     !(record(value) && record(value.answers)) ||

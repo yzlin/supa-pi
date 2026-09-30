@@ -78,7 +78,7 @@ export function fallbackSessionName(sessionId: string): string {
 /** Normalize harmless presentation noise, then reject any title outside the safety boundary. */
 export function normalizeAndValidateTitle(
   output: string,
-  configuredMaxLength: number
+  configuredMaxLength: number,
 ): string | null {
   if (!output || hasControlCharacter(output)) {
     return null;
@@ -86,7 +86,7 @@ export function normalizeAndValidateTitle(
 
   let title = output.trim().replace(/[\t \f\v]+/gu, " ");
   const wrappingQuotes = WRAPPING_QUOTE_PAIRS.find(
-    ([start, end]) => title.startsWith(start) && title.endsWith(end)
+    ([start, end]) => title.startsWith(start) && title.endsWith(end),
   );
   if (wrappingQuotes && title.length >= 2) {
     title = title.slice(1, -1).trim();
@@ -116,7 +116,7 @@ export function normalizeAndValidateTitle(
       (fragment) =>
         LATIN_LETTER_PATTERN.test(fragment) &&
         DIGIT_PATTERN.test(fragment) &&
-        (fragment.length >= 24 || TOKEN_SEPARATOR_PATTERN.test(fragment))
+        (fragment.length >= 24 || TOKEN_SEPARATOR_PATTERN.test(fragment)),
     )
   ) {
     return null;
@@ -141,7 +141,7 @@ export function normalizeAndValidateTitle(
 
 function failed(
   sessionId: string,
-  failure: NamingFailureCategory
+  failure: NamingFailureCategory,
 ): TitleGenerationResult {
   return { title: fallbackSessionName(sessionId), failure };
 }
@@ -152,7 +152,7 @@ export async function generateSessionTitle(
   source: string,
   sessionId: string,
   config: TitleGenerationConfig,
-  callerSignal?: AbortSignal
+  callerSignal?: AbortSignal,
 ): Promise<TitleGenerationResult> {
   if (!ctx.model) {
     return failed(sessionId, "no-model");
@@ -176,7 +176,7 @@ export async function generateSessionTitle(
       () => reject(new Error("naming-aborted")),
       {
         once: true,
-      }
+      },
     );
   });
 
@@ -202,7 +202,7 @@ export async function generateSessionTitle(
     if (response.stopReason === "aborted") {
       return failed(
         sessionId,
-        callerSignal?.aborted ? "abort" : "aborted-stop"
+        callerSignal?.aborted ? "abort" : "aborted-stop",
       );
     }
     if (response.stopReason === "error") {
@@ -211,7 +211,7 @@ export async function generateSessionTitle(
 
     const text = response.content
       .filter(
-        (part): part is { type: "text"; text: string } => part.type === "text"
+        (part): part is { type: "text"; text: string } => part.type === "text",
       )
       .map((part) => part.text)
       .join("\n");

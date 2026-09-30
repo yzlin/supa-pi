@@ -65,7 +65,7 @@ export function readRepoAgents(dir: string): RepoAgent[] {
 
 export function resolveAgent(
   agent: RepoAgent,
-  profile: Profile
+  profile: Profile,
 ): RepoAgent["baseline"] {
   const named = profile.agents?.[agent.name];
   const wildcard = profile.agents?.["*"];
@@ -77,7 +77,7 @@ export function resolveAgent(
 
 export function needsOverride(
   agent: RepoAgent,
-  values: RepoAgent["baseline"]
+  values: RepoAgent["baseline"],
 ): boolean {
   return (
     values.model !== agent.baseline.model ||
@@ -91,7 +91,7 @@ export function isGenerated(content: string): boolean {
 
 export function generateAgent(
   agent: RepoAgent,
-  values: RepoAgent["baseline"] | Values
+  values: RepoAgent["baseline"] | Values,
 ): string {
   const match = agent.content.match(FRONTMATTER);
   const eol = match?.[1] ?? (agent.content.includes("\r\n") ? "\r\n" : "\n");
@@ -116,7 +116,7 @@ export function generateAgent(
   if (match) {
     const opening = match[0].slice(
       0,
-      match[0].startsWith("\uFEFF") ? 4 + eol.length : 3 + eol.length
+      match[0].startsWith("\uFEFF") ? 4 + eol.length : 3 + eol.length,
     );
     return `${opening}${yaml}${eol}---${agent.content.slice(match[0].length)}`;
   }

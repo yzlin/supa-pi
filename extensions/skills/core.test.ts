@@ -61,13 +61,13 @@ function gitBlobSha(contents: string | Uint8Array): string {
 function writeSkill(
   dir: string,
   name = "Demo Skill",
-  description = "Does demo work."
+  description = "Does demo work.",
 ) {
   mkdirSync(dir, { recursive: true });
   writeFileSync(join(dir, "README.md"), "# note\n");
   writeFileSync(
     join(dir, "SKILL.md"),
-    `# ${name}\n\ndescription: ${description}\n`
+    `# ${name}\n\ndescription: ${description}\n`,
   );
 }
 
@@ -99,7 +99,7 @@ describe("skills core", () => {
       new Set([
         join(root, "nested", "two", "SKILL.md"),
         join(root, "one", "SKILL.md"),
-      ])
+      ]),
     );
   });
 
@@ -114,7 +114,7 @@ describe("skills core", () => {
     });
     writeFileSync(
       join(root, "SKILL.md"),
-      "---\nname: frontmatter-skill\ndescription: 'Frontmatter description.'\n---\n"
+      "---\nname: frontmatter-skill\ndescription: 'Frontmatter description.'\n---\n",
     );
     expect(validateSkillDirectory(root)).toMatchObject({
       ok: true,
@@ -135,7 +135,7 @@ describe("skills core", () => {
         "# iOS (requires Xcode)",
         "npx expo run:ios",
         "```",
-      ].join("\n")
+      ].join("\n"),
     );
     expect(validateSkillDirectory(root)).toMatchObject({
       ok: true,
@@ -170,8 +170,8 @@ describe("skills core", () => {
     });
     expect(
       parseSkillSource(
-        "https://github.com/vercel-labs/react-view-transitions-skill/tree/main/skills/react-view-transitions"
-      )
+        "https://github.com/vercel-labs/react-view-transitions-skill/tree/main/skills/react-view-transitions",
+      ),
     ).toMatchObject({
       identity: {
         type: "github",
@@ -198,7 +198,7 @@ describe("skills core", () => {
       rawUrl: "https://example.com/skills/demo/SKILL.md",
     });
     expect(() => parseSkillSource("http://example.com/skills/demo")).toThrow(
-      "Remote skill sources must use HTTPS."
+      "Remote skill sources must use HTTPS.",
     );
   });
 
@@ -255,7 +255,7 @@ describe("skills core", () => {
     const sourceRoot = await materializeResolvedSkillSource(
       resolved,
       paths,
-      fetcher as typeof fetch
+      fetcher as typeof fetch,
     );
     const listed = listSkillsInSource(sourceRoot);
 
@@ -264,7 +264,7 @@ describe("skills core", () => {
       "two-skill",
     ]);
     expect(
-      readFileSync(join(sourceRoot, "skills", "one", "README.md"), "utf8")
+      readFileSync(join(sourceRoot, "skills", "one", "README.md"), "utf8"),
     ).toBe("# one\n");
   });
 
@@ -283,8 +283,8 @@ describe("skills core", () => {
       ) {
         return Promise.resolve(
           new Response(
-            '<a href="/owner/repo/blob/main/skills/demo/SKILL.md">SKILL.md</a><a href="/owner/repo/tree/main/skills/demo/references">references</a>'
-          )
+            '<a href="/owner/repo/blob/main/skills/demo/SKILL.md">SKILL.md</a><a href="/owner/repo/tree/main/skills/demo/references">references</a>',
+          ),
         );
       }
       if (
@@ -292,7 +292,7 @@ describe("skills core", () => {
         "https://raw.githubusercontent.com/owner/repo/main/skills/demo/SKILL.md"
       ) {
         return Promise.resolve(
-          new Response("# Demo Skill\n\ndescription: Exact source.\n")
+          new Response("# Demo Skill\n\ndescription: Exact source.\n"),
         );
       }
       return Promise.resolve(new Response("missing", { status: 404 }));
@@ -302,17 +302,17 @@ describe("skills core", () => {
       resolved,
       paths,
       fetcher as typeof fetch,
-      { exactSubpath: true }
+      { exactSubpath: true },
     );
 
     expect(listSkillsInSource(sourceRoot).map((skill) => skill.id)).toEqual([
       "demo-skill",
     ]);
     expect(requestedUrls).toContain(
-      "https://github.com/owner/repo/tree/main/skills/demo"
+      "https://github.com/owner/repo/tree/main/skills/demo",
     );
     expect(requestedUrls).not.toContain(
-      "https://raw.githubusercontent.com/owner/repo/main/skills/demo/references/SKILL.md"
+      "https://raw.githubusercontent.com/owner/repo/main/skills/demo/references/SKILL.md",
     );
   });
 
@@ -330,13 +330,13 @@ describe("skills core", () => {
       [
         "https://github.com/owner/repo/tree/HEAD/skills/demo",
         new Response(
-          `<a href="/owner/repo/blob/${commit}/skills/demo/SKILL.md">SKILL.md</a><a href="/owner/repo/tree/${commit}/skills/demo/references">references</a>`
+          `<a href="/owner/repo/blob/${commit}/skills/demo/SKILL.md">SKILL.md</a><a href="/owner/repo/tree/${commit}/skills/demo/references">references</a>`,
         ),
       ],
       [
         "https://github.com/owner/repo/tree/HEAD/skills/demo/references",
         new Response(
-          `<a href="/owner/repo/blob/${commit}/skills/demo/references/guide.md">guide.md</a>`
+          `<a href="/owner/repo/blob/${commit}/skills/demo/references/guide.md">guide.md</a>`,
         ),
       ],
       [
@@ -353,7 +353,7 @@ describe("skills core", () => {
       requestedUrls.push(value);
       return Promise.resolve(
         responses.get(value)?.clone() ??
-          new Response("missing", { status: 404 })
+          new Response("missing", { status: 404 }),
       );
     };
 
@@ -361,17 +361,17 @@ describe("skills core", () => {
       resolved,
       paths,
       fetcher as typeof fetch,
-      { exactSubpath: true }
+      { exactSubpath: true },
     );
 
     expect(
-      readFileSync(join(sourceRoot, "references", "guide.md"), "utf8")
+      readFileSync(join(sourceRoot, "references", "guide.md"), "utf8"),
     ).toBe("# Guide\n");
     expect(requestedUrls).toContain(
-      "https://github.com/owner/repo/tree/HEAD/skills/demo/references"
+      "https://github.com/owner/repo/tree/HEAD/skills/demo/references",
     );
     expect(requestedUrls).toContain(
-      "https://raw.githubusercontent.com/owner/repo/HEAD/skills/demo/references/guide.md"
+      "https://raw.githubusercontent.com/owner/repo/HEAD/skills/demo/references/guide.md",
     );
   });
 
@@ -393,11 +393,11 @@ describe("skills core", () => {
         return Promise.resolve(
           Response.json({
             tree: [{ path: "skills/demo/SKILL.md", type: "blob" }],
-          })
+          }),
         );
       }
       return Promise.resolve(
-        new Response("# Demo Skill\n\ndescription: Token retry.\n")
+        new Response("# Demo Skill\n\ndescription: Token retry.\n"),
       );
     };
 
@@ -406,7 +406,7 @@ describe("skills core", () => {
         resolved,
         paths,
         fetcher as typeof fetch,
-        { exactSubpath: true }
+        { exactSubpath: true },
       );
 
       expect(listSkillsInSource(sourceRoot).map((skill) => skill.id)).toEqual([
@@ -437,7 +437,7 @@ describe("skills core", () => {
     const listed = listSkillsInSource(root);
 
     expect(findListedSkillSourceDir(listed, "building-native-ui")).toBe(
-      sourceDir
+      sourceDir,
     );
   });
 
@@ -453,7 +453,7 @@ describe("skills core", () => {
     const result = installSelectedSkillsSequentially(
       entries,
       entries.map((entry) => entry.sourceDir),
-      paths
+      paths,
     );
     const manifest = readManagedManifest(paths.manifestPath);
 
@@ -478,7 +478,7 @@ describe("skills core", () => {
     expect(entry.installPath).toBe(join(agentDir, "skills", "demo-skill"));
     expect(paths.manifestPath).toBe(join(agentDir, "skills.json"));
     expect(readFileSync(join(entry.installPath, "SKILL.md"), "utf8")).toContain(
-      "Demo Skill"
+      "Demo Skill",
     );
     expect(manifest.skills).toHaveLength(1);
     expect(manifest.skills[0]).toMatchObject({
@@ -486,7 +486,7 @@ describe("skills core", () => {
       name: "Demo Skill",
     });
     expect(
-      manifest.skills[0]?.files.map((file) => file.relativePath).sort()
+      manifest.skills[0]?.files.map((file) => file.relativePath).sort(),
     ).toEqual(["README.md", "SKILL.md"]);
   });
 
@@ -551,11 +551,11 @@ describe("skills core", () => {
 
     const plan = planRemoveSkill(
       "demo-skill",
-      readManagedManifest(paths.manifestPath)
+      readManagedManifest(paths.manifestPath),
     );
     const trashed: string[] = [];
     const next = applyRemovePlan(plan, paths, (targetPath) =>
-      trashed.push(targetPath)
+      trashed.push(targetPath),
     );
 
     expect(plan).toMatchObject({ trashBoundary: "trash-cli", exists: true });
@@ -581,8 +581,8 @@ describe("skills core", () => {
           exists: true,
         },
         paths,
-        (targetPath) => trashed.push(targetPath)
-      )
+        (targetPath) => trashed.push(targetPath),
+      ),
     ).toThrow("Managed skill path escapes managed directory");
     expect(trashed).toEqual([]);
   });
@@ -602,8 +602,8 @@ describe("skills core", () => {
               installs: 12_345,
             },
           ],
-        })
-      )
+        }),
+      ),
     );
     writeSkillsSearchCache(paths.cachePath, cache);
 
@@ -620,7 +620,7 @@ describe("skills core", () => {
 
   it("ignores stale search cache versions so bad source mappings refresh", () => {
     const paths = createSkillsManagerPaths(
-      join(tempRoot("stale-cache"), ".pi", "agent")
+      join(tempRoot("stale-cache"), ".pi", "agent"),
     );
     mkdirSync(join(paths.rootDir), { recursive: true });
     writeFileSync(
@@ -636,7 +636,7 @@ describe("skills core", () => {
               "https://github.com/vercel-labs/skills/tree/HEAD/find-skills",
           },
         ],
-      })
+      }),
     );
 
     expect(readSkillsSearchCache(paths.cachePath)).toEqual({
@@ -653,8 +653,8 @@ describe("skills core", () => {
       return Promise.resolve(
         new Response(
           '<html><a href="/acme/demo-repo/demo-skill"><h3>Demo Skill</h3><p>acme/demo-repo</p></a></html>',
-          { headers: { "content-type": "text/html" } }
-        )
+          { headers: { "content-type": "text/html" } },
+        ),
       );
     });
 
@@ -679,7 +679,7 @@ describe("skills core", () => {
       return Promise.resolve(
         Response.json({
           skills: [{ skillId: "ai-sdk", name: "ai-sdk", source: "vercel/ai" }],
-        })
+        }),
       );
     });
     const result = searchCachedSkills(cache, "ai-sdk")[0];
@@ -711,19 +711,19 @@ describe("skills core", () => {
                   type: "blob",
                 },
               ],
-            })
+            }),
           );
         }
         if (value.endsWith("skills/other/SKILL.md")) {
           return Promise.resolve(
-            new Response("---\nname: other\ndescription: Other skill.\n---\n")
+            new Response("---\nname: other\ndescription: Other skill.\n---\n"),
           );
         }
         if (value.endsWith("skills/use-ai-sdk/SKILL.md")) {
           return Promise.resolve(
             new Response(
-              "---\nname: ai-sdk\ndescription: Answer questions.\n---\n"
-            )
+              "---\nname: ai-sdk\ndescription: Answer questions.\n---\n",
+            ),
           );
         }
         if (value.endsWith("skills/use-ai-sdk/references/common-errors.md")) {
@@ -739,14 +739,14 @@ describe("skills core", () => {
             ref: identity.ref,
             subpath: identity.subpath,
           }),
-      }
+      },
     );
 
     expect(listSkillsInSource(sourceRoot)).toMatchObject([
       { id: "ai-sdk", name: "ai-sdk", description: "Answer questions." },
     ]);
     expect(
-      requestedUrls.some((url) => url.endsWith("/skills/ai-sdk/SKILL.md"))
+      requestedUrls.some((url) => url.endsWith("/skills/ai-sdk/SKILL.md")),
     ).toBe(false);
     expect(exactSources).toEqual([
       {
@@ -772,7 +772,7 @@ describe("skills core", () => {
               { path: "skills/one/SKILL.md", type: "blob" },
               { path: "skills/two/SKILL.md", type: "blob" },
             ],
-          })
+          }),
         );
       }
       rawRequests.push(value);
@@ -786,20 +786,20 @@ describe("skills core", () => {
       parseSkillSource("acme/repo"),
       paths,
       fetcher as typeof fetch,
-      { requestedSkillName: "one", githubSkillNameCache }
+      { requestedSkillName: "one", githubSkillNameCache },
     );
     await materializeResolvedSkillSource(
       parseSkillSource("acme/repo"),
       paths,
       fetcher as typeof fetch,
-      { requestedSkillName: "two", githubSkillNameCache }
+      { requestedSkillName: "two", githubSkillNameCache },
     );
 
     expect(
-      rawRequests.filter((url) => url.endsWith("/skills/one/SKILL.md"))
+      rawRequests.filter((url) => url.endsWith("/skills/one/SKILL.md")),
     ).toHaveLength(2);
     expect(
-      rawRequests.filter((url) => url.endsWith("/skills/two/SKILL.md"))
+      rawRequests.filter((url) => url.endsWith("/skills/two/SKILL.md")),
     ).toHaveLength(2);
   });
 
@@ -820,17 +820,17 @@ describe("skills core", () => {
                   { path: "skills/demo/SKILL.md", type: "blob" },
                   { path: "packages/demo/SKILL.md", type: "blob" },
                 ],
-              })
+              }),
             );
           }
           return Promise.resolve(
-            new Response("# Demo Skill\n\ndescription: Demo.\n")
+            new Response("# Demo Skill\n\ndescription: Demo.\n"),
           );
         },
-        { requestedSkillName: "demo" }
-      )
+        { requestedSkillName: "demo" },
+      ),
     ).rejects.toThrow(
-      "Ambiguous GitHub skill source for demo: packages/demo, skills/demo"
+      "Ambiguous GitHub skill source for demo: packages/demo, skills/demo",
     );
   });
 
@@ -851,26 +851,26 @@ describe("skills core", () => {
                   { path: "skills/one/SKILL.md", type: "blob" },
                   { path: "skills/two/SKILL.md", type: "blob" },
                 ],
-              })
+              }),
             );
           }
           if (value.endsWith("/skills/one/SKILL.md")) {
             return Promise.resolve(
               new Response(
-                "---\nname: demo\ndescription: First duplicate.\n---\n"
-              )
+                "---\nname: demo\ndescription: First duplicate.\n---\n",
+              ),
             );
           }
           return Promise.resolve(
             new Response(
-              "---\nname: demo\ndescription: Second duplicate.\n---\n"
-            )
+              "---\nname: demo\ndescription: Second duplicate.\n---\n",
+            ),
           );
         },
-        { requestedSkillName: "demo" }
-      )
+        { requestedSkillName: "demo" },
+      ),
     ).rejects.toThrow(
-      "Ambiguous GitHub skill source for demo: skills/one, skills/two"
+      "Ambiguous GitHub skill source for demo: skills/one, skills/two",
     );
   });
 
@@ -891,22 +891,24 @@ describe("skills core", () => {
                   { path: "skills/demo/SKILL.md", type: "blob" },
                   { path: "skills/other/SKILL.md", type: "blob" },
                 ],
-              })
+              }),
             );
           }
           if (value.endsWith("/skills/demo/SKILL.md")) {
             return Promise.resolve(
-              new Response("---\nname: demo\ndescription: Folder match.\n---\n")
+              new Response(
+                "---\nname: demo\ndescription: Folder match.\n---\n",
+              ),
             );
           }
           return Promise.resolve(
-            new Response("---\nname: demo\ndescription: Name match.\n---\n")
+            new Response("---\nname: demo\ndescription: Name match.\n---\n"),
           );
         },
-        { requestedSkillName: "demo" }
-      )
+        { requestedSkillName: "demo" },
+      ),
     ).rejects.toThrow(
-      "Ambiguous GitHub skill source for demo: skills/demo, skills/other"
+      "Ambiguous GitHub skill source for demo: skills/demo, skills/other",
     );
   });
 
@@ -927,18 +929,20 @@ describe("skills core", () => {
                   { path: "skills/demo/SKILL.md", type: "blob" },
                   { path: "skills/other/SKILL.md", type: "blob" },
                 ],
-              })
+              }),
             );
           }
           if (value.endsWith("/skills/demo/SKILL.md")) {
             return Promise.resolve(
-              new Response("---\nname: demo\ndescription: Folder match.\n---\n")
+              new Response(
+                "---\nname: demo\ndescription: Folder match.\n---\n",
+              ),
             );
           }
           return Promise.resolve(new Response("server error", { status: 500 }));
         },
-        { requestedSkillName: "demo" }
-      )
+        { requestedSkillName: "demo" },
+      ),
     ).rejects.toThrow("Fetch failed: 500");
   });
 
@@ -954,29 +958,31 @@ describe("skills core", () => {
           const value = String(url);
           if (value.includes("/git/trees/")) {
             return Promise.resolve(
-              new Response("rate limited", { status: 403 })
+              new Response("rate limited", { status: 403 }),
             );
           }
           if (value === "https://github.com/acme/repo/tree/HEAD/skills") {
             return Promise.resolve(
               new Response(
-                '<a href="/acme/repo/tree/HEAD/skills/demo">demo</a><a href="/acme/repo/tree/HEAD/skills/other">other</a>'
-              )
+                '<a href="/acme/repo/tree/HEAD/skills/demo">demo</a><a href="/acme/repo/tree/HEAD/skills/other">other</a>',
+              ),
             );
           }
           if (value.endsWith("/skills/demo/SKILL.md")) {
             return Promise.resolve(
-              new Response("---\nname: demo\ndescription: Folder match.\n---\n")
+              new Response(
+                "---\nname: demo\ndescription: Folder match.\n---\n",
+              ),
             );
           }
           return Promise.resolve(
-            new Response("---\nname: demo\ndescription: Name match.\n---\n")
+            new Response("---\nname: demo\ndescription: Name match.\n---\n"),
           );
         },
-        { requestedSkillName: "demo" }
-      )
+        { requestedSkillName: "demo" },
+      ),
     ).rejects.toThrow(
-      "Ambiguous GitHub skill source for demo: skills/demo, skills/other"
+      "Ambiguous GitHub skill source for demo: skills/demo, skills/other",
     );
   });
 
@@ -996,12 +1002,12 @@ describe("skills core", () => {
         if (value === "https://github.com/acme/repo/tree/HEAD/skills") {
           return Promise.resolve(
             new Response(
-              '<a href="/acme/repo/tree/HEAD/skills/actual">actual</a>'
-            )
+              '<a href="/acme/repo/tree/HEAD/skills/actual">actual</a>',
+            ),
           );
         }
         return Promise.resolve(
-          new Response("---\nname: actual\ndescription: Actual skill.\n---\n")
+          new Response("---\nname: actual\ndescription: Actual skill.\n---\n"),
         );
       },
       {
@@ -1009,7 +1015,7 @@ describe("skills core", () => {
         onExactSourceResolved: (identity) => {
           exactSources.push({ path: identity.path, subpath: identity.subpath });
         },
-      }
+      },
     );
 
     expect(listSkillsInSource(sourceRoot)).toMatchObject([
@@ -1037,7 +1043,7 @@ describe("skills core", () => {
                 { path: "skills/one/README.md", type: "blob" },
                 { path: "skills/two/SKILL.md", type: "blob" },
               ],
-            })
+            }),
           );
         }
         if (value.endsWith("README.md")) {
@@ -1045,19 +1051,19 @@ describe("skills core", () => {
         }
         if (value.includes("/one/")) {
           return Promise.resolve(
-            new Response("# One Skill\n\ndescription: one\n")
+            new Response("# One Skill\n\ndescription: one\n"),
           );
         }
         return Promise.resolve(
-          new Response("# Two Skill\n\ndescription: two\n")
+          new Response("# Two Skill\n\ndescription: two\n"),
         );
-      }
+      },
     );
 
     expect(
       listSkillsInSource(sourceRoot)
         .map((skill) => skill.id)
-        .sort()
+        .sort(),
     ).toEqual(["one-skill", "two-skill"]);
   });
 
@@ -1068,10 +1074,10 @@ describe("skills core", () => {
       readFileSync(
         join(
           import.meta.dir,
-          "__fixtures__/skills-sh-vercel-web-design-guidelines.json"
+          "__fixtures__/skills-sh-vercel-web-design-guidelines.json",
         ),
-        "utf8"
-      )
+        "utf8",
+      ),
     );
     const fixtureSkill = fixture.files[0].contents as string;
 
@@ -1079,12 +1085,12 @@ describe("skills core", () => {
       paths,
       "vercel-labs/agent-skills",
       "web-design-guidelines",
-      () => Promise.resolve(Response.json(fixture))
+      () => Promise.resolve(Response.json(fixture)),
     );
     const requestedUrls: string[] = [];
     const sourceRoot = await materializeResolvedSkillSource(
       parseSkillSource(
-        "vercel-labs/agent-skills/tree/HEAD/skills/web-design-guidelines"
+        "vercel-labs/agent-skills/tree/HEAD/skills/web-design-guidelines",
       ),
       paths,
       (url) => {
@@ -1101,7 +1107,7 @@ describe("skills core", () => {
                   sha: gitBlobSha(fixtureSkill),
                 },
               ],
-            })
+            }),
           );
         }
         if (
@@ -1111,18 +1117,18 @@ describe("skills core", () => {
           return Promise.resolve(Response.json(fixture));
         }
         return Promise.resolve(new Response("unexpected", { status: 500 }));
-      }
+      },
     );
 
     expect(snapshot?.hash).toBe(fixture.hash);
     expect(computeSkillFilesHash(snapshot?.files ?? [])).not.toBe(fixture.hash);
     expect(readFileSync(join(sourceRoot, "SKILL.md"), "utf8")).toBe(
-      fixtureSkill
+      fixtureSkill,
     );
     expect(
       requestedUrls.some((url) =>
-        url.startsWith("https://raw.githubusercontent.com/")
-      )
+        url.startsWith("https://raw.githubusercontent.com/"),
+      ),
     ).toBe(false);
   });
 
@@ -1132,7 +1138,7 @@ describe("skills core", () => {
     const snapshotSeed = join(root, "snapshot-seed");
     writeSkill(snapshotSeed, "Demo Skill", "Snapshot demo.");
     const snapshotHash = computeSkillFilesHash(
-      hashSkillDirectory(snapshotSeed)
+      hashSkillDirectory(snapshotSeed),
     );
     const requestedUrls: string[] = [];
 
@@ -1155,11 +1161,11 @@ describe("skills core", () => {
                   path: "skills/demo/README.md",
                   type: "blob",
                   sha: gitBlobSha(
-                    readFileSync(join(snapshotSeed, "README.md"))
+                    readFileSync(join(snapshotSeed, "README.md")),
                   ),
                 },
               ],
-            })
+            }),
           );
         }
         if (value === "https://skills.sh/api/download/owner/repo/demo") {
@@ -1171,34 +1177,34 @@ describe("skills core", () => {
                   path: "README.md",
                   contents: readFileSync(
                     join(snapshotSeed, "README.md"),
-                    "utf8"
+                    "utf8",
                   ),
                 },
                 {
                   path: "SKILL.md",
                   contents: readFileSync(
                     join(snapshotSeed, "SKILL.md"),
-                    "utf8"
+                    "utf8",
                   ),
                 },
               ],
-            })
+            }),
           );
         }
         return Promise.resolve(new Response("rate limited", { status: 429 }));
-      }
+      },
     );
 
     expect(listSkillsInSource(sourceRoot).map((skill) => skill.id)).toEqual([
       "demo-skill",
     ]);
     expect(readFileSync(join(sourceRoot, "demo/README.md"), "utf8")).toBe(
-      "# note\n"
+      "# note\n",
     );
     expect(
       requestedUrls.some((url) =>
-        url.startsWith("https://raw.githubusercontent.com/")
-      )
+        url.startsWith("https://raw.githubusercontent.com/"),
+      ),
     ).toBe(false);
   });
 
@@ -1208,7 +1214,7 @@ describe("skills core", () => {
     const snapshotSeed = join(root, "snapshot-seed");
     writeSkill(snapshotSeed, "Demo Skill", "Exact snapshot.");
     const snapshotHash = computeSkillFilesHash(
-      hashSkillDirectory(snapshotSeed)
+      hashSkillDirectory(snapshotSeed),
     );
 
     const sourceRoot = await materializeResolvedSkillSource(
@@ -1229,11 +1235,11 @@ describe("skills core", () => {
                   path: "skills/demo/README.md",
                   type: "blob",
                   sha: gitBlobSha(
-                    readFileSync(join(snapshotSeed, "README.md"))
+                    readFileSync(join(snapshotSeed, "README.md")),
                   ),
                 },
               ],
-            })
+            }),
           );
         }
         if (value === "https://skills.sh/api/download/owner/repo/demo") {
@@ -1245,26 +1251,26 @@ describe("skills core", () => {
                   path: "README.md",
                   contents: readFileSync(
                     join(snapshotSeed, "README.md"),
-                    "utf8"
+                    "utf8",
                   ),
                 },
                 {
                   path: "SKILL.md",
                   contents: readFileSync(
                     join(snapshotSeed, "SKILL.md"),
-                    "utf8"
+                    "utf8",
                   ),
                 },
               ],
-            })
+            }),
           );
         }
         return Promise.resolve(new Response("unexpected", { status: 500 }));
-      }
+      },
     );
 
     expect(readFileSync(join(sourceRoot, "SKILL.md"), "utf8")).toContain(
-      "Exact snapshot."
+      "Exact snapshot.",
     );
   });
 
@@ -1299,7 +1305,7 @@ describe("skills core", () => {
                   sha: gitBlobSha(githubReadme),
                 },
               ],
-            })
+            }),
           );
         }
         if (value === "https://skills.sh/api/download/owner/repo/demo") {
@@ -1314,7 +1320,7 @@ describe("skills core", () => {
                     "# Demo Skill\n\ndescription: Substituted snapshot.\n",
                 },
               ],
-            })
+            }),
           );
         }
         if (
@@ -1330,16 +1336,16 @@ describe("skills core", () => {
           return Promise.resolve(new Response(githubReadme));
         }
         return Promise.resolve(new Response("missing", { status: 404 }));
-      }
+      },
     );
 
     expect(readFileSync(join(sourceRoot, "SKILL.md"), "utf8")).toBe(
-      githubSkill
+      githubSkill,
     );
     expect(
       requestedUrls.filter((url) =>
-        url.startsWith("https://raw.githubusercontent.com/")
-      )
+        url.startsWith("https://raw.githubusercontent.com/"),
+      ),
     ).toHaveLength(2);
   });
 
@@ -1372,7 +1378,7 @@ describe("skills core", () => {
                   { path: "skills/demo/SKILL.md", type: "blob" },
                   { path: "skills/demo/icon.png", type: "blob" },
                 ],
-              })
+              }),
             );
           }
           if (value === "https://skills.sh/api/download/owner/repo/demo") {
@@ -1383,7 +1389,7 @@ describe("skills core", () => {
             `https://raw.githubusercontent.com/owner/repo/${revision}/skills/demo/SKILL.md`
           ) {
             return Promise.resolve(
-              new Response("# Demo Skill\n\ndescription: GitHub source.\n")
+              new Response("# Demo Skill\n\ndescription: GitHub source.\n"),
             );
           }
           if (
@@ -1393,19 +1399,19 @@ describe("skills core", () => {
             return Promise.resolve(new Response(new Uint8Array([0, 1, 2])));
           }
           return Promise.resolve(new Response("missing", { status: 404 }));
-        }
+        },
       );
 
       expect(readFileSync(join(sourceRoot, "SKILL.md"), "utf8")).toContain(
-        "GitHub source."
+        "GitHub source.",
       );
       expect(readFileSync(join(sourceRoot, "icon.png"))).toEqual(
-        Buffer.from([0, 1, 2])
+        Buffer.from([0, 1, 2]),
       );
       expect(
         requestedUrls.filter((url) =>
-          url.startsWith("https://raw.githubusercontent.com/")
-        )
+          url.startsWith("https://raw.githubusercontent.com/"),
+        ),
       ).toHaveLength(2);
     }
   });
@@ -1426,7 +1432,7 @@ describe("skills core", () => {
           return Promise.resolve(
             Response.json({
               tree: [{ path: "skills/demo/SKILL.md", type: "blob" }],
-            })
+            }),
           );
         }
         if (value === "https://skills.sh/api/download/owner/repo/demo") {
@@ -1439,7 +1445,7 @@ describe("skills core", () => {
                     "# Demo Skill\n\ndescription: Default branch version.\n",
                 },
               ],
-            })
+            }),
           );
         }
         if (
@@ -1449,14 +1455,14 @@ describe("skills core", () => {
           return Promise.resolve(new Response(pinnedSkill));
         }
         return Promise.resolve(new Response("missing", { status: 404 }));
-      }
+      },
     );
 
     expect(readFileSync(join(sourceRoot, "SKILL.md"), "utf8")).toBe(
-      pinnedSkill
+      pinnedSkill,
     );
     expect(requestedUrls).not.toContain(
-      "https://skills.sh/api/download/owner/repo/demo"
+      "https://skills.sh/api/download/owner/repo/demo",
     );
   });
 
@@ -1475,8 +1481,8 @@ describe("skills core", () => {
         parseSkillSource("expo/skills"),
         paths,
         fetcher as typeof fetch,
-        { requestedSkillName: "eas-app-stores" }
-      )
+        { requestedSkillName: "eas-app-stores" },
+      ),
     ).rejects.toThrow("GitHub tree fetch failed: 403");
   });
 
@@ -1489,7 +1495,7 @@ describe("skills core", () => {
       calls.push(init ?? {});
       if (calls.length === 1) {
         return Promise.resolve(
-          Response.json({ tree }, { headers: { etag: 'W/"tree-v1"' } })
+          Response.json({ tree }, { headers: { etag: 'W/"tree-v1"' } }),
         );
       }
       return Promise.resolve(new Response(null, { status: 304 }));
@@ -1500,14 +1506,14 @@ describe("skills core", () => {
       "owner",
       "repo",
       "main",
-      fetcher as typeof fetch
+      fetcher as typeof fetch,
     );
     const second = await fetchGithubRepoTreeSnapshot(
       paths,
       "owner",
       "repo",
       "main",
-      fetcher as typeof fetch
+      fetcher as typeof fetch,
     );
 
     expect(first).toMatchObject({ fromCache: false, etag: 'W/"tree-v1"' });
@@ -1540,14 +1546,14 @@ describe("skills core", () => {
       "owner",
       "repo",
       "main",
-      fetcher as typeof fetch
+      fetcher as typeof fetch,
     );
     const cached = await fetchGithubRepoTreeSnapshot(
       paths,
       "owner",
       "repo",
       "main",
-      fetcher as typeof fetch
+      fetcher as typeof fetch,
     );
 
     expect(cached).toMatchObject({ fromCache: true, stale: true, tree });
@@ -1584,7 +1590,7 @@ describe("skills core", () => {
         (_url, init) => {
           calls.push(init ?? {});
           return Promise.resolve(Response.json({ tree }));
-        }
+        },
       );
 
       expect(snapshot).toMatchObject({ fromCache: false, tree });
@@ -1594,7 +1600,7 @@ describe("skills core", () => {
         entries: { "owner/repo#main": { tree } },
       });
       expect(
-        readdirSync(paths.cacheDir).filter((name) => name.includes(".tmp"))
+        readdirSync(paths.cacheDir).filter((name) => name.includes(".tmp")),
       ).toEqual([]);
     }
   });
@@ -1624,10 +1630,10 @@ describe("skills core", () => {
                   },
                 ],
               },
-            ]
-          )
+            ],
+          ),
         ),
-      })
+      }),
     );
     const session = createGithubRepoTreeCacheSession(paths);
     writeFileSync(cachePath, "{corrupt-after-session-load");
@@ -1639,7 +1645,7 @@ describe("skills core", () => {
       "repo-one",
       "main",
       fetcher,
-      session
+      session,
     );
     await fetchGithubRepoTreeSnapshot(
       paths,
@@ -1647,15 +1653,15 @@ describe("skills core", () => {
       "repo-two",
       "main",
       fetcher,
-      session
+      session,
     );
 
     const persisted = JSON.parse(readFileSync(cachePath, "utf8"));
     expect(Object.keys(persisted.entries).length).toBeLessThanOrEqual(
-      GITHUB_TREE_CACHE_MAX_ENTRIES
+      GITHUB_TREE_CACHE_MAX_ENTRIES,
     );
     expect(Object.keys(session.cache.entries).length).toBeLessThanOrEqual(
-      GITHUB_TREE_CACHE_MAX_ENTRIES
+      GITHUB_TREE_CACHE_MAX_ENTRIES,
     );
   });
 
@@ -1670,7 +1676,7 @@ describe("skills core", () => {
       "owner",
       "repo",
       "main",
-      seedFetcher as typeof fetch
+      seedFetcher as typeof fetch,
     );
     const requestedUrls: string[] = [];
     const fetcher = (url: string | URL | Request) => {
@@ -1681,14 +1687,14 @@ describe("skills core", () => {
       }
       if (value === "https://github.com/owner/repo/tree/main/") {
         return Promise.resolve(
-          new Response('<a href="/owner/repo/blob/main/SKILL.md">SKILL.md</a>')
+          new Response('<a href="/owner/repo/blob/main/SKILL.md">SKILL.md</a>'),
         );
       }
       if (
         value === "https://raw.githubusercontent.com/owner/repo/main/SKILL.md"
       ) {
         return Promise.resolve(
-          new Response("---\nname: demo\ndescription: Demo.\n---\n")
+          new Response("---\nname: demo\ndescription: Demo.\n---\n"),
         );
       }
       return Promise.resolve(new Response("missing", { status: 404 }));
@@ -1698,11 +1704,11 @@ describe("skills core", () => {
       parseSkillSource("owner/repo#main"),
       paths,
       fetcher as typeof fetch,
-      { requestedSkillName: "demo", skipSkillsShSnapshots: true }
+      { requestedSkillName: "demo", skipSkillsShSnapshots: true },
     );
 
     expect(readFileSync(join(sourceRoot, "SKILL.md"), "utf8")).toContain(
-      "name: demo"
+      "name: demo",
     );
     expect(requestedUrls).toContain("https://github.com/owner/repo/tree/main/");
   });
@@ -1720,8 +1726,8 @@ describe("skills core", () => {
         return Promise.resolve(
           Response.json(
             { tree: completeTree },
-            { headers: { etag: 'W/"complete-tree"' } }
-          )
+            { headers: { etag: 'W/"complete-tree"' } },
+          ),
         );
       }
       if (callCount === 2) {
@@ -1731,7 +1737,7 @@ describe("skills core", () => {
             tree: [
               { path: "skills/demo/SKILL.md", type: "blob", sha: "partial" },
             ],
-          })
+          }),
         );
       }
       return Promise.resolve(new Response(null, { status: 304 }));
@@ -1742,7 +1748,7 @@ describe("skills core", () => {
       "owner",
       "repo",
       "main",
-      fetcher as typeof fetch
+      fetcher as typeof fetch,
     );
     await expect(
       fetchGithubRepoTreeSnapshot(
@@ -1750,15 +1756,15 @@ describe("skills core", () => {
         "owner",
         "repo",
         "main",
-        fetcher as typeof fetch
-      )
+        fetcher as typeof fetch,
+      ),
     ).rejects.toThrow("GitHub tree fetch failed: truncated response");
     const cached = await fetchGithubRepoTreeSnapshot(
       paths,
       "owner",
       "repo",
       "main",
-      fetcher as typeof fetch
+      fetcher as typeof fetch,
     );
 
     expect(cached.tree).toEqual(completeTree);
@@ -1777,8 +1783,8 @@ describe("skills core", () => {
         return Promise.resolve(
           Response.json(
             { tree: completeTree },
-            { headers: { etag: 'W/"complete-tree"' } }
-          )
+            { headers: { etag: 'W/"complete-tree"' } },
+          ),
         );
       }
       if (callCount === 2) {
@@ -1792,7 +1798,7 @@ describe("skills core", () => {
       "owner",
       "repo",
       "main",
-      fetcher as typeof fetch
+      fetcher as typeof fetch,
     );
     await expect(
       fetchGithubRepoTreeSnapshot(
@@ -1800,15 +1806,15 @@ describe("skills core", () => {
         "owner",
         "repo",
         "main",
-        fetcher as typeof fetch
-      )
+        fetcher as typeof fetch,
+      ),
     ).rejects.toThrow("GitHub tree fetch failed: invalid response");
     const cached = await fetchGithubRepoTreeSnapshot(
       paths,
       "owner",
       "repo",
       "main",
-      fetcher as typeof fetch
+      fetcher as typeof fetch,
     );
 
     expect(cached.tree).toEqual(completeTree);
@@ -1826,8 +1832,8 @@ describe("skills core", () => {
             {
               tree: [{ path: "skills/demo/SKILL.md", type: "blob", sha: "v1" }],
             },
-            { headers: { etag: 'W/"tree-v1"' } }
-          )
+            { headers: { etag: 'W/"tree-v1"' } },
+          ),
         );
       }
       return Promise.resolve(new Response("server error", { status: 500 }));
@@ -1838,7 +1844,7 @@ describe("skills core", () => {
       "owner",
       "repo",
       "main",
-      fetcher as typeof fetch
+      fetcher as typeof fetch,
     );
 
     await expect(
@@ -1847,8 +1853,8 @@ describe("skills core", () => {
         "owner",
         "repo",
         "main",
-        fetcher as typeof fetch
-      )
+        fetcher as typeof fetch,
+      ),
     ).rejects.toThrow("GitHub tree fetch failed: 500");
   });
 
@@ -1868,21 +1874,21 @@ describe("skills core", () => {
                 { path: "skills/demo/SKILL.md", type: "blob" },
                 { path: "skills/demo/assets/logo.bin", type: "blob" },
               ],
-            })
+            }),
           );
         }
         if (value.endsWith("logo.bin")) {
           return Promise.resolve(new Response(bytes));
         }
         return Promise.resolve(
-          new Response("# Demo Skill\n\ndescription: Demo.\n")
+          new Response("# Demo Skill\n\ndescription: Demo.\n"),
         );
       },
-      { exactSubpath: true }
+      { exactSubpath: true },
     );
 
     expect(readFileSync(join(sourceRoot, "assets", "logo.bin"))).toEqual(
-      Buffer.from(bytes)
+      Buffer.from(bytes),
     );
   });
 
@@ -1892,7 +1898,7 @@ describe("skills core", () => {
     const sourceRoot = join(
       paths.cacheDir,
       "direct-source",
-      parseSkillSource("acme/repo/tree/main/skills/demo").identity.id
+      parseSkillSource("acme/repo/tree/main/skills/demo").identity.id,
     );
 
     await expect(
@@ -1908,15 +1914,15 @@ describe("skills core", () => {
                   { path: "skills/demo/SKILL.md", type: "blob" },
                   { path: "skills/demo/../escape.txt", type: "blob" },
                 ],
-              })
+              }),
             );
           }
           return Promise.resolve(
-            new Response("# Demo Skill\n\ndescription: Demo.\n")
+            new Response("# Demo Skill\n\ndescription: Demo.\n"),
           );
         },
-        { exactSubpath: true }
-      )
+        { exactSubpath: true },
+      ),
     ).rejects.toThrow("Remote file path escapes source directory");
     expect(existsSync(join(sourceRoot, "..", "escape.txt"))).toBe(false);
   });
@@ -1946,8 +1952,8 @@ describe("skills core", () => {
     expect(
       detectSkillUpdate(
         { ...entry, source: { ...entry.source, type: "github" } },
-        latestFiles
-      )
+        latestFiles,
+      ),
     ).toMatchObject({ remoteManaged: true, updateAvailable: true });
   });
 
@@ -2006,7 +2012,7 @@ describe("skills core", () => {
     ]);
     expect(computeSkillFilesHash(files)).toHaveLength(64);
     expect(computeSkillFilesHash([...files].reverse())).toBe(
-      computeSkillFilesHash(files)
+      computeSkillFilesHash(files),
     );
   });
 
@@ -2068,7 +2074,7 @@ describe("skills core", () => {
       detectLocalSkillUpdate({
         ...entry,
         source: { ...entry.source, type: "github" },
-      })
+      }),
     ).toMatchObject({
       latestHash: null,
       updateAvailable: false,
@@ -2087,11 +2093,11 @@ describe("skills core", () => {
 
     const plan = planRemoveSkill(
       "demo-skill",
-      readManagedManifest(paths.manifestPath)
+      readManagedManifest(paths.manifestPath),
     );
     const trashed: string[] = [];
     const next = applyRemovePlan(plan, paths, (targetPath) =>
-      trashed.push(targetPath)
+      trashed.push(targetPath),
     );
 
     expect(plan).toMatchObject({ exists: false, trashBoundary: "trash-cli" });
@@ -2101,19 +2107,19 @@ describe("skills core", () => {
 
   it("uses fail-fast write locking and clears locks after errors", () => {
     const paths = createSkillsManagerPaths(
-      join(tempRoot("lock"), ".pi", "agent")
+      join(tempRoot("lock"), ".pi", "agent"),
     );
 
     expect(() =>
       withSkillsWriteLock(paths, () =>
-        withSkillsWriteLock(paths, () => undefined)
-      )
+        withSkillsWriteLock(paths, () => undefined),
+      ),
     ).toThrow("Skills manager is locked by another writer.");
     expect(existsSync(paths.lockPath)).toBe(false);
     expect(() =>
       withSkillsWriteLock(paths, () => {
         throw new Error("boom");
-      })
+      }),
     ).toThrow("boom");
     expect(existsSync(paths.lockPath)).toBe(false);
     expect(withSkillsWriteLock(paths, () => "ok")).toBe("ok");
@@ -2138,8 +2144,8 @@ describe("skills extension", () => {
                 installs: 29_178,
               },
             ],
-          })
-        )
+          }),
+        ),
       );
       writeSkillsSearchCache(paths.cachePath, cache);
 
@@ -2156,7 +2162,7 @@ describe("skills extension", () => {
             name,
             registeredCommand as {
               handler(args: string, context: never): Promise<void>;
-            }
+            },
           );
         },
       };
@@ -2171,7 +2177,7 @@ describe("skills extension", () => {
           },
           custom: () => {
             throw new Error(
-              "search results should not require a blocking modal"
+              "search results should not require a blocking modal",
             );
           },
           notify() {
@@ -2224,7 +2230,8 @@ describe("skills extension", () => {
       ]);
       globalThis.fetch = ((url: string | URL | Request) =>
         Promise.resolve(
-          responses.get(String(url)) ?? new Response("missing", { status: 404 })
+          responses.get(String(url)) ??
+            new Response("missing", { status: 404 }),
         )) as typeof fetch;
       const commands = new Map<
         string,
@@ -2239,7 +2246,7 @@ describe("skills extension", () => {
             name,
             registeredCommand as {
               handler(args: string, context: never): Promise<void>;
-            }
+            },
           );
         },
       };
@@ -2263,7 +2270,7 @@ describe("skills extension", () => {
         ?.handler("install owner/repo", commandCtx as never);
 
       const manifest = readManagedManifest(
-        createSkillsManagerPaths().manifestPath
+        createSkillsManagerPaths().manifestPath,
       );
       expect(manifest.skills.map((skill) => skill.name).sort()).toEqual([
         "One Skill",
@@ -2307,8 +2314,8 @@ describe("skills extension", () => {
                         sha: "new-skill",
                       },
                     ],
-                  }
-            )
+                  },
+            ),
           );
         }
         if (value === "https://skills.sh/api/download/owner/repo/demo") {
@@ -2319,12 +2326,12 @@ describe("skills extension", () => {
           `https://raw.githubusercontent.com/owner/repo/${oldRevision}/skills/demo/SKILL.md`
         ) {
           return Promise.resolve(
-            new Response("# Demo Skill\n\ndescription: Old revision.\n")
+            new Response("# Demo Skill\n\ndescription: Old revision.\n"),
           );
         }
         if (value.includes(newRevision) || value.includes("/HEAD/")) {
           return Promise.resolve(
-            new Response("# Demo Skill\n\ndescription: New revision.\n")
+            new Response("# Demo Skill\n\ndescription: New revision.\n"),
           );
         }
         return Promise.resolve(new Response("missing", { status: 404 }));
@@ -2348,14 +2355,14 @@ describe("skills extension", () => {
         ?.handler("install owner/repo", commandCtx as never);
 
       const installed = readManagedManifest(
-        createSkillsManagerPaths().manifestPath
+        createSkillsManagerPaths().manifestPath,
       ).skills[0];
       expect(treeRequests).toBe(1);
       expect(installed?.skillFolderHash).toBe(
-        githubSkillFolderHash(oldTree, "skills/demo")
+        githubSkillFolderHash(oldTree, "skills/demo"),
       );
       expect(
-        readFileSync(join(installed?.installPath ?? "", "SKILL.md"), "utf8")
+        readFileSync(join(installed?.installPath ?? "", "SKILL.md"), "utf8"),
       ).toContain("Old revision.");
     } finally {
       globalThis.fetch = originalFetch;
@@ -2376,7 +2383,7 @@ describe("skills extension", () => {
     try {
       for (const source of sources) {
         process.env.HOME = tempRoot(
-          `command-single-repo-picker-${source.replaceAll(/[^a-z0-9]/gi, "-")}`
+          `command-single-repo-picker-${source.replaceAll(/[^a-z0-9]/gi, "-")}`,
         );
         globalThis.fetch = ((url: string | URL | Request) => {
           const value = String(url);
@@ -2384,12 +2391,12 @@ describe("skills extension", () => {
             return Promise.resolve(
               Response.json({
                 tree: [{ path: "skills/one/SKILL.md", type: "blob" }],
-              })
+              }),
             );
           }
           if (value.includes("/skills/one/SKILL.md")) {
             return Promise.resolve(
-              new Response("# One Skill\n\ndescription: First.\n")
+              new Response("# One Skill\n\ndescription: First.\n"),
             );
           }
           return Promise.resolve(new Response("missing", { status: 404 }));
@@ -2419,8 +2426,8 @@ describe("skills extension", () => {
         expect(customCalls).toBe(1);
         expect(
           readManagedManifest(
-            createSkillsManagerPaths().manifestPath
-          ).skills.map((skill) => skill.name)
+            createSkillsManagerPaths().manifestPath,
+          ).skills.map((skill) => skill.name),
         ).toEqual(["One Skill"]);
       }
     } finally {
@@ -2441,12 +2448,12 @@ describe("skills extension", () => {
           return Promise.resolve(
             Response.json({
               tree: [{ path: "skills/one/SKILL.md", type: "blob" }],
-            })
+            }),
           );
         }
         if (value.includes("/skills/one/SKILL.md")) {
           return Promise.resolve(
-            new Response("# One Skill\n\ndescription: First.\n")
+            new Response("# One Skill\n\ndescription: First.\n"),
           );
         }
         return Promise.resolve(new Response("missing", { status: 404 }));
@@ -2471,13 +2478,13 @@ describe("skills extension", () => {
         .get("skill")
         ?.handler(
           "install https://github.com/owner/repo/tree/HEAD/skills/one",
-          commandCtx as never
+          commandCtx as never,
         );
 
       expect(
         readManagedManifest(createSkillsManagerPaths().manifestPath).skills.map(
-          (skill) => skill.name
-        )
+          (skill) => skill.name,
+        ),
       ).toEqual(["One Skill"]);
     } finally {
       globalThis.fetch = originalFetch;
@@ -2499,19 +2506,20 @@ describe("skills extension", () => {
         [
           "https://github.com/supabase/agent-skills/tree/HEAD/skills",
           new Response(
-            '<a href="/supabase/agent-skills/tree/HEAD/skills/supabase">supabase</a>'
+            '<a href="/supabase/agent-skills/tree/HEAD/skills/supabase">supabase</a>',
           ),
         ],
         [
           "https://raw.githubusercontent.com/supabase/agent-skills/HEAD/skills/supabase/SKILL.md",
           new Response(
-            '---\nname: supabase\ndescription: "Use when doing Supabase work."\n---\n'
+            '---\nname: supabase\ndescription: "Use when doing Supabase work."\n---\n',
           ),
         ],
       ]);
       globalThis.fetch = ((url: string | URL | Request) =>
         Promise.resolve(
-          responses.get(String(url)) ?? new Response("missing", { status: 404 })
+          responses.get(String(url)) ??
+            new Response("missing", { status: 404 }),
         )) as typeof fetch;
       const commands = new Map<
         string,
@@ -2526,7 +2534,7 @@ describe("skills extension", () => {
             name,
             registeredCommand as {
               handler(args: string, context: never): Promise<void>;
-            }
+            },
           );
         },
       };
@@ -2553,7 +2561,7 @@ describe("skills extension", () => {
         ?.handler("install supabase/agent-skills", commandCtx as never);
 
       const manifest = readManagedManifest(
-        createSkillsManagerPaths().manifestPath
+        createSkillsManagerPaths().manifestPath,
       );
       expect(manifest.skills.map((skill) => skill.name)).toEqual(["supabase"]);
       expect(notifications).toEqual([
@@ -2579,17 +2587,17 @@ describe("skills extension", () => {
                 { path: "skills/one/SKILL.md", type: "blob" },
                 { path: "skills/two/SKILL.md", type: "blob" },
               ],
-            })
+            }),
           );
         }
         if (String(url).includes("/skills/one/SKILL.md")) {
           return Promise.resolve(
-            new Response("# One Skill\n\ndescription: First.\n")
+            new Response("# One Skill\n\ndescription: First.\n"),
           );
         }
         if (String(url).includes("/skills/two/SKILL.md")) {
           return Promise.resolve(
-            new Response("# Two Skill\n\ndescription: Second.\n")
+            new Response("# Two Skill\n\ndescription: Second.\n"),
           );
         }
         return Promise.resolve(new Response("missing", { status: 404 }));
@@ -2623,7 +2631,7 @@ describe("skills extension", () => {
             name,
             registeredCommand as {
               handler(args: string, context: never): Promise<void>;
-            }
+            },
           );
         },
       };
@@ -2636,14 +2644,14 @@ describe("skills extension", () => {
               tui: unknown,
               theme: unknown,
               kb: unknown,
-              done: unknown
-            ) => { render(width?: number): string[] }
+              done: unknown,
+            ) => { render(width?: number): string[] },
           ) {
             const component = factory(
               undefined,
               undefined,
               undefined,
-              () => undefined
+              () => undefined,
             );
             pickerText = component.render().join("\n");
             return Promise.resolve(["two-skill"]);
@@ -2685,17 +2693,17 @@ describe("skills extension", () => {
                 { path: "skills/one/SKILL.md", type: "blob" },
                 { path: "skills/two/SKILL.md", type: "blob" },
               ],
-            })
+            }),
           );
         }
         if (String(url).includes("/skills/one/SKILL.md")) {
           return Promise.resolve(
-            new Response("# One Skill\n\ndescription: First.\n")
+            new Response("# One Skill\n\ndescription: First.\n"),
           );
         }
         if (String(url).includes("/skills/two/SKILL.md")) {
           return Promise.resolve(
-            new Response("# Two Skill\n\ndescription: Second.\n")
+            new Response("# Two Skill\n\ndescription: Second.\n"),
           );
         }
         return Promise.resolve(new Response("missing", { status: 404 }));
@@ -2713,7 +2721,7 @@ describe("skills extension", () => {
             name,
             registeredCommand as {
               handler(args: string, context: never): Promise<void>;
-            }
+            },
           );
         },
       };
@@ -2736,7 +2744,7 @@ describe("skills extension", () => {
         ?.handler("install owner/repo", commandCtx as never);
 
       expect(
-        readManagedManifest(createSkillsManagerPaths().manifestPath).skills
+        readManagedManifest(createSkillsManagerPaths().manifestPath).skills,
       ).toEqual([]);
       expect(notifications).toEqual([
         "Multiple skills found. Run /skill install owner/repo/tree/HEAD/skills/one to install one skill.",
@@ -2765,7 +2773,7 @@ describe("skills extension", () => {
             name,
             registeredCommand as {
               handler(args: string, context: never): Promise<void>;
-            }
+            },
           );
         },
       };
@@ -2816,7 +2824,7 @@ describe("skills extension", () => {
             name,
             registeredCommand as {
               handler(args: string, context: never): Promise<void>;
-            }
+            },
           );
         },
       };
@@ -2862,7 +2870,7 @@ describe("skills extension", () => {
             name,
             registeredCommand as {
               handler(args: string, context: never): Promise<void>;
-            }
+            },
           );
         },
       };
@@ -2880,7 +2888,7 @@ describe("skills extension", () => {
           },
           setWidget(_key: string, content: unknown) {
             activityCalls.push(
-              `widget:${typeof content === "function" ? "factory" : ""}`
+              `widget:${typeof content === "function" ? "factory" : ""}`,
             );
           },
           setWorkingMessage() {
@@ -2928,7 +2936,7 @@ describe("skills extension", () => {
             name,
             registeredCommand as {
               handler(args: string, context: never): Promise<void>;
-            }
+            },
           );
         },
       };
@@ -2971,7 +2979,7 @@ describe("skills extension", () => {
     try {
       globalThis.fetch = (() =>
         Promise.resolve(
-          Response.json({ skills: [] })
+          Response.json({ skills: [] }),
         )) as unknown as typeof fetch;
       const commands = new Map<
         string,
@@ -2986,7 +2994,7 @@ describe("skills extension", () => {
             name,
             registeredCommand as {
               handler(args: string, context: never): Promise<void>;
-            }
+            },
           );
         },
       };
@@ -3006,7 +3014,7 @@ describe("skills extension", () => {
           },
           setWidget(_key: string, content: unknown) {
             activityCalls.push(
-              `widget:${typeof content === "function" ? "factory" : ""}`
+              `widget:${typeof content === "function" ? "factory" : ""}`,
             );
           },
           setWorkingMessage() {
@@ -3065,7 +3073,7 @@ describe("skills extension", () => {
             name,
             registeredCommand as {
               handler(args: string, context: never): Promise<void>;
-            }
+            },
           );
         },
       };
@@ -3139,7 +3147,7 @@ describe("skills extension", () => {
               skills: [
                 { skillId: "ai-sdk", name: "ai-sdk", source: "vercel/ai" },
               ],
-            })
+            }),
           );
         }
         if (value.includes("/git/trees/")) {
@@ -3149,19 +3157,19 @@ describe("skills extension", () => {
                 { path: "skills/other/SKILL.md", type: "blob" },
                 { path: "skills/use-ai-sdk/SKILL.md", type: "blob" },
               ],
-            })
+            }),
           );
         }
         if (value.endsWith("skills/other/SKILL.md")) {
           return Promise.resolve(
-            new Response("---\nname: other\ndescription: Other skill.\n---\n")
+            new Response("---\nname: other\ndescription: Other skill.\n---\n"),
           );
         }
         if (value.endsWith("skills/use-ai-sdk/SKILL.md")) {
           return Promise.resolve(
             new Response(
-              "---\nname: ai-sdk\ndescription: Answer questions.\n---\n"
-            )
+              "---\nname: ai-sdk\ndescription: Answer questions.\n---\n",
+            ),
           );
         }
         return Promise.resolve(new Response("missing", { status: 404 }));
@@ -3191,7 +3199,7 @@ describe("skills extension", () => {
         ?.handler("search ai-sdk", commandCtx as never);
 
       const [skill] = readManagedManifest(
-        createSkillsManagerPaths().manifestPath
+        createSkillsManagerPaths().manifestPath,
       ).skills;
       expect(skill?.source).toMatchObject({
         type: "github",
@@ -3225,19 +3233,21 @@ describe("skills extension", () => {
                   source: "owner/repo",
                 },
               ],
-            })
+            }),
           );
         }
         if (value.includes("/git/trees/")) {
           return Promise.resolve(
             Response.json({
               tree: [{ path: "skills/actual/SKILL.md", type: "blob" }],
-            })
+            }),
           );
         }
         if (value.endsWith("skills/actual/SKILL.md")) {
           return Promise.resolve(
-            new Response("---\nname: actual\ndescription: Actual skill.\n---\n")
+            new Response(
+              "---\nname: actual\ndescription: Actual skill.\n---\n",
+            ),
           );
         }
         return Promise.resolve(new Response("missing", { status: 404 }));
@@ -3264,7 +3274,7 @@ describe("skills extension", () => {
         ?.handler("search display", commandCtx as never);
 
       const [skill] = readManagedManifest(
-        createSkillsManagerPaths().manifestPath
+        createSkillsManagerPaths().manifestPath,
       ).skills;
       expect(skill).toMatchObject({ id: "actual", name: "actual" });
       expect(skill?.source).toMatchObject({
@@ -3291,7 +3301,7 @@ describe("skills extension", () => {
       mkdirSync(install, { recursive: true });
       writeFileSync(
         join(install, "SKILL.md"),
-        "---\nname: ai-sdk\ndescription: Answer questions.\n---\n"
+        "---\nname: ai-sdk\ndescription: Answer questions.\n---\n",
       );
       writeManagedManifest(paths.manifestPath, {
         version: 1,
@@ -3313,14 +3323,14 @@ describe("skills extension", () => {
           return Promise.resolve(
             Response.json({
               tree: [{ path: "skills/use-ai-sdk/SKILL.md", type: "blob" }],
-            })
+            }),
           );
         }
         if (value.endsWith("skills/use-ai-sdk/SKILL.md")) {
           return Promise.resolve(
             new Response(
-              "---\nname: ai-sdk\ndescription: Answer questions.\n---\n"
-            )
+              "---\nname: ai-sdk\ndescription: Answer questions.\n---\n",
+            ),
           );
         }
         return Promise.resolve(new Response("missing", { status: 404 }));
@@ -3338,7 +3348,7 @@ describe("skills extension", () => {
             name,
             registeredCommand as {
               handler(args: string, context: never): Promise<void>;
-            }
+            },
           );
         },
       };
@@ -3418,7 +3428,7 @@ describe("skills extension", () => {
         "expo",
         "skills",
         "feature/foo",
-        treeFetcher as typeof fetch
+        treeFetcher as typeof fetch,
       );
       writeManagedManifest(paths.manifestPath, {
         version: 1,
@@ -3434,7 +3444,7 @@ describe("skills extension", () => {
             skillPath: "plugins/expo/skills/demo",
             skillFolderHash: githubSkillFolderHash(
               tree,
-              "plugins/expo/skills/demo"
+              "plugins/expo/skills/demo",
             )!,
           },
         ],
@@ -3452,8 +3462,8 @@ describe("skills extension", () => {
         ) {
           return Promise.resolve(
             new Response(
-              '<a href="/expo/skills/blob/feature/foo/plugins/expo/skills/demo/SKILL.md">SKILL.md</a><a href="/expo/skills/tree/feature/foo/plugins/expo/skills/demo/references">references</a>'
-            )
+              '<a href="/expo/skills/blob/feature/foo/plugins/expo/skills/demo/SKILL.md">SKILL.md</a><a href="/expo/skills/tree/feature/foo/plugins/expo/skills/demo/references">references</a>',
+            ),
           );
         }
         if (
@@ -3462,8 +3472,8 @@ describe("skills extension", () => {
         ) {
           return Promise.resolve(
             new Response(
-              '<a href="/expo/skills/blob/feature/foo/plugins/expo/skills/demo/references/new.md">new.md</a>'
-            )
+              '<a href="/expo/skills/blob/feature/foo/plugins/expo/skills/demo/references/new.md">new.md</a>',
+            ),
           );
         }
         if (
@@ -3506,17 +3516,17 @@ describe("skills extension", () => {
       await commands.get("skill")?.handler("update demo", commandCtx as never);
 
       expect(readFileSync(join(install, "SKILL.md"), "utf8")).toBe(
-        updatedSkill
+        updatedSkill,
       );
       expect(requestedUrls).toContain(
-        "https://raw.githubusercontent.com/expo/skills/feature/foo/plugins/expo/skills/demo/SKILL.md"
+        "https://raw.githubusercontent.com/expo/skills/feature/foo/plugins/expo/skills/demo/SKILL.md",
       );
       expect(readFileSync(join(install, "references", "new.md"), "utf8")).toBe(
-        "# New reference\n"
+        "# New reference\n",
       );
       expect(existsSync(join(install, "references", "removed.md"))).toBe(false);
       expect(requestedUrls).not.toContain(
-        "https://raw.githubusercontent.com/expo/skills/feature/foo/plugins/expo/skills/demo/references/removed.md"
+        "https://raw.githubusercontent.com/expo/skills/feature/foo/plugins/expo/skills/demo/references/removed.md",
       );
       expect(notifications).not.toContain("No skill updates found.");
     } finally {
@@ -3556,7 +3566,7 @@ describe("skills extension", () => {
                   sha: `sibling-${siblingVersion}`,
                 },
               ],
-            })
+            }),
           );
         }
         if (value === "https://skills.sh/api/download/owner/repo/sibling") {
@@ -3564,7 +3574,7 @@ describe("skills extension", () => {
         }
         if (value.endsWith("/skills/sibling/SKILL.md")) {
           return Promise.resolve(
-            new Response("# Sibling Skill\n\ndescription: Sibling.\n")
+            new Response("# Sibling Skill\n\ndescription: Sibling.\n"),
           );
         }
         if (value.endsWith("/docs/guide.md")) {
@@ -3572,8 +3582,8 @@ describe("skills extension", () => {
         }
         return Promise.resolve(
           new Response(
-            `# Root Skill\n\ndescription: ${rootVersion === "initial" ? "Initial" : "Updated"}.\n`
-          )
+            `# Root Skill\n\ndescription: ${rootVersion === "initial" ? "Initial" : "Updated"}.\n`,
+          ),
         );
       }) as typeof fetch;
       const commands = registerSkillsCommand();
@@ -3608,10 +3618,10 @@ describe("skills extension", () => {
       expect(installed?.skillPath).toBe("");
       expect(installed?.source.subpath).toBe("");
       expect(existsSync(join(installed!.installPath, "docs/guide.md"))).toBe(
-        true
+        true,
       );
       expect(
-        existsSync(join(installed!.installPath, "skills/sibling/SKILL.md"))
+        existsSync(join(installed!.installPath, "skills/sibling/SKILL.md")),
       ).toBe(false);
       siblingVersion = "updated";
       notifications.length = 0;
@@ -3636,7 +3646,7 @@ describe("skills extension", () => {
         level: "info",
       });
       expect(
-        readManagedManifest(paths.manifestPath).skills[0]?.skillFolderHash
+        readManagedManifest(paths.manifestPath).skills[0]?.skillFolderHash,
       ).toBe(rootFolderHash);
 
       rootVersion = "updated";
@@ -3647,7 +3657,7 @@ describe("skills extension", () => {
 
       const [updated] = readManagedManifest(paths.manifestPath).skills;
       expect(
-        readFileSync(join(updated!.installPath, "SKILL.md"), "utf8")
+        readFileSync(join(updated!.installPath, "SKILL.md"), "utf8"),
       ).toContain("description: Updated.");
       expect(updated?.skillPath).toBe("");
       expect(notifications).not.toContainEqual({
@@ -3673,11 +3683,11 @@ describe("skills extension", () => {
       mkdirSync(twoInstall, { recursive: true });
       writeFileSync(
         join(oneInstall, "SKILL.md"),
-        "# one\n\ndescription: One.\n"
+        "# one\n\ndescription: One.\n",
       );
       writeFileSync(
         join(twoInstall, "SKILL.md"),
-        "# two\n\ndescription: Two.\n"
+        "# two\n\ndescription: Two.\n",
       );
       const tree = [
         { path: "skills/one/SKILL.md", type: "blob", sha: "one-skill" },
@@ -3754,15 +3764,15 @@ describe("skills extension", () => {
       await commands.get("skill")?.handler("update", commandCtx as never);
 
       expect(
-        requestedUrls.filter((url) => url.includes("/git/trees/main"))
+        requestedUrls.filter((url) => url.includes("/git/trees/main")),
       ).toHaveLength(1);
       expect(
         requestedUrls.some((url) =>
-          url.startsWith("https://raw.githubusercontent.com/")
-        )
+          url.startsWith("https://raw.githubusercontent.com/"),
+        ),
       ).toBe(false);
       expect(
-        requestedUrls.some((url) => url.startsWith("https://github.com/"))
+        requestedUrls.some((url) => url.startsWith("https://github.com/")),
       ).toBe(false);
       expect(notifications).toEqual([
         { message: "No skill updates found.", level: "info" },
@@ -3817,12 +3827,12 @@ describe("skills extension", () => {
             Response.json({
               sha: "0123456789abcdef0123456789abcdef01234567",
               tree,
-            })
+            }),
           );
         }
         if (value.endsWith("/skills/demo/SKILL.md")) {
           return Promise.resolve(
-            new Response("# Demo Skill\n\ndescription: Updated.\n")
+            new Response("# Demo Skill\n\ndescription: Updated.\n"),
           );
         }
         if (value.endsWith("/skills/demo/README.md")) {
@@ -3858,15 +3868,15 @@ describe("skills extension", () => {
         ?.handler("update demo-skill", commandCtx as never);
 
       expect(readFileSync(join(install, "SKILL.md"), "utf8")).toContain(
-        "description: Updated."
+        "description: Updated.",
       );
       expect(
-        readManagedManifest(paths.manifestPath).skills[0]?.skillFolderHash
+        readManagedManifest(paths.manifestPath).skills[0]?.skillFolderHash,
       ).toBeUndefined();
       expect(
         requestedUrls.some((url) =>
-          url.startsWith("https://raw.githubusercontent.com/")
-        )
+          url.startsWith("https://raw.githubusercontent.com/"),
+        ),
       ).toBe(true);
       expect(notifications).not.toContain("No skill updates found.");
     } finally {
@@ -3930,7 +3940,7 @@ describe("skills extension", () => {
                   contents: readFileSync(join(install, "SKILL.md"), "utf8"),
                 },
               ],
-            })
+            }),
           );
         }
         if (
@@ -3938,7 +3948,7 @@ describe("skills extension", () => {
           `https://raw.githubusercontent.com/owner/repo/${revision}/skills/demo/SKILL.md`
         ) {
           return Promise.resolve(
-            new Response(readFileSync(join(githubSeed, "SKILL.md"), "utf8"))
+            new Response(readFileSync(join(githubSeed, "SKILL.md"), "utf8")),
           );
         }
         if (
@@ -3946,7 +3956,7 @@ describe("skills extension", () => {
           `https://raw.githubusercontent.com/owner/repo/${revision}/skills/demo/README.md`
         ) {
           return Promise.resolve(
-            new Response(readFileSync(join(githubSeed, "README.md"), "utf8"))
+            new Response(readFileSync(join(githubSeed, "README.md"), "utf8")),
           );
         }
         return Promise.resolve(new Response("missing", { status: 404 }));
@@ -3986,19 +3996,19 @@ describe("skills extension", () => {
       });
       expect(
         requestedUrls.some((url) =>
-          url.startsWith("https://raw.githubusercontent.com/")
-        )
+          url.startsWith("https://raw.githubusercontent.com/"),
+        ),
       ).toBe(true);
       expect(readFileSync(join(install, "SKILL.md"), "utf8")).toBe(
-        readFileSync(join(githubSeed, "SKILL.md"), "utf8")
+        readFileSync(join(githubSeed, "SKILL.md"), "utf8"),
       );
       expect(notifications).not.toContainEqual(
-        expect.objectContaining({ level: "warning" })
+        expect.objectContaining({ level: "warning" }),
       );
       expect(notifications).not.toContainEqual(
         expect.objectContaining({
           message: "Updated exact source metadata for 1 skill(s).",
-        })
+        }),
       );
     } finally {
       globalThis.fetch = originalFetch;
@@ -4016,7 +4026,7 @@ describe("skills extension", () => {
       const snapshotSeed = join(home, "snapshot-seed");
       writeSkill(snapshotSeed, "Demo Skill", "Stale snapshot.");
       const snapshotHash = computeSkillFilesHash(
-        hashSkillDirectory(snapshotSeed)
+        hashSkillDirectory(snapshotSeed),
       );
       const currentSkill =
         "# Demo Skill\n\ndescription: Current GitHub version.\n";
@@ -4041,18 +4051,18 @@ describe("skills extension", () => {
                   path: "README.md",
                   contents: readFileSync(
                     join(snapshotSeed, "README.md"),
-                    "utf8"
+                    "utf8",
                   ),
                 },
                 {
                   path: "SKILL.md",
                   contents: readFileSync(
                     join(snapshotSeed, "SKILL.md"),
-                    "utf8"
+                    "utf8",
                   ),
                 },
               ],
-            })
+            }),
           );
         }
         if (
@@ -4101,10 +4111,10 @@ describe("skills extension", () => {
         throw new Error(`Install failed: ${notifications.join(" | ")}`);
       }
       expect(installed.skillFolderHash).toBe(
-        githubSkillFolderHash(tree, "skills/demo") ?? undefined
+        githubSkillFolderHash(tree, "skills/demo") ?? undefined,
       );
       expect(
-        readFileSync(join(installed.installPath, "SKILL.md"), "utf8")
+        readFileSync(join(installed.installPath, "SKILL.md"), "utf8"),
       ).toBe(currentSkill);
 
       await commands
@@ -4113,15 +4123,15 @@ describe("skills extension", () => {
 
       const [updated] = readManagedManifest(paths.manifestPath).skills;
       expect(readFileSync(join(updated!.installPath, "SKILL.md"), "utf8")).toBe(
-        currentSkill
+        currentSkill,
       );
       expect(updated?.skillFolderHash).toBe(
-        githubSkillFolderHash(tree, "skills/demo") ?? undefined
+        githubSkillFolderHash(tree, "skills/demo") ?? undefined,
       );
       expect(
         requestedUrls.filter((url) =>
-          url.startsWith("https://raw.githubusercontent.com/")
-        ).length
+          url.startsWith("https://raw.githubusercontent.com/"),
+        ).length,
       ).toBeGreaterThan(0);
       expect(notifications).toContain("No skill updates found.");
     } finally {
@@ -4161,17 +4171,17 @@ describe("skills extension", () => {
                       },
                     ]),
               ],
-            })
+            }),
           );
         }
         if (value.endsWith("/skills/one/SKILL.md")) {
           return Promise.resolve(
-            new Response("# One Skill\n\ndescription: First.\n")
+            new Response("# One Skill\n\ndescription: First.\n"),
           );
         }
         if (value.endsWith("/skills/two/SKILL.md")) {
           return Promise.resolve(
-            new Response("# Two Skill\n\ndescription: Second.\n")
+            new Response("# Two Skill\n\ndescription: Second.\n"),
           );
         }
         return Promise.resolve(new Response("missing", { status: 404 }));
@@ -4183,7 +4193,7 @@ describe("skills extension", () => {
         ui: {
           select: (_title: string, options: string[]) =>
             Promise.resolve(
-              options.find((option) => option.startsWith("One Skill"))
+              options.find((option) => option.startsWith("One Skill")),
             ),
           notify(message: string) {
             notifications.push(message);
@@ -4219,7 +4229,7 @@ describe("skills extension", () => {
         ?.handler("update one-skill", commandCtx as never);
       expect(notifications).toContain("No skill updates found.");
       expect(
-        requestedUrls.some((url) => url.endsWith("/skills/one/SKILL.md"))
+        requestedUrls.some((url) => url.endsWith("/skills/one/SKILL.md")),
       ).toBe(false);
 
       requestedUrls.length = 0;
@@ -4230,7 +4240,7 @@ describe("skills extension", () => {
         ?.handler("update one-skill", commandCtx as never);
       expect(notifications).toContain("No skill updates found.");
       expect(
-        requestedUrls.some((url) => url.endsWith("/skills/one/SKILL.md"))
+        requestedUrls.some((url) => url.endsWith("/skills/one/SKILL.md")),
       ).toBe(false);
     } finally {
       globalThis.fetch = originalFetch;
@@ -4252,7 +4262,7 @@ describe("skills extension", () => {
       mkdirSync(install, { recursive: true });
       writeFileSync(
         join(install, "SKILL.md"),
-        "---\nname: demo\ndescription: Demo.\n---\n"
+        "---\nname: demo\ndescription: Demo.\n---\n",
       );
       writeManagedManifest(paths.manifestPath, {
         version: 1,
@@ -4277,11 +4287,11 @@ describe("skills extension", () => {
           return Promise.resolve(
             Response.json({
               tree: [{ path: "skills/demo/SKILL.md", type: "blob" }],
-            })
+            }),
           );
         }
         return Promise.resolve(
-          new Response("---\nname: demo\ndescription: Demo.\n---\n")
+          new Response("---\nname: demo\ndescription: Demo.\n---\n"),
         );
       }) as typeof fetch;
       const commands = new Map<
@@ -4297,7 +4307,7 @@ describe("skills extension", () => {
             name,
             registeredCommand as {
               handler(args: string, context: never): Promise<void>;
-            }
+            },
           );
         },
       };
@@ -4350,7 +4360,7 @@ describe("skills extension", () => {
       mkdirSync(install, { recursive: true });
       writeFileSync(
         join(install, "SKILL.md"),
-        "---\nname: demo\ndescription: Demo.\n---\n"
+        "---\nname: demo\ndescription: Demo.\n---\n",
       );
       writeManagedManifest(paths.manifestPath, {
         version: 1,
@@ -4374,11 +4384,11 @@ describe("skills extension", () => {
           return Promise.resolve(
             Response.json({
               tree: [{ path: "skills/demo/SKILL.md", type: "blob" }],
-            })
+            }),
           );
         }
         return Promise.resolve(
-          new Response("---\nname: demo\ndescription: Demo.\n---\n")
+          new Response("---\nname: demo\ndescription: Demo.\n---\n"),
         );
       }) as typeof fetch;
       const commands = new Map<
@@ -4394,7 +4404,7 @@ describe("skills extension", () => {
             name,
             registeredCommand as {
               handler(args: string, context: never): Promise<void>;
-            }
+            },
           );
         },
       };
@@ -4429,7 +4439,7 @@ describe("skills extension", () => {
         path: "owner/repo/skills/demo",
       });
       expect(requestedUrls).toContain(
-        "https://api.github.com/repos/owner/repo/git/trees/dev?recursive=1"
+        "https://api.github.com/repos/owner/repo/git/trees/dev?recursive=1",
       );
     } finally {
       globalThis.fetch = originalFetch;
@@ -4448,7 +4458,7 @@ describe("skills extension", () => {
       mkdirSync(install, { recursive: true });
       writeFileSync(
         join(install, "SKILL.md"),
-        "---\nname: demo\ndescription: Old demo.\n---\n"
+        "---\nname: demo\ndescription: Old demo.\n---\n",
       );
       writeManagedManifest(paths.manifestPath, {
         version: 1,
@@ -4477,11 +4487,11 @@ describe("skills extension", () => {
           return Promise.resolve(
             Response.json({
               tree: [{ path: "skills/demo/SKILL.md", type: "blob" }],
-            })
+            }),
           );
         }
         return Promise.resolve(
-          new Response("---\nname: demo\ndescription: New demo.\n---\n")
+          new Response("---\nname: demo\ndescription: New demo.\n---\n"),
         );
       }) as typeof fetch;
       const commands = new Map<
@@ -4497,7 +4507,7 @@ describe("skills extension", () => {
             name,
             registeredCommand as {
               handler(args: string, context: never): Promise<void>;
-            }
+            },
           );
         },
       };
@@ -4526,13 +4536,13 @@ describe("skills extension", () => {
       await commands.get("skill")?.handler("update demo", commandCtx as never);
 
       expect(requestedUrls).toContain(
-        "https://api.github.com/repos/owner/repo/git/trees/feature%2Ffoo?recursive=1"
+        "https://api.github.com/repos/owner/repo/git/trees/feature%2Ffoo?recursive=1",
       );
       expect(requestedUrls).not.toContain(
-        "https://api.github.com/repos/owner/repo/git/trees/feature?recursive=1"
+        "https://api.github.com/repos/owner/repo/git/trees/feature?recursive=1",
       );
       expect(readFileSync(join(install, "SKILL.md"), "utf8")).toBe(
-        "---\nname: demo\ndescription: New demo.\n---\n"
+        "---\nname: demo\ndescription: New demo.\n---\n",
       );
     } finally {
       globalThis.fetch = originalFetch;
@@ -4551,12 +4561,12 @@ describe("skills extension", () => {
       mkdirSync(install, { recursive: true });
       writeFileSync(
         join(install, "SKILL.md"),
-        "---\nname: demo\ndescription: Old demo.\n---\n"
+        "---\nname: demo\ndescription: Old demo.\n---\n",
       );
       const snapshotSeed = join(home, "snapshot-seed");
       writeSkill(snapshotSeed, "demo", "Snapshot demo.");
       const snapshotHash = computeSkillFilesHash(
-        hashSkillDirectory(snapshotSeed)
+        hashSkillDirectory(snapshotSeed),
       );
       writeManagedManifest(paths.manifestPath, {
         version: 1,
@@ -4589,18 +4599,18 @@ describe("skills extension", () => {
                   path: "README.md",
                   contents: readFileSync(
                     join(snapshotSeed, "README.md"),
-                    "utf8"
+                    "utf8",
                   ),
                 },
                 {
                   path: "SKILL.md",
                   contents: readFileSync(
                     join(snapshotSeed, "SKILL.md"),
-                    "utf8"
+                    "utf8",
                   ),
                 },
               ],
-            })
+            }),
           );
         }
         if (value.includes("/git/trees/")) {
@@ -4609,7 +4619,7 @@ describe("skills extension", () => {
               tree: [
                 { path: "skills/demo/SKILL.md", type: "blob", sha: "new" },
               ],
-            })
+            }),
           );
         }
         if (
@@ -4617,7 +4627,7 @@ describe("skills extension", () => {
           "https://raw.githubusercontent.com/owner/repo/main/skills/demo/SKILL.md"
         ) {
           return Promise.resolve(
-            new Response("---\nname: demo\ndescription: GitHub demo.\n---\n")
+            new Response("---\nname: demo\ndescription: GitHub demo.\n---\n"),
           );
         }
         return Promise.resolve(new Response("missing", { status: 404 }));
@@ -4635,7 +4645,7 @@ describe("skills extension", () => {
             name,
             registeredCommand as {
               handler(args: string, context: never): Promise<void>;
-            }
+            },
           );
         },
       };
@@ -4664,15 +4674,15 @@ describe("skills extension", () => {
       await commands.get("skill")?.handler("update demo", commandCtx as never);
 
       expect(requestedUrls).not.toContain(
-        "https://skills.sh/api/download/stored/remote/demo"
+        "https://skills.sh/api/download/stored/remote/demo",
       );
       expect(
         requestedUrls.some((url) =>
-          url.startsWith("https://raw.githubusercontent.com/")
-        )
+          url.startsWith("https://raw.githubusercontent.com/"),
+        ),
       ).toBe(true);
       expect(readFileSync(join(install, "SKILL.md"), "utf8")).toBe(
-        "---\nname: demo\ndescription: GitHub demo.\n---\n"
+        "---\nname: demo\ndescription: GitHub demo.\n---\n",
       );
     } finally {
       globalThis.fetch = originalFetch;
@@ -4691,7 +4701,7 @@ describe("skills extension", () => {
       mkdirSync(install, { recursive: true });
       writeFileSync(
         join(install, "SKILL.md"),
-        "---\nname: demo\ndescription: Old demo.\n---\n"
+        "---\nname: demo\ndescription: Old demo.\n---\n",
       );
       writeManagedManifest(paths.manifestPath, {
         version: 1,
@@ -4725,7 +4735,7 @@ describe("skills extension", () => {
                   contents: "# demo\n\ndescription: Stale snapshot.\n",
                 },
               ],
-            })
+            }),
           );
         }
         if (value.includes("/git/trees/")) {
@@ -4734,7 +4744,7 @@ describe("skills extension", () => {
               tree: [
                 { path: "skills/demo/SKILL.md", type: "blob", sha: "new" },
               ],
-            })
+            }),
           );
         }
         if (
@@ -4742,7 +4752,7 @@ describe("skills extension", () => {
           "https://raw.githubusercontent.com/owner/repo/main/skills/demo/SKILL.md"
         ) {
           return Promise.resolve(
-            new Response("---\nname: demo\ndescription: GitHub demo.\n---\n")
+            new Response("---\nname: demo\ndescription: GitHub demo.\n---\n"),
           );
         }
         return Promise.resolve(new Response("missing", { status: 404 }));
@@ -4760,7 +4770,7 @@ describe("skills extension", () => {
             name,
             registeredCommand as {
               handler(args: string, context: never): Promise<void>;
-            }
+            },
           );
         },
       };
@@ -4789,13 +4799,13 @@ describe("skills extension", () => {
       await commands.get("skill")?.handler("update demo", commandCtx as never);
 
       expect(requestedUrls).not.toContain(
-        "https://skills.sh/api/download/owner/repo/demo"
+        "https://skills.sh/api/download/owner/repo/demo",
       );
       expect(requestedUrls).toContain(
-        "https://raw.githubusercontent.com/owner/repo/main/skills/demo/SKILL.md"
+        "https://raw.githubusercontent.com/owner/repo/main/skills/demo/SKILL.md",
       );
       expect(readFileSync(join(install, "SKILL.md"), "utf8")).toBe(
-        "---\nname: demo\ndescription: GitHub demo.\n---\n"
+        "---\nname: demo\ndescription: GitHub demo.\n---\n",
       );
     } finally {
       globalThis.fetch = originalFetch;
@@ -4814,7 +4824,7 @@ describe("skills extension", () => {
       mkdirSync(install, { recursive: true });
       writeFileSync(
         join(install, "SKILL.md"),
-        "---\nname: demo\ndescription: Old demo.\n---\n"
+        "---\nname: demo\ndescription: Old demo.\n---\n",
       );
       writeManagedManifest(paths.manifestPath, {
         version: 1,
@@ -4847,7 +4857,7 @@ describe("skills extension", () => {
               tree: [
                 { path: "skills/demo/SKILL.md", type: "blob", sha: "new" },
               ],
-            })
+            }),
           );
         }
         if (
@@ -4855,7 +4865,7 @@ describe("skills extension", () => {
           "https://raw.githubusercontent.com/owner/repo/main/skills/demo/SKILL.md"
         ) {
           return Promise.resolve(
-            new Response("---\nname: demo\ndescription: GitHub demo.\n---\n")
+            new Response("---\nname: demo\ndescription: GitHub demo.\n---\n"),
           );
         }
         return Promise.resolve(new Response("missing", { status: 404 }));
@@ -4885,13 +4895,13 @@ describe("skills extension", () => {
       await commands.get("skill")?.handler("update demo", commandCtx as never);
 
       expect(requestedUrls).not.toContain(
-        "https://skills.sh/api/download/owner/repo/demo"
+        "https://skills.sh/api/download/owner/repo/demo",
       );
       expect(requestedUrls).toContain(
-        "https://raw.githubusercontent.com/owner/repo/main/skills/demo/SKILL.md"
+        "https://raw.githubusercontent.com/owner/repo/main/skills/demo/SKILL.md",
       );
       expect(readFileSync(join(install, "SKILL.md"), "utf8")).toBe(
-        "---\nname: demo\ndescription: GitHub demo.\n---\n"
+        "---\nname: demo\ndescription: GitHub demo.\n---\n",
       );
     } finally {
       globalThis.fetch = originalFetch;
@@ -4910,7 +4920,7 @@ describe("skills extension", () => {
       mkdirSync(install, { recursive: true });
       writeFileSync(
         join(install, "SKILL.md"),
-        "---\nname: ai-sdk\ndescription: Answer questions.\n---\n"
+        "---\nname: ai-sdk\ndescription: Answer questions.\n---\n",
       );
       const broadSource = parseSkillSource("vercel/ai").identity;
       writeManagedManifest(paths.manifestPath, {
@@ -4933,11 +4943,11 @@ describe("skills extension", () => {
           return Promise.resolve(
             Response.json({
               tree: [{ path: "skills/ai-sdk/SKILL.md", type: "blob" }],
-            })
+            }),
           );
         }
         return Promise.resolve(
-          new Response("---\nname: other\ndescription: Other skill.\n---\n")
+          new Response("---\nname: other\ndescription: Other skill.\n---\n"),
         );
       }) as typeof fetch;
       const commands = new Map<
@@ -4953,7 +4963,7 @@ describe("skills extension", () => {
             name,
             registeredCommand as {
               handler(args: string, context: never): Promise<void>;
-            }
+            },
           );
         },
       };
@@ -5029,7 +5039,7 @@ describe("skills extension", () => {
           return Promise.resolve(
             Response.json({
               tree: [{ path: "skills/use-ai-sdk/SKILL.md", type: "blob" }],
-            })
+            }),
           );
         }
         return Promise.resolve(new Response(cleanSkill));
@@ -5047,7 +5057,7 @@ describe("skills extension", () => {
             name,
             registeredCommand as {
               handler(args: string, context: never): Promise<void>;
-            }
+            },
           );
         },
       };
@@ -5081,7 +5091,7 @@ describe("skills extension", () => {
       const [skill] = readManagedManifest(paths.manifestPath).skills;
       expect(skill?.source).toMatchObject({ subpath: "skills/use-ai-sdk" });
       expect(readFileSync(join(install, "SKILL.md"), "utf8")).toBe(
-        `${cleanSkill}\n# local note\n`
+        `${cleanSkill}\n# local note\n`,
       );
       expect(skill?.files).toEqual(files);
       expect(notifications).toContainEqual({
@@ -5124,11 +5134,11 @@ describe("skills extension", () => {
                 { path: "skills/one/SKILL.md", type: "blob" },
                 { path: "skills/two/SKILL.md", type: "blob" },
               ],
-            })
+            }),
           );
         }
         return Promise.resolve(
-          new Response("# Other Skill\n\ndescription: Demo.\n")
+          new Response("# Other Skill\n\ndescription: Demo.\n"),
         );
       }) as typeof fetch;
       const commands = new Map<
@@ -5144,7 +5154,7 @@ describe("skills extension", () => {
             name,
             registeredCommand as {
               handler(args: string, context: never): Promise<void>;
-            }
+            },
           );
         },
       };
@@ -5197,7 +5207,7 @@ describe("skills extension", () => {
       mkdirSync(install, { recursive: true });
       writeFileSync(
         join(install, "SKILL.md"),
-        "# Demo Skill\n\ndescription: Demo.\n"
+        "# Demo Skill\n\ndescription: Demo.\n",
       );
       writeManagedManifest(paths.manifestPath, {
         version: 1,
@@ -5260,7 +5270,7 @@ describe("skills extension", () => {
       mkdirSync(install, { recursive: true });
       writeFileSync(
         join(install, "SKILL.md"),
-        "# Demo Skill\n\ndescription: Demo.\n"
+        "# Demo Skill\n\ndescription: Demo.\n",
       );
       const broadSource = parseSkillSource("owner/repo").identity;
       writeManagedManifest(paths.manifestPath, {
@@ -5288,11 +5298,11 @@ describe("skills extension", () => {
                 { path: "skills/one/SKILL.md", type: "blob" },
                 { path: "skills/two/SKILL.md", type: "blob" },
               ],
-            })
+            }),
           );
         }
         return Promise.resolve(
-          new Response("# Other Skill\n\ndescription: Other.\n")
+          new Response("# Other Skill\n\ndescription: Other.\n"),
         );
       }) as typeof fetch;
       const handlers = new Map<string, (event: unknown, ctx: never) => void>();
@@ -5324,10 +5334,10 @@ describe("skills extension", () => {
       }
 
       expect(requestedUrls.some((url) => url.includes("/git/trees/"))).toBe(
-        true
+        true,
       );
       expect(readManagedManifest(paths.manifestPath).skills[0]?.source).toEqual(
-        broadSource
+        broadSource,
       );
       expect(notifications).toEqual([]);
     } finally {
@@ -5347,7 +5357,7 @@ describe("skills extension", () => {
       mkdirSync(install, { recursive: true });
       writeFileSync(
         join(install, "SKILL.md"),
-        "---\nname: ai-sdk\ndescription: Answer questions.\n---\n"
+        "---\nname: ai-sdk\ndescription: Answer questions.\n---\n",
       );
       const broadSource = parseSkillSource("vercel/ai").identity;
       writeManagedManifest(paths.manifestPath, {
@@ -5370,13 +5380,13 @@ describe("skills extension", () => {
           return Promise.resolve(
             Response.json({
               tree: [{ path: "skills/use-ai-sdk/SKILL.md", type: "blob" }],
-            })
+            }),
           );
         }
         return Promise.resolve(
           new Response(
-            "---\nname: ai-sdk\ndescription: Answer questions.\n---\n"
-          )
+            "---\nname: ai-sdk\ndescription: Answer questions.\n---\n",
+          ),
         );
       }) as typeof fetch;
       const handlers = new Map<string, (event: unknown, ctx: never) => void>();
@@ -5407,7 +5417,7 @@ describe("skills extension", () => {
       await Promise.resolve();
 
       expect(readManagedManifest(paths.manifestPath).skills[0]?.source).toEqual(
-        broadSource
+        broadSource,
       );
       expect(notifications).toEqual([]);
     } finally {
@@ -5428,7 +5438,7 @@ describe("skills extension", () => {
       mkdirSync(join(install, "scripts"), { recursive: true });
       writeFileSync(
         join(install, "SKILL.md"),
-        "# Use AI SDK\n\ndescription: Build with AI SDK.\n"
+        "# Use AI SDK\n\ndescription: Build with AI SDK.\n",
       );
       writeFileSync(join(install, "references", "errors.md"), "# Errors\n");
       writeFileSync(join(install, "scripts", "setup.sh"), "echo setup\n");
@@ -5480,7 +5490,7 @@ describe("skills extension", () => {
         const value = String(url);
         requestedUrls.push(value);
         return Promise.resolve(
-          responses.get(value) ?? new Response("missing", { status: 404 })
+          responses.get(value) ?? new Response("missing", { status: 404 }),
         );
       }) as typeof fetch;
       const commands = new Map<
@@ -5496,7 +5506,7 @@ describe("skills extension", () => {
             name,
             registeredCommand as {
               handler(args: string, context: never): Promise<void>;
-            }
+            },
           );
         },
       };
@@ -5533,16 +5543,16 @@ describe("skills extension", () => {
         { message: "No skill updates found.", level: "info" },
       ]);
       expect(requestedUrls).not.toContain(
-        "https://github.com/owner/repo/tree/HEAD/skills/use-ai-sdk"
+        "https://github.com/owner/repo/tree/HEAD/skills/use-ai-sdk",
       );
       expect(requestedUrls).not.toContain(
-        "https://raw.githubusercontent.com/owner/repo/HEAD/skills/use-ai-sdk"
+        "https://raw.githubusercontent.com/owner/repo/HEAD/skills/use-ai-sdk",
       );
       expect(requestedUrls).toContain(
-        "https://raw.githubusercontent.com/owner/repo/HEAD/skills/use-ai-sdk/references/errors.md"
+        "https://raw.githubusercontent.com/owner/repo/HEAD/skills/use-ai-sdk/references/errors.md",
       );
       expect(requestedUrls).toContain(
-        "https://raw.githubusercontent.com/owner/repo/HEAD/skills/use-ai-sdk/scripts/setup.sh"
+        "https://raw.githubusercontent.com/owner/repo/HEAD/skills/use-ai-sdk/scripts/setup.sh",
       );
     } finally {
       globalThis.fetch = originalFetch;
@@ -5561,7 +5571,7 @@ describe("skills extension", () => {
       mkdirSync(join(install, "references"), { recursive: true });
       writeFileSync(
         join(install, "SKILL.md"),
-        "# AI SDK\n\ndescription: Build with AI SDK.\n"
+        "# AI SDK\n\ndescription: Build with AI SDK.\n",
       );
       writeFileSync(join(install, "references", "errors.md"), "# Errors\n");
       const files = hashSkillDirectory(install);
@@ -5589,13 +5599,13 @@ describe("skills extension", () => {
         [
           "https://github.com/vercel/ai/tree/HEAD/skills/use-ai-sdk",
           new Response(
-            '<a href="/vercel/ai/blob/HEAD/skills/use-ai-sdk/SKILL.md">SKILL.md</a><a href="/vercel/ai/tree/HEAD/skills/use-ai-sdk/references">references</a>'
+            '<a href="/vercel/ai/blob/HEAD/skills/use-ai-sdk/SKILL.md">SKILL.md</a><a href="/vercel/ai/tree/HEAD/skills/use-ai-sdk/references">references</a>',
           ),
         ],
         [
           "https://github.com/vercel/ai/tree/HEAD/skills/use-ai-sdk/references",
           new Response(
-            '<a href="/vercel/ai/blob/HEAD/skills/use-ai-sdk/references/errors.md">errors.md</a>'
+            '<a href="/vercel/ai/blob/HEAD/skills/use-ai-sdk/references/errors.md">errors.md</a>',
           ),
         ],
         [
@@ -5612,7 +5622,7 @@ describe("skills extension", () => {
         requestedUrls.push(value);
         return Promise.resolve(
           responses.get(value)?.clone() ??
-            new Response("missing", { status: 404 })
+            new Response("missing", { status: 404 }),
         );
       }) as typeof fetch;
       const commands = new Map<
@@ -5628,7 +5638,7 @@ describe("skills extension", () => {
             name,
             registeredCommand as {
               handler(args: string, context: never): Promise<void>;
-            }
+            },
           );
         },
       };
@@ -5663,10 +5673,10 @@ describe("skills extension", () => {
         { message: "No skill updates found.", level: "info" },
       ]);
       expect(requestedUrls).not.toContain(
-        "https://raw.githubusercontent.com/vercel/ai/HEAD/skills/use-ai-sdk/references/SKILL.md"
+        "https://raw.githubusercontent.com/vercel/ai/HEAD/skills/use-ai-sdk/references/SKILL.md",
       );
       expect(requestedUrls).toContain(
-        "https://raw.githubusercontent.com/vercel/ai/HEAD/skills/use-ai-sdk/references/errors.md"
+        "https://raw.githubusercontent.com/vercel/ai/HEAD/skills/use-ai-sdk/references/errors.md",
       );
     } finally {
       globalThis.fetch = originalFetch;
@@ -5685,7 +5695,7 @@ describe("skills extension", () => {
       mkdirSync(join(install, "references"), { recursive: true });
       writeFileSync(
         join(install, "SKILL.md"),
-        "# AI SDK\n\ndescription: Old AI SDK.\n"
+        "# AI SDK\n\ndescription: Old AI SDK.\n",
       );
       writeFileSync(join(install, "references", "errors.md"), "# Errors\n");
       const files = hashSkillDirectory(install);
@@ -5713,13 +5723,13 @@ describe("skills extension", () => {
         [
           "https://github.com/vercel/ai/tree/HEAD/skills/use-ai-sdk",
           new Response(
-            '<a href="/vercel/ai/blob/HEAD/skills/use-ai-sdk/SKILL.md">SKILL.md</a><a href="/vercel/ai/tree/HEAD/skills/use-ai-sdk/references">references</a>'
+            '<a href="/vercel/ai/blob/HEAD/skills/use-ai-sdk/SKILL.md">SKILL.md</a><a href="/vercel/ai/tree/HEAD/skills/use-ai-sdk/references">references</a>',
           ),
         ],
         [
           "https://github.com/vercel/ai/tree/HEAD/skills/use-ai-sdk/references",
           new Response(
-            '<a href="/vercel/ai/blob/HEAD/skills/use-ai-sdk/references/errors.md">errors.md</a>'
+            '<a href="/vercel/ai/blob/HEAD/skills/use-ai-sdk/references/errors.md">errors.md</a>',
           ),
         ],
         [
@@ -5736,7 +5746,7 @@ describe("skills extension", () => {
         requestedUrls.push(value);
         return Promise.resolve(
           responses.get(value)?.clone() ??
-            new Response("missing", { status: 404 })
+            new Response("missing", { status: 404 }),
         );
       }) as typeof fetch;
       const commands = new Map<
@@ -5752,7 +5762,7 @@ describe("skills extension", () => {
             name,
             registeredCommand as {
               handler(args: string, context: never): Promise<void>;
-            }
+            },
           );
         },
       };
@@ -5791,10 +5801,10 @@ describe("skills extension", () => {
         level: "info",
       });
       expect(requestedUrls).not.toContain(
-        "https://raw.githubusercontent.com/vercel/ai/HEAD/skills/use-ai-sdk/references/SKILL.md"
+        "https://raw.githubusercontent.com/vercel/ai/HEAD/skills/use-ai-sdk/references/SKILL.md",
       );
       expect(
-        readFileSync(join(install, "references", "errors.md"), "utf8")
+        readFileSync(join(install, "references", "errors.md"), "utf8"),
       ).toBe("# Updated errors\n");
     } finally {
       globalThis.fetch = originalFetch;
@@ -5839,7 +5849,7 @@ describe("skills extension", () => {
               tree: [
                 { path: "skills/other/SKILL.md", type: "blob", sha: "new" },
               ],
-            })
+            }),
           );
         }
         return Promise.resolve(new Response("unexpected", { status: 500 }));
@@ -5870,7 +5880,7 @@ describe("skills extension", () => {
       await commands.get("skill")?.handler("update", commandCtx as never);
 
       expect(readFileSync(join(install, "SKILL.md"), "utf8")).toBe(
-        installedSkill
+        installedSkill,
       );
       expect(readManagedManifest(paths.manifestPath).skills).toHaveLength(1);
       expect(notifications).toContainEqual({
@@ -5899,7 +5909,7 @@ describe("skills extension", () => {
       mkdirSync(install, { recursive: true });
       writeFileSync(
         join(install, "SKILL.md"),
-        "---\nname: Demo Skill\ndescription: Demo.\n---\n"
+        "---\nname: Demo Skill\ndescription: Demo.\n---\n",
       );
       writeManagedManifest(paths.manifestPath, {
         version: 1,
@@ -5923,7 +5933,7 @@ describe("skills extension", () => {
         Promise.resolve(
           Response.json({
             tree: [{ path: "skills/other/SKILL.md", type: "blob", sha: "new" }],
-          })
+          }),
         )) as typeof fetch;
       const commands = registerSkillsCommand();
       const notifications: { message: string; level?: string }[] = [];
@@ -5970,7 +5980,7 @@ describe("skills extension", () => {
       mkdirSync(goodInstall, { recursive: true });
       writeFileSync(
         join(goodInstall, "SKILL.md"),
-        "# Good Skill\n\ndescription: Still exists.\n"
+        "# Good Skill\n\ndescription: Still exists.\n",
       );
       const goodFiles = hashSkillDirectory(goodInstall);
       writeManagedManifest(paths.manifestPath, {
@@ -6012,7 +6022,8 @@ describe("skills extension", () => {
       ]);
       globalThis.fetch = ((url: string | URL | Request) =>
         Promise.resolve(
-          responses.get(String(url)) ?? new Response("missing", { status: 404 })
+          responses.get(String(url)) ??
+            new Response("missing", { status: 404 }),
         )) as typeof fetch;
       const commands = new Map<
         string,
@@ -6027,7 +6038,7 @@ describe("skills extension", () => {
             name,
             registeredCommand as {
               handler(args: string, context: never): Promise<void>;
-            }
+            },
           );
         },
       };
@@ -6080,7 +6091,7 @@ describe("skills extension", () => {
     try {
       globalThis.fetch = (() =>
         Promise.resolve(
-          new Response("missing", { status: 404 })
+          new Response("missing", { status: 404 }),
         )) as unknown as typeof fetch;
       const commands = new Map<
         string,
@@ -6095,7 +6106,7 @@ describe("skills extension", () => {
             name,
             registeredCommand as {
               handler(args: string, context: never): Promise<void>;
-            }
+            },
           );
         },
       };
@@ -6113,7 +6124,7 @@ describe("skills extension", () => {
           },
           setWidget(_key: string, content: unknown) {
             activityCalls.push(
-              `widget:${typeof content === "function" ? "factory" : ""}`
+              `widget:${typeof content === "function" ? "factory" : ""}`,
             );
           },
           setWorkingMessage() {
@@ -6178,7 +6189,7 @@ describe("skills extension", () => {
             name,
             registeredCommand as {
               handler(args: string, context: never): Promise<void>;
-            }
+            },
           );
         },
       };
@@ -6233,19 +6244,19 @@ describe("skills extension", () => {
                   source: "https://github.com/acme/demo/tree/HEAD/skills/demo",
                 },
               ],
-            })
+            }),
           );
         }
         if (value.includes("/git/trees/HEAD")) {
           return Promise.resolve(
             Response.json({
               tree: [{ path: "skills/demo/SKILL.md", type: "blob" }],
-            })
+            }),
           );
         }
         if (value.includes("/skills/demo/SKILL.md")) {
           return Promise.resolve(
-            new Response("# Demo Skill\n\ndescription: Does demos.\n")
+            new Response("# Demo Skill\n\ndescription: Does demos.\n"),
           );
         }
         return Promise.resolve(new Response("missing", { status: 404 }));
@@ -6263,7 +6274,7 @@ describe("skills extension", () => {
             name,
             registeredCommand as {
               handler(args: string, context: never): Promise<void>;
-            }
+            },
           );
         },
       };
@@ -6287,7 +6298,7 @@ describe("skills extension", () => {
       await commands.get("skill")?.handler("search demo", commandCtx as never);
 
       const manifest = readManagedManifest(
-        createSkillsManagerPaths().manifestPath
+        createSkillsManagerPaths().manifestPath,
       );
       expect(manifest.skills).toHaveLength(1);
       expect(manifest.skills[0]?.source).toMatchObject({
@@ -6324,13 +6335,13 @@ describe("skills extension", () => {
       getArgumentCompletions(argumentPrefix: string): { value: string }[];
     };
     expect(command.description).toBe(
-      "/skill list|search|install|update|remove"
+      "/skill list|search|install|update|remove",
     );
     expect(
-      command.getArgumentCompletions("i").map((item) => item.value)
+      command.getArgumentCompletions("i").map((item) => item.value),
     ).toEqual(["install "]);
     expect(
-      command.getArgumentCompletions("").map((item) => item.value)
+      command.getArgumentCompletions("").map((item) => item.value),
     ).toEqual(["list", "search", "install ", "update", "remove "]);
     expect(handlers.has("resources_discover")).toBe(true);
     expect(handlers.has("session_start")).toBe(true);

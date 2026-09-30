@@ -81,7 +81,7 @@ export const SKILLS_MANAGER_OVERLAY_OPTIONS = {
 const MANAGER_HEADER_ROWS = 3;
 const FIXED_FILTER_ROWS = 2;
 const INVENTORY_FIRST_OVERLAY_ROW = MANAGER_HEADER_ROWS + FIXED_FILTER_ROWS;
-// biome-ignore lint/suspicious/noControlCharactersInRegex: Mouse input uses the terminal escape character.
+// oxlint-disable-next-line no-control-regex -- Mouse input uses the terminal escape character.
 const SGR_MOUSE_PATTERN = /^\x1b\[<(\d+);(\d+);(\d+)[Mm]$/;
 
 type SkillsNavigationInput = Extract<
@@ -94,7 +94,7 @@ function isCloseKey(key: string | undefined): boolean {
 }
 
 function navigationInputForKey(
-  key: string | undefined
+  key: string | undefined,
 ): SkillsNavigationInput | undefined {
   switch (key) {
     case "down":
@@ -116,7 +116,7 @@ function navigationInputForKey(
 
 function selectionDeltaForInput(
   input: SkillsNavigationInput,
-  pageStep = PAGE_NAVIGATION_STEP
+  pageStep = PAGE_NAVIGATION_STEP,
 ): number {
   switch (input) {
     case "down":
@@ -153,11 +153,11 @@ function wheelInputForData(data: string): WheelInput | undefined {
     return;
   }
 
-  // biome-ignore lint/suspicious/noBitwiseOperators: Terminal mouse buttons are bit flags.
+  // oxlint-disable-next-line no-bitwise -- Terminal mouse buttons are bit flags.
   if ((button & 64) === 0) {
     return;
   }
-  // biome-ignore lint/suspicious/noBitwiseOperators: Wheel direction is stored in the low button bits.
+  // oxlint-disable-next-line no-bitwise -- Wheel direction is stored in the low button bits.
   const direction = button & 3;
   if (direction !== 0 && direction !== 1) {
     return;
@@ -176,28 +176,28 @@ function skillsManagerInventoryBounds(
   terminalWidth: number,
   terminalHeight: number,
   renderedHeight: number,
-  viewportHeight: number
+  viewportHeight: number,
 ): { left: number; right: number; top: number; bottom: number } {
   const margin = SKILLS_MANAGER_OVERLAY_OPTIONS.margin;
   const availableWidth = Math.max(1, terminalWidth - margin * 2);
   const availableHeight = Math.max(1, terminalHeight - margin * 2);
   const requestedWidth = overlaySize(
     SKILLS_MANAGER_OVERLAY_OPTIONS.width,
-    terminalWidth
+    terminalWidth,
   );
   const width = Math.max(
     1,
     Math.min(
       Math.max(requestedWidth, SKILLS_MANAGER_OVERLAY_OPTIONS.minWidth),
-      availableWidth
-    )
+      availableWidth,
+    ),
   );
   const maxHeight = Math.max(
     1,
     Math.min(
       overlaySize(SKILLS_MANAGER_OVERLAY_OPTIONS.maxHeight, terminalHeight),
-      availableHeight
-    )
+      availableHeight,
+    ),
   );
   const height = Math.min(renderedHeight, maxHeight);
   const row = margin + Math.floor((availableHeight - height) / 2);
@@ -208,14 +208,14 @@ function skillsManagerInventoryBounds(
     top: row + INVENTORY_FIRST_OVERLAY_ROW,
     bottom: Math.min(
       row + height,
-      row + INVENTORY_FIRST_OVERLAY_ROW + viewportHeight
+      row + INVENTORY_FIRST_OVERLAY_ROW + viewportHeight,
     ),
   };
 }
 
 function pointIsWithinInventory(
   input: WheelInput,
-  bounds: ReturnType<typeof skillsManagerInventoryBounds>
+  bounds: ReturnType<typeof skillsManagerInventoryBounds>,
 ): boolean {
   return (
     input.x >= bounds.left &&
@@ -234,14 +234,14 @@ function clampIndex(index: number, length: number): number {
 
 function visibleItems(
   inventory: SkillInventoryModel,
-  filter: SkillListFilter
+  filter: SkillListFilter,
 ): SkillInventoryItem[] {
   return filterSkillInventory(inventory, filter).all;
 }
 
 function groupedVisibleItems(
   inventory: SkillInventoryModel,
-  filter: SkillListFilter
+  filter: SkillListFilter,
 ): { managed: SkillInventoryItem[]; bundled: SkillInventoryItem[] } {
   const filtered = filterSkillInventory(inventory, filter);
   return { managed: filtered.managed, bundled: filtered.bundled };
@@ -258,7 +258,7 @@ function padVisible(text: string, width: number): string {
 function color(
   theme: SkillsManagerTheme | undefined,
   tone: string,
-  text: string
+  text: string,
 ): string {
   return theme?.fg?.(tone, text) ?? text;
 }
@@ -279,19 +279,19 @@ function frameBorder(
   left: string,
   fill: string,
   right: string,
-  theme?: SkillsManagerTheme
+  theme?: SkillsManagerTheme,
 ): string {
   return color(
     theme,
     "border",
-    `${left}${fill.repeat(Math.max(0, width - 2))}${right}`
+    `${left}${fill.repeat(Math.max(0, width - 2))}${right}`,
   );
 }
 
 function titleBorder(
   width: number,
   title: string,
-  theme?: SkillsManagerTheme
+  theme?: SkillsManagerTheme,
 ): string {
   const innerWidth = Math.max(0, width - 2);
   const clippedTitle = truncate(title, innerWidth);
@@ -308,7 +308,7 @@ function titleBorder(
 function frameLine(
   content: string,
   width: number,
-  theme?: SkillsManagerTheme
+  theme?: SkillsManagerTheme,
 ): string {
   const innerWidth = Math.max(0, width - 2);
   const clipped = truncate(` ${content} `, innerWidth);
@@ -318,13 +318,13 @@ function frameLine(
 function centeredFrameLine(
   content: string,
   width: number,
-  theme?: SkillsManagerTheme
+  theme?: SkillsManagerTheme,
 ): string {
   const innerWidth = Math.max(0, width - 2);
   return frameLine(
     centerText(content, Math.max(0, innerWidth - 2)),
     width,
-    theme
+    theme,
   );
 }
 
@@ -333,7 +333,7 @@ function installPickerItemLine(
   focused: boolean,
   checked: boolean,
   width: number,
-  theme?: SkillsManagerTheme
+  theme?: SkillsManagerTheme,
 ): string {
   const marker = focused ? color(theme, "accent", "›") : " ";
   const checkbox = checked ? color(theme, "accent", "[x]") : "[ ]";
@@ -352,7 +352,7 @@ function itemLine(
   item: SkillInventoryItem,
   selected: boolean,
   width: number,
-  theme?: SkillsManagerTheme
+  theme?: SkillsManagerTheme,
 ): string {
   const marker = selected ? color(theme, "accent", "›") : " ";
   const dirty =
@@ -360,7 +360,7 @@ function itemLine(
   const kind = color(
     theme,
     "dim",
-    item.kind === "managed" ? "managed" : "bundled"
+    item.kind === "managed" ? "managed" : "bundled",
   );
   const label = selected ? strong(theme, item.name) : item.name;
   const line = `${marker} ${label} ${color(theme, "dim", `(${item.id})`)} [${kind}${dirty}]`;
@@ -372,7 +372,7 @@ function sectionLines(
   items: SkillInventoryItem[],
   selected: SkillInventoryItem | undefined,
   width: number,
-  theme?: SkillsManagerTheme
+  theme?: SkillsManagerTheme,
 ): string[] {
   const lines = [color(theme, "dim", `${title} (${items.length})`)];
   if (items.length === 0) {
@@ -393,7 +393,7 @@ const SKILL_CONTENT_LINE_PATTERN = /\r?\n/;
 function clipPanelLines(
   lines: string[],
   maxLines: number,
-  theme?: SkillsManagerTheme
+  theme?: SkillsManagerTheme,
 ): string[] {
   if (lines.length <= maxLines) {
     return lines;
@@ -436,14 +436,14 @@ function renderInventoryViewport(
   selectedLineIndex: number | undefined,
   bundledSectionLineIndex: number,
   width: number,
-  theme?: SkillsManagerTheme
+  theme?: SkillsManagerTheme,
 ): string[] {
   content.lines = lines.map((line) => truncate(line, width));
   const viewportHeight = Math.min(INVENTORY_VIEWPORT_LINES, lines.length);
   scrollView.updateLayout(
     content.lines.length,
     viewportHeight,
-    ignoreLayoutRenderRequest
+    ignoreLayoutRenderRequest,
   );
 
   if (selectedLineIndex !== undefined) {
@@ -489,7 +489,7 @@ function renderInventoryViewport(
 
 function previewLines(
   item: SkillInventoryItem | undefined,
-  theme?: SkillsManagerTheme
+  theme?: SkillsManagerTheme,
 ): string[] {
   if (!item) {
     return [
@@ -515,12 +515,12 @@ function previewLines(
   lines.push("", preview.description);
   if (preview.skillContent) {
     const skillContentLines = preview.skillContent.split(
-      SKILL_CONTENT_LINE_PATTERN
+      SKILL_CONTENT_LINE_PATTERN,
     );
     lines.push(
       "",
       color(theme, "dim", "SKILL.md"),
-      ...skillContentLines.slice(0, SKILL_CONTENT_PREVIEW_LINES)
+      ...skillContentLines.slice(0, SKILL_CONTENT_PREVIEW_LINES),
     );
     if (skillContentLines.length > SKILL_CONTENT_PREVIEW_LINES) {
       lines.push(color(theme, "dim", "…"));
@@ -536,7 +536,7 @@ function renderSkillsManagerWithScrollView(
   theme: SkillsManagerTheme | undefined,
   scrollView: ScrollView,
   inventoryContent: InventoryContent,
-  followSelection = true
+  followSelection = true,
 ): string[] {
   const frameWidth = Math.max(60, width);
   const contentWidth = Math.max(0, frameWidth - 4);
@@ -550,14 +550,14 @@ function renderSkillsManagerWithScrollView(
     grouped.managed,
     selected,
     contentWidth,
-    theme
+    theme,
   );
   const bundledLines = sectionLines(
     "Bundled/read-only",
     grouped.bundled,
     selected,
     contentWidth,
-    theme
+    theme,
   );
   const bundledSectionLineIndex = managedLines.length + 1;
   const inventoryLines = [...managedLines, "", ...bundledLines];
@@ -578,12 +578,12 @@ function renderSkillsManagerWithScrollView(
     followSelection ? selectedLineIndex : undefined,
     bundledSectionLineIndex,
     contentWidth,
-    theme
+    theme,
   );
   const previewPanelLines = clipPanelLines(
     previewLines(selected, theme),
     MAX_PREVIEW_PANEL_LINES,
-    theme
+    theme,
   ).map((line) => truncate(line, contentWidth));
   const actionLines = state.actionMenuOpen
     ? [
@@ -593,14 +593,14 @@ function renderSkillsManagerWithScrollView(
           "dim",
           selected?.kind === "managed"
             ? "Actions: d remove (confirmation required); install/update unavailable"
-            : "Remove unavailable: select a managed skill; install/update unavailable"
+            : "Remove unavailable: select a managed skill; install/update unavailable",
         ),
       ]
     : [];
   const help = color(
     theme,
     "dim",
-    "↑/k ↓/j navigate  pgup/pgdn ctrl+b/ctrl+f page  / filter  d remove  esc/q close"
+    "↑/k ↓/j navigate  pgup/pgdn ctrl+b/ctrl+f page  / filter  d remove  esc/q close",
   );
   return [
     titleBorder(frameWidth, " Skills Manager ", theme),
@@ -608,10 +608,10 @@ function renderSkillsManagerWithScrollView(
       color(
         theme,
         "dim",
-        "Browse skill inventory and preview local SKILL.md content"
+        "Browse skill inventory and preview local SKILL.md content",
       ),
       frameWidth,
-      theme
+      theme,
     ),
     frameBorder(frameWidth, "├", "─", "┤", theme),
     frameLine(filterLine, frameWidth, theme),
@@ -630,7 +630,7 @@ export function renderSkillsManager(
   inventory: SkillInventoryModel,
   state: SkillsManagerState,
   width = 100,
-  theme?: SkillsManagerTheme
+  theme?: SkillsManagerTheme,
 ): string[] {
   const content = new InventoryContent();
   const scrollView = createInventoryScrollView(content);
@@ -640,7 +640,7 @@ export function renderSkillsManager(
     width,
     theme,
     scrollView,
-    content
+    content,
   );
 }
 
@@ -654,7 +654,7 @@ export function createInitialSkillsInstallPickerState(): SkillsInstallPickerStat
 export function reduceSkillsInstallPickerState(
   state: SkillsInstallPickerState,
   input: SkillsInstallPickerInput,
-  items: readonly SkillInventoryItem[]
+  items: readonly SkillInventoryItem[],
 ): SkillsInstallPickerTransition {
   switch (input) {
     case "cancel":
@@ -667,7 +667,7 @@ export function reduceSkillsInstallPickerState(
         state: {
           selectedIndex: clampIndex(
             state.selectedIndex + selectionDeltaForInput(input),
-            items.length
+            items.length,
           ),
           selectedIds: state.selectedIds,
         },
@@ -710,7 +710,7 @@ export function renderSkillsInstallPicker(
   inventory: SkillInventoryModel,
   state: SkillsInstallPickerState,
   width = 100,
-  theme?: SkillsManagerTheme
+  theme?: SkillsManagerTheme,
 ): string[] {
   const frameWidth = Math.max(60, width);
   const contentWidth = Math.max(0, frameWidth - 4);
@@ -723,21 +723,21 @@ export function renderSkillsInstallPicker(
           item.id === selected?.id,
           state.selectedIds.has(item.id),
           contentWidth,
-          theme
-        )
+          theme,
+        ),
       )
     : [color(theme, "dim", "No skills available.")];
   const help = color(
     theme,
     "dim",
-    "↑/k ↓/j navigate  pgup/pgdn ctrl+b/ctrl+f page  space toggle  enter install  esc/q cancel"
+    "↑/k ↓/j navigate  pgup/pgdn ctrl+b/ctrl+f page  space toggle  enter install  esc/q cancel",
   );
   return [
     titleBorder(frameWidth, " Install Skills ", theme),
     centeredFrameLine(
       color(theme, "dim", "Choose skills to install"),
       frameWidth,
-      theme
+      theme,
     ),
     frameBorder(frameWidth, "├", "─", "┤", theme),
     ...itemLines.map((line) => frameLine(line, frameWidth, theme)),
@@ -754,7 +754,7 @@ export function renderSkillsInstallPicker(
 }
 
 function inputForInstallPicker(
-  data: string
+  data: string,
 ): SkillsInstallPickerInput | undefined {
   const key = parseKey(data);
   if (isCloseKey(key)) {
@@ -798,7 +798,7 @@ export function createSkillsInstallPickerComponent({
       const transition = reduceSkillsInstallPickerState(
         state,
         input,
-        inventory.all
+        inventory.all,
       );
       state = transition.state;
       if (transition.confirmedIds) {
@@ -832,7 +832,7 @@ export function createSkillsManagerComponent({
   function normalizeSelection(): void {
     state.selectedIndex = clampIndex(
       state.selectedIndex,
-      visibleItems(inventory, { query: state.query }).length
+      visibleItems(inventory, { query: state.query }).length,
     );
   }
 
@@ -855,7 +855,7 @@ export function createSkillsManagerComponent({
         theme,
         inventoryScrollView,
         inventoryContent,
-        selectionToken !== lastRenderedSelection
+        selectionToken !== lastRenderedSelection,
       );
       lastRenderedSelection = selectionToken;
       lastRenderedHeight = lines.length;
@@ -885,7 +885,7 @@ export function createSkillsManagerComponent({
             hostTui.terminal.columns,
             hostTui.terminal.rows,
             lastRenderedHeight,
-            inventoryScrollView.viewportHeight
+            inventoryScrollView.viewportHeight,
           );
           if (!pointIsWithinInventory(wheelInput, bounds)) {
             if (hostTui instanceof TuiAltScreen) {
@@ -928,11 +928,11 @@ export function createSkillsManagerComponent({
       if (navigationInput) {
         const pageStep = Math.max(
           1,
-          (inventoryScrollView.viewportHeight || INVENTORY_VIEWPORT_LINES) - 1
+          (inventoryScrollView.viewportHeight || INVENTORY_VIEWPORT_LINES) - 1,
         );
         state.selectedIndex += selectionDeltaForInput(
           navigationInput,
-          pageStep
+          pageStep,
         );
         normalizeSelection();
         return;

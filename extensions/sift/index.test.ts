@@ -30,14 +30,14 @@ interface Tool {
   renderResult: (
     result: { details?: unknown },
     options: { expanded?: boolean },
-    theme: { fg: (_name: string, text: string) => string }
+    theme: { fg: (_name: string, text: string) => string },
   ) => { render: (width: number) => string[] };
   execute: (
     id: string,
     params: { query: string; paths: string[] },
     signal: AbortSignal,
     update: unknown,
-    ctx: TestContext
+    ctx: TestContext,
   ) => Promise<{ content: Array<{ text: string }>; details: unknown }>;
 }
 type TestContext = ReturnType<typeof context>;
@@ -48,7 +48,7 @@ function runtime(
       load: async () => false,
       save: () => Promise.resolve(),
     },
-  })
+  }),
 ) {
   const tools: Tool[] = [];
   const commands = new Map<string, Command>();
@@ -64,7 +64,7 @@ function runtime(
     on: (name: string, handler: () => void) => events.set(name, handler),
     sendMessage: (
       message: { content?: string },
-      options?: { triggerTurn?: boolean }
+      options?: { triggerTurn?: boolean },
     ) => messages.push({ message, options }),
   } as never);
   return { tools, commands, events, messages };
@@ -81,8 +81,8 @@ type CustomPrompt = (
     tui: unknown,
     theme: PromptTheme,
     keybindings: unknown,
-    done: (value: string | undefined) => void
-  ) => PromptComponent
+    done: (value: string | undefined) => void,
+  ) => PromptComponent,
 ) => Promise<string | undefined>;
 
 function context(
@@ -91,7 +91,7 @@ function context(
     hasUI?: boolean;
     confirm?: boolean;
     custom?: CustomPrompt;
-  } = {}
+  } = {},
 ) {
   const notifications: string[] = [];
   return {
@@ -133,7 +133,7 @@ describe("sift extension", () => {
       app.commands
         .get("sift")
         ?.getArgumentCompletions?.("")
-        .map((x) => x.value)
+        .map((x) => x.value),
     ).toEqual(["login", "logout", "status", "enable", "disable"]);
   });
 
@@ -146,8 +146,8 @@ describe("sift extension", () => {
         { query: "q", paths: ["a"] },
         new AbortController().signal,
         undefined,
-        ctx
-      )
+        ctx,
+      ),
     ).rejects.toThrow("enable");
     await app.commands
       .get("sift")
@@ -158,8 +158,8 @@ describe("sift extension", () => {
         { query: "q", paths: ["a"] },
         new AbortController().signal,
         undefined,
-        ctx
-      )
+        ctx,
+      ),
     ).rejects.toThrow("enable");
   });
 
@@ -201,7 +201,7 @@ describe("sift extension", () => {
       { query: "q", paths: ["a.txt"] },
       new AbortController().signal,
       undefined,
-      context({ cwd, hasUI: false })
+      context({ cwd, hasUI: false }),
     );
     expect(result.content[0].text).toContain("P(relevant)=1.000");
 
@@ -215,8 +215,8 @@ describe("sift extension", () => {
         { query: "q", paths: ["a.txt"] },
         new AbortController().signal,
         undefined,
-        context({ cwd })
-      )
+        context({ cwd }),
+      ),
     ).rejects.toThrow("enable");
   });
 
@@ -231,7 +231,7 @@ describe("sift extension", () => {
             bold: (text) => text,
           },
           {},
-          () => undefined
+          () => undefined,
         );
         prompt = component.render(100).join("\n");
         return Promise.resolve("");
@@ -250,7 +250,7 @@ describe("sift extension", () => {
           clear: () => Promise.resolve(),
         },
         env: {},
-      })
+      }),
     );
 
     await app.commands.get("sift")?.handler("login", ctx);
@@ -309,7 +309,7 @@ describe("sift extension", () => {
       { query: "q", paths: ["a.txt"] },
       new AbortController().signal,
       undefined,
-      ctx
+      ctx,
     );
     expect(result.content[0].text).toContain("a.txt: P(relevant)=0.800");
     expect(result.content[0].text).toContain("remaining=99");
@@ -319,7 +319,7 @@ describe("sift extension", () => {
         .renderResult(result, {}, theme)
         .render(120)
         .join("\n")
-        .trimEnd()
+        .trimEnd(),
     ).toBe("1/1 judged; 99 remaining");
     const expanded = app.tools[0]
       .renderResult(result, { expanded: true }, theme)
@@ -335,7 +335,7 @@ describe("sift extension", () => {
       { query: "q", paths: ["a.txt"] },
       new AbortController().signal,
       undefined,
-      ctx
+      ctx,
     );
     expect(afterReset.content[0].text).toContain("remaining=99");
     await app.commands.get("sift")?.handler("logout", ctx);
@@ -396,14 +396,14 @@ describe("sift extension", () => {
             return Promise.resolve({ probability: 0.5, model: "jev-latest" });
           },
         }),
-      })
+      }),
     );
     const result = await app.tools[0].execute(
       "x",
       { query: "q", paths: [absolute] },
       new AbortController().signal,
       undefined,
-      context({ cwd, hasUI: false })
+      context({ cwd, hasUI: false }),
     );
     expect(seen).toEqual(["nested.txt"]);
     expect(seen[0]).not.toContain(homedir());
@@ -425,12 +425,12 @@ describe("sift extension", () => {
         createClient: () => ({
           judge: () => Promise.reject(new Error(secret)),
         }),
-      })
+      }),
     );
     const ctx = context();
     await app.commands.get("sift")?.handler("login", ctx);
     expect(ctx.notifications.join(" ")).toBe(
-      "TypeSafe credential verification failed (connection); authentication unchanged."
+      "TypeSafe credential verification failed (connection); authentication unchanged.",
     );
     expect(ctx.notifications.join(" ")).not.toContain(secret);
   });
@@ -452,10 +452,10 @@ describe("sift extension", () => {
           save: () => Promise.resolve(),
           clear: () => Promise.resolve(),
         },
-      })
+      }),
     );
     await expect(
-      app.commands.get("sift")?.handler("status", context({ hasUI: false }))
+      app.commands.get("sift")?.handler("status", context({ hasUI: false })),
     ).rejects.toThrow("Sift config is invalid");
     await expect(
       app.tools[0].execute(
@@ -463,8 +463,8 @@ describe("sift extension", () => {
         { query: "q", paths: ["a"] },
         new AbortController().signal,
         undefined,
-        context({ hasUI: false })
-      )
+        context({ hasUI: false }),
+      ),
     ).rejects.toThrow("Sift config is invalid");
   });
 
@@ -482,7 +482,7 @@ describe("sift extension", () => {
           save: () => Promise.resolve(),
           clear: () => Promise.resolve(),
         },
-      })
+      }),
     );
     await app.commands
       .get("sift")
@@ -526,7 +526,7 @@ describe("sift extension", () => {
       { query: "q", paths: ["a"] },
       new AbortController().signal,
       undefined,
-      context({ cwd, hasUI: false })
+      context({ cwd, hasUI: false }),
     );
     expect(result.content[0].text).toContain("P(relevant)=1.000");
   });

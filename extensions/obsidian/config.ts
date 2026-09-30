@@ -78,7 +78,7 @@ export function loadObsidianConfig(): LoadedConfig {
       const obsidianStat = statSync(join(expanded, ".obsidian"));
       if (!(stat.isDirectory() && obsidianStat.isDirectory())) {
         warnings.push(
-          `Rejected Obsidian vault without .obsidian directory: ${expanded}`
+          `Rejected Obsidian vault without .obsidian directory: ${expanded}`,
         );
         continue;
       }

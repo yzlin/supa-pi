@@ -19,7 +19,7 @@ import {
 } from "./ui";
 
 function managedSkill(
-  overrides: Partial<ManagedSkillEntry> = {}
+  overrides: Partial<ManagedSkillEntry> = {},
 ): ManagedSkillEntry {
   return {
     id: "managed-demo",
@@ -51,7 +51,7 @@ function inventory() {
 }
 
 function inventoryWithSkillContent(
-  skillContent = "# Managed Demo\n\nFull skill docs."
+  skillContent = "# Managed Demo\n\nFull skill docs.",
 ) {
   const base = inventory();
   return {
@@ -78,7 +78,7 @@ function inventoryWithManyBundled(count: number) {
     managed: [managedSkill()],
     bundledSkillPaths: Array.from(
       { length: count },
-      (_, index) => `/repo/skills/bundled-${index}/SKILL.md`
+      (_, index) => `/repo/skills/bundled-${index}/SKILL.md`,
     ),
     cwd: "/repo",
   });
@@ -168,7 +168,7 @@ function expectPageShortcutHelp(text: string): void {
 }
 
 function expectIgnoredCtrlNavigationKeys(
-  component: NavigationTestComponent
+  component: NavigationTestComponent,
 ): void {
   for (const key of IGNORED_CTRL_NAVIGATION_KEYS) {
     component.handleInput(key);
@@ -228,7 +228,7 @@ describe("skills install picker UI", () => {
     let transition = reduceSkillsInstallPickerState(
       state,
       "pageDown",
-      model.all
+      model.all,
     );
     state = transition.state;
     expect(state.selectedIndex).toBeGreaterThan(1);
@@ -249,16 +249,16 @@ describe("skills install picker UI", () => {
     const transition = reduceSkillsInstallPickerState(
       createInitialSkillsInstallPickerState(),
       "confirm",
-      inventory().all
+      inventory().all,
     );
 
     expect(transition.confirmedIds).toBeUndefined();
     expect(transition.cancelled).toBeUndefined();
     expect(transition.state.warning).toBe(
-      "Select at least one skill to install."
+      "Select at least one skill to install.",
     );
     expect(
-      renderSkillsInstallPicker(inventory(), transition.state).join("\n")
+      renderSkillsInstallPicker(inventory(), transition.state).join("\n"),
     ).toContain("Select at least one skill to install.");
   });
 
@@ -272,7 +272,7 @@ describe("skills install picker UI", () => {
     component.handleInput("\r");
     expect(results).toEqual([]);
     expect(component.render().join("\n")).toContain(
-      "Select at least one skill to install."
+      "Select at least one skill to install.",
     );
 
     component.handleInput(" ");
@@ -310,7 +310,7 @@ describe("skills manager UI", () => {
         actionMenuOpen: true,
       },
       100,
-      theme
+      theme,
     );
     const text = lines.join("\n");
 
@@ -318,7 +318,7 @@ describe("skills manager UI", () => {
     expect(lines[0]).toContain("<border:╭");
     expect(lines[0]).toContain("<border: Skills Manager >");
     expect(text).toContain(
-      "<dim:Browse skill inventory and preview local SKILL.md content>"
+      "<dim:Browse skill inventory and preview local SKILL.md content>",
     );
     expect(lines[1]).not.toContain("...");
     expect(lines[1]).not.toContain("…");
@@ -332,13 +332,13 @@ describe("skills manager UI", () => {
     expect(text).toContain("<dim:Preview>");
     expect(text).not.toContain(" │ <dim:Preview>");
     expect(text.indexOf("<dim:Preview>")).toBeGreaterThan(
-      text.indexOf("<dim:Bundled/read-only (1)>")
+      text.indexOf("<dim:Bundled/read-only (1)>"),
     );
     expect(text).toContain("<accent:›> <bold:Managed Demo>");
     expect(text).not.toContain("<accent:› <bold:Managed Demo>");
     expect(text).toContain("<warning:Status: dirty>");
     expect(text).toContain(
-      "<dim:Actions: d remove (confirmation required); install/update unavailable>"
+      "<dim:Actions: d remove (confirmation required); install/update unavailable>",
     );
     expect(text).toContain("<dim:↑/k ↓/j navigate");
     expectPageShortcutHelp(text);
@@ -363,7 +363,7 @@ describe("skills manager UI", () => {
   it("clips long preview content before the footer", () => {
     const longSkillContent = Array.from(
       { length: 60 },
-      (_, index) => `line ${index + 1}`
+      (_, index) => `line ${index + 1}`,
     ).join("\n");
     const lines = renderSkillsManager(
       inventoryWithSkillContent(longSkillContent),
@@ -374,7 +374,7 @@ describe("skills manager UI", () => {
         actionMenuOpen: false,
       },
       100,
-      theme
+      theme,
     );
     const text = lines.join("\n");
 
@@ -394,7 +394,7 @@ describe("skills manager UI", () => {
         actionMenuOpen: false,
       },
       100,
-      theme
+      theme,
     );
     const text = lines.join("\n");
 
@@ -405,7 +405,7 @@ describe("skills manager UI", () => {
     expect(text).toContain("bundled-38");
     expect(text).toContain("<accent:›> <bold:bundled-39>");
     expect(text.indexOf("<dim:Preview>")).toBeGreaterThan(
-      text.indexOf("<accent:›> <bold:bundled-39>")
+      text.indexOf("<accent:›> <bold:bundled-39>"),
     );
     expect(text).toContain("<dim:↑/k ↓/j navigate");
     expectPageShortcutHelp(text);
@@ -447,35 +447,38 @@ describe("skills manager UI", () => {
   it.each([
     ["SGR", "\u001b[<65;12;8M", "\u001b[<64;12;40M"],
     ["legacy X10", "\u001b[Ma,(", "\u001b[M`,H"],
-  ])("routes %s wheel input by inventory pointer bounds on the host terminal path", (_protocol, insideWheelDown, outsideWheelUp) => {
-    const terminal = new TestTerminal();
-    const tui = new TuiAltScreen(terminal);
-    tui.addChild(transcript);
-    const component = createSkillsManagerComponent({
-      inventory: inventoryWithManyBundled(40),
-      done: () => undefined,
-      hostTui: tui,
-    });
-    tui.showOverlay(component, SKILLS_MANAGER_OVERLAY_OPTIONS);
-    tui.start();
-    tui.renderNow();
-    const transcriptScrollTop = tui.viewportTop;
-    const selectedIndex = component.state.selectedIndex;
+  ])(
+    "routes %s wheel input by inventory pointer bounds on the host terminal path",
+    (_protocol, insideWheelDown, outsideWheelUp) => {
+      const terminal = new TestTerminal();
+      const tui = new TuiAltScreen(terminal);
+      tui.addChild(transcript);
+      const component = createSkillsManagerComponent({
+        inventory: inventoryWithManyBundled(40),
+        done: () => undefined,
+        hostTui: tui,
+      });
+      tui.showOverlay(component, SKILLS_MANAGER_OVERLAY_OPTIONS);
+      tui.start();
+      tui.renderNow();
+      const transcriptScrollTop = tui.viewportTop;
+      const selectedIndex = component.state.selectedIndex;
 
-    terminal.onInput?.(insideWheelDown);
+      terminal.onInput?.(insideWheelDown);
 
-    expect(component.inventoryScrollView.scrollTop).toBe(1);
-    expect(component.state.selectedIndex).toBe(selectedIndex);
-    expect(tui.viewportTop).toBe(transcriptScrollTop);
+      expect(component.inventoryScrollView.scrollTop).toBe(1);
+      expect(component.state.selectedIndex).toBe(selectedIndex);
+      expect(tui.viewportTop).toBe(transcriptScrollTop);
 
-    terminal.onInput?.(outsideWheelUp);
+      terminal.onInput?.(outsideWheelUp);
 
-    expect(component.inventoryScrollView.scrollTop).toBe(1);
-    expect(component.state.selectedIndex).toBe(selectedIndex);
-    expect(tui.viewportTop).toBe(transcriptScrollTop - 1);
-    component.dispose();
-    tui.stop();
-  });
+      expect(component.inventoryScrollView.scrollTop).toBe(1);
+      expect(component.state.selectedIndex).toBe(selectedIndex);
+      expect(tui.viewportTop).toBe(transcriptScrollTop - 1);
+      component.dispose();
+      tui.stop();
+    },
+  );
 
   it("handles wheel input without changing selection or preview", () => {
     const component = createSkillsManagerComponent({
@@ -521,7 +524,7 @@ describe("skills manager UI", () => {
     expect(text).toContain("Managed Demo");
     expect(text).toContain("Status: dirty");
     expect(text).toContain(
-      "Browse skill inventory and preview local SKILL.md content"
+      "Browse skill inventory and preview local SKILL.md content",
     );
     expectPageShortcutHelp(text);
   });
@@ -538,23 +541,23 @@ describe("skills manager UI", () => {
     expect(results).toEqual([{ id: "managed-demo", query: "managed" }]);
   });
 
-  it.each([
-    "bundled",
-    "no-match",
-  ])("disables removal for %s selection", (query) => {
-    const results: unknown[] = [];
-    const component = createSkillsManagerComponent({
-      inventory: inventory(),
-      initialQuery: query,
-      done: (result) => results.push(result),
-    });
-    component.handleInput("d");
-    expect(results).toEqual([]);
-    component.handleInput("\r");
-    expect(component.render().join("\n")).toContain("Remove unavailable");
-    component.handleInput("d");
-    expect(results).toEqual([]);
-  });
+  it.each(["bundled", "no-match"])(
+    "disables removal for %s selection",
+    (query) => {
+      const results: unknown[] = [];
+      const component = createSkillsManagerComponent({
+        inventory: inventory(),
+        initialQuery: query,
+        done: (result) => results.push(result),
+      });
+      component.handleInput("d");
+      expect(results).toEqual([]);
+      component.handleInput("\r");
+      expect(component.render().join("\n")).toContain("Remove unavailable");
+      component.handleInput("d");
+      expect(results).toEqual([]);
+    },
+  );
 
   it("ignores the obsolete r shortcut with actions closed or open", () => {
     const results: unknown[] = [];
@@ -645,7 +648,7 @@ describe("skills manager UI", () => {
 
       component.handleInput("\r");
       expect(component.render().join("\n")).toContain(
-        "Actions: d remove (confirmation required)"
+        "Actions: d remove (confirmation required)",
       );
       component.handleInput(closeKey);
       expect(closed).toBe(true);

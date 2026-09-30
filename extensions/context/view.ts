@@ -45,7 +45,7 @@ const BUFFER_STYLE = { color: "dim", symbol: BUFFER_ICON };
 function allocateCounts(
   items: Array<{ key: string; tokens: number }>,
   totalCells: number,
-  order: string[]
+  order: string[],
 ): Record<string, number> {
   const counts = Object.fromEntries(order.map((key) => [key, 0]));
   const totalTokens = items.reduce((sum, item) => sum + item.tokens, 0);
@@ -72,11 +72,11 @@ function allocateCounts(
 
   const weightedRemainders = weighted.sort(
     (a, b) =>
-      b.remainder - a.remainder || order.indexOf(a.key) - order.indexOf(b.key)
+      b.remainder - a.remainder || order.indexOf(a.key) - order.indexOf(b.key),
   );
   for (const item of weightedRemainders.slice(
     0,
-    Math.max(0, totalCells - used)
+    Math.max(0, totalCells - used),
   )) {
     counts[item.key] += 1;
   }
@@ -85,18 +85,18 @@ function allocateCounts(
 }
 
 function buildBarCells(
-  snapshot: ContextSnapshot
+  snapshot: ContextSnapshot,
 ): Array<{ color: string; symbol: string }> {
   const usedCells = Math.max(
     snapshot.displayUsedPercent && snapshot.displayUsedPercent > 0 ? 1 : 0,
     Math.min(
       BAR_CELLS,
-      Math.round(((snapshot.displayUsedPercent ?? 0) / 100) * BAR_CELLS)
-    )
+      Math.round(((snapshot.displayUsedPercent ?? 0) / 100) * BAR_CELLS),
+    ),
   );
   const bufferCells = Math.min(
     BAR_CELLS - usedCells,
-    Math.round(((snapshot.autoCompactBufferPercent ?? 0) / 100) * BAR_CELLS)
+    Math.round(((snapshot.autoCompactBufferPercent ?? 0) / 100) * BAR_CELLS),
   );
   const freeCells = Math.max(0, BAR_CELLS - usedCells - bufferCells);
 
@@ -105,7 +105,7 @@ function buildBarCells(
       .filter((category) => (category.tokens ?? 0) > 0)
       .map((category) => ({ key: category.key, tokens: category.tokens ?? 0 })),
     usedCells,
-    [...CONTEXT_DISPLAY_CATEGORY_ORDER]
+    [...CONTEXT_DISPLAY_CATEGORY_ORDER],
   );
 
   const cells: Array<{ color: string; symbol: string }> = [];
@@ -137,7 +137,7 @@ function renderGrid(snapshot: ContextSnapshot, theme: unknown): string[] {
   for (let row = 0; row < BAR_ROWS; row += 1) {
     const rowCells = cells.slice(row * BAR_COLUMNS, (row + 1) * BAR_COLUMNS);
     lines.push(
-      rowCells.map((cell) => theme.fg(cell.color, cell.symbol)).join(" ")
+      rowCells.map((cell) => theme.fg(cell.color, cell.symbol)).join(" "),
     );
   }
 
@@ -146,11 +146,11 @@ function renderGrid(snapshot: ContextSnapshot, theme: unknown): string[] {
 
 function renderCategoryLine(
   category: ContextDisplayCategory,
-  theme: unknown
+  theme: unknown,
 ): string {
   const style = CATEGORY_STYLE[category.key];
   return `${theme.fg(style.color, style.symbol)} ${theme.bold(category.label)}: ${formatTokens(
-    category.tokens
+    category.tokens,
   )} tokens (${formatPercent(category.percent)})`;
 }
 
@@ -158,20 +158,20 @@ function renderRightPanel(snapshot: ContextSnapshot, theme: unknown): string[] {
   const lines = [
     theme.fg(
       "muted",
-      `${snapshot.modelLabel} · ${formatTokens(snapshot.displayUsedTokens)}/${formatTokens(snapshot.contextWindow)} tokens`
+      `${snapshot.modelLabel} · ${formatTokens(snapshot.displayUsedTokens)}/${formatTokens(snapshot.contextWindow)} tokens`,
     ),
     theme.fg("muted", `(${formatPercent(snapshot.displayUsedPercent)})`),
     theme.italic(theme.fg("muted", "Estimated usage by category")),
     ...snapshot.displayCategories
       .filter(
-        (category) => category.key === "residual" || (category.tokens ?? 0) > 0
+        (category) => category.key === "residual" || (category.tokens ?? 0) > 0,
       )
       .map((category) => renderCategoryLine(category, theme)),
     `${theme.fg(FREE_STYLE.color, FREE_STYLE.symbol)} ${theme.bold("Free space")}: ${formatTokens(
-      snapshot.freeSpaceTokens
+      snapshot.freeSpaceTokens,
     )} (${formatPercent(snapshot.freeSpacePercent)})`,
     `${theme.fg(BUFFER_STYLE.color, BUFFER_STYLE.symbol)} ${theme.bold("Autocompact buffer")}: ${formatTokens(
-      snapshot.autoCompactBufferTokens
+      snapshot.autoCompactBufferTokens,
     )} tokens (${formatPercent(snapshot.autoCompactBufferPercent)})`,
   ];
 
@@ -181,8 +181,8 @@ function renderRightPanel(snapshot: ContextSnapshot, theme: unknown): string[] {
       0,
       theme.fg(
         "dim",
-        `Exact total unknown · ${formatPercent(snapshot.estimatedPercent)} estimated`
-      )
+        `Exact total unknown · ${formatPercent(snapshot.estimatedPercent)} estimated`,
+      ),
     );
   } else if (snapshot.exactTotalTokens < snapshot.displayUsedTokens) {
     lines.splice(
@@ -190,8 +190,8 @@ function renderRightPanel(snapshot: ContextSnapshot, theme: unknown): string[] {
       0,
       theme.fg(
         "dim",
-        `Exact total ${formatTokens(snapshot.exactTotalTokens)} (${formatPercent(snapshot.exactPercent)})`
-      )
+        `Exact total ${formatTokens(snapshot.exactTotalTokens)} (${formatPercent(snapshot.exactPercent)})`,
+      ),
     );
   }
 
@@ -204,16 +204,16 @@ function renderRightPanel(snapshot: ContextSnapshot, theme: unknown): string[] {
         .map((artifact) =>
           theme.fg(
             "dim",
-            `${formatTokens(artifact.tokens)}  ${formatArtifactLabel(artifact)}`
-          )
-        )
+            `${formatTokens(artifact.tokens)}  ${formatArtifactLabel(artifact)}`,
+          ),
+        ),
     );
   }
 
   if (snapshot.suggestions.length > 0) {
     lines.push(
       "",
-      ...snapshot.suggestions.map((item) => theme.fg("dim", `- ${item.text}`))
+      ...snapshot.suggestions.map((item) => theme.fg("dim", `- ${item.text}`)),
     );
   }
 
@@ -224,14 +224,14 @@ function renderRightPanel(snapshot: ContextSnapshot, theme: unknown): string[] {
 function renderGridLayout(
   snapshot: ContextSnapshot,
   theme: unknown,
-  width: number
+  width: number,
 ): string[] {
   const left = renderGrid(snapshot, theme);
   const leftWidth = visibleWidth(left[0] ?? "");
   const gap = width >= leftWidth + 32 ? 3 : 2;
   const rightWidth = Math.max(16, width - leftWidth - gap);
   const right = renderRightPanel(snapshot, theme).flatMap((line) =>
-    wrapTextWithAnsi(line, rightWidth)
+    wrapTextWithAnsi(line, rightWidth),
   );
   const rows = Math.max(left.length, right.length);
   const lines: string[] = [];
@@ -240,13 +240,13 @@ function renderGridLayout(
     const leftLine = left[index] ?? "";
     const rightLine = right[index] ?? "";
     const paddedLeft = `${leftLine}${" ".repeat(
-      Math.max(0, leftWidth - visibleWidth(leftLine) + gap)
+      Math.max(0, leftWidth - visibleWidth(leftLine) + gap),
     )}`;
     lines.push(
       truncateToWidth(
         `${paddedLeft}${truncateToWidth(rightLine, rightWidth)}`,
-        width
-      )
+        width,
+      ),
     );
   }
 
@@ -255,7 +255,7 @@ function renderGridLayout(
 
 export async function showContextView(
   ctx: ExtensionCommandContext,
-  snapshot: ContextSnapshot
+  snapshot: ContextSnapshot,
 ): Promise<void> {
   if (!ctx.hasUI) {
     process.stdout.write(`${renderContextText(snapshot)}\n`);

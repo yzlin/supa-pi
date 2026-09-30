@@ -26,10 +26,10 @@ function normalizeRenderableText(text: string): string {
 
 export function fitRenderedLinesToWidth(
   lines: string[],
-  width: number
+  width: number,
 ): string[] {
   return lines.map((line) =>
-    truncateToWidth(normalizeRenderableText(line), width, "")
+    truncateToWidth(normalizeRenderableText(line), width, ""),
   );
 }
 
@@ -46,7 +46,7 @@ function wrapPreservingLines(text: string, width: number): string[] {
       }
 
       return wrapTextWithAnsi(line, width).map((item) =>
-        truncateToWidth(item, width)
+        truncateToWidth(item, width),
       );
     });
 }
@@ -54,7 +54,7 @@ function wrapPreservingLines(text: string, width: number): string[] {
 function renderBlockLines(
   block: ContextContentBlock,
   width: number,
-  formatLabel: (text: string) => string
+  formatLabel: (text: string) => string,
 ): string[] {
   const indent = "  ";
   const contentIndent = "    ";
@@ -62,7 +62,7 @@ function renderBlockLines(
 
   for (const line of wrapPreservingLines(
     block.content,
-    Math.max(8, width - contentIndent.length)
+    Math.max(8, width - contentIndent.length),
   )) {
     lines.push(`${contentIndent}${line}`);
   }
@@ -75,7 +75,7 @@ function renderMessageLines(
   width: number,
   formatTitle: (text: string) => string,
   formatMeta: (text: string) => string,
-  formatLabel: (text: string) => string
+  formatLabel: (text: string) => string,
 ): string[] {
   const lines = [formatTitle(message.title)];
 
@@ -96,7 +96,7 @@ function buildBodyLines(
   formatSection: (text: string) => string,
   formatTitle: (text: string) => string,
   formatMeta: (text: string) => string,
-  formatLabel: (text: string) => string
+  formatLabel: (text: string) => string,
 ): string[] {
   const lines: string[] = [];
 
@@ -121,8 +121,8 @@ function buildBodyLines(
         width,
         formatTitle,
         formatMeta,
-        formatLabel
-      )
+        formatLabel,
+      ),
     );
   });
 
@@ -140,7 +140,7 @@ function border(
   width: number,
   left: string,
   fill: string,
-  right: string
+  right: string,
 ): string {
   return `${left}${fill.repeat(Math.max(0, width - 2))}${right}`;
 }
@@ -148,7 +148,7 @@ function border(
 function buildStatusLine(
   scroll: number,
   visibleRows: number,
-  totalRows: number
+  totalRows: number,
 ): string {
   if (totalRows <= 0) {
     return HELP;
@@ -160,7 +160,7 @@ function buildStatusLine(
 }
 
 export function renderContextContentText(
-  snapshot: ContextContentSnapshot
+  snapshot: ContextContentSnapshot,
 ): string {
   const lines = [
     "/context content",
@@ -175,7 +175,7 @@ export function renderContextContentText(
       (text) => `== ${text} ==`,
       (text) => text,
       (text) => text,
-      (text) => `[${text}]`
+      (text) => `[${text}]`,
     ),
   ];
 
@@ -184,7 +184,7 @@ export function renderContextContentText(
 
 export async function showContextContentView(
   ctx: ExtensionCommandContext,
-  snapshot: ContextContentSnapshot
+  snapshot: ContextContentSnapshot,
 ): Promise<void> {
   if (!ctx.hasUI) {
     process.stdout.write(`${renderContextContentText(snapshot)}\n`);
@@ -206,7 +206,7 @@ export async function showContextContentView(
       const getBodyHeight = () =>
         Math.max(
           MIN_BODY_HEIGHT,
-          Math.floor(tui.terminal.rows * OVERLAY_HEIGHT_RATIO) - CHROME_ROWS
+          Math.floor(tui.terminal.rows * OVERLAY_HEIGHT_RATIO) - CHROME_ROWS,
         );
 
       const getBodyLines = (width: number) => {
@@ -222,9 +222,9 @@ export async function showContextContentView(
             (text) => theme.bold(theme.fg("toolTitle", text)),
             (text) => theme.bold(text),
             (text) => theme.fg("dim", text),
-            (text) => theme.fg("accent", `[${text}]`)
+            (text) => theme.fg("accent", `[${text}]`),
           ),
-          Math.max(8, width)
+          Math.max(8, width),
         );
         return cachedBody;
       };
@@ -240,7 +240,7 @@ export async function showContextContentView(
                 .split("\n")
                 .flatMap((line) => wrapTextWithAnsi(line, width))
                 .map((line) => truncateToWidth(line, width)),
-              width
+              width,
             );
           }
 
@@ -259,9 +259,9 @@ export async function showContextContentView(
             frameLine(
               theme.fg(
                 "muted",
-                `Model: ${snapshot.modelLabel} · Thinking: ${snapshot.thinkingLevel} · Messages: ${snapshot.messageCount}`
+                `Model: ${snapshot.modelLabel} · Thinking: ${snapshot.thinkingLevel} · Messages: ${snapshot.messageCount}`,
               ),
-              frameWidth
+              frameWidth,
             ),
             border(frameWidth, "├", "─", "┤"),
             ...visibleBody.map((line) => frameLine(line, frameWidth)),
@@ -276,10 +276,10 @@ export async function showContextContentView(
             frameLine(
               theme.fg(
                 "dim",
-                buildStatusLine(scroll, visibleBody.length, body.length)
+                buildStatusLine(scroll, visibleBody.length, body.length),
               ),
-              frameWidth
-            )
+              frameWidth,
+            ),
           );
           lines.push(border(frameWidth, "╰", "─", "╯"));
           return lines;
@@ -288,7 +288,7 @@ export async function showContextContentView(
           const bodyHeight = getBodyHeight();
           const maxScroll = Math.max(
             0,
-            getBodyLines(lastInnerWidth).length - bodyHeight
+            getBodyLines(lastInnerWidth).length - bodyHeight,
           );
 
           if (
@@ -348,6 +348,6 @@ export async function showContextContentView(
         maxHeight: "85%",
         margin: 1,
       },
-    }
+    },
   );
 }

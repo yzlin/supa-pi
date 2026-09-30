@@ -91,7 +91,7 @@ export function parseReviewPaths(value: string): string[] {
 
 export function parseReviewTargetArgs(
   args: string | undefined,
-  options: { parseReviewers?: (value: string) => string[] } = {}
+  options: { parseReviewers?: (value: string) => string[] } = {},
 ): ParsedReviewTargetArgs {
   if (!args?.trim()) {
     return { target: null };
@@ -247,7 +247,7 @@ export function normalizeStatusPaths(lines: string[]): string[] {
 
 export async function getMergeBase(
   gitExec: GitExec,
-  branch: string
+  branch: string,
 ): Promise<string | null> {
   try {
     const { stdout: upstream, code: upstreamCode } = await gitExec([
@@ -284,7 +284,7 @@ export async function getMergeBase(
 
 export async function getChangedPaths(
   target: ReviewTarget,
-  gitExec: GitExec
+  gitExec: GitExec,
 ): Promise<string[]> {
   try {
     return await getChangedPathsOrThrow(target, gitExec);
@@ -295,11 +295,11 @@ export async function getChangedPaths(
 
 export async function getChangedPathsOrThrow(
   target: ReviewTarget,
-  gitExec: GitExec
+  gitExec: GitExec,
 ): Promise<string[]> {
   const run = async (
     args: string[],
-    options: { preserveLines?: boolean } = {}
+    options: { preserveLines?: boolean } = {},
   ) => {
     const command = args.join(" ");
     let result: GitExecResult;
@@ -324,7 +324,7 @@ export async function getChangedPathsOrThrow(
       return normalizeStatusPaths(
         await run(["status", "--porcelain", "--untracked-files=all"], {
           preserveLines: true,
-        })
+        }),
       );
     case "baseBranch": {
       const mergeBase = await getMergeBase(gitExec, target.branch);

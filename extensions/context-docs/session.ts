@@ -25,7 +25,7 @@ function extractTextContent(content: MessageLike["content"]): string {
 
   return content
     .flatMap((part) =>
-      part?.type === "text" && typeof part.text === "string" ? [part.text] : []
+      part?.type === "text" && typeof part.text === "string" ? [part.text] : [],
     )
     .join("\n")
     .trim();

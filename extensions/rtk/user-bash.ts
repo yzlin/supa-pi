@@ -104,7 +104,7 @@ export function createLocalBashOperations(): BashOperations {
 
             resolve({ exitCode });
           });
-        }
+        },
       );
     },
   };
@@ -115,13 +115,13 @@ export function createRtkUserBashHandler(
   deps?: {
     createLocalOperations?: () => BashOperations;
     resolveCommand?: typeof resolveRtkCommand;
-  }
+  },
 ) {
   const local = (deps?.createLocalOperations ?? createLocalBashOperations)();
 
   return function handleUserBash(
     event: UserBashEvent,
-    ctx: ExtensionContext
+    ctx: ExtensionContext,
   ): UserBashEventResult | undefined {
     if (event.excludeFromContext) {
       return;
@@ -151,7 +151,7 @@ export function createRtkUserBashHandler(
               config: runtime.getConfig(),
               status: runtime.getStatus(),
               refreshStatus: () => runtime.refreshRtkStatus(),
-            }
+            },
           );
 
           if (resolution.status === "rewritten") {
@@ -159,7 +159,7 @@ export function createRtkUserBashHandler(
             if (runtime.getConfig().showRewriteNotifications && ctx.hasUI) {
               ctx.ui.notify(
                 `RTK rewrote !cmd: ${command} → ${resolution.command}`,
-                "info"
+                "info",
               );
             }
           }
@@ -178,7 +178,7 @@ export function createRtkUserBashHandler(
               commandId,
               "user-bash",
               resolution.command,
-              startedAt
+              startedAt,
             );
           }
 

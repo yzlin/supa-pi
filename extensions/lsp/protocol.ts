@@ -20,7 +20,7 @@ type NotificationHandler = (method: string, params: unknown) => void;
 type ServerRequestHandler = (
   id: number | string,
   method: string,
-  params: unknown
+  params: unknown,
 ) => void;
 
 export class LspConnection {
@@ -44,7 +44,7 @@ export class LspConnection {
   constructor(
     command: string,
     args: string[],
-    options?: { cwd?: string; env?: Record<string, string> }
+    options?: { cwd?: string; env?: Record<string, string> },
   ) {
     this.command = command;
     this.args = args;
@@ -126,7 +126,7 @@ export class LspConnection {
   sendRequest(
     method: string,
     params: unknown,
-    timeoutMs = 30_000
+    timeoutMs = 30_000,
   ): Promise<unknown> {
     if (!this.alive) {
       return Promise.reject(new Error("Connection not alive"));
@@ -137,7 +137,7 @@ export class LspConnection {
       const timer = setTimeout(() => {
         this.pending.delete(id);
         reject(
-          new Error(`LSP request '${method}' timed out after ${timeoutMs}ms`)
+          new Error(`LSP request '${method}' timed out after ${timeoutMs}ms`),
         );
       }, timeoutMs);
 

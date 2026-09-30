@@ -33,7 +33,7 @@ interface AppendEntry {
 }
 
 function createHarness(
-  options: { cwd?: string; branchEntries?: unknown[]; reset?: boolean } = {}
+  options: { cwd?: string; branchEntries?: unknown[]; reset?: boolean } = {},
 ) {
   const commands = new Map<string, CommandOptions>();
   const tools: ToolRegistration[] = [];
@@ -72,7 +72,7 @@ function createHarness(
     },
     sendMessage(
       message: { content?: string; details?: unknown },
-      messageOptions?: { deliverAs?: string; triggerTurn?: boolean }
+      messageOptions?: { deliverAs?: string; triggerTurn?: boolean },
     ) {
       customMessages.push({ message, options: messageOptions });
     },
@@ -136,7 +136,7 @@ function createHarness(
 
 function getTool(harness: ReturnType<typeof createHarness>) {
   const tool = harness.tools.find(
-    (registered) => registered.name === "goal_checkpoint"
+    (registered) => registered.name === "goal_checkpoint",
   );
   if (!tool) {
     throw new Error("goal_checkpoint tool was not registered");
@@ -163,7 +163,7 @@ describe("goal extension", () => {
       "goal_checkpoint",
     ]);
     expect(harness.statuses.at(-1)).toBe(
-      "goal:active pending:0 active:0 blocked:0 budget_limited:0 complete:0"
+      "goal:active pending:0 active:0 blocked:0 budget_limited:0 complete:0",
     );
     expect(harness.messages).toHaveLength(1);
     expect(harness.messages[0]?.options).toBeUndefined();
@@ -184,10 +184,10 @@ describe("goal extension", () => {
     expect(harness.messages).toHaveLength(1);
     expect(harness.messages[0]?.options).toEqual({ deliverAs: "followUp" });
     expect(harness.messages[0]?.message).toContain(
-      "You are the main-session orchestrator for /goal task mode."
+      "You are the main-session orchestrator for /goal task mode.",
     );
     expect(harness.messages[0]?.message).toContain(
-      "You are executing goal task task-1: Task 1"
+      "You are executing goal task task-1: Task 1",
     );
     expect(harness.notifications).toContainEqual({
       message: "Queued /goal continuation as follow-up",
@@ -215,7 +215,7 @@ describe("goal extension", () => {
     harness.command.handler("pause", harness.ctx(true));
     expect(harness.getActiveTools()).toEqual(["bash", "read"]);
     expect(harness.statuses.at(-1)).toBe(
-      "goal:paused pending:0 active:1 blocked:0 budget_limited:0 complete:0"
+      "goal:paused pending:0 active:1 blocked:0 budget_limited:0 complete:0",
     );
 
     harness.command.handler("resume", harness.ctx(false));
@@ -265,7 +265,7 @@ describe("goal extension", () => {
       },
       new AbortController().signal,
       () => undefined,
-      harness.ctx(true)
+      harness.ctx(true),
     );
     expect(rewriteResult?.isError).toBe(true);
 
@@ -280,7 +280,7 @@ describe("goal extension", () => {
       },
       new AbortController().signal,
       () => undefined,
-      harness.ctx(true)
+      harness.ctx(true),
     );
 
     expect(result?.isError).toBeUndefined();
@@ -304,16 +304,16 @@ describe("goal extension", () => {
       { status: "budget_limited" },
       new AbortController().signal,
       () => undefined,
-      harness.ctx(true)
+      harness.ctx(true),
     );
 
     harness.command.handler("resume --tasks 2", harness.ctx(true));
 
     expect(harness.messages.at(-1)?.message).toContain(
-      "You are executing goal task task-1: Task 1"
+      "You are executing goal task task-1: Task 1",
     );
     expect(harness.statuses.at(-1)).toBe(
-      "goal:active pending:2 active:1 blocked:0 budget_limited:0 complete:0"
+      "goal:active pending:2 active:1 blocked:0 budget_limited:0 complete:0",
     );
   });
 
@@ -333,15 +333,15 @@ describe("goal extension", () => {
     });
     restored.handlers.get("session_start")?.(
       { reason: "reload" },
-      restored.ctx(true)
+      restored.ctx(true),
     );
 
     expect(restored.statuses.at(-1)).toBe(
-      "goal:paused pending:0 active:1 blocked:0 budget_limited:0 complete:0"
+      "goal:paused pending:0 active:1 blocked:0 budget_limited:0 complete:0",
     );
     expect(restored.getActiveTools()).toEqual(["bash", "read"]);
     expect(
-      readFileSync(join(initial.cwd, ".pi", "goal", `${goalId}.json`), "utf8")
+      readFileSync(join(initial.cwd, ".pi", "goal", `${goalId}.json`), "utf8"),
     ).toContain('"status": "paused"');
   });
 
@@ -358,7 +358,7 @@ describe("goal extension", () => {
 
     other.handlers.get("session_start")?.(
       { reason: "resume" },
-      other.ctx(true)
+      other.ctx(true),
     );
 
     expect(other.statuses.at(-1)).toBeUndefined();
@@ -377,7 +377,7 @@ describe("goal extension", () => {
       deliverAs: "followUp",
     });
     expect(harness.customMessages.at(-1)?.message.content).toContain(
-      "Continue working toward the active thread goal."
+      "Continue working toward the active thread goal.",
     );
   });
 });

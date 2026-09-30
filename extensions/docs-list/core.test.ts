@@ -53,15 +53,15 @@ describe("docs-list core", () => {
     mkdirSync(docsDir, { recursive: true });
     writeFileSync(
       join(docsDir, "guide.md"),
-      "---\nsummary: Test guide\nread_when:\n  - testing docs\nother: ignored\n---\n# Guide\n"
+      "---\nsummary: Test guide\nread_when:\n  - testing docs\nother: ignored\n---\n# Guide\n",
     );
     writeFileSync(
       join(docsDir, "bad.md"),
-      "---\nread_when: ['bad front matter']\n---\n# Bad\n"
+      "---\nread_when: ['bad front matter']\n---\n# Bad\n",
     );
     writeFileSync(
       join(docsDir, "archive.md"),
-      "---\nsummary: Archive file at root is allowed\n---\n"
+      "---\nsummary: Archive file at root is allowed\n---\n",
     );
 
     const result = listDocs({ cwd });
@@ -100,7 +100,7 @@ describe("docs-list core", () => {
     mkdirSync(join(cwd, "knowledge"), { recursive: true });
     writeFileSync(
       join(cwd, "knowledge", "note.md"),
-      "---\nsummary: Knowledge note\n---\n"
+      "---\nsummary: Knowledge note\n---\n",
     );
 
     const result = listDocs({ cwd, path: "@knowledge" });
@@ -120,11 +120,11 @@ describe("docs-list core", () => {
     writeFileSync(join(cwd, "docs", "missing.md"), "# Missing\n");
     writeFileSync(
       join(cwd, "docs", "invalid.md"),
-      "---\nsummary: Broken\nread_when: [bad]\n---\n"
+      "---\nsummary: Broken\nread_when: [bad]\n---\n",
     );
     writeFileSync(
       join(cwd, "docs", "unterminated.md"),
-      "---\nsummary: Never closed\n"
+      "---\nsummary: Never closed\n",
     );
 
     const result = listDocs({ cwd });
@@ -150,11 +150,11 @@ describe("docs-list core", () => {
     writeFileSync(join(cwd, "docs", "keep.md"), "---\nsummary: Keep\n---\n");
     writeFileSync(
       join(cwd, "docs", "archive", "old.md"),
-      "---\nsummary: Old\n---\n"
+      "---\nsummary: Old\n---\n",
     );
     writeFileSync(
       join(cwd, "docs", "research", "draft.md"),
-      "---\nsummary: Draft\n---\n"
+      "---\nsummary: Draft\n---\n",
     );
 
     const result = listDocs({ cwd });
@@ -167,10 +167,10 @@ describe("docs-list core", () => {
 
     expect(resolveDocsRoot(cwd, "@docs")).toBe(join(cwd, "docs"));
     expect(() => resolveDocsRoot(cwd, "/tmp/docs")).toThrow(
-      "path must be relative"
+      "path must be relative",
     );
     expect(() => resolveDocsRoot(cwd, "../docs")).toThrow(
-      "path must not escape cwd"
+      "path must not escape cwd",
     );
   });
 
@@ -187,7 +187,7 @@ describe("docs-list core", () => {
     mkdirSync(join(cwd, "docs"), { recursive: true });
     writeFileSync(
       join(cwd, "docs", "guide.md"),
-      "---\nsummary: Guide\nread_when:\n  - when testing docs\n---\n"
+      "---\nsummary: Guide\nread_when:\n  - when testing docs\n---\n",
     );
     writeFileSync(join(cwd, "docs", "plain.md"), "# Plain\n");
 
@@ -209,7 +209,7 @@ describe("docs-list extension", () => {
     expect(tool.name).toBe("docs_list");
     expect(tool.label).toBe("Docs List");
     expect(tool.promptSnippet).toBe(
-      "Discover project markdown docs with summary and read_when metadata before coding"
+      "Discover project markdown docs with summary and read_when metadata before coding",
     );
     expect(tool.promptGuidelines).toEqual([
       "Use docs_list when the user asks for docs discovery or relevant project guidance says to discover docs before coding.",
@@ -222,7 +222,7 @@ describe("docs-list extension", () => {
     mkdirSync(join(cwd, "docs"), { recursive: true });
     writeFileSync(
       join(cwd, "docs", "guide.md"),
-      "---\nsummary: Extension guide\n---\n"
+      "---\nsummary: Extension guide\n---\n",
     );
     const { tool } = createExtensionHarness();
 
@@ -277,7 +277,7 @@ describe("docs-list extension", () => {
       { path: "../docs" },
       undefined,
       undefined,
-      { cwd } as never
+      { cwd } as never,
     );
 
     expect(result.content).toEqual([

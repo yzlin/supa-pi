@@ -74,7 +74,7 @@ export default function (pi: ExtensionAPI) {
   pi.on("context", (event) => {
     const filtered = event.messages.filter(
       (m: unknown) =>
-        !(m.role === "custom" && m.customType === BTW_MESSAGE_TYPE)
+        !(m.role === "custom" && m.customType === BTW_MESSAGE_TYPE),
     );
     if (filtered.length !== event.messages.length) {
       return { messages: filtered };
@@ -85,13 +85,13 @@ export default function (pi: ExtensionAPI) {
   function renderBtwResult(
     r: SingleResult,
     theme: unknown,
-    outputPad = 1
+    outputPad = 1,
   ): InstanceType<typeof Box> {
     const icon =
       r.exitCode === 0 ? theme.fg("success", "✓") : theme.fg("error", "✗");
 
     const box = new Box(outputPad, 1, (t: string) =>
-      theme.bg("customMessageBg", t)
+      theme.bg("customMessageBg", t),
     );
 
     // Single merged header: ✓ btw: <task>
@@ -99,13 +99,13 @@ export default function (pi: ExtensionAPI) {
       new Text(
         `${icon} ${theme.fg("toolTitle", theme.bold("btw: "))}${theme.fg("dim", r.task)}`,
         0,
-        0
-      )
+        0,
+      ),
     );
 
     if (r.exitCode > 0 && r.errorMessage) {
       box.addChild(
-        new Text(theme.fg("error", `Error: ${r.errorMessage}`), 0, 0)
+        new Text(theme.fg("error", `Error: ${r.errorMessage}`), 0, 0),
       );
     }
 
@@ -117,8 +117,8 @@ export default function (pi: ExtensionAPI) {
             theme.fg("muted", "→ ") +
               formatToolCall(item.name, item.args, theme.fg.bind(theme)),
             0,
-            0
-          )
+            0,
+          ),
         );
       }
     }
@@ -148,7 +148,7 @@ export default function (pi: ExtensionAPI) {
         return;
       }
       return renderBtwResult(details.result, theme, outputPad);
-    }
+    },
   );
 
   // --- /btw command ---
@@ -176,7 +176,7 @@ export default function (pi: ExtensionAPI) {
         ctx.model,
         pi.getThinkingLevel(),
         { model: modelOpt },
-        ctx.scopedModels
+        ctx.scopedModels,
       );
 
       if (modelError) {
@@ -206,7 +206,7 @@ export default function (pi: ExtensionAPI) {
       const messages = branch
         .filter(
           (entry): entry is SessionEntry & { type: "message" } =>
-            entry.type === "message"
+            entry.type === "message",
         )
         .map((entry) => entry.message);
       const conversationContext =
@@ -242,9 +242,9 @@ export default function (pi: ExtensionAPI) {
           ctx.ui.setWidget(
             widgetKey,
             renderProgressPlainLines(task, progressResult),
-            { placement: "aboveEditor" }
+            { placement: "aboveEditor" },
           );
-        }
+        },
       )
         .then(async (result) => {
           // Override result.task with the short user prompt (not the context-enriched one)
@@ -262,7 +262,7 @@ export default function (pi: ExtensionAPI) {
               display: true,
               details: { task, result } satisfies BtwMessageDetails,
             },
-            { triggerTurn: false }
+            { triggerTurn: false },
           );
 
           // If the agent is busy (tool call running), the custom message won't
@@ -272,7 +272,7 @@ export default function (pi: ExtensionAPI) {
             ctx.ui.setWidget(
               widgetKey,
               (_tui, theme) => renderBtwResult(result, theme),
-              { placement: "aboveEditor" }
+              { placement: "aboveEditor" },
             );
             // Wait for current turn to end - the steered custom message
             // renders at that point, so we can remove the widget.
@@ -286,7 +286,7 @@ export default function (pi: ExtensionAPI) {
           ctx.ui.setWidget(widgetKey, undefined);
           ctx.ui.notify(
             `btw failed: ${err instanceof Error ? err.message : String(err)}`,
-            "error"
+            "error",
           );
         });
 

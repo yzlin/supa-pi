@@ -90,10 +90,10 @@ describe("E2E selective reference contract", () => {
     const ciLink = "references/ci.md";
 
     expect(skill).toContain(
-      `For Playwright setup or configuration work, read [Setup and configuration](${setupLink}).`
+      `For Playwright setup or configuration work, read [Setup and configuration](${setupLink}).`,
     );
     expect(skill).toContain(
-      `For CI/CD workflow work, read [CI/CD workflow](${ciLink}).`
+      `For CI/CD workflow work, read [CI/CD workflow](${ciLink}).`,
     );
 
     for (const link of [setupLink, ciLink]) {
@@ -107,7 +107,7 @@ describe("E2E selective reference contract", () => {
     const skill = read(skillPath);
 
     expect(skill).toContain(
-      "For ordinary E2E test design, implementation, debugging, artifacts, or reporting, do not load either reference automatically."
+      "For ordinary E2E test design, implementation, debugging, artifacts, or reporting, do not load either reference automatically.",
     );
     expect(skill.match(/references\/setup\.md/g)).toHaveLength(1);
     expect(skill.match(/references\/ci\.md/g)).toHaveLength(1);
@@ -115,10 +115,10 @@ describe("E2E selective reference contract", () => {
 
   it("preserves the original moved blocks byte-for-byte in their references", () => {
     const setup = read(
-      join(repositoryRoot, "skills", "e2e-testing", "references", "setup.md")
+      join(repositoryRoot, "skills", "e2e-testing", "references", "setup.md"),
     );
     const ci = read(
-      join(repositoryRoot, "skills", "e2e-testing", "references", "ci.md")
+      join(repositoryRoot, "skills", "e2e-testing", "references", "ci.md"),
     );
 
     expect(digest(setup)).toBe(digest(originalSetupBlock));

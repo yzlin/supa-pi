@@ -3,7 +3,7 @@ import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
 const fixtureDirectory = fileURLToPath(
-  new URL("./fixtures/sample-project/", import.meta.url)
+  new URL("./fixtures/sample-project/", import.meta.url),
 );
 const onePassPattern = /\b1 pass\b/;
 const oneFailPattern = /\b1 fail\b/;

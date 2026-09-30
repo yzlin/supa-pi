@@ -15,7 +15,7 @@ export interface ToolDisplayReadDetails extends ReadToolDetails {
 }
 
 export function isToolDisplayReadDetails(
-  details: unknown
+  details: unknown,
 ): details is ToolDisplayReadDetails {
   if (!(details && typeof details === "object")) {
     return false;
@@ -29,7 +29,7 @@ export function createToolDisplayReadDetails(
   path: string,
   targetName: string,
   bytes: number,
-  params: Pick<ReadToolInput, "offset" | "limit">
+  params: Pick<ReadToolInput, "offset" | "limit">,
 ): ToolDisplayReadDetails {
   const toolDisplay: ToolDisplayReadDetails["toolDisplay"] = {
     fullRead: true,

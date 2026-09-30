@@ -28,8 +28,8 @@ describe("rtk user bash", () => {
           excludeFromContext: true,
           cwd: process.cwd(),
         },
-        createContext()
-      )
+        createContext(),
+      ),
     ).toBeUndefined();
   });
 
@@ -48,8 +48,8 @@ describe("rtk user bash", () => {
           excludeFromContext: false,
           cwd: process.cwd(),
         },
-        createContext()
-      )
+        createContext(),
+      ),
     ).toBeUndefined();
   });
 
@@ -70,8 +70,8 @@ describe("rtk user bash", () => {
           excludeFromContext: false,
           cwd: process.cwd(),
         },
-        createContext()
-      )
+        createContext(),
+      ),
     ).toBeUndefined();
   });
 
@@ -104,7 +104,7 @@ describe("rtk user bash", () => {
         excludeFromContext: false,
         cwd: process.cwd(),
       },
-      createContext()
+      createContext(),
     );
 
     await result?.operations?.exec("ls", process.cwd(), {
@@ -146,7 +146,7 @@ describe("rtk user bash", () => {
         excludeFromContext: false,
         cwd: process.cwd(),
       },
-      createContext()
+      createContext(),
     );
 
     await result?.operations?.exec("ls", process.cwd(), {

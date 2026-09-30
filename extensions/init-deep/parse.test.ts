@@ -39,7 +39,7 @@ describe("parseInitDeepArgs", () => {
   it("separates target and freeform instruction using --", () => {
     const result = parseInitDeepArgs(
       "./extensions -- focus on extension and command boundaries",
-      cwd
+      cwd,
     );
 
     expect(result.ok).toBe(true);
@@ -49,14 +49,14 @@ describe("parseInitDeepArgs", () => {
 
     expect(result.value.targetLabel).toBe("./extensions");
     expect(result.value.instruction).toBe(
-      "focus on extension and command boundaries"
+      "focus on extension and command boundaries",
     );
   });
 
   it("parses flags and max depth values", () => {
     const result = parseInitDeepArgs(
       "./extensions --create-new --max-depth 5 --dry-run -- focus on command flow",
-      cwd
+      cwd,
     );
 
     expect(result.ok).toBe(true);
@@ -121,7 +121,7 @@ describe("parseInitDeepArgs", () => {
   it("supports quoted target paths before --", () => {
     const result = parseInitDeepArgs(
       '"./extensions" -- focus on runtime boundaries',
-      cwd
+      cwd,
     );
 
     expect(result.ok).toBe(true);

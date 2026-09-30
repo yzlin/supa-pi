@@ -11,16 +11,16 @@ import {
 import { EXPLICIT_ONLY_SKILLS } from "./policy";
 export async function writeRecoveryCatalog(
   agentDir: string,
-  skills: readonly Skill[]
+  skills: readonly Skill[],
 ): Promise<string> {
   const visible = skills
     .filter(
       (skill) =>
-        !(skill.disableModelInvocation || EXPLICIT_ONLY_SKILLS.has(skill.name))
+        !(skill.disableModelInvocation || EXPLICIT_ONLY_SKILLS.has(skill.name)),
     )
     .sort(
       (a, b) =>
-        a.name.localeCompare(b.name) || a.filePath.localeCompare(b.filePath)
+        a.name.localeCompare(b.name) || a.filePath.localeCompare(b.filePath),
     );
   const explicit = skills
     .filter((skill) => EXPLICIT_ONLY_SKILLS.has(skill.name))

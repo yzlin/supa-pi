@@ -22,7 +22,7 @@ function buildMalformedBlockPlan(
   content: string,
   startMarker: string,
   endMarker: string,
-  error: string
+  error: string,
 ): MarkedBlockPlan {
   return {
     action: "error",
@@ -36,7 +36,7 @@ function buildMalformedBlockPlan(
 export function planMarkedBlockUpdate(
   existingContent: string,
   name: string,
-  nextBody: string
+  nextBody: string,
 ): MarkedBlockPlan {
   const { startMarker, endMarker } = buildContextDocsBlockMarkers(name);
   const normalizedBody = nextBody.trim();
@@ -51,7 +51,7 @@ export function planMarkedBlockUpdate(
       existingContent,
       startMarker,
       endMarker,
-      `Malformed managed block: missing end marker for ${name}.`
+      `Malformed managed block: missing end marker for ${name}.`,
     );
   }
 
@@ -60,7 +60,7 @@ export function planMarkedBlockUpdate(
       existingContent,
       startMarker,
       endMarker,
-      `Malformed managed block: missing start marker for ${name}.`
+      `Malformed managed block: missing start marker for ${name}.`,
     );
   }
 
@@ -69,7 +69,7 @@ export function planMarkedBlockUpdate(
       existingContent,
       startMarker,
       endMarker,
-      `Malformed managed block: end marker appears before start marker for ${name}.`
+      `Malformed managed block: end marker appears before start marker for ${name}.`,
     );
   }
 

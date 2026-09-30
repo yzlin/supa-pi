@@ -34,8 +34,8 @@ describe("tool-display config", () => {
     expect(
       loadToolDisplayConfig(
         createTempDir("tool-display-cwd-"),
-        createTempDir("tool-display-home-")
-      )
+        createTempDir("tool-display-home-"),
+      ),
     ).toEqual(DEFAULT_TOOL_DISPLAY_CONFIG);
   });
 
@@ -45,10 +45,10 @@ describe("tool-display config", () => {
       allowPermanentDelete: false,
     });
     expect(getToolDisplayPresetConfig("compact").tools.edit.enabled).toBe(
-      false
+      false,
     );
     expect(getToolDisplayPresetConfig("verbose").tools.edit.enabled).toBe(
-      false
+      false,
     );
   });
 
@@ -81,7 +81,7 @@ describe("tool-display config", () => {
           wordWrap: false,
           indicatorMode: "classic",
         },
-      })
+      }),
     ).toEqual({
       tools: {
         read: { enabled: false, fullRead: { enabled: false } },
@@ -119,7 +119,7 @@ describe("tool-display config", () => {
           edit: { allowPermanentDelete: true },
         },
       }),
-      "utf8"
+      "utf8",
     );
     writeFileSync(
       getProjectToolDisplayConfigPath(cwd),
@@ -129,15 +129,15 @@ describe("tool-display config", () => {
           edit: { allowPermanentDelete: false },
         },
       }),
-      "utf8"
+      "utf8",
     );
 
     const config = loadToolDisplayConfig(cwd, homeDir);
     expect(config.tools.read.enabled).toBe(false);
     expect(
       config.tools.read.fullRead.targets.find(
-        (target) => target.name === "skills"
-      )?.enabled
+        (target) => target.name === "skills",
+      )?.enabled,
     ).toBe(false);
     expect(config.tools.search.enabled).toBe(true);
     expect(config.tools.edit.allowPermanentDelete).toBe(false);
@@ -168,7 +168,7 @@ describe("tool-display config", () => {
             },
           },
         },
-      })
+      }),
     ).toEqual({
       tools: {
         read: {
@@ -225,33 +225,33 @@ describe("tool-display config", () => {
             },
           },
         },
-      }
+      },
     );
 
     expect(
       config.tools.read.fullRead.targets
         .map((target) => target.name)
-        .slice(0, 2)
+        .slice(0, 2),
     ).toEqual(["custom", "skills"]);
     expect(
       config.tools.read.fullRead.targets.find(
-        (target) => target.name === "skills"
-      )
+        (target) => target.name === "skills",
+      ),
     ).toMatchObject({
       enabled: false,
       provenance: "global",
     });
     expect(
       config.tools.read.fullRead.targets.find(
-        (target) => target.name === "custom"
-      )
+        (target) => target.name === "custom",
+      ),
     ).toMatchObject({
       maxBytes: 2048,
       provenance: "project",
       warnings: ["target custom: invalid source ignored"],
     });
     expect(config.tools.read.fullRead.warnings).not.toContain(
-      "target custom: invalid source ignored"
+      "target custom: invalid source ignored",
     );
   });
 
@@ -266,7 +266,7 @@ describe("tool-display config", () => {
         tools: { search: { enabled: true } },
         diff: { viewMode: "unified" },
       }),
-      "utf8"
+      "utf8",
     );
 
     const result = saveProjectToolDisplayConfig(
@@ -275,7 +275,7 @@ describe("tool-display config", () => {
         tools: { read: { enabled: false }, write: { enabled: true } },
         diff: { indicatorMode: "none" },
       },
-      homeDir
+      homeDir,
     );
 
     expect(result).toMatchObject({ ok: true });

@@ -55,7 +55,7 @@ type QueuePrototype = AgentSession & {
 
 export function buildPromptCommandMessage(
   name: PromptCommandName,
-  args: string
+  args: string,
 ): string {
   const command = COMMANDS[name];
   return `${command.prefix}${args}${command.suffix}`;
@@ -94,7 +94,7 @@ function addQueueOwner(owner: QueueOwner): void {
   const prompt: PromptMethod = function prompt(text, options) {
     return registry.promptExpansion.run(
       options?.expandPromptTemplates ?? true,
-      () => registry.originalPrompt.call(this, text, options)
+      () => registry.originalPrompt.call(this, text, options),
     );
   };
   registry = {
@@ -162,7 +162,7 @@ function promptExpansionEnabled(): boolean {
 }
 
 export function createPromptCommandsExtension(
-  transform: Transformer = expandRawPromptCommand
+  transform: Transformer = expandRawPromptCommand,
 ): (pi: ExtensionAPI) => void {
   return (pi) => {
     const owner = Symbol("prompt-commands-owner");

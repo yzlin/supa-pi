@@ -17,7 +17,7 @@ test("named > wildcard > repo independently per field; frontmatter name is the k
         "*": { model: "p/wild", thinking: "medium" },
         worker: { thinking: "high" },
       },
-    })
+    }),
   ).toEqual({ model: "p/wild", thinking: "high" });
   expect(resolveAgent(agent, {})).toEqual({ model: "p/base", thinking: "low" });
   expect(parseRepoAgent("/repo/agents/file.md", "Body").name).toBe("file");
@@ -27,7 +27,9 @@ test("generated frontmatter comment is tolerated by Pi; body and unrelated field
   const agent = parseRepoAgent("/repo/agents/file.md", content);
   const generated = generateAgent(agent, { model: "p/new", thinking: "max" });
   expect(generated.replace(GENERATED_COMMENT, "")).toBe(
-    content.replace("p/base", "p/new").replace("thinking: low", "thinking: max")
+    content
+      .replace("p/base", "p/new")
+      .replace("thinking: low", "thinking: max"),
   );
   expect(parseFrontmatter(generated).frontmatter).toMatchObject({
     name: "worker",
@@ -53,7 +55,7 @@ test("inserts absent fields and marker without disturbing empty frontmatter or C
     });
     expect(generated.split("---")).toHaveLength(3);
     expect(generated.slice(generated.lastIndexOf("---") + 3)).toBe(
-      contentWithFence.slice(contentWithFence.lastIndexOf("---") + 3)
+      contentWithFence.slice(contentWithFence.lastIndexOf("---") + 3),
     );
   }
 });

@@ -86,20 +86,20 @@ describe("domain-modeling skill contract", () => {
     const contextDocs = readRepositoryFile(
       "skills",
       "context-docs",
-      "SKILL.md"
+      "SKILL.md",
     );
 
     expect(skill).toContain(
-      "final user-facing response only for standalone domain-modeling runs"
+      "final user-facing response only for standalone domain-modeling runs",
     );
     expect(skill).toContain("internal caller consumption");
     expect(skill).toContain(
-      "caller skill governs interaction, writes, and final user-facing output"
+      "caller skill governs interaction, writes, and final user-facing output",
     );
     expect(skill).not.toContain("Output always uses exactly");
     expect(grilling).toContain("Ask exactly one question at a time");
     expect(contextDocs).toContain(
-      "Summarize files read, files changed, decisions captured, open questions, and validation performed."
+      "Summarize files read, files changed, decisions captured, open questions, and validation performed.",
     );
   });
 
@@ -125,7 +125,7 @@ describe("domain-modeling skill contract", () => {
     expect(skill).toContain("Matt Pocock");
     expect(skill).toContain("MIT");
     expect(skill).toContain(
-      "https://github.com/mattpocock/skills/blob/84fdeffd12f2ee307994d1eb6feb48173b6e0502/skills/engineering/domain-modeling/SKILL.md"
+      "https://github.com/mattpocock/skills/blob/84fdeffd12f2ee307994d1eb6feb48173b6e0502/skills/engineering/domain-modeling/SKILL.md",
     );
   });
 });

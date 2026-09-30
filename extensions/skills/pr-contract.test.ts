@@ -96,13 +96,13 @@ describe("pr skill contract", () => {
   it("pins GitHub commands to origin and creates ready PRs", () => {
     const commands = Array.from(
       skill.matchAll(githubCommand),
-      ([, command]) => command
+      ([, command]) => command,
     );
     expect(commands).toHaveLength(5);
     for (const command of commands) {
       if (command.startsWith("gh repo view ")) {
         expect(command).toBe(
-          'gh repo view "$(git remote get-url origin)" --json nameWithOwner,defaultBranchRef'
+          'gh repo view "$(git remote get-url origin)" --json nameWithOwner,defaultBranchRef',
         );
       } else {
         expect(command).toMatch(repositoryFlag);
@@ -115,13 +115,13 @@ describe("pr skill contract", () => {
     const prompt = readRepositoryFile("prompts/pr.md");
     expect(prompt).toContain('argument-hint: "[--base <branch>]"');
     expect(prompt).toContain(
-      "Use the `pr` skill as canonical for this explicit command."
+      "Use the `pr` skill as canonical for this explicit command.",
     );
     expect(prompt).toContain(
-      ["$", "{@:-Use the repository default branch as base.}"].join("")
+      ["$", "{@:-Use the repository default branch as base.}"].join(""),
     );
     expect(
-      readRepositoryFile("extensions/prompt-commands/index.ts")
+      readRepositoryFile("extensions/prompt-commands/index.ts"),
     ).not.toMatch(prCommandEntry);
   });
 });

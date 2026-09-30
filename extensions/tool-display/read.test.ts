@@ -29,7 +29,7 @@ async function withTempDir<T>(fn: (dir: string) => Promise<T>): Promise<T> {
 }
 
 function target(
-  overrides: Partial<ToolDisplayFullReadTarget>
+  overrides: Partial<ToolDisplayFullReadTarget>,
 ): ToolDisplayFullReadTarget {
   return {
     name: "target",
@@ -71,10 +71,10 @@ describe("tool-display read", () => {
       const targets = [target({ name: "skills", source: "registeredSkills" })];
 
       await expect(
-        resolveFullReadPath(skillPath, dir, targets, skillPaths)
+        resolveFullReadPath(skillPath, dir, targets, skillPaths),
       ).resolves.toMatchObject({ path: await realpath(skillPath) });
       await expect(
-        resolveFullReadPath("README.md", dir, targets, skillPaths)
+        resolveFullReadPath("README.md", dir, targets, skillPaths),
       ).resolves.toBeNull();
     });
   });
@@ -97,8 +97,8 @@ describe("tool-display read", () => {
               include: ["**/*.md"],
             }),
           ],
-          new Set()
-        )
+          new Set(),
+        ),
       ).resolves.toMatchObject({ path: await realpath(rulePath) });
     });
   });
@@ -120,10 +120,10 @@ describe("tool-display read", () => {
       ];
 
       await expect(
-        resolveFullReadPath(publicRule, dir, targets, new Set())
+        resolveFullReadPath(publicRule, dir, targets, new Set()),
       ).resolves.toMatchObject({ path: await realpath(publicRule) });
       await expect(
-        resolveFullReadPath(privateRule, dir, targets, new Set())
+        resolveFullReadPath(privateRule, dir, targets, new Set()),
       ).resolves.toBeNull();
     });
   });
@@ -157,7 +157,7 @@ describe("tool-display read", () => {
             include: ["**/*.md"],
           }),
         ],
-        new Set()
+        new Set(),
       );
 
       expect(match?.target.name).toBe("second");
@@ -175,7 +175,7 @@ describe("tool-display read", () => {
       };
 
       await expect(readFullReadText(match, {})).rejects.toThrow(
-        "exceeds tool-display read cap"
+        "exceeds tool-display read cap",
       );
     });
   });
@@ -193,7 +193,7 @@ describe("tool-display read", () => {
             ignorePagination: true,
           }),
         },
-        { offset: 2, limit: 1 }
+        { offset: 2, limit: 1 },
       );
 
       expect(result.content).toEqual("one\ntwo\nthree\n");
@@ -220,7 +220,7 @@ describe("tool-display read", () => {
           path: filePath,
           target: target({ maxBytes: 6, ignorePagination: false }),
         },
-        { offset: 2, limit: 1 }
+        { offset: 2, limit: 1 },
       );
 
       expect(result.content).toBe("67890");
@@ -240,8 +240,8 @@ describe("tool-display read", () => {
             path: filePath,
             target: target({ ignorePagination: false }),
           },
-          { offset: 1, limit: 1 }
-        )
+          { offset: 1, limit: 1 },
+        ),
       ).rejects.toThrow("exceeds tool-display hard read cap");
     });
   });
@@ -265,8 +265,8 @@ describe("tool-display read", () => {
                 provenance: "project",
               }),
             ],
-            new Set()
-          )
+            new Set(),
+          ),
         ).resolves.toBeNull();
       } finally {
         await rm(outsideDir, { recursive: true, force: true });
@@ -293,8 +293,8 @@ describe("tool-display read", () => {
                 provenance: "global",
               }),
             ],
-            new Set()
-          )
+            new Set(),
+          ),
         ).resolves.toMatchObject({ path: await realpath(outsideRule) });
       } finally {
         await rm(outsideDir, { recursive: true, force: true });
@@ -318,8 +318,8 @@ describe("tool-display read", () => {
           linkPath,
           dir,
           [target({ baseDir: "rules", include: ["**/*.md"] })],
-          new Set()
-        )
+          new Set(),
+        ),
       ).resolves.toBeNull();
     });
   });
@@ -338,8 +338,8 @@ describe("tool-display read", () => {
           join(linkBase, "rule.md"),
           dir,
           [target({ baseDir: "linked-rules", include: ["**/*.md"] })],
-          new Set()
-        )
+          new Set(),
+        ),
       ).resolves.toMatchObject({ path: await realpath(rulePath) });
     });
   });

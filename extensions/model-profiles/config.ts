@@ -42,7 +42,7 @@ export function isRecord(value: unknown): value is Record<string, unknown> {
 export function parseConfig(
   raw: unknown,
   path: string,
-  validate?: (raw: Record<string, unknown>) => string[]
+  validate?: (raw: Record<string, unknown>) => string[],
 ): Config {
   const errors: string[] = [];
   if (!isRecord(raw)) {
@@ -126,7 +126,7 @@ export function parseConfig(
 
 export function loadConfig(
   path: string,
-  validate?: (raw: Record<string, unknown>) => string[]
+  validate?: (raw: Record<string, unknown>) => string[],
 ): Config | undefined {
   let text: string;
   try {

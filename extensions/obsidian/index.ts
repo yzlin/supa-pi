@@ -45,7 +45,7 @@ function buildObsidianPrompt(paths: string[]): string {
 
 function activeContextPaths(
   active: ActiveVault,
-  state: LoadedContextState
+  state: LoadedContextState,
 ): string[] {
   return [...state.paths].filter((item) => assertContained(active.vault, item));
 }
@@ -54,7 +54,7 @@ function addMissingContext(
   pi: ExtensionAPI,
   active: ActiveVault,
   state: LoadedContextState,
-  targetPath: string
+  targetPath: string,
 ): string[] {
   const chain = discoverContextChain(active.vault, targetPath, state.paths);
   const missing = chain.filter((item) => !state.paths.has(item));
@@ -72,7 +72,7 @@ function addMissingContext(
 
 function appendObsidianPrompt(
   systemPrompt: string,
-  contextPrompt: string
+  contextPrompt: string,
 ): string {
   return `${systemPrompt}\n\n${contextPrompt}`;
 }
@@ -82,7 +82,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 function isTextSystemBlock(
-  block: unknown
+  block: unknown,
 ): block is Record<string, unknown> & { text: string; type: "text" } {
   return (
     isRecord(block) && block.type === "text" && typeof block.text === "string"
@@ -90,7 +90,7 @@ function isTextSystemBlock(
 }
 
 function isSystemMessage(
-  message: unknown
+  message: unknown,
 ): message is Record<string, unknown> & { content: string; role: "system" } {
   return (
     isRecord(message) &&
@@ -101,7 +101,7 @@ function isSystemMessage(
 
 function appendToAnthropicSystemBlock(
   block: unknown,
-  contextPrompt: string
+  contextPrompt: string,
 ): unknown {
   if (!isTextSystemBlock(block)) {
     return block;
@@ -115,7 +115,7 @@ function appendToAnthropicSystemBlock(
 
 function appendToProviderPayload(
   payload: unknown,
-  contextPrompt: string
+  contextPrompt: string,
 ): unknown | undefined {
   if (!isRecord(payload)) {
     return;
@@ -135,7 +135,7 @@ function appendToProviderPayload(
         system: payload.system.map((item, index) =>
           index === lastTextIndex
             ? appendToAnthropicSystemBlock(item, contextPrompt)
-            : item
+            : item,
         ),
       };
     }

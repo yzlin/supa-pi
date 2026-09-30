@@ -3,10 +3,41 @@
   "version": "1.0.0",
   "description": "Ethan's pi coding agent harness",
   "license": "MIT",
-  "readme": "README.md",
-  "type": "module",
   "bin": {
     "docs-list": "./scripts/docs-list.ts"
+  },
+  "type": "module",
+  "scripts": {
+    "check": "oxlint --type-aware && oxfmt --check",
+    "check:write": "oxlint --type-aware --fix && oxfmt",
+    "eval:prompts": "bun scripts/eval-prompts.ts",
+    "eval:prompts:test": "bun test evals/prompt-optimization",
+    "format": "oxfmt",
+    "lint": "oxlint --type-aware",
+    "lint:fix": "oxlint --type-aware --fix",
+    "test": "bun test"
+  },
+  "dependencies": {
+    "diff": "^8.0.4",
+    "ignore": "^7.0.5"
+  },
+  "devDependencies": {
+    "@earendil-works/pi-agent-core": "0.86.1",
+    "@earendil-works/pi-ai": "0.86.1",
+    "@earendil-works/pi-coding-agent": "0.86.1",
+    "@earendil-works/pi-tui": "0.86.1",
+    "@types/bun": "^1.3.12",
+    "oxfmt": "^0.71.0",
+    "oxlint": "^1.86.0",
+    "oxlint-tsgolint": "^7.0.2003",
+    "typescript": "^6.0.3",
+    "ultracite": "^7.3.1"
+  },
+  "peerDependencies": {
+    "@earendil-works/pi-ai": ">=0.86.1",
+    "@earendil-works/pi-coding-agent": ">=0.86.1",
+    "@earendil-works/pi-tui": ">=0.86.1",
+    "typebox": "^1.1.34"
   },
   "pi": {
     "extensions": [
@@ -44,34 +75,5 @@
       "./extensions/uv"
     ]
   },
-  "dependencies": {
-    "diff": "^8.0.4",
-    "ignore": "^7.0.5"
-  },
-  "scripts": {
-    "check": "biome check .",
-    "check:write": "biome check --write .",
-    "eval:prompts": "bun scripts/eval-prompts.ts",
-    "eval:prompts:test": "bun test evals/prompt-optimization",
-    "format": "biome format --write .",
-    "lint": "biome lint .",
-    "lint:fix": "biome lint --write .",
-    "test": "bun test"
-  },
-  "peerDependencies": {
-    "@earendil-works/pi-coding-agent": ">=0.86.1",
-    "@earendil-works/pi-ai": ">=0.86.1",
-    "@earendil-works/pi-tui": ">=0.86.1",
-    "typebox": "^1.1.34"
-  },
-  "devDependencies": {
-    "@biomejs/biome": "^2.4.7",
-    "@earendil-works/pi-agent-core": "0.86.1",
-    "@earendil-works/pi-ai": "0.86.1",
-    "@earendil-works/pi-coding-agent": "0.86.1",
-    "@earendil-works/pi-tui": "0.86.1",
-    "@types/bun": "^1.3.12",
-    "typescript": "^6.0.3",
-    "ultracite": "^7.3.1"
-  }
+  "readme": "README.md"
 }

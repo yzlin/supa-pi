@@ -179,7 +179,7 @@ export function parseRowScript(text: string): FileScript[] {
   finish();
   if (files.length === 0) {
     throw new Error(
-      "Row edit script must contain at least one [filename] section."
+      "Row edit script must contain at least one [filename] section.",
     );
   }
   for (const section of files) {
@@ -194,7 +194,7 @@ function parseUpdateChunk(
   lines: string[],
   start: number,
   last: number,
-  allowMissing: boolean
+  allowMissing: boolean,
 ): { chunk: UpdateChunk; next: number } {
   let index = start;
   let changeContext: string | undefined;
@@ -206,7 +206,7 @@ function parseUpdateChunk(
     index++;
   } else if (!allowMissing) {
     throw new Error(
-      `Expected update hunk to start with @@, got '${lines[index]}'`
+      `Expected update hunk to start with @@, got '${lines[index]}'`,
     );
   }
   const oldLines: string[] = [];
@@ -319,7 +319,7 @@ export function parsePatch(text: string): PatchOperation[] {
           lines,
           index,
           last,
-          chunks.length === 0
+          chunks.length === 0,
         );
         chunks.push(parsed.chunk);
         index = parsed.next;

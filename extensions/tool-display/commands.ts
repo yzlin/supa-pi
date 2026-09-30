@@ -34,13 +34,13 @@ function formatBoolean(value: boolean): string {
 }
 
 function isToolDisplayPresetName(
-  value: string | undefined
+  value: string | undefined,
 ): value is ToolDisplayPresetName {
   return value === "compact" || value === "verbose" || value === "off";
 }
 
 function summarizePatterns(
-  target: ToolDisplayConfig["tools"]["read"]["fullRead"]["targets"][number]
+  target: ToolDisplayConfig["tools"]["read"]["fullRead"]["targets"][number],
 ): string {
   if (target.source !== "patterns") {
     return "-";
@@ -66,7 +66,7 @@ function buildFullReadTargetRows(config: ToolDisplayConfig): string[] {
     "  name | source | enabled | provenance | cap | pagination | patterns",
     ...config.tools.read.fullRead.targets.map(
       (target) =>
-        `  ${target.name} | ${target.source} | ${formatBoolean(target.enabled)} | ${target.provenance} | ${target.maxBytes} | ${target.ignorePagination ? "full" : "paged"} | ${summarizePatterns(target)}`
+        `  ${target.name} | ${target.source} | ${formatBoolean(target.enabled)} | ${target.provenance} | ${target.maxBytes} | ${target.ignorePagination ? "full" : "paged"} | ${summarizePatterns(target)}`,
     ),
   ];
 
@@ -134,7 +134,7 @@ function getToolDisplayArgumentCompletions(argumentPrefix: string) {
     }
 
     const presets = TOOL_DISPLAY_PRESETS.filter(({ value }) =>
-      value.startsWith(nextToken)
+      value.startsWith(nextToken),
     );
     return presets.length > 0
       ? presets.map(({ value, description }) => ({
@@ -146,7 +146,7 @@ function getToolDisplayArgumentCompletions(argumentPrefix: string) {
   }
 
   const subcommands = TOOL_DISPLAY_SUBCOMMANDS.filter(({ value }) =>
-    value.startsWith(subcommand)
+    value.startsWith(subcommand),
   );
   return subcommands.length > 0
     ? subcommands.map(({ value, description }) => ({
@@ -162,7 +162,7 @@ function notifyWriteResult(
   result:
     | { ok: true; configPath: string; config: ToolDisplayConfig }
     | { ok: false; configPath: string; error: string },
-  successMessage: string
+  successMessage: string,
 ): void {
   if (result.ok) {
     ctx.ui.notify(`${successMessage}: ${result.configPath}`, "info");
@@ -191,7 +191,7 @@ export function registerToolDisplayCommands(pi: ExtensionAPI): void {
           if (!isToolDisplayPresetName(preset)) {
             ctx.ui.notify(
               "Usage: /tool-display preset <compact|verbose|off>",
-              "warning"
+              "warning",
             );
             return;
           }
@@ -200,9 +200,9 @@ export function registerToolDisplayCommands(pi: ExtensionAPI): void {
             ctx,
             writeProjectToolDisplayConfig(
               ctx.cwd,
-              getToolDisplayPresetConfig(preset)
+              getToolDisplayPresetConfig(preset),
             ),
-            `tool-display ${preset} preset written`
+            `tool-display ${preset} preset written`,
           );
           return;
         }
@@ -210,7 +210,7 @@ export function registerToolDisplayCommands(pi: ExtensionAPI): void {
           notifyWriteResult(
             ctx,
             resetProjectToolDisplayConfig(ctx.cwd),
-            "tool-display defaults written"
+            "tool-display defaults written",
           );
           return;
         }
@@ -218,7 +218,7 @@ export function registerToolDisplayCommands(pi: ExtensionAPI): void {
           if (command !== "help") {
             ctx.ui.notify(
               `Unknown /tool-display command: ${command}`,
-              "warning"
+              "warning",
             );
           }
           ctx.ui.notify(buildHelpMessage(), "info");

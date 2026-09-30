@@ -134,7 +134,7 @@ export function buildSkillInventoryModel({
 
 export function filterSkillInventory(
   inventory: SkillInventoryModel,
-  filter: SkillListFilter = {}
+  filter: SkillListFilter = {},
 ): SkillInventoryModel {
   const kind = filter.kind ?? "all";
   const query = (filter.query ?? "").trim().toLowerCase();
@@ -172,7 +172,7 @@ function sourceLabel(item: SkillInventoryItem): string | undefined {
 }
 
 export function buildSkillPreviewModel(
-  item: SkillInventoryItem
+  item: SkillInventoryItem,
 ): SkillPreviewModel {
   return {
     id: item.id,
@@ -189,7 +189,7 @@ export function buildSkillPreviewModel(
 }
 
 export function parseSkillCommandInitialState(
-  rawArgs = ""
+  rawArgs = "",
 ): SkillCommandInitialState {
   const trimmed = rawArgs.trim();
   if (!trimmed) {

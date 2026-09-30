@@ -26,7 +26,9 @@ type EventHandler = (event: any, ctx: any) => any;
 const roots: string[] = [];
 afterEach(async () => {
   await Promise.all(
-    roots.splice(0).map((root) => fs.rm(root, { recursive: true, force: true }))
+    roots
+      .splice(0)
+      .map((root) => fs.rm(root, { recursive: true, force: true })),
   );
 });
 
@@ -46,10 +48,10 @@ async function fixture(
   panel = "test/alpha=medium",
   finding = false,
   artifactAlias = false,
-  reviewedPath = "target.txt"
+  reviewedPath = "target.txt",
 ) {
   const root = await fs.realpath(
-    await fs.mkdtemp(path.join(os.tmpdir(), "review-lifecycle-"))
+    await fs.mkdtemp(path.join(os.tmpdir(), "review-lifecycle-")),
   );
   roots.push(root);
   await fs.mkdir(path.dirname(path.join(root, reviewedPath)), {
@@ -106,7 +108,7 @@ async function fixture(
         message.customType,
         message.content,
         message.display,
-        message.details
+        message.details,
       );
     },
   } as never);
@@ -114,12 +116,12 @@ async function fixture(
     .get("review")
     .handler(
       `folder ${reviewedPath} --reviewers code-reviewer --reviewer-models ${panel} --synthesizer-model test/synth --verifier-model test/verify`,
-      ctx
+      ctx,
     );
   expect(handoffs).toHaveLength(1);
   const runId = handoffs[0].match(RUN_ID_PATTERN)?.[1];
   const source = JSON.parse(
-    handoffs[0].split("\nPrepared script (JSON string, inert data):\n")[1]
+    handoffs[0].split("\nPrepared script (JSON string, inert data):\n")[1],
   );
   expect(typeof source).toBe("string");
   const taskId = "wf_12345678";
@@ -129,7 +131,7 @@ async function fixture(
       ? path.join(
           (await nativeNoncanonicalTmpdir())!,
           path.relative(await fs.realpath(os.tmpdir()), root),
-          `${taskId}.workflow.js`
+          `${taskId}.workflow.js`,
         )
       : scriptPath;
   const journalPath = scriptPath.replace(SCRIPT_SUFFIX, ".jsonl");
@@ -193,7 +195,7 @@ async function fixture(
             },
           ],
         }),
-      }
+      },
     );
   }
   let nativeSource = source;
@@ -201,14 +203,14 @@ async function fixture(
     await fs.writeFile(scriptPath, nativeSource);
     await fs.writeFile(
       journalPath,
-      `${records.map((entry) => JSON.stringify(entry)).join("\n")}\n`
+      `${records.map((entry) => JSON.stringify(entry)).join("\n")}\n`,
     );
   };
   await save();
   const dispatch = async (input = { script: source }, id = "call-1") => {
     const blocked = await events.get("tool_call")!(
       { toolName: "SubagentWorkflow", toolCallId: id, input },
-      ctx
+      ctx,
     );
     if (!blocked) {
       nativeSource = input.script;
@@ -225,7 +227,7 @@ async function fixture(
         content: [{ type: "text", text: `Script: ${reportedScriptPath}` }],
         isError: false,
       },
-      ctx
+      ctx,
     );
   const complete = (role = "custom", status = "completed") => {
     if (role === "custom") {
@@ -233,7 +235,7 @@ async function fixture(
         "subagent-notification",
         "truncated preview",
         true,
-        { id: taskId, status }
+        { id: taskId, status },
       );
     } else {
       sessionManager.appendMessage({
@@ -300,7 +302,7 @@ test("Pi executes expanded arguments through its public tool_call hook", async (
   const provider = fauxProvider();
   provider.setResponses([
     fauxAssistantMessage(
-      fauxToolCall("SubagentWorkflow", { script: f.source })
+      fauxToolCall("SubagentWorkflow", { script: f.source }),
     ),
     fauxAssistantMessage("Done"),
   ]);
@@ -403,7 +405,7 @@ test("finalization refuses publication after reviewed .pi configuration changes"
     "test/alpha=medium",
     false,
     false,
-    ".pi/settings.json"
+    ".pi/settings.json",
   );
   await f.ready();
   await fs.writeFile(path.join(f.root, ".pi", "settings.json"), "modified");
@@ -418,13 +420,13 @@ test("public extension clean handoff retrieves complete >4k journal once", async
   expect(
     await f.events.get("input")!(
       { source: "extension", text: "handoff" },
-      f.ctx
-    )
+      f.ctx,
+    ),
   ).toBeUndefined();
   await f.finalize();
   expect(f.messages).toHaveLength(1);
   expect(
-    f.messages[0].details.reviewers[0].humanReviewerCallouts[0]
+    f.messages[0].details.reviewers[0].humanReviewerCallouts[0],
   ).toHaveLength(6000);
   expect(Object.keys(f.messages[0].details).sort()).toEqual([
     "coverage",
@@ -521,7 +523,7 @@ for (const fault of [
     } else if (fault === "failed-tool") {
       await f.events.get("tool_result")!(
         { toolName: "SubagentWorkflow", toolCallId: "call-1", isError: true },
-        f.ctx
+        f.ctx,
       );
     } else {
       await f.result();
@@ -652,6 +654,6 @@ test("native reverse reviewer completion preserves model indices", async () => {
   expect(f.sessionManager.getBranch().at(-1)?.type).toBe("custom_message");
   await f.finalize();
   expect(
-    f.messages[0].details.coverage.runs.map((run: any) => run.model)
+    f.messages[0].details.coverage.runs.map((run: any) => run.model),
   ).toEqual(["test/alpha", "test/beta"]);
 });

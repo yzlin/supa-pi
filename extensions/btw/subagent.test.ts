@@ -59,7 +59,7 @@ describe("runSubagent", () => {
       (selectedModel, context) => {
         providerMessages = context.messages;
         return successfulStream(selectedModel);
-      }
+      },
     );
 
     expect(providerMessages.map((message) => message.role)).toEqual([
@@ -78,7 +78,7 @@ describe("appendFinalOutput", () => {
 
   it("appends later text chunks with newlines", () => {
     expect(appendFinalOutput("first chunk", "second chunk")).toBe(
-      "first chunk\nsecond chunk"
+      "first chunk\nsecond chunk",
     );
   });
 });

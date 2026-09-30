@@ -7,14 +7,14 @@ const browserSkillPath = join(
   repositoryRoot,
   "skills",
   "web-browser",
-  "SKILL.md"
+  "SKILL.md",
 );
 const e2eSkillPath = join(repositoryRoot, "skills", "e2e-testing", "SKILL.md");
 const developmentWorkflowPath = join(
   repositoryRoot,
   "rules",
   "common",
-  "development-workflow.md"
+  "development-workflow.md",
 );
 
 function readFile(path: string): string {
@@ -53,7 +53,7 @@ describe("web-browser routing instruction assertions (not proof of model complia
 
     for (const script of ["start.js", "nav.js", "eval.js", "screenshot.js"]) {
       expect(
-        existsSync(join(dirname(browserSkillPath), "scripts", script))
+        existsSync(join(dirname(browserSkillPath), "scripts", script)),
       ).toBe(true);
     }
   });
@@ -70,7 +70,7 @@ describe("web-browser routing instruction assertions (not proof of model complia
     }
 
     expect(skill.indexOf("canonical browser-interaction route")).toBeLessThan(
-      skill.indexOf("pi-computer-use")
+      skill.indexOf("pi-computer-use"),
     );
   });
 

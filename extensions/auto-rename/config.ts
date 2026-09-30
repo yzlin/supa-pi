@@ -75,7 +75,7 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
 
 function isIntegerInRange(
   value: unknown,
-  range: { readonly min: number; readonly max: number }
+  range: { readonly min: number; readonly max: number },
 ): value is number {
   return (
     typeof value === "number" &&
@@ -86,20 +86,20 @@ function isIntegerInRange(
 }
 
 export function getAutoRenameConfigPath(
-  homeDir = process.env.HOME ?? homedir()
+  homeDir = process.env.HOME ?? homedir(),
 ): string {
   return join(homeDir, ".pi", "agent", "auto-rename.json");
 }
 
 export function validateAutoRenameConfig(
-  input: unknown
+  input: unknown,
 ): AutoRenameConfigState {
   if (!isPlainObject(input)) {
     return invalidConfig("Configuration must be a JSON object.");
   }
 
   const unknownKey = Object.keys(input).find(
-    (key) => !CONFIG_KEYS.has(key as keyof AutoRenameConfig)
+    (key) => !CONFIG_KEYS.has(key as keyof AutoRenameConfig),
   );
   if (unknownKey !== undefined) {
     return invalidConfig(`Unknown configuration key: ${unknownKey}.`);
@@ -115,14 +115,14 @@ export function validateAutoRenameConfig(
       input.prompt.length > AUTO_RENAME_CONFIG_LIMITS.prompt.max)
   ) {
     return invalidConfig(
-      `prompt must be non-empty and at most ${AUTO_RENAME_CONFIG_LIMITS.prompt.max} characters.`
+      `prompt must be non-empty and at most ${AUTO_RENAME_CONFIG_LIMITS.prompt.max} characters.`,
     );
   }
   if (
     "maxQueryLength" in input &&
     !isIntegerInRange(
       input.maxQueryLength,
-      AUTO_RENAME_CONFIG_LIMITS.maxQueryLength
+      AUTO_RENAME_CONFIG_LIMITS.maxQueryLength,
     )
   ) {
     return invalidConfig("maxQueryLength must be an integer within its range.");
@@ -131,7 +131,7 @@ export function validateAutoRenameConfig(
     "maxNameLength" in input &&
     !isIntegerInRange(
       input.maxNameLength,
-      AUTO_RENAME_CONFIG_LIMITS.maxNameLength
+      AUTO_RENAME_CONFIG_LIMITS.maxNameLength,
     )
   ) {
     return invalidConfig("maxNameLength must be an integer within its range.");
@@ -162,7 +162,7 @@ function isMissingFileError(error: unknown): boolean {
 }
 
 export function loadAutoRenameConfig(
-  homeDir = process.env.HOME ?? homedir()
+  homeDir = process.env.HOME ?? homedir(),
 ): AutoRenameConfigState {
   const configPath = getAutoRenameConfigPath(homeDir);
   let contents: string;

@@ -22,7 +22,7 @@ const tempDirs: string[] = [];
 function tempDir(): string {
   const dir = join(
     import.meta.dir,
-    `.tmp-presentation-${Date.now()}-${Math.random()}`
+    `.tmp-presentation-${Date.now()}-${Math.random()}`,
   );
   mkdirSync(dir, { recursive: true });
   tempDirs.push(dir);
@@ -76,7 +76,7 @@ describe("reasoned tool composition", () => {
       { reasoning: "Inspect configuration", path: "a.ts" },
       undefined,
       undefined,
-      { cwd: "." } as never
+      { cwd: "." } as never,
     );
     expect(delegated).toEqual({ path: "a.ts" });
   });
@@ -96,7 +96,7 @@ describe("owned tool presentation", () => {
       "read",
       context.args,
       plainTheme,
-      context as never
+      context as never,
     );
     expect(call.render(80)).toEqual([
       "┊ • 📖 read Read file",
@@ -108,7 +108,7 @@ describe("owned tool presentation", () => {
       { content: [{ type: "text", text: "one\ntwo" }] },
       {},
       plainTheme,
-      context as never
+      context as never,
     );
     expect(call.render(80)).toEqual(["┊ ✓ 📖 read Read file"]);
     expect(result.render(80)).toEqual(["┊   src/deep/target.ts → 2 lines"]);
@@ -130,7 +130,7 @@ describe("owned tool presentation", () => {
       },
       {},
       plainTheme,
-      context as never
+      context as never,
     );
 
     expect(result.render(80)).toEqual([
@@ -158,7 +158,7 @@ describe("owned tool presentation", () => {
       },
       {},
       plainTheme,
-      context as never
+      context as never,
     );
 
     expect(result.render(120).join(" ")).toContain("2 matches · 2 files");
@@ -183,7 +183,7 @@ describe("owned tool presentation", () => {
       "edit",
       { text: "[a.txt]\n@REPLACE\n-old a\n+new a" },
       plainTheme,
-      context
+      context,
     );
     expect(first.render(100).join("\n")).toContain("planning preview");
 
@@ -209,7 +209,7 @@ describe("owned tool presentation", () => {
       },
       {},
       plainTheme,
-      { ...context, args: secondArgs }
+      { ...context, args: secondArgs },
     );
     expect(second.render(100).join("\n")).not.toContain("planned diff");
     expect(result.render(100).join("\n")).toContain("applied in 1s");
@@ -263,7 +263,7 @@ describe("owned tool presentation", () => {
           return;
         },
         state,
-      }
+      },
     );
 
     await sleep(30);
@@ -286,7 +286,7 @@ describe("owned tool presentation", () => {
           throw new Error("partial preview invalidated");
         },
         state,
-      }
+      },
     );
     await sleep(5);
     expect(call.render(50)).toEqual([
@@ -311,7 +311,7 @@ describe("owned tool presentation", () => {
         { content: [{ type: "text", text: "done" }] },
         {},
         plainTheme,
-        context as never
+        context as never,
       )
         .render(120)
         .join(" ");
@@ -319,13 +319,13 @@ describe("owned tool presentation", () => {
 
     expect(
       renderTarget(
-        "*** Begin Patch\n*** Update File: a.ts\n@@\n-old\n+new\n*** End Patch"
-      )
+        "*** Begin Patch\n*** Update File: a.ts\n@@\n-old\n+new\n*** End Patch",
+      ),
     ).toContain("a.ts →");
     expect(
       renderTarget(
-        "*** Begin Patch\n*** Update File: a.ts\n@@\n-old\n+new\n*** Add File: b.ts\n+new\n*** End Patch"
-      )
+        "*** Begin Patch\n*** Update File: a.ts\n@@\n-old\n+new\n*** Add File: b.ts\n+new\n*** End Patch",
+      ),
     ).toContain("a.ts, b.ts →");
   });
 
@@ -345,20 +345,20 @@ describe("owned tool presentation", () => {
       "grep",
       context.args,
       plainTheme,
-      context as never
+      context as never,
     );
     const result = renderOwnedToolResult(
       "grep",
       { content: [{ type: "text", text: "a.ts:1:x\na.ts:2:y\nb.ts:3:z" }] },
       {},
       plainTheme,
-      context as never
+      context as never,
     );
     expect(result.render(120).join(" ")).toContain("3 matches · 2 files");
     expect(
       [...call.render(24), ...result.render(24)].every(
-        (line) => visibleWidth(line) <= 24
-      )
+        (line) => visibleWidth(line) <= 24,
+      ),
     ).toBe(true);
   });
 
@@ -439,7 +439,7 @@ describe("owned tool presentation", () => {
           return guardedLines;
         },
       },
-      true
+      true,
     );
     const result = renderOwnedToolResult(
       "read",
@@ -447,7 +447,7 @@ describe("owned tool presentation", () => {
       {},
       plainTheme,
       { args: { path: "large.ts" }, state: {} },
-      body
+      body,
     );
 
     const rendered = result.render(40);

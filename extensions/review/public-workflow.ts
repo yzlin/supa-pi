@@ -68,11 +68,11 @@ const PUBLIC_EFFORTS = new Set([
 ]);
 
 export function assertPublicReviewEfforts(
-  panel: readonly ReviewPanelEntry[]
+  panel: readonly ReviewPanelEntry[],
 ): void {
   if (panel.some((entry) => entry.thinkingLevel === "off")) {
     throw new Error(
-      "Native /review does not support thinking level 'off'; choose minimal, low, medium, high, or xhigh in --reviewer-models or your review config. Saved config entries are not changed."
+      "Native /review does not support thinking level 'off'; choose minimal, low, medium, high, or xhigh in --reviewer-models or your review config. Saved config entries are not changed.",
     );
   }
 }
@@ -83,7 +83,7 @@ function normalizeInput(input: PublicReviewWorkflowInput) {
   }
   if (!(input.scopeHint.trim() && input.invocationPacket.trim())) {
     throw new Error(
-      "Public review workflow scope and packet must be non-empty."
+      "Public review workflow scope and packet must be non-empty.",
     );
   }
   if (!input.reviewers.length) {
@@ -96,7 +96,7 @@ function normalizeInput(input: PublicReviewWorkflowInput) {
   }
   if (input.reviewerPanel.length < 1 || input.reviewerPanel.length > 4) {
     throw new Error(
-      "Public review workflow model panel must contain 1–4 entries."
+      "Public review workflow model panel must contain 1–4 entries.",
     );
   }
   assertPublicReviewEfforts(input.reviewerPanel);
@@ -117,7 +117,7 @@ function normalizeInput(input: PublicReviewWorkflowInput) {
   });
   if (!(input.synthesizerModel.trim() && input.verifierModel.trim())) {
     throw new Error(
-      "Public review workflow downstream model IDs cannot be blank."
+      "Public review workflow downstream model IDs cannot be blank.",
     );
   }
   return {
@@ -237,7 +237,7 @@ const buildVerifierPrompt = (input, candidates, clusters) => {
 `;
 
 export function prepareReviewWorkflowScript(
-  input: PublicReviewWorkflowInput
+  input: PublicReviewWorkflowInput,
 ): string {
   const prepared = normalizeInput(input);
   const encodedInput = JSON.stringify(prepared);

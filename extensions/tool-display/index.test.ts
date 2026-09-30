@@ -29,7 +29,7 @@ function projectConfig(editEnabled: boolean): string {
   mkdirSync(join(cwd, ".pi"));
   writeFileSync(
     join(cwd, ".pi", "tool-display.json"),
-    JSON.stringify({ tools: { edit: { enabled: editEnabled } } })
+    JSON.stringify({ tools: { edit: { enabled: editEnabled } } }),
   );
   return cwd;
 }
@@ -101,7 +101,7 @@ describe("tool-display registration", () => {
     const call = edit?.renderCall?.(
       args,
       plainTheme as never,
-      context as never
+      context as never,
     );
     const result = {
       content: [{ type: "text" as const, text: "Successfully replaced." }],
@@ -114,10 +114,10 @@ describe("tool-display registration", () => {
       result,
       { expanded: false, isPartial: false },
       plainTheme as never,
-      context as never
+      context as never,
     );
     expect(call?.render(100).join("\n")).toContain(
-      "✏️ edit Apply row edit · 1 file · a.ts"
+      "✏️ edit Apply row edit · 1 file · a.ts",
     );
     expect(compact?.render(100).join("\n")).toContain("a.ts → applied in");
     expect(compact?.render(100).join("\n")).not.toContain("-old");
@@ -126,7 +126,7 @@ describe("tool-display registration", () => {
       result,
       { expanded: true, isPartial: false },
       plainTheme as never,
-      context as never
+      context as never,
     );
     expect(expanded?.render(100).join("\n")).toContain("old");
     expect(expanded?.render(100).join("\n")).toContain("new");
@@ -143,7 +143,7 @@ describe("tool-display registration", () => {
     Object.assign(pi, {
       on(
         event: string,
-        handler: (event: unknown, ctx: { cwd: string }) => void
+        handler: (event: unknown, ctx: { cwd: string }) => void,
       ) {
         handlers.set(event, [...(handlers.get(event) ?? []), handler]);
       },

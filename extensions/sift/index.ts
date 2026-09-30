@@ -48,7 +48,7 @@ interface Client {
     query: string,
     path: string,
     content: string,
-    signal?: AbortSignal
+    signal?: AbortSignal,
   ): Promise<JevJudgment>;
 }
 interface Dependencies {
@@ -76,7 +76,7 @@ const parameters = Type.Object(
       uniqueItems: true,
     }),
   },
-  { additionalProperties: false }
+  { additionalProperties: false },
 );
 
 export function createSiftExtension(dependencies: Dependencies = {}) {
@@ -93,14 +93,14 @@ export function createSiftExtension(dependencies: Dependencies = {}) {
     const report = (
       ctx: ExtensionContext,
       message: string,
-      level: "info" | "error"
+      level: "info" | "error",
     ) => {
       if (ctx.hasUI) {
         ctx.ui.notify(message, level);
       } else {
         pi.sendMessage(
           { customType: "sift-status", content: message, display: true },
-          { triggerTurn: false }
+          { triggerTurn: false },
         );
       }
     };
@@ -123,7 +123,7 @@ export function createSiftExtension(dependencies: Dependencies = {}) {
       async execute(_id, params, signal, _update, ctx) {
         if (!(await configStore.load())) {
           throw new Error(
-            "Sift is disabled; the user must run /sift enable first"
+            "Sift is disabled; the user must run /sift enable first",
           );
         }
         const credential = await store.resolve();
@@ -152,10 +152,10 @@ export function createSiftExtension(dependencies: Dependencies = {}) {
         return new Text(
           theme.fg(
             "toolTitle",
-            `sift ${args.paths.length} file${args.paths.length === 1 ? "" : "s"}`
+            `sift ${args.paths.length} file${args.paths.length === 1 ? "" : "s"}`,
           ),
           0,
-          0
+          0,
         );
       },
       renderResult(result, options, theme) {
@@ -175,7 +175,7 @@ export function createSiftExtension(dependencies: Dependencies = {}) {
       description: "Manage TypeSafe Sift authentication and persisted consent",
       getArgumentCompletions(prefix) {
         return ACTIONS.filter((action) => action.startsWith(prefix)).map(
-          (action) => ({ value: action, label: action })
+          (action) => ({ value: action, label: action }),
         );
       },
       handler: async (raw, ctx) => {
@@ -184,7 +184,7 @@ export function createSiftExtension(dependencies: Dependencies = {}) {
           report(
             ctx,
             "Usage: /sift [login|logout|status|enable|disable]",
-            "error"
+            "error",
           );
           return;
         }
@@ -192,7 +192,7 @@ export function createSiftExtension(dependencies: Dependencies = {}) {
           report(
             ctx,
             await statusText(await configStore.load(), budget, store),
-            "info"
+            "info",
           );
           return;
         }
@@ -208,7 +208,7 @@ export function createSiftExtension(dependencies: Dependencies = {}) {
           report(
             ctx,
             `Stored Sift credential cleared; Sift disabled.${environmentRemains ? " TYPESAFE_API_KEY remains and takes precedence." : ""}`,
-            "info"
+            "info",
           );
           return;
         }
@@ -218,7 +218,7 @@ export function createSiftExtension(dependencies: Dependencies = {}) {
             report(
               ctx,
               "Sift needs a usable TypeSafe credential. Run /sift login or set TYPESAFE_API_KEY.",
-              "error"
+              "error",
             );
             return;
           }
@@ -226,13 +226,13 @@ export function createSiftExtension(dependencies: Dependencies = {}) {
             report(
               ctx,
               "Persistent enablement requires interactive TUI; run /sift enable there.",
-              "error"
+              "error",
             );
             return;
           }
           const confirmed = await ctx.ui.confirm(
             "Enable TypeSafe Sift globally?",
-            "Selected file contents will leave this machine for paid TypeSafe Jev judgments. Secret detection is incomplete. Enable for this and future sessions?"
+            "Selected file contents will leave this machine for paid TypeSafe Jev judgments. Secret detection is incomplete. Enable for this and future sessions?",
           );
           if (!confirmed) {
             report(ctx, "Sift remains disabled.", "info");
@@ -247,7 +247,7 @@ export function createSiftExtension(dependencies: Dependencies = {}) {
           report(
             ctx,
             "TYPESAFE_API_KEY takes precedence; stored authentication was not changed.",
-            "info"
+            "info",
           );
           return;
         }
@@ -259,7 +259,7 @@ export function createSiftExtension(dependencies: Dependencies = {}) {
           report(
             ctx,
             "Secure login requires interactive TUI; set TYPESAFE_API_KEY for headless use.",
-            "error"
+            "error",
           );
           return;
         }
@@ -268,7 +268,7 @@ export function createSiftExtension(dependencies: Dependencies = {}) {
           report(
             ctx,
             "Sift login cancelled; authentication unchanged.",
-            "info"
+            "info",
           );
           return;
         }
@@ -281,7 +281,7 @@ export function createSiftExtension(dependencies: Dependencies = {}) {
           report(
             ctx,
             "TypeSafe credential is invalid; authentication unchanged.",
-            "error"
+            "error",
           );
           return;
         }
@@ -290,20 +290,20 @@ export function createSiftExtension(dependencies: Dependencies = {}) {
           await verifier.judge(
             "Credential verification request",
             "verification.txt",
-            "Synthetic credential verification; no workspace content."
+            "Synthetic credential verification; no workspace content.",
           );
           await store.save(normalizedKey);
           report(
             ctx,
             "TypeSafe credential verified and saved securely.",
-            "info"
+            "info",
           );
         } catch (error) {
           const category = safeLoginFailureCategory(error);
           report(
             ctx,
             `TypeSafe credential verification failed (${category}); authentication unchanged.`,
-            "error"
+            "error",
           );
         }
       },
@@ -318,7 +318,7 @@ function safeLoginFailureCategory(error: unknown): JevFailureCategory {
 async function statusText(
   enabled: boolean,
   budget: SessionBudget,
-  store: Store
+  store: Store,
 ): Promise<string> {
   const credential = await store.status();
   const reason = "reason" in credential ? ` (${credential.reason})` : "";
@@ -343,21 +343,21 @@ class SiftLoginPrompt extends Container implements Focusable {
       fg(color: string, text: string): string;
       bold(text: string): string;
     },
-    done: (value: string | undefined) => void
+    done: (value: string | undefined) => void,
   ) {
     super();
     this.addChild(
-      new Text(theme.fg("accent", theme.bold("TypeSafe API key")), 1, 0)
+      new Text(theme.fg("accent", theme.bold("TypeSafe API key")), 1, 0),
     );
     this.addChild(
       new Text(
         theme.fg(
           "muted",
-          "Get one at console.typesafe.ai › API Keys, then paste it here. Input is hidden. Enter verifies and saves; Esc cancels."
+          "Get one at console.typesafe.ai › API Keys, then paste it here. Input is hidden. Enter verifies and saves; Esc cancels.",
         ),
         1,
-        0
-      )
+        0,
+      ),
     );
     this.addChild(this.#input);
     this.#input.onSubmit = (value) => done(value);
@@ -398,7 +398,7 @@ class MaskedKeyInput extends Input {
 }
 function hiddenInput(ctx: ExtensionContext): Promise<string | undefined> {
   return ctx.ui.custom<string | undefined>(
-    (_tui, theme, _keys, done) => new SiftLoginPrompt(theme, done)
+    (_tui, theme, _keys, done) => new SiftLoginPrompt(theme, done),
   );
 }
 

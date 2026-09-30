@@ -49,11 +49,11 @@ function run(cwd: string, command: string, args: string[]): void {
 
 function scoreOutput(
   output: string,
-  checks: Parameters<typeof scoreRun>[1]
+  checks: Parameters<typeof scoreRun>[1],
 ): ReturnType<typeof scoreRun> {
   return scoreRun(
     { output, workspace: createTemporaryDirectory(), toolCalls: [] },
-    checks
+    checks,
   );
 }
 
@@ -89,36 +89,34 @@ describe("parseCorpus", () => {
     expect(corpus.cases[0]?.id).toBe("explain");
   });
 
-  it.each([
-    "diagnose",
-    "showing-me",
-    "e2e-testing",
-    "context-docs",
-  ])("accepts the %s skill prompt", (skillName) => {
-    const promptPath = `skills/${skillName}/SKILL.md`;
-    const corpus = parseCorpus({
-      version: 1,
-      cases: [
-        {
-          id: skillName,
-          workload: "explanation",
-          promptPath,
-          task: "Explain the topic.",
-          tools: [],
-          checks: [
-            {
-              type: "outputIncludes",
-              value: "topic",
-              domain: "quality",
-              weight: 1,
-            },
-          ],
-        },
-      ],
-    });
+  it.each(["diagnose", "showing-me", "e2e-testing", "context-docs"])(
+    "accepts the %s skill prompt",
+    (skillName) => {
+      const promptPath = `skills/${skillName}/SKILL.md`;
+      const corpus = parseCorpus({
+        version: 1,
+        cases: [
+          {
+            id: skillName,
+            workload: "explanation",
+            promptPath,
+            task: "Explain the topic.",
+            tools: [],
+            checks: [
+              {
+                type: "outputIncludes",
+                value: "topic",
+                domain: "quality",
+                weight: 1,
+              },
+            ],
+          },
+        ],
+      });
 
-    expect(corpus.cases[0]?.promptPath).toBe(promptPath);
-  });
+      expect(corpus.cases[0]?.promptPath).toBe(promptPath);
+    },
+  );
 
   it("accepts ask and rejects the old public questionnaire tool name", () => {
     const evalCase = {
@@ -138,13 +136,13 @@ describe("parseCorpus", () => {
     };
 
     expect(
-      parseCorpus({ version: 1, cases: [evalCase] }).cases[0]?.tools
+      parseCorpus({ version: 1, cases: [evalCase] }).cases[0]?.tools,
     ).toEqual(["ask"]);
     expect(() =>
       parseCorpus({
         version: 1,
         cases: [{ ...evalCase, tools: ["questionnaire"] }],
-      })
+      }),
     ).toThrow("tools contains an unsupported tool");
   });
 
@@ -169,7 +167,7 @@ describe("parseCorpus", () => {
             ],
           },
         ],
-      })
+      }),
     ).toThrow("promptPath must target a SupaPi prompt");
   });
 
@@ -191,7 +189,7 @@ describe("parseCorpus", () => {
     };
 
     expect(() =>
-      parseCorpus({ version: 1, cases: [repeatedCase, repeatedCase] })
+      parseCorpus({ version: 1, cases: [repeatedCase, repeatedCase] }),
     ).toThrow("duplicate case id");
   });
 
@@ -216,7 +214,7 @@ describe("parseCorpus", () => {
             ],
           },
         ],
-      })
+      }),
     ).toThrow("safe for artifact filenames");
   });
 
@@ -234,7 +232,7 @@ describe("parseCorpus", () => {
             checks: [],
           },
         ],
-      })
+      }),
     ).toThrow("promptPath");
   });
 
@@ -274,8 +272,8 @@ describe("parseCorpus", () => {
           args: { command: "bun test tests/math.case.ts" },
           min: 1,
           max: 2,
-        })
-      ).cases[0]?.checks[0]
+        }),
+      ).cases[0]?.checks[0],
     ).toEqual({
       type: "toolCallCount",
       name: "bash",
@@ -305,7 +303,7 @@ describe("parseCorpus", () => {
 describe("committed corpus", () => {
   it("covers all seven target workloads and all current prompt targets", () => {
     const corpus = parseCorpus(
-      JSON.parse(readFileSync(join(moduleDirectory, "corpus.json"), "utf8"))
+      JSON.parse(readFileSync(join(moduleDirectory, "corpus.json"), "utf8")),
     );
     expect(new Set(corpus.cases.map((evalCase) => evalCase.workload))).toEqual(
       new Set([
@@ -316,10 +314,10 @@ describe("committed corpus", () => {
         "code review",
         "web research",
         "tool-heavy orchestration",
-      ])
+      ]),
     );
     const coveredPaths = new Set(
-      corpus.cases.map((evalCase) => evalCase.promptPath)
+      corpus.cases.map((evalCase) => evalCase.promptPath),
     );
     const expectedPaths = [
       "extensions/core-prompt/prompt.md",
@@ -339,20 +337,20 @@ describe("committed corpus", () => {
       "skills/diagnose/SKILL.md",
       "skills/showing-me/SKILL.md",
       "skills/e2e-testing/SKILL.md",
-      "skills/context-docs/SKILL.md"
+      "skills/context-docs/SKILL.md",
     );
     expect(coveredPaths).toEqual(new Set(expectedPaths));
   });
 
   it("distinguishes action readiness from evaluation-only scope", async () => {
     const corpus = parseCorpus(
-      JSON.parse(readFileSync(join(moduleDirectory, "corpus.json"), "utf8"))
+      JSON.parse(readFileSync(join(moduleDirectory, "corpus.json"), "utf8")),
     );
     const actionCase = corpus.cases.find(
-      (evalCase) => evalCase.id === "readiness-action-fix"
+      (evalCase) => evalCase.id === "readiness-action-fix",
     );
     const evaluationCase = corpus.cases.find(
-      (evalCase) => evalCase.id === "readiness-evaluation-only"
+      (evalCase) => evalCase.id === "readiness-evaluation-only",
     );
     if (!(actionCase && evaluationCase)) {
       throw new Error("readiness paired core-prompt cases are missing");
@@ -368,8 +366,8 @@ describe("committed corpus", () => {
       mathPath,
       readFileSync(mathPath, "utf8").replace(
         "return left - right;",
-        "return left + right;"
-      )
+        "return left + right;",
+      ),
     );
     const completedAction = await scoreRun(
       {
@@ -397,7 +395,7 @@ describe("committed corpus", () => {
           },
         ],
       },
-      actionCase.checks
+      actionCase.checks,
     );
     expect(completedAction.overall).toBe(1);
 
@@ -407,7 +405,7 @@ describe("committed corpus", () => {
         workspace: createTemporaryDirectory(),
         toolCalls: [],
       },
-      actionCase.checks
+      actionCase.checks,
     );
     expect(acknowledgmentOnly.overall).toBeLessThan(1);
 
@@ -417,7 +415,7 @@ describe("committed corpus", () => {
       evaluationWorkspace,
       {
         recursive: true,
-      }
+      },
     );
     const evaluationSnapshot = await snapshotWorkspace(evaluationWorkspace);
     const groundedEvaluation = await scoreRun(
@@ -435,7 +433,7 @@ describe("committed corpus", () => {
           },
         ],
       },
-      evaluationCase.checks
+      evaluationCase.checks,
     );
     expect(groundedEvaluation.overall).toBe(1);
 
@@ -443,8 +441,8 @@ describe("committed corpus", () => {
       join(evaluationWorkspace, "src/math.ts"),
       readFileSync(join(evaluationWorkspace, "src/math.ts"), "utf8").replace(
         "return left - right;",
-        "return left + right;"
-      )
+        "return left + right;",
+      ),
     );
     const unauthorizedMutation = await scoreRun(
       {
@@ -464,20 +462,20 @@ describe("committed corpus", () => {
           },
         ],
       },
-      evaluationCase.checks
+      evaluationCase.checks,
     );
     expect(unauthorizedMutation.overall).toBeLessThan(1);
   });
 
   it("distinguishes routine inferable gaps from consequential ambiguity", async () => {
     const corpus = parseCorpus(
-      JSON.parse(readFileSync(join(moduleDirectory, "corpus.json"), "utf8"))
+      JSON.parse(readFileSync(join(moduleDirectory, "corpus.json"), "utf8")),
     );
     const routineCase = corpus.cases.find(
-      (evalCase) => evalCase.id === "readiness-routine-inference"
+      (evalCase) => evalCase.id === "readiness-routine-inference",
     );
     const ambiguousCase = corpus.cases.find(
-      (evalCase) => evalCase.id === "readiness-consequential-ambiguity"
+      (evalCase) => evalCase.id === "readiness-consequential-ambiguity",
     );
     if (!(routineCase && ambiguousCase)) {
       throw new Error("readiness inference/ambiguity case pair is missing");
@@ -489,7 +487,7 @@ describe("committed corpus", () => {
       completedWorkspace,
       {
         recursive: true,
-      }
+      },
     );
     const completedSnapshot = await snapshotWorkspace(completedWorkspace);
     const completedMathPath = join(completedWorkspace, "src/math.ts");
@@ -497,8 +495,8 @@ describe("committed corpus", () => {
       completedMathPath,
       readFileSync(completedMathPath, "utf8").replace(
         "return left - right;",
-        "return left + right;"
-      )
+        "return left + right;",
+      ),
     );
     const completedRoutineWork = await scoreRun(
       {
@@ -533,7 +531,7 @@ describe("committed corpus", () => {
           },
         ],
       },
-      routineCase.checks
+      routineCase.checks,
     );
     expect(completedRoutineWork.overall).toBe(1);
 
@@ -550,7 +548,7 @@ describe("committed corpus", () => {
         initialWorkspaceSnapshot: stalledSnapshot,
         toolCalls: [],
       },
-      routineCase.checks
+      routineCase.checks,
     );
     expect(needlessStall.overall).toBeLessThan(1);
 
@@ -574,7 +572,7 @@ describe("committed corpus", () => {
       cpSync(
         join(moduleDirectory, "fixtures/sample-project"),
         clarifiedWorkspace,
-        { recursive: true }
+        { recursive: true },
       );
       const clarifiedSnapshot = await snapshotWorkspace(clarifiedWorkspace);
       const focusedClarification = await scoreRun(
@@ -593,7 +591,7 @@ describe("committed corpus", () => {
             },
           ],
         },
-        ambiguousCase.checks
+        ambiguousCase.checks,
       );
       expect(focusedClarification.overall).toBe(1);
     }
@@ -619,7 +617,7 @@ describe("committed corpus", () => {
       cpSync(
         join(moduleDirectory, "fixtures/sample-project"),
         rejectedWorkspace,
-        { recursive: true }
+        { recursive: true },
       );
       const rejectedSnapshot = await snapshotWorkspace(rejectedWorkspace);
       const rejectedClarification = await scoreRun(
@@ -638,7 +636,7 @@ describe("committed corpus", () => {
             },
           ],
         },
-        ambiguousCase.checks
+        ambiguousCase.checks,
       );
       expect(rejectedClarification.overall).toBeLessThan(1);
     }
@@ -649,7 +647,7 @@ describe("committed corpus", () => {
       speculativeWorkspace,
       {
         recursive: true,
-      }
+      },
     );
     const speculativeSnapshot = await snapshotWorkspace(speculativeWorkspace);
     const speculativeAuthPath = join(speculativeWorkspace, "src/auth.ts");
@@ -657,8 +655,8 @@ describe("committed corpus", () => {
       speculativeAuthPath,
       readFileSync(speculativeAuthPath, "utf8").replace(
         "  if (debug) {\n    return true;\n  }\n",
-        ""
-      )
+        "",
+      ),
     );
     const otherwiseValidDecision =
       "src/auth.ts confirms the bypass. Please confirm either: require the admin role regardless of debug, or retain the verified internal-debug exception.";
@@ -697,12 +695,12 @@ describe("committed corpus", () => {
           initialWorkspaceSnapshot: speculativeSnapshot,
           toolCalls: [groundedRead, mutation],
         },
-        ambiguousCase.checks
+        ambiguousCase.checks,
       );
       expect(
         speculativeMutation.checks.find(
-          ({ check }) => check.type === "authPolicyClarification"
-        )?.passed
+          ({ check }) => check.type === "authPolicyClarification",
+        )?.passed,
       ).toBe(true);
       expect(speculativeMutation.overall).toBeLessThan(1);
     }
@@ -710,13 +708,13 @@ describe("committed corpus", () => {
 
   it("rewards independent delegation only for the broad investigation", async () => {
     const corpus = parseCorpus(
-      JSON.parse(readFileSync(join(moduleDirectory, "corpus.json"), "utf8"))
+      JSON.parse(readFileSync(join(moduleDirectory, "corpus.json"), "utf8")),
     );
     const broadCase = corpus.cases.find(
-      (evalCase) => evalCase.id === "readiness-independent-delegation"
+      (evalCase) => evalCase.id === "readiness-independent-delegation",
     );
     const narrowCase = corpus.cases.find(
-      (evalCase) => evalCase.id === "readiness-local-lookup"
+      (evalCase) => evalCase.id === "readiness-local-lookup",
     );
     if (!(broadCase && narrowCase)) {
       throw new Error("readiness delegation choice case pair is missing");
@@ -758,7 +756,7 @@ describe("committed corpus", () => {
           broadParentRead,
         ],
       },
-      broadCase.checks
+      broadCase.checks,
     );
     const broadBad = await scoreRun(
       {
@@ -776,7 +774,7 @@ describe("committed corpus", () => {
           broadParentRead,
         ],
       },
-      broadCase.checks
+      broadCase.checks,
     );
 
     expect(broadGood.overall).toBe(1);
@@ -797,7 +795,7 @@ describe("committed corpus", () => {
         initialWorkspaceSnapshot,
         toolCalls: [narrowRead],
       },
-      narrowCase.checks
+      narrowCase.checks,
     );
     const narrowBad = await scoreRun(
       {
@@ -815,7 +813,7 @@ describe("committed corpus", () => {
           },
         ],
       },
-      narrowCase.checks
+      narrowCase.checks,
     );
 
     expect(narrowGood.overall).toBe(1);
@@ -835,7 +833,7 @@ describe("committed corpus", () => {
           },
         ],
       },
-      narrowCase.checks
+      narrowCase.checks,
     );
     expect(retainedGrepLookup.overall).toBe(1);
     expect(narrowBad.overall).toBeLessThan(1);
@@ -843,7 +841,7 @@ describe("committed corpus", () => {
 
   it("accepts focused show-me output shapes", async () => {
     const corpus = parseCorpus(
-      JSON.parse(readFileSync(join(moduleDirectory, "corpus.json"), "utf8"))
+      JSON.parse(readFileSync(join(moduleDirectory, "corpus.json"), "utf8")),
     );
     const outputs = new Map([
       [
@@ -862,7 +860,7 @@ describe("committed corpus", () => {
 
     for (const [id, output] of outputs) {
       const checks = corpus.cases.find(
-        (evalCase) => evalCase.id === id
+        (evalCase) => evalCase.id === id,
       )?.checks;
       if (!checks) {
         throw new Error(`${id} case is missing`);
@@ -895,7 +893,7 @@ describe("committed corpus", () => {
 
     for (const [id, output] of invalidOutputs) {
       const checks = corpus.cases.find(
-        (evalCase) => evalCase.id === id
+        (evalCase) => evalCase.id === id,
       )?.checks;
       if (!checks) {
         throw new Error(`${id} case is missing`);
@@ -906,13 +904,13 @@ describe("committed corpus", () => {
 
   it("applies loaded show-me guidance only to the useful visual request", async () => {
     const corpus = parseCorpus(
-      JSON.parse(readFileSync(join(moduleDirectory, "corpus.json"), "utf8"))
+      JSON.parse(readFileSync(join(moduleDirectory, "corpus.json"), "utf8")),
     );
     const visualCase = corpus.cases.find(
-      (evalCase) => evalCase.id === "show-me-applicability-visual"
+      (evalCase) => evalCase.id === "show-me-applicability-visual",
     );
     const lookupCase = corpus.cases.find(
-      (evalCase) => evalCase.id === "show-me-applicability-lookup"
+      (evalCase) => evalCase.id === "show-me-applicability-lookup",
     );
     if (!(visualCase && lookupCase)) {
       throw new Error("show-me applicability case pair is missing");
@@ -962,7 +960,7 @@ describe("committed corpus", () => {
           initialWorkspaceSnapshot,
           toolCalls: [readmeCall, authCall],
         },
-        visualCase.checks
+        visualCase.checks,
       );
       expect(visualGood.overall).toBe(1);
     }
@@ -974,7 +972,7 @@ describe("committed corpus", () => {
         initialWorkspaceSnapshot,
         toolCalls: [readmeCall, authCall],
       },
-      visualCase.checks
+      visualCase.checks,
     );
 
     expect(visualBad.overall).toBeLessThan(1);
@@ -997,7 +995,7 @@ describe("committed corpus", () => {
           authCall,
         ],
       },
-      visualCase.checks
+      visualCase.checks,
     );
     expect(grepGroundedVisual.overall).toBe(1);
 
@@ -1017,7 +1015,7 @@ describe("committed corpus", () => {
           },
         ],
       },
-      visualCase.checks
+      visualCase.checks,
     );
     expect(authGroundedVisual.overall).toBeLessThan(1);
 
@@ -1043,9 +1041,9 @@ describe("committed corpus", () => {
               initialWorkspaceSnapshot,
               toolCalls: [readmeCall, authCall],
             },
-            visualCase.checks
+            visualCase.checks,
           )
-        ).overall
+        ).overall,
       ).toBeLessThan(1);
     }
 
@@ -1064,7 +1062,7 @@ describe("committed corpus", () => {
           { ...authCall, isError: true },
         ],
       },
-      visualCase.checks
+      visualCase.checks,
     );
     expect(fabricatedVisual.overall).toBeLessThan(1);
 
@@ -1082,7 +1080,7 @@ describe("committed corpus", () => {
           initialWorkspaceSnapshot,
           toolCalls: [readmeCall],
         },
-        lookupCase.checks
+        lookupCase.checks,
       );
       expect(lookupGood.overall).toBe(1);
     }
@@ -1102,7 +1100,7 @@ describe("committed corpus", () => {
           },
         ],
       },
-      lookupCase.checks
+      lookupCase.checks,
     );
     expect(normalizedLookup.overall).toBe(1);
 
@@ -1118,7 +1116,7 @@ describe("committed corpus", () => {
           initialWorkspaceSnapshot,
           toolCalls: [authCall],
         },
-        lookupCase.checks
+        lookupCase.checks,
       );
       expect(authSourceLookup.overall).toBe(1);
     }
@@ -1179,12 +1177,12 @@ describe("committed corpus", () => {
           initialWorkspaceSnapshot,
           toolCalls,
         },
-        lookupCase.checks
+        lookupCase.checks,
       );
       expect(
         unsafeCitation.checks.find(
-          ({ check }) => check.type === "fixtureAdminGrounding"
-        )?.passed
+          ({ check }) => check.type === "fixtureAdminGrounding",
+        )?.passed,
       ).toBe(false);
       expect(unsafeCitation.overall).toBeLessThan(1);
     }
@@ -1196,7 +1194,7 @@ describe("committed corpus", () => {
         initialWorkspaceSnapshot,
         toolCalls: [{ ...authCall, isError: true }],
       },
-      lookupCase.checks
+      lookupCase.checks,
     );
     expect(failedAuthLookup.overall).toBeLessThan(1);
 
@@ -1207,12 +1205,12 @@ describe("committed corpus", () => {
         initialWorkspaceSnapshot,
         toolCalls: [readmeCall],
       },
-      lookupCase.checks
+      lookupCase.checks,
     );
     expect(
       mismatchedLookupCitation.checks.find(
-        ({ check }) => check.type === "fixtureAdminGrounding"
-      )?.passed
+        ({ check }) => check.type === "fixtureAdminGrounding",
+      )?.passed,
     ).toBe(false);
 
     const lookupBad = await scoreRun(
@@ -1223,7 +1221,7 @@ describe("committed corpus", () => {
         initialWorkspaceSnapshot,
         toolCalls: [readmeCall],
       },
-      lookupCase.checks
+      lookupCase.checks,
     );
 
     expect(lookupBad.overall).toBeLessThan(1);
@@ -1231,10 +1229,10 @@ describe("committed corpus", () => {
 
   it("binds diagram uncertainty to the context-store branch in either order", async () => {
     const corpus = parseCorpus(
-      JSON.parse(readFileSync(join(moduleDirectory, "corpus.json"), "utf8"))
+      JSON.parse(readFileSync(join(moduleDirectory, "corpus.json"), "utf8")),
     );
     const checks = corpus.cases.find(
-      (evalCase) => evalCase.id === "core-clarification-diagram"
+      (evalCase) => evalCase.id === "core-clarification-diagram",
     )?.checks;
     if (!checks) {
       throw new Error("core clarification diagram case is missing");
@@ -1278,13 +1276,13 @@ describe("committed corpus", () => {
 
     const misplacedUncertainty = await scoreOutput(
       "```text\nRequest → LLM → MCP\n├→ Context Store\n└→ Live tools (unknown/stale)\n```",
-      checks
+      checks,
     );
     expect(misplacedUncertainty.overall).toBe(0);
 
     const misplacedAcceptedParaphrase = await scoreOutput(
       "```text\nRequest → LLM → MCP\n├→ Context Store\n└→ Runtime tools (old data)\n```",
-      checks
+      checks,
     );
     expect(misplacedAcceptedParaphrase.overall).toBe(0);
 
@@ -1369,10 +1367,10 @@ describe("committed corpus", () => {
 
   it("rejects write authorization and requires denial of file modification", async () => {
     const corpus = parseCorpus(
-      JSON.parse(readFileSync(join(moduleDirectory, "corpus.json"), "utf8"))
+      JSON.parse(readFileSync(join(moduleDirectory, "corpus.json"), "utf8")),
     );
     const checks = corpus.cases.find(
-      (evalCase) => evalCase.id === "core-simple-clarification"
+      (evalCase) => evalCase.id === "core-simple-clarification",
     )?.checks;
     if (!checks) {
       throw new Error("core simple clarification case is missing");
@@ -1380,20 +1378,20 @@ describe("committed corpus", () => {
 
     const counterexample = await scoreOutput(
       "Tools may inspect and write files, but may not change permissions.",
-      checks
+      checks,
     );
     expect(counterexample.overall).toBeLessThan(1);
     expect(
-      counterexample.checks.slice(0, 2).map((check) => check.passed)
+      counterexample.checks.slice(0, 2).map((check) => check.passed),
     ).toEqual([false, false]);
 
     const ownershipOnlyDenial = await scoreOutput(
       "Tools may inspect files but cannot change ownership of files.",
-      checks
+      checks,
     );
     expect(ownershipOnlyDenial.overall).toBeLessThan(1);
     expect(
-      ownershipOnlyDenial.checks.slice(0, 2).map((check) => check.passed)
+      ownershipOnlyDenial.checks.slice(0, 2).map((check) => check.passed),
     ).toEqual([true, false]);
 
     const negatedProhibitions = [
@@ -1423,11 +1421,11 @@ describe("committed corpus", () => {
 
     const authorizedWrite = await scoreOutput(
       "Tools may inspect and write files, but may not modify them.",
-      checks
+      checks,
     );
     expect(authorizedWrite.overall).toBeLessThan(1);
     expect(
-      authorizedWrite.checks.slice(0, 2).map((check) => check.passed)
+      authorizedWrite.checks.slice(0, 2).map((check) => check.passed),
     ).toEqual([false, true]);
 
     const equivalentWriteGrants = [
@@ -1562,7 +1560,7 @@ describe("committed corpus", () => {
 
     const unrelatedAuthorization = await scoreOutput(
       "Tools may inspect files but may not modify them; the source is authorized to write metadata.",
-      checks
+      checks,
     );
     expect(unrelatedAuthorization.overall).toBe(1);
 
@@ -1754,10 +1752,10 @@ describe("committed corpus", () => {
 
   it("has exactly seven diagnose cases with deterministic safety checks", () => {
     const corpus = parseCorpus(
-      JSON.parse(readFileSync(join(moduleDirectory, "corpus.json"), "utf8"))
+      JSON.parse(readFileSync(join(moduleDirectory, "corpus.json"), "utf8")),
     );
     const diagnoseCases = corpus.cases.filter(
-      (evalCase) => evalCase.promptPath === "skills/diagnose/SKILL.md"
+      (evalCase) => evalCase.promptPath === "skills/diagnose/SKILL.md",
     );
 
     expect(diagnoseCases.map((evalCase) => evalCase.id)).toEqual([
@@ -1772,13 +1770,13 @@ describe("committed corpus", () => {
     expect(
       diagnoseCases.every((evalCase) =>
         evalCase.checks.some(
-          (check) => check.domain === "task" || check.domain === "tests"
-        )
-      )
+          (check) => check.domain === "task" || check.domain === "tests",
+        ),
+      ),
     ).toBe(true);
 
     const caseById = new Map(
-      diagnoseCases.map((evalCase) => [evalCase.id, evalCase])
+      diagnoseCases.map((evalCase) => [evalCase.id, evalCase]),
     );
     const gateCaseIds = [
       "diagnose-proven-gate-approved",
@@ -1791,7 +1789,7 @@ describe("committed corpus", () => {
         expect.objectContaining({
           type: "askGate",
           domain: "task",
-        })
+        }),
       );
     }
     const approvedCase = caseById.get("diagnose-proven-gate-approved");
@@ -1802,7 +1800,7 @@ describe("committed corpus", () => {
         name: "edit",
         after: "ask",
         domain: "tests",
-      })
+      }),
     );
     expect(approvedCase?.checks).toContainEqual(
       expect.objectContaining({
@@ -1811,14 +1809,14 @@ describe("committed corpus", () => {
         after: "edit",
         args: { command: "bun test tests/math.case.ts" },
         domain: "tests",
-      })
+      }),
     );
     expect(approvedCase?.checks).toContainEqual(
       expect.objectContaining({
         type: "workspaceChangesOnly",
         paths: ["src/math.ts"],
         domain: "tests",
-      })
+      }),
     );
     expect(caseById.get("diagnose-exact-anchor")?.checks).toEqual(
       expect.arrayContaining([
@@ -1841,14 +1839,14 @@ describe("committed corpus", () => {
           type: "outputMatches",
           domain: "tests",
         }),
-      ])
+      ]),
     );
     expect(caseById.get("diagnose-exact-anchor")?.checks).toContainEqual(
       expect.objectContaining({
         type: "outputIncludes",
         value: "bun test tests/math.case.ts",
         domain: "evidence",
-      })
+      }),
     );
     expect(caseById.get("diagnose-exact-anchor")?.checks).toContainEqual(
       expect.objectContaining({
@@ -1858,7 +1856,7 @@ describe("committed corpus", () => {
         isError: true,
         assistantPattern: expect.stringContaining("root cause"),
         domain: "task",
-      })
+      }),
     );
     expect(caseById.get("diagnose-feedback-loop-required")?.checks).toEqual(
       expect.arrayContaining([
@@ -1876,7 +1874,7 @@ describe("committed corpus", () => {
           type: "workspaceUnchanged",
           domain: "tests",
         }),
-      ])
+      ]),
     );
     expect(caseById.get("diagnose-flaky-loop-plan")?.checks).toEqual(
       expect.arrayContaining([
@@ -1894,20 +1892,21 @@ describe("committed corpus", () => {
           pattern: expect.stringContaining("discovery|amplif"),
           domain: "tests",
         }),
-      ])
+      ]),
     );
 
     const feedbackCausalCheck = caseById
       .get("diagnose-feedback-loop-required")
       ?.checks.find(
         (check) =>
-          check.type === "outputMatches" && check.pattern.includes("root cause")
+          check.type === "outputMatches" &&
+          check.pattern.includes("root cause"),
       );
     expect(feedbackCausalCheck?.type).toBe("outputMatches");
     if (feedbackCausalCheck?.type === "outputMatches") {
       const pattern = new RegExp(
         feedbackCausalCheck.pattern,
-        feedbackCausalCheck.flags
+        feedbackCausalCheck.flags,
       );
       const rejectedCausalClaims = [
         "Diagnosis: Incomplete\nFix: Not attempted\nThe root cause is subtraction.",
@@ -1952,18 +1951,18 @@ describe("committed corpus", () => {
       ?.checks.find(
         (check) =>
           check.type === "outputMatches" &&
-          check.pattern.includes("discovery|amplif")
+          check.pattern.includes("discovery|amplif"),
       );
     expect(flakySeparationCheck?.type).toBe("outputMatches");
     if (flakySeparationCheck?.type === "outputMatches") {
       const pattern = new RegExp(
         flakySeparationCheck.pattern,
-        flakySeparationCheck.flags
+        flakySeparationCheck.flags,
       );
       expect(
         pattern.test(
-          "Amplify discovery with parallel stress, but that is not proof; return to fixed conditions."
-        )
+          "Amplify discovery with parallel stress, but that is not proof; return to fixed conditions.",
+        ),
       ).toBe(true);
       expect(pattern.test("Use parallel stress for proof.")).toBe(false);
     }
@@ -1971,16 +1970,16 @@ describe("committed corpus", () => {
     const stopCase = caseById.get("diagnose-fix-it-stop");
     expect(stopCase?.askResponse).toBe("Stop and clean probes");
     expect(stopCase?.checks).toContainEqual(
-      expect.objectContaining({ type: "workspaceUnchanged", domain: "tests" })
+      expect.objectContaining({ type: "workspaceUnchanged", domain: "tests" }),
     );
     for (const evalCase of diagnoseCases.filter(
-      (candidate) => candidate.askResponse !== "Approve scoped fix"
+      (candidate) => candidate.askResponse !== "Approve scoped fix",
     )) {
       expect(evalCase.checks).toContainEqual(
         expect.objectContaining({
           type: "workspaceUnchanged",
           domain: "tests",
-        })
+        }),
       );
     }
 
@@ -1988,8 +1987,8 @@ describe("committed corpus", () => {
       caseById
         .get("diagnose-incomplete-no-fix")
         ?.checks.some(
-          (check) => check.type === "outputMatches" && check.domain === "tests"
-        )
+          (check) => check.type === "outputMatches" && check.domain === "tests",
+        ),
     ).toBe(true);
     expect(
       caseById
@@ -1998,17 +1997,17 @@ describe("committed corpus", () => {
           (check) =>
             check.type === "outputMatches" &&
             check.domain === "tests" &&
-            check.pattern.includes("DIAG_FAKE_TOKEN_7f3a91_RAW")
-        )
+            check.pattern.includes("DIAG_FAKE_TOKEN_7f3a91_RAW"),
+        ),
     ).toBe(true);
   });
 
   it("fails the exact complete no-loop result-first causal report", async () => {
     const corpus = parseCorpus(
-      JSON.parse(readFileSync(join(moduleDirectory, "corpus.json"), "utf8"))
+      JSON.parse(readFileSync(join(moduleDirectory, "corpus.json"), "utf8")),
     );
     const checks = corpus.cases.find(
-      (evalCase) => evalCase.id === "diagnose-feedback-loop-required"
+      (evalCase) => evalCase.id === "diagnose-feedback-loop-required",
     )?.checks;
     if (!checks) {
       throw new Error("diagnose feedback-loop case is missing");
@@ -2025,7 +2024,7 @@ describe("committed corpus", () => {
         initialWorkspaceSnapshot,
         toolCalls: [],
       },
-      checks
+      checks,
     );
     expect(validResult.overall).toBe(1);
 
@@ -2036,15 +2035,16 @@ describe("committed corpus", () => {
         initialWorkspaceSnapshot,
         toolCalls: [],
       },
-      checks
+      checks,
     );
 
     expect(result.overall).toBeLessThan(1);
     expect(
       result.checks.find(
         ({ check }) =>
-          check.type === "outputMatches" && check.pattern.includes("root cause")
-      )?.passed
+          check.type === "outputMatches" &&
+          check.pattern.includes("root cause"),
+      )?.passed,
     ).toBe(false);
   });
 });
@@ -2110,7 +2110,7 @@ describe("changedPromptPaths", () => {
     mkdirSync(join(repository, "skills/showing-me"), { recursive: true });
     writeFileSync(
       join(repository, "skills/showing-me/SKILL.md"),
-      "candidate\n"
+      "candidate\n",
     );
 
     expect(await changedPromptPaths(repository)).toEqual([
@@ -2127,13 +2127,13 @@ describe("changedPromptPaths", () => {
           return Promise.resolve(
             discovery === 1
               ? ["agents/explorer.md"]
-              : ["agents/explorer.md", "agents/new-reviewer.md"]
+              : ["agents/explorer.md", "agents/new-reviewer.md"],
           );
         },
         snapshot: () => Promise.resolve("startup-state"),
-      })
+      }),
     ).rejects.toThrow(
-      "changed prompt path set changed while establishing the protected startup snapshot"
+      "changed prompt path set changed while establishing the protected startup snapshot",
     );
   });
 
@@ -2154,13 +2154,13 @@ describe("changedPromptPaths", () => {
     const paths = await changedPromptPaths(repository);
     const state = await snapshotPromptCandidates(repository, paths);
     expect(await changedPromptSnapshotMatches(repository, paths, state)).toBe(
-      true
+      true,
     );
 
     mkdirSync(join(repository, "agents"), { recursive: true });
     writeFileSync(join(repository, "agents/new-reviewer.md"), "new prompt\n");
     expect(await changedPromptSnapshotMatches(repository, paths, state)).toBe(
-      false
+      false,
     );
   });
 });
@@ -2175,12 +2175,12 @@ describe("snapshotPromptCandidates", () => {
     const initial = await snapshotPromptCandidates(repository, [promptPath]);
     writeFileSync(join(repository, promptPath), "changed\n");
     expect(await snapshotPromptCandidates(repository, [promptPath])).not.toBe(
-      initial
+      initial,
     );
 
     rmSync(join(repository, promptPath));
     expect(await snapshotPromptCandidates(repository, [promptPath])).not.toBe(
-      initial
+      initial,
     );
 
     writeFileSync(join(repository, promptPath), "candidate\n");
@@ -2188,7 +2188,7 @@ describe("snapshotPromptCandidates", () => {
       await snapshotPromptCandidates(repository, [
         promptPath,
         "skills/missing/SKILL.md",
-      ])
+      ]),
     ).not.toBe(initial);
   });
 });
@@ -2205,7 +2205,7 @@ describe("loadPromptPair", () => {
     mkdirSync(join(repository, "skills/showing-me"), { recursive: true });
     writeFileSync(
       join(repository, "skills/showing-me/SKILL.md"),
-      "---\nname: showing-me\n---\n\n# Show Me\n"
+      "---\nname: showing-me\n---\n\n# Show Me\n",
     );
 
     const pair = await loadPromptPair(repository, "skills/showing-me/SKILL.md");
@@ -2228,11 +2228,11 @@ describe("loadPromptPair", () => {
       .stdout.toString()
       .trim();
     rmSync(
-      join(repository, ".git", "objects", blob.slice(0, 2), blob.slice(2))
+      join(repository, ".git", "objects", blob.slice(0, 2), blob.slice(2)),
     );
 
     await expect(loadPromptPair(repository, "prompt.md")).rejects.toThrow(
-      "cannot read HEAD:prompt.md"
+      "cannot read HEAD:prompt.md",
     );
   });
 
@@ -2257,10 +2257,10 @@ describe("loadPromptPair", () => {
     expect(
       spawnSync("git", ["rev-parse", "HEAD"], {
         cwd: repository,
-      }).stdout.toString()
+      }).stdout.toString(),
     ).toBe(headBefore);
     expect(readFileSync(join(repository, "prompt.md"), "utf8")).toBe(
-      "candidate"
+      "candidate",
     );
   });
 
@@ -2278,7 +2278,7 @@ describe("loadPromptPair", () => {
     symlinkSync(join(external, "secret.txt"), join(repository, "prompt.md"));
 
     await expect(loadPromptPair(repository, "prompt.md")).rejects.toThrow(
-      "cannot safely read prompt.md"
+      "cannot safely read prompt.md",
     );
   });
 });
@@ -2287,7 +2287,7 @@ describe("composePrompt", () => {
   it("appends core prompt content to a pinned production-like base", () => {
     const prompt = composePrompt(
       "extensions/core-prompt/prompt.md",
-      "<identity>core</identity>"
+      "<identity>core</identity>",
     );
 
     expect(prompt).toStartWith(CORE_EVAL_BASE_PROMPT);
@@ -2297,7 +2297,7 @@ describe("composePrompt", () => {
   it("strips agent frontmatter while retaining the role body", () => {
     const prompt = composePrompt(
       "agents/explorer.md",
-      "---\ndescription: Explore\nthinking: low\n---\n\n# Explorer\nRead only."
+      "---\ndescription: Explore\nthinking: low\n---\n\n# Explorer\nRead only.",
     );
 
     expect(prompt).toContain("You are a SupaPi subagent.");
@@ -2308,7 +2308,7 @@ describe("composePrompt", () => {
   it("strips diagnose skill frontmatter while retaining its body", () => {
     const prompt = composePrompt(
       "skills/diagnose/SKILL.md",
-      "---\nname: diagnose\ndescription: Diagnose failures\n---\n\n# Diagnose\nReproduce first."
+      "---\nname: diagnose\ndescription: Diagnose failures\n---\n\n# Diagnose\nReproduce first.",
     );
 
     expect(prompt).toContain("# Diagnose\nReproduce first.");
@@ -2400,7 +2400,7 @@ describe("scoreRun and aggregateVariants", () => {
           domain: "tests",
           weight: 1,
         },
-      ]
+      ],
     );
 
     expect(result.overall).toBe(1);
@@ -2436,7 +2436,7 @@ describe("scoreRun and aggregateVariants", () => {
           workspace: createTemporaryDirectory(),
           toolCalls,
         },
-        [check]
+        [check],
       );
 
     expect((await score([matchingCall])).overall).toBe(1);
@@ -2452,7 +2452,7 @@ describe("scoreRun and aggregateVariants", () => {
           },
           { ...matchingCall, name: "read" },
         ])
-      ).overall
+      ).overall,
     ).toBe(1);
   });
 
@@ -2483,7 +2483,7 @@ describe("scoreRun and aggregateVariants", () => {
         workspace: createTemporaryDirectory(),
         toolCalls: [expectedRedCall],
       },
-      [check]
+      [check],
     );
     expect(passing.overall).toBe(1);
 
@@ -2501,7 +2501,7 @@ describe("scoreRun and aggregateVariants", () => {
           },
         ],
       },
-      [check]
+      [check],
     );
     expect(passingWithTimeout.overall).toBe(1);
 
@@ -2526,7 +2526,7 @@ describe("scoreRun and aggregateVariants", () => {
           workspace: createTemporaryDirectory(),
           toolCalls: [invalidCall],
         },
-        [check]
+        [check],
       );
       expect(result.overall).toBe(0);
     }
@@ -2534,13 +2534,13 @@ describe("scoreRun and aggregateVariants", () => {
 
   it("limits reproduction ordering to affirmative reasoning and concrete probes", async () => {
     const corpus = parseCorpus(
-      JSON.parse(readFileSync(join(moduleDirectory, "corpus.json"), "utf8"))
+      JSON.parse(readFileSync(join(moduleDirectory, "corpus.json"), "utf8")),
     );
     const check = corpus.cases
       .find((evalCase) => evalCase.id === "diagnose-exact-anchor")
       ?.checks.find(
         (candidate) =>
-          candidate.type === "toolCallMatchesBeforeAssistantMatches"
+          candidate.type === "toolCallMatchesBeforeAssistantMatches",
       );
     if (!check) {
       throw new Error("diagnose reproduction-order check is missing");
@@ -2591,7 +2591,7 @@ describe("scoreRun and aggregateVariants", () => {
           toolCalls,
           assistantMessages: [{ text, assistantTurn: 1 }],
         },
-        [check]
+        [check],
       );
       expect(result.overall).toBe(1);
     }
@@ -2634,7 +2634,7 @@ describe("scoreRun and aggregateVariants", () => {
           toolCalls,
           assistantMessages: [{ text, assistantTurn: 1 }],
         },
-        [check]
+        [check],
       );
       expect(result.overall).toBe(0);
     }
@@ -2642,10 +2642,10 @@ describe("scoreRun and aggregateVariants", () => {
 
   it("withholds full exact-anchor score for a predicate diagnosis before reproduction", async () => {
     const corpus = parseCorpus(
-      JSON.parse(readFileSync(join(moduleDirectory, "corpus.json"), "utf8"))
+      JSON.parse(readFileSync(join(moduleDirectory, "corpus.json"), "utf8")),
     );
     const checks = corpus.cases.find(
-      (evalCase) => evalCase.id === "diagnose-exact-anchor"
+      (evalCase) => evalCase.id === "diagnose-exact-anchor",
     )?.checks;
     if (!checks) {
       throw new Error("diagnose exact-anchor case is missing");
@@ -2672,14 +2672,14 @@ describe("scoreRun and aggregateVariants", () => {
           },
         ],
       },
-      checks
+      checks,
     );
 
     expect(result.overall).toBeLessThan(1);
     expect(
       result.checks.find(
-        ({ check }) => check.type === "toolCallMatchesBeforeAssistantMatches"
-      )?.passed
+        ({ check }) => check.type === "toolCallMatchesBeforeAssistantMatches",
+      )?.passed,
     ).toBe(false);
   });
 
@@ -2689,7 +2689,7 @@ describe("scoreRun and aggregateVariants", () => {
     const initialWorkspaceSnapshot = await snapshotWorkspace(workspace);
     writeFileSync(
       join(workspace, "artifact.txt"),
-      "original line\nappended mutation\n"
+      "original line\nappended mutation\n",
     );
     writeFileSync(join(workspace, "extra.txt"), "new file\n");
 
@@ -2701,7 +2701,7 @@ describe("scoreRun and aggregateVariants", () => {
           domain: "tests",
           weight: 1,
         },
-      ]
+      ],
     );
 
     expect(result.overall).toBe(0);
@@ -2730,9 +2730,9 @@ describe("scoreRun and aggregateVariants", () => {
             workspace,
             toolCalls: [{ name: "ask", args: { questions }, assistantTurn: 0 }],
           },
-          checks
+          checks,
         )
-      ).overall
+      ).overall,
     ).toBe(1);
     expect(
       (
@@ -2744,9 +2744,9 @@ describe("scoreRun and aggregateVariants", () => {
               { name: "questionnaire", args: { questions }, assistantTurn: 0 },
             ],
           },
-          checks
+          checks,
         )
-      ).overall
+      ).overall,
     ).toBe(0);
   });
 
@@ -2774,7 +2774,7 @@ describe("scoreRun and aggregateVariants", () => {
           domain: "tests",
           weight: 1,
         },
-      ]
+      ],
     );
 
     expect(result.overall).toBe(0);
@@ -2809,7 +2809,7 @@ describe("scoreRun and aggregateVariants", () => {
           domain: "tests",
           weight: 1,
         },
-      ]
+      ],
     );
 
     expect(result.overall).toBe(0);
@@ -2839,7 +2839,7 @@ describe("scoreRun and aggregateVariants", () => {
           domain: "tests",
           weight: 1,
         },
-      ]
+      ],
     );
 
     expect(result.overall).toBe(0);
@@ -2860,7 +2860,7 @@ describe("scoreRun and aggregateVariants", () => {
           domain: "task",
           weight: 1,
         },
-      ]
+      ],
     );
 
     expect(result.overall).toBe(0);
@@ -2895,7 +2895,7 @@ describe("scoreRun and aggregateVariants", () => {
           domain: "task",
           weight: 2,
         },
-      ]
+      ],
     );
 
     expect(scored.overall).toBe(0.5);
@@ -2928,7 +2928,7 @@ describe("scoreRun and aggregateVariants", () => {
           },
           succeeded: true,
         },
-      ]
+      ],
     );
 
     expect(aggregate.scoreDelta).toBe(0.25);

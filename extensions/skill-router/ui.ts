@@ -19,21 +19,21 @@ class RouterLoginPrompt extends Container implements Focusable {
       fg(color: string, text: string): string;
       bold(text: string): string;
     },
-    done: (value: string | undefined) => void
+    done: (value: string | undefined) => void,
   ) {
     super();
     this.addChild(
-      new Text(theme.fg("accent", theme.bold("TypeSafe API key")), 1, 0)
+      new Text(theme.fg("accent", theme.bold("TypeSafe API key")), 1, 0),
     );
     this.addChild(
       new Text(
         theme.fg(
           "muted",
-          "Get one at console.typesafe.ai › API Keys. Input is hidden; Enter verifies and saves, Esc cancels."
+          "Get one at console.typesafe.ai › API Keys. Input is hidden; Enter verifies and saves, Esc cancels.",
         ),
         1,
-        0
-      )
+        0,
+      ),
     );
     this.addChild(this.#input);
     this.#input.onSubmit = (value) => done(value);
@@ -76,9 +76,9 @@ class MaskedKeyInput extends Input {
 }
 
 export function hiddenRouterInput(
-  ctx: ExtensionContext
+  ctx: ExtensionContext,
 ): Promise<string | undefined> {
   return ctx.ui.custom<string | undefined>(
-    (_tui, theme, _keys, done) => new RouterLoginPrompt(theme, done)
+    (_tui, theme, _keys, done) => new RouterLoginPrompt(theme, done),
   );
 }

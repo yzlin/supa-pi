@@ -104,7 +104,7 @@ interface CaptureState {
 export async function captureReviewTargetFreshness(
   cwd: string,
   target: ReviewTarget,
-  options: ReviewFreshnessOptions = {}
+  options: ReviewFreshnessOptions = {},
 ): Promise<ReviewTargetFreshness> {
   const limits = normalizeLimits(options);
   throwIfCancelled(options.signal);
@@ -142,10 +142,10 @@ export async function captureReviewTargetFreshness(
               "--ignored=no",
               "-z",
             ],
-            options.signal
-          )
+            options.signal,
+          ),
         ),
-        options.signal
+        options.signal,
       );
       ensurePathLimit(changed.length, limits);
       paths = uniquePaths(changed);
@@ -153,7 +153,7 @@ export async function captureReviewTargetFreshness(
         ? await runGit(
             root,
             ["ls-files", "--stage", "-z", "--", ...paths],
-            options.signal
+            options.signal,
           )
         : "";
       identity = [
@@ -161,7 +161,7 @@ export async function captureReviewTargetFreshness(
         ...changed
           .sort(compareChangedPaths)
           .map(({ path: changedPath, status }) =>
-            JSON.stringify({ path: changedPath, status })
+            JSON.stringify({ path: changedPath, status }),
           ),
         `index:${index}`,
       ];
@@ -214,10 +214,10 @@ export async function captureReviewTargetFreshness(
               commit,
               "--",
             ],
-            options.signal
-          )
+            options.signal,
+          ),
         ),
-        options.signal
+        options.signal,
       );
       ensurePathLimit(changed.length, limits);
       paths = uniquePaths(changed);
@@ -226,7 +226,7 @@ export async function captureReviewTargetFreshness(
         ...changed
           .sort(compareChangedPaths)
           .map(({ path: changedPath, status }) =>
-            JSON.stringify({ path: changedPath, status })
+            JSON.stringify({ path: changedPath, status }),
           ),
       ];
       break;
@@ -240,7 +240,7 @@ export async function captureReviewTargetFreshness(
     default:
       throw new ReviewFreshnessError(
         "invalid-target",
-        "target has an unsupported type"
+        "target has an unsupported type",
       );
   }
 
@@ -257,7 +257,7 @@ export async function captureReviewTargetFreshness(
 async function captureRange(
   cwd: string,
   baseRef: string,
-  signal?: AbortSignal
+  signal?: AbortSignal,
 ): Promise<{ changed: ChangedPath[]; identity: string[] }> {
   const base = await resolveRevision(cwd, baseRef, signal);
   const head = await resolveRevision(cwd, "HEAD", signal);
@@ -265,7 +265,7 @@ async function captureRange(
   const changed = normalizeChangedPaths(
     cwd,
     parseNameStatusPaths(await runDiffPaths(cwd, mergeBase, signal)),
-    signal
+    signal,
   );
   return {
     changed,
@@ -277,7 +277,7 @@ async function captureRange(
         .slice()
         .sort(compareChangedPaths)
         .map(({ path: changedPath, status }) =>
-          JSON.stringify({ path: changedPath, status })
+          JSON.stringify({ path: changedPath, status }),
         ),
     ],
   };
@@ -293,12 +293,12 @@ function normalizeLimits(options: ReviewFreshnessOptions): CaptureLimits {
 function normalizeLimit(
   value: number | undefined,
   fallback: number,
-  name: string
+  name: string,
 ): number {
   if (value !== undefined && (!Number.isSafeInteger(value) || value < 0)) {
     throw new ReviewFreshnessError(
       "invalid-limit",
-      `${name} must be a finite non-negative safe integer`
+      `${name} must be a finite non-negative safe integer`,
     );
   }
   return value ?? fallback;
@@ -326,7 +326,7 @@ async function resolveRoot(cwd: string, signal?: AbortSignal): Promise<string> {
 
 async function resolveGitRoot(
   cwd: string,
-  signal?: AbortSignal
+  signal?: AbortSignal,
 ): Promise<string> {
   const reported = (
     await runGit(cwd, ["rev-parse", "--show-toplevel"], signal)
@@ -338,7 +338,7 @@ async function resolveGitRoot(
   ) {
     throw new ReviewFreshnessError(
       "git-error",
-      "Git returned an invalid repository root"
+      "Git returned an invalid repository root",
     );
   }
   throwIfCancelled(signal);
@@ -347,7 +347,7 @@ async function resolveGitRoot(
     if (!(await fs.lstat(root)).isDirectory()) {
       throw new ReviewFreshnessError(
         "git-error",
-        "Git repository root is not a directory"
+        "Git repository root is not a directory",
       );
     }
     throwIfCancelled(signal);
@@ -358,7 +358,7 @@ async function resolveGitRoot(
     }
     throw new ReviewFreshnessError(
       "git-error",
-      "Git repository root could not be opened"
+      "Git repository root could not be opened",
     );
   }
 }
@@ -387,7 +387,7 @@ function describeTarget(target: ReviewTarget): string {
     default:
       throw new ReviewFreshnessError(
         "invalid-target",
-        "target has an unsupported type"
+        "target has an unsupported type",
       );
   }
 }
@@ -397,7 +397,7 @@ function validateRevisionInput(value: string, label: string): void {
   if (value.length === 0 || hasControlCharacter(value)) {
     throw new ReviewFreshnessError(
       "invalid-target",
-      `${label} is not a valid Git revision input`
+      `${label} is not a valid Git revision input`,
     );
   }
 }
@@ -409,7 +409,7 @@ function validateTargetText(value: string, label: string): void {
   ) {
     throw new ReviewFreshnessError(
       "target-limit",
-      `${label} exceeds the bounded target input size`
+      `${label} exceeds the bounded target input size`,
     );
   }
 }
@@ -418,7 +418,7 @@ function validatePositiveInteger(value: number, label: string): void {
   if (!Number.isSafeInteger(value) || value <= 0) {
     throw new ReviewFreshnessError(
       "invalid-target",
-      `${label} must be a positive safe integer`
+      `${label} must be a positive safe integer`,
     );
   }
 }
@@ -427,13 +427,13 @@ function normalizeFolderPaths(root: string, values: string[]): string[] {
   if (!Array.isArray(values) || values.length === 0) {
     throw new ReviewFreshnessError(
       "invalid-target",
-      "folder target must contain at least one path"
+      "folder target must contain at least one path",
     );
   }
   if (values.length > MAX_TARGET_PATHS) {
     throw new ReviewFreshnessError(
       "target-limit",
-      `folder target exceeds ${MAX_TARGET_PATHS} paths`
+      `folder target exceeds ${MAX_TARGET_PATHS} paths`,
     );
   }
   const normalized = new Set<string>();
@@ -444,7 +444,7 @@ function normalizeFolderPaths(root: string, values: string[]): string[] {
     ) {
       throw new ReviewFreshnessError(
         "target-limit",
-        "folder path exceeds the bounded path input size"
+        "folder path exceeds the bounded path input size",
       );
     }
     normalized.add(normalizeRelativePath(root, value));
@@ -456,14 +456,14 @@ function normalizeRelativePath(root: string, value: string): string {
   if (!value || value.includes("\0") || path.isAbsolute(value)) {
     throw new ReviewFreshnessError(
       "unsafe-path",
-      "target path is absolute or otherwise unsafe"
+      "target path is absolute or otherwise unsafe",
     );
   }
   const resolved = path.resolve(root, value);
   if (!isContained(root, resolved)) {
     throw new ReviewFreshnessError(
       "unsafe-path",
-      "target path escapes the capture root"
+      "target path escapes the capture root",
     );
   }
   const relative = path.relative(root, resolved);
@@ -473,7 +473,7 @@ function normalizeRelativePath(root: string, value: string): string {
 function normalizeChangedPaths(
   root: string,
   rawPaths: readonly ChangedPath[],
-  signal: AbortSignal | undefined
+  signal: AbortSignal | undefined,
 ): ChangedPath[] {
   const normalized: ChangedPath[] = [];
   for (const rawPath of rawPaths) {
@@ -506,7 +506,7 @@ function isExcludedPath(relativePath: string): boolean {
 async function resolveRevision(
   cwd: string,
   revision: string,
-  signal?: AbortSignal
+  signal?: AbortSignal,
 ): Promise<string> {
   validateRevisionInput(revision, "revision");
   return parseGitIdentity(
@@ -519,20 +519,20 @@ async function resolveRevision(
         "--end-of-options",
         `${revision}^{commit}`,
       ],
-      signal
+      signal,
     ),
-    "commit"
+    "commit",
   );
 }
 
 async function resolveHeadIdentity(
   cwd: string,
-  signal?: AbortSignal
+  signal?: AbortSignal,
 ): Promise<string[]> {
   const commitResult = await runGitResult(
     cwd,
     ["rev-parse", "--verify", "--quiet", "--end-of-options", "HEAD^{commit}"],
-    signal
+    signal,
   );
   if (commitResult.exitCode === 0) {
     const commit = parseGitIdentity(commitResult.stdout, "commit");
@@ -540,9 +540,9 @@ async function resolveHeadIdentity(
       await runGit(
         cwd,
         ["rev-parse", "--verify", "--quiet", "--end-of-options", "HEAD^{tree}"],
-        signal
+        signal,
       ),
-      "tree"
+      "tree",
     );
     return [`head:${commit}`, `head-tree:${tree}`];
   }
@@ -557,7 +557,7 @@ async function resolveHeadIdentity(
   const symbolicHead = await runGitResult(
     cwd,
     ["symbolic-ref", "--quiet", "HEAD"],
-    signal
+    signal,
   );
   if (symbolicHead.exitCode !== 0) {
     throwGitFailure();
@@ -566,13 +566,13 @@ async function resolveHeadIdentity(
   if (!ref || hasControlCharacter(ref) || !ref.startsWith("refs/")) {
     throw new ReviewFreshnessError(
       "git-error",
-      "Git returned an invalid unborn HEAD identity"
+      "Git returned an invalid unborn HEAD identity",
     );
   }
   const refResult = await runGitResult(
     cwd,
     ["show-ref", "--verify", "--quiet", "--", ref],
-    signal
+    signal,
   );
   if (refResult.exitCode !== 1 || refResult.stdout.trim()) {
     throwGitFailure();
@@ -585,7 +585,7 @@ function parseGitIdentity(output: string, kind: "commit" | "tree"): string {
   if (!SHA_PATTERN.test(identity)) {
     throw new ReviewFreshnessError(
       "git-error",
-      `Git returned an invalid ${kind} identity`
+      `Git returned an invalid ${kind} identity`,
     );
   }
   return identity.toLowerCase();
@@ -594,7 +594,7 @@ function parseGitIdentity(output: string, kind: "commit" | "tree"): string {
 async function resolveMergeBase(
   cwd: string,
   base: string,
-  signal?: AbortSignal
+  signal?: AbortSignal,
 ): Promise<string> {
   const mergeBase = (
     await runGit(cwd, ["merge-base", "HEAD", base], signal)
@@ -602,7 +602,7 @@ async function resolveMergeBase(
   if (!SHA_PATTERN.test(mergeBase)) {
     throw new ReviewFreshnessError(
       "git-error",
-      "Git did not return a valid merge base"
+      "Git did not return a valid merge base",
     );
   }
   return mergeBase.toLowerCase();
@@ -611,7 +611,7 @@ async function resolveMergeBase(
 function runDiffPaths(
   cwd: string,
   from: string,
-  signal?: AbortSignal
+  signal?: AbortSignal,
 ): Promise<string> {
   return runGit(
     cwd,
@@ -626,7 +626,7 @@ function runDiffPaths(
       from,
       "--",
     ],
-    signal
+    signal,
   );
 }
 
@@ -635,7 +635,7 @@ function parsePorcelainPaths(output: string): ChangedPath[] {
     if (field.length < 4 || field[2] !== " ") {
       throw new ReviewFreshnessError(
         "git-error",
-        "Git returned malformed status output"
+        "Git returned malformed status output",
       );
     }
     return { path: field.slice(3), status: field.slice(0, 2) };
@@ -650,7 +650,7 @@ function parseNameStatusPaths(output: string): ChangedPath[] {
     if (!field) {
       throw new ReviewFreshnessError(
         "git-error",
-        "Git returned malformed changed-path output"
+        "Git returned malformed changed-path output",
       );
     }
     const tab = field.indexOf("\t");
@@ -662,13 +662,13 @@ function parseNameStatusPaths(output: string): ChangedPath[] {
     if (!status || changedPath === undefined || !changedPath) {
       throw new ReviewFreshnessError(
         "git-error",
-        "Git returned malformed changed-path output"
+        "Git returned malformed changed-path output",
       );
     }
     if (RENAME_STATUS_PATTERN.test(status)) {
       throw new ReviewFreshnessError(
         "git-error",
-        "Git returned a rename despite rename detection being disabled"
+        "Git returned a rename despite rename detection being disabled",
       );
     }
     paths.push({ path: changedPath, status });
@@ -691,7 +691,7 @@ function ensurePathLimit(pathCount: number, limits: CaptureLimits): void {
   if (pathCount > limits.maxFiles) {
     throw new ReviewFreshnessError(
       "file-limit",
-      `target contains more than ${limits.maxFiles} changed paths`
+      `target contains more than ${limits.maxFiles} changed paths`,
     );
   }
 }
@@ -705,7 +705,7 @@ function uniquePaths(changedPaths: readonly ChangedPath[]): string[] {
 async function capturePaths(
   state: CaptureState,
   paths: readonly string[],
-  signal?: AbortSignal
+  signal?: AbortSignal,
 ): Promise<void> {
   for (const relativePath of paths) {
     throwIfCancelled(signal);
@@ -717,7 +717,7 @@ async function capturePath(
   state: CaptureState,
   relativePath: string,
   signal: AbortSignal | undefined,
-  depth: number
+  depth: number,
 ): Promise<void> {
   if (isExcludedPath(relativePath) || state.seen.has(relativePath)) {
     return;
@@ -725,7 +725,7 @@ async function capturePath(
   if (depth > MAX_DIRECTORY_DEPTH) {
     throw new ReviewFreshnessError(
       "depth-limit",
-      `path recursion exceeds ${MAX_DIRECTORY_DEPTH} levels`
+      `path recursion exceeds ${MAX_DIRECTORY_DEPTH} levels`,
     );
   }
   state.seen.add(relativePath);
@@ -743,7 +743,7 @@ async function capturePath(
     }
     throw new ReviewFreshnessError(
       "read-error",
-      `could not inspect target path ${relativePath}`
+      `could not inspect target path ${relativePath}`,
     );
   }
 
@@ -755,11 +755,11 @@ async function capturePath(
   if (!stats.isFile()) {
     throw new ReviewFreshnessError(
       "special-file",
-      `target path ${relativePath} is not a regular file or directory`
+      `target path ${relativePath} is not a regular file or directory`,
     );
   }
   state.entries.push(
-    await readRegularFile(state, fullPath, relativePath, stats, signal)
+    await readRegularFile(state, fullPath, relativePath, stats, signal),
   );
 }
 
@@ -768,7 +768,7 @@ async function captureDirectory(
   fullPath: string,
   relativePath: string,
   signal: AbortSignal | undefined,
-  depth: number
+  depth: number,
 ): Promise<void> {
   const names: string[] = [];
   let directory: Awaited<ReturnType<typeof fs.opendir>> | undefined;
@@ -776,7 +776,7 @@ async function captureDirectory(
     directory = await fs.opendir(fullPath);
     const entryLimit = Math.min(
       MAX_DIRECTORY_ENTRIES,
-      state.limits.maxFiles + 1
+      state.limits.maxFiles + 1,
     );
     for await (const entry of directory) {
       throwIfCancelled(signal);
@@ -786,7 +786,7 @@ async function captureDirectory(
       if (names.length >= entryLimit) {
         throw new ReviewFreshnessError(
           "file-limit",
-          "directory entries exceed the bounded file limit"
+          "directory entries exceed the bounded file limit",
         );
       }
       names.push(entry.name);
@@ -797,7 +797,7 @@ async function captureDirectory(
     }
     throw new ReviewFreshnessError(
       "read-error",
-      `could not enumerate target directory ${relativePath}`
+      `could not enumerate target directory ${relativePath}`,
     );
   } finally {
     await directory?.close().catch(() => undefined);
@@ -814,20 +814,20 @@ async function assertExistingPathSafe(
   root: string,
   fullPath: string,
   stats: FileStats,
-  signal?: AbortSignal
+  signal?: AbortSignal,
 ): Promise<void> {
   throwIfCancelled(signal);
   if (stats.isSymbolicLink()) {
     throw new ReviewFreshnessError(
       "unsafe-path",
-      "symbolic links are not captured"
+      "symbolic links are not captured",
     );
   }
   try {
     if (!isContained(root, await fs.realpath(fullPath))) {
       throw new ReviewFreshnessError(
         "unsafe-path",
-        "target path resolves outside the capture root"
+        "target path resolves outside the capture root",
       );
     }
   } catch (error) {
@@ -836,7 +836,7 @@ async function assertExistingPathSafe(
     }
     throw new ReviewFreshnessError(
       "read-error",
-      "could not verify target path containment"
+      "could not verify target path containment",
     );
   }
 }
@@ -844,7 +844,7 @@ async function assertExistingPathSafe(
 async function ensureMissingPathSafe(
   root: string,
   fullPath: string,
-  signal?: AbortSignal
+  signal?: AbortSignal,
 ): Promise<void> {
   let ancestor = path.dirname(fullPath);
   while (true) {
@@ -854,19 +854,19 @@ async function ensureMissingPathSafe(
       if (stats.isSymbolicLink()) {
         throw new ReviewFreshnessError(
           "unsafe-path",
-          "missing target path has a symbolic-link parent"
+          "missing target path has a symbolic-link parent",
         );
       }
       if (!stats.isDirectory()) {
         throw new ReviewFreshnessError(
           "read-error",
-          "missing target path has a non-directory parent"
+          "missing target path has a non-directory parent",
         );
       }
       if (!isContained(root, await fs.realpath(ancestor))) {
         throw new ReviewFreshnessError(
           "unsafe-path",
-          "missing target path resolves outside the capture root"
+          "missing target path resolves outside the capture root",
         );
       }
       return;
@@ -877,14 +877,14 @@ async function ensureMissingPathSafe(
       if (!isErrorCode(error, "ENOENT")) {
         throw new ReviewFreshnessError(
           "read-error",
-          "could not verify missing target path containment"
+          "could not verify missing target path containment",
         );
       }
       const parent = path.dirname(ancestor);
       if (parent === ancestor || !isContained(root, parent)) {
         throw new ReviewFreshnessError(
           "unsafe-path",
-          "missing target path escapes the capture root"
+          "missing target path escapes the capture root",
         );
       }
       ancestor = parent;
@@ -897,13 +897,13 @@ async function readRegularFile(
   fullPath: string,
   relativePath: string,
   stats: FileStats,
-  signal?: AbortSignal
+  signal?: AbortSignal,
 ): Promise<FileFingerprint> {
   reserveFile(state);
   if (stats.size > state.limits.maxBytes - state.byteCount) {
     throw new ReviewFreshnessError(
       "byte-limit",
-      `file ${relativePath} exceeds the bounded byte limit`
+      `file ${relativePath} exceeds the bounded byte limit`,
     );
   }
 
@@ -913,7 +913,7 @@ async function readRegularFile(
       typeof constants.O_NOFOLLOW === "number" ? constants.O_NOFOLLOW : 0;
     handle = await fs.open(
       fullPath,
-      constants.O_RDONLY + noFollow + constants.O_NONBLOCK
+      constants.O_RDONLY + noFollow + constants.O_NONBLOCK,
     );
     const opened = await handle.stat();
     if (
@@ -923,7 +923,7 @@ async function readRegularFile(
     ) {
       throw new ReviewFreshnessError(
         "unstable-file",
-        `file ${relativePath} changed while being opened`
+        `file ${relativePath} changed while being opened`,
       );
     }
 
@@ -937,13 +937,13 @@ async function readRegularFile(
       if (bytesRead === 0) {
         throw new ReviewFreshnessError(
           "unstable-file",
-          `file ${relativePath} became shorter while being read`
+          `file ${relativePath} became shorter while being read`,
         );
       }
       if (state.byteCount + bytesRead > state.limits.maxBytes) {
         throw new ReviewFreshnessError(
           "byte-limit",
-          `target exceeds the ${state.limits.maxBytes}-byte limit`
+          `target exceeds the ${state.limits.maxBytes}-byte limit`,
         );
       }
       digest.update(buffer.subarray(0, bytesRead));
@@ -961,7 +961,7 @@ async function readRegularFile(
     ) {
       throw new ReviewFreshnessError(
         "unstable-file",
-        `file ${relativePath} changed while being read`
+        `file ${relativePath} changed while being read`,
       );
     }
     throwIfCancelled(signal);
@@ -979,12 +979,12 @@ async function readRegularFile(
     if (isErrorCode(error, "ELOOP")) {
       throw new ReviewFreshnessError(
         "unsafe-path",
-        `file ${relativePath} became a symbolic link`
+        `file ${relativePath} became a symbolic link`,
       );
     }
     throw new ReviewFreshnessError(
       "read-error",
-      `could not read target file ${relativePath}`
+      `could not read target file ${relativePath}`,
     );
   } finally {
     await handle?.close().catch(() => undefined);
@@ -995,7 +995,7 @@ function reserveFile(state: CaptureState): void {
   if (state.fileCount >= state.limits.maxFiles) {
     throw new ReviewFreshnessError(
       "file-limit",
-      `target exceeds the ${state.limits.maxFiles}-file limit`
+      `target exceeds the ${state.limits.maxFiles}-file limit`,
     );
   }
   state.fileCount += 1;
@@ -1014,7 +1014,7 @@ function fileMode(stats: { mode: number }): number {
 function hashCapture(
   descriptor: string,
   identity: readonly string[],
-  entries: readonly FileFingerprint[]
+  entries: readonly FileFingerprint[],
 ): string {
   const hash = createHash("sha256");
   hashPart(hash, "supa-pi-review-freshness-v1");
@@ -1039,14 +1039,14 @@ function hashPart(hash: ReturnType<typeof createHash>, value: string): void {
 function compareChangedPaths(left: ChangedPath, right: ChangedPath): number {
   return compareStrings(
     `${left.path}\0${left.status}`,
-    `${right.path}\0${right.status}`
+    `${right.path}\0${right.status}`,
   );
 }
 
 function compareEntries(left: FileFingerprint, right: FileFingerprint): number {
   return compareStrings(
     `${left.path}\0${left.kind}`,
-    `${right.path}\0${right.kind}`
+    `${right.path}\0${right.kind}`,
   );
 }
 
@@ -1074,7 +1074,7 @@ function throwIfCancelled(signal?: AbortSignal): void {
   if (signal?.aborted) {
     throw new ReviewFreshnessError(
       "cancelled",
-      "freshness capture was cancelled"
+      "freshness capture was cancelled",
     );
   }
 }
@@ -1087,7 +1087,7 @@ interface GitResult {
 async function runGit(
   cwd: string,
   args: readonly string[],
-  signal?: AbortSignal
+  signal?: AbortSignal,
 ): Promise<string> {
   const result = await runGitResult(cwd, args, signal);
   if (result.exitCode !== 0) {
@@ -1099,7 +1099,7 @@ async function runGit(
 async function runGitResult(
   cwd: string,
   args: readonly string[],
-  signal?: AbortSignal
+  signal?: AbortSignal,
 ): Promise<GitResult> {
   throwIfCancelled(signal);
   return await new Promise((resolve, reject) => {
@@ -1132,8 +1132,8 @@ async function runGitResult(
           reject(
             new ReviewFreshnessError(
               "cancelled",
-              "freshness capture was cancelled"
-            )
+              "freshness capture was cancelled",
+            ),
           );
           return;
         }
@@ -1141,8 +1141,8 @@ async function runGitResult(
           reject(
             new ReviewFreshnessError(
               "git-output-limit",
-              "Git failed, timed out, or exceeded its bounded output limit"
-            )
+              "Git failed, timed out, or exceeded its bounded output limit",
+            ),
           );
           return;
         }
@@ -1151,8 +1151,8 @@ async function runGitResult(
           reject(
             new ReviewFreshnessError(
               "git-error",
-              "Git failed, timed out, or exceeded its bounded output limit"
-            )
+              "Git failed, timed out, or exceeded its bounded output limit",
+            ),
           );
           return;
         }
@@ -1165,11 +1165,11 @@ async function runGitResult(
           reject(
             new ReviewFreshnessError(
               "git-error",
-              "Git returned non-UTF-8 path metadata"
-            )
+              "Git returned non-UTF-8 path metadata",
+            ),
           );
         }
-      }
+      },
     );
   });
 }
@@ -1177,7 +1177,7 @@ async function runGitResult(
 function throwGitFailure(): never {
   throw new ReviewFreshnessError(
     "git-error",
-    "Git failed, timed out, or exceeded its bounded output limit"
+    "Git failed, timed out, or exceeded its bounded output limit",
   );
 }
 

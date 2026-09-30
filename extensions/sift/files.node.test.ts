@@ -26,7 +26,7 @@ afterEach(async () => {
   await Promise.all(
     directories
       .splice(0)
-      .map((directory) => rm(directory, { recursive: true, force: true }))
+      .map((directory) => rm(directory, { recursive: true, force: true })),
   );
 });
 
@@ -36,7 +36,7 @@ test("loads an ordinary workspace file with Node descriptor semantics", async ()
 
   assert.equal(
     (await loadWorkspaceFile(workspace, "ordinary.txt")).content,
-    "ordinary"
+    "ordinary",
   );
 });
 
@@ -55,6 +55,6 @@ test("rejects an outside file reached by a concurrently replaced parent", async 
         await symlink(outside, parent);
       },
     }),
-    FILE_CHANGED
+    FILE_CHANGED,
   );
 });

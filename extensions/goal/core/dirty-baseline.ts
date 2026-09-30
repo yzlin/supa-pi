@@ -27,7 +27,7 @@ export function captureDirtyBaseline(cwd = process.cwd()): DirtyBaseline {
 
 export function compareDirtyBaseline(
   baseline: DirtyBaseline,
-  current: DirtyBaseline
+  current: DirtyBaseline,
 ): Result<{ added: string[]; removed: string[]; headChanged: boolean }> {
   const before = new Set(baseline.dirtyFiles);
   const after = new Set(current.dirtyFiles);
@@ -43,7 +43,7 @@ export function compareDirtyBaseline(
 
 export function assertDirtyBaselineUnchanged(
   baseline: DirtyBaseline,
-  current: DirtyBaseline
+  current: DirtyBaseline,
 ): Result<void> {
   const compared = compareDirtyBaseline(baseline, current);
   if (!compared.ok) {

@@ -30,7 +30,7 @@ test("missing file; strict shape and field errors including all allowed thinking
   for (const thinking of THINKING_LEVELS) {
     expect(
       parseConfig({ profiles: { work: { main: { thinking } } } }, path).profiles
-        .work.main?.thinking
+        .work.main?.thinking,
     ).toBe(thinking);
   }
   for (const raw of [
@@ -74,7 +74,7 @@ test("real SettingsManager persistence writes global defaults in an injected tem
     thinking: "max",
   });
   expect(
-    JSON.parse(readFileSync(join(agentDir, "settings.json"), "utf8"))
+    JSON.parse(readFileSync(join(agentDir, "settings.json"), "utf8")),
   ).toMatchObject({
     defaultProvider: "p",
     defaultModel: "id/with-slash",

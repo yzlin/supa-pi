@@ -19,7 +19,7 @@ type PromptMethod = (text: string, options?: PromptOptions) => Promise<void>;
 type PromptObserver = (
   session: AgentSession,
   text: string,
-  options?: PromptOptions
+  options?: PromptOptions,
 ) => void;
 type PromptOwner = symbol;
 type SessionPrototype = AgentSession & { prompt: PromptMethod };
@@ -127,7 +127,7 @@ function messageText(content: unknown): string | null {
         part !== null &&
         typeof part === "object" &&
         (part as { type?: unknown }).type === "text" &&
-        typeof (part as { text?: unknown }).text === "string"
+        typeof (part as { text?: unknown }).text === "string",
     )
     .map((part) => part.text)
     .join("\n");
@@ -160,7 +160,7 @@ function firstBranchUserText(ctx: RuntimeContext): string | null {
 function notify(
   ctx: RuntimeContext,
   message: string,
-  level: "info" | "warning" | "error" = "info"
+  level: "info" | "warning" | "error" = "info",
 ): boolean {
   if (ctx.hasUI && ctx.ui && typeof ctx.ui.notify === "function") {
     ctx.ui.notify(message, level);
@@ -203,7 +203,7 @@ export default function autoRenameExtension(pi: ExtensionAPI): void {
       !notify(
         ctx,
         "Auto-rename disabled: invalid global configuration.",
-        "warning"
+        "warning",
       )
     ) {
       console.warn("auto-rename: disabled-invalid");
@@ -247,7 +247,7 @@ export default function autoRenameExtension(pi: ExtensionAPI): void {
 
   function operationIsCurrent(
     operation: NamingOperation,
-    ctx: RuntimeContext
+    ctx: RuntimeContext,
   ): boolean {
     return (
       operation.epoch === epoch &&
@@ -259,7 +259,7 @@ export default function autoRenameExtension(pi: ExtensionAPI): void {
 
   async function runNaming(
     kind: OperationKind,
-    ctx: RuntimeContext
+    ctx: RuntimeContext,
   ): Promise<"started" | "disabled" | "no-session" | "no-source" | "pending"> {
     if (!enabled()) {
       return "disabled";
@@ -302,7 +302,7 @@ export default function autoRenameExtension(pi: ExtensionAPI): void {
       source,
       sessionId,
       configState.config,
-      operation.controller.signal
+      operation.controller.signal,
     );
 
     if (inFlight === operation) {
@@ -344,7 +344,7 @@ export default function autoRenameExtension(pi: ExtensionAPI): void {
   function observePrompt(
     session: AgentSession,
     text: string,
-    options?: PromptOptions
+    options?: PromptOptions,
   ): void {
     const source = options?.source ?? "interactive";
     if (
@@ -457,7 +457,7 @@ export default function autoRenameExtension(pi: ExtensionAPI): void {
         notify(
           ctx,
           "No user request is available to name this session.",
-          "error"
+          "error",
         );
       }
     },

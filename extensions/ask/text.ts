@@ -11,7 +11,7 @@ function isTextControl(code: number): boolean {
 function skipOscSequence(
   text: string,
   index: number,
-  limit = text.length
+  limit = text.length,
 ): number {
   let cursor = index + 2;
   while (cursor < limit) {
@@ -30,7 +30,7 @@ function skipOscSequence(
 function skipCsiSequence(
   text: string,
   index: number,
-  limit = text.length
+  limit = text.length,
 ): number {
   let cursor = index + 2;
   while (cursor < limit) {
@@ -46,7 +46,7 @@ function skipCsiSequence(
 function skipEscapeSequence(
   text: string,
   index: number,
-  limit = text.length
+  limit = text.length,
 ): number {
   const next = index + 1 < limit ? text[index + 1] : undefined;
   if (next === "]") {
@@ -77,7 +77,7 @@ export function stripTerminalControls(text: string): string {
 export function stripTerminalControlsUpTo(
   text: string,
   maxOutputChars: number,
-  maxInputChars = Math.max(maxOutputChars * 16, maxOutputChars + 1024)
+  maxInputChars = Math.max(maxOutputChars * 16, maxOutputChars + 1024),
 ): { text: string; truncated: boolean } {
   let out = "";
   const inputLimit = Math.min(text.length, maxInputChars);
@@ -112,7 +112,7 @@ export function wrapAskText(text: string, width: number): string[] {
     }
 
     return wrapTextWithAnsi(line, clampedWidth).map((segment) =>
-      truncateToWidth(segment, clampedWidth)
+      truncateToWidth(segment, clampedWidth),
     );
   });
 }

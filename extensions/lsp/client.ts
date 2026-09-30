@@ -297,7 +297,7 @@ export class LspClient {
 
   async getDiagnostics(
     filePath: string,
-    timeoutMs = 10_000
+    timeoutMs = 10_000,
   ): Promise<Diagnostic[]> {
     const uri = await this.openDocument(filePath);
     await this.waitForDiagnostics(uri, timeoutMs);
@@ -362,7 +362,7 @@ export class LspClient {
       {
         textDocument: { uri },
         position,
-      }
+      },
     );
     return normalizeLocations(result);
   }
@@ -377,7 +377,7 @@ export class LspClient {
         textDocument: { uri },
         position,
         context: { includeDeclaration: true },
-      }
+      },
     );
     return normalizeLocations(result);
   }
@@ -386,7 +386,7 @@ export class LspClient {
 
   async implementation(
     filePath: string,
-    position: Position
+    position: Position,
   ): Promise<Location[]> {
     const uri = await this.openDocument(filePath);
     const result = await this.connection.sendRequest(
@@ -394,7 +394,7 @@ export class LspClient {
       {
         textDocument: { uri },
         position,
-      }
+      },
     );
     return normalizeLocations(result);
   }
@@ -402,14 +402,14 @@ export class LspClient {
   // ── Document Symbols ──────────────────────────────────────────────────
 
   async documentSymbol(
-    filePath: string
+    filePath: string,
   ): Promise<DocumentSymbol[] | SymbolInformation[]> {
     const uri = await this.openDocument(filePath);
     const result = await this.connection.sendRequest(
       "textDocument/documentSymbol",
       {
         textDocument: { uri },
-      }
+      },
     );
     if (!Array.isArray(result)) {
       return [];
@@ -434,7 +434,7 @@ export class LspClient {
 
   async prepareCallHierarchy(
     filePath: string,
-    position: Position
+    position: Position,
   ): Promise<CallHierarchyItem[]> {
     const uri = await this.openDocument(filePath);
     const result = await this.connection.sendRequest(
@@ -442,7 +442,7 @@ export class LspClient {
       {
         textDocument: { uri },
         position,
-      }
+      },
     );
     if (!Array.isArray(result)) {
       return [];
@@ -451,11 +451,11 @@ export class LspClient {
   }
 
   async incomingCalls(
-    item: CallHierarchyItem
+    item: CallHierarchyItem,
   ): Promise<CallHierarchyIncomingCall[]> {
     const result = await this.connection.sendRequest(
       "callHierarchy/incomingCalls",
-      { item }
+      { item },
     );
     if (!Array.isArray(result)) {
       return [];
@@ -464,11 +464,11 @@ export class LspClient {
   }
 
   async outgoingCalls(
-    item: CallHierarchyItem
+    item: CallHierarchyItem,
   ): Promise<CallHierarchyOutgoingCall[]> {
     const result = await this.connection.sendRequest(
       "callHierarchy/outgoingCalls",
-      { item }
+      { item },
     );
     if (!Array.isArray(result)) {
       return [];
@@ -481,7 +481,7 @@ export class LspClient {
   async codeActions(
     filePath: string,
     range: Range,
-    context: CodeActionContext
+    context: CodeActionContext,
   ): Promise<CodeAction[]> {
     const uri = await this.openDocument(filePath);
     const result = await this.connection.sendRequest(
@@ -490,7 +490,7 @@ export class LspClient {
         textDocument: { uri },
         range,
         context,
-      }
+      },
     );
     if (!Array.isArray(result)) {
       return [];

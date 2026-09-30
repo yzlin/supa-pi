@@ -12,7 +12,7 @@ import {
 } from "./model";
 
 function managedSkill(
-  overrides: Partial<ManagedSkillEntry> = {}
+  overrides: Partial<ManagedSkillEntry> = {},
 ): ManagedSkillEntry {
   return {
     id: "managed-demo",
@@ -74,13 +74,13 @@ describe("skills manager model", () => {
     });
 
     expect(
-      filterSkillInventory(inventory, { query: "managed" }).all
+      filterSkillInventory(inventory, { query: "managed" }).all,
     ).toHaveLength(1);
     expect(
-      filterSkillInventory(inventory, { kind: "bundled", query: "react" }).all
+      filterSkillInventory(inventory, { kind: "bundled", query: "react" }).all,
     ).toMatchObject([{ kind: "bundled", name: "react-helper" }]);
     expect(
-      filterSkillInventory(inventory, { kind: "managed", query: "react" }).all
+      filterSkillInventory(inventory, { kind: "managed", query: "react" }).all,
     ).toEqual([]);
   });
 
@@ -114,11 +114,11 @@ describe("skills manager model", () => {
       mkdirSync(bundledDir);
       writeFileSync(
         join(managedDir, "SKILL.md"),
-        "# Managed Demo\n\nDo managed work.\n"
+        "# Managed Demo\n\nDo managed work.\n",
       );
       writeFileSync(
         join(bundledDir, "SKILL.md"),
-        "# Bundled Demo\n\nDo bundled work.\n"
+        "# Bundled Demo\n\nDo bundled work.\n",
       );
 
       const inventory = buildSkillInventoryModel({
@@ -128,10 +128,10 @@ describe("skills manager model", () => {
       });
 
       expect(buildSkillPreviewModel(inventory.managed[0]).skillContent).toBe(
-        "# Managed Demo\n\nDo managed work."
+        "# Managed Demo\n\nDo managed work.",
       );
       expect(buildSkillPreviewModel(inventory.bundled[0]).skillContent).toBe(
-        "# Bundled Demo\n\nDo bundled work."
+        "# Bundled Demo\n\nDo bundled work.",
       );
     } finally {
       rmSync(root, { recursive: true, force: true });

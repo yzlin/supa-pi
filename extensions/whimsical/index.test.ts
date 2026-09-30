@@ -166,7 +166,7 @@ function setupHarness(): {
 function emit(
   handlers: Map<string, ExtensionEventHandler>,
   eventName: string,
-  ctx: ExtensionContext
+  ctx: ExtensionContext,
 ): void {
   const handler = handlers.get(eventName);
   if (!handler) {
@@ -261,8 +261,8 @@ describe("whimsical extension", () => {
     const negativeEnergyMessages = JSON.parse(
       readFileSync(
         join(import.meta.dir, "messages", "negative-energy.json"),
-        "utf8"
-      )
+        "utf8",
+      ),
     ) as string[];
     const { handlers } = setupHarness();
     const { ctx, workingMessages } = createContext([
@@ -283,16 +283,16 @@ describe("whimsical extension", () => {
   it("validates bundled message sets strictly", () => {
     expect(validateMessageSet("ok", ["hello"])).toEqual(["hello"]);
     expect(() => validateMessageSet("empty", [])).toThrow(
-      'Invalid whimsical message set "empty": expected non-empty string array'
+      'Invalid whimsical message set "empty": expected non-empty string array',
     );
     expect(() => validateMessageSet("bad", [""])).toThrow(
-      'Invalid whimsical message set "bad": expected non-whitespace strings'
+      'Invalid whimsical message set "bad": expected non-whitespace strings',
     );
     expect(() => validateMessageSet("bad", ["   "])).toThrow(
-      'Invalid whimsical message set "bad": expected non-whitespace strings'
+      'Invalid whimsical message set "bad": expected non-whitespace strings',
     );
     expect(() => validateMessageSet("bad", [1])).toThrow(
-      'Invalid whimsical message set "bad": expected non-whitespace strings'
+      'Invalid whimsical message set "bad": expected non-whitespace strings',
     );
   });
 
@@ -496,7 +496,7 @@ describe("whimsical extension", () => {
     writeGlobalConfig({ selectedSet: "noisy" });
     writeCustomSet(
       "noisy",
-      Array.from({ length: 501 }, (_, index) => `message ${index}`)
+      Array.from({ length: 501 }, (_, index) => `message ${index}`),
     );
     const { handlers } = setupHarness();
     const { ctx, notifications } = createContext();
@@ -644,7 +644,7 @@ describe("whimsical extension", () => {
     writeGlobalConfig({ selectedSet: "default" });
     writeCustomSet("default", [""]);
     const bundledDefaultMessages = JSON.parse(
-      readFileSync(join(import.meta.dir, "messages", "default.json"), "utf8")
+      readFileSync(join(import.meta.dir, "messages", "default.json"), "utf8"),
     ) as string[];
     const { handlers } = setupHarness();
     const { ctx, notifications, workingMessages } = createContext();
@@ -660,7 +660,7 @@ describe("whimsical extension", () => {
     writeGlobalConfig({ selectedSet: "missing" });
     writeCustomSet("default", ["custom default"]);
     const bundledDefaultMessages = JSON.parse(
-      readFileSync(join(import.meta.dir, "messages", "default.json"), "utf8")
+      readFileSync(join(import.meta.dir, "messages", "default.json"), "utf8"),
     ) as string[];
     const { handlers } = setupHarness();
     const { ctx, workingMessages } = createContext();

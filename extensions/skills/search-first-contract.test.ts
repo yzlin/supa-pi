@@ -15,7 +15,7 @@ describe("search-first skill contract", () => {
     expect(skill).toContain('description: "Research existing solutions"');
     expect(skill).toContain("Give the researcher a concrete question");
     expect(skill).toContain(
-      "Return: Structured comparison with recommendation"
+      "Return: Structured comparison with recommendation",
     );
     expect(skill).not.toContain("Task(subagent_type=");
     expect(skill).not.toContain('subagent_type="general-purpose"');
@@ -25,10 +25,10 @@ describe("search-first skill contract", () => {
     const skill = readSkill("search-first");
 
     expect(skill).toContain(
-      "The main session supplies relevant researcher findings to the planner"
+      "The main session supplies relevant researcher findings to the planner",
     );
     expect(skill).toContain(
-      "The main session supplies relevant researcher findings to the architect"
+      "The main session supplies relevant researcher findings to the architect",
     );
     expect(skill).not.toContain("The planner should invoke researcher");
     expect(skill).not.toContain("The architect should consult researcher");
@@ -38,13 +38,13 @@ describe("search-first skill contract", () => {
     const skill = readSkill("search-first");
 
     expect(skill).toContain(
-      "For a simple local lookup, search the repository directly in the main session without launching a researcher"
+      "For a simple local lookup, search the repository directly in the main session without launching a researcher",
     );
     expect(skill).toContain(
-      "Does this already exist in the repo? → `rg` through relevant modules/tests first"
+      "Does this already exist in the repo? → `rg` through relevant modules/tests first",
     );
     expect(skill).toContain(
-      "Before creating a new utility, helper, or abstraction"
+      "Before creating a new utility, helper, or abstraction",
     );
   });
 
@@ -60,10 +60,10 @@ describe("search-first skill contract", () => {
 
     expect(positions.every((position) => position >= 0)).toBe(true);
     expect(positions).toEqual(
-      [...positions].sort((left, right) => left - right)
+      [...positions].sort((left, right) => left - right),
     );
     expect(skill).toContain(
-      "If a suitable existing capability meets those requirements, stop and use or reuse it"
+      "If a suitable existing capability meets those requirements, stop and use or reuse it",
     );
     expect(skill).toContain("Before external package/web research");
   });
@@ -80,14 +80,14 @@ describe("search-first skill contract", () => {
       expect(skill).toContain(requirement);
     }
     expect(skill).toContain(
-      "A justified package or research remains appropriate when these checks do not meet the requirements"
+      "A justified package or research remains appropriate when these checks do not meet the requirements",
     );
     expect(skill).toContain(
-      "For non-trivial functionality, run the cheap capability check and relevant local skill/MCP checks first."
+      "For non-trivial functionality, run the cheap capability check and relevant local skill/MCP checks first.",
     );
     expect(skill).toContain("Local checks already completed: [FINDINGS]");
     expect(skill).toContain(
-      "do not choose a shorter implementation without checking fit"
+      "do not choose a shorter implementation without checking fit",
     );
   });
 });

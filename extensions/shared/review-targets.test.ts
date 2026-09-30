@@ -43,7 +43,7 @@ describe("review target parsing", () => {
       "docs two",
     ]);
     expect(
-      parseReviewTargetArgs("folder \"src one\" 'docs two'").target
+      parseReviewTargetArgs("folder \"src one\" 'docs two'").target,
     ).toEqual({
       type: "folder",
       paths: ["src one", "docs two"],
@@ -79,7 +79,7 @@ describe("review target parsing", () => {
     expect(
       parseReviewTargetArgs("uncommitted --reviewers a,b", {
         parseReviewers: reviewers,
-      })
+      }),
     ).toMatchObject({ reviewers: ["a", "b"] });
   });
 });
@@ -99,7 +99,7 @@ describe("review path parsing", () => {
         " M src/index.ts",
         "?? new file.ts",
         "R  old.ts -> new.ts",
-      ])
+      ]),
     ).toEqual(["src/index.ts", "new file.ts", "new.ts"]);
   });
 });
@@ -115,7 +115,7 @@ describe("changed path resolution", () => {
     };
 
     await expect(
-      getChangedPaths({ type: "uncommitted" }, gitExec)
+      getChangedPaths({ type: "uncommitted" }, gitExec),
     ).resolves.toEqual(["src/index.ts", "new.ts", "newdir/file.ts"]);
   });
 
@@ -133,7 +133,7 @@ describe("changed path resolution", () => {
     };
 
     await expect(
-      getChangedPaths({ type: "baseBranch", branch: "main" }, gitExec)
+      getChangedPaths({ type: "baseBranch", branch: "main" }, gitExec),
     ).resolves.toEqual(["src/a.ts", "db/schema.sql"]);
     expect(calls).toEqual([
       ["rev-parse", "--abbrev-ref", "main@{upstream}"],
@@ -150,14 +150,14 @@ describe("changed path resolution", () => {
     };
 
     await expect(
-      getChangedPaths({ type: "commit", sha: "abc123" }, gitExec)
+      getChangedPaths({ type: "commit", sha: "abc123" }, gitExec),
     ).resolves.toEqual(["src/commit.ts"]);
     expect(commitCalls).toEqual([
       ["diff-tree", "--root", "--no-commit-id", "--name-only", "-r", "abc123"],
     ]);
 
     await expect(
-      getChangedPaths({ type: "folder", paths: ["src"] }, gitExec)
+      getChangedPaths({ type: "folder", paths: ["src"] }, gitExec),
     ).resolves.toEqual(["src"]);
   });
 });

@@ -57,13 +57,13 @@ afterEach(async () => {
   await Promise.all(
     temporaryDirectories
       .splice(0)
-      .map((directory) => rm(directory, { recursive: true, force: true }))
+      .map((directory) => rm(directory, { recursive: true, force: true })),
   );
 });
 
 async function createSession(
   inputEvents: unknown[],
-  extension: (pi: ExtensionAPI) => void = promptCommandsExtension
+  extension: (pi: ExtensionAPI) => void = promptCommandsExtension,
 ) {
   const directory = await mkdtemp(join(tmpdir(), "prompt-commands-"));
   temporaryDirectories.push(directory);
@@ -91,7 +91,7 @@ async function createSession(
     settingsManager: SettingsManager.inMemory(),
   });
   activeSessions.push(
-    result.session as unknown as (typeof activeSessions)[number]
+    result.session as unknown as (typeof activeSessions)[number],
   );
   return { loader, session: result.session };
 }
@@ -100,14 +100,14 @@ describe("raw prompt pipeline commands", () => {
   it("round-trips rich raw arguments without trimming or tokenizing", () => {
     for (const name of Object.keys(expectedMessages) as CommandName[]) {
       expect(buildPromptCommandMessage(name, rawArgument)).toBe(
-        expectedMessages[name](rawArgument)
+        expectedMessages[name](rawArgument),
       );
     }
   });
 
   it("expands a bare wayfinder invocation without inventing a request", () => {
     expect(buildPromptCommandMessage("wayfinder", "")).toBe(
-      expectedMessages.wayfinder("")
+      expectedMessages.wayfinder(""),
     );
   });
 
@@ -171,7 +171,7 @@ describe("raw prompt pipeline commands", () => {
     }
     await session.sendUserMessage(
       [{ type: "text", text: `/research-brief\t${rawArgument}` }, image],
-      { deliverAs: "steer" }
+      { deliverAs: "steer" },
     );
 
     const literalTexts = [
@@ -202,14 +202,14 @@ describe("raw prompt pipeline commands", () => {
     expect(
       queued.map(
         (message) =>
-          (message as { content: Array<{ text?: string }> }).content[0]?.text
-      )
+          (message as { content: Array<{ text?: string }> }).content[0]?.text,
+      ),
     ).toEqual(literalTexts);
     expect(
       queued.map(
         (message) =>
-          (message as { content: Array<{ type: string }> }).content[1]
-      )
+          (message as { content: Array<{ type: string }> }).content[1],
+      ),
     ).toEqual([image, image, image]);
     session.dispose();
   });
@@ -312,17 +312,17 @@ describe("raw prompt pipeline commands", () => {
     const originalFollowUp = prototype.followUp;
     const old = await createSession(
       [],
-      createPromptCommandsExtension((text) => `old:${text}`)
+      createPromptCommandsExtension((text) => `old:${text}`),
     );
     expect(
-      (AgentSession.prototype as unknown as { prompt: unknown }).prompt
+      (AgentSession.prototype as unknown as { prompt: unknown }).prompt,
     ).not.toBe(originalPrompt);
     expect(prototype.steer).toBe(originalSteer);
     expect(prototype.followUp).toBe(originalFollowUp);
 
     const current = await createSession(
       [],
-      createPromptCommandsExtension((text) => `current:${text}`)
+      createPromptCommandsExtension((text) => `current:${text}`),
     );
     const currentQueued: unknown[] = [];
     (
@@ -331,7 +331,7 @@ describe("raw prompt pipeline commands", () => {
     await current.session.steer("/show-me topic");
     expect(
       (currentQueued[0] as { content: Array<{ text?: string }> }).content[0]
-        ?.text
+        ?.text,
     ).toBe("current:/show-me topic");
 
     await (
@@ -353,7 +353,7 @@ describe("raw prompt pipeline commands", () => {
       (message) => oldQueued.push(message);
     await old.session.steer("/show-me topic");
     expect(
-      (oldQueued[0] as { content: Array<{ text?: string }> }).content[0]?.text
+      (oldQueued[0] as { content: Array<{ text?: string }> }).content[0]?.text,
     ).toBe("old:/show-me topic");
     await (
       old.session as unknown as {
@@ -367,7 +367,7 @@ describe("raw prompt pipeline commands", () => {
     ).extensionRunner.emit({ type: "session_shutdown", reason: "quit" });
     old.session.dispose();
     expect(
-      (AgentSession.prototype as unknown as { prompt: unknown }).prompt
+      (AgentSession.prototype as unknown as { prompt: unknown }).prompt,
     ).toBe(originalPrompt);
     expect(prototype.steer).toBe(originalSteer);
     expect(prototype.followUp).toBe(originalFollowUp);
@@ -382,7 +382,7 @@ describe("raw prompt pipeline commands", () => {
     await noOwner.session.steer("/show-me topic");
     expect(
       (untransformed[0] as { content: Array<{ text?: string }> }).content[0]
-        ?.text
+        ?.text,
     ).not.toStartWith("current:");
     noOwner.session.dispose();
   });
@@ -397,7 +397,7 @@ describe("raw prompt pipeline commands", () => {
     const outerPrompt = function outerPrompt(
       this: AgentSession,
       text: string,
-      options?: unknown
+      options?: unknown,
     ) {
       return promptCommandsPrompt.call(this, text, options);
     };
@@ -434,7 +434,7 @@ describe("raw prompt pipeline commands", () => {
       });
       await loader.reload();
       expect(loader.getExtensions().errors.length > 0).toBe(
-        additionalExtensionPaths.length > 0
+        additionalExtensionPaths.length > 0,
       );
       const result = await createAgentSession({
         cwd: directory,
@@ -444,7 +444,7 @@ describe("raw prompt pipeline commands", () => {
         settingsManager: SettingsManager.inMemory(),
       });
       activeSessions.push(
-        result.session as unknown as (typeof activeSessions)[number]
+        result.session as unknown as (typeof activeSessions)[number],
       );
       const queued: unknown[] = [];
       (
@@ -459,14 +459,14 @@ describe("raw prompt pipeline commands", () => {
       expect(
         queued.map(
           (message) =>
-            (message as { content: Array<{ text?: string }> }).content[0]?.text
-        )
+            (message as { content: Array<{ text?: string }> }).content[0]?.text,
+        ),
       ).toEqual([
         ...(Object.keys(expectedMessages) as CommandName[]).map((name) =>
-          expectedMessages[name]("first second")
+          expectedMessages[name]("first second"),
         ),
         expectedMessages.wayfinder(
-          "Start a new decision map or resume an existing one."
+          "Start a new decision map or resume an existing one.",
         ),
       ]);
       expect(
@@ -474,8 +474,8 @@ describe("raw prompt pipeline commands", () => {
           (message) =>
             !(
               message as { content: Array<{ text?: string }> }
-            ).content[0]?.text?.includes("prompt-pipeline command")
-        )
+            ).content[0]?.text?.includes("prompt-pipeline command"),
+        ),
       ).toBe(true);
       result.session.dispose();
     }
@@ -488,11 +488,11 @@ describe("raw prompt pipeline commands", () => {
       .prompts.filter(({ name }) => Object.hasOwn(expectedMessages, name));
 
     expect(prompts.map(({ name }) => name)).toEqual(
-      Object.keys(expectedMessages) as CommandName[]
+      Object.keys(expectedMessages) as CommandName[],
     );
     for (const name of Object.keys(expectedMessages) as CommandName[]) {
       await expect(
-        session.steer(`/${name} ${rawArgument}`)
+        session.steer(`/${name} ${rawArgument}`),
       ).resolves.toBeUndefined();
     }
     session.dispose();

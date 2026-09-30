@@ -10,7 +10,7 @@ const tempDirs: string[] = [];
 function tempDir(): string {
   const dir = join(
     import.meta.dir,
-    `.tmp-edit-tool-${Date.now()}-${Math.random()}`
+    `.tmp-edit-tool-${Date.now()}-${Math.random()}`,
   );
   mkdirSync(dir, { recursive: true });
   tempDirs.push(dir);
@@ -26,7 +26,7 @@ describe("edit helper compatibility", () => {
   test("normalizes Unicode spaces, @ aliases, and file URLs", () => {
     const dir = tempDir();
     expect(resolveToCwd(dir, "foo\u00A0bar.txt")).toBe(
-      join(dir, "foo bar.txt")
+      join(dir, "foo bar.txt"),
     );
     const target = join(dir, "target.txt");
     expect(resolveToCwd(dir, `@${pathToFileURL(target).href}`)).toBe(target);
@@ -51,7 +51,7 @@ describe("edit helper compatibility", () => {
         ran = true;
         return Promise.resolve();
       },
-      controller.signal
+      controller.signal,
     );
     controller.abort();
     await expect(second).rejects.toThrow("Operation aborted");
@@ -75,7 +75,7 @@ describe("edit helper compatibility", () => {
     const second = withFileMutationQueue(
       [path],
       async () => undefined,
-      controller.signal
+      controller.signal,
     );
     controller.abort();
     await expect(second).rejects.toThrow("Operation aborted");
@@ -95,10 +95,10 @@ describe("edit helper compatibility", () => {
   test("bounds canonicalization work", async () => {
     const path = join(
       tempDir(),
-      ...Array.from({ length: 300 }, (_, index) => `x-${index}`)
+      ...Array.from({ length: 300 }, (_, index) => `x-${index}`),
     );
     await expect(
-      withFileMutationQueue([path], async () => undefined)
+      withFileMutationQueue([path], async () => undefined),
     ).rejects.toThrow("Path exceeds maximum canonicalization size");
   });
 });

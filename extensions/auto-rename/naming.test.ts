@@ -31,7 +31,7 @@ const CODEX_MODEL = {
 
 function response(
   text: string,
-  stopReason: AssistantMessage["stopReason"] = "stop"
+  stopReason: AssistantMessage["stopReason"] = "stop",
 ) {
   return {
     content: text ? [{ type: "text" as const, text }] : [],
@@ -41,14 +41,14 @@ function response(
 
 function context(
   model: NamingContext["model"],
-  complete: NamingContext["modelRegistry"]["complete"]
+  complete: NamingContext["modelRegistry"]["complete"],
 ): NamingContext {
   return { model, modelRegistry: { complete } };
 }
 
 function expectedFailure(
   sessionId: string,
-  failure: NamingFailureCategory
+  failure: NamingFailureCategory,
 ): { title: string; failure: NamingFailureCategory } {
   return { title: fallbackSessionName(sessionId), failure };
 }
@@ -57,7 +57,7 @@ describe("fallbackSessionName", () => {
   it("uses only the first eight SHA-256 hex characters of the session ID", () => {
     const sessionId = "private-session-id";
     expect(fallbackSessionName(sessionId)).toBe(
-      `session-${createHash("sha256").update(sessionId).digest("hex").slice(0, 8)}`
+      `session-${createHash("sha256").update(sessionId).digest("hex").slice(0, 8)}`,
     );
     expect(fallbackSessionName(sessionId)).not.toContain("private-session-id");
   });
@@ -66,19 +66,19 @@ describe("fallbackSessionName", () => {
 describe("normalizeAndValidateTitle", () => {
   it("normalizes harmless surrounding whitespace, quotes, and ending punctuation", () => {
     expect(
-      normalizeAndValidateTitle('  "Build   Safe Model Titles!"  ', 80)
+      normalizeAndValidateTitle('  "Build   Safe Model Titles!"  ', 80),
     ).toBe("Build Safe Model Titles");
   });
 
   it("accepts plain titles with basic separators and the configured length bound", () => {
     expect(
-      normalizeAndValidateTitle("Review TypeScript Safety - Fast", 80)
+      normalizeAndValidateTitle("Review TypeScript Safety - Fast", 80),
     ).toBe("Review TypeScript Safety - Fast");
     expect(normalizeAndValidateTitle("Plan API: Safe Client Flow", 80)).toBe(
-      "Plan API: Safe Client Flow"
+      "Plan API: Safe Client Flow",
     );
     expect(normalizeAndValidateTitle("One Two Three", 13)).toBe(
-      "One Two Three"
+      "One Two Three",
     );
   });
 
@@ -107,7 +107,7 @@ describe("normalizeAndValidateTitle", () => {
   it("enforces both configured and absolute length caps", () => {
     expect(normalizeAndValidateTitle("Three Quite Long Words", 12)).toBeNull();
     expect(
-      normalizeAndValidateTitle(`${"A".repeat(70)} Second Third`, 500)
+      normalizeAndValidateTitle(`${"A".repeat(70)} Second Third`, 500),
     ).toBeNull();
   });
 });
@@ -125,7 +125,7 @@ describe("generateSessionTitle", () => {
       ctx,
       "abcdefghijklmnop secret remainder",
       "session-a",
-      CONFIG
+      CONFIG,
     );
     const finishedAt = Date.now();
 
@@ -175,7 +175,7 @@ describe("generateSessionTitle", () => {
       ctx,
       "sensitive prompt",
       "codex-session",
-      CONFIG
+      CONFIG,
     );
 
     expect(calls).toHaveLength(1);
@@ -191,7 +191,7 @@ describe("generateSessionTitle", () => {
       ctx,
       "sensitive prompt",
       "codex-session",
-      CONFIG
+      CONFIG,
     );
 
     expect(result).toEqual(expectedFailure("codex-session", "provider-error"));
@@ -242,8 +242,8 @@ describe("generateSessionTitle", () => {
           testCase.ctx,
           "sensitive prompt",
           "stable-session",
-          CONFIG
-        )
+          CONFIG,
+        ),
       ).toEqual(expectedFailure("stable-session", testCase.expected));
     }
   });
@@ -256,7 +256,7 @@ describe("generateSessionTitle", () => {
         options?.signal?.addEventListener(
           "abort",
           () => reject(new Error("provider included private detail")),
-          { once: true }
+          { once: true },
         );
       });
       return response("Never Returned Safe Title");
@@ -289,7 +289,7 @@ describe("generateSessionTitle", () => {
       "source",
       "abort-id",
       CONFIG,
-      caller.signal
+      caller.signal,
     );
     caller.abort();
 

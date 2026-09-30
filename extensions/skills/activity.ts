@@ -30,7 +30,7 @@ export interface SkillOperationActivity {
 export function renderSkillActivityLine(
   frame: string,
   label: string,
-  theme: SkillActivityTheme
+  theme: SkillActivityTheme,
 ): string {
   return `${theme.fg("accent", frame)} ${theme.fg("dim", label)}`;
 }
@@ -38,18 +38,22 @@ export function renderSkillActivityLine(
 function createSkillActivityWidget(label: string) {
   return (
     tui: TUI,
-    theme: SkillActivityTheme
+    theme: SkillActivityTheme,
   ): Component & { dispose?(): void } => {
     let frameIndex = 0;
     const text = new Text(
       renderSkillActivityLine(SKILL_ACTIVITY_FRAMES[frameIndex], label, theme),
       1,
-      0
+      0,
     );
     const timer = setInterval(() => {
       frameIndex = (frameIndex + 1) % SKILL_ACTIVITY_FRAMES.length;
       text.setText(
-        renderSkillActivityLine(SKILL_ACTIVITY_FRAMES[frameIndex], label, theme)
+        renderSkillActivityLine(
+          SKILL_ACTIVITY_FRAMES[frameIndex],
+          label,
+          theme,
+        ),
       );
       tui.requestRender();
     }, SKILL_ACTIVITY_INTERVAL_MS);
@@ -69,7 +73,7 @@ function createSkillActivityWidget(label: string) {
 }
 
 export function createSkillOperationActivity(
-  ctx: ExtensionCommandContext
+  ctx: ExtensionCommandContext,
 ): SkillOperationActivity {
   const setRunning = (label: string): void => {
     if (!ctx.hasUI) {
@@ -78,7 +82,7 @@ export function createSkillOperationActivity(
     ctx.ui.setStatus(SKILL_ACTIVITY_STATUS_KEY, label);
     ctx.ui.setWidget?.(
       SKILL_ACTIVITY_STATUS_KEY,
-      createSkillActivityWidget(label)
+      createSkillActivityWidget(label),
     );
   };
   const stop = (): void => {

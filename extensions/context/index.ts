@@ -40,7 +40,7 @@ export default function (pi: ExtensionAPI) {
       if (args.trim() === "content") {
         const snapshot = buildContextContentSnapshot(
           ctx,
-          cachedContextSnapshot
+          cachedContextSnapshot,
         );
         await showContextContentView(ctx, snapshot);
         return;
@@ -50,14 +50,14 @@ export default function (pi: ExtensionAPI) {
       const usage = ctx.getContextUsage();
       const sessionContext = buildSessionContext(
         entries,
-        ctx.sessionManager.getLeafId()
+        ctx.sessionManager.getLeafId(),
       );
       const sessionModel =
         ctx.model ??
         (sessionContext.model
           ? ctx.modelRegistry.find(
               sessionContext.model.provider,
-              sessionContext.model.modelId
+              sessionContext.model.modelId,
             )
           : undefined);
 

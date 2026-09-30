@@ -93,7 +93,7 @@ function validateModel(value: unknown, file: string, field: string): string {
     fail(
       file,
       field,
-      "must use provider/model without whitespace, control, or Unicode format characters."
+      "must use provider/model without whitespace, control, or Unicode format characters.",
     );
   }
   return model;
@@ -101,7 +101,7 @@ function validateModel(value: unknown, file: string, field: string): string {
 
 export function validateReviewConfig(
   value: unknown,
-  file: string
+  file: string,
 ): ReviewModelConfig {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     fail(file, "$", "must be a JSON object.");
@@ -144,7 +144,7 @@ export function validateReviewConfig(
         fail(
           file,
           `${field}.thinkingLevel`,
-          "must be off, minimal, low, medium, high, or xhigh."
+          "must be off, minimal, low, medium, high, or xhigh.",
         );
       }
       if (seen.has(model)) {
@@ -161,14 +161,14 @@ export function validateReviewConfig(
     config.synthesizerModel = validateModel(
       record.synthesizerModel,
       file,
-      "synthesizerModel"
+      "synthesizerModel",
     );
   }
   if (record.verifierModel !== undefined) {
     config.verifierModel = validateModel(
       record.verifierModel,
       file,
-      "verifierModel"
+      "verifierModel",
     );
   }
   return config;
@@ -176,7 +176,7 @@ export function validateReviewConfig(
 
 async function readLayer(
   file: string,
-  project: boolean
+  project: boolean,
 ): Promise<ReviewConfigLayer> {
   let content: string;
   try {
@@ -192,12 +192,12 @@ async function readLayer(
     parsed = JSON.parse(content);
   } catch (error) {
     throw new Error(
-      `Invalid review config ${file} field '$': malformed JSON (${error instanceof Error ? error.message : String(error)}).`
+      `Invalid review config ${file} field '$': malformed JSON (${error instanceof Error ? error.message : String(error)}).`,
     );
   }
   const config = validateReviewConfig(parsed, file);
   const hasProjectModels = MODEL_FIELDS.some(
-    (field) => config[field] !== undefined
+    (field) => config[field] !== undefined,
   );
   return {
     path: file,
@@ -216,7 +216,7 @@ function copyPanel(panel: readonly ReviewPanelEntry[]): ReviewPanelEntry[] {
 
 async function loadReviewConfig(
   cwd: string,
-  explicit: Partial<EffectiveReviewModels>
+  explicit: Partial<EffectiveReviewModels>,
 ): Promise<ResolvedReviewConfig> {
   const global = await readLayer(getGlobalReviewConfigPath(), false);
   const project = await readLayer(await getProjectReviewConfigPath(cwd), true);
@@ -225,7 +225,7 @@ async function loadReviewConfig(
       explicit.reviewerPanel ??
         project.config.reviewerPanel ??
         global.config.reviewerPanel ??
-        DEFAULT_REVIEWER_PANEL
+        DEFAULT_REVIEWER_PANEL,
     ),
     synthesizerModel:
       explicit.synthesizerModel ??
@@ -243,7 +243,7 @@ async function loadReviewConfig(
 
 export async function resolveReviewConfig(
   cwd: string,
-  explicit: Partial<EffectiveReviewModels> = {}
+  explicit: Partial<EffectiveReviewModels> = {},
 ): Promise<ResolvedReviewConfig> {
   const resolved = await loadReviewConfig(cwd, explicit);
   validateReviewConfig(resolved.effective, "<effective review configuration>");
@@ -288,7 +288,7 @@ async function assertSafeProjectConfigWrite(file: string): Promise<void> {
     });
   if (piStat?.isSymbolicLink()) {
     throw new Error(
-      `Refusing project review config write through symlinked directory ${piDirectory}.`
+      `Refusing project review config write through symlinked directory ${piDirectory}.`,
     );
   }
   const resolvedDirectory = piStat
@@ -296,7 +296,7 @@ async function assertSafeProjectConfigWrite(file: string): Promise<void> {
     : piDirectory;
   if (!isWithin(canonicalRoot, resolvedDirectory)) {
     throw new Error(
-      `Refusing project review config write outside ${canonicalRoot}.`
+      `Refusing project review config write outside ${canonicalRoot}.`,
     );
   }
 
@@ -311,7 +311,7 @@ async function assertSafeProjectConfigWrite(file: string): Promise<void> {
     resolvedFile === path.resolve(getGlobalReviewConfigPath())
   ) {
     throw new Error(
-      `Refusing unsafe project review config destination ${resolvedFile}.`
+      `Refusing unsafe project review config destination ${resolvedFile}.`,
     );
   }
 }
@@ -319,7 +319,7 @@ async function assertSafeProjectConfigWrite(file: string): Promise<void> {
 export async function writeReviewConfigField(
   file: string,
   field: (typeof MODEL_FIELDS)[number],
-  value: ReviewModelConfig[typeof field]
+  value: ReviewModelConfig[typeof field],
 ): Promise<ReviewConfigLayer> {
   const global = path.resolve(getGlobalReviewConfigPath());
   const project = path.resolve(file) !== global;
@@ -362,20 +362,20 @@ export async function writeReviewConfigField(
 function validateTrust(value: unknown, file: string): ReviewTrustFile {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     throw new Error(
-      `Invalid review trust file ${file}: must be a JSON object.`
+      `Invalid review trust file ${file}: must be a JSON object.`,
     );
   }
   const record = value as Record<string, unknown>;
   for (const key of Object.keys(record)) {
     if (key !== "$schema" && key !== "approvals") {
       throw new Error(
-        `Invalid review trust file ${file} field '${key}': is not allowed.`
+        `Invalid review trust file ${file} field '${key}': is not allowed.`,
       );
     }
   }
   if (record.$schema !== undefined && typeof record.$schema !== "string") {
     throw new Error(
-      `Invalid review trust file ${file} field '$schema': must be a string.`
+      `Invalid review trust file ${file} field '$schema': must be a string.`,
     );
   }
   const approvalsValue = record.approvals;
@@ -383,7 +383,7 @@ function validateTrust(value: unknown, file: string): ReviewTrustFile {
   if (approvalsValue !== undefined) {
     if (!Array.isArray(approvalsValue)) {
       throw new Error(
-        `Invalid review trust file ${file} field 'approvals': must be an array.`
+        `Invalid review trust file ${file} field 'approvals': must be an array.`,
       );
     }
     approvalItems = approvalsValue;
@@ -391,7 +391,7 @@ function validateTrust(value: unknown, file: string): ReviewTrustFile {
   const approvals = approvalItems.map((item, index) => {
     if (!item || typeof item !== "object" || Array.isArray(item)) {
       throw new Error(
-        `Invalid review trust file ${file} field 'approvals[${index}]'.`
+        `Invalid review trust file ${file} field 'approvals[${index}]'.`,
       );
     }
     const approval = item as Record<string, unknown>;
@@ -402,7 +402,7 @@ function validateTrust(value: unknown, file: string): ReviewTrustFile {
       !SHA256_PATTERN.test(approval.hash)
     ) {
       throw new Error(
-        `Invalid review trust file ${file} field 'approvals[${index}]'.`
+        `Invalid review trust file ${file} field 'approvals[${index}]'.`,
       );
     }
     return { path: approval.path, hash: approval.hash };
@@ -420,7 +420,7 @@ async function readTrust(): Promise<ReviewTrustFile> {
     }
     if (error instanceof SyntaxError) {
       throw new Error(
-        `Invalid review trust file ${file}: malformed JSON (${error.message}).`
+        `Invalid review trust file ${file}: malformed JSON (${error.message}).`,
       );
     }
     throw error;
@@ -428,7 +428,7 @@ async function readTrust(): Promise<ReviewTrustFile> {
 }
 
 export async function isProjectReviewConfigApproved(
-  layer: ReviewConfigLayer
+  layer: ReviewConfigLayer,
 ): Promise<boolean> {
   if (!layer.hash) {
     return true;
@@ -436,14 +436,15 @@ export async function isProjectReviewConfigApproved(
   const trust = await readTrust();
   return Boolean(
     trust.approvals?.some(
-      (approval) => approval.path === layer.path && approval.hash === layer.hash
-    )
+      (approval) =>
+        approval.path === layer.path && approval.hash === layer.hash,
+    ),
   );
 }
 
 async function withFileLock<T>(
   file: string,
-  run: () => Promise<T>
+  run: () => Promise<T>,
 ): Promise<T> {
   const lock = `${file}.lock`;
   await fs.mkdir(path.dirname(lock), { recursive: true });
@@ -476,7 +477,7 @@ async function withFileLock<T>(
 }
 
 export async function approveProjectReviewConfig(
-  layer: ReviewConfigLayer
+  layer: ReviewConfigLayer,
 ): Promise<void> {
   if (!layer.hash) {
     return;
@@ -484,18 +485,18 @@ export async function approveProjectReviewConfig(
   const current = await readLayer(layer.path, true);
   if (current.hash !== layer.hash) {
     throw new Error(
-      `Project review config ${layer.path} changed before approval; inspect and approve its new content.`
+      `Project review config ${layer.path} changed before approval; inspect and approve its new content.`,
     );
   }
   await withFileLock(getReviewTrustPath(), async () => {
     const trust = await readTrust();
     const approvals = (trust.approvals ?? []).filter(
-      (approval) => approval.path !== layer.path
+      (approval) => approval.path !== layer.path,
     );
     approvals.push({ path: layer.path, hash: layer.hash });
     await atomicWrite(
       getReviewTrustPath(),
-      `${JSON.stringify({ ...trust, approvals }, null, 2)}\n`
+      `${JSON.stringify({ ...trust, approvals }, null, 2)}\n`,
     );
   });
 }

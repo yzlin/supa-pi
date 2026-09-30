@@ -8,7 +8,7 @@ export const unifiedEditSchema = Type.Object(
         "Local unified-edit dialect: [path] row operations or a Codex *** Begin Patch payload.",
     }),
   },
-  { additionalProperties: false }
+  { additionalProperties: false },
 );
 
 export type UnifiedEditParameters = Static<typeof unifiedEditSchema>;

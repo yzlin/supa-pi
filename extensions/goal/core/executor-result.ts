@@ -24,7 +24,7 @@ function stringArray(value: unknown): string[] {
   return value
     .filter(
       (entry): entry is string =>
-        typeof entry === "string" && entry.trim().length > 0
+        typeof entry === "string" && entry.trim().length > 0,
     )
     .map((entry) => entry.trim());
 }
@@ -70,7 +70,7 @@ function checkpointPatch(value: unknown): GoalCheckpointPatch | null {
 }
 
 export function parseGoalExecutorResult(
-  raw: string
+  raw: string,
 ): Result<GoalExecutorResult> {
   let parsed: unknown;
   try {

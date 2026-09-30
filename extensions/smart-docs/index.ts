@@ -13,7 +13,7 @@ const TOP_LEVEL_REGEX_2 = /\s+/;
 const PROMPT = fs
   .readFileSync(
     path.join(path.dirname(fileURLToPath(import.meta.url)), "prompt.md"),
-    "utf8"
+    "utf8",
   )
   .trim();
 
@@ -142,17 +142,17 @@ function getAvailableFlags(usedFlags: Set<string>): AutocompleteItem[] {
 
 function completeFlagPrefix(
   currentToken: string,
-  usedFlags: Set<string>
+  usedFlags: Set<string>,
 ): AutocompleteItem[] | null {
   const matches = getAvailableFlags(usedFlags).filter((item) =>
-    item.value.startsWith(currentToken)
+    item.value.startsWith(currentToken),
   );
   return matches.length > 0 ? matches : null;
 }
 
 function resolvePathSearch(
   token: string,
-  cwd: string
+  cwd: string,
 ): {
   searchDir: string;
   valuePrefix: string;
@@ -184,7 +184,7 @@ function resolvePathSearch(
 
 function completeDirectories(
   token: string,
-  cwd: string
+  cwd: string,
 ): AutocompleteItem[] | null {
   const { searchDir, valuePrefix, namePrefix } = resolvePathSearch(token, cwd);
 
@@ -216,7 +216,7 @@ function completeDirectories(
 
 export function getSmartDocsArgumentCompletions(
   argumentPrefix: string,
-  cwd: string
+  cwd: string,
 ): AutocompleteItem[] | null {
   const state = analyzeCompletionState(argumentPrefix);
   if (state.hasInstructionSeparator) {

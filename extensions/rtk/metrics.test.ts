@@ -112,7 +112,7 @@ describe("rtk metrics", () => {
     expect(snapshot.commandFamilies[0]?.count).toBe(2);
     expect(snapshot.commands[0]?.label).toBe("rtk git diff main");
     expect(snapshot.commands[0]?.savedTokens).toBeGreaterThan(
-      snapshot.commands[1]?.savedTokens ?? 0
+      snapshot.commands[1]?.savedTokens ?? 0,
     );
   });
 

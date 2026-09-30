@@ -4,41 +4,41 @@ export type PortableValidationResult =
 
 export function runPortableReviewCore(
   operation: string,
-  input: unknown
+  input: unknown,
 ): unknown;
 export function validatePortableFinding(
   value: unknown,
-  rejectUnknownFields?: boolean
+  rejectUnknownFields?: boolean,
 ): PortableValidationResult;
 export function validatePortableFindings(
-  value: unknown
+  value: unknown,
 ): PortableValidationResult;
 export function validatePortableReviewer(
-  value: unknown
+  value: unknown,
 ): PortableValidationResult;
 export function collectPortableHumanReviewerCallouts(
-  reviewerOutputs: unknown[]
+  reviewerOutputs: unknown[],
 ): string[];
 export function buildPortableReviewerCoverage(
-  reviewers: unknown[]
+  reviewers: unknown[],
 ): Record<string, "used" | "not used">;
 export function buildPortableCorrectReviewResult(
   workflowInput: unknown,
-  args: unknown
+  args: unknown,
 ): unknown;
 export function buildPortableCandidateFindings(runs: unknown[]): unknown[];
 export function distinctPortableLocations(candidates: unknown[]): unknown[];
 export function parsePortableSynthesizerOutput(
   value: unknown,
-  candidates: unknown[]
+  candidates: unknown[],
 ): PortableValidationResult;
 export function validatePortableVerifier(
   value: unknown,
-  candidateFindings: unknown[]
+  candidateFindings: unknown[],
 ): PortableValidationResult;
 export function applyPortableDeterministicReportFields(
   verifier: unknown,
   candidateFindings: unknown[],
   coverage: unknown,
-  deterministicReportFields: unknown
+  deterministicReportFields: unknown,
 ): unknown;

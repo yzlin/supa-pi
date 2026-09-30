@@ -46,9 +46,9 @@ describe("Pi 0.84 runtime APIs", () => {
         command: {
           handler: (
             args: string,
-            ctx: Record<string, unknown>
+            ctx: Record<string, unknown>,
           ) => Promise<void>;
-        }
+        },
       ) {
         if (name === "handoff") {
           commandHandler = command.handler;
@@ -115,7 +115,7 @@ describe("Pi 0.84 runtime APIs", () => {
               },
               { fg: (_color: string, text: string) => text },
               undefined,
-              done
+              done,
             ) as { stop?: () => void };
           });
         },
@@ -142,7 +142,7 @@ describe("Pi 0.84 runtime APIs", () => {
     expect(completionCalls).toHaveLength(1);
     expect(completionCalls[0]?.[0]).toBe(model);
     expect(
-      (completionCalls[0]?.[2] as { signal?: AbortSignal }).signal
+      (completionCalls[0]?.[2] as { signal?: AbortSignal }).signal,
     ).toBeInstanceOf(AbortSignal);
     expect(replacementCalls).toEqual(["sendUserMessage"]);
     expect(oldCalls).toEqual([]);
@@ -206,11 +206,11 @@ describe("Pi 0.84 runtime APIs", () => {
             customCalls++;
           },
         },
-      }
+      },
     );
 
     expect(result.content[0]?.text).toBe(
-      "Handoff: model test/historical is outside the current model scope"
+      "Handoff: model test/historical is outside the current model scope",
     );
     expect(result.details).toEqual({ error: true });
     expect(completionCalls).toBe(0);
@@ -233,7 +233,7 @@ describe("Pi 0.84 runtime APIs", () => {
     const pi = {
       on(
         event: string,
-        handler: (event: unknown, ctx: Record<string, unknown>) => void
+        handler: (event: unknown, ctx: Record<string, unknown>) => void,
       ) {
         if (event === "agent_end") {
           agentEnd = handler;
@@ -290,7 +290,7 @@ describe("Pi 0.84 runtime APIs", () => {
               },
               { fg: (_color: string, text: string) => text },
               undefined,
-              resolve
+              resolve,
             );
           });
         },
@@ -308,7 +308,7 @@ describe("Pi 0.84 runtime APIs", () => {
       { goal: "continue", model: "test/requested" },
       undefined,
       undefined,
-      ctx
+      ctx,
     );
     agentEnd({}, ctx);
     await new Promise((resolve) => setTimeout(resolve, 10));
@@ -341,9 +341,9 @@ describe("Pi 0.84 runtime APIs", () => {
         command: {
           handler: (
             args: string,
-            ctx: Record<string, unknown>
+            ctx: Record<string, unknown>,
           ) => Promise<void>;
-        }
+        },
       ) {
         if (name === "handoff") {
           commandHandler = command.handler;
@@ -451,7 +451,7 @@ describe("Pi 0.84 runtime APIs", () => {
         { sessionPath, question: "What was decided?" },
         new AbortController().signal,
         undefined,
-        ctx
+        ctx,
       );
 
       expect(completionModels).toEqual([scopedModel]);
@@ -515,7 +515,7 @@ describe("Pi 0.84 runtime APIs", () => {
         { sessionPath, question: "What was decided?" },
         signal,
         undefined,
-        ctx
+        ctx,
       );
 
       expect(completionCalls).toHaveLength(1);

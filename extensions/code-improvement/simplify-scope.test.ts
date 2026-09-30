@@ -61,7 +61,7 @@ describe("classifySimplifyScopePaths git ignore handling", () => {
     writeFileSync("src/feature/build/good.ts", "export const good = true;\n");
     writeFileSync(
       "src/feature/build/nested/good.tsx",
-      "export function Good() { return null; }\n"
+      "export function Good() { return null; }\n",
     );
 
     const result = classifySimplifyScopePaths(["src"], {

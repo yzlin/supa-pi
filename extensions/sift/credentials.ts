@@ -35,7 +35,7 @@ export class CredentialStore {
     options: {
       agentDir?: string;
       env?: Record<string, string | undefined>;
-    } = {}
+    } = {},
   ) {
     this.#env = options.env ?? process.env;
     this.#agentDir =
@@ -84,7 +84,7 @@ export class CredentialStore {
       throw new Error(
         "reason" in status && status.reason === "permissions"
           ? "Stored credential has unsafe permissions"
-          : "Stored credential is unusable"
+          : "Stored credential is unusable",
       );
     }
     const apiKey = storedKey(JSON.parse(await readFile(this.path, "utf8")));
@@ -98,7 +98,7 @@ export class CredentialStore {
     const apiKey = validKey(value);
     if (!apiKey) {
       throw new Error(
-        "API key must be a valid printable key (16 to 512 characters)"
+        "API key must be a valid printable key (16 to 512 characters)",
       );
     }
     const directory = join(this.#agentDir, "sift");

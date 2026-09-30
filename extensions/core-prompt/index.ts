@@ -7,7 +7,7 @@ export default function corePromptExtension(pi: ExtensionAPI) {
   pi.on("before_agent_start", (event) => {
     const promptPath = path.join(
       path.dirname(new URL(import.meta.url).pathname),
-      "prompt.md"
+      "prompt.md",
     );
     const prompt = fs.readFileSync(promptPath, "utf8").trim();
 

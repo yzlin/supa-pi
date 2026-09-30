@@ -25,7 +25,7 @@ const TEST_DIAGNOSTIC: Diagnostic = {
 
 function client(
   name: string,
-  result: Diagnostic[] | Error
+  result: Diagnostic[] | Error,
 ): DiagnosticClientMock {
   return {
     config: { name },
@@ -65,7 +65,7 @@ function executeDiagnostics(tool: RegisteredTool): Promise<unknown> {
     Reflect.apply(tool.execute, tool, [
       "test-call",
       { operation: "diagnostics", filePath: "src/example.ts" },
-    ])
+    ]),
   );
 }
 
@@ -94,7 +94,7 @@ describe("LSP diagnostics aggregation", () => {
       captureTool([
         client("typescript", new Error("server stopped")),
         client("eslint", new Error("startup failed")),
-      ])
+      ]),
     );
 
     expect(message).toContain("unavailable");
@@ -108,7 +108,7 @@ describe("LSP diagnostics aggregation", () => {
       captureTool([
         client("typescript", []),
         client("eslint", new Error("timed out")),
-      ])
+      ]),
     );
 
     expect(message).toContain("incomplete");
@@ -122,7 +122,7 @@ describe("LSP diagnostics aggregation", () => {
       captureTool([
         client("typescript", [TEST_DIAGNOSTIC]),
         client("eslint", new Error("connection closed")),
-      ])
+      ]),
     );
 
     expect(message).toContain("incomplete");
@@ -134,7 +134,7 @@ describe("LSP diagnostics aggregation", () => {
 
   it("keeps successful empty diagnostics unchanged", async () => {
     const result = await executeDiagnostics(
-      captureTool([client("typescript", [])])
+      captureTool([client("typescript", [])]),
     );
 
     expect(result).toEqual({
@@ -150,7 +150,7 @@ describe("LSP diagnostics aggregation", () => {
 
   it("keeps successful populated diagnostics unchanged", async () => {
     const result = await executeDiagnostics(
-      captureTool([client("typescript", [TEST_DIAGNOSTIC])])
+      captureTool([client("typescript", [TEST_DIAGNOSTIC])]),
     );
 
     expect(result).toEqual({

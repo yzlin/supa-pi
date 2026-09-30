@@ -90,7 +90,7 @@ export function renderAskRuntime(args: {
       index === state.optionIndex,
       question,
       state,
-      theme
+      theme,
     );
 
   const renderOptions = () => {
@@ -133,7 +133,7 @@ export function renderAskRuntime(args: {
         const label =
           answer.kind === "multi" ? answer.label || "(none)" : answer.label;
         add(
-          `${theme.fg("muted", ` ${item.label}: `)}${theme.fg("text", prefix + label)}`
+          `${theme.fg("muted", ` ${item.label}: `)}${theme.fg("text", prefix + label)}`,
         );
       }
     }
@@ -162,7 +162,7 @@ export function renderAskRuntime(args: {
         const { titleWidth, previewWidth } = columnWidths;
         const headerLeft = padToVisibleWidth(
           theme.fg("muted", " Options"),
-          titleWidth
+          titleWidth,
         );
         add(`${headerLeft} │ ${theme.fg("muted", " Preview")}`);
         const optionColumnLines = options.flatMap((option, optionIndex) =>
@@ -173,26 +173,26 @@ export function renderAskRuntime(args: {
             optionIndex === state.optionIndex,
             question,
             state,
-            theme
-          )
+            theme,
+          ),
         );
         const previewColumnLines = getOptionPreviewLines(
           options[state.optionIndex],
           previewWidth,
-          theme
+          theme,
         );
         const rowCount = Math.max(
           optionColumnLines.length,
-          previewColumnLines.length
+          previewColumnLines.length,
         );
         for (let rowIndex = 0; rowIndex < rowCount; rowIndex++) {
           const left = padToVisibleWidth(
             optionColumnLines[rowIndex] ?? "",
-            titleWidth
+            titleWidth,
           );
           const right = truncateToWidth(
             previewColumnLines[rowIndex] ?? "",
-            previewWidth
+            previewWidth,
           );
           add(`${left} │ ${right}`);
         }
@@ -203,7 +203,7 @@ export function renderAskRuntime(args: {
         for (const line of getOptionPreviewLines(
           options[state.optionIndex],
           width,
-          theme
+          theme,
         )) {
           add(line);
         }
@@ -251,7 +251,7 @@ function stripOuterCodeFence(text: string): string {
 
 function prepareCappedPreviewText(
   text: string,
-  maxChars: number
+  maxChars: number,
 ): { text: string; truncated: boolean } {
   const sanitized = stripTerminalControlsUpTo(text, maxChars + 1);
   const firstLineEnd = sanitized.text.indexOf("\n");
@@ -260,11 +260,11 @@ function prepareCappedPreviewText(
       ? sanitized.text
       : sanitized.text.slice(0, firstLineEnd);
   const startsWithCodeFence = PREVIEW_OPENING_CODE_FENCE_REGEX.test(
-    firstLine.trim()
+    firstLine.trim(),
   );
   const suffixWindow = stripTerminalControlsUpTo(
     text.slice(-(maxChars + 1)),
-    maxChars + 1
+    maxChars + 1,
   ).text;
   const lastLineStart = suffixWindow.lastIndexOf("\n");
   const lastLine =
@@ -289,7 +289,7 @@ function prepareCappedPreviewText(
 function wrapPreviewText(
   text: string,
   width: number,
-  options: { maxLines?: number } = {}
+  options: { maxLines?: number } = {},
 ): string[] {
   if (!options.maxLines) {
     return wrapAskText(stripOuterCodeFence(text), width);
@@ -300,7 +300,7 @@ function wrapPreviewText(
   return capWrappedLines(
     wrapAskText(cappedText, width),
     width,
-    options.maxLines
+    options.maxLines,
   );
 }
 
@@ -319,7 +319,7 @@ function stripTrailingOuterClosingFence(text: string): string {
 function wrapCappedAskText(
   text: string,
   width: number,
-  maxLines: number
+  maxLines: number,
 ): string[] {
   const maxChars = Math.max(1, width) * maxLines;
   const sanitized = stripTerminalControlsUpTo(text, maxChars + 1);
@@ -333,7 +333,7 @@ function wrapCappedAskText(
 function capWrappedLines(
   lines: string[],
   width: number,
-  maxLines: number
+  maxLines: number,
 ): string[] {
   if (lines.length <= maxLines) {
     return lines;
@@ -342,13 +342,13 @@ function capWrappedLines(
   const cappedLines = lines.slice(0, maxLines);
   cappedLines[cappedLines.length - 1] = truncateToWidth(
     `${cappedLines.at(-1)}…`,
-    width
+    width,
   );
   return cappedLines;
 }
 
 function getOptionColumnWidths(
-  width: number
+  width: number,
 ): { titleWidth: number; previewWidth: number } | null {
   if (width < PREVIEW_LAYOUT_MIN_WIDTH) {
     return null;
@@ -380,7 +380,7 @@ function formatOptionBlockForWidth(
   selected: boolean,
   question: Question | undefined,
   state: AskRuntimeState,
-  theme: AskTheme
+  theme: AskTheme,
 ): string[] {
   const cursor = selected ? "> " : "  ";
   let marker = `${index + 1}. `;
@@ -401,7 +401,7 @@ function formatOptionBlockForWidth(
   const block = wrapCappedAskText(
     title,
     contentWidth,
-    OPTION_LABEL_MAX_LINES
+    OPTION_LABEL_MAX_LINES,
   ).map((line, lineIndex) => {
     const prefix = lineIndex === 0 ? cursor + marker : continuation;
     return prefix + theme.fg(color, line);
@@ -418,7 +418,7 @@ function formatOptionBlockForWidth(
 function getOptionPreviewLines(
   option: RenderOption | undefined,
   width: number,
-  theme: AskTheme
+  theme: AskTheme,
 ): string[] {
   const preview =
     option?.isOther === true

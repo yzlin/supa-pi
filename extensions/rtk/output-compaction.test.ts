@@ -236,7 +236,7 @@ describe("rtk output compaction", () => {
 
     expect(result).toBeUndefined();
     expect(runtime.metrics.snapshot().toolSavingsByName.grep?.calls ?? 0).toBe(
-      0
+      0,
     );
   });
 
@@ -265,7 +265,7 @@ describe("rtk output compaction", () => {
 
     expect(result).toBeUndefined();
     expect(runtime.metrics.snapshot().toolSavingsByName.grep?.calls ?? 0).toBe(
-      0
+      0,
     );
   });
 

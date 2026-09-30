@@ -17,7 +17,7 @@ it("loads through Pi's Node extension loader", () => {
   const result = spawnSync(
     "node",
     ["--input-type=module", "--eval", LOAD_EXTENSION_SCRIPT],
-    { cwd: PROJECT_ROOT, encoding: "utf8" }
+    { cwd: PROJECT_ROOT, encoding: "utf8" },
   );
 
   expect(result.status).toBe(0);

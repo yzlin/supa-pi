@@ -16,7 +16,7 @@ function createMockCtx(
     confirm?: boolean;
     select?: string;
     editor?: string;
-  } = {}
+  } = {},
 ) {
   const notifications: Array<{ message: string; level: string }> = [];
   const confirmations: Array<{ title: string; message?: string }> = [];
@@ -45,7 +45,7 @@ function createMockCtx(
 function createMockPiRuntime(
   exec: (
     command: string,
-    args: string[]
+    args: string[],
   ) =>
     | Promise<{
         stdout: string;
@@ -56,7 +56,7 @@ function createMockPiRuntime(
         stdout: string;
         stderr?: string;
         code: number;
-      } = () => ({ stdout: "", code: 0 })
+      } = () => ({ stdout: "", code: 0 }),
 ) {
   const commands = new Map<
     string,
@@ -73,7 +73,7 @@ function createMockPiRuntime(
         name: string,
         definition: {
           handler: (args: string, ctx: unknown) => Promise<void> | void;
-        }
+        },
       ) {
         commands.set(name, definition);
       },
@@ -89,7 +89,7 @@ function getRegisteredCommand(
     string,
     { handler: (args: string, ctx: unknown) => Promise<void> | void }
   >,
-  name: string
+  name: string,
 ) {
   const command = commands.get(name);
 
@@ -111,7 +111,7 @@ describe("code-improvement commands", () => {
     const packageJson = readPackageJson();
 
     expect(packageJson.pi.extensions).toContain(
-      "./extensions/code-improvement"
+      "./extensions/code-improvement",
     );
     expect(packageJson.pi.extensions).not.toContain("./extensions/simplify");
   });
@@ -129,21 +129,21 @@ describe("code-improvement commands", () => {
 
   it("preserves /simplify default and focused prompt semantics", () => {
     expect(buildSimplifyCommandMessage("   ")).toBe(
-      "Use the `simplify` skill behavior as canonical.\n\nSimplify invocation packet:\n- Scope: recent session\n- Focus instruction: Simplify the recent feature implementation or recently modified code in this session."
+      "Use the `simplify` skill behavior as canonical.\n\nSimplify invocation packet:\n- Scope: recent session\n- Focus instruction: Simplify the recent feature implementation or recently modified code in this session.",
     );
     expect(buildSimplifyCommandMessage("  focus here  ")).toBe(
-      "Use the `simplify` skill behavior as canonical.\n\nSimplify invocation packet:\n- Scope: recent session\n- Focus instruction: focus here"
+      "Use the `simplify` skill behavior as canonical.\n\nSimplify invocation packet:\n- Scope: recent session\n- Focus instruction: focus here",
     );
   });
 
   it("builds the architecture review message with optional scope injection", () => {
     expect(buildImproveCodebaseArchitectureCommandMessage("   ")).toContain(
-      "Scope instruction: No explicit scope provided. Start broad, then narrow based on explorer findings."
+      "Scope instruction: No explicit scope provided. Start broad, then narrow based on explorer findings.",
     );
     expect(
       buildImproveCodebaseArchitectureCommandMessage(
-        "  extensions/context-docs  "
-      )
+        "  extensions/context-docs  ",
+      ),
     ).toContain("Scope instruction: extensions/context-docs");
   });
 
@@ -153,7 +153,7 @@ describe("code-improvement commands", () => {
 
     for (const supportDoc of supportDocs) {
       expect(message).toContain(
-        readRepoFile("extensions", "code-improvement", supportDoc)
+        readRepoFile("extensions", "code-improvement", supportDoc),
       );
     }
   });
@@ -163,13 +163,13 @@ describe("code-improvement commands", () => {
       buildImproveCodebaseArchitectureCommandMessage("src/domain");
 
     expect(message).toContain(
-      "Read-only by default. Do not edit files, implement code, create branches, commit, or run destructive commands."
+      "Read-only by default. Do not edit files, implement code, create branches, commit, or run destructive commands.",
     );
     expect(message).toContain(
-      "Produce analysis and plans only. Do not implement."
+      "Produce analysis and plans only. Do not implement.",
     );
     expect(message).toContain(
-      "Do not propose final Interfaces in the candidate report. Ask which candidate should be turned into an implementation plan."
+      "Do not propose final Interfaces in the candidate report. Ask which candidate should be turned into an implementation plan.",
     );
     expect(message).toContain("read-only plan, no code changes");
   });
@@ -179,16 +179,16 @@ describe("code-improvement commands", () => {
       buildImproveCodebaseArchitectureCommandMessage("src/domain");
 
     expect(message).toContain(
-      'The first substantive action must be an `Agent` call with `subagent_type: "explorer"`.'
+      'The first substantive action must be an `Agent` call with `subagent_type: "explorer"`.',
     );
     expect(message).toContain(
-      'Immediately use the `Agent` tool with `subagent_type: "explorer"` to inspect the requested scope.'
+      'Immediately use the `Agent` tool with `subagent_type: "explorer"` to inspect the requested scope.',
     );
     expect(message).toContain(
-      "Use direct tool reads only after the explorer-first step, to verify specific findings."
+      "Use direct tool reads only after the explorer-first step, to verify specific findings.",
     );
     expect(message).toContain(
-      "architecture friction, shallow Modules, coupling across Seams, testing pain, domain vocabulary, and relevant ADR constraints"
+      "architecture friction, shallow Modules, coupling across Seams, testing pain, domain vocabulary, and relevant ADR constraints",
     );
   });
 
@@ -207,13 +207,13 @@ describe("code-improvement commands", () => {
     ];
 
     expect(message).toContain(
-      "Use the architecture terms in this document exactly: **Module**, **Interface**, **Implementation**, **Depth**, **Seam**, **Adapter**, **Leverage**, **Locality**."
+      "Use the architecture terms in this document exactly: **Module**, **Interface**, **Implementation**, **Depth**, **Seam**, **Adapter**, **Leverage**, **Locality**.",
     );
     expect(message).toContain(
-      "Avoid substitute terms such as component, service, API, or boundary when describing architecture."
+      "Avoid substitute terms such as component, service, API, or boundary when describing architecture.",
     );
     expect(message).toContain(
-      "Each interface-design agent must use the strict architecture terms"
+      "Each interface-design agent must use the strict architecture terms",
     );
 
     for (const term of terms) {
@@ -237,7 +237,7 @@ describe("code-improvement commands", () => {
     }
     expect(message).toContain("existing report fields");
     expect(message).toContain(
-      "**Files** — files, Modules, and exact locations involved."
+      "**Files** — files, Modules, and exact locations involved.",
     );
   });
 
@@ -343,7 +343,7 @@ describe("code-improvement commands", () => {
     codeImprovementExtension(runtime.pi as never);
     const command = getRegisteredCommand(
       runtime.commands,
-      "improve-codebase-architecture"
+      "improve-codebase-architecture",
     );
 
     await command?.handler("src/domain", ctx as never);
@@ -371,7 +371,7 @@ describe("code-improvement commands", () => {
 
     await command?.handler(
       'uncommitted --extra "prefer smaller functions" --yes',
-      ctx as never
+      ctx as never,
     );
 
     expect(runtime.sentUserMessages).toHaveLength(1);
@@ -379,20 +379,20 @@ describe("code-improvement commands", () => {
       deliverAs: "followUp",
     });
     expect(runtime.sentUserMessages[0]?.content).toContain(
-      "Use the `simplify` skill behavior as canonical."
+      "Use the `simplify` skill behavior as canonical.",
     );
     expect(runtime.sentUserMessages[0]?.content).toContain("- package.json");
     expect(runtime.sentUserMessages[0]?.content).toContain(
-      "Unsupported changed files (1):\n- ../unsafe.ts"
+      "Unsupported changed files (1):\n- ../unsafe.ts",
     );
     expect(runtime.sentUserMessages[0]?.content).toContain(
-      "Simplify invocation packet:"
+      "Simplify invocation packet:",
     );
     expect(runtime.sentUserMessages[0]?.content).toContain(
-      "Extra guidance: prefer smaller functions"
+      "Extra guidance: prefer smaller functions",
     );
     expect(runtime.sentUserMessages[0]?.content).toContain(
-      "Before delegating, re-resolve this scope and compare editable files only. Ignore lockfile drift. Stop if editable files changed. Stop if new unsupported non-lock files appeared"
+      "Before delegating, re-resolve this scope and compare editable files only. Ignore lockfile drift. Stop if editable files changed. Stop if new unsupported non-lock files appeared",
     );
     expect(notifications).toContainEqual({
       message: "Queued /simplify as a follow-up",
@@ -412,7 +412,7 @@ describe("code-improvement commands", () => {
     expect(message).toContain("Ignored lockfiles (read-only, 1):\n- bun.lock");
     expect(message).toContain("Unsupported changed files (1):\n- image.png");
     expect(message).toContain(
-      "Use the `simplify` skill behavior as canonical."
+      "Use the `simplify` skill behavior as canonical.",
     );
     expect(message).toContain("Simplify invocation packet:");
   });
@@ -479,18 +479,18 @@ describe("code-improvement commands", () => {
 
     await command?.handler(
       "folder extensions/code-improvement/__fixtures__/folder-scope --yes",
-      ctx as never
+      ctx as never,
     );
 
     const content = runtime.sentUserMessages[0]?.content ?? "";
     expect(content).toContain(
-      "- extensions/code-improvement/__fixtures__/folder-scope/README.md"
+      "- extensions/code-improvement/__fixtures__/folder-scope/README.md",
     );
     expect(content).toContain(
-      "Ignored lockfiles (read-only, 1):\n- extensions/code-improvement/__fixtures__/folder-scope/bun.lock"
+      "Ignored lockfiles (read-only, 1):\n- extensions/code-improvement/__fixtures__/folder-scope/bun.lock",
     );
     expect(content).toContain(
-      "- extensions/code-improvement/__fixtures__/folder-scope/src/good.ts"
+      "- extensions/code-improvement/__fixtures__/folder-scope/src/good.ts",
     );
   });
 
@@ -515,7 +515,7 @@ describe("code-improvement commands", () => {
         level: "warning",
       });
       expect(runtime.sentUserMessages[0]?.content).toContain(
-        "Editable files (1):\n- safe.ts"
+        "Editable files (1):\n- safe.ts",
       );
     } finally {
       process.chdir(originalCwd);
@@ -531,26 +531,26 @@ describe("code-improvement commands", () => {
 
     await command?.handler(
       "folder extensions/code-improvement/__fixtures__/folder-scope ../unsafe.ts node_modules --yes",
-      ctx as never
+      ctx as never,
     );
 
     const content = runtime.sentUserMessages[0]?.content ?? "";
     expect(content).toContain(
-      "- extensions/code-improvement/__fixtures__/folder-scope/src/good.ts"
+      "- extensions/code-improvement/__fixtures__/folder-scope/src/good.ts",
     );
     expect(content).not.toContain(
-      "- extensions/code-improvement/__fixtures__/folder-scope/generated/ignored.ts"
+      "- extensions/code-improvement/__fixtures__/folder-scope/generated/ignored.ts",
     );
     expect(content).not.toContain(
-      "- extensions/code-improvement/__fixtures__/folder-scope/node_modules/ignored.ts"
+      "- extensions/code-improvement/__fixtures__/folder-scope/node_modules/ignored.ts",
     );
     expect(content).not.toContain(
-      "- extensions/code-improvement/__fixtures__/folder-scope/dist/ignored.ts"
+      "- extensions/code-improvement/__fixtures__/folder-scope/dist/ignored.ts",
     );
     expect(content).toContain("Unsupported changed files (3):");
     expect(content).toContain("- ../unsafe.ts");
     expect(content).toContain(
-      "- extensions/code-improvement/__fixtures__/folder-scope/image.png"
+      "- extensions/code-improvement/__fixtures__/folder-scope/image.png",
     );
     expect(content).toContain("- node_modules");
   });
@@ -598,7 +598,7 @@ describe("code-improvement commands", () => {
     ]);
     expect(runtime.sentUserMessages).toHaveLength(1);
     expect(runtime.sentUserMessages[0]?.content).toContain(
-      "Unsupported changed files (1):\n- image.png"
+      "Unsupported changed files (1):\n- image.png",
     );
   });
 
@@ -641,7 +641,7 @@ describe("code-improvement commands", () => {
     expect(notifications).toEqual([]);
     expect(runtime.sentUserMessages).toHaveLength(1);
     expect(runtime.sentUserMessages[0]?.content).toContain(
-      "Unsupported changed files (1):\n- image.png"
+      "Unsupported changed files (1):\n- image.png",
     );
   });
 
@@ -665,10 +665,10 @@ describe("code-improvement commands", () => {
     expect(notifications).toEqual([]);
     expect(runtime.sentUserMessages).toHaveLength(1);
     expect(runtime.sentUserMessages[0]?.content).toContain(
-      "Editable files (1):\n- package.json"
+      "Editable files (1):\n- package.json",
     );
     expect(runtime.sentUserMessages[0]?.content).toContain(
-      "Ignored lockfiles (read-only, 1):\n- bun.lock"
+      "Ignored lockfiles (read-only, 1):\n- bun.lock",
     );
   });
 
@@ -679,7 +679,7 @@ describe("code-improvement commands", () => {
     codeImprovementExtension(runtime.pi as never);
     const command = getRegisteredCommand(
       runtime.commands,
-      "improve-codebase-architecture"
+      "improve-codebase-architecture",
     );
 
     await command?.handler("src/domain", ctx as never);

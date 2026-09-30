@@ -101,12 +101,13 @@ interface LegacyAskMissLog {
 }
 
 function getLegacyAskMissLogs(
-  entries: Array<{ type: string; customType?: string; data?: unknown }>
+  entries: Array<{ type: string; customType?: string; data?: unknown }>,
 ): LegacyAskMissLog[] {
   return entries
     .filter(
       (entry) =>
-        entry.type === "custom" && entry.customType === LEGACY_ASK_MISS_LOG_TYPE
+        entry.type === "custom" &&
+        entry.customType === LEGACY_ASK_MISS_LOG_TYPE,
     )
     .map((entry) => entry.data as LegacyAskMissLog);
 }
@@ -118,10 +119,10 @@ const QuestionOptionSchema = Type.Object({
   value: Type.String({ description: "The value returned when selected" }),
   label: Type.String({ description: "Display label for the option" }),
   description: Type.Optional(
-    Type.String({ description: "Optional description shown below label" })
+    Type.String({ description: "Optional description shown below label" }),
   ),
   preview: Type.Optional(
-    Type.String({ description: "Optional preview content for this option" })
+    Type.String({ description: "Optional preview content for this option" }),
   ),
 });
 
@@ -131,7 +132,7 @@ const QuestionSchema = Type.Object({
     Type.String({
       description:
         "Short contextual label for tab bar, e.g. 'Scope', 'Priority' (defaults to Q1, Q2)",
-    })
+    }),
   ),
   prompt: Type.String({ description: "The full question text to display" }),
   options: Type.Array(QuestionOptionSchema, {
@@ -143,7 +144,7 @@ const QuestionSchema = Type.Object({
     Type.Boolean({
       description:
         "Allow selecting multiple options before committing with Next. Multi-select questions do not include the custom input row.",
-    })
+    }),
   ),
 });
 
@@ -161,7 +162,7 @@ function addDuplicateIssue(
   value: string,
   path: string,
   code: AskValidationIssue["code"],
-  label: string
+  label: string,
 ): void {
   if (!seen.has(value)) {
     seen.add(value);
@@ -175,7 +176,7 @@ function addDuplicateIssue(
 }
 
 export function validateAskParams(
-  params: AskParamsInput
+  params: AskParamsInput,
 ): AskValidationErrorDetails | { valid: true; questions: QuestionInput[] } {
   const issues: AskValidationIssue[] = [];
   const questions = params.questions ?? [];
@@ -196,7 +197,7 @@ export function validateAskParams(
       question.id,
       `questions[${questionIndex}].id`,
       "duplicate_question_id",
-      "Question id"
+      "Question id",
     );
 
     if (question.options.length < 2 || question.options.length > 5) {
@@ -218,7 +219,7 @@ export function validateAskParams(
         option.value,
         valuePath,
         "duplicate_option_value",
-        "Option value"
+        "Option value",
       );
       addDuplicateIssue(
         issues,
@@ -226,7 +227,7 @@ export function validateAskParams(
         option.label,
         labelPath,
         "duplicate_option_label",
-        "Option label"
+        "Option label",
       );
       if (ASK_RESERVED_VALUES.includes(option.value as never)) {
         issues.push({
@@ -264,7 +265,7 @@ function normalizeQuestion(question: QuestionInput, index: number): Question {
 function errorResult(
   message: string,
   questions: Question[] = [],
-  validation?: AskValidationErrorDetails
+  validation?: AskValidationErrorDetails,
 ): {
   content: { type: "text"; text: string }[];
   details: AskResult & {
@@ -419,7 +420,7 @@ export default function ask(pi: ExtensionAPI): void {
     async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
       if (!ctx.hasUI) {
         return errorResult(
-          "Error: UI not available (running in non-interactive mode)"
+          "Error: UI not available (running in non-interactive mode)",
         );
       }
       const validation = validateAskParams(params);
@@ -427,7 +428,7 @@ export default function ask(pi: ExtensionAPI): void {
         return errorResult(
           `Error: Invalid ask request: ${validation.issues.map((issue) => issue.message).join(" ")}`,
           [],
-          validation
+          validation,
         );
       }
 
@@ -492,7 +493,7 @@ export default function ask(pi: ExtensionAPI): void {
         }
 
         function applyEffect(
-          effect: ReturnType<typeof reduceAskRuntime>["effect"]
+          effect: ReturnType<typeof reduceAskRuntime>["effect"],
         ) {
           if (effect.type === "submit") {
             submit(effect.cancelled);
@@ -607,7 +608,7 @@ export default function ask(pi: ExtensionAPI): void {
       }
 
       const questionsById = new Map(
-        details.questions.map((question) => [question.id, question])
+        details.questions.map((question) => [question.id, question]),
       );
       const displayField = options.expanded
         ? stripTerminalControls
@@ -615,7 +616,7 @@ export default function ask(pi: ExtensionAPI): void {
       const summaryLines = details.answers.map((answer) => {
         const question = questionsById.get(answer.id);
         const heading = displayField(
-          options.expanded ? (question?.label ?? "Question") : answer.id
+          options.expanded ? (question?.label ?? "Question") : answer.id,
         );
         if (answer.kind === "custom") {
           return `${theme.fg("success", "✓ ")}${theme.fg("accent", heading)}: ${theme.fg("muted", "(wrote) ")}${displayField(answer.label)}`;
@@ -649,7 +650,7 @@ export default function ask(pi: ExtensionAPI): void {
         ];
         if (answer.kind === "custom") {
           detailLines.push(
-            indentDetail(stripTerminalControls(answer.label), "  ")
+            indentDetail(stripTerminalControls(answer.label), "  "),
           );
         } else if (answer.kind === "multi") {
           if (answer.selectedOptions.length === 0) {
@@ -657,59 +658,59 @@ export default function ask(pi: ExtensionAPI): void {
           }
           for (const selectedOption of answer.selectedOptions) {
             detailLines.push(
-              `  ${selectedOption.index}. ${stripTerminalControls(selectedOption.label)}`
+              `  ${selectedOption.index}. ${stripTerminalControls(selectedOption.label)}`,
             );
             if (selectedOption.description !== undefined) {
               detailLines.push(
                 indentDetail(
                   stripTerminalControls(selectedOption.description),
-                  "    Description: "
-                )
+                  "    Description: ",
+                ),
               );
             }
             if (selectedOption.preview !== undefined) {
               detailLines.push(
                 indentDetail(
                   stripTerminalControls(selectedOption.preview),
-                  "    Preview: "
-                )
+                  "    Preview: ",
+                ),
               );
             }
           }
         } else {
           detailLines.push(
-            `  ${answer.index}. ${stripTerminalControls(answer.label)}`
+            `  ${answer.index}. ${stripTerminalControls(answer.label)}`,
           );
           const selectedOption = question.options.find(
-            (option) => option.value === answer.value
+            (option) => option.value === answer.value,
           );
           if (selectedOption?.description !== undefined) {
             detailLines.push(
               indentDetail(
                 stripTerminalControls(selectedOption.description),
-                "    Description: "
-              )
+                "    Description: ",
+              ),
             );
           }
           if (answer.preview !== undefined) {
             detailLines.push(
               indentDetail(
                 stripTerminalControls(answer.preview),
-                "    Preview: "
-              )
+                "    Preview: ",
+              ),
             );
           }
         }
         if (answer.note !== undefined) {
           detailLines.push(
-            indentDetail(stripTerminalControls(answer.note), "  Note: ")
+            indentDetail(stripTerminalControls(answer.note), "  Note: "),
           );
         }
         return [detailLines.join("\n")];
       });
 
       return renderResultText(
-        `${summaryLines.join("\n")}\n\n${detailBlocks.join("\n\n")}`
+        `${summaryLines.join("\n")}\n\n${detailBlocks.join("\n\n")}`,
       );
     },
   });
@@ -739,14 +740,14 @@ QUESTION-ASKING RULES:
     }
 
     const usedAsk = event.messages.some(
-      (message) => message.role === "toolResult" && message.toolName === "ask"
+      (message) => message.role === "toolResult" && message.toolName === "ask",
     );
     if (usedAsk) {
       return;
     }
 
     const assistantMessages = event.messages.filter(
-      (message) => message.role === "assistant"
+      (message) => message.role === "assistant",
     );
     const lastAssistant = assistantMessages.at(-1);
     if (lastAssistant?.stopReason !== "stop") {

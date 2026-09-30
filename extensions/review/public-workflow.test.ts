@@ -18,7 +18,7 @@ const RUNTIME_EXPORT_RE = /^export\b/m;
 const VERIFIER_ID_ERROR_RE = /unknown member ID|repeated member ID/;
 
 function input(
-  overrides: Partial<PublicReviewWorkflowInput> = {}
+  overrides: Partial<PublicReviewWorkflowInput> = {},
 ): PublicReviewWorkflowInput {
   return {
     scopeHint: "changed files",
@@ -103,9 +103,9 @@ function executeScript(
     throwOnAgent?: boolean;
     onAgent?: (
       options: Record<string, unknown>,
-      index: number
+      index: number,
     ) => void | Promise<void>;
-  } = {}
+  } = {},
 ) {
   const body = stripScriptMeta(script);
   const AsyncFunction = Object.getPrototypeOf(async () => {
@@ -126,7 +126,7 @@ function executeScript(
       throw reply;
     }
     return Promise.resolve(options.onAgent?.(agentOptions, index)).then(
-      () => reply ?? null
+      () => reply ?? null,
     );
   };
   const parallel = (thunks: Array<() => Promise<unknown>>) => {
@@ -140,7 +140,7 @@ function executeScript(
         } catch {
           return null;
         }
-      })
+      }),
     );
   };
   const phase = () => undefined;
@@ -168,7 +168,7 @@ function assertProviderSchema(schema: Record<string, any>): void {
   if (schema.type === "object") {
     expect(schema.additionalProperties).toBe(false);
     expect([...schema.required].sort()).toEqual(
-      Object.keys(schema.properties).sort()
+      Object.keys(schema.properties).sort(),
     );
     for (const property of Object.values(schema.properties)) {
       assertProviderSchema(property as Record<string, unknown>);
@@ -196,7 +196,7 @@ describe("public review workflow script", () => {
           stages.push(options.agentType);
           schemas.push(options.schema as Record<string, any>);
         },
-      }
+      },
     );
     expect(stages).toEqual([
       REVIEWER,
@@ -215,7 +215,7 @@ describe("public review workflow script", () => {
       reviewers: [REVIEWER, "security-reviewer", "database-reviewer"],
     });
     const jobs = plan.reviewers.flatMap((reviewer) =>
-      PANEL.map((entry) => ({ reviewer, ...entry }))
+      PANEL.map((entry) => ({ reviewer, ...entry })),
     );
     const outputs = jobs.map((job, index) => ({
       ...reviewerOutput(REVIEWER, []),
@@ -243,12 +243,12 @@ describe("public review workflow script", () => {
           active += 1;
           maxActive = Math.max(maxActive, active);
           await new Promise((resolve) =>
-            setTimeout(resolve, index % 4 === 0 ? 20 : 1)
+            setTimeout(resolve, index % 4 === 0 ? 20 : 1),
           );
           active -= 1;
           completed.push(index);
         },
-      }
+      },
     )) as PublicReviewWorkflowScriptResult;
     expect(maxActive).toBe(4);
     expect(completedAtSecondBatch).toBe(4);
@@ -261,7 +261,7 @@ describe("public review workflow script", () => {
         ...job,
         status: "succeeded",
         output: outputs[index],
-      }))
+      })),
     );
   });
 
@@ -270,32 +270,29 @@ describe("public review workflow script", () => {
       prepareReviewWorkflowScript(
         input({
           reviewerPanel: [{ model: "test/alpha", thinkingLevel: "off" }],
-        })
-      )
+        }),
+      ),
     ).toThrow("choose minimal, low, medium, high, or xhigh");
   });
 
-  it.each([
-    "minimal",
-    "low",
-    "medium",
-    "high",
-    "xhigh",
-  ] as const)("preserves requested %s effort", async (thinkingLevel) => {
-    const efforts: unknown[] = [];
-    await executeScript(
-      prepareReviewWorkflowScript(
-        input({ reviewerPanel: [{ model: "test/alpha", thinkingLevel }] })
-      ),
-      [reviewerOutput(REVIEWER, [])],
-      {
-        onAgent: (options) => {
-          efforts.push(options.effort);
+  it.each(["minimal", "low", "medium", "high", "xhigh"] as const)(
+    "preserves requested %s effort",
+    async (thinkingLevel) => {
+      const efforts: unknown[] = [];
+      await executeScript(
+        prepareReviewWorkflowScript(
+          input({ reviewerPanel: [{ model: "test/alpha", thinkingLevel }] }),
+        ),
+        [reviewerOutput(REVIEWER, [])],
+        {
+          onAgent: (options) => {
+            efforts.push(options.effort);
+          },
         },
-      }
-    );
-    expect(efforts).toEqual([thinkingLevel]);
-  });
+      );
+      expect(efforts).toEqual([thinkingLevel]);
+    },
+  );
 
   it("retains complete raw stage outputs for local revalidation", async () => {
     const rawSynthesizer = cluster(["candidate-0001", "candidate-0002"]);
@@ -318,7 +315,7 @@ describe("public review workflow script", () => {
     });
     const derived = derivePreparedReviewResult(
       input(),
-      JSON.stringify(result.rawResult)
+      JSON.stringify(result.rawResult),
     );
     expect(derived.verifier.findings[0]?.supportCount).toBe(2);
   });
@@ -332,7 +329,7 @@ describe("public review workflow script", () => {
     expect(result.status).toBe("failed");
     expect(JSON.stringify(result.rawResult)).not.toContain("credential");
     expect(() =>
-      derivePreparedReviewResult(input(), JSON.stringify(result.rawResult))
+      derivePreparedReviewResult(input(), JSON.stringify(result.rawResult)),
     ).toThrow("Invalid synthesizer output");
   });
 
@@ -363,7 +360,7 @@ describe("public review workflow script", () => {
 
     expect(result.status).toBe("succeeded");
     expect(result.candidates.map((candidate) => candidate.candidateId)).toEqual(
-      ["candidate-0001", "candidate-0002"]
+      ["candidate-0001", "candidate-0002"],
     );
     expect(result.verifier.findings[0]?.supportCount).toBe(2);
     expect(result.verifier.findings[0]?.supportingModels).toEqual([
@@ -397,16 +394,18 @@ describe("public review workflow script", () => {
       },
       "repeated candidate ID",
     ],
-  ])("rejects %s synthesizer IDs without a local repair", async (_name, badClusters, reason) => {
-    const result = (await executeScript(prepareReviewWorkflowScript(input()), [
-      reviewerOutput(),
-      reviewerOutput(REVIEWER, []),
-      badClusters,
-    ])) as { status: string; reason: string };
+  ])(
+    "rejects %s synthesizer IDs without a local repair",
+    async (_name, badClusters, reason) => {
+      const result = (await executeScript(
+        prepareReviewWorkflowScript(input()),
+        [reviewerOutput(), reviewerOutput(REVIEWER, []), badClusters],
+      )) as { status: string; reason: string };
 
-    expect(result.status).toBe("failed");
-    expect(result.reason).toContain(reason);
-  });
+      expect(result.status).toBe("failed");
+      expect(result.reason).toContain(reason);
+    },
+  );
 
   it("rejects unknown and duplicate verifier IDs without another model call", async () => {
     for (const badVerifier of [
@@ -426,7 +425,7 @@ describe("public review workflow script", () => {
           reviewerOutput(REVIEWER, []),
           cluster(["candidate-0001"]),
           badVerifier,
-        ]
+        ],
       )) as { status: string; reason: string };
       expect(result.status).toBe("failed");
       expect(result.reason).toMatch(VERIFIER_ID_ERROR_RE);

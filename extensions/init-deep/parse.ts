@@ -24,7 +24,7 @@ interface Token {
 }
 
 function tokenizeArgs(
-  rawArgs: string
+  rawArgs: string,
 ): { ok: true; tokens: Token[] } | { ok: false; error: string } {
   const tokens: Token[] = [];
   let index = 0;
@@ -104,7 +104,7 @@ function tokenizeArgs(
 
 function splitInstruction(
   rawArgs: string,
-  tokens: Token[]
+  tokens: Token[],
 ): {
   beforeTokens: Token[];
   instruction: string | null;
@@ -125,7 +125,7 @@ function splitInstruction(
 
 function parsePositiveInteger(
   value: string,
-  flagName: string
+  flagName: string,
 ): { ok: true; value: number } | { ok: false; error: string } {
   if (!TOP_LEVEL_REGEX_2.test(value)) {
     return {
@@ -147,7 +147,7 @@ function parsePositiveInteger(
 
 export function parseInitDeepArgs(
   rawArgs: string,
-  cwd: string
+  cwd: string,
 ): InitDeepParseResult {
   const tokenized = tokenizeArgs(rawArgs);
   if (tokenized.ok === false) {
@@ -156,7 +156,7 @@ export function parseInitDeepArgs(
 
   const { beforeTokens, instruction } = splitInstruction(
     rawArgs,
-    tokenized.tokens
+    tokenized.tokens,
   );
 
   let targetLabel: string | null = null;

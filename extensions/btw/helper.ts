@@ -42,7 +42,7 @@ export function resolveModelAndThinking(
   currentModel: unknown,
   currentThinkingLevel: string,
   params: { model?: string },
-  scopedModels: readonly ScopedModelEntry[] = []
+  scopedModels: readonly ScopedModelEntry[] = [],
 ): ResolveModelResult {
   if (!params.model) {
     return { model: currentModel, thinkingLevel: currentThinkingLevel };
@@ -60,7 +60,7 @@ export function resolveModelAndThinking(
   const modelId = params.model.slice(slashIdx + 1);
   if (scopedModels.length > 0) {
     const scoped = scopedModels.find(
-      ({ model }) => model.provider === provider && model.id === modelId
+      ({ model }) => model.provider === provider && model.id === modelId,
     );
     if (!scoped) {
       return {

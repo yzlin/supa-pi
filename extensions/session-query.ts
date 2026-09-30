@@ -62,7 +62,7 @@ export default function (pi: ExtensionAPI) {
       // Validate session path
       if (!sessionPath.endsWith(".jsonl")) {
         return errorResult(
-          `Error: Invalid session path. Expected a .jsonl file, got: ${sessionPath}`
+          `Error: Invalid session path. Expected a .jsonl file, got: ${sessionPath}`,
         );
       }
 
@@ -99,7 +99,7 @@ export default function (pi: ExtensionAPI) {
       const messages = branch
         .filter(
           (entry): entry is SessionEntry & { type: "message" } =>
-            entry.type === "message"
+            entry.type === "message",
         )
         .map((entry) => entry.message);
 
@@ -125,7 +125,7 @@ export default function (pi: ExtensionAPI) {
       const currentScopedModel = scopedModels.find(
         ({ model: scopedModel }) =>
           scopedModel.provider === ctx.model?.provider &&
-          scopedModel.id === ctx.model.id
+          scopedModel.id === ctx.model.id,
       )?.model;
       let queryModel =
         scopedModels.length > 0
@@ -133,7 +133,7 @@ export default function (pi: ExtensionAPI) {
           : ctx.model;
       const modelChanges = branch.filter(
         (entry): entry is SessionEntry & { type: "model_change" } =>
-          entry.type === "model_change"
+          entry.type === "model_change",
       );
       if (modelChanges.length > 0) {
         const lastChange = modelChanges.at(-1)!;
@@ -142,7 +142,7 @@ export default function (pi: ExtensionAPI) {
             ? scopedModels.find(
                 ({ model: scopedModel }) =>
                   scopedModel.provider === lastChange.provider &&
-                  scopedModel.id === lastChange.modelId
+                  scopedModel.id === lastChange.modelId,
               )?.model
             : ctx.modelRegistry.find(lastChange.provider, lastChange.modelId);
         if (sessionModel) {
@@ -169,7 +169,7 @@ export default function (pi: ExtensionAPI) {
         const response = await ctx.modelRegistry.complete(
           queryModel,
           { systemPrompt: QUERY_SYSTEM_PROMPT, messages: [userMessage] },
-          { signal }
+          { signal },
         );
 
         if (response.stopReason === "aborted") {
@@ -213,14 +213,14 @@ export default function (pi: ExtensionAPI) {
         if (match) {
           const [, query, answer] = match;
           container.addChild(
-            new Text(theme.bold("Query: ") + theme.fg("accent", query), 0, 0)
+            new Text(theme.bold("Query: ") + theme.fg("accent", query), 0, 0),
           );
           container.addChild(new Spacer(1));
           // Render the answer as markdown
           container.addChild(
             new Markdown(answer.trim(), 0, 0, getMarkdownTheme(), {
               color: (segment: string) => theme.fg("toolOutput", segment),
-            })
+            }),
           );
         } else {
           // Fallback for other formats (errors, etc)

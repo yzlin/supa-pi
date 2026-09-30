@@ -25,12 +25,12 @@ export class CredentialStore {
     options: {
       agentDir?: string;
       env?: Record<string, string | undefined>;
-    } = {}
+    } = {},
   ) {
     this.#env = options.env ?? process.env;
     this.#directory = join(
       options.agentDir ?? resolveAgentDir(this.#env.PI_CODING_AGENT_DIR),
-      "skill-router"
+      "skill-router",
     );
   }
   private get path() {
@@ -66,7 +66,7 @@ export class CredentialStore {
           return { reason: "unreadable" };
         }
         const parsed: unknown = JSON.parse(
-          buffer.subarray(0, bytesRead).toString("utf8")
+          buffer.subarray(0, bytesRead).toString("utf8"),
         );
         const apiKey = storedKey(parsed);
         return apiKey ? { apiKey } : { reason: "invalid" };
@@ -106,7 +106,7 @@ export class CredentialStore {
       throw new Error(
         stored.reason === "permissions"
           ? "Stored credential has unsafe permissions"
-          : "Stored credential is unusable"
+          : "Stored credential is unusable",
       );
     }
     return { apiKey: stored.apiKey, source: "stored" };
@@ -115,7 +115,7 @@ export class CredentialStore {
     const apiKey = validKey(value);
     if (!apiKey) {
       throw new Error(
-        "API key must be a valid printable key (16 to 512 characters)"
+        "API key must be a valid printable key (16 to 512 characters)",
       );
     }
     await mkdir(this.#directory, { recursive: true, mode: 0o700 });

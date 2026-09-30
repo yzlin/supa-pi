@@ -55,7 +55,7 @@ test("input bounds and visible recent truncation", () => {
       skills: [s],
       currentRequest: "x".repeat(8193),
       recentText: "",
-    }).ok
+    }).ok,
   ).toBe(false);
   const result = prepareRoute({
     skills: [s],
@@ -79,7 +79,7 @@ test("recent truncation retains newest Unicode context with a marker", () => {
     expect(result.context.recentText.startsWith("[truncated:")).toBe(true);
     expect(result.context.recentText.endsWith("LATEST fix it ✅")).toBe(true);
     expect(Buffer.byteLength(result.context.recentText)).toBeLessThanOrEqual(
-      8192
+      8192,
     );
     expect(result.context.recentText).not.toContain("�");
   }
@@ -104,7 +104,7 @@ test("pre-aborted classification never invokes the judge", async () => {
       calls++;
       return Promise.resolve({ scores: new Map([["s0", 1]]) });
     },
-    controller.signal
+    controller.signal,
   );
   expect(calls).toBe(0);
   expect(result.kind).toBe("fallback");
@@ -116,7 +116,7 @@ test("pre-aborted classification never invokes the judge", async () => {
 test("synchronous cancellation settles even when judges ignore abort", async () => {
   const prepared = prepareRoute({
     skills: Array.from({ length: 33 }, (_, index) =>
-      skill("/tmp/x", `s${index}`)
+      skill("/tmp/x", `s${index}`),
     ),
     currentRequest: "route",
     recentText: "",
@@ -137,10 +137,10 @@ test("synchronous cancellation settles even when judges ignore abort", async () 
           // Deliberately ignores cancellation and never settles.
         });
       },
-      controller.signal
+      controller.signal,
     ),
     new Promise<never>((_, reject) =>
-      setTimeout(() => reject(new Error("classification did not settle")), 100)
+      setTimeout(() => reject(new Error("classification did not settle")), 100),
     ),
   ]);
   expect(result).toMatchObject({ kind: "fallback", reason: "cancelled" });
@@ -150,7 +150,7 @@ test("synchronous cancellation settles even when judges ignore abort", async () 
 test("one global deadline bounds all batches and late judges cannot mutate returned usage", async () => {
   const prepared = prepareRoute({
     skills: Array.from({ length: 65 }, (_, index) =>
-      skill("/tmp/x", `s${index}`)
+      skill("/tmp/x", `s${index}`),
     ),
     currentRequest: "route",
     recentText: "",
@@ -218,7 +218,7 @@ test("selected bodies enforce cumulative bytes, UTF-8 validity, and reject FIFOs
     await writeFile(second.filePath, `${"é".repeat(16_383)}ab`);
     const exact = await loadSelectedSkills(
       [first, second],
-      ["first", "second"]
+      ["first", "second"],
     );
     expect(exact.ok).toBe(true);
     if (exact.ok) {
@@ -226,7 +226,7 @@ test("selected bodies enforce cumulative bytes, UTF-8 validity, and reject FIFOs
     }
     await writeFile(second.filePath, Buffer.alloc(32_769, 98));
     expect(
-      (await loadSelectedSkills([first, second], ["first", "second"])).ok
+      (await loadSelectedSkills([first, second], ["first", "second"])).ok,
     ).toBe(false);
     await writeFile(second.filePath, Uint8Array.from([0xc3, 0x28]));
     expect((await loadSelectedSkills([second], ["second"])).ok).toBe(false);
@@ -235,7 +235,7 @@ test("selected bodies enforce cumulative bytes, UTF-8 validity, and reject FIFOs
     const fifo = await Promise.race([
       loadSelectedSkills([second], ["second"]),
       new Promise<never>((_, reject) =>
-        setTimeout(() => reject(new Error("FIFO blocked")), 100)
+        setTimeout(() => reject(new Error("FIFO blocked")), 100),
       ),
     ]);
     expect(fifo.ok).toBe(false);

@@ -40,7 +40,7 @@ const HITL_LOOP_SCRIPT = join(
   "skills",
   "diagnose",
   "scripts",
-  "hitl-loop.template.sh"
+  "hitl-loop.template.sh",
 );
 
 function expectedDiagnoseCommandMessage(request: string): string {
@@ -83,7 +83,7 @@ function createMockPiRuntime() {
 
 function getCommandHandler(
   commands: Map<string, CommandDefinition>,
-  name: string
+  name: string,
 ): CommandHandler {
   const command = commands.get(name);
 
@@ -106,7 +106,7 @@ describe("diagnose command", () => {
   it("parses skill metadata containing the Diagnosis: Proven label", () => {
     const skill = readFileSync(
       join(import.meta.dir, "../../skills/diagnose/SKILL.md"),
-      "utf8"
+      "utf8",
     );
     const { frontmatter } = parseFrontmatter(skill);
 
@@ -133,7 +133,7 @@ describe("diagnose command", () => {
     const message = buildDiagnoseCommandMessage("  export button crashes  ");
 
     expect(message).toBe(
-      expectedDiagnoseCommandMessage("export button crashes")
+      expectedDiagnoseCommandMessage("export button crashes"),
     );
   });
 
@@ -190,16 +190,16 @@ describe("diagnose command", () => {
       expect(doc).toContain("Matt Pocock");
       expect(doc).toContain("MIT");
       expect(doc).toContain(
-        "https://github.com/mattpocock/skills/blob/694fa30311e02c2639942308513555e61ee84a6f/skills/engineering/diagnose/SKILL.md"
+        "https://github.com/mattpocock/skills/blob/694fa30311e02c2639942308513555e61ee84a6f/skills/engineering/diagnose/SKILL.md",
       );
       expect(doc).toContain("694fa30311e02c2639942308513555e61ee84a6f");
       expect(doc).toContain(
-        "https://github.com/mattpocock/skills/tree/84fdeffd12f2ee307994d1eb6feb48173b6e0502/skills/engineering/diagnosing-bugs"
+        "https://github.com/mattpocock/skills/tree/84fdeffd12f2ee307994d1eb6feb48173b6e0502/skills/engineering/diagnosing-bugs",
       );
       expect(doc).toContain("84fdeffd12f2ee307994d1eb6feb48173b6e0502");
       expect(doc).toContain("LegendApp");
       expect(doc).toContain(
-        "https://github.com/LegendApp/legend-skills/tree/main/diagnose"
+        "https://github.com/LegendApp/legend-skills/tree/main/diagnose",
       );
       expect(doc).toContain("5a4be517989496d0bc59520a93976360dd1bff51");
     }
@@ -211,17 +211,17 @@ describe("diagnose command", () => {
       "skills",
       "diagnose",
       "references",
-      "reproduction-loops.md"
+      "reproduction-loops.md",
     );
     const hitlLoop = readRepoFile(
       "skills",
       "diagnose",
       "scripts",
-      "hitl-loop.template.sh"
+      "hitl-loop.template.sh",
     );
 
     expect(skill).toContain(
-      "[references/reproduction-loops.md](references/reproduction-loops.md)"
+      "[references/reproduction-loops.md](references/reproduction-loops.md)",
     );
     expect(skill).toContain("one command");
     expect(skill).toContain("already run");
@@ -238,13 +238,13 @@ describe("diagnose command", () => {
     expect(reproductionLoops).toContain("Discovery amplification is not proof");
     expect(reproductionLoops).toContain("scripts/hitl-loop.template.sh");
     expect(reproductionLoops).toContain(
-      "Pi's bash executor has no interactive stdin"
+      "Pi's bash executor has no interactive stdin",
     );
     expect(reproductionLoops).toContain("private directory");
     expect(reproductionLoops).toContain("path literally");
     expect(reproductionLoops).toContain("removes them after consuming");
     expect(reproductionLoops).toContain(
-      "a placeholder, or any other shell expression"
+      "a placeholder, or any other shell expression",
     );
     expect(hitlLoop).toContain("Never capture secrets");
     expect(hitlLoop).toContain("--- Captured ---");
@@ -265,7 +265,7 @@ describe("diagnose command", () => {
       const result = spawnSync(
         "bash",
         [HITL_LOOP_SCRIPT, "--reproduced", "y", "--run-id", runId],
-        { input: "", encoding: "utf8" }
+        { input: "", encoding: "utf8" },
       );
 
       expect(result.status).toBe(0);
@@ -328,13 +328,13 @@ describe("diagnose command", () => {
 
   it("isolates and consumes concurrent HITL observation handoffs", async () => {
     const runIds = ["a", "b"].map(
-      (suffix) => `diag-concurrent-${process.pid}-${suffix}`
+      (suffix) => `diag-concurrent-${process.pid}-${suffix}`,
     );
     const handoffDirectories = runIds.map(
-      (runId) => `/tmp/supa-pi-diagnose-${process.getuid()}-${runId}`
+      (runId) => `/tmp/supa-pi-diagnose-${process.getuid()}-${runId}`,
     );
     const observationFiles = handoffDirectories.map((directory) =>
-      join(directory, "observation.txt")
+      join(directory, "observation.txt"),
     );
     const observations = ["redacted observation A", "redacted observation B"];
     for (const [index, path] of observationFiles.entries()) {
@@ -371,8 +371,8 @@ describe("diagnose command", () => {
                   reject(new Error(stderr));
                 }
               });
-            })
-        )
+            }),
+        ),
       );
 
       expect(outputs[0]).toContain(`OBSERVATION=${observations[0]}`);
@@ -396,7 +396,7 @@ describe("diagnose command", () => {
     const skill = readRepoFile("skills", "diagnose", "SKILL.md");
 
     expect(skill).toContain(
-      "Show the ranked candidate table in the main thread before probing"
+      "Show the ranked candidate table in the main thread before probing",
     );
     expect(skill).toContain("Candidate | Evidence for/against | Prediction");
     expect(skill).toContain("After `Fix: Verified`");
@@ -409,25 +409,25 @@ describe("diagnose command", () => {
     expect(skill).toContain("Diagnosis: Proven | Incomplete");
     expect(skill).toContain("Fix: Verified | Failed | Not attempted");
     expect(skill).toContain(
-      "Incomplete` never offers, recommends, or applies a fix"
+      "Incomplete` never offers, recommends, or applies a fix",
     );
     expect(skill).toContain(
-      "An explicit diagnosis-and-fix request authorizes a bounded local remedy only after `Diagnosis: Proven`."
+      "An explicit diagnosis-and-fix request authorizes a bounded local remedy only after `Diagnosis: Proven`.",
     );
     expect(skill).toContain(
-      "Before fixing, disclose the concrete scoped remedy and test plan."
+      "Before fixing, disclose the concrete scoped remedy and test plan.",
     );
     expect(skill).toContain(
-      "Do not ask for approval again when that request already authorizes the bounded local remedy."
+      "Do not ask for approval again when that request already authorizes the bounded local remedy.",
     );
     expect(skill).toContain(
-      "Plain `/diagnose`, a diagnosis-only request, general autonomy, or probe authorization alone do not authorize a fix."
+      "Plain `/diagnose`, a diagnosis-only request, general autonomy, or probe authorization alone do not authorize a fix.",
     );
     expect(skill).toContain(
-      "A materially out-of-scope remedy requires a new proposal and the same approval gate."
+      "A materially out-of-scope remedy requires a new proposal and the same approval gate.",
     );
     expect(skill).toContain(
-      "After authorization through either the explicit diagnosis-and-fix request or `Approve scoped fix`:"
+      "After authorization through either the explicit diagnosis-and-fix request or `Approve scoped fix`:",
     );
     expect(skill).toContain("Approve scoped fix");
     expect(skill).toContain("Stop and clean probes");
@@ -435,11 +435,11 @@ describe("diagnose command", () => {
     expect(skill).toContain("do not use `multiSelect`");
     expect(skill).toContain("Invocation wording");
     expect(skill).toContain(
-      "If `ask` is unavailable on the approval-gated path, do not infer approval or edit the fix; report the blocked gate and print both exact choices `Approve scoped fix` and `Stop and clean probes` verbatim."
+      "If `ask` is unavailable on the approval-gated path, do not infer approval or edit the fix; report the blocked gate and print both exact choices `Approve scoped fix` and `Stop and clean probes` verbatim.",
     );
     expect(skill).toContain("requires a new proposal and the same gate again");
     expect(skill).not.toContain(
-      "Do not edit the fix before the user selects `Approve scoped fix`."
+      "Do not edit the fix before the user selects `Approve scoped fix`.",
     );
   });
 
@@ -447,13 +447,13 @@ describe("diagnose command", () => {
     const readme = readRepoFile("extensions", "diagnose", "README.md");
 
     expect(readme).toContain(
-      "Plain `/diagnose` and diagnosis-only requests do not authorize a fix."
+      "Plain `/diagnose` and diagnosis-only requests do not authorize a fix.",
     );
     expect(readme).toContain(
-      "An explicit diagnosis-and-fix request authorizes only a bounded local remedy after `Diagnosis: Proven`"
+      "An explicit diagnosis-and-fix request authorizes only a bounded local remedy after `Diagnosis: Proven`",
     );
     expect(readme).toContain(
-      "Causal proof, targeted revalidation, and probe cleanup remain required."
+      "Causal proof, targeted revalidation, and probe cleanup remain required.",
     );
     expect(readme).not.toContain("diagnosis does not authorize a fix");
   });
@@ -464,12 +464,12 @@ describe("diagnose command", () => {
       "skills",
       "diagnose",
       "references",
-      "instrumentation.md"
+      "instrumentation.md",
     );
 
     for (const document of [skill, instrumentation]) {
       expect(document).toContain(
-        "terminal `Diagnosis: Incomplete` / `Fix: Not attempted` report"
+        "terminal `Diagnosis: Incomplete` / `Fix: Not attempted` report",
       );
       expect(document).toContain("explicit");
       expect(document).toContain("retain");
@@ -482,18 +482,18 @@ describe("diagnose command", () => {
       "skills",
       "diagnose",
       "references",
-      "instrumentation.md"
+      "instrumentation.md",
     );
 
     expect(skill).toContain(
-      "Do not activate it for an ordinary bug report, debugging request, or fix request."
+      "Do not activate it for an ordinary bug report, debugging request, or fix request.",
     );
     expect(skill).toContain(
-      "do not ask a second consent question for those probes"
+      "do not ask a second consent question for those probes",
     );
     expect(skill).toContain("Separate user approval remains mandatory");
     expect(instrumentation).toContain(
-      "An explicit Diagnose invocation already authorizes reversible, behavior-neutral temporary probes"
+      "An explicit Diagnose invocation already authorizes reversible, behavior-neutral temporary probes",
     );
     expect(instrumentation).not.toContain("Before requesting scoped consent");
   });
@@ -504,15 +504,15 @@ describe("diagnose command", () => {
       "skills",
       "diagnose",
       "references",
-      "instrumentation.md"
+      "instrumentation.md",
     );
 
     expect(skill).toContain(
-      "[references/instrumentation.md](references/instrumentation.md)"
+      "[references/instrumentation.md](references/instrumentation.md)",
     );
     expect(instrumentation).toContain("Default deny every field");
     expect(instrumentation).toContain(
-      "Never collect secrets, tokens, credentials"
+      "Never collect secrets, tokens, credentials",
     );
   });
 });

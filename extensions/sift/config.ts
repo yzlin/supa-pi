@@ -19,7 +19,7 @@ export class SiftConfigStore {
     options: {
       agentDir?: string;
       env?: Record<string, string | undefined>;
-    } = {}
+    } = {},
   ) {
     const env = options.env ?? process.env;
     const agentDir =

@@ -53,7 +53,7 @@ function loadRuntimeState(cwd: string, runtime: RtkRuntime): void {
 
 function withRtkExecution(
   baseTool: BashTool,
-  runtime: RtkRuntime
+  runtime: RtkRuntime,
 ): RtkExecutionTool {
   return {
     ...baseTool,
@@ -62,7 +62,7 @@ function withRtkExecution(
       params: Static<BashSchema>,
       signal: AbortSignal | undefined,
       onUpdate: AgentToolUpdateCallback<BashDetails> | undefined,
-      ctx: ExtensionContext
+      ctx: ExtensionContext,
     ): Promise<AgentToolResult<BashDetails>> {
       runtime.metrics.recordRewriteAttempt();
       const resolution = resolveRtkCommand(params.command, {
@@ -76,7 +76,7 @@ function withRtkExecution(
         if (runtime.getConfig().showRewriteNotifications && ctx.hasUI) {
           ctx.ui.notify(
             `RTK rewrote bash: ${params.command} → ${resolution.command}`,
-            "info"
+            "info",
           );
         }
       }
@@ -98,7 +98,7 @@ function withRtkExecution(
         toolCallId,
         { ...params, command: resolution.command },
         signal,
-        onUpdate
+        onUpdate,
       );
     },
   };
@@ -108,7 +108,7 @@ function withRtkExecution(
 export function createRtkBashTool(
   baseTool: BashTool,
   runtime: RtkRuntime,
-  getOutputConfig: () => ToolDisplayBashOutputConfig
+  getOutputConfig: () => ToolDisplayBashOutputConfig,
 ) {
   const rtkTool = withRtkExecution(baseTool, runtime);
   if (!getOutputConfig().enabled) {
@@ -130,9 +130,9 @@ export function createRtkBashTool(
                   result,
                   { ...options, expanded: true },
                   theme,
-                  outputConfig
+                  outputConfig,
                 ),
-                true
+                true,
               )
             : undefined;
         return renderBashToolResult(result, options, theme, context, body);
@@ -141,7 +141,7 @@ export function createRtkBashTool(
     {
       reasoningDescription: REASONING_DESCRIPTION,
       promptGuidelines: [REASONING_GUIDELINE],
-    }
+    },
   );
 }
 
@@ -151,7 +151,7 @@ export default function rtkExtension(pi: ExtensionAPI): void {
   const registeredDefinition = createRtkBashTool(
     createBashTool(process.cwd()),
     runtime,
-    () => toolDisplayConfig.output.bash
+    () => toolDisplayConfig.output.bash,
   );
 
   function reloadSession(cwd: string): void {
@@ -161,7 +161,7 @@ export default function rtkExtension(pi: ExtensionAPI): void {
     const nextDefinition = createRtkBashTool(
       createBashTool(cwd),
       runtime,
-      () => toolDisplayConfig.output.bash
+      () => toolDisplayConfig.output.bash,
     );
     registeredDefinition.promptGuidelines = undefined;
     registeredDefinition.renderShell = undefined;
@@ -179,8 +179,8 @@ export default function rtkExtension(pi: ExtensionAPI): void {
       event: "session_switch",
       handler: (
         event: { type: "session_switch" },
-        ctx: ExtensionContext
-      ) => void
+        ctx: ExtensionContext,
+      ) => void,
     ): void;
   };
   sessionSwitchApi.on("session_switch", (_event, ctx) => {

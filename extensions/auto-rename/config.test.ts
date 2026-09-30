@@ -63,7 +63,7 @@ describe("auto-rename config", () => {
     const homeDir = useTempHome();
 
     expect(getAutoRenameConfigPath()).toBe(
-      join(homeDir, ".pi", "agent", "auto-rename.json")
+      join(homeDir, ".pi", "agent", "auto-rename.json"),
     );
     expect(loadAutoRenameConfig()).toEqual({
       valid: true,
@@ -88,12 +88,12 @@ describe("auto-rename config", () => {
     writeFileSync(
       join(homeDir, ".pi", "auto-rename.json"),
       JSON.stringify({ enabled: false }),
-      "utf8"
+      "utf8",
     );
     writeFileSync(
       join(homeDir, "auto-rename.json"),
       JSON.stringify({ enabled: false }),
-      "utf8"
+      "utf8",
     );
 
     expect(loadAutoRenameConfig()).toEqual({
@@ -114,7 +114,7 @@ describe("auto-rename config", () => {
         maxNameLength: 60,
         timeoutMs: 2500,
         debug: true,
-      })
+      }),
     );
 
     expect(loadAutoRenameConfig()).toEqual({

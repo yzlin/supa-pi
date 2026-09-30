@@ -157,7 +157,7 @@ describe("security selective reference contract", () => {
     for (const route of routes) {
       expect(skill).toContain(route.text);
       expect(
-        skill.match(new RegExp(route.link.replace(".", "\\."), "g"))
+        skill.match(new RegExp(route.link.replace(".", "\\."), "g")),
       ).toHaveLength(1);
 
       const referencePath = resolve(dirname(skillPath), route.link);
@@ -170,7 +170,7 @@ describe("security selective reference contract", () => {
     const skill = read(skillPath);
 
     expect(skill).toContain(
-      "Ordinary input-validation work does not automatically load any of these specialized references."
+      "Ordinary input-validation work does not automatically load any of these specialized references.",
     );
     expect(skill).not.toContain("read all specialized references");
     expect(skill).not.toContain("read all three references");
@@ -185,7 +185,7 @@ describe("security selective reference contract", () => {
 
     for (const [file, originalBlock] of references) {
       const content = read(
-        join(repositoryRoot, "skills", "security-review", "references", file)
+        join(repositoryRoot, "skills", "security-review", "references", file),
       );
       expect(digest(content)).toBe(digest(originalBlock));
     }
@@ -210,7 +210,7 @@ describe("security selective reference contract", () => {
     const skill = read(skillPath);
 
     expect(skill).toContain(
-      "Before beginning work, you MUST read and follow the canonical [Security Guidelines](../../rules/common/security.md). That common rule owns the shared threat-model, approval, and prohibited-action baseline and applies whenever this skill activates; load it directly from this link rather than assuming a rules extension or global catalog search supplied it."
+      "Before beginning work, you MUST read and follow the canonical [Security Guidelines](../../rules/common/security.md). That common rule owns the shared threat-model, approval, and prohibited-action baseline and applies whenever this skill activates; load it directly from this link rather than assuming a rules extension or global catalog search supplied it.",
     );
 
     for (const retained of [

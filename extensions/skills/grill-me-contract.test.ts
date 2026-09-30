@@ -49,7 +49,7 @@ describe("grilling skill contract", () => {
     const skill = readRepositoryFile("skills", "grilling", "SKILL.md");
 
     expect(skill).toContain(
-      "Use the public `ask` tool for user answers when interactive UI is available."
+      "Use the public `ask` tool for user answers when interactive UI is available.",
     );
     expect(skill).toContain("ask one final `ask` gate");
     expect(skill).not.toContain("`questionnaire`");
@@ -123,14 +123,14 @@ describe("grilling skill contract", () => {
     expect(skill).toContain("`Keep grilling`");
     expect(skill).toContain("injected custom row for `Type something.`");
     expect(skill).toContain(
-      "must not ask whether to proceed to implementation"
+      "must not ask whether to proceed to implementation",
     );
     expect(skill).toContain(
-      "must not include any implement/proceed/start-coding wording or option"
+      "must not include any implement/proceed/start-coding wording or option",
     );
     expect(skill).not.toContain("Yes, implement this contract");
     expect(skill).toContain(
-      "continue with the same one-to-three-question cadence"
+      "continue with the same one-to-three-question cadence",
     );
     expect(skill).not.toContain("Ask exactly one question at a time");
     expect(skill).not.toContain("exactly one single-select question per call");
@@ -180,10 +180,10 @@ describe("grill-me wrapper contract", () => {
     expect(skill).toContain("Explicit /grill-me wrapper");
     expect(skill).toContain("Use only when the user invokes /grill-me");
     expect(skill).toContain(
-      "Load and follow the `grilling` skill as the canonical interview primitive."
+      "Load and follow the `grilling` skill as the canonical interview primitive.",
     );
     expect(skill).toContain(
-      "Load and follow the `context-docs` skill as the canonical durable-context contract."
+      "Load and follow the `context-docs` skill as the canonical durable-context contract.",
     );
     expect(skill).not.toContain("disable-model-invocation");
     expect(skill).not.toContain("exactly one single-select question per call");
@@ -232,7 +232,7 @@ describe("semantic ownership contract", () => {
     const contextDocs = readRepositoryFile(
       "skills",
       "context-docs",
-      "SKILL.md"
+      "SKILL.md",
     );
     const grilling = readRepositoryFile("skills", "grilling", "SKILL.md");
     const grillMe = readRepositoryFile("skills", "grill-me", "SKILL.md");
@@ -250,18 +250,18 @@ describe("grill-me command contract", () => {
     const extension = readRepositoryFile(
       "extensions",
       "prompt-commands",
-      "index.ts"
+      "index.ts",
     );
 
     expect(extension).toContain('"grill-me": {');
     const prompt = readRepositoryFile("prompts", "grill-me.md");
     expect(prompt).toContain('argument-hint: "<plan>"');
     expect(prompt).toContain(
-      "Use the `grill-me` wrapper skill as canonical for this explicit command."
+      "Use the `grill-me` wrapper skill as canonical for this explicit command.",
     );
     expect(prompt).toContain("Plan:\n$@");
     expect(extension).toContain(
-      "Use the `grill-me` wrapper skill as canonical for this explicit command."
+      "Use the `grill-me` wrapper skill as canonical for this explicit command.",
     );
     expect(extension).toContain('pi.on("input"');
     expect(extension).not.toContain("registerCommand");

@@ -2,7 +2,7 @@ import type { GoalTaskBudget, Result } from "./types";
 
 export function createTaskBudget(
   maxAttempts: number,
-  maxToolCalls?: number
+  maxToolCalls?: number,
 ): GoalTaskBudget {
   if (!Number.isSafeInteger(maxAttempts) || maxAttempts <= 0) {
     throw new Error("maxAttempts must be a positive integer.");
@@ -17,7 +17,7 @@ export function createTaskBudget(
 }
 
 export function spendTaskAttempt(
-  budget: GoalTaskBudget
+  budget: GoalTaskBudget,
 ): Result<GoalTaskBudget> {
   if (budget.usedAttempts >= budget.maxAttempts) {
     return { ok: false, error: "Task attempt budget exhausted." };
@@ -30,7 +30,7 @@ export function spendTaskAttempt(
 
 export function spendToolCalls(
   budget: GoalTaskBudget,
-  count: number
+  count: number,
 ): Result<GoalTaskBudget> {
   if (!Number.isSafeInteger(count) || count < 0) {
     return {

@@ -58,14 +58,14 @@ const FIRST_TOKEN_COMPLETIONS: GoalCommandCompletion[] = [
 ];
 
 export function completeGoalCommandArguments(
-  argumentPrefix: string
+  argumentPrefix: string,
 ): GoalCommandCompletion[] {
   const trimmedStart = argumentPrefix.trimStart();
   if (WHITESPACE.test(trimmedStart)) {
     return [];
   }
   return FIRST_TOKEN_COMPLETIONS.filter((completion) =>
-    completion.value.startsWith(trimmedStart)
+    completion.value.startsWith(trimmedStart),
   );
 }
 

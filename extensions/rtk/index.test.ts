@@ -69,7 +69,7 @@ function writeDisplayConfig(cwd: string, enabled: boolean): void {
   mkdirSync(join(cwd, ".pi"), { recursive: true });
   writeFileSync(
     join(cwd, ".pi", "tool-display.json"),
-    JSON.stringify({ output: { bash: { enabled } } })
+    JSON.stringify({ output: { bash: { enabled } } }),
   );
 }
 
@@ -88,7 +88,7 @@ describe("RTK bash presentation", () => {
     const base = fakeBashTool();
     const runtime = createRtkRuntime({ ...DEFAULT_RTK_CONFIG, enabled: false });
     const tool = createRtkBashTool(base.tool as never, runtime, () =>
-      displayConfig(true)
+      displayConfig(true),
     );
 
     expect(Object.keys(tool.parameters.properties)).toEqual([
@@ -104,12 +104,12 @@ describe("RTK bash presentation", () => {
       { reasoning: "Check status", command: "git status", timeout: 4 } as never,
       undefined as never,
       undefined as never,
-      { hasUI: false } as never
+      { hasUI: false } as never,
     );
     expect(base.getDelegated()).toEqual({ command: "git status", timeout: 4 });
     expect(
       (result.details as { toolDisplay?: { durationMs?: number } }).toolDisplay
-        ?.durationMs
+        ?.durationMs,
     ).toBeNumber();
   });
 
@@ -117,7 +117,7 @@ describe("RTK bash presentation", () => {
     const base = fakeBashTool();
     const runtime = createRtkRuntime(DEFAULT_RTK_CONFIG);
     const tool = createRtkBashTool(base.tool as never, runtime, () =>
-      displayConfig(false)
+      displayConfig(false),
     );
 
     expect(tool.parameters).toBe(base.tool.parameters);
@@ -144,12 +144,12 @@ describe("RTK bash presentation", () => {
           // Deterministic native renderer test does not schedule redraws.
         },
       } as never,
-      process.cwd()
+      process.cwd(),
     );
     expect(() => component.render(80)).not.toThrow();
     component.updateResult(
       { content: [{ type: "text", text: "ok" }], isError: false },
-      false
+      false,
     );
     expect(component.render(80).join("\n")).toContain("ok");
   });
@@ -158,7 +158,7 @@ describe("RTK bash presentation", () => {
     const base = fakeBashTool();
     const runtime = createRtkRuntime(DEFAULT_RTK_CONFIG);
     const tool = createRtkBashTool(base.tool as never, runtime, () =>
-      displayConfig(true)
+      displayConfig(true),
     );
     const state = {};
     const context = {
@@ -171,7 +171,7 @@ describe("RTK bash presentation", () => {
     const call = tool.renderCall(
       context.args as never,
       theme as never,
-      context as never
+      context as never,
     );
     expect(call.render(100)).toEqual(["┊ • ⚡️ bash false", "┊   false → <1s"]);
 
@@ -187,11 +187,11 @@ describe("RTK bash presentation", () => {
       } as never,
       {} as never,
       theme as never,
-      { ...context, isError: true } as never
+      { ...context, isError: true } as never,
     );
     expect(call.render(100)).toEqual(["┊ × ⚡️ bash false"]);
     expect(result.render(100)[0]).toBe(
-      "┊   false → error in 2s [truncated] [RTK saved 99]"
+      "┊   false → error in 2s [truncated] [RTK saved 99]",
     );
 
     const expanded = tool.renderResult(
@@ -201,7 +201,7 @@ describe("RTK bash presentation", () => {
       },
       { expanded: true } as never,
       theme as never,
-      { args: { command: "printf 'one\\ntwo'" }, state: {} } as never
+      { args: { command: "printf 'one\\ntwo'" }, state: {} } as never,
     );
     expect(expanded.render(100).map((line) => line.trimEnd())).toEqual([
       "┊   printf 'one\\ntwo' → done in <1s",
@@ -213,7 +213,7 @@ describe("RTK bash presentation", () => {
   test("session reload refreshes copied runtime metadata in both directions", () => {
     const cwd = join(
       import.meta.dir,
-      `.tmp-rtk-${Date.now()}-${Math.random()}`
+      `.tmp-rtk-${Date.now()}-${Math.random()}`,
     );
     mkdirSync(cwd, { recursive: true });
     tempDirs.push(cwd);
@@ -229,7 +229,7 @@ describe("RTK bash presentation", () => {
     Object.assign(api, {
       on(
         name: string,
-        handler: (event: unknown, ctx: { cwd: string }) => void
+        handler: (event: unknown, ctx: { cwd: string }) => void,
       ) {
         handlers.set(name, [...(handlers.get(name) ?? []), handler]);
       },

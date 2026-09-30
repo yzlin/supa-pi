@@ -39,12 +39,12 @@ export interface ClassifyOptions {
     query: string,
     path: string,
     content: string,
-    signal?: AbortSignal
+    signal?: AbortSignal,
   ) => Promise<JevJudgment>;
 }
 
 export async function classifyFiles(
-  options: ClassifyOptions
+  options: ClassifyOptions,
 ): Promise<ClassificationResult[]> {
   const query = options.query.trim();
   if (!query || query.length > 2000) {
@@ -84,7 +84,7 @@ export async function classifyFiles(
           query,
           file.externalPath,
           file.content,
-          options.signal
+          options.signal,
         );
         results[index] = {
           path,
@@ -98,7 +98,7 @@ export async function classifyFiles(
     }
   };
   await Promise.all(
-    Array.from({ length: Math.min(4, options.paths.length) }, worker)
+    Array.from({ length: Math.min(4, options.paths.length) }, worker),
   );
   if (options.signal?.aborted) {
     for (let index = 0; index < results.length; index++) {

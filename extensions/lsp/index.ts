@@ -72,7 +72,7 @@ function getLspArgumentCompletions(argumentPrefix: string) {
   }
 
   const matches = LSP_SUBCOMMANDS.filter(({ value }) =>
-    value.startsWith(trimmed)
+    value.startsWith(trimmed),
   );
   return matches.length > 0
     ? matches.map(({ value, description }) => ({
@@ -144,17 +144,17 @@ function border(
   left: string,
   fill: string,
   right: string,
-  framePalette: FramePalette = DEFAULT_FRAME_PALETTE
+  framePalette: FramePalette = DEFAULT_FRAME_PALETTE,
 ): string {
   return framePalette.border(
-    `${left}${fill.repeat(Math.max(0, width - 2))}${right}`
+    `${left}${fill.repeat(Math.max(0, width - 2))}${right}`,
   );
 }
 
 function titleBorder(
   width: number,
   titleText: string,
-  framePalette: FramePalette = DEFAULT_FRAME_PALETTE
+  framePalette: FramePalette = DEFAULT_FRAME_PALETTE,
 ): string {
   const innerWidth = Math.max(0, width - 2);
   const clippedTitle = truncateToWidth(titleText, innerWidth);
@@ -172,7 +172,7 @@ function titleBorder(
 function frameLine(
   content: string,
   width: number,
-  framePalette: FramePalette = DEFAULT_FRAME_PALETTE
+  framePalette: FramePalette = DEFAULT_FRAME_PALETTE,
 ): string {
   const innerWidth = Math.max(0, width - 2);
   const clipped = truncateToWidth(` ${content} `, innerWidth);
@@ -194,14 +194,14 @@ function wrapLines(lines: string[], width: number): string[] {
     }
 
     return wrapTextWithAnsi(line, width).map((item) =>
-      truncateToWidth(item, width)
+      truncateToWidth(item, width),
     );
   });
 }
 
 function buildLspStatusLines(
   cfg: LoadedConfig,
-  clients: Map<string, LspClient>
+  clients: Map<string, LspClient>,
 ): string[] {
   const lines: string[] = ["LSP Status:"];
 
@@ -233,7 +233,7 @@ function buildLspStatusLines(
 
 function buildLspStatusServers(
   cfg: LoadedConfig,
-  clients: Map<string, LspClient>
+  clients: Map<string, LspClient>,
 ): LspStatusServerView[] {
   return cfg.servers.map((server) => {
     const client = clients.get(server.name);
@@ -254,7 +254,7 @@ function renderSummaryMetric(
   theme: ThemeLike,
   label: string,
   value: number,
-  tone: LspThemeTone
+  tone: LspThemeTone,
 ): string {
   return `${theme.fg(tone, "■")} ${label} ${theme.bold(String(value))}`;
 }
@@ -270,10 +270,10 @@ function shouldCloseOverlay(data: string): boolean {
 function buildStatusSummaryLine(
   theme: ThemeLike,
   servers: LspStatusServerView[],
-  errorCount: number
+  errorCount: number,
 ): string {
   const runningCount = servers.filter(
-    (server) => server.statusLabel === "running"
+    (server) => server.statusLabel === "running",
   ).length;
   const lazyCount = servers.length - runningCount;
 
@@ -283,19 +283,19 @@ function buildStatusSummaryLine(
       theme,
       "running",
       runningCount,
-      runningCount > 0 ? "success" : "dim"
+      runningCount > 0 ? "success" : "dim",
     ),
     renderSummaryMetric(
       theme,
       "lazy",
       lazyCount,
-      lazyCount > 0 ? "accent" : "dim"
+      lazyCount > 0 ? "accent" : "dim",
     ),
     renderSummaryMetric(
       theme,
       "errors",
       errorCount,
-      errorCount > 0 ? "warning" : "dim"
+      errorCount > 0 ? "warning" : "dim",
     ),
   ].join(` ${theme.fg("dim", "·")} `);
 }
@@ -303,7 +303,7 @@ function buildStatusSummaryLine(
 function buildStatusBodyLines(
   theme: ThemeLike,
   cfg: LoadedConfig,
-  servers: LspStatusServerView[]
+  servers: LspStatusServerView[],
 ): string[] {
   const bodyLines: string[] = [];
 
@@ -313,23 +313,23 @@ function buildStatusBodyLines(
     bodyLines.push(
       theme.fg(
         "dim",
-        "Set `lsp` to an object in ~/.pi/agent/lsp.json or .pi/lsp.json to re-enable LSP."
-      )
+        "Set `lsp` to an object in ~/.pi/agent/lsp.json or .pi/lsp.json to re-enable LSP.",
+      ),
     );
   } else if (servers.length === 0) {
     bodyLines.push(theme.bold(theme.fg("toolTitle", "Status")));
     bodyLines.push(theme.fg("warning", "No servers configured."));
     bodyLines.push(
-      theme.fg("dim", "Add servers to ~/.pi/agent/lsp.json or .pi/lsp.json.")
+      theme.fg("dim", "Add servers to ~/.pi/agent/lsp.json or .pi/lsp.json."),
     );
   } else {
     bodyLines.push(theme.bold(theme.fg("toolTitle", "Servers")));
     for (const server of servers) {
       bodyLines.push(
-        `${theme.fg(server.statusTone, "●")} ${theme.bold(server.name)} ${theme.fg("dim", "·")} ${theme.fg(server.statusTone, server.statusLabel)} ${theme.fg("dim", "· handles")} ${server.extensionsLabel}`
+        `${theme.fg(server.statusTone, "●")} ${theme.bold(server.name)} ${theme.fg("dim", "·")} ${theme.fg(server.statusTone, server.statusLabel)} ${theme.fg("dim", "· handles")} ${server.extensionsLabel}`,
       );
       bodyLines.push(
-        `${theme.fg("dim", "    command")} ${server.commandLabel}`
+        `${theme.fg("dim", "    command")} ${server.commandLabel}`,
       );
     }
   }
@@ -350,7 +350,7 @@ function buildStatusBodyLines(
 async function showLspTextView(
   ctx: ExtensionCommandContext,
   text: string,
-  level: "info" | "warning" = "info"
+  level: "info" | "warning" = "info",
 ): Promise<void> {
   if (!ctx.hasUI || typeof ctx.ui.custom !== "function") {
     ctx.ui.notify(text, level);
@@ -374,7 +374,7 @@ async function showLspTextView(
             titleBorder(frameWidth, " LSP ", framePalette),
             border(frameWidth, "├", "─", "┤", framePalette),
             ...bodyLines.map((line) =>
-              frameLine(line, frameWidth, framePalette)
+              frameLine(line, frameWidth, framePalette),
             ),
             border(frameWidth, "╰", "─", "╯", framePalette),
           ];
@@ -395,14 +395,14 @@ async function showLspTextView(
         maxHeight: "80%",
         margin: 1,
       },
-    }
+    },
   );
 }
 
 async function showLspStatusView(
   ctx: ExtensionCommandContext,
   cfg: LoadedConfig,
-  clients: Map<string, LspClient>
+  clients: Map<string, LspClient>,
 ): Promise<void> {
   const fallbackText = buildLspStatusLines(cfg, clients).join("\n");
   if (!ctx.hasUI || typeof ctx.ui.custom !== "function") {
@@ -426,11 +426,11 @@ async function showLspStatusView(
           const summaryLine = buildStatusSummaryLine(
             theme,
             servers,
-            cfg.errors.length
+            cfg.errors.length,
           );
           const wrappedBody = wrapLines(
             buildStatusBodyLines(theme, cfg, servers),
-            innerWidth
+            innerWidth,
           );
 
           return [
@@ -438,22 +438,22 @@ async function showLspStatusView(
             frameLine(
               centerText(
                 theme.fg("dim", "Per-workspace routing · lazy server startup"),
-                innerWidth
+                innerWidth,
               ),
               frameWidth,
-              framePalette
+              framePalette,
             ),
             border(frameWidth, "├", "─", "┤", framePalette),
             frameLine(summaryLine, frameWidth, framePalette),
             border(frameWidth, "├", "─", "┤", framePalette),
             ...wrappedBody.map((line) =>
-              frameLine(line, frameWidth, framePalette)
+              frameLine(line, frameWidth, framePalette),
             ),
             border(frameWidth, "├", "─", "┤", framePalette),
             frameLine(
               centerText(theme.fg("dim", STATUS_MODAL_HELP), innerWidth),
               frameWidth,
-              framePalette
+              framePalette,
             ),
             border(frameWidth, "╰", "─", "╯", framePalette),
           ];
@@ -474,7 +474,7 @@ async function showLspStatusView(
         maxHeight: "80%",
         margin: 1,
       },
-    }
+    },
   );
 }
 
@@ -487,12 +487,12 @@ export default function lspExtension(pi: ExtensionAPI) {
   // ── Client management ───────────────────────────────────────────────
 
   function resolveServer(
-    serverConfig: ConfiguredServerConfig
+    serverConfig: ConfiguredServerConfig,
   ): ResolvedServerConfig | null {
     return resolveConfiguredServer(
       serverConfig,
       rootPath,
-      commandAvailabilityCache
+      commandAvailabilityCache,
     );
   }
 
@@ -520,7 +520,7 @@ export default function lspExtension(pi: ExtensionAPI) {
     const shutdowns = [...clients.values()].map((c) =>
       c.shutdown().catch(() => {
         /* noop */
-      })
+      }),
     );
     await Promise.all(shutdowns);
     clients.clear();
@@ -529,7 +529,7 @@ export default function lspExtension(pi: ExtensionAPI) {
 
   function refreshStatus(
     ui: { setStatus: (key: string, value: string) => void },
-    cfg: LoadedConfig | null
+    cfg: LoadedConfig | null,
   ) {
     if (!cfg) {
       ui.setStatus("lsp", "LSP: no servers detected");
@@ -547,12 +547,12 @@ export default function lspExtension(pi: ExtensionAPI) {
     }
 
     const running = cfg.servers.filter(
-      (server) => clients.get(server.name)?.isInitialized
+      (server) => clients.get(server.name)?.isInitialized,
     );
     if (running.length > 0) {
       ui.setStatus(
         "lsp",
-        `LSP: ${running.map((s) => s.name).join(", ")} (running)`
+        `LSP: ${running.map((s) => s.name).join(", ")} (running)`,
       );
       return;
     }
@@ -572,7 +572,7 @@ export default function lspExtension(pi: ExtensionAPI) {
 
     clientForFileWithCapability(
       filePath: string,
-      capability: string
+      capability: string,
     ): LspClient | null {
       if (!config) {
         return null;
@@ -638,7 +638,7 @@ export default function lspExtension(pi: ExtensionAPI) {
     if (scaffolded) {
       ctx.ui.notify(
         "LSP: created starter config at ~/.pi/agent/lsp.json — edit it to add your servers.",
-        "info"
+        "info",
       );
     }
 
@@ -689,7 +689,7 @@ export default function lspExtension(pi: ExtensionAPI) {
           refreshStatus(ctx.ui, config);
           ctx.ui.notify(
             "LSP servers stopped. Will reinitialize on next tool use.",
-            "info"
+            "info",
           );
           return;
         }

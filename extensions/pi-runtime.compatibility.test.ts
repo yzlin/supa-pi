@@ -11,7 +11,7 @@ interface PackageManifest {
 
 const projectRoot = resolve(import.meta.dir, "..");
 const packageJson = JSON.parse(
-  readFileSync(join(projectRoot, "package.json"), "utf8")
+  readFileSync(join(projectRoot, "package.json"), "utf8"),
 ) as PackageManifest;
 const loadMultipleExtensionsScript = `
 const codingAgentEntry = import.meta.resolve("@earendil-works/pi-coding-agent");
@@ -39,7 +39,7 @@ describe("Pi runtime compatibility", () => {
     const result = spawnSync(
       "node",
       ["--input-type=module", "--eval", loadMultipleExtensionsScript],
-      { cwd: projectRoot, encoding: "utf8" }
+      { cwd: projectRoot, encoding: "utf8" },
     );
 
     expect(result.status).toBe(0);

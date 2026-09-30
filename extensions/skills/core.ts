@@ -45,7 +45,7 @@ const GIT_SHA1_RE = /^[0-9a-f]{40}$/i;
 export type SkillSourceKind = "directory" | "github" | "repo" | "skills.sh";
 type SkillFetch = (
   input: RequestInfo | URL,
-  init?: RequestInit
+  init?: RequestInit,
 ) => Promise<Response>;
 
 export interface SkillSourceIdentity {
@@ -244,7 +244,7 @@ function safeSegment(value: string): string {
 function assertInsideDirectory(
   targetPath: string,
   rootDir: string,
-  message: string
+  message: string,
 ): string {
   const resolvedRoot = resolve(rootDir);
   const resolvedTarget = resolve(targetPath);
@@ -263,7 +263,7 @@ function assertInsideManagedDir(targetPath: string, paths: SkillsManagerPaths) {
   return assertInsideDirectory(
     targetPath,
     paths.managedDir,
-    "Managed skill path escapes managed directory"
+    "Managed skill path escapes managed directory",
   );
 }
 
@@ -296,7 +296,7 @@ function filesHash(files: ManagedSkillFile[]): string {
     files
       .map((file) => `${file.relativePath}\0${file.sha256}\0${file.bytes}`)
       .sort()
-      .join("\n")
+      .join("\n"),
   );
 }
 
@@ -348,7 +348,7 @@ function isSafeCachedGithubTreeItem(item: GitHubTreeItem): boolean {
 }
 
 function parseGithubRepoTreeCacheEntry(
-  value: unknown
+  value: unknown,
 ): GithubRepoTreeCacheEntry | null {
   if (
     !(
@@ -381,12 +381,12 @@ function parseGithubRepoTreeCacheEntry(
 
 function pruneGithubRepoTreeCache(
   cache: GithubRepoTreeCache,
-  now = Date.now()
+  now = Date.now(),
 ): GithubRepoTreeCache {
   const entries = Object.entries(cache.entries)
     .filter(
       ([, entry]) =>
-        now - Date.parse(entry.fetchedAt) <= GITHUB_TREE_CACHE_TTL_MS
+        now - Date.parse(entry.fetchedAt) <= GITHUB_TREE_CACHE_TTL_MS,
     )
     .sort(([leftKey, left], [rightKey, right]) => {
       const fetchedAtDifference =
@@ -401,7 +401,7 @@ function pruneGithubRepoTreeCache(
 }
 
 export function readGithubRepoTreeCache(
-  paths: SkillsManagerPaths
+  paths: SkillsManagerPaths,
 ): GithubRepoTreeCache {
   const cachePath = githubTreeCachePath(paths);
   if (!existsSync(cachePath)) {
@@ -419,7 +419,7 @@ export function readGithubRepoTreeCache(
       return emptyGithubRepoTreeCache();
     }
     const entries = Object.entries(parsed.entries).map(
-      ([key, value]) => [key, parseGithubRepoTreeCacheEntry(value)] as const
+      ([key, value]) => [key, parseGithubRepoTreeCacheEntry(value)] as const,
     );
     if (entries.some(([, entry]) => entry === null)) {
       return emptyGithubRepoTreeCache();
@@ -437,14 +437,14 @@ export function readGithubRepoTreeCache(
 }
 
 export function createGithubRepoTreeCacheSession(
-  paths: SkillsManagerPaths
+  paths: SkillsManagerPaths,
 ): GithubRepoTreeCacheSession {
   return { cache: readGithubRepoTreeCache(paths) };
 }
 
 function writeGithubRepoTreeCache(
   paths: SkillsManagerPaths,
-  cache: GithubRepoTreeCache
+  cache: GithubRepoTreeCache,
 ): GithubRepoTreeCache {
   const cachePath = githubTreeCachePath(paths);
   const tempPath = `${cachePath}.${process.pid}.${randomUUID()}.tmp`;
@@ -491,7 +491,7 @@ function githubSkillRootFolderName(root: string): string {
 }
 
 export function githubRemoteSlug(
-  identity: SkillSourceIdentity
+  identity: SkillSourceIdentity,
 ): string | undefined {
   return identity.owner && identity.repo
     ? `${identity.owner}/${identity.repo}`
@@ -500,14 +500,14 @@ export function githubRemoteSlug(
 
 function githubSkillOwnedItems(
   tree: GitHubTreeItem[],
-  skillPath: string
+  skillPath: string,
 ): GitHubTreeItem[] {
   const root = normalizeSlashPath(skillPath);
   const prefix = root ? `${root}/` : "";
   const nestedRootPrefixes = githubSkillRootsFromTree(tree)
     .filter(
       (candidateRoot) =>
-        candidateRoot !== root && candidateRoot.startsWith(prefix)
+        candidateRoot !== root && candidateRoot.startsWith(prefix),
     )
     .map((candidateRoot) => `${candidateRoot}/`);
   return tree.filter(
@@ -515,27 +515,27 @@ function githubSkillOwnedItems(
       typeof item.path === "string" &&
       item.path.startsWith(prefix) &&
       !nestedRootPrefixes.some((nestedPrefix) =>
-        item.path.startsWith(nestedPrefix)
-      )
+        item.path.startsWith(nestedPrefix),
+      ),
   );
 }
 
 export function githubSkillOwnedFilePaths(
   tree: GitHubTreeItem[],
-  skillPath: string
+  skillPath: string,
 ): Set<string> {
   const root = normalizeSlashPath(skillPath);
   const prefix = root ? `${root}/` : "";
   return new Set(
     githubSkillOwnedItems(tree, root)
       .filter(isGitHubBlobItem)
-      .map((item) => stripGithubPrefix(item.path, prefix))
+      .map((item) => stripGithubPrefix(item.path, prefix)),
   );
 }
 
 export function githubSkillFolderHash(
   tree: GitHubTreeItem[],
-  skillPath: string
+  skillPath: string,
 ): string | null {
   const root = normalizeSlashPath(skillPath);
   const prefix = root ? `${root}/` : "";
@@ -551,13 +551,13 @@ export function githubSkillFolderHash(
     files
       .map((item) => `${stripGithubPrefix(item.path, prefix)}\0${item.sha}`)
       .sort()
-      .join("\n")
+      .join("\n"),
   );
 }
 
 export function githubSkillRootsFromTree(
   tree: GitHubTreeItem[],
-  prefix = ""
+  prefix = "",
 ): string[] {
   const normalizedPrefix = prefix ? `${normalizeSlashPath(prefix)}/` : "";
   return [
@@ -565,7 +565,7 @@ export function githubSkillRootsFromTree(
       tree
         .filter(isGitHubBlobItem)
         .map((item) => githubSkillRoot(item, normalizedPrefix))
-        .filter((value): value is string => value !== null)
+        .filter((value): value is string => value !== null),
     ),
   ].sort();
 }
@@ -617,7 +617,7 @@ function parseSkillMetadata(content: string): {
 }
 
 export function createSkillsManagerPaths(
-  agentDir = join(process.env.HOME ?? homedir(), ".pi", "agent")
+  agentDir = join(process.env.HOME ?? homedir(), ".pi", "agent"),
 ): SkillsManagerPaths {
   return {
     rootDir: agentDir,
@@ -650,7 +650,7 @@ export function discoverBundledSkillPaths(skillsDir: string): string[] {
 }
 
 export function sourceIdentityForDirectory(
-  sourceDir: string
+  sourceDir: string,
 ): SkillSourceIdentity {
   const resolvedPath = resolve(sourceDir);
   const identity = { type: "directory" as const, path: resolvedPath };
@@ -659,7 +659,7 @@ export function sourceIdentityForDirectory(
 
 export function sourceIdentityForGithubSkillRoot(
   resolved: ResolvedSkillSource,
-  skillRoot: string
+  skillRoot: string,
 ): SkillSourceIdentity {
   if (
     resolved.identity.type !== "github" ||
@@ -754,7 +754,7 @@ export function computeSkillFilesHash(files: ManagedSkillFile[]): string {
 }
 
 export function validateSkillDirectory(
-  skillDir: string
+  skillDir: string,
 ): SkillValidationResult {
   const skillPath = join(skillDir, SKILL_FILE_NAME);
   const errors: string[] = [];
@@ -778,7 +778,7 @@ export function validateSkillDirectory(
 }
 
 export function readManagedManifest(
-  manifestPath: string
+  manifestPath: string,
 ): ManagedSkillsManifest {
   if (!existsSync(manifestPath)) {
     return { version: MANIFEST_VERSION, skills: [] };
@@ -796,7 +796,7 @@ export function readManagedManifest(
 
 export function writeManagedManifest(
   manifestPath: string,
-  manifest: ManagedSkillsManifest
+  manifest: ManagedSkillsManifest,
 ) {
   mkdirSync(dirname(manifestPath), { recursive: true });
   writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
@@ -805,7 +805,7 @@ export function writeManagedManifest(
 export function planInstallSkill(
   sourceDir: string,
   paths: SkillsManagerPaths,
-  manifest = readManagedManifest(paths.manifestPath)
+  manifest = readManagedManifest(paths.manifestPath),
 ): InstallPlan {
   const validation = validateSkillDirectory(sourceDir);
   if (!(validation.ok && validation.name)) {
@@ -814,7 +814,7 @@ export function planInstallSkill(
   const source = sourceIdentityForDirectory(sourceDir);
   const id = safeSegment(validation.name);
   const existing = manifest.skills.find(
-    (skill) => skill.id === id || skill.source.id === source.id
+    (skill) => skill.id === id || skill.source.id === source.id,
   );
   const targetDir = assertInsideManagedDir(join(paths.managedDir, id), paths);
   return {
@@ -833,7 +833,7 @@ export function copyInstallPlan(
   plan: InstallPlan,
   paths: SkillsManagerPaths,
   installedAt = new Date().toISOString(),
-  sourceOverride?: SkillSourceIdentity
+  sourceOverride?: SkillSourceIdentity,
 ): ManagedSkillEntry {
   const targetDir = assertInsideManagedDir(plan.targetDir, paths);
   if (plan.existingInstallPath && plan.existingInstallPath !== targetDir) {
@@ -864,7 +864,7 @@ export function copyInstallPlan(
     version: MANIFEST_VERSION,
     skills: [
       ...manifest.skills.filter(
-        (skill) => skill.id !== entry.id && skill.id !== plan.existingId
+        (skill) => skill.id !== entry.id && skill.id !== plan.existingId,
       ),
       entry,
     ],
@@ -874,7 +874,7 @@ export function copyInstallPlan(
 
 function isExpectedFileDirty(
   filePath: string,
-  file: ManagedSkillFile
+  file: ManagedSkillFile,
 ): boolean {
   if (!existsSync(filePath)) {
     return true;
@@ -886,7 +886,7 @@ function isExpectedFileDirty(
 }
 
 export function detectDirtySkills(
-  manifest: ManagedSkillsManifest
+  manifest: ManagedSkillsManifest,
 ): DirtySkill[] {
   const dirty: DirtySkill[] = [];
   for (const skill of manifest.skills) {
@@ -899,11 +899,11 @@ export function detectDirtySkills(
       continue;
     }
     const expectedFiles = new Map(
-      skill.files.map((file) => [file.relativePath, file])
+      skill.files.map((file) => [file.relativePath, file]),
     );
     const changedFiles = skill.files
       .filter((file) =>
-        isExpectedFileDirty(join(skill.installPath, file.relativePath), file)
+        isExpectedFileDirty(join(skill.installPath, file.relativePath), file),
       )
       .map((file) => file.relativePath);
     const extraFiles = hashSkillDirectory(skill.installPath)
@@ -919,7 +919,7 @@ export function detectDirtySkills(
 
 export function planRemoveSkill(
   id: string,
-  manifest: ManagedSkillsManifest
+  manifest: ManagedSkillsManifest,
 ): RemovePlan {
   const entry = manifest.skills.find((skill) => skill.id === id);
   if (!entry) {
@@ -936,7 +936,7 @@ export function planRemoveSkill(
 export function applyRemovePlan(
   plan: RemovePlan,
   paths: SkillsManagerPaths,
-  trash: (targetPath: string) => void
+  trash: (targetPath: string) => void,
 ): ManagedSkillsManifest {
   if (plan.exists) {
     trash(assertInsideManagedDir(plan.installPath, paths));
@@ -972,12 +972,12 @@ export function listSkillsInSource(sourceDir: string): ListedSkillSource[] {
 
 export function findListedSkillSourceDir(
   entries: ListedSkillSource[],
-  requestedName: string
+  requestedName: string,
 ): string | undefined {
   const requestedId = safeSegment(requestedName);
   const matched = entries.find(
     (entry) =>
-      entry.id === requestedId || safeSegment(entry.name) === requestedId
+      entry.id === requestedId || safeSegment(entry.name) === requestedId,
   );
   return (
     matched?.sourceDir ??
@@ -990,12 +990,14 @@ export function installSelectedSkillsSequentially(
   selectedSourceDirs: string[],
   paths: SkillsManagerPaths,
   sourceForEntry?: (
-    entry: ListedSkillSource
+    entry: ListedSkillSource,
   ) => SkillSourceIdentity | undefined,
-  ownedFilePathsForEntry?: (entry: ListedSkillSource) => Set<string> | undefined
+  ownedFilePathsForEntry?: (
+    entry: ListedSkillSource,
+  ) => Set<string> | undefined,
 ): InstallSelectedSkillsResult {
   const selected = new Set(
-    selectedSourceDirs.map((sourceDir) => resolve(sourceDir))
+    selectedSourceDirs.map((sourceDir) => resolve(sourceDir)),
   );
   const installed: ManagedSkillEntry[] = [];
   for (const entry of entries) {
@@ -1010,12 +1012,12 @@ export function installSelectedSkillsSequentially(
         ? {
             ...plan,
             files: plan.files.filter((file) =>
-              ownedFilePaths.has(file.relativePath)
+              ownedFilePaths.has(file.relativePath),
             ),
           }
         : plan;
       installed.push(
-        copyInstallPlan(ownedPlan, paths, undefined, sourceForEntry?.(entry))
+        copyInstallPlan(ownedPlan, paths, undefined, sourceForEntry?.(entry)),
       );
     } catch (error) {
       return { installed, failed: { sourceDir: entry.sourceDir, error } };
@@ -1027,7 +1029,7 @@ export function installSelectedSkillsSequentially(
 async function writeResponseFile(
   fetcher: SkillFetch,
   url: string,
-  targetPath: string
+  targetPath: string,
 ): Promise<void> {
   const response = await fetcher(url);
   if (!response.ok) {
@@ -1039,7 +1041,7 @@ async function writeResponseFile(
 
 function skillsShDownloadSnapshotUrl(
   remoteSlug: string,
-  skillSlug: string
+  skillSlug: string,
 ): string {
   const encodedRemoteSlug = remoteSlug
     .split("/")
@@ -1063,10 +1065,10 @@ export async function materializeSkillsShDownloadSnapshot(
   paths: SkillsManagerPaths,
   remoteSlug: string,
   skillSlug: string,
-  fetcher: SkillFetch = fetch
+  fetcher: SkillFetch = fetch,
 ): Promise<SkillsShDownloadSnapshotResult | null> {
   const response = await fetcher(
-    skillsShDownloadSnapshotUrl(remoteSlug, skillSlug)
+    skillsShDownloadSnapshotUrl(remoteSlug, skillSlug),
   );
   if (!response.ok) {
     return null;
@@ -1079,10 +1081,10 @@ export async function materializeSkillsShDownloadSnapshot(
     join(
       paths.cacheDir,
       "skills-sh-snapshots",
-      hashString(`${remoteSlug}/${skillSlug}`)
+      hashString(`${remoteSlug}/${skillSlug}`),
     ),
     paths.cacheDir,
-    "skills.sh snapshot cache path escapes cache directory"
+    "skills.sh snapshot cache path escapes cache directory",
   );
   rmSync(sourceDir, { recursive: true, force: true });
   mkdirSync(sourceDir, { recursive: true });
@@ -1100,7 +1102,7 @@ export async function materializeSkillsShDownloadSnapshot(
     const targetPath = assertInsideDirectory(
       join(sourceDir, normalizeSlashPath(file.path)),
       sourceDir,
-      "skills.sh snapshot file path escapes source directory"
+      "skills.sh snapshot file path escapes source directory",
     );
     mkdirSync(dirname(targetPath), { recursive: true });
     writeFileSync(targetPath, file.contents);
@@ -1122,14 +1124,14 @@ function githubSkillNameCacheKey(
   owner: string,
   repo: string,
   ref: string,
-  root: string
+  root: string,
 ): string {
   return `${owner}/${repo}#${ref}:${root}`;
 }
 
 function exactGithubRoot(
   roots: Iterable<string>,
-  requestedRoot: string | null
+  requestedRoot: string | null,
 ): string | null {
   if (requestedRoot !== null) {
     return requestedRoot;
@@ -1144,7 +1146,7 @@ async function fetchGithubSkillRootName(
   repo: string,
   ref: string,
   root: string,
-  cache?: Map<string, string | null>
+  cache?: Map<string, string | null>,
 ): Promise<string | null> {
   const cacheKey = githubSkillNameCacheKey(owner, repo, ref, root);
   if (cache?.has(cacheKey)) {
@@ -1171,7 +1173,7 @@ async function findGithubSkillRootByNameFromRoots(
   ref: string,
   roots: Iterable<string>,
   requestedName: string,
-  githubSkillNameCache?: Map<string, string | null>
+  githubSkillNameCache?: Map<string, string | null>,
 ): Promise<string | null> {
   const requestedId = safeSegment(requestedName);
   const matches = new Set<string>();
@@ -1185,7 +1187,7 @@ async function findGithubSkillRootByNameFromRoots(
       repo,
       ref,
       root,
-      githubSkillNameCache
+      githubSkillNameCache,
     );
     if (name && safeSegment(name) === requestedId) {
       matches.add(root);
@@ -1194,7 +1196,7 @@ async function findGithubSkillRootByNameFromRoots(
   const sortedMatches = [...matches].sort();
   if (sortedMatches.length > 1) {
     throw new Error(
-      `Ambiguous GitHub skill source for ${requestedName}: ${sortedMatches.join(", ")}`
+      `Ambiguous GitHub skill source for ${requestedName}: ${sortedMatches.join(", ")}`,
     );
   }
   return sortedMatches[0] ?? null;
@@ -1208,7 +1210,7 @@ function findGithubSkillRootByName(
   blobItems: GitHubBlobItem[],
   requestedName: string,
   candidateRoots?: Iterable<string>,
-  githubSkillNameCache?: Map<string, string | null>
+  githubSkillNameCache?: Map<string, string | null>,
 ): Promise<string | null> {
   const skillRoots =
     candidateRoots ??
@@ -1222,7 +1224,7 @@ function findGithubSkillRootByName(
     ref,
     skillRoots,
     requestedName,
-    githubSkillNameCache
+    githubSkillNameCache,
   );
 }
 
@@ -1234,7 +1236,7 @@ export function resolveGithubSkillPathFromTree(
   tree: GitHubTreeItem[],
   requestedName: string,
   candidateRoots?: Iterable<string>,
-  githubSkillNameCache?: Map<string, string | null>
+  githubSkillNameCache?: Map<string, string | null>,
 ): Promise<string | null> {
   return findGithubSkillRootByName(
     fetcher,
@@ -1244,13 +1246,13 @@ export function resolveGithubSkillPathFromTree(
     tree.filter(isGitHubBlobItem),
     requestedName,
     candidateRoots,
-    githubSkillNameCache
+    githubSkillNameCache,
   );
 }
 
 function snapshotTargetRelativeRoot(
   root: string,
-  relativePrefix: string
+  relativePrefix: string,
 ): string {
   const normalizedPrefix = relativePrefix.replace(TRAILING_SLASH_RE, "");
   if (normalizedPrefix && root === normalizedPrefix) {
@@ -1269,7 +1271,7 @@ function gitBlobSha(contents: Buffer): string {
 function snapshotMatchesGithubTree(
   snapshot: SkillsShDownloadSnapshotResult,
   tree: GitHubTreeItem[],
-  root: string
+  root: string,
 ): boolean {
   const normalizedRoot = normalizeSlashPath(root);
   const rootPrefix = normalizedRoot ? `${normalizedRoot}/` : "";
@@ -1288,7 +1290,7 @@ function snapshotMatchesGithubTree(
     expectedBlobs.map((item) => [
       normalizeSlashPath(stripGithubPrefix(item.path, rootPrefix)),
       item.sha as string,
-    ])
+    ]),
   );
   if (expectedByPath.size !== expectedBlobs.length) {
     return false;
@@ -1303,7 +1305,7 @@ function snapshotMatchesGithubTree(
     const sourcePath = assertInsideDirectory(
       join(snapshot.sourceDir, relativePath),
       snapshot.sourceDir,
-      "skills.sh snapshot file path escapes source directory"
+      "skills.sh snapshot file path escapes source directory",
     );
     if (
       !existsSync(sourcePath) ||
@@ -1325,7 +1327,7 @@ async function writeGithubSkillSnapshotFiles(
   sourceDir: string,
   tree: GitHubTreeItem[],
   roots: string[],
-  relativePrefix: string
+  relativePrefix: string,
 ): Promise<Set<string>> {
   const writtenRoots = new Set<string>();
   if (ref !== "HEAD") {
@@ -1342,7 +1344,7 @@ async function writeGithubSkillSnapshotFiles(
         paths,
         `${owner}/${repo}`,
         slug,
-        fetcher
+        fetcher,
       );
     } catch {
       snapshot = null;
@@ -1355,7 +1357,7 @@ async function writeGithubSkillSnapshotFiles(
       ? assertInsideDirectory(
           join(sourceDir, targetRelativeRoot),
           sourceDir,
-          "skills.sh snapshot target path escapes source directory"
+          "skills.sh snapshot target path escapes source directory",
         )
       : sourceDir;
     for (const file of listFilesRecursive(snapshot.sourceDir)) {
@@ -1365,7 +1367,7 @@ async function writeGithubSkillSnapshotFiles(
       const targetPath = assertInsideDirectory(
         join(targetRoot, relativePath),
         sourceDir,
-        "skills.sh snapshot file path escapes source directory"
+        "skills.sh snapshot file path escapes source directory",
       );
       mkdirSync(dirname(targetPath), { recursive: true });
       copyFileSync(file, targetPath);
@@ -1383,15 +1385,15 @@ async function writeGithubSkillFiles(
   sourceDir: string,
   tree: GitHubTreeItem[],
   roots: string[],
-  relativePrefix: string
+  relativePrefix: string,
 ): Promise<void> {
   const skillFiles = [
     ...new Map(
       roots
         .flatMap((root) =>
-          githubSkillOwnedItems(tree, root).filter(isGitHubBlobItem)
+          githubSkillOwnedItems(tree, root).filter(isGitHubBlobItem),
         )
-        .map((item) => [item.path, item])
+        .map((item) => [item.path, item]),
     ).values(),
   ];
   for (const item of skillFiles) {
@@ -1399,7 +1401,7 @@ async function writeGithubSkillFiles(
     const targetPath = assertInsideDirectory(
       join(sourceDir, relativePath),
       sourceDir,
-      "Remote file path escapes source directory"
+      "Remote file path escapes source directory",
     );
     const rawUrl = `https://raw.githubusercontent.com/${owner}/${repo}/${ref}/${item.path}`;
     await writeResponseFile(fetcher, rawUrl, targetPath);
@@ -1410,7 +1412,7 @@ function githubTreePageUrl(
   owner: string,
   repo: string,
   ref: string,
-  subpath: string
+  subpath: string,
 ): string {
   return `https://github.com/${owner}/${repo}/tree/${ref}/${subpath}`;
 }
@@ -1419,7 +1421,7 @@ function githubRawUrl(
   owner: string,
   repo: string,
   ref: string,
-  path: string
+  path: string,
 ): string {
   return `https://raw.githubusercontent.com/${owner}/${repo}/${ref}/${path}`;
 }
@@ -1427,7 +1429,7 @@ function githubRawUrl(
 function githubHrefPrefix(
   owner: string,
   repo: string,
-  kind: "blob" | "tree"
+  kind: "blob" | "tree",
 ): string {
   return `/${owner}/${repo}/${kind}/`;
 }
@@ -1437,7 +1439,7 @@ function githubPathFromHref(
   owner: string,
   repo: string,
   ref: string,
-  kind: "blob" | "tree"
+  kind: "blob" | "tree",
 ): string | null {
   const hrefPrefix = githubHrefPrefix(owner, repo, kind);
   const requestedRefPrefix = `${hrefPrefix}${ref}/`;
@@ -1465,7 +1467,7 @@ function githubSkillRootsFromHtml(
   owner: string,
   repo: string,
   ref: string,
-  subpath: string
+  subpath: string,
 ): string[] {
   const prefix = `${subpath.replace(TRAILING_SLASH_RE, "")}/`;
   const roots = new Set<string>();
@@ -1490,7 +1492,7 @@ function githubExactRootHtmlPaths(
   owner: string,
   repo: string,
   ref: string,
-  root: string
+  root: string,
 ): { blobs: string[]; trees: string[] } {
   const rootPrefix = root ? `${root.replace(TRAILING_SLASH_RE, "")}/` : "";
   const blobs = new Set<string>();
@@ -1517,7 +1519,7 @@ async function materializeExactGithubRootFromHtml(
   sourceDir: string,
   root: string,
   baseRoot = root,
-  seen = new Set<string>()
+  seen = new Set<string>(),
 ): Promise<boolean> {
   if (seen.has(root)) {
     return true;
@@ -1532,7 +1534,7 @@ async function materializeExactGithubRootFromHtml(
     owner,
     repo,
     ref,
-    root
+    root,
   );
   const skillFilePath = root ? `${root}/${SKILL_FILE_NAME}` : SKILL_FILE_NAME;
   if (root === baseRoot && !blobs.includes(skillFilePath)) {
@@ -1542,12 +1544,12 @@ async function materializeExactGithubRootFromHtml(
     const targetPath = assertInsideDirectory(
       join(sourceDir, stripGithubPrefix(blob, baseRoot ? `${baseRoot}/` : "")),
       sourceDir,
-      "Remote file path escapes source directory"
+      "Remote file path escapes source directory",
     );
     await writeResponseFile(
       fetcher,
       githubRawUrl(owner, repo, ref, blob),
-      targetPath
+      targetPath,
     );
   }
   const nested = await Promise.all(
@@ -1560,9 +1562,9 @@ async function materializeExactGithubRootFromHtml(
         sourceDir,
         tree,
         baseRoot,
-        seen
-      )
-    )
+        seen,
+      ),
+    ),
   );
   return (blobs.length > 0 || trees.length > 0) && nested.every(Boolean);
 }
@@ -1574,22 +1576,22 @@ async function writeGithubSkillMarkdownFiles(
   ref: string,
   sourceDir: string,
   roots: string[],
-  relativePrefix: string
+  relativePrefix: string,
 ): Promise<void> {
   for (const root of roots) {
     const relativePath = stripGithubPrefix(
       `${root}/${SKILL_FILE_NAME}`,
-      relativePrefix
+      relativePrefix,
     );
     const targetPath = assertInsideDirectory(
       join(sourceDir, relativePath),
       sourceDir,
-      "Remote file path escapes source directory"
+      "Remote file path escapes source directory",
     );
     await writeResponseFile(
       fetcher,
       githubRawUrl(owner, repo, ref, `${root}/${SKILL_FILE_NAME}`),
-      targetPath
+      targetPath,
     );
   }
 }
@@ -1603,11 +1605,11 @@ async function materializeGithubSourceFromHtml(
   subpath: string,
   requestedSkillName?: string,
   onExactRootResolved?: (root: string) => void,
-  githubSkillNameCache?: Map<string, string | null>
+  githubSkillNameCache?: Map<string, string | null>,
 ): Promise<string | null> {
   const listingPath = subpath || "skills";
   const response = await fetcher(
-    githubTreePageUrl(owner, repo, ref, listingPath)
+    githubTreePageUrl(owner, repo, ref, listingPath),
   );
   if (!response.ok) {
     return null;
@@ -1617,7 +1619,7 @@ async function materializeGithubSourceFromHtml(
     owner,
     repo,
     ref,
-    listingPath
+    listingPath,
   );
   if (requestedSkillName) {
     const requestedRoot = await findGithubSkillRootByNameFromRoots(
@@ -1627,7 +1629,7 @@ async function materializeGithubSourceFromHtml(
       ref,
       roots,
       requestedSkillName,
-      githubSkillNameCache
+      githubSkillNameCache,
     );
     const exactRoot = exactGithubRoot(roots, requestedRoot);
     roots = exactRoot === null ? [] : [exactRoot];
@@ -1645,7 +1647,7 @@ async function materializeGithubSourceFromHtml(
     ref,
     sourceDir,
     roots,
-    subpath ? `${subpath}/` : ""
+    subpath ? `${subpath}/` : "",
   );
   return sourceDir;
 }
@@ -1653,7 +1655,7 @@ async function materializeGithubSourceFromHtml(
 async function fetchGithubTree(
   fetcher: SkillFetch,
   url: string,
-  cachedEtag?: string
+  cachedEtag?: string,
 ): Promise<Response> {
   const headers: Record<string, string> = {
     Accept: "application/vnd.github+json",
@@ -1685,7 +1687,7 @@ export async function fetchGithubRepoTreeSnapshot(
   repo: string,
   ref: string,
   fetcher: SkillFetch = fetch,
-  cacheSession?: GithubRepoTreeCacheSession
+  cacheSession?: GithubRepoTreeCacheSession,
 ): Promise<GithubRepoTreeSnapshot> {
   const cache = cacheSession?.cache ?? readGithubRepoTreeCache(paths);
   const key = githubTreeCacheKey(owner, repo, ref);
@@ -1760,7 +1762,7 @@ export async function fetchGithubRepoTreeSnapshot(
 }
 
 function normalizeMaterializeOptions(
-  requestedSkillNameOrOptions?: string | MaterializeResolvedSkillSourceOptions
+  requestedSkillNameOrOptions?: string | MaterializeResolvedSkillSourceOptions,
 ): MaterializeResolvedSkillSourceOptions {
   return typeof requestedSkillNameOrOptions === "string"
     ? { requestedSkillName: requestedSkillNameOrOptions }
@@ -1771,7 +1773,7 @@ export async function materializeResolvedSkillSource(
   resolved: ResolvedSkillSource,
   paths: SkillsManagerPaths,
   fetcher: SkillFetch = fetch,
-  requestedSkillNameOrOptions?: string | MaterializeResolvedSkillSourceOptions
+  requestedSkillNameOrOptions?: string | MaterializeResolvedSkillSourceOptions,
 ): Promise<string> {
   const {
     requestedSkillName,
@@ -1785,7 +1787,7 @@ export async function materializeResolvedSkillSource(
   const sourceDir = assertInsideDirectory(
     join(paths.cacheDir, "direct-source", resolved.identity.id),
     paths.cacheDir,
-    "Skill source cache path escapes cache directory"
+    "Skill source cache path escapes cache directory",
   );
   rmSync(sourceDir, { recursive: true, force: true });
   mkdirSync(sourceDir, { recursive: true });
@@ -1804,7 +1806,7 @@ export async function materializeResolvedSkillSource(
         repo,
         ref,
         fetcher,
-        githubTreeCacheSession
+        githubTreeCacheSession,
       );
       const { tree, stale } = githubTreeSnapshot;
       const materializeRef = githubTreeSnapshot.revision ?? ref;
@@ -1814,7 +1816,7 @@ export async function materializeResolvedSkillSource(
       const skillRoots = new Set(
         blobItems
           .map((item) => githubSkillRoot(item, prefix))
-          .filter((value): value is string => value !== null)
+          .filter((value): value is string => value !== null),
       );
       const requestedName =
         requestedSkillName ?? subpath.split("/").filter(Boolean).at(-1);
@@ -1828,7 +1830,7 @@ export async function materializeResolvedSkillSource(
               blobItems,
               requestedSkillName,
               skillRoots,
-              githubSkillNameCache
+              githubSkillNameCache,
             )
           : null;
         const exactRoot = exactGithubRoot(skillRoots, requestedRoot);
@@ -1842,16 +1844,16 @@ export async function materializeResolvedSkillSource(
                 repo,
                 ref,
                 sourceDir,
-                exactRoot
+                exactRoot,
               ))
             )
           ) {
             throw new Error(
-              "Unable to verify current GitHub skill files from stale tree metadata."
+              "Unable to verify current GitHub skill files from stale tree metadata.",
             );
           }
           onExactSourceResolved?.(
-            sourceIdentityForGithubSkillRoot(resolved, exactRoot)
+            sourceIdentityForGithubSkillRoot(resolved, exactRoot),
           );
           return sourceDir;
         }
@@ -1872,10 +1874,10 @@ export async function materializeResolvedSkillSource(
               sourceDir,
               tree,
               rootsToWrite,
-              relativePrefix
+              relativePrefix,
             );
         const rawRoots = rootsToWrite.filter(
-          (root) => !snapshotRoots.has(root)
+          (root) => !snapshotRoots.has(root),
         );
         await writeGithubSkillFiles(
           fetcher,
@@ -1885,11 +1887,11 @@ export async function materializeResolvedSkillSource(
           sourceDir,
           tree,
           rawRoots,
-          relativePrefix
+          relativePrefix,
         );
         if (exactRoot !== null) {
           onExactSourceResolved?.(
-            sourceIdentityForGithubSkillRoot(resolved, exactRoot)
+            sourceIdentityForGithubSkillRoot(resolved, exactRoot),
           );
         }
         return sourceDir;
@@ -1903,7 +1905,7 @@ export async function materializeResolvedSkillSource(
             blobItems,
             requestedName,
             undefined,
-            githubSkillNameCache
+            githubSkillNameCache,
           )
         : null;
       if (matchedRoot !== null) {
@@ -1915,15 +1917,15 @@ export async function materializeResolvedSkillSource(
               repo,
               ref,
               sourceDir,
-              matchedRoot
+              matchedRoot,
             ))
           ) {
             throw new Error(
-              "Unable to verify current GitHub skill files from stale tree metadata."
+              "Unable to verify current GitHub skill files from stale tree metadata.",
             );
           }
           onExactSourceResolved?.(
-            sourceIdentityForGithubSkillRoot(resolved, matchedRoot)
+            sourceIdentityForGithubSkillRoot(resolved, matchedRoot),
           );
           return sourceDir;
         }
@@ -1938,7 +1940,7 @@ export async function materializeResolvedSkillSource(
               sourceDir,
               tree,
               [matchedRoot],
-              matchedRoot ? `${matchedRoot}/` : ""
+              matchedRoot ? `${matchedRoot}/` : "",
             );
         const rawRoots = snapshotRoots.has(matchedRoot) ? [] : [matchedRoot];
         await writeGithubSkillFiles(
@@ -1949,10 +1951,10 @@ export async function materializeResolvedSkillSource(
           sourceDir,
           tree,
           rawRoots,
-          matchedRoot ? `${matchedRoot}/` : ""
+          matchedRoot ? `${matchedRoot}/` : "",
         );
         onExactSourceResolved?.(
-          sourceIdentityForGithubSkillRoot(resolved, matchedRoot)
+          sourceIdentityForGithubSkillRoot(resolved, matchedRoot),
         );
         return sourceDir;
       }
@@ -1977,11 +1979,11 @@ export async function materializeResolvedSkillSource(
         repo,
         ref,
         sourceDir,
-        subpath
+        subpath,
       );
       if (htmlExactRoot) {
         onExactSourceResolved?.(
-          sourceIdentityForGithubSkillRoot(resolved, subpath)
+          sourceIdentityForGithubSkillRoot(resolved, subpath),
         );
         return sourceDir;
       }
@@ -1996,9 +1998,9 @@ export async function materializeResolvedSkillSource(
         requestedSkillName,
         (root) =>
           onExactSourceResolved?.(
-            sourceIdentityForGithubSkillRoot(resolved, root)
+            sourceIdentityForGithubSkillRoot(resolved, root),
           ),
-        githubSkillNameCache
+        githubSkillNameCache,
       );
       if (htmlSourceRoot) {
         return htmlSourceRoot;
@@ -2013,7 +2015,7 @@ export async function materializeResolvedSkillSource(
     await writeResponseFile(
       fetcher,
       resolved.rawUrl,
-      join(sourceDir, SKILL_FILE_NAME)
+      join(sourceDir, SKILL_FILE_NAME),
     );
   } catch (error) {
     if (
@@ -2029,8 +2031,8 @@ export async function materializeResolvedSkillSource(
     onExactSourceResolved?.(
       sourceIdentityForGithubSkillRoot(
         resolved,
-        resolved.identity.subpath ?? ""
-      )
+        resolved.identity.subpath ?? "",
+      ),
     );
   }
   return sourceDir;
@@ -2052,7 +2054,7 @@ export function readSkillsSearchCache(cachePath: string): SkillsSearchCache {
 
 export function writeSkillsSearchCache(
   cachePath: string,
-  cache: SkillsSearchCache
+  cache: SkillsSearchCache,
 ) {
   mkdirSync(dirname(cachePath), { recursive: true });
   writeFileSync(cachePath, `${JSON.stringify(cache, null, 2)}\n`);
@@ -2060,7 +2062,7 @@ export function writeSkillsSearchCache(
 
 export function searchCachedSkills(
   cache: SkillsSearchCache,
-  query: string
+  query: string,
 ): RemoteSkillMetadata[] {
   const terms = query.toLowerCase().split(WHITESPACE_RE).filter(Boolean);
   if (terms.length === 0) {
@@ -2076,7 +2078,7 @@ export function searchCachedSkills(
 export async function fetchSkillsShSearchCache(
   query: string,
   fetcher: SkillFetch = fetch,
-  endpoint = "https://skills.sh/api/search"
+  endpoint = "https://skills.sh/api/search",
 ): Promise<SkillsSearchCache> {
   const url = new URL(endpoint);
   if (query) {
@@ -2169,7 +2171,7 @@ function skillsFromHtml(html: string): RemoteSkillMetadata[] {
 
 export function detectSkillUpdate(
   entry: ManagedSkillEntry,
-  latestFiles: ManagedSkillFile[] | null
+  latestFiles: ManagedSkillFile[] | null,
 ): SkillUpdateStatus {
   const installedHash = filesHash(entry.files);
   const remoteManaged = entry.source.type !== "directory";
@@ -2194,7 +2196,7 @@ export function detectSkillUpdate(
 }
 
 export function detectLocalSkillUpdate(
-  entry: ManagedSkillEntry
+  entry: ManagedSkillEntry,
 ): SkillUpdateStatus {
   if (entry.source.type !== "directory" || !existsSync(entry.source.path)) {
     return detectSkillUpdate(entry, null);
@@ -2204,7 +2206,7 @@ export function detectLocalSkillUpdate(
 
 export function withSkillsWriteLock<T>(
   paths: SkillsManagerPaths,
-  action: () => T
+  action: () => T,
 ): T {
   mkdirSync(dirname(paths.lockPath), { recursive: true });
   let fd: number | null = null;

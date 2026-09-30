@@ -254,7 +254,7 @@ export interface AggregateDelta {
 
 function assertObject(
   value: unknown,
-  label: string
+  label: string,
 ): asserts value is Record<string, unknown> {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     throw new Error(`${label} must be an object`);
@@ -263,7 +263,7 @@ function assertObject(
 
 function assertNonEmptyString(
   value: unknown,
-  label: string
+  label: string,
 ): asserts value is string {
   if (typeof value !== "string" || value.trim().length === 0) {
     throw new Error(`${label} must be a non-empty string`);
@@ -393,7 +393,7 @@ function parseCheck(value: unknown, label: string): EvalCheck {
       if (value.type === "toolCallMatchesBeforeAssistantMatches") {
         assertNonEmptyString(
           value.assistantPattern,
-          `${label}.assistantPattern`
+          `${label}.assistantPattern`,
         );
         if (
           value.assistantFlags !== undefined &&
@@ -403,7 +403,7 @@ function parseCheck(value: unknown, label: string): EvalCheck {
         }
         new RegExp(
           value.assistantPattern,
-          value.assistantFlags as string | undefined
+          value.assistantFlags as string | undefined,
         );
         return {
           ...parsedMatch,
@@ -419,11 +419,11 @@ function parseCheck(value: unknown, label: string): EvalCheck {
       assertObject(value.args, `${label}.args`);
       assertNonEmptyString(
         value.firstResultPattern,
-        `${label}.firstResultPattern`
+        `${label}.firstResultPattern`,
       );
       assertNonEmptyString(
         value.secondResultPattern,
-        `${label}.secondResultPattern`
+        `${label}.secondResultPattern`,
       );
       if (
         typeof value.firstIsError !== "boolean" ||
@@ -486,11 +486,11 @@ function parseCheck(value: unknown, label: string): EvalCheck {
         !Array.isArray(value.paths) ||
         value.paths.length === 0 ||
         !value.paths.every(
-          (path) => typeof path === "string" && isSafeRelativePath(path)
+          (path) => typeof path === "string" && isSafeRelativePath(path),
         )
       ) {
         throw new Error(
-          `${label}.paths must be safe repository-relative paths`
+          `${label}.paths must be safe repository-relative paths`,
         );
       }
       return { ...base, type: value.type, paths: value.paths as string[] };
@@ -559,7 +559,7 @@ export function parseCorpus(value: unknown): EvalCorpus {
       (caseValue.tools as unknown[]).includes("ask")
     ) {
       throw new Error(
-        `${label} must configure askResponse exactly when ask is enabled`
+        `${label} must configure askResponse exactly when ask is enabled`,
       );
     }
 
@@ -571,7 +571,7 @@ export function parseCorpus(value: unknown): EvalCorpus {
       tools: caseValue.tools as ToolName[],
       askResponse: caseValue.askResponse as AskResponse | undefined,
       checks: caseValue.checks.map((check, checkIndex) =>
-        parseCheck(check, `${label}.checks[${checkIndex}]`)
+        parseCheck(check, `${label}.checks[${checkIndex}]`),
       ),
     };
   });
@@ -585,7 +585,7 @@ function sha256(content: string | Buffer): string {
 
 export function readStableContainedFile(
   repositoryRoot: string,
-  relativePath: string
+  relativePath: string,
 ): Buffer {
   const noFollow = fsConstants.O_NOFOLLOW;
   if (typeof noFollow !== "number" || noFollow === 0) {
@@ -601,10 +601,10 @@ export function readStableContainedFile(
     const pathBefore = lstatSync(absolute);
     if (!pathBefore.isFile() || pathBefore.isSymbolicLink()) {
       throw new Error(
-        `file must be a regular non-symlink file: ${relativePath}`
+        `file must be a regular non-symlink file: ${relativePath}`,
       );
     }
-    // biome-ignore lint/suspicious/noBitwiseOperators: open(2) flags are bitmasks.
+    // oxlint-disable-next-line no-bitwise -- open(2) flags are bitmasks.
     descriptor = openSync(absolute, fsConstants.O_RDONLY | noFollow);
     const before = fstatSync(descriptor);
     if (
@@ -623,7 +623,7 @@ export function readStableContainedFile(
         content,
         offset,
         content.length - offset,
-        offset
+        offset,
       );
       if (count <= 0) {
         throw new Error(`file changed while reading: ${relativePath}`);
@@ -657,7 +657,7 @@ export function readStableContainedFile(
 export async function loadPromptPair(
   repositoryRoot: string,
   promptPath: string,
-  baselineRevision = "HEAD"
+  baselineRevision = "HEAD",
 ): Promise<PromptPair> {
   if (!isSafeRelativePath(promptPath)) {
     throw new Error(`promptPath must be repository-relative: ${promptPath}`);
@@ -670,7 +670,7 @@ export async function loadPromptPair(
   }
   const candidateContent = readStableContainedFile(
     resolvedRepositoryRoot,
-    promptPath
+    promptPath,
   ).toString("utf8");
 
   const baselineProcess = spawn(
@@ -679,21 +679,21 @@ export async function loadPromptPair(
     {
       cwd: repositoryRoot,
       stdio: ["ignore", "pipe", "pipe"],
-    }
+    },
   );
   const baselineOutput: Buffer[] = [];
   const baselineErrors: Buffer[] = [];
   baselineProcess.stdout.on("data", (chunk: Buffer) =>
-    baselineOutput.push(chunk)
+    baselineOutput.push(chunk),
   );
   baselineProcess.stderr.on("data", (chunk: Buffer) =>
-    baselineErrors.push(chunk)
+    baselineErrors.push(chunk),
   );
   const baselineExitCode = await new Promise<number | null>(
     (resolveExit, reject) => {
       baselineProcess.once("error", reject);
       baselineProcess.once("close", resolveExit);
-    }
+    },
   );
   const baselineError = Buffer.concat(baselineErrors).toString("utf8");
   if (baselineExitCode !== 0) {
@@ -703,7 +703,7 @@ export async function loadPromptPair(
       {
         cwd: repositoryRoot,
         stdio: ["ignore", "pipe", "ignore"],
-      }
+      },
     );
     const treeOutput: Buffer[] = [];
     treeProcess.stdout.on("data", (chunk: Buffer) => treeOutput.push(chunk));
@@ -711,13 +711,13 @@ export async function loadPromptPair(
       (resolveExit, reject) => {
         treeProcess.once("error", reject);
         treeProcess.once("close", resolveExit);
-      }
+      },
     );
     const baselinePathExists =
       Buffer.concat(treeOutput).toString("utf8").trim().length > 0;
     if (treeExitCode !== 0 || baselinePathExists) {
       throw new Error(
-        `cannot read ${baselineRevision}:${promptPath}: ${baselineError.trim() || "git show failed"}`
+        `cannot read ${baselineRevision}:${promptPath}: ${baselineError.trim() || "git show failed"}`,
       );
     }
   }
@@ -750,7 +750,7 @@ export function composePrompt(promptPath: string, content: string): string {
 export function composeEvalRequest(
   promptPath: string,
   content: string,
-  task: string
+  task: string,
 ): { systemPrompt: string; userPrompt: string } {
   return {
     systemPrompt: composePrompt(promptPath, content),
@@ -781,7 +781,7 @@ function canonicalToolCall(name: string, args: unknown): string {
 
 export function reduceRunEvent(
   metrics: RunMetrics,
-  event: Record<string, unknown>
+  event: Record<string, unknown>,
 ): RunMetrics {
   const next = { ...metrics };
   if (event.type === "message_end") {
@@ -807,7 +807,7 @@ export function reduceRunEvent(
     const key = canonicalToolCall(String(event.toolName), event.args);
     const failedKeys = new Set(
       (metrics as RunMetrics & { failedToolKeys?: string[] }).failedToolKeys ??
-        []
+        [],
     );
     if (event.isError === true) {
       next.toolErrors += 1;
@@ -850,7 +850,7 @@ export async function snapshotWorkspace(workspace: string): Promise<string> {
         await visit(path, relativePath);
       } else if (stat.isFile()) {
         entries.push(
-          `file\0${relativePath}\0${stat.mode}\0${sha256(await readFile(path))}`
+          `file\0${relativePath}\0${stat.mode}\0${sha256(await readFile(path))}`,
         );
       } else {
         entries.push(`other\0${relativePath}\0${stat.mode}`);
@@ -866,17 +866,17 @@ function workspaceEntriesByPath(snapshot: string): Map<string, string> {
     (JSON.parse(snapshot) as string[]).map((entry) => [
       entry.split("\0")[1] ?? "",
       entry,
-    ])
+    ]),
   );
 }
 
 function includesRequiredArgs(
   recorded: Record<string, unknown>,
-  required: Record<string, unknown>
+  required: Record<string, unknown>,
 ): boolean {
   return Object.entries(required).every(
     ([key, value]) =>
-      Object.hasOwn(recorded, key) && isDeepStrictEqual(recorded[key], value)
+      Object.hasOwn(recorded, key) && isDeepStrictEqual(recorded[key], value),
   );
 }
 
@@ -890,7 +890,7 @@ function normalizedToolPath(value: unknown): string | undefined {
 
 function supportsFixtureAdminAnswer(
   call: ToolCallRecord,
-  source: "readme" | "auth"
+  source: "readme" | "auth",
 ): boolean {
   if (
     call.isError === true ||
@@ -940,7 +940,7 @@ function fixtureSourcesIn(value: string): Set<"readme" | "auth" | "outside"> {
         sources.add("outside");
       }
       return " ";
-    }
+    },
   );
   for (const match of withoutLinks.matchAll(FIXTURE_PATH_TOKEN_PATTERN)) {
     const token = match[0] ?? "";
@@ -983,7 +983,7 @@ function hasValidAdminTable(output: string): boolean {
       continue;
     }
     const rows = tableLines.map((line) =>
-      line.slice(1, -1).split("|").map(normalizedMarkdownText)
+      line.slice(1, -1).split("|").map(normalizedMarkdownText),
     );
     const columnCount = rows[0]?.length ?? 0;
     if (
@@ -1088,7 +1088,7 @@ function hasAuthPolicyDecisionRequest(output: string): boolean {
     .split(LINE_PATTERN)
     .filter((line) => !line.trimStart().startsWith(">"))
     .map((line) =>
-      normalizedMarkdownText(line).replace(/"[^"]*"|“[^”]*”/g, "")
+      normalizedMarkdownText(line).replace(/"[^"]*"|“[^”]*”/g, ""),
     );
   const authContext = unquotedLines.join(" ");
   if (
@@ -1161,7 +1161,7 @@ function hasAuthPolicyDecisionRequest(output: string): boolean {
 
 async function scoreCheck(
   input: ScoreInput,
-  check: EvalCheck
+  check: EvalCheck,
 ): Promise<CheckResult> {
   switch (check.type) {
     case "outputIncludes": {
@@ -1214,7 +1214,7 @@ async function scoreCheck(
     case "toolCalled":
     case "toolNotCalled": {
       const count = input.toolCalls.filter(
-        (call) => call.name === check.name
+        (call) => call.name === check.name,
       ).length;
       const passed = check.type === "toolCalled" ? count > 0 : count === 0;
       return {
@@ -1228,7 +1228,7 @@ async function scoreCheck(
         (call) =>
           call.name === check.name &&
           (check.args === undefined ||
-            includesRequiredArgs(call.args, check.args))
+            includesRequiredArgs(call.args, check.args)),
       ).length;
       const passed =
         (check.min === undefined || count >= check.min) &&
@@ -1247,18 +1247,18 @@ async function scoreCheck(
           includesRequiredArgs(call.args, check.args) &&
           call.isError === check.isError &&
           typeof call.resultText === "string" &&
-          new RegExp(check.resultPattern, check.flags).test(call.resultText)
+          new RegExp(check.resultPattern, check.flags).test(call.resultText),
       );
       if (check.type === "toolCallMatchesBeforeAssistantMatches") {
         const firstMatchingTurn = Math.min(
-          ...matchingCalls.map((call) => call.assistantTurn)
+          ...matchingCalls.map((call) => call.assistantTurn),
         );
         const prematureMessage = (input.assistantMessages ?? []).find(
           (message) =>
             message.assistantTurn <= firstMatchingTurn &&
             new RegExp(check.assistantPattern, check.assistantFlags).test(
-              message.text
-            )
+              message.text,
+            ),
         );
         const hasAssistantTrajectory = input.assistantMessages !== undefined;
         const passed =
@@ -1291,14 +1291,14 @@ async function scoreCheck(
           ({ call }) =>
             call.name === check.name &&
             includesRequiredArgs(call.args, check.args) &&
-            typeof call.resultText === "string"
+            typeof call.resultText === "string",
         );
       const first = matchingIndexes.find(
         ({ call }) =>
           call.isError === check.firstIsError &&
           new RegExp(check.firstResultPattern, check.flags).test(
-            call.resultText ?? ""
-          )
+            call.resultText ?? "",
+          ),
       );
       const second = matchingIndexes.find(
         ({ call, index }) =>
@@ -1306,8 +1306,8 @@ async function scoreCheck(
           index > first.index &&
           call.isError === check.secondIsError &&
           new RegExp(check.secondResultPattern, check.flags).test(
-            call.resultText ?? ""
-          )
+            call.resultText ?? "",
+          ),
       );
       const passed = first !== undefined && second !== undefined;
       return {
@@ -1323,20 +1323,20 @@ async function scoreCheck(
         (call) =>
           call.name === check.after &&
           !call.isError &&
-          (call.name !== "ask" || call.askResponse === "Approve scoped fix")
+          (call.name !== "ask" || call.askResponse === "Approve scoped fix"),
       );
       const matchingCalls = input.toolCalls.filter(
         (call) =>
           call.name === check.name &&
           (check.args === undefined ||
-            JSON.stringify(call.args) === JSON.stringify(check.args))
+            JSON.stringify(call.args) === JSON.stringify(check.args)),
       );
       const prerequisiteTurn = prerequisiteCall?.assistantTurn;
       const passed =
         prerequisiteTurn !== undefined &&
         matchingCalls.length > 0 &&
         matchingCalls.every(
-          (call) => !call.isError && call.assistantTurn > prerequisiteTurn
+          (call) => !call.isError && call.assistantTurn > prerequisiteTurn,
         );
       return {
         check,
@@ -1351,7 +1351,7 @@ async function scoreCheck(
         (call) =>
           normalizedToolPath(call.args.path) === "src/auth.ts" &&
           supportsFixtureAdminAnswer(call, "auth") &&
-          AUTH_BYPASS_PATTERN.test(call.resultText ?? "")
+          AUTH_BYPASS_PATTERN.test(call.resultText ?? ""),
       );
       const decisionRequest = hasAuthPolicyDecisionRequest(input.output);
       const passed = grounded && decisionRequest;
@@ -1365,10 +1365,10 @@ async function scoreCheck(
     }
     case "fixtureAdminGrounding": {
       const readmeGrounded = input.toolCalls.some((call) =>
-        supportsFixtureAdminAnswer(call, "readme")
+        supportsFixtureAdminAnswer(call, "readme"),
       );
       const authGrounded = input.toolCalls.some((call) =>
-        supportsFixtureAdminAnswer(call, "auth")
+        supportsFixtureAdminAnswer(call, "auth"),
       );
       const acceptedGrounding = check.visual
         ? readmeGrounded && authGrounded
@@ -1406,7 +1406,7 @@ async function scoreCheck(
         ? options.map((option) =>
             option && typeof option === "object"
               ? (option as { label?: unknown }).label
-              : undefined
+              : undefined,
           )
         : [];
       const passed =
@@ -1442,7 +1442,7 @@ async function scoreCheck(
       }
       const before = workspaceEntriesByPath(input.initialWorkspaceSnapshot);
       const after = workspaceEntriesByPath(
-        await snapshotWorkspace(input.workspace)
+        await snapshotWorkspace(input.workspace),
       );
       const changedPaths = [...new Set([...before.keys(), ...after.keys()])]
         .filter((path) => before.get(path) !== after.get(path))
@@ -1461,37 +1461,37 @@ async function scoreCheck(
 
 export async function scoreRun(
   input: ScoreInput,
-  checks: EvalCheck[]
+  checks: EvalCheck[],
 ): Promise<ScoreResult> {
   const results = await Promise.all(
-    checks.map((check) => scoreCheck(input, check))
+    checks.map((check) => scoreCheck(input, check)),
   );
   const possible = results.reduce(
     (sum, result) => sum + result.check.weight,
-    0
+    0,
   );
   const earned = results.reduce(
     (sum, result) => sum + (result.passed ? result.check.weight : 0),
-    0
+    0,
   );
   const domains = Object.fromEntries(
     CHECK_DOMAINS.map((domain) => {
       const matching = results.filter(
-        (result) => result.check.domain === domain
+        (result) => result.check.domain === domain,
       );
       const domainPossible = matching.reduce(
         (sum, result) => sum + result.check.weight,
-        0
+        0,
       );
       const domainEarned = matching.reduce(
         (sum, result) => sum + (result.passed ? result.check.weight : 0),
-        0
+        0,
       );
       return [
         domain,
         domainPossible === 0 ? null : domainEarned / domainPossible,
       ];
-    })
+    }),
   ) as Record<CheckDomain, number | null>;
 
   return { overall: earned / possible, domains, checks: results };
@@ -1499,7 +1499,7 @@ export async function scoreRun(
 
 function average(
   records: VariantRecord[],
-  select: (record: VariantRecord) => number
+  select: (record: VariantRecord) => number,
 ): number {
   return (
     records.reduce((sum, record) => sum + select(record), 0) / records.length
@@ -1527,16 +1527,16 @@ function averageMetrics(records: VariantRecord[]): RunMetrics {
 
 export function aggregateVariants(
   baseline: VariantRecord[],
-  candidate: VariantRecord[]
+  candidate: VariantRecord[],
 ): AggregateDelta {
   if (baseline.length === 0 || candidate.length === 0) {
     throw new Error("both variants require at least one record");
   }
   const baselinePassRate = average(baseline, (record) =>
-    Number(record.succeeded)
+    Number(record.succeeded),
   );
   const candidatePassRate = average(candidate, (record) =>
-    Number(record.succeeded)
+    Number(record.succeeded),
   );
   const baselineScore = average(baseline, (record) => record.score);
   const candidateScore = average(candidate, (record) => record.score);

@@ -17,8 +17,8 @@ describe("rtk stats", () => {
       renderRtkStats(
         createRtkMetricsStore().snapshot(),
         DEFAULT_RTK_CONFIG,
-        120
-      )
+        120,
+      ),
     );
 
     expect(output).toContain("RTK Token Savings (Session Scope)");
@@ -62,7 +62,7 @@ describe("rtk stats", () => {
     });
 
     const output = stripAnsi(
-      renderRtkStats(store.snapshot(), DEFAULT_RTK_CONFIG, 132)
+      renderRtkStats(store.snapshot(), DEFAULT_RTK_CONFIG, 132),
     );
 
     expect(output).toContain("Total commands:");
@@ -98,7 +98,7 @@ describe("rtk stats", () => {
     }
 
     const output = stripAnsi(
-      renderRtkStats(store.snapshot(), DEFAULT_RTK_CONFIG, 132)
+      renderRtkStats(store.snapshot(), DEFAULT_RTK_CONFIG, 132),
     );
 
     expect(output).toContain("+ 1 more raw command row(s)");
@@ -117,7 +117,7 @@ describe("rtk stats", () => {
           compactRead: false,
           trackSavings: false,
         },
-      })
+      }),
     );
 
     expect(output).toContain("RTK is disabled");
@@ -138,7 +138,7 @@ describe("rtk stats", () => {
     });
 
     const output = stripAnsi(
-      renderRtkStats(store.snapshot(), DEFAULT_RTK_CONFIG, 88)
+      renderRtkStats(store.snapshot(), DEFAULT_RTK_CONFIG, 88),
     );
     const familyLine = output
       .split("\n")

@@ -51,7 +51,7 @@ describe("analyzeMessages", () => {
     expect(snapshot.residualTokens).toBeGreaterThanOrEqual(0);
     expect(
       snapshot.displayCategories.find((category) => category.key === "messages")
-        ?.tokens
+        ?.tokens,
     ).toBeGreaterThan(0);
     expect(snapshot.topOffenders[0]?.tokens).toBeGreaterThan(0);
   });
@@ -83,10 +83,10 @@ describe("analyzeMessages", () => {
     expect(snapshot.severitySource).toBe("estimate");
     expect(snapshot.severity).toBe("critical");
     expect(
-      snapshot.suggestions.some((item) => item.kind === "unknown_total")
+      snapshot.suggestions.some((item) => item.kind === "unknown_total"),
     ).toBe(true);
     expect(snapshot.suggestions.some((item) => item.kind === "critical")).toBe(
-      true
+      true,
     );
   });
 
@@ -100,22 +100,22 @@ describe("analyzeMessages", () => {
 
     expect(
       snapshot.displayCategories.find(
-        (category) => category.key === "system_tools"
-      )?.tokens
+        (category) => category.key === "system_tools",
+      )?.tokens,
     ).toBeGreaterThan(0);
     expect(
       snapshot.displayCategories.find(
-        (category) => category.key === "custom_agents"
-      )?.tokens
+        (category) => category.key === "custom_agents",
+      )?.tokens,
     ).toBeGreaterThan(0);
     expect(
       snapshot.displayCategories.find(
-        (category) => category.key === "memory_files"
-      )?.tokens
+        (category) => category.key === "memory_files",
+      )?.tokens,
     ).toBeGreaterThan(0);
     expect(
       snapshot.displayCategories.find((category) => category.key === "skills")
-        ?.tokens
+        ?.tokens,
     ).toBeGreaterThan(0);
   });
 
@@ -134,16 +134,16 @@ describe("analyzeMessages", () => {
     expect(snapshot.exactTotalTokens).toBe(0);
     expect(
       snapshot.displayCategories.find(
-        (category) => category.key === "system_prompt"
-      )?.tokens
+        (category) => category.key === "system_prompt",
+      )?.tokens,
     ).toBeGreaterThan(0);
     expect(
       snapshot.displayCategories.find((category) => category.key === "residual")
-        ?.tokens
+        ?.tokens,
     ).toBe(0);
     expect(snapshot.displayUsedTokens).toBeGreaterThan(0);
     expect(
-      snapshot.suggestions.some((item) => item.kind === "overestimate")
+      snapshot.suggestions.some((item) => item.kind === "overestimate"),
     ).toBe(true);
   });
 
@@ -154,7 +154,7 @@ describe("analyzeMessages", () => {
         tokens: 42,
         turn: 3,
         source: "tool result: read",
-      })
+      }),
     ).toBe("t3 • tool result: read");
   });
 });

@@ -52,14 +52,14 @@ export function createAskRuntimeState(): AskRuntimeState {
 
 export function isAllAnswered(
   questions: Question[],
-  answers: Map<string, Answer>
+  answers: Map<string, Answer>,
 ): boolean {
   return questions.every((question) => answers.has(question.id));
 }
 
 export function advanceAfterAnswer(
   state: AskRuntimeState,
-  questions: Question[]
+  questions: Question[],
 ): AskRuntimeState {
   if (questions.length <= 1) {
     return state;
@@ -78,7 +78,7 @@ export function advanceAfterAnswer(
 function withAnswer(
   state: AskRuntimeState,
   answer: Answer,
-  questions: Question[]
+  questions: Question[],
 ): AskRuntimeState {
   const answers = new Map(state.answers);
   answers.set(answer.id, answer);
@@ -89,14 +89,14 @@ function withAnswer(
       inputMode: false,
       inputQuestionId: null,
     },
-    questions
+    questions,
   );
 }
 
 export function reduceAskRuntime(
   state: AskRuntimeState,
   action: AskRuntimeAction,
-  questions: Question[]
+  questions: Question[],
 ): { state: AskRuntimeState; effect: AskRuntimeEffect } {
   switch (action.type) {
     case "cancel":
@@ -151,7 +151,7 @@ export function reduceAskRuntime(
               multi: true,
               selectedOptions,
             },
-            questions
+            questions,
           );
           return {
             state: nextState,
@@ -199,7 +199,7 @@ export function reduceAskRuntime(
           preview: option.preview,
           ...(note ? { note } : {}),
         },
-        questions
+        questions,
       );
       return {
         state: nextState,
@@ -225,7 +225,7 @@ export function reduceAskRuntime(
           wasCustom: true,
           ...(note ? { note } : {}),
         },
-        questions
+        questions,
       );
       return {
         state: nextState,

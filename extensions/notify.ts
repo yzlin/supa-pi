@@ -30,7 +30,7 @@ interface NotificationRuntime {
   execFile(
     command: string,
     args: string[],
-    callback: (error: Error | null, stdout: string) => void
+    callback: (error: Error | null, stdout: string) => void,
   ): void;
   write(text: string): void;
 }
@@ -42,7 +42,7 @@ const defaultRuntime: NotificationRuntime = {
       command,
       args,
       { encoding: "utf8", timeout: 5000, killSignal: "SIGTERM" },
-      callback
+      callback,
     );
   },
   write: (text) => process.stdout.write(text),
@@ -64,7 +64,7 @@ const notify = (
   title: string,
   body: string,
   runtime: NotificationRuntime,
-  onHerdrFailure: () => void
+  onHerdrFailure: () => void,
 ): void => {
   if (runtime.environment.HERDR_ENV !== "1") {
     // OSC 777 format: ESC ] 777 ; notify ; title ; body BEL
@@ -80,7 +80,7 @@ const notify = (
         if (error || !wasHerdrNotificationShown(stdout)) {
           onHerdrFailure();
         }
-      }
+      },
     );
   } catch {
     onHerdrFailure();
@@ -90,14 +90,14 @@ const notify = (
 const isTextPart = (part: unknown): part is { type: "text"; text: string } =>
   Boolean(
     part &&
-      typeof part === "object" &&
-      "type" in part &&
-      part.type === "text" &&
-      "text" in part
+    typeof part === "object" &&
+    "type" in part &&
+    part.type === "text" &&
+    "text" in part,
   );
 
 const extractLastAssistantText = (
-  messages: Array<{ role?: string; content?: unknown }>
+  messages: Array<{ role?: string; content?: unknown }>,
 ): string | null => {
   for (let i = messages.length - 1; i >= 0; i--) {
     const message = messages[i];
@@ -148,7 +148,7 @@ const simpleMarkdown = (text: string, width = 80): string => {
 };
 
 const formatNotification = (
-  text: string | null
+  text: string | null,
 ): { title: string; body: string } => {
   const simplified = text ? simpleMarkdown(text) : "";
   // Markdown emits OSC 8 hyperlinks. Embedding one OSC sequence inside the OSC
@@ -173,7 +173,7 @@ const formatNotification = (
 
 export default function (
   pi: ExtensionAPI,
-  runtime: NotificationRuntime = defaultRuntime
+  runtime: NotificationRuntime = defaultRuntime,
 ) {
   pi.on("agent_end", (event, ctx) => {
     const lastText = extractLastAssistantText(event.messages ?? []);

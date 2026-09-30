@@ -18,7 +18,7 @@ let cachedRtkBinaryPath: string | undefined;
 function formatCommandFailure(
   result: RtkRunnerResult,
   timeoutMs: number,
-  fallback: string
+  fallback: string,
 ): string {
   if (result.error) {
     return result.error;
@@ -35,7 +35,7 @@ function formatCommandFailure(
 export const defaultRtkRunner: RtkRunner = (
   file,
   args,
-  timeoutMs
+  timeoutMs,
 ): RtkRunnerResult => {
   const result = spawnSync(file, args, {
     encoding: "utf8",
@@ -56,7 +56,7 @@ function resolveBinaryPathError(message: string): Error {
 
 function defaultResolveRtkBinaryPath(
   runner: RtkRunner,
-  timeoutMs: number
+  timeoutMs: number,
 ): string {
   if (cachedRtkBinaryPath) {
     return cachedRtkBinaryPath;
@@ -66,7 +66,7 @@ function defaultResolveRtkBinaryPath(
   const result = runner(locator, ["rtk"], timeoutMs);
   if (result.error || result.exitCode !== 0) {
     throw resolveBinaryPathError(
-      formatCommandFailure(result, timeoutMs, "RTK is unavailable")
+      formatCommandFailure(result, timeoutMs, "RTK is unavailable"),
     );
   }
 
@@ -86,7 +86,7 @@ export function clearRtkBinaryPathCache(): void {
 function resolveBinaryPath(
   runner: RtkRunner,
   timeoutMs: number,
-  customResolver?: (customRunner: RtkRunner, customTimeoutMs: number) => string
+  customResolver?: (customRunner: RtkRunner, customTimeoutMs: number) => string,
 ): string {
   return (customResolver ?? defaultResolveRtkBinaryPath)(runner, timeoutMs);
 }
@@ -104,7 +104,7 @@ export function checkRtkAvailability(options?: {
     const binaryPath = resolveBinaryPath(
       runner,
       timeoutMs,
-      options?.resolveBinaryPath
+      options?.resolveBinaryPath,
     );
     const result = runner(binaryPath, ["--help"], timeoutMs);
 
@@ -115,7 +115,7 @@ export function checkRtkAvailability(options?: {
         lastError: formatCommandFailure(
           result,
           timeoutMs,
-          "RTK is unavailable"
+          "RTK is unavailable",
         ),
       };
     }
@@ -139,20 +139,20 @@ export function rewriteCommandWithRtk(
     runner?: RtkRunner;
     timeoutMs?: number;
     resolveBinaryPath?: (runner: RtkRunner, timeoutMs: number) => string;
-  }
+  },
 ): RtkRewriteResult {
   const runner = options?.runner ?? defaultRtkRunner;
   const timeoutMs = options?.timeoutMs ?? DEFAULT_RTK_REWRITE_TIMEOUT_MS;
   const binaryPath = resolveBinaryPath(
     runner,
     timeoutMs,
-    options?.resolveBinaryPath
+    options?.resolveBinaryPath,
   );
   const result = runner(binaryPath, ["rewrite", command], timeoutMs);
 
   if (result.error || result.exitCode !== 0) {
     throw new Error(
-      formatCommandFailure(result, timeoutMs, "RTK rewrite failed")
+      formatCommandFailure(result, timeoutMs, "RTK rewrite failed"),
     );
   }
 
@@ -174,7 +174,7 @@ export function resolveRtkCommand(
     status: RtkRuntimeStatus;
     refreshStatus?: () => RtkRuntimeStatus;
     rewrite?: typeof rewriteCommandWithRtk;
-  }
+  },
 ): RtkRewriteResolution {
   if (!options.config.enabled) {
     return {

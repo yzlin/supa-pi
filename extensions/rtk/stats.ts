@@ -111,7 +111,7 @@ export function renderProgressBar(percent: number, width = BAR_WIDTH): string {
 function applyThemeColor(
   theme: ThemeLike | undefined,
   color: string,
-  text: string
+  text: string,
 ): string {
   if (!(theme && text)) {
     return text;
@@ -139,7 +139,7 @@ function getSavingsPercentTone(percent: number): string {
 function formatColoredPercent(
   percent: number,
   width: number,
-  theme?: ThemeLike
+  theme?: ThemeLike,
 ): string {
   const value = formatPercent(percent).padStart(width);
   return applyThemeColor(theme, getSavingsPercentTone(percent), value);
@@ -148,7 +148,7 @@ function formatColoredPercent(
 function renderImpactBar(
   percent: number,
   width: number,
-  theme?: ThemeLike
+  theme?: ThemeLike,
 ): string {
   const filled = getBarFillWidth(percent, width);
   return `${applyThemeColor(theme, "accent", repeat("█", filled))}${applyThemeColor(theme, "dim", repeat("░", width - filled))}`;
@@ -177,7 +177,7 @@ function formatStatsRowLabel(row: RtkStatsRow, width: number): string {
 
 function buildStatusNotes(
   metrics: RtkMetricsSnapshot,
-  config: RtkConfig
+  config: RtkConfig,
 ): string[] {
   const notes: string[] = [];
 
@@ -187,17 +187,17 @@ function buildStatusNotes(
 
   if (!config.outputCompaction.enabled) {
     notes.push(
-      "Output compaction is off. Token savings are only tracked while compaction is enabled."
+      "Output compaction is off. Token savings are only tracked while compaction is enabled.",
     );
   } else if (!config.outputCompaction.trackSavings) {
     notes.push(
-      "Savings tracking is off. Enable outputCompaction.trackSavings to collect estimates."
+      "Savings tracking is off. Enable outputCompaction.trackSavings to collect estimates.",
     );
   }
 
   if (!metrics.hasCommandData) {
     notes.push(
-      "No session savings yet. Run bash/read/grep with RTK compaction enabled to populate this dashboard."
+      "No session savings yet. Run bash/read/grep with RTK compaction enabled to populate this dashboard.",
     );
   }
 
@@ -206,7 +206,7 @@ function buildStatusNotes(
 
 function buildSummaryLines(
   metrics: RtkMetricsSnapshot,
-  config: RtkConfig
+  config: RtkConfig,
 ): string[] {
   const summary = metrics.summary;
   const statusNotes = buildStatusNotes(metrics, config);
@@ -260,7 +260,7 @@ function buildRankedTableLines<T extends RtkStatsRow>(options: {
   const timeWidth = 9;
   const impactWidth = Math.max(
     IMPACT_BAR_MIN_WIDTH,
-    Math.min(IMPACT_BAR_MAX_WIDTH, Math.floor(width * 0.17))
+    Math.min(IMPACT_BAR_MAX_WIDTH, Math.floor(width * 0.17)),
   );
   const labelWidth = Math.max(
     16,
@@ -271,7 +271,7 @@ function buildRankedTableLines<T extends RtkStatsRow>(options: {
         avgWidth +
         timeWidth +
         impactWidth +
-        6)
+        6),
   );
   const totalSavedTokens = rows.reduce((sum, row) => sum + row.savedTokens, 0);
 
@@ -291,7 +291,7 @@ function buildRankedTableLines<T extends RtkStatsRow>(options: {
     const formattedLabel = applyThemeColor(
       theme,
       "accent",
-      formatLabel(row, labelWidth).padEnd(labelWidth)
+      formatLabel(row, labelWidth).padEnd(labelWidth),
     );
     const impactShare =
       totalSavedTokens > 0 ? (row.savedTokens / totalSavedTokens) * 100 : 0;
@@ -301,7 +301,7 @@ function buildRankedTableLines<T extends RtkStatsRow>(options: {
 
   if (rows.length > visibleRows.length) {
     lines.push(
-      `+ ${rows.length - visibleRows.length} more ${hiddenLabel} row(s)`
+      `+ ${rows.length - visibleRows.length} more ${hiddenLabel} row(s)`,
     );
   }
 
@@ -311,7 +311,7 @@ function buildRankedTableLines<T extends RtkStatsRow>(options: {
 function buildToolLines(
   metrics: RtkMetricsSnapshot,
   width: number,
-  theme?: ThemeLike
+  theme?: ThemeLike,
 ): string[] {
   return buildRankedTableLines({
     title: "By Tool",
@@ -329,7 +329,7 @@ function buildToolLines(
 function buildCommandFamilyLines(
   metrics: RtkMetricsSnapshot,
   width: number,
-  theme?: ThemeLike
+  theme?: ThemeLike,
 ): string[] {
   return buildRankedTableLines({
     title: "Top Command Families",
@@ -347,7 +347,7 @@ function buildCommandFamilyLines(
 function buildRawCommandLines(
   metrics: RtkMetricsSnapshot,
   width: number,
-  theme?: ThemeLike
+  theme?: ThemeLike,
 ): string[] {
   return buildRankedTableLines({
     title: "Raw Command Rows",
@@ -366,7 +366,7 @@ function buildBodyLines(
   metrics: RtkMetricsSnapshot,
   config: RtkConfig,
   width: number,
-  theme?: ThemeLike
+  theme?: ThemeLike,
 ): string[] {
   const tableWidth = Math.max(TABLE_MIN_WIDTH, width);
 
@@ -384,27 +384,27 @@ function buildBodyLines(
 export function renderRtkStats(
   metrics: RtkMetricsSnapshot,
   config: RtkConfig,
-  width = 120
+  width = 120,
 ): string {
   return buildBodyLines(
     metrics,
     config,
-    Math.max(TEXT_FALLBACK_WIDTH, width)
+    Math.max(TEXT_FALLBACK_WIDTH, width),
   ).join("\n");
 }
 
 function fitRenderedLinesToWidth(lines: string[], width: number): string[] {
   return lines.flatMap((line) =>
     wrapTextWithAnsi(line, width).map((wrapped) =>
-      truncateToWidth(wrapped, width)
-    )
+      truncateToWidth(wrapped, width),
+    ),
   );
 }
 
 function frameLine(
   content: string,
   width: number,
-  framePalette: FramePalette
+  framePalette: FramePalette,
 ): string {
   const innerWidth = Math.max(0, width - 4);
   const clipped = truncateToWidth(content, innerWidth);
@@ -417,17 +417,17 @@ function border(
   left: string,
   fill: string,
   right: string,
-  framePalette: FramePalette
+  framePalette: FramePalette,
 ): string {
   return framePalette.border(
-    `${left}${fill.repeat(Math.max(0, width - 2))}${right}`
+    `${left}${fill.repeat(Math.max(0, width - 2))}${right}`,
   );
 }
 
 function titledTopBorder(
   width: number,
   titleText: string,
-  framePalette: FramePalette
+  framePalette: FramePalette,
 ): string {
   const innerWidth = Math.max(0, width - 2);
   const borderLen = Math.max(0, innerWidth - visibleWidth(titleText));
@@ -444,7 +444,7 @@ function titledTopBorder(
 function buildStatusLine(
   scroll: number,
   visibleRows: number,
-  totalRows: number
+  totalRows: number,
 ): string {
   if (totalRows <= 0) {
     return HELP;
@@ -496,7 +496,7 @@ function decorateLines(lines: string[], theme: ThemeLike): string[] {
 export async function showRtkStatsView(
   ctx: ExtensionCommandContext,
   metrics: RtkMetricsSnapshot,
-  config: RtkConfig
+  config: RtkConfig,
 ): Promise<void> {
   if (!ctx.hasUI) {
     process.stdout.write(`${renderRtkStats(metrics, config)}\n`);
@@ -519,7 +519,7 @@ export async function showRtkStatsView(
       const getBodyHeight = () =>
         Math.max(
           MIN_BODY_HEIGHT,
-          Math.floor(tui.terminal.rows * OVERLAY_HEIGHT_RATIO) - CHROME_ROWS
+          Math.floor(tui.terminal.rows * OVERLAY_HEIGHT_RATIO) - CHROME_ROWS,
         );
 
       const getBodyLines = (width: number) => {
@@ -530,7 +530,7 @@ export async function showRtkStatsView(
         cachedWidth = width;
         cachedBody = fitRenderedLinesToWidth(
           decorateLines(buildBodyLines(metrics, config, width, theme), theme),
-          Math.max(8, width)
+          Math.max(8, width),
         );
         return cachedBody;
       };
@@ -543,7 +543,7 @@ export async function showRtkStatsView(
           if (width < TEXT_FALLBACK_WIDTH) {
             return fitRenderedLinesToWidth(
               renderRtkStats(metrics, config, width).split("\n"),
-              width
+              width,
             );
           }
 
@@ -560,11 +560,11 @@ export async function showRtkStatsView(
             frameLine(
               theme.fg("dim", "Session-only dashboard · estimated tokens"),
               frameWidth,
-              framePalette
+              framePalette,
             ),
             border(frameWidth, "├", "─", "┤", framePalette),
             ...visibleBody.map((line) =>
-              frameLine(line, frameWidth, framePalette)
+              frameLine(line, frameWidth, framePalette),
             ),
           ];
 
@@ -577,11 +577,11 @@ export async function showRtkStatsView(
             frameLine(
               theme.fg(
                 "dim",
-                buildStatusLine(scroll, visibleBody.length, body.length)
+                buildStatusLine(scroll, visibleBody.length, body.length),
               ),
               frameWidth,
-              framePalette
-            )
+              framePalette,
+            ),
           );
           lines.push(border(frameWidth, "╰", "─", "╯", framePalette));
           return lines;
@@ -590,7 +590,7 @@ export async function showRtkStatsView(
           const bodyHeight = getBodyHeight();
           const maxScroll = Math.max(
             0,
-            getBodyLines(lastInnerWidth).length - bodyHeight
+            getBodyLines(lastInnerWidth).length - bodyHeight,
           );
 
           if (
@@ -650,6 +650,6 @@ export async function showRtkStatsView(
         maxHeight: "92%",
         margin: 1,
       },
-    }
+    },
   );
 }

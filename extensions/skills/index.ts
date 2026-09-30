@@ -74,7 +74,7 @@ const BACKSLASH_RE = /\\/g;
 function withSkillOperationPromptsSuspended(
   ctx: ExtensionCommandContext,
   activity: SkillOperationActivity,
-  label: string
+  label: string,
 ): ExtensionCommandContext {
   const resumeAfterPrompt = (): void => {
     activity.start(label);
@@ -121,7 +121,7 @@ function withSkillOperationPromptsSuspended(
 
 export function skillOperationLabel(
   subcommand: string,
-  enteredSubcommand = subcommand
+  enteredSubcommand = subcommand,
 ): string {
   switch (subcommand) {
     case "search":
@@ -164,7 +164,7 @@ function resolvedSourceForSkill(skill: ManagedSkillEntry): ResolvedSkillSource {
     return {
       identity: sourceIdentityForGithubSkillRoot(
         { identity: skill.source, displayName: source },
-        subpath
+        subpath,
       ),
       displayName: source,
       rawUrl: `https://raw.githubusercontent.com/${owner}/${repo}/${ref}/${subpath ? `${subpath}/` : ""}SKILL.md`,
@@ -200,7 +200,7 @@ const COMMANDS: AutocompleteItem[] = [
 function notifyError(ctx: ExtensionCommandContext, error: unknown): void {
   ctx.ui.notify(
     error instanceof Error ? error.message : String(error),
-    "error"
+    "error",
   );
 }
 
@@ -266,7 +266,7 @@ function formatList(managed: ManagedSkillEntry[]): string {
 async function showSkillsManager(
   ctx: ExtensionCommandContext,
   managed: ManagedSkillEntry[],
-  initialQuery = ""
+  initialQuery = "",
 ): Promise<void> {
   const dirty = detectDirtySkills({ version: 1, skills: managed });
   const dirtyIds = new Set(dirty.map((skill) => skill.id));
@@ -292,7 +292,7 @@ async function showSkillsManager(
     {
       overlay: true,
       overlayOptions: SKILLS_MANAGER_OVERLAY_OPTIONS,
-    }
+    },
   );
   if (!removal) {
     return;
@@ -305,13 +305,13 @@ async function showSkillsManager(
   await showSkillsManager(
     ctx,
     readManagedManifest(createSkillsManagerPaths().manifestPath).skills,
-    removal.query
+    removal.query,
   );
 }
 
 function dirtyWarning(
   skill: ManagedSkillEntry,
-  changedFiles: string[]
+  changedFiles: string[],
 ): string {
   const files = changedFiles.slice(0, 5).join(", ");
   const suffix =
@@ -322,30 +322,30 @@ function dirtyWarning(
 function confirmCleanOverwrite(
   ctx: ExtensionCommandContext,
   skill: ManagedSkillEntry,
-  manifest = readManagedManifest(createSkillsManagerPaths().manifestPath)
+  manifest = readManagedManifest(createSkillsManagerPaths().manifestPath),
 ): Promise<boolean> {
   const dirty = detectDirtySkills(manifest).find(
-    (entry) => entry.id === skill.id
+    (entry) => entry.id === skill.id,
   );
   if (!dirty) {
     return Promise.resolve(true);
   }
   return ctx.ui.confirm(
     "Overwrite dirty skill",
-    dirtyWarning(skill, dirty.changedFiles)
+    dirtyWarning(skill, dirty.changedFiles),
   );
 }
 
 async function selectSkillSourceDir(
   ctx: ExtensionCommandContext,
-  entries: ListedSkillSource[]
+  entries: ListedSkillSource[],
 ): Promise<string | undefined> {
   if (entries.length === 1) {
     return entries[0]?.sourceDir;
   }
   const selected = await ctx.ui.select(
     "Install skill",
-    entries.map((listed) => `${listed.name} — ${listed.sourceDir}`)
+    entries.map((listed) => `${listed.name} — ${listed.sourceDir}`),
   );
   return entries.find((listed) => selected?.endsWith(listed.sourceDir))
     ?.sourceDir;
@@ -354,7 +354,7 @@ async function selectSkillSourceDir(
 function installPickerInventory(
   entries: ListedSkillSource[],
   managed: ManagedSkillEntry[],
-  dirtyIds: ReadonlySet<string>
+  dirtyIds: ReadonlySet<string>,
 ): SkillInventoryModel {
   const managedById = new Map(managed.map((skill) => [skill.id, skill]));
   const items = entries.map((entry) => {
@@ -386,7 +386,7 @@ async function selectSkillSourceDirs(
   entries: ListedSkillSource[],
   source: string,
   sourceRoot: string,
-  manifest = readManagedManifest(createSkillsManagerPaths().manifestPath)
+  manifest = readManagedManifest(createSkillsManagerPaths().manifestPath),
 ): Promise<string[] | undefined> {
   if (!ctx.hasUI || typeof ctx.ui.custom !== "function") {
     if (entries.length === 1) {
@@ -398,7 +398,7 @@ async function selectSkillSourceDirs(
       : source;
     ctx.ui.notify(
       `Multiple skills found. Run /skill install ${suggestion} to install one skill.`,
-      "warning"
+      "warning",
     );
     return;
   }
@@ -408,7 +408,7 @@ async function selectSkillSourceDirs(
         inventory: installPickerInventory(
           entries,
           manifest.skills,
-          new Set(detectDirtySkills(manifest).map((skill) => skill.id))
+          new Set(detectDirtySkills(manifest).map((skill) => skill.id)),
         ),
         theme,
         done,
@@ -422,7 +422,7 @@ async function selectSkillSourceDirs(
         maxHeight: "95%",
         margin: 1,
       },
-    }
+    },
   );
   if (!selectedIds) {
     return;
@@ -440,14 +440,14 @@ async function selectSkillSourceDirs(
 function remoteIdentityForEntry(
   resolved: ResolvedSkillSource,
   sourceRoot: string,
-  entry: ListedSkillSource
+  entry: ListedSkillSource,
 ) {
   if (resolved.identity.type !== "github") {
     return resolved.identity;
   }
   const relativeEntry = relative(sourceRoot, entry.sourceDir).replace(
     BACKSLASH_RE,
-    "/"
+    "/",
   );
   const subpath = [resolved.identity.subpath, relativeEntry]
     .filter(Boolean)
@@ -462,7 +462,7 @@ type GithubSkillMetadata = Pick<
 
 function githubMetadataForIdentity(
   identity: SkillSourceIdentity,
-  snapshot: GithubRepoTreeSnapshot | undefined
+  snapshot: GithubRepoTreeSnapshot | undefined,
 ): GithubSkillMetadata {
   if (
     identity.type !== "github" ||
@@ -488,7 +488,7 @@ function githubMetadataForIdentity(
 
 function applyInstalledMetadata(
   paths: ReturnType<typeof createSkillsManagerPaths>,
-  patches: Map<string, GithubSkillMetadata>
+  patches: Map<string, GithubSkillMetadata>,
 ): ManagedSkillEntry[] {
   const manifest = readManagedManifest(paths.manifestPath);
   const next = {
@@ -509,10 +509,10 @@ function formatInstalledMessage(installed: { name: string }[]): string {
 
 function exactGithubSourceResolutionError(
   requestedSkillName: string | undefined,
-  source: string
+  source: string,
 ): Error {
   return new Error(
-    `Unable to resolve ${requestedSkillName} to one exact GitHub skill source from ${source}.`
+    `Unable to resolve ${requestedSkillName} to one exact GitHub skill source from ${source}.`,
   );
 }
 
@@ -527,7 +527,7 @@ async function installLocalSource(
   confirmDirty = true,
   requestedSkillName?: string,
   resolvedSource?: ResolvedSkillSource,
-  materializedSource?: MaterializedRemoteSource
+  materializedSource?: MaterializedRemoteSource,
 ): Promise<void> {
   const paths = createSkillsManagerPaths();
   const resolved = resolvedSource ?? parseSkillSource(source);
@@ -576,7 +576,7 @@ async function installLocalSource(
       ctx,
       entries,
       source,
-      sourceRoot
+      sourceRoot,
     );
     if (!selectedSourceDirs || selectedSourceDirs.length === 0) {
       return;
@@ -586,13 +586,13 @@ async function installLocalSource(
       for (const sourceDir of selectedSourceDirs) {
         const plan = planInstallSkill(sourceDir, paths, currentManifest);
         const existing = currentManifest.skills.find(
-          (skill) => skill.id === plan.id
+          (skill) => skill.id === plan.id,
         );
         if (existing) {
           const ok = await confirmCleanOverwrite(
             ctx,
             existing,
-            currentManifest
+            currentManifest,
           );
           if (!ok) {
             return;
@@ -610,7 +610,7 @@ async function installLocalSource(
       identities.set(entry.id, identity);
       metadata.set(
         entry.id,
-        githubMetadataForIdentity(identity, githubTreeSnapshot)
+        githubMetadataForIdentity(identity, githubTreeSnapshot),
       );
     }
     const result = withSkillsWriteLock(paths, () => {
@@ -626,16 +626,16 @@ async function installLocalSource(
           }
           return githubSkillOwnedFilePaths(
             githubTreeSnapshot.tree,
-            identity.subpath ?? ""
+            identity.subpath ?? "",
           );
-        }
+        },
       );
       if (installedResult.installed.length > 0) {
         const latest = applyInstalledMetadata(paths, metadata);
         return {
           ...installedResult,
           installed: latest.filter((skill) =>
-            installedResult.installed.some((entry) => entry.id === skill.id)
+            installedResult.installed.some((entry) => entry.id === skill.id),
           ),
         };
       }
@@ -647,7 +647,7 @@ async function installLocalSource(
           result.failed.error instanceof Error
             ? result.failed.error.message
             : String(result.failed.error)
-        }`
+        }`,
       );
     }
     ctx.ui.notify(formatInstalledMessage(result.installed), "info");
@@ -682,7 +682,7 @@ async function installLocalSource(
       : resolved.identity);
   const githubMetadata = githubMetadataForIdentity(
     finalSource,
-    githubTreeSnapshot
+    githubTreeSnapshot,
   );
   const installed = withSkillsWriteLock(paths, () => {
     const entry = copyInstallPlan(plan, paths);
@@ -693,7 +693,7 @@ async function installLocalSource(
         skills: manifest.skills.map((skill) =>
           skill.id === entry.id
             ? { ...entry, source: finalSource, ...githubMetadata }
-            : skill
+            : skill,
         ),
       };
       writeManagedManifest(paths.manifestPath, next);
@@ -732,14 +732,14 @@ function formatUpdateFailures(failures: PendingSkillUpdateFailure[]): string {
   const suffix = failures.length === 1 ? "" : "s";
   return `Unable to check ${failures.length} skill update source${suffix}: ${failures
     .map(
-      ({ skill, source, message }) => `${skill.name} (${source}): ${message}`
+      ({ skill, source, message }) => `${skill.name} (${source}): ${message}`,
     )
     .join("; ")}`;
 }
 
 function applySourceHeals(
   paths: ReturnType<typeof createSkillsManagerPaths>,
-  sourceHeals: PendingSkillSourceHeal[]
+  sourceHeals: PendingSkillSourceHeal[],
 ): void {
   withSkillsWriteLock(paths, () => {
     const latestManifest = readManagedManifest(paths.manifestPath);
@@ -772,7 +772,7 @@ function githubUpdateGroupKey(skill: ManagedSkillEntry): string | null {
 
 function exactGithubResolvedSource(
   skill: ManagedSkillEntry,
-  skillPath: string
+  skillPath: string,
 ): ResolvedSkillSource {
   const { owner, repo, ref = "HEAD" } = skill.source;
   if (!(owner && repo)) {
@@ -783,7 +783,7 @@ function exactGithubResolvedSource(
       identity: skill.source,
       displayName: sourceText(skill),
     },
-    skillPath
+    skillPath,
   );
   return {
     identity,
@@ -795,7 +795,7 @@ function exactGithubResolvedSource(
 async function materializeGithubUpdateSource(
   paths: ReturnType<typeof createSkillsManagerPaths>,
   skill: ManagedSkillEntry,
-  resolvedSource: ResolvedSkillSource
+  resolvedSource: ResolvedSkillSource,
 ): Promise<MaterializedRemoteSource | undefined> {
   if (resolvedSource.identity.type !== "github") {
     return;
@@ -812,7 +812,7 @@ async function materializeGithubUpdateSource(
       onGithubTreeResolved: (snapshot) => {
         githubTreeSnapshot = snapshot;
       },
-    }
+    },
   );
   return { sourceRoot, githubTreeSnapshot };
 }
@@ -822,7 +822,7 @@ async function checkLegacyGithubUpdate(
   skill: ManagedSkillEntry,
   resolvedSource: ResolvedSkillSource,
   githubSkillNameCache: Map<string, string | null>,
-  githubTreeCacheSession: GithubRepoTreeCacheSession
+  githubTreeCacheSession: GithubRepoTreeCacheSession,
 ): Promise<{ found: boolean; updateAvailable: boolean }> {
   const sourceRoot = await materializeResolvedSkillSource(
     resolvedSource,
@@ -834,10 +834,10 @@ async function checkLegacyGithubUpdate(
       skipSkillsShSnapshots: true,
       githubSkillNameCache,
       githubTreeCacheSession,
-    }
+    },
   );
   const latest = listSkillsInSource(sourceRoot).find(
-    (listed) => listed.id === skill.id
+    (listed) => listed.id === skill.id,
   );
   return {
     found: !!latest,
@@ -854,7 +854,7 @@ async function checkGithubUpdateGroup(
   failures: PendingSkillUpdateFailure[],
   githubSkillNameCache: Map<string, string | null>,
   githubTreeCacheSession: GithubRepoTreeCacheSession,
-  suppressFailures: boolean
+  suppressFailures: boolean,
 ): Promise<void> {
   const first = skills[0];
   if (!(first?.source.owner && first.source.repo)) {
@@ -870,7 +870,7 @@ async function checkGithubUpdateGroup(
       repo,
       ref,
       fetch,
-      githubTreeCacheSession
+      githubTreeCacheSession,
     );
     tree = snapshot.tree;
     staleTree = snapshot.stale;
@@ -884,7 +884,7 @@ async function checkGithubUpdateGroup(
           skill,
           resolvedSource,
           githubSkillNameCache,
-          githubTreeCacheSession
+          githubTreeCacheSession,
         );
         if (legacyStatus.updateAvailable) {
           updates.push({ skill, source, resolvedSource });
@@ -919,19 +919,19 @@ async function checkGithubUpdateGroup(
           tree,
           skill.id,
           roots,
-          githubSkillNameCache
+          githubSkillNameCache,
         ));
       if (resolvedPath === null) {
         if (broadGithubSource && roots.length === 0) {
           throw new Error(
-            `Deleted GitHub skill source: ${source} contains no skills.`
+            `Deleted GitHub skill source: ${source} contains no skills.`,
           );
         }
         if (broadGithubSource && roots.length === 1) {
           continue;
         }
         throw new Error(
-          `Unable to resolve ${skill.id} to one exact GitHub skill source.`
+          `Unable to resolve ${skill.id} to one exact GitHub skill source.`,
         );
       }
       if (!roots.includes(resolvedPath)) {
@@ -941,7 +941,7 @@ async function checkGithubUpdateGroup(
       const resolvedSource = exactGithubResolvedSource(skill, resolvedPath);
       const exactSource = sourceIdentityForGithubSkillRoot(
         resolvedSource,
-        resolvedPath
+        resolvedPath,
       );
       const metadata: GithubSkillMetadata = {
         remoteSlug: `${owner}/${repo}`,
@@ -962,7 +962,7 @@ async function checkGithubUpdateGroup(
             skill,
             resolvedSource,
             githubSkillNameCache,
-            githubTreeCacheSession
+            githubTreeCacheSession,
           );
       if (broadGithubSource && !legacyStatus.found) {
         continue;
@@ -991,7 +991,7 @@ async function checkGithubUpdateGroup(
 
 async function findRemoteUpdates(
   manifest = readManagedManifest(createSkillsManagerPaths().manifestPath),
-  options: { suppressFailures?: boolean } = {}
+  options: { suppressFailures?: boolean } = {},
 ): Promise<RemoteUpdateCheckResult> {
   const paths = createSkillsManagerPaths();
   const updates: PendingSkillUpdate[] = [];
@@ -1000,7 +1000,7 @@ async function findRemoteUpdates(
   const githubSkillNameCache = new Map<string, string | null>();
   const githubTreeCacheSession = createGithubRepoTreeCacheSession(paths);
   const candidates = manifest.skills.filter(
-    (skill) => skill.source.type !== "directory"
+    (skill) => skill.source.type !== "directory",
   );
   const githubGroups = new Map<string, ManagedSkillEntry[]>();
   const otherCandidates: ManagedSkillEntry[] = [];
@@ -1024,7 +1024,7 @@ async function findRemoteUpdates(
       failures,
       githubSkillNameCache,
       githubTreeCacheSession,
-      !!options.suppressFailures
+      !!options.suppressFailures,
     );
   }
   for (const skill of otherCandidates) {
@@ -1034,10 +1034,10 @@ async function findRemoteUpdates(
       const sourceRoot = await materializeResolvedSkillSource(
         resolvedSource,
         paths,
-        fetch
+        fetch,
       );
       const latest = listSkillsInSource(sourceRoot).find(
-        (listed) => listed.id === skill.id
+        (listed) => listed.id === skill.id,
       );
       if (latest && latest.hash !== computeSkillFilesHash(skill.files)) {
         updates.push({ skill, source, resolvedSource });
@@ -1058,7 +1058,7 @@ async function findRemoteUpdates(
 
 async function updateManaged(
   ctx: ExtensionCommandContext,
-  idArgs = ""
+  idArgs = "",
 ): Promise<void> {
   const paths = createSkillsManagerPaths();
   const manifest = readManagedManifest(paths.manifestPath);
@@ -1080,7 +1080,7 @@ async function updateManaged(
     applySourceHeals(paths, matchingSourceHeals);
     ctx.ui.notify(
       `Updated exact source metadata for ${matchingSourceHeals.length} skill(s).`,
-      "info"
+      "info",
     );
   }
   if (updates.length === 0) {
@@ -1117,7 +1117,7 @@ async function updateManaged(
       const materializedSource = await materializeGithubUpdateSource(
         paths,
         skill,
-        resolvedSource
+        resolvedSource,
       );
       await installLocalSource(
         ctx,
@@ -1125,7 +1125,7 @@ async function updateManaged(
         false,
         skill.id,
         resolvedSource,
-        materializedSource
+        materializedSource,
       );
       updatedCount += 1;
     }
@@ -1146,7 +1146,7 @@ function trashPath(targetPath: string): void {
 
 async function removeManaged(
   ctx: ExtensionCommandContext,
-  idArg: string
+  idArg: string,
 ): Promise<void> {
   const paths = createSkillsManagerPaths();
   const manifest = readManagedManifest(paths.manifestPath);
@@ -1155,7 +1155,7 @@ async function removeManaged(
     (await ctx.ui
       .select(
         "Remove skill",
-        manifest.skills.map((entry) => `${entry.name} (${entry.id})`)
+        manifest.skills.map((entry) => `${entry.name} (${entry.id})`),
       )
       .then((selected) => selected?.match(SELECTED_ID_RE)?.[1] ?? ""));
   if (!id) {
@@ -1167,7 +1167,7 @@ async function removeManaged(
     dirty ? "Remove dirty skill" : "Remove skill",
     dirty && skill
       ? `Remove managed skill ${id}? ${dirtyWarning(skill, dirty.changedFiles)}`
-      : `Remove managed skill ${id}?`
+      : `Remove managed skill ${id}?`,
   );
   if (!ok) {
     return;
@@ -1182,7 +1182,7 @@ async function removeManaged(
 
 async function searchSkills(
   ctx: ExtensionCommandContext,
-  queryArg: string
+  queryArg: string,
 ): Promise<void> {
   const paths = createSkillsManagerPaths();
   const query =
@@ -1194,7 +1194,7 @@ async function searchSkills(
   if (isDirectSourceQuery(query)) {
     const install = await ctx.ui.confirm(
       "Install source",
-      `Install from ${query}?`
+      `Install from ${query}?`,
     );
     if (install) {
       await installLocalSource(ctx, query);
@@ -1214,7 +1214,7 @@ async function searchSkills(
   }
   const selected = await ctx.ui.select(
     `Install skill (${results.length} found)`,
-    ["Cancel", ...results.map(remoteSkillLabel)]
+    ["Cancel", ...results.map(remoteSkillLabel)],
   );
   if (!selected || selected === "Cancel") {
     return;
@@ -1226,7 +1226,7 @@ async function searchSkills(
       ctx,
       source,
       true,
-      skill?.skillName ?? skill?.name
+      skill?.skillName ?? skill?.name,
     );
   }
 }
@@ -1244,7 +1244,7 @@ function refreshStatus(ctx: ExtensionCommandContext, updateCount = 0): void {
 }
 
 async function checkRemoteUpdatesInBackground(
-  ctx: ExtensionCommandContext
+  ctx: ExtensionCommandContext,
 ): Promise<void> {
   try {
     const { updates } = await findRemoteUpdates(undefined, {
@@ -1254,7 +1254,7 @@ async function checkRemoteUpdatesInBackground(
     if (updates.length > 0) {
       ctx.ui.notify(
         `${updates.length} managed skill update${updates.length === 1 ? "" : "s"} available. Run /skill update.`,
-        "info"
+        "info",
       );
     }
   } catch {
@@ -1267,7 +1267,7 @@ export default function skillsExtension(pi: ExtensionAPI): void {
     skillPaths: [
       ...discoverBundledSkillPaths(BUNDLED_SKILLS_DIR),
       ...readManagedManifest(
-        createSkillsManagerPaths().manifestPath
+        createSkillsManagerPaths().manifestPath,
       ).skills.flatMap((skill) => discoverBundledSkillPaths(skill.installPath)),
     ],
   }));
@@ -1281,7 +1281,7 @@ export default function skillsExtension(pi: ExtensionAPI): void {
         checkRemoteUpdatesInBackground(ctx as ExtensionCommandContext).catch(
           () => {
             ctx.ui.setStatus(STATUS_KEY, undefined);
-          }
+          },
         );
       } catch {
         ctx.ui.setStatus(STATUS_KEY, undefined);
@@ -1304,7 +1304,7 @@ export default function skillsExtension(pi: ExtensionAPI): void {
       const activityCtx = withSkillOperationPromptsSuspended(
         ctx,
         activity,
-        label
+        label,
       );
       activity.start(label);
       try {
@@ -1314,7 +1314,7 @@ export default function skillsExtension(pi: ExtensionAPI): void {
               activityCtx,
               readManagedManifest(createSkillsManagerPaths().manifestPath)
                 .skills,
-              operand
+              operand,
             );
             break;
           case "search":
@@ -1326,9 +1326,9 @@ export default function skillsExtension(pi: ExtensionAPI): void {
               operand ||
                 (await activityCtx.ui.input(
                   "Install skill",
-                  "local skill directory"
+                  "local skill directory",
                 )) ||
-                ""
+                "",
             );
             break;
           case "update":
@@ -1341,7 +1341,7 @@ export default function skillsExtension(pi: ExtensionAPI): void {
             activity.suspendBeforePrompt();
             ctx.ui.notify(
               "Usage: /skill list|search|install|update|remove",
-              "warning"
+              "warning",
             );
         }
         activity.finishSuccess();

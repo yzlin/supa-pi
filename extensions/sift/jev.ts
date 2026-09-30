@@ -3,7 +3,7 @@ export const JEV_MODEL = "jev-latest";
 
 type FetchFunction = (
   input: string | URL | Request,
-  init?: RequestInit
+  init?: RequestInit,
 ) => Promise<Response>;
 
 export interface JevJudgment {
@@ -54,7 +54,7 @@ export class JevClient {
     query: string,
     path: string,
     content: string,
-    signal?: AbortSignal
+    signal?: AbortSignal,
   ): Promise<JevJudgment> {
     const controller = new AbortController();
     let timedOut = false;
@@ -104,7 +104,7 @@ export class JevClient {
         if (response.status === 401 || response.status === 403) {
           throw new JevError(
             "authentication",
-            "TypeSafe authentication failed"
+            "TypeSafe authentication failed",
           );
         }
         throw new JevError("http", `Jev request failed (${response.status})`);
@@ -194,7 +194,7 @@ function validOptionalTokenCount(value: unknown): value is number | undefined {
 
 function recordWithKeys(
   value: unknown,
-  allowed: string[]
+  allowed: string[],
 ): value is Record<string, unknown> {
   return (
     typeof value === "object" &&

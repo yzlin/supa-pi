@@ -21,7 +21,7 @@ describe("skill-backed command contracts", () => {
     expect(skill).toContain('subagent_type: "executor"');
     expect(skill).toContain("The main session is forbidden from editing code");
     expect(skill).toContain(
-      "Return the existing executor JSON schema unchanged"
+      "Return the existing executor JSON schema unchanged",
     );
   });
 
@@ -31,7 +31,7 @@ describe("skill-backed command contracts", () => {
     expect(skill).toContain("Delegate to `code-simplifier`");
     expect(skill).toContain("Do not set `max_turns`");
     expect(skill).toContain(
-      "Do not edit ignored lockfiles or unsupported changed files"
+      "Do not edit ignored lockfiles or unsupported changed files",
     );
   });
 });

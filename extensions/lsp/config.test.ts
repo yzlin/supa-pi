@@ -16,7 +16,7 @@ import {
 } from "./config";
 
 function withTempHome<T>(
-  run: (paths: { homeDir: string; cwd: string }) => Promise<T> | T
+  run: (paths: { homeDir: string; cwd: string }) => Promise<T> | T,
 ) {
   const previousHome = process.env.HOME;
   const rootDir = mkdtempSync(join(tmpdir(), "pi-lsp-config-test-"));
@@ -106,7 +106,7 @@ describe("lsp config", () => {
             },
           },
         }),
-        "utf8"
+        "utf8",
       );
 
       const config = await loadConfig(cwd);
@@ -143,7 +143,7 @@ describe("lsp config", () => {
       () => {
         probes++;
         return "npx";
-      }
+      },
     );
     const second = resolveConfiguredServer(
       server,
@@ -152,7 +152,7 @@ describe("lsp config", () => {
       () => {
         probes++;
         return "global";
-      }
+      },
     );
 
     expect(probes).toBe(1);

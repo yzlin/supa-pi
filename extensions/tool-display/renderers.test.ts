@@ -66,7 +66,7 @@ const tempDirs: string[] = [];
 function tempDir(): string {
   const dir = join(
     import.meta.dir,
-    `.tmp-renderers-${Date.now()}-${Math.random()}`
+    `.tmp-renderers-${Date.now()}-${Math.random()}`,
   );
   mkdirSync(dir, { recursive: true });
   tempDirs.push(dir);
@@ -81,7 +81,7 @@ afterEach(() => {
 
 function renderPatchCallText(
   patch: string | string[],
-  lineEnding = "\n"
+  lineEnding = "\n",
 ): string {
   const patchText = Array.isArray(patch) ? patch.join(lineEnding) : patch;
   return renderEditCall({ patch: patchText }, theme).text;
@@ -90,7 +90,7 @@ function renderPatchCallText(
 function expectPatchCallText(
   patch: string | string[],
   text: string,
-  lineEnding = "\n"
+  lineEnding = "\n",
 ): void {
   expect(renderPatchCallText(patch, lineEnding)).toBe(text);
 }
@@ -98,14 +98,14 @@ function expectPatchCallText(
 describe("tool-display renderers", () => {
   test("renders compact bash call and result", () => {
     expect(
-      renderCompactBashCall({ command: "echo hello", timeout: 2 }, theme).text
+      renderCompactBashCall({ command: "echo hello", timeout: 2 }, theme).text,
     ).toContain("$ echo hello (2s)");
     expect(
       renderCompactBashResult(
         { content: [{ type: "text", text: "hello\nexit code: 0" }] },
         {},
-        theme
-      ).text
+        theme,
+      ).text,
     ).toContain("done (2 lines)");
   });
 
@@ -127,7 +127,7 @@ describe("tool-display renderers", () => {
         mode: "compact",
         previewLines: 20,
         rtkHints: true,
-      }).text
+      }).text,
     ).toContain("[compacted by RTK: saved 90 chars, original 120, final 30]");
     expect(
       renderCompactBashResult(result, {}, theme, {
@@ -135,7 +135,7 @@ describe("tool-display renderers", () => {
         mode: "compact",
         previewLines: 20,
         rtkHints: false,
-      }).text
+      }).text,
     ).not.toContain("compacted by RTK");
   });
 
@@ -144,15 +144,15 @@ describe("tool-display renderers", () => {
       renderCompactReadResult(
         { content: [{ type: "text", text: "one\ntwo" }] },
         { isPartial: true },
-        theme
-      ).text
+        theme,
+      ).text,
     ).toBe("reading…");
     expect(
       renderCompactReadResult(
         { content: [{ type: "text", text: "one\ntwo" }] },
         { expanded: true },
-        theme
-      ).text
+        theme,
+      ).text,
     ).toContain("\none\ntwo");
   });
 
@@ -164,8 +164,8 @@ describe("tool-display renderers", () => {
           details: { matchLimitReached: 2 },
         },
         {},
-        theme
-      ).text
+        theme,
+      ).text,
     ).toContain("2 lines [limit 2]");
   });
 
@@ -179,12 +179,12 @@ describe("tool-display renderers", () => {
     expect(details.toolDisplay?.writeDiff).toContain("-old");
     expect(details.toolDisplay?.writeDiff).toContain("+new");
     expect(
-      renderFinalDiffResult({ content: [], details }, {}, theme).text
+      renderFinalDiffResult({ content: [], details }, {}, theme).text,
     ).toBe("+1 / -1 (rewrote file) line 1");
     expect(
       renderFinalDiffResult({ content: [], details }, { expanded: true }, theme)
         .render(80)
-        .join("\n")
+        .join("\n"),
     ).toContain("▌new");
   });
 
@@ -199,7 +199,7 @@ describe("tool-display renderers", () => {
         },
       },
       {},
-      theme
+      theme,
     ).text;
 
     expect(rendered).toContain("diff omitted");
@@ -221,8 +221,8 @@ describe("tool-display renderers", () => {
           { content: [], details },
           { expanded: true },
           theme,
-          { collapsed: true, enabled: true, previewLines: 3 }
-        ).text
+          { collapsed: true, enabled: true, previewLines: 3 },
+        ).text,
       ).toContain("… 4 diff lines collapsed");
 
       process.stdout.columns = 120;
@@ -231,8 +231,8 @@ describe("tool-display renderers", () => {
           { content: [], details },
           { expanded: true },
           theme,
-          { collapsed: true, enabled: true, previewLines: 20 }
-        ).text
+          { collapsed: true, enabled: true, previewLines: 20 },
+        ).text,
       ).toContain(" │ ");
     } finally {
       process.stdout.columns = originalColumns;
@@ -259,7 +259,12 @@ describe("tool-display renderers", () => {
       { content: [], details },
       { expanded: true },
       theme,
-      { collapsed: false, enabled: true, previewLines: 20, viewMode: "unified" }
+      {
+        collapsed: false,
+        enabled: true,
+        previewLines: 20,
+        viewMode: "unified",
+      },
     ).text;
 
     expect(rendered).toContain("--- a.txt");
@@ -285,7 +290,7 @@ describe("tool-display renderers", () => {
         previewLines: 20,
         splitMinWidth: 100,
         viewMode: "auto",
-      }
+      },
     );
 
     expect(component.render(120).join("\n")).toContain(" │ ");
@@ -309,7 +314,7 @@ describe("tool-display renderers", () => {
         previewLines: 20,
         splitMinWidth: 100,
         viewMode: "split",
-      }
+      },
     )
       .render(80)
       .join("\n");
@@ -340,7 +345,7 @@ describe("tool-display renderers", () => {
         { content: [], details },
         { expanded: true },
         theme,
-        { collapsed: false, enabled: true, previewLines: 20 }
+        { collapsed: false, enabled: true, previewLines: 20 },
       );
 
       expect(component.text).toContain(" │ ");
@@ -362,7 +367,7 @@ describe("tool-display renderers", () => {
       { content: [], details },
       { expanded: true },
       theme,
-      { collapsed: false, enabled: true, previewLines: 20 }
+      { collapsed: false, enabled: true, previewLines: 20 },
     )
       .render(120)
       .filter((line) => line.includes(" │ "));
@@ -381,13 +386,13 @@ describe("tool-display renderers", () => {
       { content: [], details },
       { expanded: true },
       theme,
-      { collapsed: false, enabled: true, previewLines: 20, viewMode: "split" }
+      { collapsed: false, enabled: true, previewLines: 20, viewMode: "split" },
     ).render(140);
 
     expect(rendered).toContainEqual(expect.stringContaining("▌1 │ old1"));
     expect(rendered).toContainEqual(expect.stringContaining("▌1 │ new1"));
     expect(rendered).toContainEqual(
-      expect.stringMatching(splitAddLeftoverPattern)
+      expect.stringMatching(splitAddLeftoverPattern),
     );
   });
 
@@ -399,7 +404,7 @@ describe("tool-display renderers", () => {
       },
       { expanded: true },
       theme,
-      { collapsed: false, enabled: true, previewLines: 20, viewMode: "split" }
+      { collapsed: false, enabled: true, previewLines: 20, viewMode: "split" },
     ).render(140);
     const addOnly = renderFinalDiffResult(
       {
@@ -408,11 +413,11 @@ describe("tool-display renderers", () => {
       },
       { expanded: true },
       theme,
-      { collapsed: false, enabled: true, previewLines: 20, viewMode: "split" }
+      { collapsed: false, enabled: true, previewLines: 20, viewMode: "split" },
     ).render(140);
 
     expect(removeOnly).toContainEqual(
-      expect.stringMatching(splitRemoveOnlyPattern)
+      expect.stringMatching(splitRemoveOnlyPattern),
     );
     expect(addOnly).toContainEqual(expect.stringMatching(splitAddOnlyPattern));
   });
@@ -425,7 +430,7 @@ describe("tool-display renderers", () => {
       },
       { expanded: true },
       dimContextTheme,
-      { collapsed: false, enabled: true, previewLines: 20, viewMode: "split" }
+      { collapsed: false, enabled: true, previewLines: 20, viewMode: "split" },
     )
       .render(140)
       .join("\n");
@@ -445,7 +450,7 @@ describe("tool-display renderers", () => {
       },
       { expanded: true },
       theme,
-      { collapsed: false, enabled: true, previewLines: 20, viewMode: "split" }
+      { collapsed: false, enabled: true, previewLines: 20, viewMode: "split" },
     ).render(140);
 
     expect(rendered[1]?.trim()).toBe("file.txt");
@@ -464,7 +469,7 @@ describe("tool-display renderers", () => {
       },
       { expanded: true },
       theme,
-      { collapsed: false, enabled: true, previewLines: 20, viewMode: "split" }
+      { collapsed: false, enabled: true, previewLines: 20, viewMode: "split" },
     ).render(140);
 
     expect(rendered[1]?.trim()).toBe("old.txt → new.txt");
@@ -481,7 +486,7 @@ describe("tool-display renderers", () => {
       },
       { expanded: true },
       theme,
-      { collapsed: false, enabled: true, previewLines: 20, viewMode: "split" }
+      { collapsed: false, enabled: true, previewLines: 20, viewMode: "split" },
     )
       .render(140)
       .join("\n");
@@ -501,7 +506,7 @@ describe("tool-display renderers", () => {
       },
       { expanded: true },
       theme,
-      { collapsed: false, enabled: true, previewLines: 20, viewMode: "split" }
+      { collapsed: false, enabled: true, previewLines: 20, viewMode: "split" },
     )
       .render(140)
       .join("\n");
@@ -524,7 +529,12 @@ describe("tool-display renderers", () => {
       },
       { expanded: true },
       theme,
-      { collapsed: false, enabled: true, previewLines: 20, viewMode: "unified" }
+      {
+        collapsed: false,
+        enabled: true,
+        previewLines: 20,
+        viewMode: "unified",
+      },
     )
       .render(80)
       .join("\n");
@@ -546,7 +556,7 @@ describe("tool-display renderers", () => {
       },
       { expanded: true },
       theme,
-      { collapsed: false, enabled: true, previewLines: 20, viewMode: "split" }
+      { collapsed: false, enabled: true, previewLines: 20, viewMode: "split" },
     )
       .render(140)
       .join("\n");
@@ -562,20 +572,20 @@ describe("tool-display renderers", () => {
     const details = createWriteDiffDetails(
       "file.txt",
       `${"new ".repeat(30)}\n`,
-      { ok: true, content: `${"old ".repeat(30)}\n` }
+      { ok: true, content: `${"old ".repeat(30)}\n` },
     );
     const rendered = renderFinalDiffResult(
       { content: [], details },
       { expanded: true },
       theme,
-      { collapsed: false, enabled: true, previewLines: 20 }
+      { collapsed: false, enabled: true, previewLines: 20 },
     ).render(120);
 
     expect(rendered.filter((line) => line.includes("▌1 │ old"))).toHaveLength(
-      1
+      1,
     );
     expect(rendered.filter((line) => line.includes("▌1 │ new"))).toHaveLength(
-      1
+      1,
     );
     expect(rendered.some((line) => line.includes("   │ old"))).toBe(true);
     expect(rendered.some((line) => line.includes("   │ new"))).toBe(true);
@@ -597,7 +607,7 @@ describe("tool-display renderers", () => {
         previewLines: 20,
         viewMode: "unified",
         wordWrap: false,
-      }
+      },
     )
       .render(80)
       .join("\n");
@@ -612,7 +622,7 @@ describe("tool-display renderers", () => {
         previewLines: 20,
         viewMode: "unified",
         wordWrap: false,
-      }
+      },
     )
       .render(80)
       .join("\n");
@@ -627,7 +637,7 @@ describe("tool-display renderers", () => {
         previewLines: 20,
         viewMode: "unified",
         wordWrap: false,
-      }
+      },
     )
       .render(80)
       .join("\n");
@@ -662,7 +672,7 @@ describe("tool-display renderers", () => {
         previewLines: 20,
         viewMode: "split",
         wordWrap: false,
-      }
+      },
     )
       .render(140)
       .join("\n");
@@ -677,7 +687,7 @@ describe("tool-display renderers", () => {
         previewLines: 20,
         viewMode: "split",
         wordWrap: false,
-      }
+      },
     )
       .render(140)
       .join("\n");
@@ -692,7 +702,7 @@ describe("tool-display renderers", () => {
         previewLines: 20,
         viewMode: "split",
         wordWrap: false,
-      }
+      },
     )
       .render(140)
       .join("\n");
@@ -726,7 +736,7 @@ describe("tool-display renderers", () => {
         previewLines: 20,
         viewMode: "unified",
         wordWrap: false,
-      }
+      },
     )
       .render(80)
       .join("\n");
@@ -740,7 +750,7 @@ describe("tool-display renderers", () => {
         previewLines: 20,
         viewMode: "split",
         wordWrap: false,
-      }
+      },
     )
       .render(140)
       .join("\n");
@@ -755,7 +765,7 @@ describe("tool-display renderers", () => {
     const details = createWriteDiffDetails(
       "file.txt",
       `${"new ".repeat(30)}\n`,
-      { ok: true, content: `${"old ".repeat(30)}\n` }
+      { ok: true, content: `${"old ".repeat(30)}\n` },
     );
 
     const rendered = renderFinalDiffResult(
@@ -768,11 +778,11 @@ describe("tool-display renderers", () => {
         previewLines: 20,
         viewMode: "split",
         wordWrap: true,
-      }
+      },
     ).render(120);
 
     expect(rendered.filter((line) => line.includes("▌1 │ old"))).toHaveLength(
-      1
+      1,
     );
     expect(rendered.some((line) => line.includes("   │ old"))).toBe(true);
   });
@@ -781,7 +791,7 @@ describe("tool-display renderers", () => {
     const details = createWriteDiffDetails(
       "file.txt",
       `${"new ".repeat(30)}\n`,
-      { ok: true, content: `${"old ".repeat(30)}\n` }
+      { ok: true, content: `${"old ".repeat(30)}\n` },
     );
 
     const rendered = renderFinalDiffResult(
@@ -794,11 +804,11 @@ describe("tool-display renderers", () => {
         previewLines: 20,
         viewMode: "split",
         wordWrap: false,
-      }
+      },
     ).render(120);
 
     expect(rendered.filter((line) => line.includes("▌1 │ old"))).toHaveLength(
-      1
+      1,
     );
     expect(rendered.some((line) => line.includes("   │ old"))).toBe(false);
   });
@@ -817,7 +827,7 @@ describe("tool-display renderers", () => {
       content: "old",
     });
     await expect(
-      capturePreviousWriteContent(cwd, "../outside.txt")
+      capturePreviousWriteContent(cwd, "../outside.txt"),
     ).resolves.toEqual({
       ok: false,
       summary: "previous content unavailable: outside workspace",
@@ -825,7 +835,7 @@ describe("tool-display renderers", () => {
     const large = await capturePreviousWriteContent(cwd, "large.txt");
     expect(large.ok).toBe(false);
     expect(large.ok ? "" : large.summary).toContain(
-      "previous content too large"
+      "previous content too large",
     );
     expect(large.ok ? "" : large.summary.length).toBeLessThan(260);
   });
@@ -837,10 +847,10 @@ describe("tool-display renderers", () => {
     });
 
     expect(details.toolDisplay?.writeSummary).toBe(
-      "previous content unavailable: nope"
+      "previous content unavailable: nope",
     );
     expect(
-      renderFinalDiffResult({ content: [], details }, {}, theme).text
+      renderFinalDiffResult({ content: [], details }, {}, theme).text,
     ).toBe("previous content unavailable: nope");
   });
 
@@ -859,11 +869,11 @@ describe("tool-display renderers", () => {
   test("omits detailed overwrite diff when LCS guard trips", () => {
     const oldContent = Array.from(
       { length: 1001 },
-      (_, index) => `old ${index}`
+      (_, index) => `old ${index}`,
     ).join("\n");
     const nextContent = Array.from(
       { length: 1000 },
-      (_, index) => `new ${index}`
+      (_, index) => `new ${index}`,
     ).join("\n");
     const details = createWriteDiffDetails("file.txt", nextContent, {
       ok: true,
@@ -872,7 +882,7 @@ describe("tool-display renderers", () => {
 
     expect(details.toolDisplay?.writeDiff).toBeUndefined();
     expect(details.toolDisplay?.writeSummary).toBe(
-      "rewrote file; detailed diff omitted (1001 old lines, 1000 new lines)"
+      "rewrote file; detailed diff omitted (1001 old lines, 1000 new lines)",
     );
   });
 
@@ -886,7 +896,12 @@ describe("tool-display renderers", () => {
       { content: [], details },
       { expanded: true },
       tokenTheme,
-      { collapsed: false, enabled: true, previewLines: 20, viewMode: "unified" }
+      {
+        collapsed: false,
+        enabled: true,
+        previewLines: 20,
+        viewMode: "unified",
+      },
     ).text;
 
     expect(rendered).toContain("old");
@@ -905,7 +920,12 @@ describe("tool-display renderers", () => {
       { content: [], details },
       { expanded: true },
       ansiDiffTheme,
-      { collapsed: false, enabled: true, previewLines: 20, viewMode: "unified" }
+      {
+        collapsed: false,
+        enabled: true,
+        previewLines: 20,
+        viewMode: "unified",
+      },
     )
       .render(80)
       .join("\n");
@@ -938,7 +958,12 @@ describe("tool-display renderers", () => {
       },
       { expanded: true },
       theme,
-      { collapsed: false, enabled: true, previewLines: 20, viewMode: "unified" }
+      {
+        collapsed: false,
+        enabled: true,
+        previewLines: 20,
+        viewMode: "unified",
+      },
     )
       .render(120)
       .join("\n");
@@ -946,7 +971,7 @@ describe("tool-display renderers", () => {
     expect(rendered).toContain("▌-- old content marker");
     expect(rendered).toContain("▌++ new content marker");
     expect(rendered).not.toContain(
-      "--- old content marker\n+++ new content marker"
+      "--- old content marker\n+++ new content marker",
     );
   });
 
@@ -962,7 +987,12 @@ describe("tool-display renderers", () => {
       { content: [], details },
       { expanded: true },
       tokenTheme,
-      { collapsed: false, enabled: true, previewLines: 20, viewMode: "unified" }
+      {
+        collapsed: false,
+        enabled: true,
+        previewLines: 20,
+        viewMode: "unified",
+      },
     )
       .render(2000)
       .join("\n");
@@ -984,7 +1014,12 @@ describe("tool-display renderers", () => {
       { content: [], details },
       { expanded: true },
       tokenTheme,
-      { collapsed: false, enabled: true, previewLines: 20, viewMode: "unified" }
+      {
+        collapsed: false,
+        enabled: true,
+        previewLines: 20,
+        viewMode: "unified",
+      },
     )
       .render(2000)
       .join("\n");
@@ -1009,7 +1044,7 @@ describe("tool-display renderers", () => {
         previewLines: 3,
         viewMode: "split",
         wordWrap: false,
-      }
+      },
     )
       .render(140)
       .join("\n");
@@ -1026,7 +1061,7 @@ describe("tool-display renderers", () => {
       { content: [], details: { diff } },
       { expanded: true },
       theme,
-      { collapsed: false, enabled: true, previewLines: 20, viewMode: "split" }
+      { collapsed: false, enabled: true, previewLines: 20, viewMode: "split" },
     ).render(140);
     const writeRendered = renderFinalDiffResult(
       {
@@ -1037,15 +1072,15 @@ describe("tool-display renderers", () => {
       },
       { expanded: true },
       theme,
-      { collapsed: false, enabled: true, previewLines: 20, viewMode: "split" }
+      { collapsed: false, enabled: true, previewLines: 20, viewMode: "split" },
     ).render(140);
 
     expect(renderEditCall({ path: "a.txt" }, theme).text).toBe("edit a.txt");
     expect(
       renderEditCall(
         { multi: [{ path: "a.txt" }, { path: "b.txt" }, { path: "c.txt" }] },
-        theme
-      ).text
+        theme,
+      ).text,
     ).toBe("multi 3 a.txt, b.txt, c.txt");
     expect(
       renderEditCall(
@@ -1055,14 +1090,14 @@ describe("tool-display renderers", () => {
           newText: "new",
           multi: [{ path: "b.txt" }],
         },
-        theme
-      ).text
+        theme,
+      ).text,
     ).toBe("multi 2 top.txt, b.txt");
     expect(
       renderEditCall(
         { edits: [{ path: "a.txt" }, { path: "b.txt" }, { path: "c.txt" }] },
-        theme
-      ).text
+        theme,
+      ).text,
     ).toBe("multi 3 a.txt, b.txt, c.txt");
     expect(
       renderEditCall(
@@ -1077,8 +1112,8 @@ describe("tool-display renderers", () => {
             { path: "g.txt" },
           ],
         },
-        theme
-      ).text
+        theme,
+      ).text,
     ).toBe("multi 7 a.txt, b.txt, c.txt, d.txt, e.txt +2 more");
     const hugeMulti = Array.from({ length: 100 }, (_, index) => ({
       path: `${index}.txt`,
@@ -1089,7 +1124,7 @@ describe("tool-display renderers", () => {
       },
     });
     expect(renderEditCall({ multi: hugeMulti }, theme).text).toBe(
-      "multi 100 0.txt, 1.txt, 2.txt, 3.txt, 4.txt +95 more"
+      "multi 100 0.txt, 1.txt, 2.txt, 3.txt, 4.txt +95 more",
     );
     const duplicateMulti = Array.from({ length: 100 }, () => ({
       path: "same.txt",
@@ -1100,7 +1135,7 @@ describe("tool-display renderers", () => {
       },
     });
     expect(renderEditCall({ multi: duplicateMulti }, theme).text).toBe(
-      "multi 100 same.txt +95 more"
+      "multi 100 same.txt +95 more",
     );
     const missingPathMulti = Array.from({ length: 100 }, () => ({}));
     Object.defineProperty(missingPathMulti, 5, {
@@ -1110,13 +1145,13 @@ describe("tool-display renderers", () => {
     });
     expect(
       renderEditCall({ path: "fallback.txt", multi: missingPathMulti }, theme)
-        .text
+        .text,
     ).toBe("multi 100 fallback.txt +95 more");
     expect(renderEditCall({ patch: "*** Begin Patch" }, theme).text).toBe(
-      "patch"
+      "patch",
     );
     expect(renderWriteCall({ content: "new", path: "a.txt" }, theme).text).toBe(
-      "write a.txt (1 lines)"
+      "write a.txt (1 lines)",
     );
     expect(editRendered.slice(1)).toEqual(writeRendered.slice(1));
   });
@@ -1127,19 +1162,19 @@ describe("tool-display renderers", () => {
         {
           text: "[a.ts]\n@REPLACE\n-old\n+new\n[b.ts]\n@APPEND\n+tail\n[a.ts]\n@DEL 2",
         },
-        theme
-      ).text
+        theme,
+      ).text,
     ).toBe("row edit 2 a.ts, b.ts");
     expect(
       renderEditCall(
         {
           text: "*** Begin Patch\n*** Update File: a.ts\n@@\n-old\n+new\n*** Delete File: b.ts\n*** End Patch",
         },
-        theme
-      ).text
+        theme,
+      ).text,
     ).toBe("patch 2 a.ts, b.ts");
     expect(renderEditCall({ text: "[partial.ts]\n@REP" }, theme).text).toBe(
-      "edit"
+      "edit",
     );
   });
 
@@ -1156,7 +1191,7 @@ describe("tool-display renderers", () => {
         "*** Update File: a.ts",
         "*** End Patch",
       ],
-      "patch 2 a.ts, b.ts"
+      "patch 2 a.ts, b.ts",
     );
   });
 
@@ -1170,7 +1205,7 @@ describe("tool-display renderers", () => {
         "+new",
         "*** End Patch",
       ],
-      "patch 1 a.ts"
+      "patch 1 a.ts",
     );
   });
 
@@ -1185,7 +1220,7 @@ describe("tool-display renderers", () => {
         "+new",
         "*** End Patch",
       ],
-      "patch 1 a.ts"
+      "patch 1 a.ts",
     );
   });
 
@@ -1200,7 +1235,7 @@ describe("tool-display renderers", () => {
         "*** End Patch",
         "",
       ],
-      "patch 1 a.ts"
+      "patch 1 a.ts",
     );
   });
 
@@ -1229,7 +1264,7 @@ describe("tool-display renderers", () => {
         "+new",
         "*** End Patch",
       ],
-      "patch"
+      "patch",
     );
   });
 
@@ -1244,7 +1279,7 @@ describe("tool-display renderers", () => {
         "+new",
         "*** End Patch",
       ],
-      "patch"
+      "patch",
     );
   });
 
@@ -1259,7 +1294,7 @@ describe("tool-display renderers", () => {
         "+new",
         "*** End Patch",
       ],
-      "patch"
+      "patch",
     );
   });
 
@@ -1275,7 +1310,7 @@ describe("tool-display renderers", () => {
         "+new",
         "*** End Patch",
       ],
-      "patch"
+      "patch",
     );
   });
 
@@ -1290,7 +1325,7 @@ describe("tool-display renderers", () => {
         "+new",
         "*** End Patch",
       ],
-      "patch"
+      "patch",
     );
   });
 
@@ -1307,7 +1342,7 @@ describe("tool-display renderers", () => {
         "*** Add File: g.ts",
         "*** End Patch",
       ],
-      "patch 7 a.ts, b.ts, c.ts, d.ts, e.ts +2 more"
+      "patch 7 a.ts, b.ts, c.ts, d.ts, e.ts +2 more",
     );
   });
 
@@ -1318,7 +1353,7 @@ describe("tool-display renderers", () => {
     expectPatchCallText("*** Begin Patch\n*** Add File: partial.ts", "patch");
     expectPatchCallText(
       "*** Begin Patch\n*** End Patch\nnotes\n*** Update File: a.ts\n*** End Patch",
-      "patch"
+      "patch",
     );
   });
 
@@ -1340,7 +1375,7 @@ describe("tool-display renderers", () => {
         },
       },
       {},
-      theme
+      theme,
     ).text;
 
     expect(rendered).toContain("+1 / -1");

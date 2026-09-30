@@ -77,9 +77,9 @@ export async function classifyRoute(
   judge: (
     batch: readonly JevCandidate[],
     context: { currentRequest: string; recentText: string },
-    signal?: AbortSignal
+    signal?: AbortSignal,
   ) => Promise<JevBatchResult>,
-  signal?: AbortSignal
+  signal?: AbortSignal,
 ): Promise<RouteResult> {
   const usage = { attempts: 0, inputTokens: 0, outputTokens: 0 };
   const snapshot = () => ({ ...usage });
@@ -139,7 +139,7 @@ export async function classifyRoute(
     }
   });
   const work = Promise.all(
-    Array.from({ length: Math.min(4, batches.length) }, worker)
+    Array.from({ length: Math.min(4, batches.length) }, worker),
   );
   await Promise.race([work, aborted]);
   clearTimeout(timeout);
@@ -205,7 +205,7 @@ export interface LoadedSkill {
 }
 export async function loadSelectedSkills(
   available: readonly Skill[],
-  names: readonly string[]
+  names: readonly string[],
 ): Promise<
   { ok: true; skills: LoadedSkill[] } | { ok: false; reason: string }
 > {
@@ -223,7 +223,7 @@ export async function loadSelectedSkills(
       }
       const remaining = MAX_SELECTED_BODY_BYTES - total;
       // O_NONBLOCK ensures a configured FIFO cannot stall routing before fstat rejects it.
-      // biome-ignore lint/suspicious/noBitwiseOperators: file open flags are bit masks
+      // oxlint-disable-next-line no-bitwise -- file open flags are bit masks
       const flags = constants.O_RDONLY | constants.O_NONBLOCK;
       const handle = await open(skill.filePath, flags);
       let body: string;
@@ -242,7 +242,7 @@ export async function loadSelectedSkills(
             buffer,
             offset,
             buffer.length - offset,
-            offset
+            offset,
           );
           if (bytesRead === 0) {
             break;
@@ -262,7 +262,7 @@ export async function loadSelectedSkills(
           return { ok: false, reason: "selected skill unreadable" };
         }
         body = new TextDecoder("utf-8", { fatal: true }).decode(
-          buffer.subarray(0, offset)
+          buffer.subarray(0, offset),
         );
       } finally {
         await handle.close();

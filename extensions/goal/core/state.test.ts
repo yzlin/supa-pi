@@ -69,7 +69,7 @@ describe("goal core state helpers", () => {
     expect(isTerminalGoalStatus("complete")).toBe(true);
     expect(parseGoalStatus("active")).toEqual({ ok: true, value: "active" });
     expect(formatGoalStatus("active", ["active", "pending"])).toBe(
-      "goal:active pending:1 active:1 blocked:0 budget_limited:0 complete:0"
+      "goal:active pending:1 active:1 blocked:0 budget_limited:0 complete:0",
     );
   });
 
@@ -129,7 +129,7 @@ describe("goal core state helpers", () => {
           },
         },
         suggestedNextTask: "task-2",
-      })
+      }),
     );
 
     expect(parsed).toMatchObject({
@@ -151,13 +151,13 @@ describe("goal core state helpers", () => {
     const packet = buildGoalTaskPacket(cp, cp.tasks[0]);
 
     expect(packet.checkpointSummary).toBe(
-      "1 tasks; status active; updated 2026-01-01T00:00:00.000Z"
+      "1 tasks; status active; updated 2026-01-01T00:00:00.000Z",
     );
     expect(buildGoalTaskPrompt(packet)).toContain(
-      "Budget: attempts 1/2; tool calls 3/unlimited"
+      "Budget: attempts 1/2; tool calls 3/unlimited",
     );
     expect(buildGoalTaskPrompt(packet)).toContain(
-      "Return strict executor JSON"
+      "Return strict executor JSON",
     );
   });
 
@@ -165,14 +165,14 @@ describe("goal core state helpers", () => {
     expect(
       assertDirtyBaselineUnchanged(
         { gitHead: "a", dirtyFiles: ["one.ts"] },
-        { gitHead: "a", dirtyFiles: ["one.ts"] }
-      )
+        { gitHead: "a", dirtyFiles: ["one.ts"] },
+      ),
     ).toEqual({ ok: true, value: undefined });
     expect(
       assertDirtyBaselineUnchanged(
         { gitHead: "a", dirtyFiles: ["one.ts"] },
-        { gitHead: "b", dirtyFiles: ["two.ts"] }
-      )
+        { gitHead: "b", dirtyFiles: ["two.ts"] },
+      ),
     ).toEqual({
       ok: false,
       error:

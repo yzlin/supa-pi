@@ -49,7 +49,7 @@ function validateTextLimit(text: string, label: string): void {
     lines > UNIFIED_EDIT_LIMITS.targetLines
   ) {
     throw new Error(
-      `${label} exceeds target limit of ${UNIFIED_EDIT_LIMITS.targetBytes} bytes / ${UNIFIED_EDIT_LIMITS.targetLines} lines.`
+      `${label} exceeds target limit of ${UNIFIED_EDIT_LIMITS.targetBytes} bytes / ${UNIFIED_EDIT_LIMITS.targetLines} lines.`,
     );
   }
 }
@@ -67,7 +67,7 @@ export interface UnifiedEditPlan {
 }
 export type PlanReader = (
   path: string,
-  absolutePath: string
+  absolutePath: string,
 ) => Promise<string | null>;
 
 interface Format {
@@ -99,7 +99,7 @@ function absolute(cwd: string, path: string): string {
 
 function pairs(path: string, groups: RowGroup[]): TextEdit[] {
   const contextual = groups.some(
-    (group) => group.marker === " " || group.marker === "@@"
+    (group) => group.marker === " " || group.marker === "@@",
   );
   if (contextual) {
     const hunks: RowGroup[][] = [[]];
@@ -132,7 +132,7 @@ function pairs(path: string, groups: RowGroup[]): TextEdit[] {
         }
         if (!(changed && oldLines.length)) {
           throw new Error(
-            `@REPLACE hunk in ${path} needs changed and locating rows.`
+            `@REPLACE hunk in ${path} needs changed and locating rows.`,
           );
         }
         return { oldText: oldLines.join("\n"), newText: newLines.join("\n") };
@@ -140,7 +140,7 @@ function pairs(path: string, groups: RowGroup[]): TextEdit[] {
   }
   const changes = groups.filter(
     (group): group is RowGroup & { marker: "+" | "-" } =>
-      group.marker === "+" || group.marker === "-"
+      group.marker === "+" || group.marker === "-",
   );
   if (changes.length === 1 && changes[0].marker === "-") {
     return [{ oldText: changes[0].lines.join("\n"), newText: "" }];
@@ -176,7 +176,7 @@ export function applyRowOperations(
   path: string,
   content: string,
   operations: RowOperation[],
-  matcherBudget?: MatcherBudget
+  matcherBudget?: MatcherBudget,
 ): string {
   const doc = split(content);
   for (const operation of operations) {
@@ -199,7 +199,7 @@ export function applyRowOperations(
       }
       doc.lines.splice(
         operation.startLine - 1,
-        operation.endLine - operation.startLine + 1
+        operation.endLine - operation.startLine + 1,
       );
       if (!doc.lines.length) {
         doc.finalNewline = false;
@@ -217,9 +217,9 @@ export function applyRowOperations(
             })),
             path,
             true,
-            matcherBudget
-          )
-        )
+            matcherBudget,
+          ),
+        ),
       );
     } else {
       if (!("groups" in operation)) {
@@ -228,11 +228,11 @@ export function applyRowOperations(
       const groups = operation.groups.filter(
         (group): group is RowGroup & { marker: "+" | "-" } =>
           (group.marker === "+" || group.marker === "-") &&
-          group.lines.length > 0
+          group.lines.length > 0,
       );
       if (groups.length !== 2 || groups[0].marker === groups[1].marker) {
         throw new Error(
-          `Anchor insertion in ${path} needs one - and one + block.`
+          `Anchor insertion in ${path} needs one - and one + block.`,
         );
       }
       const anchor = (
@@ -253,9 +253,9 @@ export function applyRowOperations(
             [{ oldText: anchor, newText: replacement }],
             path,
             true,
-            matcherBudget
-          )
-        )
+            matcherBudget,
+          ),
+        ),
       );
     }
   }
@@ -267,7 +267,7 @@ function seek(
   pattern: string[],
   start: number,
   eof = false,
-  matcherBudget?: MatcherBudget
+  matcherBudget?: MatcherBudget,
 ): number {
   const begin = eof
     ? Math.max(0, lines.length - pattern.length)
@@ -293,7 +293,7 @@ function seek(
     }
     if (found.length > 1) {
       throw new Error(
-        "Patch hunk matched multiple locations. Add more context."
+        "Patch hunk matched multiple locations. Add more context.",
       );
     }
     if (found.length === 1) {
@@ -306,7 +306,7 @@ export function applyPatchChunks(
   path: string,
   content: string,
   chunks: UpdateChunk[],
-  matcherBudget?: MatcherBudget
+  matcherBudget?: MatcherBudget,
 ): string {
   const finalNewline = content.endsWith("\n");
   const lines = content.split("\n");
@@ -322,11 +322,11 @@ export function applyPatchChunks(
         [chunk.changeContext],
         cursor,
         false,
-        matcherBudget
+        matcherBudget,
       );
       if (context < 0) {
         throw new Error(
-          `Failed to find context '${chunk.changeContext}' in ${path}.`
+          `Failed to find context '${chunk.changeContext}' in ${path}.`,
         );
       }
       cursor = context + 1;
@@ -334,7 +334,7 @@ export function applyPatchChunks(
     if (!chunk.oldLines.length) {
       if (chunk.changeContext === undefined) {
         throw new Error(
-          `Insertion-only patch hunk in ${path} needs locating context.`
+          `Insertion-only patch hunk in ${path} needs locating context.`,
         );
       }
       replacements.push([cursor, 0, chunk.newLines]);
@@ -366,7 +366,7 @@ export function applyPatchChunks(
   }
   const next = [...lines];
   for (const [start, count, rows] of replacements.sort(
-    (a, b) => b[0] - a[0] || b[1] - a[1]
+    (a, b) => b[0] - a[0] || b[1] - a[1],
   )) {
     next.splice(start, count, ...rows);
   }
@@ -384,7 +384,7 @@ export async function buildUnifiedEditPlan(
       }
       if (metadata.size > UNIFIED_EDIT_LIMITS.targetBytes) {
         throw new Error(
-          `Target ${target} exceeds target limit of ${UNIFIED_EDIT_LIMITS.targetBytes} bytes.`
+          `Target ${target} exceeds target limit of ${UNIFIED_EDIT_LIMITS.targetBytes} bytes.`,
         );
       }
       return await readFile(target, "utf8");
@@ -398,7 +398,7 @@ export async function buildUnifiedEditPlan(
       }
       throw error;
     }
-  }
+  },
 ): Promise<UnifiedEditPlan> {
   const inputBytes = Buffer.byteLength(text, "utf8");
   const inputLines = lineCount(normalizeToLF(text));
@@ -407,7 +407,7 @@ export async function buildUnifiedEditPlan(
     inputLines > UNIFIED_EDIT_LIMITS.inputLines
   ) {
     throw new Error(
-      `Unified edit input exceeds limit of ${UNIFIED_EDIT_LIMITS.inputBytes} bytes / ${UNIFIED_EDIT_LIMITS.inputLines} lines.`
+      `Unified edit input exceeds limit of ${UNIFIED_EDIT_LIMITS.inputBytes} bytes / ${UNIFIED_EDIT_LIMITS.inputLines} lines.`,
     );
   }
   const mode = isPatchLikePayload(text) ? "patch" : "rows";
@@ -447,7 +447,7 @@ export async function buildUnifiedEditPlan(
       operationCount += script.ops.length;
       if (operationCount > UNIFIED_EDIT_LIMITS.operations) {
         throw new Error(
-          `Unified edit exceeds ${UNIFIED_EDIT_LIMITS.operations} operations.`
+          `Unified edit exceeds ${UNIFIED_EDIT_LIMITS.operations} operations.`,
         );
       }
       const snapshot = await get(script.path);
@@ -459,9 +459,9 @@ export async function buildUnifiedEditPlan(
           script.path,
           normalized(snapshot.current),
           script.ops,
-          matcherBudget
+          matcherBudget,
         ),
-        snapshot.format
+        snapshot.format,
       );
     }
   } else {
@@ -470,7 +470,7 @@ export async function buildUnifiedEditPlan(
         operation.kind === "update" ? operation.chunks.length : 1;
       if (operationCount > UNIFIED_EDIT_LIMITS.operations) {
         throw new Error(
-          `Unified edit exceeds ${UNIFIED_EDIT_LIMITS.operations} operations.`
+          `Unified edit exceeds ${UNIFIED_EDIT_LIMITS.operations} operations.`,
         );
       }
       const snapshot = await get(operation.path);
@@ -493,9 +493,9 @@ export async function buildUnifiedEditPlan(
             operation.path,
             normalized(snapshot.current),
             operation.chunks,
-            matcherBudget
+            matcherBudget,
           ),
-          snapshot.format
+          snapshot.format,
         );
       }
     }
@@ -511,7 +511,7 @@ export async function buildUnifiedEditPlan(
       stagedBytes += Buffer.byteLength(snapshot.current, "utf8");
       if (stagedBytes > UNIFIED_EDIT_LIMITS.stagedBytes) {
         throw new Error(
-          `Staged content exceeds limit of ${UNIFIED_EDIT_LIMITS.stagedBytes} bytes.`
+          `Staged content exceeds limit of ${UNIFIED_EDIT_LIMITS.stagedBytes} bytes.`,
         );
       }
     }
@@ -543,7 +543,7 @@ export async function buildUnifiedEditPlan(
   }
   if (!changes.length) {
     throw new Error(
-      `The ${mode === "rows" ? "row edit script" : "patch"} produced no changes.`
+      `The ${mode === "rows" ? "row edit script" : "patch"} produced no changes.`,
     );
   }
   return { mode, changes };

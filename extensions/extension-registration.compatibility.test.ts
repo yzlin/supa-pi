@@ -14,15 +14,15 @@ import rtkExtension from "./rtk";
 import toolDisplayExtension from "./tool-display";
 
 const packageJson = JSON.parse(
-  readFileSync(join(import.meta.dir, "..", "package.json"), "utf8")
+  readFileSync(join(import.meta.dir, "..", "package.json"), "utf8"),
 ) as { pi?: { extensions?: string[] } };
 const rtkIndexSource = readFileSync(
   join(import.meta.dir, "rtk", "index.ts"),
-  "utf8"
+  "utf8",
 );
 const toolDisplayIndexSource = readFileSync(
   join(import.meta.dir, "tool-display", "index.ts"),
-  "utf8"
+  "utf8",
 );
 type RegisteredTool = Parameters<ExtensionAPI["registerTool"]>[0];
 type EventHandler = (event: unknown, ctx: { cwd: string }) => void;
@@ -32,7 +32,7 @@ const tempDirs: string[] = [];
 function tempDir(): string {
   const dir = join(
     import.meta.dir,
-    `.tmp-extension-registration-${Date.now()}-${Math.random()}`
+    `.tmp-extension-registration-${Date.now()}-${Math.random()}`,
   );
   mkdirSync(dir, { recursive: true });
   tempDirs.push(dir);
@@ -43,7 +43,7 @@ function writeToolDisplayConfig(cwd: string, tools: unknown): void {
   mkdirSync(join(cwd, ".pi"), { recursive: true });
   writeFileSync(
     join(cwd, ".pi", "tool-display.json"),
-    JSON.stringify({ tools })
+    JSON.stringify({ tools }),
   );
 }
 
@@ -80,10 +80,10 @@ describe("extension registration compatibility", () => {
     const extensions = packageJson.pi?.extensions ?? [];
     const autoRenameIndex = extensions.indexOf("./extensions/auto-rename");
     expect(extensions.indexOf("./extensions/prompt-commands")).toBeLessThan(
-      autoRenameIndex
+      autoRenameIndex,
     );
     expect(autoRenameIndex).toBeLessThan(
-      extensions.indexOf("./extensions/context-docs")
+      extensions.indexOf("./extensions/context-docs"),
     );
   });
 
@@ -93,7 +93,7 @@ describe("extension registration compatibility", () => {
     expect(extensions).toContain("./extensions/rtk");
     expect(extensions).toContain("./extensions/tool-display");
     expect(extensions.indexOf("./extensions/rtk")).toBeLessThan(
-      extensions.indexOf("./extensions/tool-display")
+      extensions.indexOf("./extensions/tool-display"),
     );
     expect(extensions).not.toContain("./extensions/multi-edit.ts");
   });
@@ -120,7 +120,7 @@ describe("extension registration compatibility", () => {
     expect(
       harness.tools
         .filter((tool) => tool.renderShell === "default")
-        .map((tool) => tool.name)
+        .map((tool) => tool.name),
     ).toEqual([]);
   });
 
@@ -159,8 +159,8 @@ describe("extension registration compatibility", () => {
         },
         undefined,
         undefined,
-        { cwd } as never
-      )
+        { cwd } as never,
+      ),
     ).rejects.toThrow("Patch Add File requires the write tool to be enabled");
     expect(existsSync(join(cwd, "should-not-exist.txt"))).toBe(false);
   });
@@ -183,8 +183,8 @@ describe("extension registration compatibility", () => {
     expect(
       readFileSync(
         join(import.meta.dir, "tool-display", "presentation.ts"),
-        "utf8"
-      )
+        "utf8",
+      ),
     ).toContain("details.toolDisplay?.fullRead");
   });
 });

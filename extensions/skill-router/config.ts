@@ -11,12 +11,12 @@ export class RouterConfigStore {
     options: {
       agentDir?: string;
       env?: Record<string, string | undefined>;
-    } = {}
+    } = {},
   ) {
     const env = options.env ?? process.env;
     this.#directory = join(
       options.agentDir ?? resolveAgentDir(env.PI_CODING_AGENT_DIR),
-      "skill-router"
+      "skill-router",
     );
   }
   get path(): string {

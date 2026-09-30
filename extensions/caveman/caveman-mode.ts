@@ -106,7 +106,7 @@ function stripCavemanPrompt(systemPrompt: string): string {
 
 export function applyCavemanPrompt(
   systemPrompt: string,
-  enabled: boolean
+  enabled: boolean,
 ): string {
   const strippedPrompt = stripCavemanPrompt(systemPrompt);
 
@@ -133,7 +133,7 @@ function parseCavemanModeState(data: unknown): CavemanModeState | null {
 }
 
 function isCavemanModeEntry(
-  entry: SessionEntryLike | undefined
+  entry: SessionEntryLike | undefined,
 ): entry is SessionEntryLike {
   return (
     entry?.type === "custom" &&
@@ -143,7 +143,7 @@ function isCavemanModeEntry(
 }
 
 function getLatestCavemanModeState(
-  entries: readonly SessionEntryLike[]
+  entries: readonly SessionEntryLike[],
 ): CavemanModeState | null {
   for (let i = entries.length - 1; i >= 0; i--) {
     const entry = entries[i];
@@ -178,7 +178,7 @@ function loadCavemanConfigFile(configPath: string): CavemanModeState | null {
 
 function getConfigCavemanModeState(
   cwd = process.cwd(),
-  homeDir = homedir()
+  homeDir = homedir(),
 ): CavemanModeState | null {
   return (
     loadCavemanConfigFile(getProjectCavemanConfigPath(cwd)) ??
@@ -190,7 +190,7 @@ function resolveCavemanModeState(
   entries: readonly SessionEntryLike[],
   flagOverride: boolean | undefined,
   cwd = process.cwd(),
-  homeDir = homedir()
+  homeDir = homedir(),
 ): CavemanModeState {
   if (typeof flagOverride === "boolean") {
     return { enabled: flagOverride };
@@ -222,7 +222,7 @@ function refreshCavemanStatus(ctx: ExtensionContext): void {
 
   ctx.ui.setStatus(
     CAVEMAN_MODE_STATUS_KEY,
-    cavemanModeEnabled ? CAVEMAN_MODE_STATUS_TEXT : undefined
+    cavemanModeEnabled ? CAVEMAN_MODE_STATUS_TEXT : undefined,
   );
 }
 
@@ -232,7 +232,7 @@ function describeCavemanModeStatus(enabled: boolean): string {
 
 function notifyCavemanModeStatus(
   ctx: ExtensionCommandContext,
-  enabled: boolean
+  enabled: boolean,
 ): void {
   ctx.ui.notify(describeCavemanModeStatus(enabled), "info");
 }
@@ -245,7 +245,7 @@ function createCavemanCapabilitiesResponse(): CavemanRpcResponse<CavemanRpcCapab
 }
 
 function applyCavemanRpcRequest(
-  payload: unknown
+  payload: unknown,
 ): CavemanRpcResponse<CavemanRpcApplyData> {
   if (!isRecord(payload)) {
     return { success: false, error: "Expected object payload" };
@@ -280,7 +280,7 @@ function publishRpcResponse<T>(
   events: EventBus,
   channel: string,
   payload: unknown,
-  response: CavemanRpcResponse<T>
+  response: CavemanRpcResponse<T>,
 ): void {
   if (!isRecord(payload)) {
     return;
@@ -306,20 +306,20 @@ function publishRpcResponse<T>(
 
 function registerCavemanRpc(pi: ExtensionAPI): void {
   const handleCapabilities = (
-    payload: unknown
+    payload: unknown,
   ): CavemanRpcResponse<CavemanRpcCapabilitiesData> => {
     const response = createCavemanCapabilitiesResponse();
     publishRpcResponse(
       pi.events,
       CAVEMAN_RPC_CAPABILITIES_CHANNEL,
       payload,
-      response
+      response,
     );
     return response;
   };
 
   const handleApply = (
-    payload: unknown
+    payload: unknown,
   ): CavemanRpcResponse<CavemanRpcApplyData> => {
     const response = applyCavemanRpcRequest(payload);
     publishRpcResponse(pi.events, CAVEMAN_RPC_APPLY_CHANNEL, payload, response);
@@ -342,14 +342,14 @@ export function registerCavemanMode(pi: ExtensionAPI): void {
 
   cavemanModeEnabled = resolveCavemanModeState(
     [],
-    getCavemanFlagOverride(pi)
+    getCavemanFlagOverride(pi),
   ).enabled;
   registerCavemanRpc(pi);
 
   function setEnabled(
     ctx: ExtensionContext,
     nextEnabled: boolean,
-    persist: boolean
+    persist: boolean,
   ): void {
     cavemanModeEnabled = nextEnabled;
 
@@ -366,7 +366,7 @@ export function registerCavemanMode(pi: ExtensionAPI): void {
     const state = resolveCavemanModeState(
       ctx.sessionManager.getEntries() as readonly SessionEntryLike[],
       getCavemanFlagOverride(pi),
-      ctx.cwd
+      ctx.cwd,
     );
     setEnabled(ctx, state.enabled, false);
   }
@@ -382,7 +382,7 @@ export function registerCavemanMode(pi: ExtensionAPI): void {
   pi.on("before_agent_start", (event: BeforeAgentStartEvent) => {
     const systemPrompt = applyCavemanPrompt(
       event.systemPrompt,
-      cavemanModeEnabled
+      cavemanModeEnabled,
     );
 
     if (systemPrompt === event.systemPrompt) {
@@ -397,7 +397,7 @@ export function registerCavemanMode(pi: ExtensionAPI): void {
     getArgumentCompletions(argumentPrefix) {
       const prefix = argumentPrefix.trim().toLowerCase();
       return CAVEMAN_MODE_COMPLETIONS.filter((completion) =>
-        completion.value.startsWith(prefix)
+        completion.value.startsWith(prefix),
       );
     },
     handler: (args: string, ctx: ExtensionCommandContext) => {

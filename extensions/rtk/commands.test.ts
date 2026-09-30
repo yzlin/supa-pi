@@ -101,7 +101,7 @@ describe("rtk commands", () => {
           commandOptions = options;
         },
       } as ExtensionAPI,
-      createRuntime()
+      createRuntime(),
     );
 
     if (!commandOptions) {
@@ -249,7 +249,7 @@ describe("rtk commands", () => {
             {},
             () => {
               /* noop */
-            }
+            },
           );
 
           rendered = component.render(80).join("\n");

@@ -23,7 +23,7 @@ function createHarness() {
       options: {
         handler: (...args: any[]) => unknown;
         getArgumentCompletions?: (prefix: string) => unknown;
-      }
+      },
     ) {
       commands.set(name, options);
     },
@@ -59,25 +59,25 @@ describe("init-deep command", () => {
     expect(harness.command?.handler).toBeDefined();
     await harness.command?.handler(
       "./extensions --create-new --max-depth=2 -- focus on extension boundaries",
-      harness.ctx as never
+      harness.ctx as never,
     );
 
     expect(harness.sentUserMessages).toHaveLength(1);
     expect(harness.sentUserMessages[0]?.options).toBeUndefined();
     expect(String(harness.sentUserMessages[0]?.content)).toContain(
-      "Resolved command input:"
+      "Resolved command input:",
     );
     expect(String(harness.sentUserMessages[0]?.content)).toContain(
-      `target root: ${path.join(process.cwd(), "extensions")}`
+      `target root: ${path.join(process.cwd(), "extensions")}`,
     );
     expect(String(harness.sentUserMessages[0]?.content)).toContain(
-      "mode: create-new"
+      "mode: create-new",
     );
     expect(String(harness.sentUserMessages[0]?.content)).toContain(
-      "max depth: 2"
+      "max depth: 2",
     );
     expect(String(harness.sentUserMessages[0]?.content)).toContain(
-      "instruction: focus on extension boundaries"
+      "instruction: focus on extension boundaries",
     );
     expect(harness.notifications).toEqual([]);
   });
@@ -130,14 +130,14 @@ describe("init-deep prompt builder", () => {
     });
 
     expect(message).toContain(
-      "instruction: default hierarchical AGENTS.md generation for the target codebase"
+      "instruction: default hierarchical AGENTS.md generation for the target codebase",
     );
     expect(message).toContain("dry run: true");
     expect(message).toContain(
-      "Use TaskCreate and TaskUpdate for phase tracking."
+      "Use TaskCreate and TaskUpdate for phase tracking.",
     );
     expect(message).toContain(
-      "do not emit the final answer while any init-deep task is pending or in_progress."
+      "do not emit the final answer while any init-deep task is pending or in_progress.",
     );
   });
 });
@@ -156,10 +156,10 @@ describe("init-deep completions", () => {
 
     expect(completions).not.toBeNull();
     expect(completions).toContainEqual(
-      expect.objectContaining({ value: "--create-new", label: "--create-new" })
+      expect.objectContaining({ value: "--create-new", label: "--create-new" }),
     );
     expect(completions).toContainEqual(
-      expect.objectContaining({ value: "extensions/", label: "extensions/" })
+      expect.objectContaining({ value: "extensions/", label: "extensions/" }),
     );
   });
 
@@ -191,10 +191,10 @@ describe("init-deep completions", () => {
     const completions = getInitDeepArgumentCompletions("./extensions ", cwd);
 
     expect(completions).toContainEqual(
-      expect.objectContaining({ value: "--dry-run", label: "--dry-run" })
+      expect.objectContaining({ value: "--dry-run", label: "--dry-run" }),
     );
     expect(completions).not.toContainEqual(
-      expect.objectContaining({ value: "extensions/", label: "extensions/" })
+      expect.objectContaining({ value: "extensions/", label: "extensions/" }),
     );
   });
 
@@ -211,7 +211,7 @@ describe("init-deep completions", () => {
   it("stops suggesting once freeform instruction text begins", () => {
     const completions = getInitDeepArgumentCompletions(
       "./extensions -- focus on command boundaries",
-      cwd
+      cwd,
     );
 
     expect(completions).toBeNull();

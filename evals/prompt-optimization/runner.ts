@@ -71,7 +71,7 @@ export interface PlannedRun {
 export function planRuns(
   caseIds: readonly string[],
   repetitions: number,
-  singleArm = false
+  singleArm = false,
 ): PlannedRun[] {
   const runs: PlannedRun[] = [];
   for (const [caseIndex, caseId] of caseIds.entries()) {
@@ -145,7 +145,7 @@ async function copyFixture(source: string, destination: string): Promise<void> {
 
 const IMMUTABLE_MATH_TEST = readFileSync(
   new URL("./fixtures/sample-project/tests/math.case.ts", import.meta.url),
-  "utf8"
+  "utf8",
 );
 function stripComments(source: string): string | undefined {
   let output = "";
@@ -211,7 +211,7 @@ function expressionMatchesOperation(
   source: string,
   leftParameter: string,
   rightParameter: string,
-  operator: string
+  operator: string,
 ): boolean {
   const expression = stripHarmlessParentheses(source);
   let depth = 0;
@@ -245,7 +245,7 @@ function expressionMatchesOperation(
 /** Scores allowlisted fixture tests with a bounded closed arithmetic grammar; never executes workspace code. */
 export function runAllowedFixtureTest(
   cwd: string,
-  command = "bun test tests/math.case.ts"
+  command = "bun test tests/math.case.ts",
 ): { exitCode: number; output: Buffer } {
   const specifications = {
     "bun test tests/math.case.ts": {
@@ -273,7 +273,7 @@ export function runAllowedFixtureTest(
         return {
           exitCode: 1,
           output: Buffer.from(
-            `${test.path}: required canonical test is missing\n1 failed, 0 passed\n`
+            `${test.path}: required canonical test is missing\n1 failed, 0 passed\n`,
           ),
         };
       }
@@ -281,13 +281,13 @@ export function runAllowedFixtureTest(
         return {
           exitCode: 1,
           output: Buffer.from(
-            `${test.path}: required canonical test was modified\n1 failed, 0 passed\n`
+            `${test.path}: required canonical test was modified\n1 failed, 0 passed\n`,
           ),
         };
       }
     }
     const source = stripComments(
-      readFileSync(join(cwd, "src/math.ts"), "utf8")
+      readFileSync(join(cwd, "src/math.ts"), "utf8"),
     );
     const declaration =
       /export\s+function\s+(add|multiply)\s*\(\s*([A-Za-z_$][\w$]*)\s*:\s*number\s*,\s*([A-Za-z_$][\w$]*)\s*:\s*number\s*\)\s*:\s*number\s*\{\s*return\s+([^;{}\n]{1,200});\s*\}/gy;
@@ -327,9 +327,9 @@ export function runAllowedFixtureTest(
             implementation.expression,
             implementation.leftParameter,
             implementation.rightParameter,
-            operator
-          )
-        )
+            operator,
+          ),
+        ),
     );
     const passed =
       fullyParsed &&
@@ -342,14 +342,14 @@ export function runAllowedFixtureTest(
             implementation.expression,
             implementation.leftParameter,
             implementation.rightParameter,
-            operator
+            operator,
           )
         );
       });
     return {
       exitCode: passed ? 0 : 1,
       output: Buffer.from(
-        passed ? specification.success : specification.failure
+        passed ? specification.success : specification.failure,
       ),
     };
   } catch {
@@ -364,7 +364,7 @@ const ALLOWED_FIXTURE_TEST_COMMANDS = new Set(["bun test tests/math.case.ts"]);
 
 export function isAllowedFixtureTestCommand(command: string): boolean {
   return ALLOWED_FIXTURE_TEST_COMMANDS.has(
-    command.trim().replaceAll(/\s+/g, " ")
+    command.trim().replaceAll(/\s+/g, " "),
   );
 }
 
@@ -377,12 +377,12 @@ function createSafeBashOperations() {
         onData: (data: Buffer) => void;
         signal?: AbortSignal;
         timeout?: number;
-      }
+      },
     ): Promise<{ exitCode: number | null }> {
       const normalized = command.trim().replaceAll(/\s+/g, " ");
       if (!isAllowedFixtureTestCommand(command)) {
         options.onData(
-          Buffer.from(`Blocked by eval command allowlist: ${command}\n`)
+          Buffer.from(`Blocked by eval command allowlist: ${command}\n`),
         );
         return { exitCode: 126 };
       }
@@ -391,7 +391,7 @@ function createSafeBashOperations() {
         return { exitCode: null };
       }
       const execution = await Promise.resolve(
-        runAllowedFixtureTest(cwd, normalized)
+        runAllowedFixtureTest(cwd, normalized),
       );
       if (execution.output.length) {
         options.onData(execution.output);
@@ -455,15 +455,15 @@ const askSchema = Type.Object({
           value: Type.String(),
           label: Type.String(),
           description: Type.Optional(Type.String()),
-        })
+        }),
       ),
       multiSelect: Type.Optional(Type.Boolean()),
-    })
+    }),
   ),
 });
 
 function createAskTool(
-  response: NonNullable<EvalCase["askResponse"]>
+  response: NonNullable<EvalCase["askResponse"]>,
 ): AgentTool<typeof askSchema> {
   return {
     name: "ask",
@@ -474,7 +474,7 @@ function createAskTool(
     execute(_toolCallId, params) {
       const question = params.questions[0];
       const option = question?.options.find(
-        (candidate) => candidate.label === response
+        (candidate) => candidate.label === response,
       );
       if (!(question && option)) {
         return Promise.resolve({
@@ -534,7 +534,7 @@ const fetchContentTool: AgentTool = {
 
 export function isContainedRelativePath(
   relativePath: string,
-  pathSeparator = sep
+  pathSeparator = sep,
 ): boolean {
   const absolute =
     pathSeparator === "\\"
@@ -554,12 +554,12 @@ function isWithinDirectory(directory: string, target: string): boolean {
 
 async function isSafeWorkspacePath(
   workspace: string,
-  requestedPath: string
+  requestedPath: string,
 ): Promise<boolean> {
   const workspacePath = await realpath(workspace);
   const targetPath = resolve(
     workspacePath,
-    requestedPath.replace(LEADING_AT_PATTERN, "")
+    requestedPath.replace(LEADING_AT_PATTERN, ""),
   );
   if (!isWithinDirectory(workspacePath, targetPath)) {
     return false;
@@ -584,13 +584,13 @@ function createTools(workspace: string, evalCase: EvalCase): AgentTool[] {
         bash: { operations: createSafeBashOperations() },
       }),
       ...createReadOnlyTools(workspace),
-    ].map((tool) => [tool.name, tool])
+    ].map((tool) => [tool.name, tool]),
   );
   const builtIns = [...builtInsByName.values()].filter((tool) =>
-    names.includes(tool.name as EvalCase["tools"][number])
+    names.includes(tool.name as EvalCase["tools"][number]),
   );
   const extras = [agentTool, webSearchTool, fetchContentTool].filter((tool) =>
-    names.includes(tool.name as EvalCase["tools"][number])
+    names.includes(tool.name as EvalCase["tools"][number]),
   );
   const askTools = evalCase.askResponse
     ? [createAskTool(evalCase.askResponse)]
@@ -599,7 +599,7 @@ function createTools(workspace: string, evalCase: EvalCase): AgentTool[] {
 }
 
 function textFromContent(
-  content: Array<{ type?: string; text?: string }> | undefined
+  content: Array<{ type?: string; text?: string }> | undefined,
 ): string {
   return (content ?? [])
     .filter((part) => part.type === "text" && typeof part.text === "string")
@@ -608,7 +608,7 @@ function textFromContent(
 }
 
 export async function runVariant(
-  options: RunVariantOptions
+  options: RunVariantOptions,
 ): Promise<RunRecord> {
   const workspace = await mkdtemp(join(tmpdir(), "supa-pi-prompt-eval-"));
   const sessionId = SessionManager.inMemory().getSessionId();
@@ -618,7 +618,7 @@ export async function runVariant(
   const request = composeEvalRequest(
     options.evalCase.promptPath,
     options.promptContent,
-    options.evalCase.task
+    options.evalCase.task,
   );
   const context: AgentContext = {
     messages: [
@@ -677,7 +677,7 @@ export async function runVariant(
           payloadServiceTiers.add(
             typeof candidate?.service_tier === "string"
               ? candidate.service_tier
-              : "absent"
+              : "absent",
           );
         },
         convertToLlm: (messages) => convertToLlm(messages),
@@ -685,7 +685,7 @@ export async function runVariant(
         beforeToolCall: async ({ toolCall, args }) => {
           if (
             ["read", "write", "edit", "grep", "find", "ls"].includes(
-              toolCall.name
+              toolCall.name,
             )
           ) {
             const requestedPath = (args as { path?: unknown }).path;
@@ -705,7 +705,7 @@ export async function runVariant(
       } as AgentLoopConfig & { serviceTier?: "priority" },
       controller.signal,
       options.streamFn ??
-        (options.serviceTier ? codexServiceTierStream : undefined)
+        (options.serviceTier ? codexServiceTierStream : undefined),
     );
 
     for await (const event of eventStream) {
@@ -763,7 +763,7 @@ export async function runVariant(
       } else {
         metrics = reduceRunEvent(
           metrics,
-          event as unknown as Record<string, unknown>
+          event as unknown as Record<string, unknown>,
         );
       }
       if (event.type === "message_end" && event.message.role === "assistant") {
@@ -789,7 +789,7 @@ export async function runVariant(
   if (pendingToolCalls.size > 0) {
     const pendingIds = [...pendingToolCalls.keys()].slice(0, 5).join(", ");
     recordTrajectoryError(
-      `pending starts at terminal status: ${pendingToolCalls.size}${pendingIds ? ` (${pendingIds})` : ""}`
+      `pending starts at terminal status: ${pendingToolCalls.size}${pendingIds ? ` (${pendingIds})` : ""}`,
     );
   }
 
@@ -808,7 +808,7 @@ export async function runVariant(
         trajectoryErrors,
         taskIntent: options.evalCase.task,
       },
-      options.evalCase.checks
+      options.evalCase.checks,
     );
     const completed =
       !error && stopReason !== "error" && stopReason !== "aborted";

@@ -8,7 +8,7 @@ export function validateRuntime(
   raw: Record<string, unknown>,
   selected: string | undefined,
   agents: RepoAgent[],
-  ctx: ExtensionContext
+  ctx: ExtensionContext,
 ): string[] {
   const errors: string[] = [];
   const names = new Set(agents.map((agent) => agent.name));
@@ -29,7 +29,7 @@ export function validateRuntime(
     const slash = values.model.indexOf("/");
     const model = ctx.modelRegistry.find(
       values.model.slice(0, slash),
-      values.model.slice(slash + 1)
+      values.model.slice(slash + 1),
     );
     if (!model) {
       errors.push(`${field}.model: unknown model ${values.model}`);
@@ -42,7 +42,7 @@ export function validateRuntime(
       ctx.scopedModels.length &&
       !ctx.scopedModels.some(
         (item) =>
-          item.model.provider === model.provider && item.model.id === model.id
+          item.model.provider === model.provider && item.model.id === model.id,
       )
     ) {
       errors.push(`${field}.model: outside model scope: ${values.model}`);

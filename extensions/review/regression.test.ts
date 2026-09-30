@@ -29,7 +29,7 @@ interface SessionEntry {
 
 const TEST_VERIFIER_MODEL = "test/verifier";
 const TEST_ROOT = mkdtempSync(
-  path.join(tmpdir(), "supa-pi-review-regression-")
+  path.join(tmpdir(), "supa-pi-review-regression-"),
 );
 const TEST_PROJECT_CWD = path.join(TEST_ROOT, "project");
 const ORIGINAL_HOME = process.env.HOME;
@@ -61,7 +61,7 @@ beforeAll(() => {
     "user.email=test@example.com",
     "commit",
     "-qm",
-    "fixture"
+    "fixture",
   );
   git("tag", "def456");
   writeFileSync(path.join(TEST_PROJECT_CWD, "src/target.ts"), "changed");
@@ -129,7 +129,7 @@ const EMPTY_SUMMARY_REVIEW_REPORT = `## Review Scope
 - code-reviewer: used / not used`;
 
 type TerminalInputHandler = (
-  data: string
+  data: string,
 ) => { consume?: boolean; data?: string } | undefined;
 
 function createMockCtx(
@@ -143,7 +143,7 @@ function createMockCtx(
     custom?: <T>(renderer: unknown) => Promise<T>;
     onTerminalInput?: (handler: TerminalInputHandler) => () => void;
     cwd?: string;
-  } = {}
+  } = {},
 ) {
   const notifications: Array<{ message: string; level: string }> = [];
   const statuses: Array<{ key: string; text: string | undefined }> = [];
@@ -188,7 +188,7 @@ function createMockCtx(
               entry.customType!,
               entry.content as string,
               true,
-              entry.details
+              entry.details,
             );
             return manager.getBranch()[0];
           });
@@ -203,7 +203,7 @@ function createMockCtx(
               entry.customType!,
               entry.content as string,
               true,
-              entry.details
+              entry.details,
             );
             return manager.getBranch()[0];
           });
@@ -223,7 +223,7 @@ function createMockCtx(
         setWidget(
           key: string,
           content: string[] | undefined,
-          widgetOptions?: { placement?: "aboveEditor" | "belowEditor" }
+          widgetOptions?: { placement?: "aboveEditor" | "belowEditor" },
         ) {
           if (content !== undefined && !Array.isArray(content)) {
             throw new TypeError("The mock supports plain widgets only.");
@@ -246,7 +246,7 @@ function createMockPiRuntime(
   exec?: (
     command: string,
     args: string[],
-    options?: { signal?: AbortSignal }
+    options?: { signal?: AbortSignal },
   ) =>
     | { stdout: string; code: number; stderr?: string; killed?: boolean }
     | Promise<{
@@ -254,7 +254,7 @@ function createMockPiRuntime(
         code: number;
         stderr?: string;
         killed?: boolean;
-      }>
+      }>,
 ) {
   const commands = new Map<
     string,
@@ -274,7 +274,7 @@ function createMockPiRuntime(
     string,
     (
       message: unknown,
-      options: { expanded: boolean; outputPad: number }
+      options: { expanded: boolean; outputPad: number },
     ) => unknown
   >();
   const eventHandlers = new Map<
@@ -301,7 +301,7 @@ function createMockPiRuntime(
       async exec(
         command: string,
         args: string[],
-        options?: { signal?: AbortSignal }
+        options?: { signal?: AbortSignal },
       ) {
         execCalls.push({ command, args, options });
         return (
@@ -317,7 +317,7 @@ function createMockPiRuntime(
         name: string,
         definition: {
           handler: (args: string, ctx: unknown) => Promise<void> | void;
-        }
+        },
       ) {
         commands.set(name, {
           ...definition,
@@ -331,14 +331,14 @@ function createMockPiRuntime(
         customType: string,
         renderer: (
           message: unknown,
-          options: { expanded: boolean; outputPad: number }
-        ) => unknown
+          options: { expanded: boolean; outputPad: number },
+        ) => unknown,
       ) {
         messageRenderers.set(customType, renderer);
       },
       on(
         event: string,
-        handler: (event: unknown, ctx: unknown) => Promise<unknown> | unknown
+        handler: (event: unknown, ctx: unknown) => Promise<unknown> | unknown,
       ) {
         eventHandlers.set(event, handler);
       },
@@ -347,14 +347,14 @@ function createMockPiRuntime(
       },
       sendMessage(
         message: { customType?: string; content?: string; details?: unknown },
-        options?: unknown
+        options?: unknown,
       ) {
         sentMessages.push({ message, options });
       },
       sendUserMessage(content: string, options?: unknown) {
         sentUserMessages.push({ content, options });
         const encoded = content.split(
-          "\nPrepared script (JSON string, inert data):\n"
+          "\nPrepared script (JSON string, inert data):\n",
         )[1];
         if (encoded) {
           const input = { script: JSON.parse(encoded) as string };
@@ -364,7 +364,7 @@ function createMockPiRuntime(
               toolCallId: `call-${preparedScripts.length}`,
               input,
             },
-            commandContext
+            commandContext,
           );
           expect(blocked).toBeUndefined();
           preparedScripts.push(input.script);
@@ -376,10 +376,10 @@ function createMockPiRuntime(
 }
 
 function getReviewReportMessages(
-  runtime: ReturnType<typeof createMockPiRuntime>
+  runtime: ReturnType<typeof createMockPiRuntime>,
 ) {
   return runtime.sentMessages.filter(
-    ({ message }) => message.customType === REVIEW_REPORT_MESSAGE_TYPE
+    ({ message }) => message.customType === REVIEW_REPORT_MESSAGE_TYPE,
   );
 }
 
@@ -403,7 +403,7 @@ describe.serial("review direct targets", () => {
               preflightAborted = true;
               resolve({ stdout: "", code: 0, killed: true });
             },
-            { once: true }
+            { once: true },
           );
         });
       }
@@ -439,11 +439,11 @@ describe.serial("review direct targets", () => {
       hasUI: false,
       custom: () =>
         Promise.reject(
-          new Error("target selector should not open in headless review")
+          new Error("target selector should not open in headless review"),
         ),
       select: () =>
         Promise.reject(
-          new Error("reviewer selector should not open in headless review")
+          new Error("reviewer selector should not open in headless review"),
         ),
     });
 
@@ -468,7 +468,7 @@ describe.serial("review direct targets", () => {
       hasUI: false,
       select: () =>
         Promise.reject(
-          new Error("reviewer selector should not open in headless review")
+          new Error("reviewer selector should not open in headless review"),
         ),
     });
 
@@ -498,11 +498,11 @@ describe.serial("review direct targets", () => {
       hasUI: false,
       custom: () =>
         Promise.reject(
-          new Error("target selector should not open in headless review")
+          new Error("target selector should not open in headless review"),
         ),
       select: () =>
         Promise.reject(
-          new Error("reviewer selector should not open in headless review")
+          new Error("reviewer selector should not open in headless review"),
         ),
     });
 
@@ -564,7 +564,7 @@ describe.serial("review direct targets", () => {
     expect(handler).toBeDefined();
     await handler?.(
       `branch main --auto-reviewers --verifier-model ${TEST_VERIFIER_MODEL}`,
-      ctx as never
+      ctx as never,
     );
 
     const message = String(preparedCalls(runtime)[0]?.prompt);
@@ -596,7 +596,7 @@ describe.serial("review direct targets", () => {
     expect(handler).toBeDefined();
     await handler?.(
       `commit def456 Fix metadata --reviewers code-reviewer --verifier-model ${TEST_VERIFIER_MODEL}`,
-      ctx as never
+      ctx as never,
     );
 
     const message = String(preparedCalls(runtime)[0]?.prompt);
@@ -663,15 +663,15 @@ describe.serial("review direct targets", () => {
     expect(handler).toBeDefined();
     await handler?.(
       `pr 42 --auto-reviewers --verifier-model ${TEST_VERIFIER_MODEL}`,
-      ctx as never
+      ctx as never,
     );
 
     const message = String(preparedCalls(runtime)[0]?.prompt);
     expect(message).toContain(
-      'Review pull request #42 ("Add review metadata")'
+      'Review pull request #42 ("Add review metadata")',
     );
     expect(message).toContain(
-      "- Changed paths:\n  - extensions/review/index.ts"
+      "- Changed paths:\n  - extensions/review/index.ts",
     );
     expect(message).toContain("git diff base789");
     expect(message).toContain("git log base789..HEAD --oneline");
@@ -693,20 +693,20 @@ describe.serial("review direct targets", () => {
     expect(handler).toBeDefined();
     await handler?.(
       `uncommitted --reviewers performance-reviewer --verifier-model ${TEST_VERIFIER_MODEL}`,
-      ctx as never
+      ctx as never,
     );
 
     const message = String(preparedCalls(runtime)[0]?.prompt);
     expect(message).toContain("- performance-reviewer");
     expect(message).toContain(
-      "- Selected reviewers:\n  - performance-reviewer"
+      "- Selected reviewers:\n  - performance-reviewer",
     );
     expect(
       notifications.some(
         (entry) =>
           entry.message.startsWith("Review plan:") &&
-          entry.message.includes("1 role × 1 model")
-      )
+          entry.message.includes("1 role × 1 model"),
+      ),
     ).toBe(true);
   });
 
@@ -725,11 +725,11 @@ describe.serial("review direct targets", () => {
     expect(handler).toBeDefined();
     await handler?.(
       `uncommitted --auto-reviewers --verifier-model ${TEST_VERIFIER_MODEL}`,
-      ctx as never
+      ctx as never,
     );
 
     expect(String(preparedCalls(runtime)[0]?.prompt)).toContain(
-      "- performance-reviewer"
+      "- performance-reviewer",
     );
   });
 
@@ -748,7 +748,7 @@ describe.serial("review direct targets", () => {
     expect(handler).toBeDefined();
     await handler?.(
       `uncommitted --reviewers code-reviewer --verifier-model ${TEST_VERIFIER_MODEL}`,
-      ctx as never
+      ctx as never,
     );
 
     expect(runtime.sentUserMessages).toEqual([]);
@@ -773,7 +773,7 @@ describe.serial("review direct targets", () => {
     expect(handler).toBeDefined();
     await handler?.(
       `uncommitted --reviewers code-reviewer --verifier-model ${TEST_VERIFIER_MODEL}`,
-      ctx as never
+      ctx as never,
     );
 
     expect(runtime.sentUserMessages).toEqual([]);
@@ -802,7 +802,7 @@ describe.serial("review direct targets", () => {
     expect(handler).toBeDefined();
     await handler?.(
       `branch missing --reviewers code-reviewer --verifier-model ${TEST_VERIFIER_MODEL}`,
-      ctx as never
+      ctx as never,
     );
 
     expect(runtime.sentUserMessages).toEqual([]);
@@ -858,7 +858,7 @@ describe.serial("review direct targets", () => {
     expect(handler).toBeDefined();
     await handler?.(
       `pr 43 --reviewers code-reviewer --verifier-model ${TEST_VERIFIER_MODEL}`,
-      ctx as never
+      ctx as never,
     );
 
     expect(runtime.sentUserMessages).toEqual([]);
@@ -883,7 +883,7 @@ describe.serial("review direct targets", () => {
     expect(handler).toBeDefined();
     await handler?.(
       `commit badsha --reviewers code-reviewer --verifier-model ${TEST_VERIFIER_MODEL}`,
-      ctx as never
+      ctx as never,
     );
 
     expect(runtime.sentUserMessages).toEqual([]);
@@ -903,12 +903,12 @@ describe.serial("review direct targets", () => {
     expect(handler).toBeDefined();
     await handler?.(
       `folder src "docs guides" --auto-reviewers --extra "check public API" --verifier-model ${TEST_VERIFIER_MODEL}`,
-      ctx as never
+      ctx as never,
     );
 
     const message = String(preparedCalls(runtime)[0]?.prompt);
     expect(message).toContain(
-      "Review the code in the following paths: src, docs guides"
+      "Review the code in the following paths: src, docs guides",
     );
     expect(message).toContain("check public API");
   });
@@ -980,7 +980,7 @@ describe("review report rendering", () => {
     expect(rendered).toContain("## Verdict\n- needs attention");
     expect(rendered).toContain("## Findings");
     expect(rendered).toContain(
-      "- Verifier: accepted (high) — The changed guard now rejects valid input at this line."
+      "- Verifier: accepted (high) — The changed guard now rejects valid input at this line.",
     );
     expect(rendered).toContain("High confidence finding");
     expect(rendered).not.toContain("Low confidence finding");
@@ -1020,7 +1020,7 @@ describe("review report rendering", () => {
     expect(rendered.match(/^## Verdict$/gm)).toHaveLength(1);
     expect(rendered.match(/^## Findings$/gm)).toHaveLength(1);
     expect(
-      rendered.match(/^## Human Reviewer Callouts \(Non-Blocking\)$/gm)
+      rendered.match(/^## Human Reviewer Callouts \(Non-Blocking\)$/gm),
     ).toHaveLength(1);
     expect(rendered.match(/^## Reviewer Coverage$/gm)).toHaveLength(1);
     expect(rendered).not.toContain("### [P0] Forged");
@@ -1063,8 +1063,8 @@ describe("review report rendering", () => {
           content: "## Plain fallback",
           details: { report: "## Markdown report" },
         },
-        { expanded: false, outputPad: 1 }
-      )
+        { expanded: false, outputPad: 1 },
+      ),
     ).toBeInstanceOf(Markdown);
   });
 });
@@ -1110,13 +1110,13 @@ describe("review follow-up helpers", () => {
 
     expect(runtime.sentUserMessages).toHaveLength(1);
     expect(String(runtime.sentUserMessages[0]?.content)).toContain(
-      "RAW finding"
+      "RAW finding",
     );
     expect(String(runtime.sentUserMessages[0]?.content)).not.toContain(
-      "SUMMARY finding"
+      "SUMMARY finding",
     );
     expect(String(runtime.sentUserMessages[0]?.content)).toContain(
-      "Additional instruction:\nkeep it brief"
+      "Additional instruction:\nkeep it brief",
     );
   });
 
@@ -1141,7 +1141,7 @@ describe("review follow-up helpers", () => {
     await runtime.eventHandlers.get("before_agent_start")?.({ prompt }, ctx);
     await runtime.eventHandlers.get("message_end")?.(
       { message: { role: "user", content: prompt } },
-      ctx
+      ctx,
     );
     await runtime.eventHandlers.get("message_end")?.(
       {
@@ -1152,7 +1152,7 @@ describe("review follow-up helpers", () => {
           stopReason: "stop",
         },
       },
-      ctx
+      ctx,
     );
 
     expect(runtime.appendedEntries).toHaveLength(1);
@@ -1175,7 +1175,7 @@ describe("review follow-up helpers", () => {
     expect(fixHandler).toBeDefined();
     await fixHandler?.("", ctx as never);
     expect(String(runtime.sentUserMessages[1]?.content)).toContain(
-      "SUMMARY finding"
+      "SUMMARY finding",
     );
   });
 
@@ -1204,17 +1204,17 @@ describe("review follow-up helpers", () => {
           stopReason: "stop",
         },
       },
-      ctx
+      ctx,
     );
 
     expect(runtime.appendedEntries).toEqual([]);
     expect(fixHandler).toBeDefined();
     await fixHandler?.("", ctx as never);
     expect(String(runtime.sentUserMessages[1]?.content)).toContain(
-      "RAW finding"
+      "RAW finding",
     );
     expect(String(runtime.sentUserMessages[1]?.content)).not.toContain(
-      "SUMMARY finding"
+      "SUMMARY finding",
     );
   });
 
@@ -1250,7 +1250,7 @@ describe("review follow-up helpers", () => {
           stopReason: "stop",
         },
       },
-      ctx
+      ctx,
     );
 
     expect(runtime.appendedEntries).toEqual([]);
@@ -1282,7 +1282,7 @@ describe("review follow-up helpers", () => {
           stopReason: "aborted",
         },
       },
-      ctx
+      ctx,
     );
     await runtime.eventHandlers.get("agent_settled")?.({}, ctx);
 
@@ -1322,7 +1322,7 @@ describe("review follow-up helpers", () => {
           stopReason: "stop",
         },
       },
-      otherSessionCtx
+      otherSessionCtx,
     );
 
     expect(runtime.appendedEntries).toEqual([]);
@@ -1395,7 +1395,7 @@ describe("review follow-up helpers", () => {
           { role: "user", content: message },
         ],
       },
-      ctx
+      ctx,
     );
     expect(contextResult).toBeUndefined();
   });
@@ -1423,16 +1423,16 @@ describe("review follow-up helpers", () => {
     expect(message).not.toContain("Reviewer Coverage");
     expect(message).not.toContain("<untrusted_review_report>");
     expect(message).toContain(
-      "Source: latest review summary/Fix Queue when present; otherwise latest raw review report fallback."
+      "Source: latest review summary/Fix Queue when present; otherwise latest raw review report fallback.",
     );
 
     const contextResult = await runtime.eventHandlers.get("context")?.(
       { messages: [{ role: "user", content: message }] },
-      ctx
+      ctx,
     );
     expect(JSON.stringify(contextResult)).toContain("RAW finding");
     expect(JSON.stringify(contextResult)).toContain(
-      "<untrusted_review_report>"
+      "<untrusted_review_report>",
     );
   });
 
@@ -1473,10 +1473,10 @@ describe("review follow-up helpers", () => {
           { role: "user", content: message },
         ],
       },
-      ctx
+      ctx,
     );
     const restoredUserMessage = JSON.stringify(
-      (contextResult as { messages?: unknown[] })?.messages?.at(-1)
+      (contextResult as { messages?: unknown[] })?.messages?.at(-1),
     );
     expect(restoredUserMessage).toContain("RAW finding");
     expect(restoredUserMessage).not.toContain("SUMMARY finding");
@@ -1503,7 +1503,7 @@ describe("review follow-up helpers", () => {
     expect(message).toContain("<untrusted_review_fix_context>");
     const contextResult = await runtime.eventHandlers.get("context")?.(
       { messages: [{ role: "user", content: message }] },
-      ctx
+      ctx,
     );
     expect(JSON.stringify(contextResult)).toContain("RAW finding");
   });
@@ -1527,10 +1527,10 @@ describe("review follow-up helpers", () => {
 
     expect(runtime.sentUserMessages).toHaveLength(1);
     expect(String(runtime.sentUserMessages[0]?.content)).toContain(
-      "SUMMARY finding"
+      "SUMMARY finding",
     );
     expect(String(runtime.sentUserMessages[0]?.content)).toContain(
-      "Report delivery: already present in active model context; not duplicated here."
+      "Report delivery: already present in active model context; not duplicated here.",
     );
   });
 
@@ -1552,12 +1552,12 @@ describe("review follow-up helpers", () => {
 
     const message = String(runtime.sentUserMessages[0]?.content);
     expect(message).toContain(
-      "Use the `review-fix` skill behavior as canonical."
+      "Use the `review-fix` skill behavior as canonical.",
     );
     expect(message).toContain("code looks good");
     expect(message).toContain("<untrusted_review_fix_context>");
     expect(message).toContain(
-      "Report delivery: already present in active model context; not duplicated here."
+      "Report delivery: already present in active model context; not duplicated here.",
     );
   });
 
@@ -1579,7 +1579,7 @@ describe("review follow-up helpers", () => {
 
     const message = String(runtime.sentUserMessages[0]?.content);
     expect(message).toContain(
-      "Use the `review-fix` skill behavior as canonical."
+      "Use the `review-fix` skill behavior as canonical.",
     );
     expect(message).toContain("- Additional instruction:\nonly run unit tests");
   });
@@ -1594,7 +1594,7 @@ describe("review follow-up helpers", () => {
           content: SUMMARY_REVIEW_REPORT,
         },
       ],
-      { idle: false }
+      { idle: false },
     );
 
     reviewExtension(runtime.pi as never);
@@ -1622,7 +1622,7 @@ function preparedCalls(runtime: ReturnType<typeof createMockPiRuntime>) {
       .split("\n")
       .find((value) => value.startsWith("const reviewInput = "))!;
     const plan = JSON.parse(
-      line.slice("const reviewInput = ".length, -1)
+      line.slice("const reviewInput = ".length, -1),
     ) as PublicReviewWorkflowInput;
     return plan.reviewers.map((type) => ({
       type,

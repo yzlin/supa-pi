@@ -36,7 +36,7 @@ function isWholeLine(
   content: string,
   start: number,
   length: number,
-  needle: string
+  needle: string,
 ): boolean {
   const end = start + length;
   return (
@@ -49,7 +49,7 @@ function locations(
   content: string,
   needle: string,
   wholeLines: boolean,
-  budget?: MatcherBudget
+  budget?: MatcherBudget,
 ): number[] {
   if (!needle) {
     return [];
@@ -82,12 +82,12 @@ function uniqueMatch(
   needle: string,
   wholeLines: boolean,
   path: string,
-  budget?: MatcherBudget
+  budget?: MatcherBudget,
 ): Match {
   const exact = locations(content, needle, wholeLines, budget);
   if (exact.length > 1) {
     throw new Error(
-      `Found ${exact.length} occurrences of the text in ${path}. The text must be unique.`
+      `Found ${exact.length} occurrences of the text in ${path}. The text must be unique.`,
     );
   }
   const fuzzyContent = normalizeForFuzzyMatch(content);
@@ -96,14 +96,14 @@ function uniqueMatch(
   if (exact.length === 1) {
     if (fuzzy.length > 1) {
       throw new Error(
-        `Found ${fuzzy.length} fuzzy occurrences of the text in ${path}. The text must be unique.`
+        `Found ${fuzzy.length} fuzzy occurrences of the text in ${path}. The text must be unique.`,
       );
     }
     return { index: exact[0], length: needle.length, fuzzy: false };
   }
   if (fuzzy.length > 1) {
     throw new Error(
-      `Found ${fuzzy.length} fuzzy occurrences of the text in ${path}. The text must be unique.`
+      `Found ${fuzzy.length} fuzzy occurrences of the text in ${path}. The text must be unique.`,
     );
   }
   if (fuzzy.length === 0) {
@@ -128,7 +128,7 @@ export function applyOriginalContentEdits(
   edits: TextEdit[],
   path: string,
   wholeLines = true,
-  budget?: MatcherBudget
+  budget?: MatcherBudget,
 ): string {
   const normalized = normalizeToLF(content);
   const prepared = edits.map((edit) => ({
@@ -140,7 +140,7 @@ export function applyOriginalContentEdits(
     throw new Error(`oldText must not be empty in ${path}.`);
   }
   const initial = prepared.map((edit) =>
-    uniqueMatch(normalized, edit.oldText, wholeLines, path, budget)
+    uniqueMatch(normalized, edit.oldText, wholeLines, path, budget),
   );
   const fuzzy = initial.some((match) => match.fuzzy);
   const base = fuzzy ? normalizeForFuzzyMatch(normalized) : normalized;
@@ -160,7 +160,7 @@ export function applyOriginalContentEdits(
   for (let i = 1; i < matches.length; i++) {
     if (matches[i - 1].index + matches[i - 1].length > matches[i].index) {
       throw new Error(
-        `edits[${matches[i - 1].editIndex}] and edits[${matches[i].editIndex}] overlap in ${path}.`
+        `edits[${matches[i - 1].editIndex}] and edits[${matches[i].editIndex}] overlap in ${path}.`,
       );
     }
   }
@@ -185,7 +185,7 @@ export function applyOriginalContentEdits(
   let result = normalized;
   for (const match of matches.toReversed()) {
     const startLine = spans.findIndex(
-      (span) => match.index >= span.start && match.index < span.end
+      (span) => match.index >= span.start && match.index < span.end,
     );
     let endLine = startLine;
     while (spans[endLine].end < match.index + match.length) {

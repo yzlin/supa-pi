@@ -6,7 +6,7 @@ const performanceRulePath = join(
   process.cwd(),
   "rules",
   "common",
-  "performance.md"
+  "performance.md",
 );
 
 function readPerformanceRule(): string {
@@ -52,16 +52,16 @@ describe("application performance policy contract", () => {
     const rule = readPerformanceRule();
 
     expect(rule).toContain(
-      "Measure before optimizing. Do not add complexity for speculative performance gains."
+      "Measure before optimizing. Do not add complexity for speculative performance gains.",
     );
     expect(rule).toContain(
-      "N+1 queries or repeated network/database calls in loops"
+      "N+1 queries or repeated network/database calls in loops",
     );
     expect(rule).toContain(
-      "unbounded fetches, list endpoints, result sets, queues, or file reads"
+      "unbounded fetches, list endpoints, result sets, queues, or file reads",
     );
     expect(rule).toContain(
-      "If measurement is blocked, state what is missing and why the risk still matters."
+      "If measurement is blocked, state what is missing and why the risk still matters.",
     );
   });
 

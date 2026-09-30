@@ -14,7 +14,7 @@ function record(value: unknown): Record<string, unknown> | undefined {
 
 /** Normalize upstream-compatible arguments before strict schema validation. */
 export function prepareUnifiedEditArguments(
-  args: unknown
+  args: unknown,
 ): UnifiedEditParameters {
   if (typeof args === "string") {
     return { text: args };
@@ -22,16 +22,16 @@ export function prepareUnifiedEditArguments(
   const input = record(args);
   if (!input) {
     throw new Error(
-      "Edit arguments must be a raw string or one supported text alias."
+      "Edit arguments must be a raw string or one supported text alias.",
     );
   }
 
   const aliases = ["text", "patch", "input", "content"].filter((key) =>
-    Object.hasOwn(input, key)
+    Object.hasOwn(input, key),
   );
   if (aliases.length !== 1 || Object.keys(input).length !== 1) {
     throw new Error(
-      "Edit arguments must be a raw string or exactly one of text, patch, input, or content."
+      "Edit arguments must be a raw string or exactly one of text, patch, input, or content.",
     );
   }
   const value = input[aliases[0]];

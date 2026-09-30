@@ -14,14 +14,14 @@ import goalExtension from "./goal";
 import reviewExtension from "./review";
 
 function captureRenderer(
-  register: (pi: ExtensionAPI) => void
+  register: (pi: ExtensionAPI) => void,
 ): MessageRenderer {
   let renderer: MessageRenderer | undefined;
   const api = new Proxy(
     {
       registerMessageRenderer(
         _customType: string,
-        registeredRenderer: MessageRenderer
+        registeredRenderer: MessageRenderer,
       ) {
         renderer = registeredRenderer;
       },
@@ -33,7 +33,7 @@ function captureRenderer(
         }
         return () => undefined;
       },
-    }
+    },
   ) as unknown as ExtensionAPI;
 
   register(api);
@@ -64,7 +64,7 @@ describe("custom message output padding", () => {
         timestamp: Date.now(),
       },
       { expanded: false, outputPad: 1 },
-      theme
+      theme,
     );
 
     expect(paddingX(component)).toBe(1);
@@ -82,7 +82,7 @@ describe("custom message output padding", () => {
         timestamp: Date.now(),
       },
       { expanded: false, outputPad: 1 },
-      theme
+      theme,
     );
 
     expect(paddingX(component)).toBe(1);
@@ -117,7 +117,7 @@ describe("custom message output padding", () => {
         timestamp: Date.now(),
       },
       { expanded: false, outputPad: 0 },
-      theme
+      theme,
     );
 
     expect(paddingX(component)).toBe(0);

@@ -10,7 +10,7 @@ describe("getProviderApiKeyForModel", () => {
           return provider === "anthropic" ? "oauth-token" : undefined;
         },
       },
-      { provider: "anthropic" }
+      { provider: "anthropic" },
     );
 
     expect(apiKey).toBe("oauth-token");
@@ -24,7 +24,7 @@ describe("getProviderApiKeyForModel", () => {
           return input === model ? "legacy-oauth-token" : undefined;
         },
       },
-      model
+      model,
     );
 
     expect(apiKey).toBe("legacy-oauth-token");

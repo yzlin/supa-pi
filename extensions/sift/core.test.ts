@@ -1,3 +1,4 @@
+import { $, sleep } from "bun";
 import { afterEach, describe, expect, it } from "bun:test";
 import {
   chmod,
@@ -11,7 +12,6 @@ import {
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { $, sleep } from "bun";
 
 import { classifyFiles, SessionBudget } from "./classify";
 import { CredentialStore } from "./credentials";
@@ -51,10 +51,10 @@ describe("credentials", () => {
     });
     expect((await lstat(join(root, "sift"))).mode % 0o1000).toBe(0o700);
     expect((await lstat(join(root, "sift", "auth.json"))).mode % 0o1000).toBe(
-      0o600
+      0o600,
     );
     expect(
-      JSON.parse(await readFile(join(root, "sift", "auth.json"), "utf8"))
+      JSON.parse(await readFile(join(root, "sift", "auth.json"), "utf8")),
     ).toEqual({ apiKey: diskKey });
     const disk = new CredentialStore({ agentDir: root, env: {} });
     expect(await disk.status()).toEqual({ source: "stored", usable: true });
@@ -87,7 +87,7 @@ describe("credentials", () => {
       await expect(stored.resolve()).rejects.toThrow("permissions");
     }
     await expect(stored.save("bad\nkey-that-is-long-enough")).rejects.toThrow(
-      "valid"
+      "valid",
     );
   });
 });
@@ -143,13 +143,13 @@ describe("workspace files", () => {
     })();
     const results = await Promise.all(
       Array.from({ length: 200 }, () =>
-        loadWorkspaceFile(root, "race.txt").catch(() => undefined)
-      )
+        loadWorkspaceFile(root, "race.txt").catch(() => undefined),
+      ),
     );
     swapping = false;
     await swapper;
     expect(
-      results.filter(Boolean).map((result) => result?.content)
+      results.filter(Boolean).map((result) => result?.content),
     ).not.toContain("outside");
   });
 
@@ -168,7 +168,7 @@ describe("workspace files", () => {
           await rename(parent, original);
           await symlink(outside, parent);
         },
-      })
+      }),
     ).rejects.toThrow("workspace");
   });
 
@@ -193,13 +193,13 @@ describe("workspace files", () => {
     })();
     const results = await Promise.all(
       Array.from({ length: 200 }, () =>
-        loadWorkspaceFile(root, "parent/race.txt").catch(() => undefined)
-      )
+        loadWorkspaceFile(root, "parent/race.txt").catch(() => undefined),
+      ),
     );
     swapping = false;
     await swapper;
     expect(
-      results.filter(Boolean).map((result) => result?.content)
+      results.filter(Boolean).map((result) => result?.content),
     ).not.toContain("outside");
   });
 
@@ -216,17 +216,17 @@ describe("workspace files", () => {
     for (const [name, content] of credentialFiles) {
       await writeFile(join(root, name), content);
       await expect(loadWorkspaceFile(root, name)).rejects.toThrow(
-        "sensitive marker"
+        "sensitive marker",
       );
     }
     await expect(loadWorkspaceFile(root, ".env.production")).rejects.toThrow(
-      "not complete"
+      "not complete",
     );
     await expect(loadWorkspaceFile(root, "server.pem")).rejects.toThrow(
-      "sensitive filename"
+      "sensitive filename",
     );
     await expect(loadWorkspaceFile(root, "key.txt")).rejects.toThrow(
-      "sensitive marker"
+      "sensitive marker",
     );
   });
 });
@@ -243,7 +243,7 @@ describe("Jev client", () => {
             model: "jev-response",
             answers: { relevant: { type: "noul", noul: 0.75 } },
             usage: { input_tokens: 42, output_tokens: 7 },
-          })
+          }),
         );
       },
     });
@@ -267,7 +267,7 @@ describe("Jev client", () => {
       },
     });
     expect(request?.headers.get("authorization")).toBe(
-      "Bearer secret-key-123456"
+      "Bearer secret-key-123456",
     );
     expect(request?.headers.get("content-type")).toBe("application/json");
   });
@@ -293,7 +293,7 @@ describe("Jev client", () => {
         fetch: async () => Response.json(value),
       });
       await expect(malformed.judge("q", "p", "c")).rejects.toThrow(
-        "Malformed Jev response"
+        "Malformed Jev response",
       );
     }
   });
@@ -304,10 +304,10 @@ describe("Jev client", () => {
         fetch: async () => new Response("top-secret server detail", { status }),
       });
       await expect(client.judge("q", "p", "c")).rejects.toThrow(
-        status === 401 ? "authentication failed" : "request failed (500)"
+        status === 401 ? "authentication failed" : "request failed (500)",
       );
       await expect(client.judge("q", "p", "c")).rejects.not.toThrow(
-        "top-secret"
+        "top-secret",
       );
     }
     const connection = new JevClient({
@@ -316,10 +316,10 @@ describe("Jev client", () => {
         Promise.reject(new Error("connection secret=do-not-display")),
     });
     await expect(connection.judge("q", "p", "c")).rejects.toThrow(
-      "Jev connection failed"
+      "Jev connection failed",
     );
     await expect(connection.judge("q", "p", "c")).rejects.not.toThrow(
-      "do-not-display"
+      "do-not-display",
     );
   });
   it("times out and honors cancellation", async () => {
@@ -329,18 +329,18 @@ describe("Jev client", () => {
       fetch: (_input, init) =>
         new Promise((_resolve, reject) =>
           init?.signal?.addEventListener("abort", () =>
-            reject(init.signal?.reason)
-          )
+            reject(init.signal?.reason),
+          ),
         ),
     });
     await expect(client.judge("q", "p", "c")).rejects.toThrow("timed out");
     const controller = new AbortController();
     controller.abort(new Error("cancel secret=do-not-display"));
     await expect(
-      client.judge("q", "p", "c", controller.signal)
+      client.judge("q", "p", "c", controller.signal),
     ).rejects.toThrow("Jev request cancelled");
     await expect(
-      client.judge("q", "p", "c", controller.signal)
+      client.judge("q", "p", "c", controller.signal),
     ).rejects.not.toThrow("do-not-display");
   });
 });
@@ -356,7 +356,7 @@ describe("classification", () => {
     };
     const budget = new SessionBudget(1);
     await expect(
-      classifyFiles({ cwd: root, query: "", paths: ["a"], budget, judge })
+      classifyFiles({ cwd: root, query: "", paths: ["a"], budget, judge }),
     ).rejects.toThrow("query");
     await expect(
       classifyFiles({
@@ -365,13 +365,25 @@ describe("classification", () => {
         paths: new Array(21).fill("a"),
         budget,
         judge,
-      })
+      }),
     ).rejects.toThrow("20");
     await expect(
-      classifyFiles({ cwd: root, query: "q", paths: ["a", "a"], budget, judge })
+      classifyFiles({
+        cwd: root,
+        query: "q",
+        paths: ["a", "a"],
+        budget,
+        judge,
+      }),
     ).rejects.toThrow("unique");
     await expect(
-      classifyFiles({ cwd: root, query: "q", paths: ["a", "b"], budget, judge })
+      classifyFiles({
+        cwd: root,
+        query: "q",
+        paths: ["a", "b"],
+        budget,
+        judge,
+      }),
     ).rejects.toThrow("budget");
     expect(calls).toBe(0);
     expect(budget.attempted).toBe(0);

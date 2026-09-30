@@ -78,7 +78,7 @@ function fixtureDefinition(): ToolDefinition<
         context,
         options.expanded
           ? toolResultBody(new Text("expanded-one\nexpanded-two", 0, 0))
-          : undefined
+          : undefined,
       ),
   };
 }
@@ -94,7 +94,7 @@ function createFixture(reasoning: string) {
     {},
     fixtureDefinition(),
     ui as never,
-    process.cwd()
+    process.cwd(),
   );
 }
 
@@ -123,7 +123,9 @@ describe("real Pi ToolExecutionComponent smoke", () => {
       expect(pending).toHaveLength(2);
       expectRowsFit(pending, width);
       expect(
-        pending.every((line) => line.includes(theme.getBgAnsi("toolPendingBg")))
+        pending.every((line) =>
+          line.includes(theme.getBgAnsi("toolPendingBg")),
+        ),
       ).toBe(true);
     }
     expect(contentRows(component, 64).join("\n")).toContain("📖");
@@ -142,14 +144,14 @@ describe("real Pi ToolExecutionComponent smoke", () => {
         },
         isError: false,
       },
-      false
+      false,
     );
     const settled = contentRows(component, 64);
     expect(settled).toHaveLength(2);
     expect(settled.join("\n")).toContain("full read skills");
     expect(settled.join("\n")).toContain("[pagination ignored]");
     expect(
-      settled.every((line) => line.includes(theme.getBgAnsi("toolSuccessBg")))
+      settled.every((line) => line.includes(theme.getBgAnsi("toolSuccessBg"))),
     ).toBe(true);
     expectRowsFit(settled, 64);
 
@@ -165,24 +167,24 @@ describe("real Pi ToolExecutionComponent smoke", () => {
     const read = createFixture("Stream file");
     read.updateResult(
       { content: [{ type: "text", text: "one" }], isError: false },
-      true
+      true,
     );
     expect(contentRows(read, 64)).toHaveLength(3);
     expect(contentRows(read, 64).join("\n")).toContain("📖");
     expect(
       contentRows(read, 64).every((line) =>
-        line.includes(theme.getBgAnsi("toolPendingBg"))
-      )
+        line.includes(theme.getBgAnsi("toolPendingBg")),
+      ),
     ).toBe(true);
     read.updateResult(
       { content: [{ type: "text", text: "one\ntwo" }], isError: false },
-      false
+      false,
     );
     expect(contentRows(read, 64)).toHaveLength(2);
     expect(
       contentRows(read, 64).every((line) =>
-        line.includes(theme.getBgAnsi("toolSuccessBg"))
-      )
+        line.includes(theme.getBgAnsi("toolSuccessBg")),
+      ),
     ).toBe(true);
 
     const bashSchema = Type.Object({
@@ -218,11 +220,11 @@ describe("real Pi ToolExecutionComponent smoke", () => {
       {},
       bashDefinition,
       ui as never,
-      process.cwd()
+      process.cwd(),
     );
     bash.updateResult(
       { content: [{ type: "text", text: "one" }], isError: false },
-      true
+      true,
     );
     const pendingBashRows = contentRows(bash, 64);
     const pendingBashText = pendingBashRows.join("\n");
@@ -232,19 +234,19 @@ describe("real Pi ToolExecutionComponent smoke", () => {
     expect(pendingBashText).not.toContain("hidden-tail");
     expect(
       pendingBashRows.every((line) =>
-        line.includes(theme.getBgAnsi("toolPendingBg"))
-      )
+        line.includes(theme.getBgAnsi("toolPendingBg")),
+      ),
     ).toBe(true);
     bash.updateResult(
       { content: [{ type: "text", text: "done" }], isError: false },
-      false
+      false,
     );
     const settledBashRows = contentRows(bash, 64);
     expect(settledBashRows).toHaveLength(2);
     expect(
       settledBashRows.every((line) =>
-        line.includes(theme.getBgAnsi("toolSuccessBg"))
-      )
+        line.includes(theme.getBgAnsi("toolSuccessBg")),
+      ),
     ).toBe(true);
   });
 
@@ -283,7 +285,7 @@ describe("real Pi ToolExecutionComponent smoke", () => {
       {},
       bashDefinition,
       ui as never,
-      process.cwd()
+      process.cwd(),
     );
 
     const rows = contentRows(bash, 100);
@@ -291,8 +293,8 @@ describe("real Pi ToolExecutionComponent smoke", () => {
     const forbidden = ["\n", "\r", "\t", "\u0007", "\u001b[31m"];
     expect(
       rows.every((line) =>
-        forbidden.every((character) => !line.includes(character))
-      )
+        forbidden.every((character) => !line.includes(character)),
+      ),
     ).toBe(true);
     const plain = rows.map(stripVTControlCharacters);
     expect(plain[0]).toContain("Compare upstream icon");
@@ -303,7 +305,7 @@ describe("real Pi ToolExecutionComponent smoke", () => {
   test("renders strict edit planned preview then replaces it with final diff", async () => {
     const cwd = join(
       import.meta.dir,
-      `.tmp-tui-edit-${Date.now()}-${Math.random()}`
+      `.tmp-tui-edit-${Date.now()}-${Math.random()}`,
     );
     mkdirSync(cwd, { recursive: true });
     writeFileSync(join(cwd, "target.txt"), "old\n");
@@ -343,11 +345,11 @@ describe("real Pi ToolExecutionComponent smoke", () => {
                     enabled: true,
                     previewLines: 20,
                     viewMode: "unified",
-                  }
+                  },
                 ),
-                true
+                true,
               )
-            : undefined
+            : undefined,
         ),
     };
     try {
@@ -358,7 +360,7 @@ describe("real Pi ToolExecutionComponent smoke", () => {
         {},
         definition,
         ui as never,
-        cwd
+        cwd,
       );
       component.setArgsComplete();
       component.setExpanded(true);
@@ -378,13 +380,13 @@ describe("real Pi ToolExecutionComponent smoke", () => {
           },
           isError: false,
         },
-        false
+        false,
       );
       const final = contentRows(component, 64);
       expect(final.join("\n")).toContain("FINAL");
       expect(final.join("\n")).not.toContain("planned diff");
       expect(
-        final.every((line) => line.includes(theme.getBgAnsi("toolSuccessBg")))
+        final.every((line) => line.includes(theme.getBgAnsi("toolSuccessBg"))),
       ).toBe(true);
       expectRowsFit(final, 64);
     } finally {
@@ -400,14 +402,14 @@ describe("real Pi ToolExecutionComponent smoke", () => {
         details: { toolDisplay: { durationMs: 30 } },
         isError: true,
       },
-      false
+      false,
     );
 
     const rows = contentRows(component, 42);
     expect(rows).toHaveLength(2);
     expect(rows.join("\n")).toContain("permission denied");
     expect(
-      rows.every((line) => line.includes(theme.getBgAnsi("toolErrorBg")))
+      rows.every((line) => line.includes(theme.getBgAnsi("toolErrorBg"))),
     ).toBe(true);
     expectRowsFit(rows, 42);
   });

@@ -62,7 +62,7 @@ const REVIEW_SCOPES = new Set(["current", "all"]);
 const WHITESPACE_PATTERN = /\s/;
 
 function tokenizeArgs(
-  rawArgs: string
+  rawArgs: string,
 ): { ok: true; tokens: Token[] } | { ok: false; error: string } {
   const tokens: Token[] = [];
   let index = 0;
@@ -142,7 +142,7 @@ function tokenizeArgs(
 
 function splitInstruction(
   rawArgs: string,
-  tokens: Token[]
+  tokens: Token[],
 ): {
   beforeTokens: Token[];
   instruction: string | null;
@@ -163,7 +163,7 @@ function splitInstruction(
 
 function requireAllowedFlag(
   command: ContextDocsCommand,
-  flag: string
+  flag: string,
 ): { ok: true } | { ok: false; error: string } {
   if (!ALLOWED_FLAGS[command].has(flag)) {
     return { ok: false, error: `Unknown flag for /${command}: ${flag}` };
@@ -175,7 +175,7 @@ function requireAllowedFlag(
 function assignOption(
   input: ContextDocsCommandInput,
   flag: string,
-  value: string | true
+  value: string | true,
 ): { ok: true } | { ok: false; error: string } {
   switch (flag) {
     case "--dry-run":
@@ -237,7 +237,7 @@ function isMissingNextValue(token: string | undefined): boolean {
 export function parseContextDocsArgs(
   command: ContextDocsCommand,
   rawArgs: string,
-  cwd: string
+  cwd: string,
 ): ContextDocsParseResult {
   const tokenized = tokenizeArgs(rawArgs);
   if (!tokenized.ok) {
@@ -246,7 +246,7 @@ export function parseContextDocsArgs(
 
   const { beforeTokens, instruction } = splitInstruction(
     rawArgs,
-    tokenized.tokens
+    tokenized.tokens,
   );
 
   let targetLabel: string | null = null;

@@ -67,7 +67,7 @@ afterEach(() => {
 
 function createContext(
   entries: readonly SessionEntryLike[] = [],
-  model: unknown = { fastMode: true }
+  model: unknown = { fastMode: true },
 ): {
   ctx: ExtensionCommandContext;
   statuses: Array<{ key: string; text: string | undefined }>;
@@ -140,7 +140,7 @@ function setupHarness(harnessOptions: { flag?: boolean } = {}): {
 
 function getHandler(
   handlers: Map<string, ExtensionEventHandler>,
-  eventName: string
+  eventName: string,
 ): ExtensionEventHandler {
   const handler = handlers.get(eventName);
   if (!handler) {
@@ -301,13 +301,13 @@ describe("fast mode", () => {
     mkdirSync(join(testHomeDir, ".pi", "agent"), { recursive: true });
     writeFileSync(
       getGlobalConfigPath(),
-      JSON.stringify({ enabled: false, warned: false, allowList: [] })
+      JSON.stringify({ enabled: false, warned: false, allowList: [] }),
     );
     expect(() => setupHarness()).toThrow(ALLOW_LIST_KEY_ERROR);
 
     writeFileSync(
       getGlobalConfigPath(),
-      JSON.stringify({ enabled: false, warned: false, allowlist: ["gpt-5.5"] })
+      JSON.stringify({ enabled: false, warned: false, allowlist: ["gpt-5.5"] }),
     );
     expect(() => setupHarness()).toThrow(ALLOWLIST_ENTRY_ERROR);
   });
@@ -318,7 +318,7 @@ describe("fast mode", () => {
     mkdirSync(join(testHomeDir, ".pi", "agent"), { recursive: true });
     writeFileSync(
       getGlobalConfigPath(),
-      JSON.stringify({ enabled: false, warned: false, allowList: [] })
+      JSON.stringify({ enabled: false, warned: false, allowList: [] }),
     );
 
     expect(() => command.handler("on", ctx)).toThrow(ALLOW_LIST_KEY_ERROR);
@@ -330,7 +330,7 @@ describe("fast mode", () => {
     expect(
       applyFastModeToPayload({ model: "x" }, isFastModeEnabled(), {
         fastMode: true,
-      })
+      }),
     ).toBeUndefined();
   });
 
@@ -343,7 +343,7 @@ describe("fast mode", () => {
         warned: false,
         allowlist: ["custom-provider/custom-model"],
         note: "keep me",
-      })
+      }),
     );
 
     const { command } = setupHarness();
@@ -369,7 +369,7 @@ describe("fast mode", () => {
         enabled: false,
         warned: false,
         allowlist: ["custom-provider/custom-model"],
-      })
+      }),
     );
     setupHarness();
 
@@ -377,10 +377,10 @@ describe("fast mode", () => {
       applyFastModeToPayload({}, true, {
         provider: "custom-provider",
         id: "custom-model",
-      })
+      }),
     ).toEqual({ service_tier: "priority" });
     expect(
-      applyFastModeToPayload({}, true, { id: "custom-provider/custom-model" })
+      applyFastModeToPayload({}, true, { id: "custom-provider/custom-model" }),
     ).toEqual({ service_tier: "priority" });
   });
 
@@ -392,7 +392,7 @@ describe("fast mode", () => {
         enabled: false,
         warned: false,
         allowlist: ["old-provider/old-model"],
-      })
+      }),
     );
     const { handlers } = setupHarness();
     writeFileSync(
@@ -401,7 +401,7 @@ describe("fast mode", () => {
         enabled: false,
         warned: false,
         allowlist: ["new-provider/new-model"],
-      })
+      }),
     );
     const restored = createContext([
       {
@@ -418,13 +418,13 @@ describe("fast mode", () => {
       applyFastModeToPayload({}, true, {
         provider: "old-provider",
         id: "old-model",
-      })
+      }),
     ).toBeUndefined();
     expect(
       applyFastModeToPayload({}, true, {
         provider: "new-provider",
         id: "new-model",
-      })
+      }),
     ).toEqual({ service_tier: "priority" });
   });
 
@@ -440,7 +440,7 @@ describe("fast mode", () => {
       "gpt-6-sol",
     ]) {
       expect(
-        applyFastModeToPayload({}, true, { provider: "openai-codex", id })
+        applyFastModeToPayload({}, true, { provider: "openai-codex", id }),
       ).toEqual({ service_tier: "priority" });
     }
 
@@ -463,25 +463,25 @@ describe("fast mode", () => {
       applyFastModeToPayload({}, true, {
         provider: "openai-codex",
         id: "gpt-5.5",
-      })
+      }),
     ).toEqual({
       service_tier: "priority",
     });
     expect(
-      applyFastModeToPayload({}, true, { fastMode: false })
+      applyFastModeToPayload({}, true, { fastMode: false }),
     ).toBeUndefined();
     expect(applyFastModeToPayload({}, true, {})).toBeUndefined();
   });
 
   it("patches request payload only when enabled and supported", () => {
     expect(
-      applyFastModeToPayload({ model: "x" }, true, { fastMode: true })
+      applyFastModeToPayload({ model: "x" }, true, { fastMode: true }),
     ).toEqual({
       model: "x",
       service_tier: "priority",
     });
     expect(
-      applyFastModeToPayload({ model: "x" }, false, { fastMode: true })
+      applyFastModeToPayload({ model: "x" }, false, { fastMode: true }),
     ).toBeUndefined();
   });
 
@@ -489,12 +489,12 @@ describe("fast mode", () => {
     expect(
       applyFastModeToPayload({ service_tier: "default" }, true, {
         fastMode: true,
-      })
+      }),
     ).toBeUndefined();
     expect(
       applyFastModeToPayload({ serviceTier: "default" }, true, {
         fastMode: true,
-      })
+      }),
     ).toBeUndefined();
   });
 
@@ -542,7 +542,7 @@ describe("fast mode", () => {
     await command.handler("on", ctx);
 
     expect(
-      notifications.filter((item) => item.message === FAST_MODE_WARNING)
+      notifications.filter((item) => item.message === FAST_MODE_WARNING),
     ).toHaveLength(1);
   });
 
@@ -554,7 +554,7 @@ describe("fast mode", () => {
     command.handler("on", ctx);
     const result = getHandler(handlers, "before_provider_request")(
       request,
-      ctx as ExtensionContext
+      ctx as ExtensionContext,
     );
 
     expect(result).toEqual({ model: "x", service_tier: "priority" });

@@ -1,8 +1,8 @@
+import { spawn } from "bun";
 import { afterEach, describe, expect, it } from "bun:test";
 import { promises as fs } from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { spawn } from "bun";
 
 import {
   captureReviewTargetFreshness,
@@ -45,12 +45,12 @@ async function commitAll(cwd: string, message: string): Promise<void> {
 
 async function expectFreshnessError(
   promise: Promise<unknown>,
-  reason: ReviewFreshnessErrorReason
+  reason: ReviewFreshnessErrorReason,
 ) {
   // Bun's rejects.toSatisfy does not unwrap promises in all supported versions.
   const error = await promise.then(
     () => null,
-    (failure: unknown) => failure
+    (failure: unknown) => failure,
   );
   expect(error).toBeInstanceOf(ReviewFreshnessError);
   expect(error instanceof ReviewFreshnessError && error.reason).toBe(reason);
@@ -61,7 +61,7 @@ afterEach(async () => {
   await Promise.all(
     temporaryDirectories
       .splice(0)
-      .map((directory) => fs.rm(directory, { force: true, recursive: true }))
+      .map((directory) => fs.rm(directory, { force: true, recursive: true })),
   );
 });
 
@@ -82,7 +82,7 @@ describe("captureReviewTargetFreshness", () => {
       "diff",
       "--name-only",
       "baseline...HEAD",
-      "--"
+      "--",
     );
     expect(reviewerPaths).toContain("sibling/changed.txt");
 
@@ -99,11 +99,11 @@ describe("captureReviewTargetFreshness", () => {
       expect(before.fileCount).toBe(1);
       await fs.writeFile(path.join(root, "sibling", "changed.txt"), "edited\n");
       expect((await captureReviewTargetFreshness(cwd, target)).digest).not.toBe(
-        before.digest
+        before.digest,
       );
       await fs.writeFile(
         path.join(root, "sibling", "changed.txt"),
-        "changed\n"
+        "changed\n",
       );
     }
   });
@@ -119,7 +119,7 @@ describe("captureReviewTargetFreshness", () => {
     await runGit(root, "add", "sibling/staged.txt");
     await fs.writeFile(
       path.join(root, "sibling", "unstaged.txt"),
-      "unstaged\n"
+      "unstaged\n",
     );
     await fs.writeFile(path.join(root, "sibling", "untracked.txt"), "new\n");
     const cwd = path.join(root, "nested");
@@ -130,7 +130,7 @@ describe("captureReviewTargetFreshness", () => {
     expect(before.fileCount).toBe(3);
     await fs.writeFile(path.join(root, "sibling", "untracked.txt"), "edited\n");
     expect(
-      (await captureReviewTargetFreshness(cwd, { type: "uncommitted" })).digest
+      (await captureReviewTargetFreshness(cwd, { type: "uncommitted" })).digest,
     ).not.toBe(before.digest);
   });
 
@@ -152,7 +152,7 @@ describe("captureReviewTargetFreshness", () => {
       cwd,
       "status",
       "--porcelain",
-      "--untracked-files=all"
+      "--untracked-files=all",
     );
     expect(reviewerPacketPaths).toContain(".pi/staged.json");
     expect(reviewerPacketPaths).toContain(".pi/unstaged.json");
@@ -164,7 +164,7 @@ describe("captureReviewTargetFreshness", () => {
     expect(before.fileCount).toBe(4);
     await fs.writeFile(path.join(cwd, ".pi", "untracked.json"), "two\n");
     expect((await captureReviewTargetFreshness(cwd, target)).digest).not.toBe(
-      before.digest
+      before.digest,
     );
   });
 
@@ -179,7 +179,7 @@ describe("captureReviewTargetFreshness", () => {
     expect(before.fileCount).toBe(2);
     await fs.writeFile(path.join(cwd, ".pi", "settings.json"), "two\n");
     expect((await captureReviewTargetFreshness(cwd, target)).digest).not.toBe(
-      before.digest
+      before.digest,
     );
   });
 
@@ -191,11 +191,11 @@ describe("captureReviewTargetFreshness", () => {
     const target = { type: "folder", paths: ["."] } as const;
     const before = await captureReviewTargetFreshness(
       path.join(root, "nested"),
-      target
+      target,
     );
     await fs.writeFile(path.join(root, "sibling.txt"), "two\n");
     expect(
-      await captureReviewTargetFreshness(path.join(root, "nested"), target)
+      await captureReviewTargetFreshness(path.join(root, "nested"), target),
     ).toEqual(before);
   });
 
@@ -226,7 +226,7 @@ describe("captureReviewTargetFreshness", () => {
     await fs.utimes(
       file,
       new Date(1_700_000_000_000),
-      new Date(1_700_000_000_000)
+      new Date(1_700_000_000_000),
     );
     const before = await fs.stat(file);
     const first = await captureReviewTargetFreshness(cwd, {
@@ -267,7 +267,7 @@ describe("captureReviewTargetFreshness", () => {
     expect(await runGit(cwd, "ls-files", "--stage")).toBe(beforeIndex);
     expect(await fs.readFile(file, "utf8")).toBe("third\n");
     expect((await captureReviewTargetFreshness(cwd, target)).digest).not.toBe(
-      before.digest
+      before.digest,
     );
   });
 
@@ -319,7 +319,7 @@ describe("captureReviewTargetFreshness", () => {
   it("rejects symlinked folder traversal", async () => {
     const cwd = await makeRepository();
     const outside = await fs.mkdtemp(
-      path.join(os.tmpdir(), "review-freshness-outside-")
+      path.join(os.tmpdir(), "review-freshness-outside-"),
     );
     temporaryDirectories.push(outside);
     await fs.writeFile(path.join(outside, "secret.txt"), "secret\n");
@@ -330,7 +330,7 @@ describe("captureReviewTargetFreshness", () => {
         type: "folder",
         paths: ["selected"],
       }),
-      "unsafe-path"
+      "unsafe-path",
     );
   });
 
@@ -346,9 +346,9 @@ describe("captureReviewTargetFreshness", () => {
       captureReviewTargetFreshness(
         cwd,
         { type: "folder", paths: ["one.txt"] },
-        { signal: controller.signal }
+        { signal: controller.signal },
       ),
-      "cancelled"
+      "cancelled",
     );
     await expectFreshnessError(
       captureReviewTargetFreshness(
@@ -356,9 +356,9 @@ describe("captureReviewTargetFreshness", () => {
         { type: "folder", paths: ["."] },
         {
           maxFiles: 1,
-        }
+        },
       ),
-      "file-limit"
+      "file-limit",
     );
     await expectFreshnessError(
       captureReviewTargetFreshness(
@@ -366,9 +366,9 @@ describe("captureReviewTargetFreshness", () => {
         { type: "folder", paths: ["one.txt"] },
         {
           maxBytes: 1,
-        }
+        },
       ),
-      "byte-limit"
+      "byte-limit",
     );
   });
 });
@@ -390,20 +390,20 @@ it("captures branch and commit identity and current affected bytes", async () =>
     "--allow-empty",
     "--quiet",
     "-m",
-    "identity only"
+    "identity only",
   );
   expect((await captureReviewTargetFreshness(cwd, branch)).digest).not.toBe(
-    firstBranch.digest
+    firstBranch.digest,
   );
   expect((await captureReviewTargetFreshness(cwd, commit)).digest).not.toBe(
-    firstCommit.digest
+    firstCommit.digest,
   );
   const sha = (await runGit(cwd, "rev-parse", "HEAD~1")).trim();
   const fixed = { type: "commit", sha } as const;
   const before = await captureReviewTargetFreshness(cwd, fixed);
   await fs.writeFile(path.join(cwd, "tracked.txt"), "working\n");
   expect((await captureReviewTargetFreshness(cwd, fixed)).digest).not.toBe(
-    before.digest
+    before.digest,
   );
 });
 
@@ -424,7 +424,7 @@ it("captures folder dependencies, detects removal, and rejects escapes and neste
         type: "folder",
         paths: target.paths,
       })
-    ).digest
+    ).digest,
   ).not.toBe(before.digest);
   await fs.rm(path.join(cwd, "selected", "one"));
   expect(
@@ -433,11 +433,11 @@ it("captures folder dependencies, detects removal, and rejects escapes and neste
         type: "folder",
         paths: target.paths,
       })
-    ).digest
+    ).digest,
   ).not.toBe(before.digest);
   await expectFreshnessError(
     captureReviewTargetFreshness(cwd, { type: "folder", paths: ["../escape"] }),
-    "unsafe-path"
+    "unsafe-path",
   );
   await fs.symlink(cwd, path.join(cwd, "selected", "link"));
   await expectFreshnessError(
@@ -445,7 +445,7 @@ it("captures folder dependencies, detects removal, and rejects escapes and neste
       type: "folder",
       paths: ["selected/link/selected"],
     }),
-    "unsafe-path"
+    "unsafe-path",
   );
 });
 
@@ -459,13 +459,13 @@ it("captures staged identity and untracked bytes and supports pull requests", as
   const unstaged = await captureReviewTargetFreshness(cwd, target);
   await runGit(cwd, "add", "one");
   expect((await captureReviewTargetFreshness(cwd, target)).digest).not.toBe(
-    unstaged.digest
+    unstaged.digest,
   );
   await fs.writeFile(path.join(cwd, "new"), "aaaa");
   const untracked = await captureReviewTargetFreshness(cwd, target);
   await fs.writeFile(path.join(cwd, "new"), "bbbb");
   expect((await captureReviewTargetFreshness(cwd, target)).digest).not.toBe(
-    untracked.digest
+    untracked.digest,
   );
   const pr = {
     type: "pullRequest",
@@ -481,24 +481,24 @@ it("captures staged identity and untracked bytes and supports pull requests", as
   expect(await captureReviewTargetFreshness(cwd, pr)).toEqual(before);
   await fs.writeFile(path.join(cwd, "one"), "more");
   expect((await captureReviewTargetFreshness(cwd, branch)).digest).not.toBe(
-    beforeBranch.digest
+    beforeBranch.digest,
   );
   expect((await captureReviewTargetFreshness(cwd, pr)).digest).not.toBe(
-    before.digest
+    before.digest,
   );
   await expectFreshnessError(
     captureReviewTargetFreshness(cwd, target, { maxBytes: 1 }),
-    "byte-limit"
+    "byte-limit",
   );
   await expectFreshnessError(
     captureReviewTargetFreshness(cwd, { type: "commit", sha: "--invalid" }),
-    "git-error"
+    "git-error",
   );
   await expectFreshnessError(
     captureReviewTargetFreshness(cwd, target, {
       maxFiles: Number.POSITIVE_INFINITY,
     }),
-    "invalid-limit"
+    "invalid-limit",
   );
 });
 
@@ -508,6 +508,6 @@ it("rejects special files without opening them", async () => {
   expect(await child.exited).toBe(0);
   await expectFreshnessError(
     captureReviewTargetFreshness(cwd, { type: "folder", paths: ["pipe"] }),
-    "special-file"
+    "special-file",
   );
 });

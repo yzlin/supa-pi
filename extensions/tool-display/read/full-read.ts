@@ -28,7 +28,7 @@ export interface ToolDisplayFullReadMatch {
 }
 
 export async function normalizeSkillFilePaths(
-  skills: ToolDisplaySkillLike[]
+  skills: ToolDisplaySkillLike[],
 ): Promise<Set<string>> {
   const normalized = new Set<string>();
 
@@ -72,7 +72,7 @@ function isContainedOrEqual(relativePath: string): boolean {
 function matchesPatterns(
   relativePath: string,
   include: string[] = [],
-  exclude: string[] = []
+  exclude: string[] = [],
 ): boolean {
   const normalizedPath = toPosixPath(relativePath);
   const includeMatcher = ignore().add(include);
@@ -86,7 +86,7 @@ function matchesPatterns(
 async function matchesPatternTarget(
   canonicalPath: string,
   cwd: string,
-  target: ToolDisplayFullReadTarget
+  target: ToolDisplayFullReadTarget,
 ): Promise<boolean> {
   if (!(target.baseDir && target.include?.length)) {
     return false;
@@ -112,7 +112,7 @@ export async function resolveFullReadPath(
   requestedPath: string,
   cwd: string,
   targets: ToolDisplayFullReadTarget[],
-  skillFilePaths: Set<string>
+  skillFilePaths: Set<string>,
 ): Promise<ToolDisplayFullReadMatch | null> {
   let canonicalPath: string;
   try {
@@ -147,7 +147,7 @@ export async function resolveFullReadPath(
 
 function applyPagination(
   content: string,
-  params: Pick<ReadToolInput, "offset" | "limit">
+  params: Pick<ReadToolInput, "offset" | "limit">,
 ): string {
   const lines = content.split("\n");
   const start =
@@ -158,18 +158,18 @@ function applyPagination(
 
 export async function readFullReadText(
   match: ToolDisplayFullReadMatch,
-  params: Pick<ReadToolInput, "offset" | "limit">
+  params: Pick<ReadToolInput, "offset" | "limit">,
 ): Promise<{ content: string; details: ToolDisplayReadDetails }> {
   const { path, target } = match;
   const fileStat = await stat(path);
   if (fileStat.size > TOOL_DISPLAY_FULL_READ_MAX_BYTES) {
     throw new Error(
-      `File exceeds tool-display hard read cap: ${fileStat.size} bytes > ${TOOL_DISPLAY_FULL_READ_MAX_BYTES} bytes`
+      `File exceeds tool-display hard read cap: ${fileStat.size} bytes > ${TOOL_DISPLAY_FULL_READ_MAX_BYTES} bytes`,
     );
   }
   if (target.ignorePagination && fileStat.size > target.maxBytes) {
     throw new Error(
-      `File exceeds tool-display read cap: ${fileStat.size} bytes > ${target.maxBytes} bytes`
+      `File exceeds tool-display read cap: ${fileStat.size} bytes > ${target.maxBytes} bytes`,
     );
   }
 
@@ -180,7 +180,7 @@ export async function readFullReadText(
   const bytes = Buffer.byteLength(content, "utf8");
   if (bytes > target.maxBytes) {
     throw new Error(
-      `File exceeds tool-display read cap: ${bytes} bytes > ${target.maxBytes} bytes`
+      `File exceeds tool-display read cap: ${bytes} bytes > ${target.maxBytes} bytes`,
     );
   }
 
@@ -188,7 +188,7 @@ export async function readFullReadText(
     path,
     target.name,
     bytes,
-    target.ignorePagination ? params : {}
+    target.ignorePagination ? params : {},
   );
 
   return { content, details };

@@ -22,7 +22,7 @@ const temporaryDirectories: string[] = [];
 
 async function writeBunStub(
   bin: string,
-  script = 'printf \'%s\\n\' "$*" >> "$BUN_CALL_LOG"\n'
+  script = 'printf \'%s\\n\' "$*" >> "$BUN_CALL_LOG"\n',
 ) {
   const bunStub = join(bin, "bun");
   await writeFile(bunStub, `#!/usr/bin/env bash\n${script}`);
@@ -33,7 +33,7 @@ afterEach(async () => {
   await Promise.all(
     temporaryDirectories
       .splice(0)
-      .map((path) => rm(path, { force: true, recursive: true }))
+      .map((path) => rm(path, { force: true, recursive: true })),
   );
 });
 
@@ -51,7 +51,7 @@ describe("setup local package deployment", () => {
     const piStub = join(bin, "pi");
     await writeFile(
       piStub,
-      '#!/usr/bin/env bash\nprintf \'%s\\n\' "$*" >> "$PI_CALL_LOG"\n'
+      '#!/usr/bin/env bash\nprintf \'%s\\n\' "$*" >> "$PI_CALL_LOG"\n',
     );
     await chmod(piStub, 0o755);
 
@@ -68,7 +68,7 @@ describe("setup local package deployment", () => {
 
     expect(result.status).toBe(23);
     expect((await readFile(piCallLog, "utf8")).split("\n")).not.toContain(
-      `install ${repositoryDir}`
+      `install ${repositoryDir}`,
     );
     expect(result.stdout).not.toContain("Linking prompts...");
   });
@@ -133,18 +133,18 @@ describe("setup local package deployment", () => {
     await loader.reload();
 
     const manifest = JSON.parse(
-      await readFile(join(checkout, "package.json"), "utf8")
+      await readFile(join(checkout, "package.json"), "utf8"),
     );
     const expectedPaths = manifest.pi.extensions.map((path: string) =>
       path.endsWith(".ts") || path.endsWith(".js")
         ? resolve(checkout, path)
-        : resolve(checkout, path, "index.ts")
+        : resolve(checkout, path, "index.ts"),
     );
     const loaded = loader.getExtensions();
 
     expect(loaded.errors).toEqual([]);
     expect(
-      loaded.extensions.map((extension) => extension.resolvedPath)
+      loaded.extensions.map((extension) => extension.resolvedPath),
     ).toEqual(expectedPaths);
   }, 30_000);
 
@@ -162,7 +162,7 @@ describe("setup local package deployment", () => {
     const piStub = join(bin, "pi");
     await writeFile(
       piStub,
-      '#!/usr/bin/env bash\nprintf \'%s\\n\' "$*" >> "$PI_CALL_LOG"\nif [ "$2" = "$REPOSITORY_DIR" ]; then echo "local package deployed"; fi\n'
+      '#!/usr/bin/env bash\nprintf \'%s\\n\' "$*" >> "$PI_CALL_LOG"\nif [ "$2" = "$REPOSITORY_DIR" ]; then echo "local package deployed"; fi\n',
     );
     await chmod(piStub, 0o755);
 
@@ -181,16 +181,18 @@ describe("setup local package deployment", () => {
 
     expect(result.status, result.error?.message ?? result.stderr).toBe(0);
     expect((await readFile(bunCallLog, "utf8")).split("\n")).toContain(
-      "install --frozen-lockfile --production"
+      "install --frozen-lockfile --production",
     );
     expect((await readFile(callLog, "utf8")).split("\n")).toContain(
-      `install ${repositoryDir}`
+      `install ${repositoryDir}`,
     );
     expect(
-      result.stdout.indexOf("Installing locked supa-pi runtime dependencies...")
+      result.stdout.indexOf(
+        "Installing locked supa-pi runtime dependencies...",
+      ),
     ).toBeLessThan(result.stdout.indexOf("local package deployed"));
     expect(result.stdout.indexOf("local package deployed")).toBeLessThan(
-      result.stdout.indexOf("Linking prompts...")
+      result.stdout.indexOf("Linking prompts..."),
     );
   });
 
@@ -210,7 +212,7 @@ describe("setup local package deployment", () => {
     for (const command of ["grill-me", "research-brief", "show-me"]) {
       await symlink(
         join(repositoryDir, "prompts", `${command}.md`),
-        join(promptsDirectory, `${command}.md`)
+        join(promptsDirectory, `${command}.md`),
       );
     }
 
@@ -224,7 +226,7 @@ if [ "$2" = "$REPOSITORY_DIR" ]; then
     [ -L "$HOME/.pi/agent/prompts/$command.md" ] || exit 42
   done
 fi
-`
+`,
     );
     await chmod(piStub, 0o755);
 
@@ -243,13 +245,13 @@ fi
 
     expect(result.status, result.error?.message ?? result.stderr).toBe(0);
     expect((await readFile(callLog, "utf8")).split("\n")).toContain(
-      `install ${repositoryDir}`
+      `install ${repositoryDir}`,
     );
     for (const command of ["grill-me", "research-brief", "show-me"]) {
       const promptPath = join(promptsDirectory, `${command}.md`);
       expect((await lstat(promptPath)).isSymbolicLink()).toBe(true);
       expect(await readlink(promptPath)).toBe(
-        join(repositoryDir, "prompts", `${command}.md`)
+        join(repositoryDir, "prompts", `${command}.md`),
       );
     }
   });
@@ -274,7 +276,7 @@ describe("setup managed-directory symlink reconciliation", () => {
 
     const managedDanglingLink = join(
       targetDirectory,
-      "removed-managed-agent.md"
+      "removed-managed-agent.md",
     );
     const unrelatedDanglingLink = join(targetDirectory, "unrelated.md");
     const crossSectionDanglingLink = join(targetDirectory, "former-prompt.md");
@@ -285,19 +287,19 @@ describe("setup managed-directory symlink reconciliation", () => {
 
     await symlink(
       join(repositoryDir, "agents", "removed-managed-agent.md"),
-      managedDanglingLink
+      managedDanglingLink,
     );
     await symlink(
       join(temporaryDirectory, "missing", "unrelated.md"),
-      unrelatedDanglingLink
+      unrelatedDanglingLink,
     );
     await symlink(
       join(repositoryDir, "prompts", "removed-prompt.md"),
-      crossSectionDanglingLink
+      crossSectionDanglingLink,
     );
     await symlink(
       join(repositoryDir, "agents-user", "removed.md"),
-      prefixCollisionDanglingLink
+      prefixCollisionDanglingLink,
     );
     await symlink(join(repositoryDir, "AGENTS.global.md"), validLink);
     await writeFile(realFile, "keep me\n");
@@ -319,16 +321,16 @@ describe("setup managed-directory symlink reconciliation", () => {
       code: "ENOENT",
     });
     expect(await readlink(unrelatedDanglingLink)).toBe(
-      join(temporaryDirectory, "missing", "unrelated.md")
+      join(temporaryDirectory, "missing", "unrelated.md"),
     );
     expect(await readlink(crossSectionDanglingLink)).toBe(
-      join(repositoryDir, "prompts", "removed-prompt.md")
+      join(repositoryDir, "prompts", "removed-prompt.md"),
     );
     expect(await readlink(prefixCollisionDanglingLink)).toBe(
-      join(repositoryDir, "agents-user", "removed.md")
+      join(repositoryDir, "agents-user", "removed.md"),
     );
     expect(await readlink(validLink)).toBe(
-      join(repositoryDir, "AGENTS.global.md")
+      join(repositoryDir, "AGENTS.global.md"),
     );
     expect((await lstat(realFile)).isFile()).toBe(true);
     expect((await lstat(realDirectory)).isDirectory()).toBe(true);

@@ -34,7 +34,7 @@ export function realpathExistingAncestor(input: string): string | null {
 
 export function resolveActiveVault(
   cwd: string,
-  vaults: ValidatedVault[]
+  vaults: ValidatedVault[],
 ): ActiveVault | null {
   const realCwd = realpathExistingAncestor(cwd);
   if (!realCwd) {
@@ -59,7 +59,7 @@ export function resolveActiveVault(
 
 export function assertContained(
   vault: ValidatedVault,
-  target: string
+  target: string,
 ): boolean {
   const realTarget = realpathExistingAncestor(target);
   return realTarget ? contains(vault.realPath, realTarget) : false;

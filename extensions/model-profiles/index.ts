@@ -30,14 +30,14 @@ export interface Options {
   persistMain?: (
     cwd: string,
     agentDir: string,
-    values: Values
+    values: Values,
   ) => Promise<void>;
 }
 
 export async function persistMain(
   cwd: string,
   agentDir: string,
-  values: Values
+  values: Values,
 ): Promise<void> {
   const settings = SettingsManager.create(cwd, agentDir);
   // These setters update globalSettings, not project settings (Pi 0.86.1).
@@ -45,7 +45,7 @@ export async function persistMain(
     const slash = values.model.indexOf("/");
     settings.setDefaultModelAndProvider(
       values.model.slice(0, slash),
-      values.model.slice(slash + 1)
+      values.model.slice(slash + 1),
     );
   }
   if (values.thinking) {
@@ -55,14 +55,14 @@ export async function persistMain(
   const errors = settings.drainErrors();
   if (errors.length) {
     throw new Error(
-      `Could not persist model defaults: ${errors.map((error) => error.error.message).join("; ")}`
+      `Could not persist model defaults: ${errors.map((error) => error.error.message).join("; ")}`,
     );
   }
 }
 
 export function registerModelProfiles(
   pi: ExtensionAPI,
-  options: Options = {}
+  options: Options = {},
 ): void {
   const agentDir = options.agentDir ?? getAgentDir();
   const repoDir =
@@ -76,12 +76,12 @@ export function registerModelProfiles(
 
   function guarded(
     ctx: ExtensionContext,
-    action: () => void | Promise<void>
+    action: () => void | Promise<void>,
   ): Promise<void> {
     queue = queue.then(action).catch((error) => {
       ctx.ui.notify(
         String(error instanceof Error ? error.message : error),
-        "error"
+        "error",
       );
     });
     return queue;
@@ -89,7 +89,7 @@ export function registerModelProfiles(
 
   function read(
     ctx: ExtensionContext,
-    selected?: string
+    selected?: string,
   ): { config: Config; agents: RepoAgent[] } | undefined {
     // Missing config is explicitly a no-op; don't even observe the live agents directory.
     let agents: RepoAgent[] = [];
@@ -104,14 +104,14 @@ export function registerModelProfiles(
     if (ctx.hasUI) {
       ctx.ui.setStatus(
         "model-profiles",
-        name === "default" ? undefined : `profile: ${name}`
+        name === "default" ? undefined : `profile: ${name}`,
       );
     }
   }
   function render(
     ctx: ExtensionContext,
     agents: RepoAgent[],
-    profile: Profile
+    profile: Profile,
   ): void {
     const plan = planAgents(agents, profile, observeLive(liveDir, repoDir));
     applyPlan(liveDir, repoDir, plan);
@@ -126,7 +126,7 @@ export function registerModelProfiles(
       render(
         ctx,
         state.agents,
-        name === "default" ? {} : state.config.profiles[name]
+        name === "default" ? {} : state.config.profiles[name],
       );
     }
     status(ctx, name);
@@ -134,7 +134,7 @@ export function registerModelProfiles(
 
   async function switchProfile(
     name: string,
-    ctx: ExtensionCommandContext
+    ctx: ExtensionCommandContext,
   ): Promise<void> {
     const state = read(ctx, name);
     if (!state && name !== "default") {
@@ -155,11 +155,11 @@ export function registerModelProfiles(
       const slash = profile.main.model.indexOf("/");
       const model = ctx.modelRegistry.find(
         profile.main.model.slice(0, slash),
-        profile.main.model.slice(slash + 1)
+        profile.main.model.slice(slash + 1),
       );
       if (!(model && (await pi.setModel(model)))) {
         throw new Error(
-          `${configPath}: profiles.${name}.main.model: auth failure setting ${profile.main.model}`
+          `${configPath}: profiles.${name}.main.model: auth failure setting ${profile.main.model}`,
         );
       }
     }
@@ -185,7 +185,7 @@ export function registerModelProfiles(
   function save(name: string, ctx: ExtensionCommandContext): void {
     if (!name || name === "default" || WHITESPACE.test(name)) {
       throw new Error(
-        `${configPath}: save requires a non-reserved profile name (not default)`
+        `${configPath}: save requires a non-reserved profile name (not default)`,
       );
     }
     if (!ctx.model) {
@@ -213,7 +213,7 @@ export function registerModelProfiles(
   pi.on("session_start", (_event, ctx) => guarded(ctx, () => refresh(ctx)));
   // Block spawns only when stale generated overrides could run with the wrong model.
   function refreshForSpawn(
-    ctx: ExtensionContext
+    ctx: ExtensionContext,
   ): ToolCallEventResult | undefined {
     try {
       refresh(ctx);
@@ -224,7 +224,7 @@ export function registerModelProfiles(
       try {
         const live = observeLive(liveDir, repoDir);
         generated = Object.values(live.entries).some(
-          (entry) => entry.kind === "generated"
+          (entry) => entry.kind === "generated",
         );
       } catch {
         // Unknown live state: stay conservative and block.
@@ -242,7 +242,7 @@ export function registerModelProfiles(
       const run = queue.then(() => refreshForSpawn(ctx));
       queue = run.then(
         () => undefined,
-        () => undefined
+        () => undefined,
       );
       return run;
     }
@@ -275,7 +275,7 @@ export function registerModelProfiles(
             ...Object.keys(state?.config.profiles ?? {}),
           ];
           const labels = names.map((name) =>
-            name === active ? `${name} (active)` : name
+            name === active ? `${name} (active)` : name,
           );
           const choice = await ctx.ui.select("Model profile", labels);
           if (choice !== undefined) {

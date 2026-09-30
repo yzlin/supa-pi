@@ -23,7 +23,7 @@ function findMarkdownFiles(dir: string, basePath = ""): string[] {
 
     if (entry.isDirectory()) {
       results.push(
-        ...findMarkdownFiles(path.join(dir, entry.name), relativePath)
+        ...findMarkdownFiles(path.join(dir, entry.name), relativePath),
       );
     } else if (entry.isFile() && entry.name.endsWith(".md")) {
       results.push(relativePath);
@@ -44,7 +44,7 @@ export default function rulesExtension(pi: ExtensionAPI) {
     if (userRuleFiles.length > 0) {
       ctx.ui.notify(
         `Found ${userRuleFiles.length} user rule(s) in ${USER_RULES_DIR}`,
-        "info"
+        "info",
       );
     }
 
@@ -54,7 +54,7 @@ export default function rulesExtension(pi: ExtensionAPI) {
     if (projectRuleFiles.length > 0) {
       ctx.ui.notify(
         `Found ${projectRuleFiles.length} project rule(s) in ${projectRulesDir}`,
-        "info"
+        "info",
       );
     }
   });
@@ -67,7 +67,7 @@ export default function rulesExtension(pi: ExtensionAPI) {
 
     const promptPath = path.join(
       path.dirname(new URL(import.meta.url).pathname),
-      "prompt.md"
+      "prompt.md",
     );
     const prompt = fs.readFileSync(promptPath, "utf8").trim();
 

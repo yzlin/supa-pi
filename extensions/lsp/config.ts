@@ -114,7 +114,7 @@ type AvailabilityProbe = (command: string, cwd: string) => CommandAvailability;
 
 function commandAvailableVia(
   command: string,
-  cwd: string
+  cwd: string,
 ): CommandAvailability {
   try {
     execSync(`which ${command}`, { stdio: "pipe", timeout: 5000 });
@@ -138,7 +138,7 @@ function commandAvailableVia(
 
 function normalizeServerConfig(
   name: string,
-  config: LspServerUserConfig
+  config: LspServerUserConfig,
 ): ConfiguredServerConfig | null {
   if (config.disabled) {
     return null;
@@ -167,7 +167,7 @@ export function resolveConfiguredServer(
   config: ConfiguredServerConfig,
   cwd: string,
   availabilityCache: CommandAvailabilityCache,
-  probe: AvailabilityProbe = commandAvailableVia
+  probe: AvailabilityProbe = commandAvailableVia,
 ): ResolvedServerConfig | null {
   const [rawCommand, ...rawArgs] = config.command;
   const cacheKey = availabilityCacheKey(rawCommand, cwd);
@@ -208,7 +208,7 @@ export async function loadConfig(cwd: string): Promise<LoadedConfig> {
 
   const globalConfig = await loadJsonFile<LspConfigFile>(globalConfigPath());
   const projectConfig = await loadJsonFile<LspConfigFile>(
-    projectConfigPath(cwd)
+    projectConfigPath(cwd),
   );
 
   // Check if globally disabled
@@ -256,7 +256,7 @@ export async function loadConfig(cwd: string): Promise<LoadedConfig> {
 /** Find all servers that handle a given file extension. */
 export function serversForExtension<T extends { extensions: string[] }>(
   servers: T[],
-  filePath: string
+  filePath: string,
 ): T[] {
   const ext = filePath.slice(filePath.lastIndexOf("."));
   return servers.filter((s) => s.extensions.includes(ext));

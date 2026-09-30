@@ -29,7 +29,7 @@ afterEach(async () => {
   await Promise.all(
     roots
       .splice(0)
-      .map((directory) => rm(directory, { recursive: true, force: true }))
+      .map((directory) => rm(directory, { recursive: true, force: true })),
   );
 });
 async function makeRoot() {
@@ -89,7 +89,7 @@ test("credential FIFO and symlink destinations are rejected without outside muta
   const status = await Promise.race([
     store.status(),
     new Promise<never>((_, reject) =>
-      setTimeout(() => reject(new Error("FIFO blocked")), 100)
+      setTimeout(() => reject(new Error("FIFO blocked")), 100),
     ),
   ]);
   expect(status).toMatchObject({ usable: false });
@@ -114,14 +114,14 @@ test("Jev schema has only bounded text/metadata and validates exact answers", as
           JSON.stringify({
             answers: { applicable_s0: { type: "noul", noul: 1 } },
           }),
-          { status: 200 }
-        )
+          { status: 200 },
+        ),
       );
     },
   });
   const result = await client.judgeBatch(
     [{ id: "s0", name: "unknown", description: "data" }],
-    { currentRequest: "request", recentText: "recent" }
+    { currentRequest: "request", recentText: "recent" },
   );
   expect(result.scores.get("s0")).toBe(1);
   expect(body).not.toMatch(FORBIDDEN_CLASSIFIER_FIELDS);
@@ -138,14 +138,14 @@ test("deadline covers response json that ignores abort and cancellation is sanit
             streamController.enqueue(new TextEncoder().encode("{"));
           },
         }),
-        { status: 200 }
+        { status: 200 },
       ),
   });
   await expect(
     client.judgeBatch([{ id: "s0", name: "x", description: "x" }], {
       currentRequest: "x",
       recentText: "",
-    })
+    }),
   ).rejects.toMatchObject({ category: "timeout" });
   const controller = new AbortController();
   controller.abort();
@@ -158,7 +158,7 @@ test("deadline covers response json that ignores abort and cancellation is sanit
     },
   });
   await expect(preAborted.verify(controller.signal)).rejects.toBeInstanceOf(
-    JevError
+    JevError,
   );
   expect(preAbortedCalls).toBe(0);
 });
@@ -209,7 +209,7 @@ test("Jev failures are categorized and malformed answer/usage matrices are rejec
         return Promise.resolve(
           value === "not json"
             ? new Response("{", { status: 200 })
-            : Response.json(value)
+            : Response.json(value),
         );
       },
     });
@@ -230,7 +230,7 @@ test("Jev failures are categorized and malformed answer/usage matrices are rejec
     {
       category: "connection",
       message: "Jev connection failed",
-    }
+    },
   );
   expect(connectionCalls).toBe(1);
 });
@@ -253,14 +253,14 @@ test("Jev request and payload bounds fail before fetch", async () => {
         name: "x",
         description: "x",
       })),
-      context
-    )
+      context,
+    ),
   ).rejects.toThrow("1 to 16");
   await expect(
     client.judgeBatch(
       [{ id: "s0", name: "x", description: "x".repeat(70_000) }],
-      context
-    )
+      context,
+    ),
   ).rejects.toMatchObject({ category: "malformed" });
   expect(calls).toBe(0);
 });
@@ -291,10 +291,10 @@ test("classification thresholds, hidden exclusion, uncertainty and malformed/par
       await classifyRoute(prepared, async (batch) => ({
         scores: new Map([[batch[0].id, 0.5]]),
       }))
-    ).kind
+    ).kind,
   ).toBe("fallback");
   expect(
-    (await classifyRoute(prepared, async () => ({ scores: new Map() }))).kind
+    (await classifyRoute(prepared, async () => ({ scores: new Map() }))).kind,
   ).toBe("fallback");
 
   const tooMany = prepareRoute({

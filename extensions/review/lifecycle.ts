@@ -100,7 +100,7 @@ async function readArtifact(filename: string): Promise<string> {
   }
   const handle = await fs.open(
     filename,
-    constants.O_RDONLY + constants.O_NOFOLLOW + constants.O_NONBLOCK
+    constants.O_RDONLY + constants.O_NOFOLLOW + constants.O_NONBLOCK,
   );
   try {
     const before = await handle.stat();
@@ -114,7 +114,7 @@ async function readArtifact(filename: string): Promise<string> {
         bytes,
         offset,
         bytes.length - offset,
-        offset
+        offset,
       );
       if (!bytesRead) {
         break;
@@ -131,7 +131,7 @@ async function readArtifact(filename: string): Promise<string> {
       throw new Error("Review artifact changed during capture.");
     }
     return new TextDecoder("utf-8", { fatal: true }).decode(
-      bytes.subarray(0, offset)
+      bytes.subarray(0, offset),
     );
   } finally {
     await handle.close();
@@ -161,7 +161,7 @@ export class ReviewRunController {
     ctx: ExtensionContext,
     target: ReviewTarget,
     plan: PublicReviewWorkflowInput,
-    signal?: AbortSignal
+    signal?: AbortSignal,
   ): Promise<Readonly<{ id: string; script: string }>> {
     if (this.running || this.preparing) {
       throw new Error("A review is already running.");
@@ -226,7 +226,7 @@ export class ReviewRunController {
       toolCallId: string;
       input: Record<string, unknown>;
     },
-    ctx: ExtensionContext
+    ctx: ExtensionContext,
   ): { block: true; reason: string } | undefined {
     const run = this.pending;
     if (!run || event.toolName !== "SubagentWorkflow") {
@@ -269,7 +269,7 @@ export class ReviewRunController {
       details?: unknown;
       content?: unknown;
     },
-    ctx: ExtensionContext
+    ctx: ExtensionContext,
   ): void {
     const run = this.pending;
     if (!run || event.toolName !== "SubagentWorkflow") {
@@ -295,7 +295,7 @@ export class ReviewRunController {
           .flatMap((part) =>
             part?.type === "text" && typeof part.text === "string"
               ? [part.text]
-              : []
+              : [],
           )
           .join("\n")
       : "";
@@ -329,7 +329,7 @@ export class ReviewRunController {
     if (!this.sameContext(run, ctx)) {
       this.cancel();
       throw new Error(
-        "Review cancelled, already published, or session/cwd changed."
+        "Review cancelled, already published, or session/cwd changed.",
       );
     }
     let completed = false;
@@ -356,7 +356,7 @@ export class ReviewRunController {
     }
     if (!(completed && run.scriptPath)) {
       throw new Error(
-        "Review not ready: missing completed native workflow or supported startup capture."
+        "Review not ready: missing completed native workflow or supported startup capture.",
       );
     }
   }
@@ -365,7 +365,7 @@ export class ReviewRunController {
     runId: string,
     ctx: ExtensionContext,
     publish: (result: ReviewWorkflowResult) => void,
-    signal?: AbortSignal
+    signal?: AbortSignal,
   ): Promise<void> {
     const run = this.pending;
     if (
@@ -376,7 +376,7 @@ export class ReviewRunController {
       run.invalid
     ) {
       throw new Error(
-        "Unknown, invalid, replayed, or concurrently finalizing review run."
+        "Unknown, invalid, replayed, or concurrently finalizing review run.",
       );
     }
     this.assertReady(run, ctx);
@@ -403,11 +403,11 @@ export class ReviewRunController {
       const script = await readArtifact(scriptPath);
       if (script !== run.script || digest(script) !== run.scriptHash) {
         throw new Error(
-          "Saved native review script differs from authorized source."
+          "Saved native review script differs from authorized source.",
         );
       }
       const journal = await readArtifact(
-        scriptPath.replace(SCRIPT_SUFFIX, ".jsonl")
+        scriptPath.replace(SCRIPT_SUFFIX, ".jsonl"),
       );
       this.assertReady(run, ctx);
       const result = deriveJournalReviewResult(run.plan, journal);
@@ -425,7 +425,7 @@ export class ReviewRunController {
     } catch (error) {
       this.cancel();
       throw new Error(
-        `Review finalization failed (unsupported/missing capture or invalid run): ${error instanceof Error ? error.message : String(error)}`
+        `Review finalization failed (unsupported/missing capture or invalid run): ${error instanceof Error ? error.message : String(error)}`,
       );
     } finally {
       run.finalizing = false;

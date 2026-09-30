@@ -104,7 +104,7 @@ const timers = new Map<ReturnType<typeof setTimeout>, LspPresentationState>();
 
 export function attachLspPresentation(
   details: unknown,
-  metadata: LspPresentationDetails
+  metadata: LspPresentationDetails,
 ): Record<string, unknown> {
   const base =
     details && typeof details === "object" && !Array.isArray(details)
@@ -114,7 +114,7 @@ export function attachLspPresentation(
 }
 
 export function getLspPresentation(
-  details: unknown
+  details: unknown,
 ): LspPresentationDetails | undefined {
   if (!details || typeof details !== "object") {
     return;
@@ -132,7 +132,7 @@ export function getLspPresentation(
 
 export function rememberLspPresentation(
   toolCallId: string,
-  metadata: LspPresentationDetails
+  metadata: LspPresentationDetails,
 ): void {
   presentationByCallId.set(toolCallId, metadata);
   if (presentationByCallId.size > 256) {
@@ -144,7 +144,7 @@ export function rememberLspPresentation(
 }
 
 export function getLspPresentationForCall(
-  toolCallId: string | undefined
+  toolCallId: string | undefined,
 ): LspPresentationDetails | undefined {
   return toolCallId ? presentationByCallId.get(toolCallId) : undefined;
 }
@@ -164,7 +164,7 @@ export function cleanupLspPresentationTimers(): void {
 }
 
 function stateFor(
-  state: LspPresentationState
+  state: LspPresentationState,
 ): NonNullable<LspPresentationState["lspPresentation"]> {
   state.lspPresentation ??= {};
   return state.lspPresentation;
@@ -249,7 +249,7 @@ export function formatToolDuration(milliseconds: number): string {
 function fitTail(
   text: string,
   width: number,
-  measuredWidth = visibleWidth(text)
+  measuredWidth = visibleWidth(text),
 ): string {
   if (measuredWidth <= width) {
     return text;
@@ -266,7 +266,7 @@ function fitMiddle(
   prefix: string,
   middle: string,
   suffix: string,
-  width: number
+  width: number,
 ): string {
   const full = `${prefix}${middle}${suffix}`;
   if (visibleWidth(full) <= width) {
@@ -281,7 +281,7 @@ function fitMiddle(
     middle,
     Math.max(0, middleWidth - available + 1),
     available - 1,
-    true
+    true,
   );
   return `${prefix}…${tail}${suffix}`;
 }
@@ -291,7 +291,7 @@ function backgroundLine(
   width: number,
   theme: LspTheme,
   error: boolean,
-  settled: boolean
+  settled: boolean,
 ): string {
   let token = "toolPendingBg";
   if (error) {
@@ -324,7 +324,7 @@ function diagnosticSummary(counts: DiagnosticCounts): string {
 
 function outcomeSummary(
   metadata: LspPresentationDetails | undefined,
-  isError: boolean
+  isError: boolean,
 ): string {
   if (!metadata) {
     return isError ? "error" : "result available";
@@ -394,7 +394,7 @@ class HeaderComponent implements Component {
     args: LspToolArgs,
     theme: LspTheme,
     state: LspPresentationState,
-    invalidate: () => void
+    invalidate: () => void,
   ) {
     this.args = args;
     this.theme = theme;
@@ -425,8 +425,8 @@ class HeaderComponent implements Component {
           this.theme.fg("dim", "┊   "),
           target,
           ` ${this.theme.fg("dim", `→ ${formatToolDuration(elapsed)}`)}`,
-          width
-        )
+          width,
+        ),
       );
     }
     return lines.map((line) =>
@@ -435,8 +435,8 @@ class HeaderComponent implements Component {
         width,
         this.theme,
         presentation.error === true,
-        presentation.settled === true
-      )
+        presentation.settled === true,
+      ),
     );
   }
 }
@@ -455,7 +455,7 @@ class ResultComponent implements Component {
     error: boolean,
     settled: boolean,
     body: Component | undefined,
-    showSummary: boolean
+    showSummary: boolean,
   ) {
     this.summary = summary;
     this.theme = theme;
@@ -475,12 +475,12 @@ class ResultComponent implements Component {
       const summary =
         typeof this.summary === "function" ? this.summary(width) : this.summary;
       lines.push(
-        backgroundLine(summary, width, this.theme, this.error, this.settled)
+        backgroundLine(summary, width, this.theme, this.error, this.settled),
       );
     }
     for (const line of this.body?.render(width) ?? []) {
       lines.push(
-        backgroundLine(line, width, this.theme, this.error, this.settled)
+        backgroundLine(line, width, this.theme, this.error, this.settled),
       );
     }
     return lines;
@@ -490,7 +490,7 @@ class ResultComponent implements Component {
 export function renderLspToolCall(
   args: LspToolArgs,
   theme: LspTheme,
-  context: Pick<RenderContextLike, "state" | "invalidate">
+  context: Pick<RenderContextLike, "state" | "invalidate">,
 ): Component {
   return new HeaderComponent(args, theme, context.state, context.invalidate);
 }
@@ -499,7 +499,7 @@ export function renderLspToolResult(
   result: LspToolResultLike,
   options: { expanded: boolean; isPartial: boolean },
   theme: LspTheme,
-  context: Pick<RenderContextLike, "args" | "state" | "toolCallId" | "isError">
+  context: Pick<RenderContextLike, "args" | "state" | "toolCallId" | "isError">,
 ): Component {
   const state = stateFor(context.state);
   const error = result.isError === true || context.isError === true;
@@ -533,12 +533,12 @@ export function renderLspToolResult(
         theme.fg("dim", "┊   "),
         target,
         ` ${theme.fg("dim", "→")} ${theme.fg(error ? "error" : "dim", summary)}`,
-        width
+        width,
       ),
     theme,
     error,
     !options.isPartial,
     body,
-    !options.isPartial
+    !options.isPartial,
   );
 }

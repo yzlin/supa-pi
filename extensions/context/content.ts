@@ -57,7 +57,7 @@ function isTextContent(part: TextContent | ImageContent): part is TextContent {
 }
 
 function isImageContent(
-  part: TextContent | ImageContent
+  part: TextContent | ImageContent,
 ): part is ImageContent {
   return part.type === "image";
 }
@@ -68,7 +68,7 @@ function formatImage(image: ImageContent): string {
 
 function formatContentParts(
   content: string | (TextContent | ImageContent)[],
-  defaultLabel = "content"
+  defaultLabel = "content",
 ): ContextContentBlock[] {
   if (typeof content === "string") {
     return [
@@ -107,7 +107,7 @@ function formatContentParts(
 
 function normalizeMessage(
   message: AgentMessage,
-  index: number
+  index: number,
 ): ContextContentMessage {
   const titlePrefix = `[${index + 1}]`;
 
@@ -229,7 +229,7 @@ function normalizeMessage(
 
 export function captureContextEventSnapshot(
   ctx: ExtensionContext,
-  messages: AgentMessage[]
+  messages: AgentMessage[],
 ): CachedContextEventSnapshot {
   return {
     sessionId: ctx.sessionManager.getSessionId(),
@@ -241,7 +241,7 @@ export function captureContextEventSnapshot(
 
 function isCurrentSnapshot(
   ctx: ExtensionCommandContext,
-  snapshot: CachedContextEventSnapshot | null
+  snapshot: CachedContextEventSnapshot | null,
 ): snapshot is CachedContextEventSnapshot {
   if (!snapshot) {
     return false;
@@ -259,7 +259,7 @@ function resolveModelLabel(
   model: {
     provider: string;
     modelId: string;
-  } | null
+  } | null,
 ): string {
   if (ctx.model) {
     return ctx.model.id;
@@ -279,11 +279,11 @@ function resolveModelLabel(
 
 export function buildContextContentSnapshot(
   ctx: ExtensionCommandContext,
-  cachedSnapshot: CachedContextEventSnapshot | null
+  cachedSnapshot: CachedContextEventSnapshot | null,
 ): ContextContentSnapshot {
   const sessionContext = buildSessionContext(
     ctx.sessionManager.getEntries(),
-    ctx.sessionManager.getLeafId()
+    ctx.sessionManager.getLeafId(),
   );
   const source = isCurrentSnapshot(ctx, cachedSnapshot)
     ? "context_event_snapshot"
@@ -310,7 +310,7 @@ export function buildContextContentSnapshot(
     thinkingLevel: sessionContext.thinkingLevel,
     messageCount: rawMessages.length,
     messages: rawMessages.map((message, index) =>
-      normalizeMessage(message, index)
+      normalizeMessage(message, index),
     ),
   };
 }

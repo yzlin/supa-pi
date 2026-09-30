@@ -94,10 +94,10 @@ function parseRaw(rawJson: string): Record<string, unknown> {
 
 function validateRuns(
   prepared: PublicReviewWorkflowInput,
-  raw: Record<string, unknown>
+  raw: Record<string, unknown>,
 ): ReviewRunOutcome[] {
   const expected = prepared.reviewers.flatMap((reviewer) =>
-    prepared.reviewerPanel.map((entry) => ({ reviewer, ...entry }))
+    prepared.reviewerPanel.map((entry) => ({ reviewer, ...entry })),
   );
   const runs = raw.reviewerRuns;
   if (!Array.isArray(runs) || runs.length !== expected.length) {
@@ -148,14 +148,14 @@ function parseJournalJson(text: string): unknown {
 /** Decode the public, version-sensitive agent-call journal, never notification previews. */
 export function deriveJournalReviewResult(
   prepared: PublicReviewWorkflowInput,
-  journal: string
+  journal: string,
 ): Omit<ReviewWorkflowResult, "report"> {
   if (Buffer.byteLength(journal) > MAX_RAW_BYTES || !journal.endsWith("\n")) {
     throw new Error("Unsupported or incomplete review journal capture.");
   }
   const lines = journal.slice(0, -1).split("\n");
   const jobs = prepared.reviewers.flatMap((reviewer) =>
-    prepared.reviewerPanel.map((entry) => ({ reviewer, ...entry }))
+    prepared.reviewerPanel.map((entry) => ({ reviewer, ...entry })),
   );
   if (lines.length < jobs.length || lines.length > jobs.length + 2) {
     throw new Error("Unexpected agent calls in review journal.");
@@ -222,7 +222,7 @@ export function deriveJournalReviewResult(
             verifierOutput: downstream[1].output,
           }
         : {}),
-    })
+    }),
   );
 }
 
@@ -234,7 +234,7 @@ export function deriveJournalReviewResult(
  */
 export function derivePreparedReviewResult(
   prepared: PublicReviewWorkflowInput,
-  rawJson: string
+  rawJson: string,
 ): Omit<ReviewWorkflowResult, "report"> {
   const raw = parseRaw(rawJson);
   const runs = validateRuns(prepared, raw);
@@ -243,19 +243,19 @@ export function derivePreparedReviewResult(
     prepared.reviewers.some(
       (reviewer) =>
         !runs.some(
-          (run) => run.reviewer === reviewer && run.status === "succeeded"
-        )
+          (run) => run.reviewer === reviewer && run.status === "succeeded",
+        ),
     )
   ) {
     throw new Error(
-      "No successful model run for every selected reviewer role."
+      "No successful model run for every selected reviewer role.",
     );
   }
   const reviewerOutputs = runs.flatMap((run) =>
-    run.output ? [run.output] : []
+    run.output ? [run.output] : [],
   );
   const candidates = buildPortableCandidateFindings(
-    runs
+    runs,
   ) as ReviewCandidateFindingContract[];
   const coverage: ReviewWorkflowCoverage = {
     configuredPanelSize: prepared.reviewerPanel.length,
@@ -300,20 +300,20 @@ export function derivePreparedReviewResult(
       clusters: [],
       verifier: buildPortableCorrectReviewResult(
         prepared,
-        deterministicReportFields
+        deterministicReportFields,
       ) as VerifierJsonContract,
     };
   }
   const parsedClusters = parsePortableSynthesizerOutput(
     raw.synthesizerOutput,
-    candidates
+    candidates,
   );
   if (!parsedClusters.ok) {
     throw new Error("Invalid synthesizer output.");
   }
   const parsedVerifier = validatePortableVerifier(
     raw.verifierOutput,
-    candidates
+    candidates,
   );
   if (!parsedVerifier.ok) {
     throw new Error("Invalid verifier output.");
@@ -327,7 +327,7 @@ export function derivePreparedReviewResult(
       parsedVerifier.value,
       candidates,
       coverage,
-      deterministicReportFields
+      deterministicReportFields,
     ) as VerifierJsonContract,
   };
 }

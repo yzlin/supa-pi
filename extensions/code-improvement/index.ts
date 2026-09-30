@@ -155,7 +155,7 @@ export function buildScopedSimplifyCommandMessage(options: {
 }
 
 export function buildImproveCodebaseArchitectureCommandMessage(
-  args: string
+  args: string,
 ): string {
   const scope = args.trim();
   const scopeInstruction = scope
@@ -189,13 +189,13 @@ async function resolvePrTarget(
   pi: ExtensionAPI,
   ctx: ExtensionCommandContext,
   ref: string,
-  yes?: boolean
+  yes?: boolean,
 ): Promise<ReviewTarget | null> {
   const prNumber = parsePrReference(ref);
   if (!prNumber) {
     ctx.ui.notify(
       "Invalid PR reference. Enter a number or GitHub PR URL.",
-      "error"
+      "error",
     );
     return null;
   }
@@ -210,7 +210,7 @@ async function resolvePrTarget(
     }
     const confirmed = await ctx.ui.confirm(
       "Checkout PR for /simplify?",
-      `Checkout PR #${prNumber} before simplifying.`
+      `Checkout PR #${prNumber} before simplifying.`,
     );
     if (!confirmed) {
       return null;
@@ -286,7 +286,7 @@ async function getSmartDefault(pi: ExtensionAPI): Promise<string> {
 
 async function promptForSimplifyTarget(
   pi: ExtensionAPI,
-  ctx: ExtensionCommandContext
+  ctx: ExtensionCommandContext,
 ): Promise<ReviewTarget | { type: "pr"; ref: string } | null> {
   const smartDefault = await getSmartDefault(pi);
   const choice = await ctx.ui.select("Select simplify scope:", [
@@ -302,7 +302,7 @@ async function promptForSimplifyTarget(
   if (normalizedChoice === "folder") {
     const input = await ctx.ui.editor(
       "Enter folders/files to simplify (space-separated or one per line):",
-      "."
+      ".",
     );
     const paths = parseReviewPaths(input ?? "");
     return paths.length ? { type: "folder", paths } : null;
@@ -332,29 +332,29 @@ async function dispatchSimplify(
   ctx: ExtensionCommandContext,
   target: ReviewTarget,
   extraInstruction: string | undefined,
-  yes: boolean | undefined
+  yes: boolean | undefined,
 ) {
   const scope = classifySimplifyScopePaths(
     await getChangedPaths(target, createGitExec(pi)),
-    { expandDirectories: target.type === "folder" }
+    { expandDirectories: target.type === "folder" },
   );
   if (scope.gitIgnoreUnavailable) {
     ctx.ui.notify(
       "Git ignore checks unavailable; continuing without ignored-file pruning.",
-      "warning"
+      "warning",
     );
   }
   if (scope.unsupportedChangedFiles.length > 0 && !yes) {
     if (!ctx.hasUI) {
       ctx.ui.notify(
         "Unsupported changed files in no-UI /simplify scope require --yes",
-        "error"
+        "error",
       );
       return;
     }
     const confirmed = await ctx.ui.confirm(
       "Unsupported changed files",
-      `Continue with ${scope.unsupportedChangedFiles.length} unsupported changed files excluded from editable files?`
+      `Continue with ${scope.unsupportedChangedFiles.length} unsupported changed files excluded from editable files?`,
     );
     if (!confirmed) {
       return;
@@ -364,7 +364,7 @@ async function dispatchSimplify(
     if (scope.ignoredLockfiles.length > 0) {
       ctx.ui.notify(
         `No editable files resolved for /simplify scope; ignored ${scope.ignoredLockfiles.length} lockfile(s).`,
-        "info"
+        "info",
       );
       return;
     }
@@ -378,7 +378,7 @@ async function dispatchSimplify(
     }
     const confirmed = await ctx.ui.confirm(
       "Large simplify scope",
-      `Allow code-simplifier to edit ${scope.editableFiles.length} files?`
+      `Allow code-simplifier to edit ${scope.editableFiles.length} files?`,
     );
     if (!confirmed) {
       return;
@@ -425,7 +425,7 @@ export default function codeImprovementExtension(pi: ExtensionAPI): void {
                 ctx,
                 target,
                 parsed.extraInstruction,
-                parsed.yes
+                parsed.yes,
               );
             }
           }
@@ -451,7 +451,7 @@ export default function codeImprovementExtension(pi: ExtensionAPI): void {
           ctx,
           target,
           parsed.extraInstruction,
-          parsed.yes
+          parsed.yes,
         );
       }
     },
@@ -462,7 +462,7 @@ export default function codeImprovementExtension(pi: ExtensionAPI): void {
       "Read-only architecture review with deepening candidates: /improve-codebase-architecture [scope]",
     handler: (args, ctx) => {
       const message = buildImproveCodebaseArchitectureCommandMessage(
-        args ?? ""
+        args ?? "",
       );
 
       if (ctx.isIdle()) {
@@ -473,7 +473,7 @@ export default function codeImprovementExtension(pi: ExtensionAPI): void {
       pi.sendUserMessage(message, { deliverAs: "followUp" });
       ctx.ui.notify(
         "Queued /improve-codebase-architecture as a follow-up",
-        "info"
+        "info",
       );
     },
   });

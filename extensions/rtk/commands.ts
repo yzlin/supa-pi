@@ -33,7 +33,7 @@ function formatBoolean(value: boolean): string {
 
 function buildShowMessage(
   ctx: ExtensionCommandContext,
-  runtime: RtkRuntime
+  runtime: RtkRuntime,
 ): string {
   const config = runtime.getConfig();
   const status = runtime.getStatus();
@@ -65,7 +65,7 @@ function buildShowMessage(
 function applyConfigChange(
   ctx: ExtensionCommandContext,
   runtime: RtkRuntime,
-  nextConfig: RtkConfig
+  nextConfig: RtkConfig,
 ): RtkConfig {
   const saved = saveRtkConfig(ctx.cwd, nextConfig);
   runtime.setConfig(saved);
@@ -114,7 +114,7 @@ function getRtkArgumentCompletions(argumentPrefix: string) {
     }
 
     const filteredModes = RTK_MODES.filter(({ value }) =>
-      value.startsWith(nextToken)
+      value.startsWith(nextToken),
     );
 
     return filteredModes.length > 0
@@ -127,7 +127,7 @@ function getRtkArgumentCompletions(argumentPrefix: string) {
   }
 
   const filteredSubcommands = RTK_SUBCOMMANDS.filter(({ value }) =>
-    value.startsWith(subcommand)
+    value.startsWith(subcommand),
   );
 
   return filteredSubcommands.length > 0
@@ -141,7 +141,7 @@ function getRtkArgumentCompletions(argumentPrefix: string) {
 
 export function registerRtkCommands(
   pi: ExtensionAPI,
-  runtime: RtkRuntime
+  runtime: RtkRuntime,
 ): void {
   pi.registerCommand("rtk", {
     description: "Manage RTK rewrite settings and stats",
@@ -164,7 +164,7 @@ export function registerRtkCommands(
             status.rtkAvailable
               ? `RTK available. Last checked: ${status.lastCheckedAt}`
               : `RTK unavailable: ${status.lastError ?? "unknown error"}`,
-            status.rtkAvailable ? "info" : "warning"
+            status.rtkAvailable ? "info" : "warning",
           );
           return;
         }
@@ -173,7 +173,7 @@ export function registerRtkCommands(
           await showRtkStatsView(
             ctx,
             runtime.metrics.snapshot(),
-            runtime.getConfig()
+            runtime.getConfig(),
           );
           return;
         }

@@ -21,7 +21,7 @@ function loadTheme(): LspPaletteTheme {
     "agent",
     "extensions",
     "file-picker",
-    "theme.json"
+    "theme.json",
   );
 
   try {

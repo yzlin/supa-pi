@@ -37,14 +37,14 @@ describe("parseSmartDocsArgs", () => {
     expect(result.value.targetRoot).toBe(path.resolve(cwd, "./extensions"));
     expect(result.value.targetLabel).toBe("./extensions");
     expect(result.value.outputDir).toBe(
-      path.resolve(cwd, "./extensions", "docs")
+      path.resolve(cwd, "./extensions", "docs"),
     );
   });
 
   it("separates target and freeform instruction using --", () => {
     const result = parseSmartDocsArgs(
       "./extensions -- focus on command architecture",
-      cwd
+      cwd,
     );
 
     expect(result.ok).toBe(true);
@@ -59,7 +59,7 @@ describe("parseSmartDocsArgs", () => {
   it("parses flags and custom output paths", () => {
     const result = parseSmartDocsArgs(
       "./extensions --out generated-docs --overview-only --deep-dive context,execute --dry-run -- focus on the command layer",
-      cwd
+      cwd,
     );
 
     expect(result.ok).toBe(true);
@@ -68,7 +68,7 @@ describe("parseSmartDocsArgs", () => {
     }
 
     expect(result.value.outputDir).toBe(
-      path.resolve(cwd, "./extensions", "generated-docs")
+      path.resolve(cwd, "./extensions", "generated-docs"),
     );
     expect(result.value.overviewOnly).toBe(true);
     expect(result.value.deepDive).toEqual(["context", "execute"]);
@@ -116,7 +116,7 @@ describe("parseSmartDocsArgs", () => {
   it("supports quoted target paths before --", () => {
     const result = parseSmartDocsArgs(
       '"./extensions" -- architecture only',
-      cwd
+      cwd,
     );
 
     expect(result.ok).toBe(true);

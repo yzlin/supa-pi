@@ -91,15 +91,15 @@ interface DiagnosticGroup {
 
 export function formatDiagnostics(
   filePath: string,
-  groups: DiagnosticGroup[]
+  groups: DiagnosticGroup[],
 ): string {
   const allDiags = groups.flatMap((g) => g.diagnostics);
 
   const totalErrors = allDiags.filter(
-    (d) => d.severity === DiagnosticSeverity.Error
+    (d) => d.severity === DiagnosticSeverity.Error,
   ).length;
   const totalWarnings = allDiags.filter(
-    (d) => d.severity === DiagnosticSeverity.Warning
+    (d) => d.severity === DiagnosticSeverity.Warning,
   ).length;
   const totalOther = allDiags.length - totalErrors - totalWarnings;
 
@@ -113,7 +113,7 @@ export function formatDiagnostics(
   }
   if (totalWarnings > 0) {
     summaryParts.push(
-      `${totalWarnings} warning${totalWarnings === 1 ? "" : "s"}`
+      `${totalWarnings} warning${totalWarnings === 1 ? "" : "s"}`,
     );
   }
   if (totalOther > 0) {
@@ -150,7 +150,7 @@ export function formatHover(
   hover: Hover | null,
   filePath: string,
   line: number,
-  character: number
+  character: number,
 ): string {
   if (!hover) {
     return `No hover information at ${filePath}:${line + 1}:${character + 1}`;
@@ -164,7 +164,7 @@ export function formatHover(
   } else if (Array.isArray(contents)) {
     text = contents
       .map((c) =>
-        typeof c === "string" ? c : `\`\`\`${c.language}\n${c.value}\n\`\`\``
+        typeof c === "string" ? c : `\`\`\`${c.language}\n${c.value}\n\`\`\``,
       )
       .join("\n\n");
   } else if ("value" in contents) {
@@ -184,7 +184,7 @@ export function formatLocations(
   filePath: string,
   line: number,
   character: number,
-  rootPath: string
+  rootPath: string,
 ): string {
   const queryPos = `${filePath}:${line + 1}:${character + 1}`;
 
@@ -203,14 +203,14 @@ export function formatLocations(
 // ── Document Symbols ────────────────────────────────────────────────────────
 
 function isDocumentSymbol(
-  item: DocumentSymbol | SymbolInformation
+  item: DocumentSymbol | SymbolInformation,
 ): item is DocumentSymbol {
   return "selectionRange" in item;
 }
 
 function formatDocSymbolTree(
   symbols: DocumentSymbol[],
-  indent: number
+  indent: number,
 ): string[] {
   const lines: string[] = [];
   const prefix = "  ".repeat(indent);
@@ -229,7 +229,7 @@ function formatDocSymbolTree(
 export function formatDocumentSymbols(
   symbols: (DocumentSymbol | SymbolInformation)[],
   filePath: string,
-  rootPath: string
+  rootPath: string,
 ): string {
   if (symbols.length === 0) {
     return `No symbols found in ${filePath}`;
@@ -257,7 +257,7 @@ export function formatDocumentSymbols(
 export function formatWorkspaceSymbols(
   symbols: SymbolInformation[],
   query: string,
-  rootPath: string
+  rootPath: string,
 ): string {
   if (symbols.length === 0) {
     return `No workspace symbols matching "${query}"`;
@@ -291,7 +291,7 @@ export function formatCallHierarchy(
   filePath: string,
   line: number,
   character: number,
-  rootPath: string
+  rootPath: string,
 ): string {
   const queryPos = `${filePath}:${line + 1}:${character + 1}`;
 
@@ -300,7 +300,7 @@ export function formatCallHierarchy(
   }
 
   const formatted = items.map(
-    (item, i) => `${i + 1}. ${formatCallItem(item, rootPath)}`
+    (item, i) => `${i + 1}. ${formatCallItem(item, rootPath)}`,
   );
   return `Call hierarchy at ${queryPos}:\n\n${formatted.join("\n")}`;
 }
@@ -308,14 +308,14 @@ export function formatCallHierarchy(
 export function formatIncomingCalls(
   calls: CallHierarchyIncomingCall[],
   target: CallHierarchyItem,
-  rootPath: string
+  rootPath: string,
 ): string {
   if (calls.length === 0) {
     return `No incoming calls to ${target.name}`;
   }
 
   const formatted = calls.map(
-    (call, i) => `${i + 1}. ${formatCallItem(call.from, rootPath)}`
+    (call, i) => `${i + 1}. ${formatCallItem(call.from, rootPath)}`,
   );
   return `Incoming calls to ${target.name} (${calls.length}):\n\n${formatted.join("\n")}`;
 }
@@ -323,14 +323,14 @@ export function formatIncomingCalls(
 export function formatOutgoingCalls(
   calls: CallHierarchyOutgoingCall[],
   source: CallHierarchyItem,
-  rootPath: string
+  rootPath: string,
 ): string {
   if (calls.length === 0) {
     return `No outgoing calls from ${source.name}`;
   }
 
   const formatted = calls.map(
-    (call, i) => `${i + 1}. ${formatCallItem(call.to, rootPath)}`
+    (call, i) => `${i + 1}. ${formatCallItem(call.to, rootPath)}`,
   );
   return `Outgoing calls from ${source.name} (${calls.length}):\n\n${formatted.join("\n")}`;
 }
@@ -340,7 +340,7 @@ export function formatOutgoingCalls(
 export function formatCodeActions(
   actions: CodeAction[],
   filePath: string,
-  line: number
+  line: number,
 ): string {
   if (actions.length === 0) {
     return `No code actions available at ${filePath}:${line + 1}`;
@@ -359,10 +359,10 @@ export function formatCodeActions(
       const files = Object.keys(action.edit.changes);
       const totalEdits = files.reduce(
         (s, f) => s + (action.edit!.changes![f]?.length ?? 0),
-        0
+        0,
       );
       parts.push(
-        `   Changes: ${totalEdits} edit${totalEdits === 1 ? "" : "s"} across ${files.length} file${files.length === 1 ? "" : "s"}`
+        `   Changes: ${totalEdits} edit${totalEdits === 1 ? "" : "s"} across ${files.length} file${files.length === 1 ? "" : "s"}`,
       );
     }
 

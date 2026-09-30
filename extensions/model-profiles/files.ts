@@ -81,7 +81,7 @@ function within(path: string, dir: string): boolean {
 export function assertOutsideRepo(path: string, repoDir: string): void {
   if (within(physical(path), realpathSync(repoDir))) {
     throw new Error(
-      `${path}: refusing to write inside repository agents directory`
+      `${path}: refusing to write inside repository agents directory`,
     );
   }
 }
@@ -131,7 +131,7 @@ export function observeLive(liveDir: string, repoDir: string): LiveState {
 export function planAgents(
   agents: RepoAgent[],
   profile: Profile,
-  state: LiveState
+  state: LiveState,
 ): Plan {
   const desired = agents.map((agent) => {
     const values = resolveAgent(agent, profile);
@@ -159,7 +159,7 @@ export function planAgents(
     if (!owned) {
       if (override) {
         warnings.push(
-          `${agent.name}: user-owned ${agent.filename} shadows the requested override; left untouched`
+          `${agent.name}: user-owned ${agent.filename} shadows the requested override; left untouched`,
         );
       }
       continue;
@@ -193,7 +193,7 @@ export function planAgents(
 export function applyPlan(
   liveDir: string,
   repoDir: string,
-  plan: Plan
+  plan: Plan,
 ): number {
   if (!plan.actions.length) {
     return 0;
@@ -210,7 +210,7 @@ export function applyPlan(
     )
   ) {
     throw new Error(
-      `${liveDir}: refusing to write inside repository agents directory`
+      `${liveDir}: refusing to write inside repository agents directory`,
     );
   }
   if (stat(liveDir)?.isSymbolicLink() && !converting) {

@@ -88,14 +88,14 @@ export interface ToolDisplayConfig {
   diff: ToolDisplayDiffConfig;
 }
 
-interface ToolDisplayFullReadConfigLayer
-  extends Partial<ToolDisplayFullReadConfig> {
+interface ToolDisplayFullReadConfigLayer extends Partial<ToolDisplayFullReadConfig> {
   order?: string[];
   targets?: Partial<ToolDisplayFullReadTarget>[];
 }
 
-interface ToolDisplayReadConfigLayer
-  extends Partial<Omit<ToolDisplayReadConfig, "fullRead">> {
+interface ToolDisplayReadConfigLayer extends Partial<
+  Omit<ToolDisplayReadConfig, "fullRead">
+> {
   fullRead?: ToolDisplayFullReadConfigLayer;
 }
 
@@ -216,13 +216,13 @@ function normalizePositiveInteger(value: unknown): number | undefined {
 }
 
 function normalizeOutputMode(
-  value: unknown
+  value: unknown,
 ): ToolDisplayOutputMode | undefined {
   return value === "compact" || value === "expanded" ? value : undefined;
 }
 
 function normalizeDiffViewMode(
-  value: unknown
+  value: unknown,
 ): ToolDisplayDiffViewMode | undefined {
   return value === "auto" || value === "split" || value === "unified"
     ? value
@@ -230,7 +230,7 @@ function normalizeDiffViewMode(
 }
 
 function normalizeDiffIndicatorMode(
-  value: unknown
+  value: unknown,
 ): ToolDisplayDiffIndicatorMode | undefined {
   return value === "bars" || value === "classic" || value === "none"
     ? value
@@ -238,15 +238,15 @@ function normalizeDiffIndicatorMode(
 }
 
 function compactConfigSection<T extends Record<string, unknown>>(
-  value: T
+  value: T,
 ): Partial<T> {
   return Object.fromEntries(
-    Object.entries(value).filter(([, entry]) => entry !== undefined)
+    Object.entries(value).filter(([, entry]) => entry !== undefined),
   ) as Partial<T>;
 }
 
 function normalizeToolConfig(
-  value: unknown
+  value: unknown,
 ): Partial<ToolDisplayToolConfig> | undefined {
   if (!isPlainObject(value)) {
     return;
@@ -257,7 +257,7 @@ function normalizeToolConfig(
 }
 
 function normalizeEditConfig(
-  value: unknown
+  value: unknown,
 ): Partial<ToolDisplayEditConfig> | undefined {
   if (!isPlainObject(value)) {
     return;
@@ -279,7 +279,7 @@ function normalizeStringArray(value: unknown): string[] | undefined {
 }
 
 function normalizeFullReadSource(
-  value: unknown
+  value: unknown,
 ): ToolDisplayFullReadSource | undefined {
   return value === "registeredSkills" || value === "patterns"
     ? value
@@ -289,7 +289,7 @@ function normalizeFullReadSource(
 function normalizeFullReadMaxBytes(
   value: unknown,
   warnings: string[],
-  targetName: string
+  targetName: string,
 ): number | undefined {
   const maxBytes = normalizePositiveInteger(value);
   if (maxBytes === undefined) {
@@ -300,13 +300,13 @@ function normalizeFullReadMaxBytes(
   }
 
   warnings.push(
-    `target ${targetName}: maxBytes clamped to ${TOOL_DISPLAY_FULL_READ_MAX_BYTES}`
+    `target ${targetName}: maxBytes clamped to ${TOOL_DISPLAY_FULL_READ_MAX_BYTES}`,
   );
   return TOOL_DISPLAY_FULL_READ_MAX_BYTES;
 }
 
 function normalizeFullReadTarget(
-  value: unknown
+  value: unknown,
 ): Partial<ToolDisplayFullReadTarget> | undefined {
   if (
     !isPlainObject(value) ||
@@ -322,7 +322,7 @@ function normalizeFullReadTarget(
   const maxBytes = normalizeFullReadMaxBytes(
     value.maxBytes,
     warnings,
-    value.name
+    value.name,
   );
   const ignorePagination = normalizeBoolean(value.ignorePagination);
   const baseDir = typeof value.baseDir === "string" ? value.baseDir : undefined;
@@ -353,7 +353,7 @@ function normalizeFullReadTarget(
 }
 
 function normalizeFullReadConfig(
-  value: unknown
+  value: unknown,
 ): ToolDisplayFullReadConfigLayer | undefined {
   if (!isPlainObject(value)) {
     return;
@@ -378,7 +378,7 @@ function normalizeFullReadConfig(
       warnings.push(
         isPlainObject(target)
           ? `target at index ${index}: missing name ignored`
-          : `target at index ${index}: invalid target ignored`
+          : `target at index ${index}: invalid target ignored`,
       );
     }
   }
@@ -392,7 +392,7 @@ function normalizeFullReadConfig(
 }
 
 function normalizeReadConfig(
-  value: unknown
+  value: unknown,
 ): ToolDisplayReadConfigLayer | undefined {
   if (!isPlainObject(value)) {
     return;
@@ -414,7 +414,7 @@ function normalizeReadConfig(
 }
 
 function normalizePreviewConfig(
-  value: unknown
+  value: unknown,
 ): Partial<ToolDisplayPreviewConfig> | undefined {
   if (!isPlainObject(value)) {
     return;
@@ -439,7 +439,7 @@ function normalizePreviewConfig(
 }
 
 function normalizeBashOutputConfig(
-  value: unknown
+  value: unknown,
 ): Partial<ToolDisplayBashOutputConfig> | undefined {
   if (!isPlainObject(value)) {
     return;
@@ -460,7 +460,7 @@ function normalizeBashOutputConfig(
 }
 
 function normalizeDiffConfig(
-  value: unknown
+  value: unknown,
 ): Partial<ToolDisplayDiffConfig> | undefined {
   if (!isPlainObject(value)) {
     return;
@@ -501,7 +501,7 @@ function normalizeDiffConfig(
 }
 
 export function normalizeToolDisplayConfig(
-  input: unknown
+  input: unknown,
 ): ToolDisplayConfigLayer {
   if (!isPlainObject(input)) {
     return {};
@@ -545,7 +545,7 @@ export function normalizeToolDisplayConfig(
 
 function mergeFullReadConfig(
   globalConfig: ToolDisplayConfigLayer | null,
-  projectConfig: ToolDisplayConfigLayer | null
+  projectConfig: ToolDisplayConfigLayer | null,
 ): ToolDisplayFullReadConfig {
   const defaultFullRead = DEFAULT_TOOL_DISPLAY_CONFIG.tools.read.fullRead;
   const globalFullRead = globalConfig?.tools?.read?.fullRead;
@@ -554,7 +554,7 @@ function mergeFullReadConfig(
 
   function applyTargets(
     targets: Partial<ToolDisplayFullReadTarget>[] | undefined,
-    provenance: ToolDisplayFullReadProvenance
+    provenance: ToolDisplayFullReadProvenance,
   ): void {
     for (const target of targets ?? []) {
       if (!target.name) {
@@ -620,7 +620,7 @@ function mergeFullReadConfig(
 
 export function loadToolDisplayConfigFromLayers(
   globalConfig: unknown,
-  projectConfig: unknown
+  projectConfig: unknown,
 ): ToolDisplayConfig {
   const normalizedGlobalConfig = globalConfig
     ? normalizeToolDisplayConfig(globalConfig)
@@ -637,7 +637,7 @@ export function loadToolDisplayConfigFromLayers(
         ...normalizedProjectConfig?.tools?.read,
         fullRead: mergeFullReadConfig(
           normalizedGlobalConfig,
-          normalizedProjectConfig
+          normalizedProjectConfig,
         ),
       },
       search: {
@@ -703,16 +703,16 @@ function loadConfigLayer(configPath: string): unknown {
 
 export function loadToolDisplayConfig(
   cwd = process.cwd(),
-  homeDir = homedir()
+  homeDir = homedir(),
 ): ToolDisplayConfig {
   return loadToolDisplayConfigFromLayers(
     loadConfigLayer(getGlobalToolDisplayConfigPath(homeDir)),
-    loadConfigLayer(getProjectToolDisplayConfigPath(cwd))
+    loadConfigLayer(getProjectToolDisplayConfigPath(cwd)),
   );
 }
 
 function readConfigObjectForPersistence(
-  configPath: string
+  configPath: string,
 ): { ok: true; value: Record<string, unknown> } | { ok: false; error: string } {
   if (!existsSync(configPath)) {
     return { ok: true, value: {} };
@@ -732,7 +732,7 @@ function readConfigObjectForPersistence(
 
 function writeConfigObjectAtomically(
   configPath: string,
-  value: Record<string, unknown>
+  value: Record<string, unknown>,
 ): void {
   const tempPath = `${configPath}.${randomBytes(8).toString("hex")}.tmp`;
   mkdirSync(dirname(configPath), { recursive: true });
@@ -743,7 +743,7 @@ function writeConfigObjectAtomically(
 export function saveProjectToolDisplayConfig(
   cwd: string,
   config: unknown,
-  homeDir = homedir()
+  homeDir = homedir(),
 ):
   | { ok: true; configPath: string; config: ToolDisplayConfig }
   | { ok: false; configPath: string; error: string } {
@@ -798,7 +798,7 @@ export function saveProjectToolDisplayConfig(
 export function writeProjectToolDisplayConfig(
   cwd: string,
   config: ToolDisplayConfig,
-  homeDir = homedir()
+  homeDir = homedir(),
 ):
   | { ok: true; configPath: string; config: ToolDisplayConfig }
   | { ok: false; configPath: string; error: string } {
@@ -806,7 +806,7 @@ export function writeProjectToolDisplayConfig(
   try {
     writeConfigObjectAtomically(
       configPath,
-      config as unknown as Record<string, unknown>
+      config as unknown as Record<string, unknown>,
     );
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
@@ -817,17 +817,17 @@ export function writeProjectToolDisplayConfig(
 
 export function resetProjectToolDisplayConfig(
   cwd: string,
-  homeDir = homedir()
+  homeDir = homedir(),
 ) {
   return writeProjectToolDisplayConfig(
     cwd,
     DEFAULT_TOOL_DISPLAY_CONFIG,
-    homeDir
+    homeDir,
   );
 }
 
 export function getToolDisplayPresetConfig(
-  preset: ToolDisplayPresetName
+  preset: ToolDisplayPresetName,
 ): ToolDisplayConfig {
   const compact = defaultToolDisplayConfig();
   if (preset === "compact") {

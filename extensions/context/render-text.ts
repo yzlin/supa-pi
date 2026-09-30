@@ -54,11 +54,11 @@ export function renderContextText(snapshot: ContextSnapshot): string {
   const exactTotalLines: string[] = [];
   if (snapshot.exactTotalTokens === null) {
     exactTotalLines.push(
-      `Exact total: unknown (${formatPercent(snapshot.estimatedPercent)} estimated)`
+      `Exact total: unknown (${formatPercent(snapshot.estimatedPercent)} estimated)`,
     );
   } else if (snapshot.exactTotalTokens < snapshot.displayUsedTokens) {
     exactTotalLines.push(
-      `Exact total: ${formatTokens(snapshot.exactTotalTokens)} (${formatPercent(snapshot.exactPercent)})`
+      `Exact total: ${formatTokens(snapshot.exactTotalTokens)} (${formatPercent(snapshot.exactPercent)})`,
     );
   }
 
@@ -70,7 +70,7 @@ export function renderContextText(snapshot: ContextSnapshot): string {
     "Estimated usage by category",
     ...snapshot.displayCategories
       .filter(
-        (category) => category.key === "residual" || (category.tokens ?? 0) > 0
+        (category) => category.key === "residual" || (category.tokens ?? 0) > 0,
       )
       .map(renderCategory),
     `⛶ Free space: ${formatTokens(snapshot.freeSpaceTokens)} (${formatPercent(snapshot.freeSpacePercent)})`,
@@ -81,7 +81,7 @@ export function renderContextText(snapshot: ContextSnapshot): string {
     lines.push(
       "",
       "Top offenders",
-      ...snapshot.topOffenders.map(renderOffender)
+      ...snapshot.topOffenders.map(renderOffender),
     );
   }
 
@@ -89,7 +89,7 @@ export function renderContextText(snapshot: ContextSnapshot): string {
     lines.push(
       "",
       "Notes",
-      ...snapshot.suggestions.map((item) => `- ${item.text}`)
+      ...snapshot.suggestions.map((item) => `- ${item.text}`),
     );
   }
 

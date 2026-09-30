@@ -69,7 +69,7 @@ interface HookResult {
 
 type HookHandler = (
   event: unknown,
-  context: unknown
+  context: unknown,
 ) => HookResult | undefined | Promise<HookResult | undefined>;
 
 interface MockClient {
@@ -77,33 +77,33 @@ interface MockClient {
   getDiagnostics: (filePath: string) => Promise<Diagnostic[]>;
   hover: (
     filePath: string,
-    position: { line: number; character: number }
+    position: { line: number; character: number },
   ) => Promise<Hover | null>;
   definition: (
     filePath: string,
-    position: { line: number; character: number }
+    position: { line: number; character: number },
   ) => Promise<Location[]>;
   references: (
     filePath: string,
-    position: { line: number; character: number }
+    position: { line: number; character: number },
   ) => Promise<Location[]>;
   implementation: (
     filePath: string,
-    position: { line: number; character: number }
+    position: { line: number; character: number },
   ) => Promise<Location[]>;
   documentSymbol: (
-    filePath: string
+    filePath: string,
   ) => Promise<DocumentSymbol[] | SymbolInformation[]>;
   workspaceSymbol: (query: string) => Promise<SymbolInformation[]>;
   prepareCallHierarchy: (
     filePath: string,
-    position: { line: number; character: number }
+    position: { line: number; character: number },
   ) => Promise<CallHierarchyItem[]>;
   incomingCalls: (
-    item: CallHierarchyItem
+    item: CallHierarchyItem,
   ) => Promise<CallHierarchyIncomingCall[]>;
   outgoingCalls: (
-    item: CallHierarchyItem
+    item: CallHierarchyItem,
   ) => Promise<CallHierarchyOutgoingCall[]>;
   codeActions: (
     filePath: string,
@@ -111,7 +111,7 @@ interface MockClient {
       start: { line: number; character: number };
       end: { line: number; character: number };
     },
-    context: { diagnostics: Diagnostic[] }
+    context: { diagnostics: Diagnostic[] },
   ) => Promise<CodeAction[]>;
 }
 
@@ -213,7 +213,7 @@ function captureTool(clients: MockClient[]): RegisteredTool {
         tools.push(registeredTool);
       },
     },
-    manager
+    manager,
   );
   const tool = tools[0];
   if (!tool) {
@@ -242,7 +242,7 @@ function captureExtensionHooks(): Map<string, HookHandler> {
 function executeTool(
   tool: RegisteredTool,
   id: string,
-  params: Record<string, unknown>
+  params: Record<string, unknown>,
 ): Promise<ToolResult> {
   return Reflect.apply(tool.execute, tool, [
     id,
@@ -259,7 +259,7 @@ function renderResult(
   args: Record<string, unknown>,
   options: { expanded: boolean; isPartial?: boolean } = { expanded: false },
   state: LspPresentationState = {},
-  toolCallId = "render-call"
+  toolCallId = "render-call",
 ): string[] {
   const component = tool.renderResult?.(
     result as never,
@@ -273,7 +273,7 @@ function renderResult(
         return;
       },
       isError: result.isError === true,
-    } as never
+    } as never,
   );
   return component?.render(120) ?? [];
 }
@@ -420,8 +420,8 @@ describe("LSP tool registration and presentation", () => {
           args,
           { expanded: false },
           {},
-          toolCallId
-        ).join("\n")
+          toolCallId,
+        ).join("\n"),
       ).toContain(expectation.summary);
     }
 
@@ -446,7 +446,7 @@ describe("LSP tool registration and presentation", () => {
       const result = await executeTool(
         emptyTool,
         toolCallId,
-        operationArgs(expectation.operation)
+        operationArgs(expectation.operation),
       );
       expect(result.content[0]?.text).toContain(expectation.contains);
       const lines = renderResult(
@@ -455,7 +455,7 @@ describe("LSP tool registration and presentation", () => {
         operationArgs(expectation.operation),
         { expanded: false },
         {},
-        toolCallId
+        toolCallId,
       );
       expect(lines.join("\n")).toContain("no");
     }
@@ -485,8 +485,8 @@ describe("LSP tool registration and presentation", () => {
         { operation: "documentSymbol", ...FILE_ONLY_ARGS },
         { expanded: false },
         {},
-        "nested-symbols"
-      ).join("\n")
+        "nested-symbols",
+      ).join("\n"),
     ).toContain("2 symbols found");
 
     const workspaceResult = await executeTool(tool, "workspace-symbols", {
@@ -503,8 +503,8 @@ describe("LSP tool registration and presentation", () => {
         },
         { expanded: false },
         {},
-        "workspace-symbols"
-      ).join("\n")
+        "workspace-symbols",
+      ).join("\n"),
     ).toContain("55 symbols found");
   });
 
@@ -555,7 +555,7 @@ describe("LSP tool registration and presentation", () => {
       const tool = captureTool([createClient(overrides)]);
       const toolCallId = `error-${operation}`;
       await expect(
-        executeTool(tool, toolCallId, operationArgs(operation))
+        executeTool(tool, toolCallId, operationArgs(operation)),
       ).rejects.toThrow(error.message);
       const lines = renderResult(
         tool,
@@ -563,7 +563,7 @@ describe("LSP tool registration and presentation", () => {
         operationArgs(operation),
         { expanded: false },
         {},
-        toolCallId
+        toolCallId,
       );
       expect(lines.join("\n")).toContain("error");
     }
@@ -580,7 +580,7 @@ describe("LSP tool registration and presentation", () => {
       {
         operation: "diagnostics",
         ...FILE_ONLY_ARGS,
-      }
+      },
     );
     expect(
       renderResult(
@@ -592,8 +592,8 @@ describe("LSP tool registration and presentation", () => {
         },
         { expanded: false },
         {},
-        "diagnostics-success"
-      ).join("\n")
+        "diagnostics-success",
+      ).join("\n"),
     ).toContain("1 error · 1 warning");
 
     const unavailableTool = captureTool([]);
@@ -601,7 +601,7 @@ describe("LSP tool registration and presentation", () => {
       executeTool(unavailableTool, "diagnostics-unavailable", {
         operation: "diagnostics",
         ...FILE_ONLY_ARGS,
-      })
+      }),
     ).rejects.toThrow("unavailable");
     const unavailable = renderResult(
       unavailableTool,
@@ -612,7 +612,7 @@ describe("LSP tool registration and presentation", () => {
       { operation: "diagnostics", ...FILE_ONLY_ARGS },
       { expanded: false },
       {},
-      "diagnostics-unavailable"
+      "diagnostics-unavailable",
     ).join("\n");
     expect(unavailable).toContain("unavailable");
     expect(unavailable).not.toContain("0 diagnostics");
@@ -642,7 +642,7 @@ describe("LSP tool registration and presentation", () => {
       { operation: "diagnostics", ...FILE_ONLY_ARGS },
       { expanded: true },
       {},
-      "diagnostics-incomplete"
+      "diagnostics-incomplete",
     );
     expect(incomplete[0]).toContain("1 error · 1 warning · incomplete");
     expect(incomplete.join("\n")).toContain("Broken type");
@@ -668,13 +668,13 @@ describe("LSP tool registration and presentation", () => {
     const call = tool.renderCall?.(args as never, theme, context as never);
     expect(call?.render(64)).toHaveLength(2);
     expect(
-      stripVTControlCharacters(call?.render(64).join("\n") ?? "")
+      stripVTControlCharacters(call?.render(64).join("\n") ?? ""),
     ).toContain("🔎 LSP hover");
     expect(call?.render(64).join("\n")).toContain("src/example.ts:3:5");
     expect(
       call
         ?.render(64)
-        .every((line) => line.includes(theme.getBgAnsi("toolPendingBg")))
+        .every((line) => line.includes(theme.getBgAnsi("toolPendingBg"))),
     ).toBe(true);
 
     const result = await executeTool(tool, "elapsed-call", args);
@@ -682,7 +682,7 @@ describe("LSP tool registration and presentation", () => {
       result as never,
       { expanded: false, isPartial: false },
       theme,
-      { ...context, toolCallId: "elapsed-call", isError: false } as never
+      { ...context, toolCallId: "elapsed-call", isError: false } as never,
     );
     const settled = renderedResult?.render(64) ?? [];
     expect(settled).toHaveLength(1);
@@ -694,10 +694,10 @@ describe("LSP tool registration and presentation", () => {
       { content: [{ type: "text", text: "failed" }], isError: true } as never,
       { expanded: false, isPartial: false },
       theme,
-      { ...context, toolCallId: "error-render", isError: true } as never
+      { ...context, toolCallId: "error-render", isError: true } as never,
     );
     expect(errorResult?.render(64)[0]).toContain(
-      theme.getBgAnsi("toolErrorBg")
+      theme.getBgAnsi("toolErrorBg"),
     );
   });
 
@@ -754,7 +754,7 @@ describe("LSP tool registration and presentation", () => {
           /* noop */
         },
       } as never,
-      "/workspace"
+      "/workspace",
     );
     component.setArgsComplete();
     component.updateResult(result, false);
@@ -800,7 +800,7 @@ describe("LSP tool registration and presentation", () => {
           /* noop */
         },
       } as never,
-      "/workspace"
+      "/workspace",
     );
     component.setArgsComplete();
     component.updateResult(result, false);
@@ -846,7 +846,7 @@ describe("LSP tool registration and presentation", () => {
         details: result.details,
         isError: false,
       } satisfies ToolResultEvent,
-      {}
+      {},
     );
     const details = (hookResult as HookResult | undefined)?.details;
     const counts = (
@@ -867,10 +867,10 @@ describe("LSP tool registration and presentation", () => {
         { content: result.content, details, isError: false },
         { expanded: false, isPartial: false },
         plainTheme,
-        { args, toolCallId, state: {}, isError: false }
+        { args, toolCallId, state: {}, isError: false },
       )
         .render(100)
-        .join("\n")
+        .join("\n"),
     ).toContain("1 error · 1 warning · 1 info · 1 hint · 1 other");
   });
 
@@ -924,12 +924,12 @@ describe("LSP tool registration and presentation", () => {
           details: {},
           isError: true,
         } satisfies ToolResultEvent,
-        {}
+        {},
       );
       const persistedDetails = (hookResult as HookResult | undefined)?.details;
       expect(persistedDetails).toBeDefined();
       expect(JSON.parse(JSON.stringify(persistedDetails))).toEqual(
-        persistedDetails
+        persistedDetails,
       );
 
       const metadata = (
@@ -962,13 +962,13 @@ describe("LSP tool registration and presentation", () => {
           toolCallId: `replayed-${scenario.id}`,
           state: {},
           isError: true,
-        }
+        },
       );
       const replayed = replay.render(100).join("\n");
       expect(replayed).toContain(
         scenario.expectedStatus === "unavailable"
           ? "diagnostics unavailable"
-          : "1 error · 1 warning · incomplete"
+          : "1 error · 1 warning · incomplete",
       );
       expect(replayed).toContain(message);
     }
@@ -1007,7 +1007,7 @@ describe("LSP tool registration and presentation", () => {
         invalidate() {
           firstInvalidations += 1;
         },
-      }
+      },
     );
     renderLspToolCall(
       { operation: "hover", ...FILE_ARGS, filePath: "second.ts" },
@@ -1017,7 +1017,7 @@ describe("LSP tool registration and presentation", () => {
         invalidate() {
           secondInvalidations += 1;
         },
-      }
+      },
     );
 
     await sleep(1050);
@@ -1051,7 +1051,7 @@ describe("LSP tool registration and presentation", () => {
           return;
         },
         isError: false,
-      } as never
+      } as never,
     );
     expect(replayed.render(80).join("\n")).toContain("replayed\nresult");
   });

@@ -77,11 +77,11 @@ function makeTask(index: number, maxAttempts: number): GoalTask {
 function addBudgetTasks(
   checkpoint: GoalCheckpoint,
   additionalBudget: number,
-  maxAttempts: number
+  maxAttempts: number,
 ): GoalCheckpoint {
   const startIndex = checkpoint.tasks.length + 1;
   const hasActiveTask = checkpoint.tasks.some(
-    (task) => task.status === "active"
+    (task) => task.status === "active",
   );
   const newTasks = Array.from({ length: additionalBudget }, (_, index) => ({
     ...makeTask(startIndex + index, maxAttempts),
@@ -118,7 +118,7 @@ function createCheckpoint(input: {
 }): GoalCheckpoint {
   const timestamp = now();
   const tasks = Array.from({ length: input.taskBudget ?? 0 }, (_, index) =>
-    makeTask(index + 1, input.maxAttemptsPerTask)
+    makeTask(index + 1, input.maxAttemptsPerTask),
   );
   return {
     version: 1,
@@ -188,7 +188,7 @@ function emitGoalEvent(
   pi: ExtensionAPI,
   title: string,
   body?: string,
-  status?: GoalStatus
+  status?: GoalStatus,
 ): void {
   pi.sendMessage({
     customType: GOAL_MESSAGE_TYPE,
@@ -201,7 +201,7 @@ function emitGoalEvent(
 function appendGoalState(
   pi: ExtensionAPI,
   checkpoint: GoalCheckpoint | null,
-  cwd: string | null
+  cwd: string | null,
 ): void {
   pi.appendEntry(GOAL_STATE_TYPE, {
     goalId: checkpoint?.goalId ?? null,
@@ -277,7 +277,7 @@ function promptFor(checkpoint: GoalCheckpoint): string {
 function sendPrompt(
   pi: ExtensionAPI,
   ctx: ExtensionCommandContext,
-  prompt: string
+  prompt: string,
 ): void {
   if (ctx.isIdle()) {
     pi.sendUserMessage(prompt);
@@ -312,7 +312,7 @@ function queueContinuation(pi: ExtensionAPI, checkpoint: GoalCheckpoint): void {
           status: activeGoal.status,
         } satisfies GoalEventDetails,
       },
-      { triggerTurn: true, deliverAs: "followUp" }
+      { triggerTurn: true, deliverAs: "followUp" },
     );
   });
 }
@@ -320,7 +320,7 @@ function queueContinuation(pi: ExtensionAPI, checkpoint: GoalCheckpoint): void {
 function saveGoal(
   pi: ExtensionAPI,
   checkpoint: GoalCheckpoint,
-  cwd: string
+  cwd: string,
 ): Result<GoalCheckpoint> {
   const next = { ...checkpoint, updatedAt: now() };
   const saved = saveGoalCheckpoint(next, cwd);
@@ -335,13 +335,13 @@ function saveGoal(
 
 function notifySaveFailure(
   ctx: ExtensionCommandContext | ExtensionContext,
-  error: string
+  error: string,
 ): void {
   ctx.ui.notify(`Failed to save goal checkpoint: ${error}`, "error");
 }
 
 function activeGoalForContext(
-  ctx: ExtensionCommandContext | ExtensionContext
+  ctx: ExtensionCommandContext | ExtensionContext,
 ): Result<GoalCheckpoint> {
   if (activeGoal?.status !== "active") {
     return { ok: false, error: "No active goal." };
@@ -361,13 +361,13 @@ function hasPrefix<T>(current: T[], next: T[]): boolean {
     return false;
   }
   return current.every(
-    (entry, index) => JSON.stringify(entry) === JSON.stringify(next[index])
+    (entry, index) => JSON.stringify(entry) === JSON.stringify(next[index]),
   );
 }
 
 function validateTaskPatch(
   current: GoalTask[],
-  next: GoalTask[]
+  next: GoalTask[],
 ): Result<void> {
   if (next.length !== current.length) {
     return { ok: false, error: "goal_checkpoint cannot add or remove tasks." };
@@ -433,7 +433,7 @@ function validateTaskPatch(
 
 function validateMilestonePatch(
   current: GoalMilestone[],
-  next: GoalMilestone[]
+  next: GoalMilestone[],
 ): Result<void> {
   if (next.length !== current.length) {
     return {
@@ -462,7 +462,7 @@ function validateMilestonePatch(
 
 function validateCheckpointUpdate(
   current: GoalCheckpoint,
-  next: GoalCheckpoint
+  next: GoalCheckpoint,
 ): Result<void> {
   if (next.goalId !== current.goalId || next.mode !== current.mode) {
     return { ok: false, error: "goal_checkpoint cannot change goal identity." };
@@ -498,7 +498,7 @@ function validateCheckpointUpdate(
   }
   const milestonePatch = validateMilestonePatch(
     current.milestones,
-    next.milestones
+    next.milestones,
   );
   if (!milestonePatch.ok) {
     return milestonePatch;
@@ -536,7 +536,7 @@ function registerGoalCheckpointTool(pi: ExtensionAPI): void {
           blocked: Type.Boolean(),
           reason: Type.Union([Type.String(), Type.Null()]),
           taskId: Type.Optional(Type.String()),
-        })
+        }),
       ),
     }),
     execute(_toolCallId, params, _signal, _onUpdate, ctx) {
@@ -629,7 +629,7 @@ function clearActiveGoal(pi: ExtensionAPI, ctx: ExtensionContext): void {
 function restoreGoalFromSession(
   pi: ExtensionAPI,
   event: { reason?: string },
-  ctx: ExtensionContext
+  ctx: ExtensionContext,
 ): void {
   continuationQueued = false;
   const state = latestGoalState(ctx);
@@ -668,7 +668,7 @@ function restoreGoalFromSession(
     checkpoint = saved.value;
     ctx.ui.notify(
       `Goal paused after reload: ${checkpoint.objective}\nUse /goal resume to continue, or /goal clear to stop.`,
-      "info"
+      "info",
     );
   } else {
     activeGoal = checkpoint;
@@ -693,16 +693,16 @@ export default function goalExtension(pi: ExtensionAPI): void {
       return new Text(
         `${theme.fg("toolTitle", "goal:")} ${details.title}${suffix}${details.body ? ` — ${details.body}` : ""}`,
         outputPad,
-        0
+        0,
       );
-    }
+    },
   );
 
   pi.on("session_start", (event, ctx) =>
-    restoreGoalFromSession(pi, event, ctx)
+    restoreGoalFromSession(pi, event, ctx),
   );
   pi.on("session_switch", (_event, ctx) =>
-    restoreGoalFromSession(pi, { reason: "resume" }, ctx)
+    restoreGoalFromSession(pi, { reason: "resume" }, ctx),
   );
   pi.on("session_shutdown", () => {
     forgetActiveGoal();
@@ -771,7 +771,7 @@ export default function goalExtension(pi: ExtensionAPI): void {
           checkpoint = addBudgetTasks(
             checkpoint,
             input.taskBudget,
-            input.maxAttemptsPerTask
+            input.maxAttemptsPerTask,
           );
         }
         if (
@@ -780,7 +780,7 @@ export default function goalExtension(pi: ExtensionAPI): void {
         ) {
           ctx.ui.notify(
             "/goal resume requires --tasks N for budget-limited task goals.",
-            "warning"
+            "warning",
           );
           return;
         }

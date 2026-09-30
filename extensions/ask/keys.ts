@@ -6,7 +6,7 @@ import type { Question, RenderOption } from "./types";
 function matchesNavigationKey(
   data: string,
   key: KeyId,
-  vimKey: "h" | "j" | "k" | "l"
+  vimKey: "h" | "j" | "k" | "l",
 ): boolean {
   return matchesKey(data, key) || data === vimKey;
 }

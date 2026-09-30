@@ -14,10 +14,10 @@ const reader = (files: Record<string, string>) => async (path: string) =>
 describe("local unified-edit schema and argument preparation", () => {
   test("public schema is strict text-only with no reasoning", () => {
     expect(Value.Check(unifiedEditSchema, { text: "[a]\n@APPEND\n+x" })).toBe(
-      true
+      true,
     );
     expect(
-      Value.Check(unifiedEditSchema, { text: "x", reasoning: "why" })
+      Value.Check(unifiedEditSchema, { text: "x", reasoning: "why" }),
     ).toBe(false);
     expect(Value.Check(unifiedEditSchema, { patch: "x" })).toBe(false);
   });
@@ -55,7 +55,7 @@ describe("local unified-edit parser and planner", () => {
   test("description examples parse in their documented dialects", () => {
     expect(parseRowScript(ROW_EXAMPLE)).toHaveLength(2);
     expect(
-      parsePatch(PATCH_EXAMPLE).map((operation) => operation.kind)
+      parsePatch(PATCH_EXAMPLE).map((operation) => operation.kind),
     ).toEqual(["add", "update", "delete"]);
   });
 
@@ -115,7 +115,7 @@ describe("local unified-edit parser and planner", () => {
     const plan = await buildUnifiedEditPlan(
       text,
       "/tmp",
-      reader({ "a.txt": "before\n\nold\nafter\n" })
+      reader({ "a.txt": "before\n\nold\nafter\n" }),
     );
     expect(plan.changes[0].newText).toBe("before\n\nnew\nafter\n");
   });
@@ -125,15 +125,15 @@ describe("local unified-edit parser and planner", () => {
     const plan = await buildUnifiedEditPlan(
       text,
       "/tmp",
-      reader({ "a.txt": "\uFEFFHello — “world”  \r\nkeep\r\n" })
+      reader({ "a.txt": "\uFEFFHello — “world”  \r\nkeep\r\n" }),
     );
     expect(plan.changes[0].newText).toBe("\uFEFFchanged\r\nkeep\r\n");
     await expect(
       buildUnifiedEditPlan(
         "[a.txt]\n@REPLACE\n-same\n+x",
         "/tmp",
-        reader({ "a.txt": "same\nsame\n" })
-      )
+        reader({ "a.txt": "same\nsame\n" }),
+      ),
     ).rejects.toThrow("must be unique");
   });
 
@@ -143,8 +143,8 @@ describe("local unified-edit parser and planner", () => {
         buildUnifiedEditPlan(
           "[a.txt]\n@REPLACE\n-same",
           "/tmp",
-          reader({ "a.txt": content })
-        )
+          reader({ "a.txt": content }),
+        ),
       ).rejects.toThrow("must be unique");
     }
 
@@ -158,7 +158,7 @@ describe("local unified-edit parser and planner", () => {
       const plan = await buildUnifiedEditPlan(
         "[a.txt]\n@REPLACE\n-remove",
         "/tmp",
-        reader({ "a.txt": content })
+        reader({ "a.txt": content }),
       );
       expect(plan.changes[0].newText).toBe(expected);
     }
@@ -182,7 +182,7 @@ describe("local unified-edit parser and planner", () => {
     const plan = await buildUnifiedEditPlan(
       patch,
       "/tmp",
-      reader({ "old.txt": "old\n", "gone.txt": "gone\n" })
+      reader({ "old.txt": "old\n", "gone.txt": "gone\n" }),
     );
     expect(plan.changes.map((change) => change.kind)).toEqual([
       "add",
@@ -191,8 +191,8 @@ describe("local unified-edit parser and planner", () => {
     ]);
     expect(() =>
       parsePatch(
-        "*** Begin Patch\n*** Update File: a\n*** Move to: b\n*** End Patch"
-      )
+        "*** Begin Patch\n*** Update File: a\n*** Move to: b\n*** End Patch",
+      ),
     ).toThrow("move operations");
   });
 
@@ -203,12 +203,12 @@ describe("local unified-edit parser and planner", () => {
         "/tmp",
         reader({
           "a.txt": "x\n",
-        })
-      )
+        }),
+      ),
     ).rejects.toThrow("input exceeds limit");
 
     const operations = Array.from({ length: 1001 }, () => "@APPEND\n+x").join(
-      "\n"
+      "\n",
     );
     await expect(
       buildUnifiedEditPlan(
@@ -216,8 +216,8 @@ describe("local unified-edit parser and planner", () => {
         "/tmp",
         reader({
           "a.txt": "base\n",
-        })
-      )
+        }),
+      ),
     ).rejects.toThrow("1000 operations");
 
     await expect(
@@ -226,8 +226,8 @@ describe("local unified-edit parser and planner", () => {
         "/tmp",
         reader({
           "a.txt": `${"a".repeat(200_001)}\n`,
-        })
-      )
+        }),
+      ),
     ).rejects.toThrow("Matcher comparison limit");
   });
 
@@ -239,8 +239,8 @@ describe("local unified-edit parser and planner", () => {
 +inserted
 *** End Patch`,
         "/tmp",
-        reader({ "a.txt": "first\nsecond\n" })
-      )
+        reader({ "a.txt": "first\nsecond\n" }),
+      ),
     ).rejects.toThrow("needs locating context");
 
     await expect(
@@ -252,8 +252,8 @@ describe("local unified-edit parser and planner", () => {
 +second insert
 *** End Patch`,
         "/tmp",
-        reader({ "a.txt": "first\nsecond\n" })
-      )
+        reader({ "a.txt": "first\nsecond\n" }),
+      ),
     ).rejects.toThrow("needs locating context");
   });
 
@@ -265,7 +265,7 @@ describe("local unified-edit parser and planner", () => {
 +inserted
 *** End Patch`,
       "/tmp",
-      reader({ "a.txt": "anchor\ntail\n" })
+      reader({ "a.txt": "anchor\ntail\n" }),
     );
 
     expect(plan.changes[0].newText).toBe("anchor\ninserted\ntail\n");
@@ -283,14 +283,14 @@ describe("local unified-edit parser and planner", () => {
     const fuzzy = await buildUnifiedEditPlan(
       patch,
       "/tmp",
-      reader({ "a.txt": "before  \nold\nafter\t\n" })
+      reader({ "a.txt": "before  \nold\nafter\t\n" }),
     );
     expect(fuzzy.changes[0].newText).toBe("before  \nnew\nafter\t\n");
 
     const exact = await buildUnifiedEditPlan(
       patch,
       "/tmp",
-      reader({ "a.txt": "before\nold\nafter\n" })
+      reader({ "a.txt": "before\nold\nafter\n" }),
     );
     expect(exact.changes[0].newText).toBe("before\nnew\nafter\n");
   });
@@ -305,8 +305,8 @@ describe("local unified-edit parser and planner", () => {
 +new
 *** End Patch`,
         "/tmp",
-        reader({ "a.txt": "same\nkeep\nsame\n" })
-      )
+        reader({ "a.txt": "same\nkeep\nsame\n" }),
+      ),
     ).rejects.toThrow("multiple locations");
   });
 });

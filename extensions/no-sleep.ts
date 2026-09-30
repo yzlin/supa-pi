@@ -67,7 +67,7 @@ function caffeinateArgs(): string[] {
 function notify(
   ctx: ExtensionContext | undefined,
   message: string,
-  level: Level = "info"
+  level: Level = "info",
 ): void {
   if (ctx?.hasUI) {
     ctx.ui.notify(message, level);
@@ -104,14 +104,14 @@ function start(ctx?: ExtensionContext): void {
       notify(
         ctx,
         `No Sleep: caffeinate stopped unexpectedly (${lastError}).`,
-        "warning"
+        "warning",
       );
     } else if (signal) {
       lastError = `caffeinate exited after signal ${signal}`;
       notify(
         ctx,
         `No Sleep: caffeinate stopped unexpectedly (${lastError}).`,
-        "warning"
+        "warning",
       );
     }
   });
@@ -220,7 +220,7 @@ export default function noSleepExtension(pi: ExtensionAPI) {
         notify(
           ctx,
           "Usage: /no-sleep [status|on|off|toggle|agent|session]",
-          "warning"
+          "warning",
         );
         return;
       }

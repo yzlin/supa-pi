@@ -103,17 +103,17 @@ export interface RtkMetricsStore {
   recordToolSavings(
     toolName: RtkToolName | string,
     originalChars: number,
-    finalChars: number
+    finalChars: number,
   ): void;
   startCommand(
     commandId: string,
     toolName: RtkTrackedToolName,
     label: string,
-    startedAt?: number
+    startedAt?: number,
   ): void;
   completeCommand(
     commandId: string,
-    options?: RtkCommandCompletionOptions
+    options?: RtkCommandCompletionOptions,
   ): void;
   reset(): void;
   snapshot(): RtkMetricsSnapshot;
@@ -129,7 +129,7 @@ export interface RtkRunnerResult {
 export type RtkRunner = (
   file: string,
   args: string[],
-  timeoutMs: number
+  timeoutMs: number,
 ) => RtkRunnerResult;
 
 export interface RtkRewriteResult {

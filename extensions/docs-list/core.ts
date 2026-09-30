@@ -122,7 +122,7 @@ function normalizeSummary(value: string): string {
 
 function parseReadWhenInlineArray(
   inline: string,
-  warnings: string[]
+  warnings: string[],
 ): string[] {
   if (!(inline.startsWith("[") && inline.endsWith("]"))) {
     return [];
@@ -130,7 +130,7 @@ function parseReadWhenInlineArray(
 
   try {
     const parsed = JSON.parse(
-      inline.replace(SINGLE_QUOTE_REGEX, '"')
+      inline.replace(SINGLE_QUOTE_REGEX, '"'),
     ) as unknown;
     return Array.isArray(parsed) ? compactStrings(parsed) : [];
   } catch {
@@ -212,7 +212,7 @@ function extractMetadata(fullPath: string): Omit<DocsListItem, "path"> {
 }
 
 export function listDocs(
-  options: { cwd?: string; path?: string } = {}
+  options: { cwd?: string; path?: string } = {},
 ): DocsListResult {
   const cwd = options.cwd ?? process.cwd();
   const target = getDocsTarget(options.path);
@@ -240,7 +240,7 @@ export function listDocs(
     ...extractMetadata(join(root, markdownPath)),
   }));
   const warnings = docs.flatMap((doc) =>
-    doc.warnings.map((message) => ({ path: doc.path, message }))
+    doc.warnings.map((message) => ({ path: doc.path, message })),
   );
 
   return {
@@ -279,7 +279,7 @@ export function formatDocsList(result: DocsListResult): string {
 
   lines.push(
     "",
-    'Reminder: keep docs up to date as behavior changes. When your task matches any "Read when" hint above (React hooks, cache directives, database work, tests, etc.), read that doc before coding, and suggest new coverage when it is missing.'
+    'Reminder: keep docs up to date as behavior changes. When your task matches any "Read when" hint above (React hooks, cache directives, database work, tests, etc.), read that doc before coding, and suggest new coverage when it is missing.',
   );
 
   return lines.join("\n");

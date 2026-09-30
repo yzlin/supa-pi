@@ -48,7 +48,7 @@ interface Client {
   judgeBatch(
     candidates: readonly JevCandidate[],
     context: { currentRequest: string; recentText: string },
-    signal?: AbortSignal
+    signal?: AbortSignal,
   ): Promise<JevBatchResult>;
   verify(signal?: AbortSignal): Promise<void>;
 }
@@ -90,7 +90,7 @@ const FALLBACK_MESSAGE_TYPE = "skill-router-native-fallback";
 const OVERSIZED_INPUT = "x".repeat(MAX_TEXT_BYTES + 1);
 
 export function createSkillRouterExtension(
-  dependencies: SkillRouterDependencies = {}
+  dependencies: SkillRouterDependencies = {},
 ) {
   return (pi: ExtensionAPI): void => {
     const env = dependencies.env ?? process.env;
@@ -160,7 +160,7 @@ export function createSkillRouterExtension(
     const report = (
       ctx: ExtensionContext,
       message: string,
-      level: "info" | "error"
+      level: "info" | "error",
     ) => {
       if (ctx.hasUI) {
         ctx.ui.notify(message, level);
@@ -171,7 +171,7 @@ export function createSkillRouterExtension(
             content: message,
             display: true,
           },
-          { triggerTurn: false }
+          { triggerTurn: false },
         );
       }
     };
@@ -242,7 +242,7 @@ export function createSkillRouterExtension(
       controllers.add(controller);
       const timeout = setTimeout(
         () => controller.abort(new Error("routing deadline exceeded")),
-        deadlineMs
+        deadlineMs,
       );
       const valid = () =>
         !controller.signal.aborted &&
@@ -280,7 +280,7 @@ export function createSkillRouterExtension(
         const result = await classifyRoute(
           prepared,
           (batch, context, signal) => client.judgeBatch(batch, context, signal),
-          controller.signal
+          controller.signal,
         );
         if (!valid()) {
           return;
@@ -291,7 +291,7 @@ export function createSkillRouterExtension(
         }
         const loaded = await loadSelectedSkills(
           effectiveSkills,
-          result.skills.map((skill) => skill.name)
+          result.skills.map((skill) => skill.name),
         );
         if (!(loaded.ok && valid())) {
           lastFallback =
@@ -300,7 +300,7 @@ export function createSkillRouterExtension(
         }
         const catalogPath = await writeRecoveryCatalog(
           agentDir,
-          effectiveSkills
+          effectiveSkills,
         );
         if (!(valid() && (await configStore.load()) && valid())) {
           lastFallback = "disabled or stale";
@@ -308,7 +308,7 @@ export function createSkillRouterExtension(
         }
         const visibleProvenance = visibleSelectedProvenance(
           ctx,
-          projections.map((projection) => projection.message)
+          projections.map((projection) => projection.message),
         );
         const details: SelectedDetails = {
           version: 1,
@@ -382,7 +382,7 @@ export function createSkillRouterExtension(
                 lastFallback = "routing timed out or cancelled";
                 resolve(undefined);
               },
-              { once: true }
+              { once: true },
             );
           }),
         ]);
@@ -415,7 +415,7 @@ export function createSkillRouterExtension(
         }
       }
       const visibleAnchors = new Set(
-        identified.map((message) => message.identity)
+        identified.map((message) => message.identity),
       );
       for (let index = projections.length - 1; index >= 0; index--) {
         if (!visibleAnchors.has(projections[index]?.anchor ?? "")) {
@@ -452,11 +452,11 @@ export function createSkillRouterExtension(
         ...projections.map((projection) => projection.message),
       ]);
       const missingFrozen = frozenSelections.filter(
-        (selection) => !visibleProvenance.has(selection.provenance)
+        (selection) => !visibleProvenance.has(selection.provenance),
       );
       const insertion = canonical[0]?.role === "system" ? 1 : 0;
       const anchorAtInsertion = identified.find(
-        (message) => message.index === insertion
+        (message) => message.index === insertion,
       );
       const lastAnchor = identified.at(-1);
       const selectedAnchor = anchorAtInsertion ?? lastAnchor;
@@ -488,11 +488,11 @@ export function createSkillRouterExtension(
       let messages: typeof event.messages = [];
       let changed = false;
       const identityByIndex = new Map(
-        identified.map((message) => [message.index, message.identity])
+        identified.map((message) => [message.index, message.identity]),
       );
       for (const [index, message] of canonical.entries()) {
         const anchored = projectionsByAnchor.get(
-          identityByIndex.get(index) ?? ""
+          identityByIndex.get(index) ?? "",
         );
         if (anchored && anchored.before.length > 0) {
           messages.push(...anchored.before);
@@ -519,7 +519,7 @@ export function createSkillRouterExtension(
       description: "Manage skill-router authentication, consent, and status",
       getArgumentCompletions(prefix) {
         return ACTIONS.filter((action) => action.startsWith(prefix)).map(
-          (action) => ({ value: action, label: action })
+          (action) => ({ value: action, label: action }),
         );
       },
       handler: async (raw, ctx) => {
@@ -528,7 +528,7 @@ export function createSkillRouterExtension(
           report(
             ctx,
             "Usage: /skill-router [status|login|logout|enable|disable]",
-            "error"
+            "error",
           );
           return;
         }
@@ -543,7 +543,7 @@ export function createSkillRouterExtension(
             report(
               ctx,
               `Skill router ${enabled ? "enabled" : "disabled"}; credential=${status.source}:${usability}; requests=${requests}/${MAX_REQUESTS}; lastFallback=${lastFallback}; model=${JEV_MODEL}. No input is sent by this status command.`,
-              "info"
+              "info",
             );
             return;
           }
@@ -560,7 +560,7 @@ export function createSkillRouterExtension(
             report(
               ctx,
               `Stored skill-router credential cleared; routing disabled.${env.TYPESAFE_API_KEY === undefined ? "" : " TYPESAFE_API_KEY remains and takes precedence."}`,
-              "info"
+              "info",
             );
             return;
           }
@@ -570,7 +570,7 @@ export function createSkillRouterExtension(
               report(
                 ctx,
                 "Skill router needs a usable TypeSafe credential. Run /skill-router login or set TYPESAFE_API_KEY.",
-                "error"
+                "error",
               );
               return;
             }
@@ -578,13 +578,13 @@ export function createSkillRouterExtension(
               report(
                 ctx,
                 "Persistent enablement requires an interactive TUI.",
-                "error"
+                "error",
               );
               return;
             }
             const confirmed = await ctx.ui.confirm(
               "Enable experimental paid skill routing?",
-              "Skill names/descriptions plus bounded current and recent user/assistant text will leave this machine for charged TypeSafe judgments. Conversation may contain sensitive text. Filtering is source-based, not secret-proof; routing is experimental and uncalibrated. Enable for future sessions?"
+              "Skill names/descriptions plus bounded current and recent user/assistant text will leave this machine for charged TypeSafe judgments. Conversation may contain sensitive text. Filtering is source-based, not secret-proof; routing is experimental and uncalibrated. Enable for future sessions?",
             );
             if (!confirmed) {
               report(ctx, "Skill router remains disabled.", "info");
@@ -599,7 +599,7 @@ export function createSkillRouterExtension(
             report(
               ctx,
               "TYPESAFE_API_KEY takes precedence; stored authentication was not changed.",
-              "info"
+              "info",
             );
             return;
           }
@@ -607,13 +607,13 @@ export function createSkillRouterExtension(
             report(
               ctx,
               "Secure login requires an interactive TUI; set TYPESAFE_API_KEY for headless use.",
-              "error"
+              "error",
             );
             return;
           }
           const chargeConfirmed = await ctx.ui.confirm(
             "Verify a TypeSafe credential?",
-            "Login sends one tiny synthetic verification judgment, which may incur a small charge. No workspace or conversation content is included. Continue?"
+            "Login sends one tiny synthetic verification judgment, which may incur a small charge. No workspace or conversation content is included. Continue?",
           );
           if (!chargeConfirmed) {
             report(ctx, "Skill-router login cancelled.", "info");
@@ -633,7 +633,7 @@ export function createSkillRouterExtension(
             report(
               ctx,
               "TypeSafe credential is invalid; authentication unchanged.",
-              "error"
+              "error",
             );
             return;
           }
@@ -648,13 +648,13 @@ export function createSkillRouterExtension(
             report(
               ctx,
               "TypeSafe credential verified and saved. Existing routing consent is unchanged.",
-              "info"
+              "info",
             );
           } catch (error) {
             report(
               ctx,
               `TypeSafe credential verification failed (${safeFailure(error)}); authentication unchanged.`,
-              "error"
+              "error",
             );
           } finally {
             controllers.delete(controller);
@@ -678,7 +678,8 @@ function sameCatalog(left: readonly Skill[], right: readonly Skill[]): boolean {
         skill === right[index] ||
         (skill.name === right[index]?.name &&
           skill.filePath === right[index]?.filePath &&
-          skill.disableModelInvocation === right[index]?.disableModelInvocation)
+          skill.disableModelInvocation ===
+            right[index]?.disableModelInvocation),
     )
   );
 }
@@ -687,7 +688,7 @@ function isExplicitInvocation(text: string): boolean {
 }
 function mentionsExcludedSkill(text: string): boolean {
   const words = new Set(
-    text.toLowerCase().split(WORD_SEPARATOR).filter(Boolean)
+    text.toLowerCase().split(WORD_SEPARATOR).filter(Boolean),
   );
   for (const name of EXPLICIT_ONLY_SKILLS) {
     if (words.has(name.toLowerCase())) {
@@ -708,7 +709,7 @@ function trimRawInputSet(inputs: Set<string>): void {
 function buildRecentText(
   ctx: ExtensionContext,
   safeRawInputs: ReadonlySet<string>,
-  current: string
+  current: string,
 ): string {
   const lines: string[] = [];
   const entries = ctx.sessionManager.buildContextEntries();
@@ -759,7 +760,7 @@ function plainText(content: unknown): string | undefined {
         typeof item === "object" &&
         item !== null &&
         Reflect.get(item, "type") === "text" &&
-        typeof Reflect.get(item, "text") === "string"
+        typeof Reflect.get(item, "text") === "string",
     )
     .map((item) => item.text)
     .join("\n");
@@ -767,7 +768,7 @@ function plainText(content: unknown): string | undefined {
 }
 function visibleSelectedProvenance(
   ctx: ExtensionContext,
-  retained: readonly unknown[]
+  retained: readonly unknown[],
 ): Set<string> {
   return selectedProvenanceInMessages([
     ...ctx.sessionManager
@@ -783,7 +784,7 @@ function visibleSelectedProvenance(
   ]);
 }
 function selectedProvenanceInMessages(
-  messages: readonly unknown[]
+  messages: readonly unknown[],
 ): Set<string> {
   const visible = new Set<string>();
   for (const message of messages) {
@@ -819,7 +820,7 @@ function selectedProvenanceInMessages(
   return visible;
 }
 function selectedSkillDetails(
-  value: unknown
+  value: unknown,
 ): SelectedSkillDetails | undefined {
   if (typeof value !== "object" || value === null) {
     return;
@@ -859,7 +860,7 @@ function xml(value: string): string {
 }
 function rememberContextUsers(
   ctx: ExtensionContext,
-  knownUsers: Set<string>
+  knownUsers: Set<string>,
 ): void {
   const messages = ctx.sessionManager
     .buildContextEntries()

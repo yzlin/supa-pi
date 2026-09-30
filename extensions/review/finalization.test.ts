@@ -78,7 +78,7 @@ describe("prepared review raw result derivation", () => {
   it("recomputes candidate IDs, provenance, coverage and support", () => {
     const result = derive(raw());
     expect(result.candidates.map((candidate) => candidate.candidateId)).toEqual(
-      ["candidate-0001", "candidate-0002"]
+      ["candidate-0001", "candidate-0002"],
     );
     expect(result.verifier.findings[0]?.supportingModels).toEqual([
       "test/alpha",
@@ -87,7 +87,7 @@ describe("prepared review raw result derivation", () => {
     expect(result.verifier.findings[0]?.supportCount).toBe(2);
     expect(result.coverage.degraded).toBe(false);
     expect(result.coverage.callPlan.synthesizer?.model).toBe(
-      "test/synthesizer"
+      "test/synthesizer",
     );
   });
 
@@ -99,7 +99,7 @@ describe("prepared review raw result derivation", () => {
     expect(result.coverage.callPlan.synthesizer).toBeUndefined();
     expect(result.coverage.callPlan.verifier).toBeUndefined();
     expect(() =>
-      derive({ ...raw([]), synthesizerOutput: { clusters: [] } })
+      derive({ ...raw([]), synthesizerOutput: { clusters: [] } }),
     ).toThrow();
   });
 
@@ -161,7 +161,7 @@ describe("prepared review raw result derivation", () => {
       "verdict",
     ]) {
       expect(() => derive({ ...raw(), [key]: [] })).toThrow(
-        "Invalid raw review result"
+        "Invalid raw review result",
       );
     }
   });
@@ -201,7 +201,7 @@ describe("prepared review raw result derivation", () => {
       JSON.stringify({ reviewerRuns: new Array(257).fill(null) }),
     ]) {
       expect(() => derivePreparedReviewResult(prepared, json)).toThrow(
-        "Invalid raw review result"
+        "Invalid raw review result",
       );
     }
     expect(() => derive({ ...raw([]), extra: "x".repeat(16_385) })).toThrow();
@@ -229,7 +229,7 @@ function journalRecords(findings = [finding]) {
 function deriveJournal(records: unknown[], plan = prepared) {
   return deriveJournalReviewResult(
     plan,
-    `${records.map((entry) => JSON.stringify(entry)).join("\n")}\n`
+    `${records.map((entry) => JSON.stringify(entry)).join("\n")}\n`,
   );
 }
 
@@ -238,7 +238,7 @@ describe("native completion-order journal contracts", () => {
     const records = journalRecords();
     expect(deriveJournal(records.toReversed())).toEqual(deriveJournal(records));
     expect(
-      deriveJournal(records.toReversed()).candidates.map(({ model }) => model)
+      deriveJournal(records.toReversed()).candidates.map(({ model }) => model),
     ).toEqual(["test/alpha", "test/beta"]);
   });
   it("accepts failed/skip records without text, with success for the same role", () => {
@@ -250,8 +250,8 @@ describe("native completion-order journal contracts", () => {
     expect(result.coverage.runs[1].model).toBe("test/beta");
     expect(() =>
       deriveJournal(
-        records.map(({ index, key }) => ({ index, key, ok: false }))
-      )
+        records.map(({ index, key }) => ({ index, key, ok: false })),
+      ),
     ).toThrow("No successful model run");
   });
   it("requires success for every role, not just any successful model", () => {
@@ -263,15 +263,15 @@ describe("native completion-order journal contracts", () => {
           ...prepared,
           reviewers: ["code-reviewer", "security-reviewer"],
           reviewerPanel: [prepared.reviewerPanel[0]],
-        }
-      )
+        },
+      ),
     ).toThrow("No successful model run");
   });
   for (const index of [-1, 0, 0.5, 2, "1", null]) {
     it(`rejects duplicate, missing, noninteger or out-of-range index ${index}`, () => {
       const records = journalRecords([]);
       expect(() =>
-        deriveJournal([records[0], { ...records[1], index }])
+        deriveJournal([records[0], { ...records[1], index }]),
       ).toThrow();
     });
   }
@@ -309,7 +309,7 @@ describe("native completion-order journal contracts", () => {
         records[1],
         { index, key, ok: false },
         records[3],
-      ])
+      ]),
     ).toThrow("Downstream review agent failed");
   });
 });

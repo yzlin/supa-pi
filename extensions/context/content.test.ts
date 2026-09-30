@@ -14,7 +14,7 @@ import {
 
 function makeCtx(
   sessionManager: SessionManager,
-  systemPrompt = "system prompt"
+  systemPrompt = "system prompt",
 ) {
   return {
     sessionManager,

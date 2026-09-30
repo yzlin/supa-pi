@@ -29,18 +29,18 @@ describe("visual explanation skill contracts", () => {
     const extension = readRepositoryFile(
       "extensions",
       "prompt-commands",
-      "index.ts"
+      "index.ts",
     );
 
     expect(extension).toContain('"show-me": {');
     const prompt = readRepositoryFile("prompts", "show-me.md");
     expect(prompt).toContain('argument-hint: "[topic]"');
     expect(prompt).toContain(
-      "Use the `showing-me` skill as canonical for this explicit command."
+      "Use the `showing-me` skill as canonical for this explicit command.",
     );
     expect(prompt).toContain("Topic:\n$@");
     expect(extension).toContain(
-      "Use the `showing-me` skill as canonical for this explicit command."
+      "Use the `showing-me` skill as canonical for this explicit command.",
     );
     expect(extension).toContain('pi.on("input"');
     expect(extension).not.toContain("registerCommand");
@@ -53,14 +53,14 @@ describe("visual explanation skill contracts", () => {
 
     expect(skill).toContain("Choose the smallest diagram set");
     expect(skill).toContain(
-      "An architectural visual or diagram is explicitly requested."
+      "An architectural visual or diagram is explicitly requested.",
     );
     expect(skill).toContain("An architectural visual is needed");
     expect(skill).not.toContain(
-      '"diagram", "architecture", or "system design" mentioned'
+      '"diagram", "architecture", or "system design" mentioned',
     );
     expect(skill).not.toContain(
-      "For every architectural assessment, create the following diagrams"
+      "For every architectural assessment, create the following diagrams",
     );
     expect(skill).not.toContain("use `show-me`");
   });

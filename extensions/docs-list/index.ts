@@ -20,7 +20,7 @@ export default function docsListExtension(pi: ExtensionAPI): void {
         Type.String({
           description:
             "Optional relative docs directory path. Leading @ is ignored. Absolute paths and paths escaping cwd are rejected.",
-        })
+        }),
       ),
     }),
     execute(_toolCallId, params, _signal, _onUpdate, ctx) {

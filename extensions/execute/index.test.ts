@@ -24,7 +24,7 @@ function createMockCtx(
       role: string;
       content: string | Array<{ type?: string; text?: string }>;
     };
-  }> = []
+  }> = [],
 ) {
   const notifications: Array<{ message: string; level: string }> = [];
 
@@ -65,7 +65,7 @@ function createMockPiRuntime() {
         name: string,
         definition: {
           handler: (args: string, ctx: unknown) => Promise<void> | void;
-        }
+        },
       ) {
         commands.set(name, definition);
       },
@@ -85,7 +85,7 @@ function createMockPiRuntime() {
 async function runExecuteCommand(
   runtime: ReturnType<typeof createMockPiRuntime>,
   args: string,
-  ctx: unknown
+  ctx: unknown,
 ): Promise<void> {
   const handler = runtime.commands.get("execute")?.handler;
 
@@ -111,7 +111,7 @@ describe("execute command", () => {
       },
     ]);
     expect(runtime.sentUserMessages[0]?.content).toContain(
-      "This explicit `/execute` invocation authorizes the main session to call `SubagentWorkflow`"
+      "This explicit `/execute` invocation authorizes the main session to call `SubagentWorkflow`",
     );
     expect(notifications).toEqual([]);
   });
@@ -177,7 +177,7 @@ describe("execute command", () => {
     await runExecuteCommand(runtime, "   ", ctx);
 
     expect(runtime.sentUserMessages[0]?.content).toBe(
-      EXECUTE_SYNTHESIS_MESSAGE
+      EXECUTE_SYNTHESIS_MESSAGE,
     );
   });
 
@@ -189,7 +189,7 @@ describe("execute command", () => {
     await runExecuteCommand(runtime, "   ", ctx);
 
     expect(runtime.sentUserMessages[0]?.content).toBe(
-      EXECUTE_SYNTHESIS_MESSAGE
+      EXECUTE_SYNTHESIS_MESSAGE,
     );
   });
 
@@ -208,7 +208,7 @@ describe("execute documentation contract", () => {
   it("documents native workflow dispatch and main-session verification", () => {
     const skill = readFileSync(
       join(import.meta.dir, "../../skills/execute/SKILL.md"),
-      "utf8"
+      "utf8",
     );
 
     expect(skill).toContain("SubagentWorkflow");
@@ -217,11 +217,11 @@ describe("execute documentation contract", () => {
     expect(skill).toContain("conservative danger preflight");
     expect(skill).toContain("explicit user approval");
     expect(skill).toContain(
-      "main session still performs independent verification"
+      "main session still performs independent verification",
     );
     expect(skill).toContain("Upstream workflow journals");
     expect(skill).toContain(
-      "explicit `/execute` invocation is the user's opt-in to this workflow"
+      "explicit `/execute` invocation is the user's opt-in to this workflow",
     );
     expect(skill).toContain("parent/main-session stop does not cancel");
     expect(skill).toContain("`null` or missing result");

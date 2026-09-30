@@ -47,11 +47,11 @@ export function stateFromSession(ctx: ExtensionContext): LoadedContextState {
 
 function findContextFile(
   directory: string,
-  loadedPaths: ReadonlySet<string>
+  loadedPaths: ReadonlySet<string>,
 ): string | null {
   const realDirectory = realpathSync(directory);
   const persisted = [...loadedPaths].find(
-    (filePath) => dirname(filePath) === realDirectory
+    (filePath) => dirname(filePath) === realDirectory,
   );
   if (persisted) {
     return persisted;
@@ -86,7 +86,7 @@ function nearestExistingDirectory(targetPath: string): string {
 export function discoverContextChain(
   vault: ValidatedVault,
   targetPath: string,
-  loadedPaths: ReadonlySet<string> = new Set()
+  loadedPaths: ReadonlySet<string> = new Set(),
 ): string[] {
   if (!assertContained(vault, targetPath)) {
     return [];
@@ -131,7 +131,7 @@ export function loadContextFiles(paths: string[]): string {
 
 export function persistLoadedPaths(
   pi: ExtensionAPI,
-  state: LoadedContextState
+  state: LoadedContextState,
 ): void {
   pi.appendEntry(OBSIDIAN_CONTEXT_ENTRY, { paths: [...state.paths].sort() });
 }

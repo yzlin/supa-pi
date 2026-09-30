@@ -32,7 +32,7 @@ beforeEach(() => {
   mkdirSync(agentDir);
   writeFileSync(
     join(repo, "file.md"),
-    "---\nname: worker\nmodel: p/base\nthinking: low\n---\nBody\n"
+    "---\nname: worker\nmodel: p/base\nthinking: low\n---\nBody\n",
   );
 });
 afterEach(() => rmSync(root, { recursive: true, force: true }));
@@ -46,7 +46,7 @@ function harness(
   auth = true,
   setModelResult = true,
   injectedAgentDir = agentDir,
-  onPersist?: () => void
+  onPersist?: () => void,
 ) {
   const handlers = new Map<string, (...args: unknown[]) => unknown>();
   let command: Parameters<ExtensionAPI["registerCommand"]>[1];
@@ -81,7 +81,7 @@ function harness(
       select(_title: string, choices: string[]) {
         selections.push(choices);
         return Promise.resolve(
-          choices.find((value) => value.startsWith("work"))
+          choices.find((value) => value.startsWith("work")),
         );
       },
     },
@@ -92,7 +92,7 @@ function harness(
     },
     registerCommand(
       _name: string,
-      options: Parameters<ExtensionAPI["registerCommand"]>[1]
+      options: Parameters<ExtensionAPI["registerCommand"]>[1],
     ) {
       command = options;
     },
@@ -149,7 +149,7 @@ test("switch validates then sets main/thinking, renders agents, persists default
     active: "work",
   });
   expect(readFileSync(join(agentDir, "agents", "file.md"), "utf8")).toContain(
-    "model: p/new"
+    "model: p/new",
   );
   expect(h.statuses.at(-1)).toBe("profile: work");
   await h.command.handler("default", h.ctx);
@@ -292,13 +292,13 @@ test("spawn refresh failure blocks only while generated overrides exist", async 
   writeFileSync(configPath, "invalid json");
   const h = harness();
   expect(
-    await h.handlers.get("tool_call")!({ toolName: "Agent" }, h.ctx)
+    await h.handlers.get("tool_call")!({ toolName: "Agent" }, h.ctx),
   ).toBeUndefined();
   config({ active: "work", profiles: { work } });
   await h.handlers.get("session_start")!({}, h.ctx);
   writeFileSync(configPath, "invalid json");
   expect(
-    await h.handlers.get("tool_call")!({ toolName: "Agent" }, h.ctx)
+    await h.handlers.get("tool_call")!({ toolName: "Agent" }, h.ctx),
   ).toMatchObject({ block: true, reason: expect.stringContaining(configPath) });
 });
 
@@ -311,11 +311,11 @@ test("session start renders but never switches main; spawn hooks refresh idempot
   const before = readFileSync(join(agentDir, "agents", "file.md"), "utf8");
   await h.handlers.get("tool_call")!({ toolName: "Agent" }, h.ctx);
   expect(readFileSync(join(agentDir, "agents", "file.md"), "utf8")).toBe(
-    before
+    before,
   );
   writeFileSync(configPath, "invalid json");
   expect(
-    await h.handlers.get("tool_call")!({ toolName: "SubagentWorkflow" }, h.ctx)
+    await h.handlers.get("tool_call")!({ toolName: "SubagentWorkflow" }, h.ctx),
   ).toMatchObject({ block: true });
   expect(h.notifications.at(-1)).toContain(configPath);
   const count = h.notifications.length;
@@ -330,8 +330,8 @@ test("bare selector marks active; headless bare/status prints; completions expos
   expect(h.selections[0]).toContain("default");
   expect(
     h.selections[0].some(
-      (value) => value.startsWith("work") && value !== "work"
-    )
+      (value) => value.startsWith("work") && value !== "work",
+    ),
   ).toBe(true);
   expect(h.command.getArgumentCompletions?.("w")).toEqual([
     { value: "work", label: "work" },

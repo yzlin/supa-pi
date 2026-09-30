@@ -118,13 +118,13 @@ function gitIgnoreCheckablePaths(paths: readonly string[]): string[] {
   return paths
     .map((path) => normalizeScopePath(path.trim()))
     .filter(
-      (path) => isSafeRelativePath(path) && !hasGeneratedOrVendorSegment(path)
+      (path) => isSafeRelativePath(path) && !hasGeneratedOrVendorSegment(path),
     );
 }
 
 function checkGitIgnored(
   paths: readonly string[],
-  state: GitIgnoreCheckState
+  state: GitIgnoreCheckState,
 ): Set<string> {
   if (state.unavailable || paths.length === 0) {
     return new Set();
@@ -145,7 +145,7 @@ function checkGitIgnored(
 function addExplicitInput(
   expanded: string[],
   path: string,
-  isExplicitInput: boolean
+  isExplicitInput: boolean,
 ): void {
   if (isExplicitInput) {
     expanded.push(path);
@@ -162,7 +162,7 @@ function expandFolderScopePaths(paths: readonly string[]): {
   function visit(
     path: string,
     isExplicitInput = false,
-    isIgnored = false
+    isIgnored = false,
   ): void {
     const trimmedPath = path.trim();
     const normalizedPath = normalizeScopePath(trimmedPath);
@@ -195,11 +195,11 @@ function expandFolderScopePaths(paths: readonly string[]): {
     }
 
     const entries = readdirSync(normalizedPath).map((entry) =>
-      normalizeScopePath(join(normalizedPath, entry))
+      normalizeScopePath(join(normalizedPath, entry)),
     );
     const ignoredEntries = checkGitIgnored(
       gitIgnoreCheckablePaths(entries),
-      ignoreState
+      ignoreState,
     );
 
     for (const entry of entries) {
@@ -209,7 +209,7 @@ function expandFolderScopePaths(paths: readonly string[]): {
 
   const ignoredPaths = checkGitIgnored(
     gitIgnoreCheckablePaths(paths),
-    ignoreState
+    ignoreState,
   );
 
   for (const path of paths) {
@@ -222,7 +222,7 @@ function expandFolderScopePaths(paths: readonly string[]): {
 
 export function classifySimplifyScopePaths(
   paths: readonly string[],
-  options: SimplifyScopeClassificationOptions = {}
+  options: SimplifyScopeClassificationOptions = {},
 ): SimplifyScopeClassification {
   const lockfileNames = options.lockfileNames ?? LOCKFILE_NAMES;
   const shouldCheckGitIgnore = options.expandDirectories === true;
@@ -241,7 +241,7 @@ export function classifySimplifyScopePaths(
     : [];
   const ignoredCandidates = checkGitIgnored(
     checkableCandidatePaths,
-    ignoreState
+    ignoreState,
   );
 
   for (const candidatePath of candidatePaths) {

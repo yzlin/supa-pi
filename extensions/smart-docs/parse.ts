@@ -25,7 +25,7 @@ interface Token {
 }
 
 function tokenizeArgs(
-  rawArgs: string
+  rawArgs: string,
 ): { ok: true; tokens: Token[] } | { ok: false; error: string } {
   const tokens: Token[] = [];
   let index = 0;
@@ -105,7 +105,7 @@ function tokenizeArgs(
 
 function splitInstruction(
   rawArgs: string,
-  tokens: Token[]
+  tokens: Token[],
 ): {
   beforeTokens: Token[];
   instruction: string | null;
@@ -126,7 +126,7 @@ function splitInstruction(
 
 export function parseSmartDocsArgs(
   rawArgs: string,
-  cwd: string
+  cwd: string,
 ): SmartDocsParseResult {
   const tokenized = tokenizeArgs(rawArgs);
   if (!tokenized.ok) {
@@ -135,7 +135,7 @@ export function parseSmartDocsArgs(
 
   const { beforeTokens, instruction } = splitInstruction(
     rawArgs,
-    tokenized.tokens
+    tokenized.tokens,
   );
 
   let targetLabel: string | null = null;

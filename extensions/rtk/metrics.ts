@@ -118,13 +118,13 @@ function createEmptyState(): MutableRtkMetricsState {
 }
 
 function cloneToolSavingsMap(
-  input: Record<string, RtkToolSavings>
+  input: Record<string, RtkToolSavings>,
 ): Record<string, RtkToolSavings> {
   return Object.fromEntries(
     Object.entries(input).map(([toolName, savings]) => [
       toolName,
       { ...savings },
-    ])
+    ]),
   );
 }
 
@@ -169,7 +169,7 @@ function toPrecisePercent(part: number, total: number): number {
 
 function getOrCreateToolSavings(
   state: MutableRtkMetricsState,
-  toolName: RtkToolName | string
+  toolName: RtkToolName | string,
 ): RtkToolSavings {
   const existing = state.toolSavingsByName[toolName];
   if (existing) {
@@ -188,7 +188,7 @@ function normalizeCommandLabel(label: string): string {
 
 function getCommandMetricsKey(
   toolName: RtkTrackedToolName,
-  label: string
+  label: string,
 ): string {
   return `${toolName}:${label}`;
 }
@@ -196,7 +196,7 @@ function getCommandMetricsKey(
 function getOrCreateCommandMetrics(
   state: MutableRtkMetricsState,
   toolName: RtkTrackedToolName,
-  label: string
+  label: string,
 ): MutableRtkCommandMetrics {
   const key = getCommandMetricsKey(toolName, label);
   const existing = state.commandMetricsByKey[key];
@@ -225,7 +225,7 @@ function compareStatsRows(
   right: Pick<
     RtkStatsRow,
     "label" | "savedTokens" | "inputTokens" | "count" | "totalExecMs"
-  >
+  >,
 ): number {
   return (
     right.savedTokens - left.savedTokens ||
@@ -263,7 +263,7 @@ function normalizeCommandFamilyToken(token: string): string {
 
 function getCommandFamilyLabel(
   toolName: RtkTrackedToolName,
-  label: string
+  label: string,
 ): string {
   if (toolName === "read" || toolName === "grep") {
     return toolName;
@@ -296,7 +296,7 @@ function getCommandFamilyLabel(
 
 function aggregateStatsRows<T extends MutableRtkCommandMetrics>(
   rows: T[],
-  getLabel: (row: T) => string
+  getLabel: (row: T) => string,
 ): RtkStatsRow[] {
   const aggregates = Object.create(null) as Record<string, MutableRtkStatsRow>;
 
@@ -328,7 +328,7 @@ function createEmptySummary(): RtkMetricsSnapshot["summary"] {
 }
 
 function buildSummary(
-  commands: RtkCommandMetrics[]
+  commands: RtkCommandMetrics[],
 ): RtkMetricsSnapshot["summary"] {
   const summary = commands.reduce((totals, command) => {
     totals.totalCommands += command.count;
@@ -341,7 +341,7 @@ function buildSummary(
 
   summary.avgSavingsPercent = toPrecisePercent(
     summary.totalSavedTokens,
-    summary.totalInputTokens
+    summary.totalInputTokens,
   );
   summary.avgExecMs =
     summary.totalCommands > 0
@@ -410,7 +410,7 @@ export function createRtkMetricsStore(): RtkMetricsStore {
       const savedTokens = Math.max(0, inputTokens - outputTokens);
       const execMs = clampNonNegative(
         options.execMs ??
-          (options.endedAt ?? Date.now()) - clampNonNegative(pending.startedAt)
+          (options.endedAt ?? Date.now()) - clampNonNegative(pending.startedAt),
       );
 
       row.count += 1;
@@ -427,13 +427,13 @@ export function createRtkMetricsStore(): RtkMetricsStore {
     snapshot(): RtkMetricsSnapshot {
       const totalSavedChars = Math.max(
         0,
-        state.totalOriginalChars - state.totalFinalChars
+        state.totalOriginalChars - state.totalFinalChars,
       );
       const commandRows = Object.values(state.commandMetricsByKey);
       const commands = commandRows.map(toCommandMetrics).sort(compareStatsRows);
       const tools = aggregateStatsRows(commandRows, (row) => row.toolName);
       const commandFamilies = aggregateStatsRows(commandRows, (row) =>
-        getCommandFamilyLabel(row.toolName, row.label)
+        getCommandFamilyLabel(row.toolName, row.label),
       );
       const summary = buildSummary(commands);
 
@@ -449,19 +449,19 @@ export function createRtkMetricsStore(): RtkMetricsStore {
         totalSavedChars,
         overallSavingsPercent: toPercent(
           totalSavedChars,
-          state.totalOriginalChars
+          state.totalOriginalChars,
         ),
         rewriteRatePercent: toPercent(
           state.rewritesApplied,
-          state.rewriteAttempts
+          state.rewriteAttempts,
         ),
         fallbackRatePercent: toPercent(
           state.rewriteFallbacks,
-          state.rewriteAttempts
+          state.rewriteAttempts,
         ),
         userBashRewriteRatePercent: toPercent(
           state.userBashRewrites,
-          state.userBashAttempts
+          state.userBashAttempts,
         ),
         summary,
         tools,

@@ -11,7 +11,7 @@ export interface CanonicalMessageIdentity {
  * Occurrences keep otherwise-identical messages distinct and deterministic.
  */
 export function identifyCanonicalMessages(
-  messages: readonly unknown[]
+  messages: readonly unknown[],
 ): CanonicalMessageIdentity[] {
   const occurrences = new Map<string, number>();
   const identified: CanonicalMessageIdentity[] = [];

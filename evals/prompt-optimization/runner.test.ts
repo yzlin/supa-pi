@@ -22,7 +22,7 @@ import {
 
 const fixturePath = resolve(
   fileURLToPath(new URL(".", import.meta.url)),
-  "fixtures/sample-project"
+  "fixtures/sample-project",
 );
 const modelRegistry = new ModelRegistry(await ModelRuntime.create());
 describe("run planning", () => {
@@ -41,7 +41,7 @@ describe("canonical fixture test execution", () => {
     const mathPath = join(deadWorkspace, "src/math.ts");
     writeFileSync(
       mathPath,
-      `${readFileSync(mathPath, "utf8")}\n// export function add(left: number, right: number): number { return left + right; }\nfunction dead(left: number, right: number) { if (false) return left + right; }\n`
+      `${readFileSync(mathPath, "utf8")}\n// export function add(left: number, right: number): number { return left + right; }\nfunction dead(left: number, right: number) { if (false) return left + right; }\n`,
     );
     expect(runAllowedFixtureTest(deadWorkspace).exitCode).toBe(1);
 
@@ -49,23 +49,23 @@ describe("canonical fixture test execution", () => {
       mathPath,
       readFileSync(join(fixturePath, "src/math.ts"), "utf8").replace(
         "return left - right",
-        "return left + right"
-      )
+        "return left + right",
+      ),
     );
     expect(runAllowedFixtureTest(deadWorkspace).exitCode).toBe(0);
 
     const changedTestWorkspace = mkdtempSync(
-      join(tmpdir(), "supa-pi-changed-test-")
+      join(tmpdir(), "supa-pi-changed-test-"),
     );
     cpSync(fixturePath, changedTestWorkspace, { recursive: true });
     writeFileSync(
       join(changedTestWorkspace, "tests/math.case.ts"),
-      'import { test, expect } from "bun:test";\ntest("weakened", () => expect(true).toBe(true));\n'
+      'import { test, expect } from "bun:test";\ntest("weakened", () => expect(true).toBe(true));\n',
     );
     const changedTest = runAllowedFixtureTest(changedTestWorkspace);
     expect(changedTest.exitCode).toBe(1);
     expect(changedTest.output.toString()).toContain(
-      "tests/math.case.ts: required canonical test was modified"
+      "tests/math.case.ts: required canonical test was modified",
     );
   });
 
@@ -86,7 +86,7 @@ describe("canonical fixture test execution", () => {
     ]) {
       writeFileSync(
         join(workspace, "src/math.ts"),
-        `${residue}\n${declarations}`
+        `${residue}\n${declarations}`,
       );
       expect(runAllowedFixtureTest(workspace).exitCode).toBe(1);
     }
@@ -94,7 +94,7 @@ describe("canonical fixture test execution", () => {
 
     writeFileSync(
       join(workspace, "src/math.ts"),
-      `// fixture implementation\n${declarations}`
+      `// fixture implementation\n${declarations}`,
     );
     expect(runAllowedFixtureTest(workspace).exitCode).toBe(0);
   });
@@ -106,7 +106,7 @@ const UUID_V7_PATTERN =
 function createMessage(
   model: Model<Api>,
   content: AssistantMessage["content"],
-  stopReason: "stop" | "toolUse" = "stop"
+  stopReason: "stop" | "toolUse" = "stop",
 ): AssistantMessage {
   return {
     role: "assistant",
@@ -154,7 +154,7 @@ function createSuccessfulStream(model: Model<Api>) {
         type: "text",
         text: "Evidence: src/math.ts uses subtraction.",
       },
-    ])
+    ]),
   );
 }
 
@@ -240,10 +240,10 @@ describe("runVariant", () => {
     expect(initialMessageRoles).toEqual(["system", "user"]);
     expect(initialSystemPrompt).toContain("Be evidence driven.");
     expect(initialSystemPrompt).toContain(
-      "`tests/math.case.ts` must remain byte-for-byte unchanged."
+      "`tests/math.case.ts` must remain byte-for-byte unchanged.",
     );
     expect(initialSystemPrompt).toContain(
-      "Do not edit, replace, or add assertions to this file."
+      "Do not edit, replace, or add assertions to this file.",
     );
     expect(result.sessionId).toBe(observedSessionId);
     expect(result.sessionId).toMatch(UUID_V7_PATTERN);
@@ -350,8 +350,8 @@ describe("runVariant", () => {
                   arguments: { path: "src/math.ts" },
                 },
               ],
-              "toolUse"
-            )
+              "toolUse",
+            ),
           );
         }
         return createMessageStream(
@@ -360,7 +360,7 @@ describe("runVariant", () => {
               type: "text",
               text: "src/math.ts subtracts right from left.",
             },
-          ])
+          ]),
         );
       },
     });
@@ -429,14 +429,14 @@ describe("runVariant", () => {
                   arguments: { command: "bun test tests/math.case.ts" },
                 },
               ],
-              "toolUse"
-            )
+              "toolUse",
+            ),
           );
         }
         return createMessageStream(
           createMessage(selectedModel, [
             { type: "text", text: "Diagnosis: Incomplete" },
-          ])
+          ]),
         );
       },
     });
@@ -447,7 +447,7 @@ describe("runVariant", () => {
         name: "bash",
         isError: true,
         resultText: expect.stringContaining("Expected: 12"),
-      })
+      }),
     );
   });
 
@@ -503,8 +503,8 @@ describe("runVariant", () => {
                   arguments: { command: "pwd" },
                 },
               ],
-              "toolUse"
-            )
+              "toolUse",
+            ),
           );
         }
         if (providerCall === 2) {
@@ -519,14 +519,14 @@ describe("runVariant", () => {
                   arguments: { command: "bun test tests/math.case.ts" },
                 },
               ],
-              "toolUse"
-            )
+              "toolUse",
+            ),
           );
         }
         return createMessageStream(
           createMessage(selectedModel, [
             { type: "text", text: "Diagnosis: Incomplete" },
-          ])
+          ]),
         );
       },
     });
@@ -537,7 +537,7 @@ describe("runVariant", () => {
       { text: "Diagnosis: Incomplete", assistantTurn: 3 },
     ]);
     expect(result.score.checks[0]?.evidence).toContain(
-      "preceded matching bash call"
+      "preceded matching bash call",
     );
   });
 
@@ -597,8 +597,8 @@ describe("runVariant", () => {
             createMessage(
               selectedModel,
               [createAskToolCall("ask-1")],
-              "toolUse"
-            )
+              "toolUse",
+            ),
           );
         }
         if (providerCall === 2) {
@@ -617,8 +617,8 @@ describe("runVariant", () => {
                   },
                 },
               ],
-              "toolUse"
-            )
+              "toolUse",
+            ),
           );
         }
         if (providerCall === 3) {
@@ -633,14 +633,14 @@ describe("runVariant", () => {
                   arguments: { command: "bun test tests/math.case.ts" },
                 },
               ],
-              "toolUse"
-            )
+              "toolUse",
+            ),
           );
         }
         return createMessageStream(
           createMessage(selectedModel, [
             { type: "text", text: "Diagnosis: Proven\nFix: Verified" },
-          ])
+          ]),
         );
       },
     });
@@ -709,12 +709,12 @@ describe("runVariant", () => {
                   },
                 },
               ],
-              "toolUse"
-            )
+              "toolUse",
+            ),
           );
         }
         return createMessageStream(
-          createMessage(selectedModel, [{ type: "text", text: "done" }])
+          createMessage(selectedModel, [{ type: "text", text: "done" }]),
         );
       },
     });
@@ -769,14 +769,14 @@ describe("runVariant", () => {
             createMessage(
               selectedModel,
               [createAskToolCall("ask-stop-1", false)],
-              "toolUse"
-            )
+              "toolUse",
+            ),
           );
         }
         return createMessageStream(
           createMessage(selectedModel, [
             { type: "text", text: "Diagnosis: Proven\nFix: Not attempted" },
-          ])
+          ]),
         );
       },
     });
@@ -831,8 +831,8 @@ describe("runVariant", () => {
                   arguments: { path: "/etc/passwd" },
                 },
               ],
-              "toolUse"
-            )
+              "toolUse",
+            ),
           );
         }
         return createMessageStream(
@@ -841,7 +841,7 @@ describe("runVariant", () => {
               type: "text",
               text: "The outside-workspace read was blocked.",
             },
-          ])
+          ]),
         );
       },
     });

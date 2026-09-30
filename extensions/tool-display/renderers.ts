@@ -106,10 +106,10 @@ const DELETION_TINT_TARGET = { r: 232, g: 95, b: 122 };
 const ANSI_BG_RESET = "\x1b[49m";
 const ANSI_ESCAPE_PATTERN = "\\x1b";
 const ANSI_RGB_COLOR_PATTERN = new RegExp(
-  `${ANSI_ESCAPE_PATTERN}\\[(?:3|4)8;2;(\\d{1,3});(\\d{1,3});(\\d{1,3})m`
+  `${ANSI_ESCAPE_PATTERN}\\[(?:3|4)8;2;(\\d{1,3});(\\d{1,3});(\\d{1,3})m`,
 );
 const ANSI_256_COLOR_PATTERN = new RegExp(
-  `${ANSI_ESCAPE_PATTERN}\\[(?:3|4)8;5;(\\d{1,3})m`
+  `${ANSI_ESCAPE_PATTERN}\\[(?:3|4)8;5;(\\d{1,3})m`,
 );
 
 function truncateMiddle(value: string, maxLength = MAX_TITLE_LENGTH): string {
@@ -137,7 +137,7 @@ function firstTextLine(result: ToolResultLike, fallback: string): string {
 
 function shouldRenderExpanded(
   options: RenderOptionsLike,
-  outputConfig?: ToolDisplayPreviewConfig
+  outputConfig?: ToolDisplayPreviewConfig,
 ): boolean {
   return options.expanded === true || outputConfig?.mode === "expanded";
 }
@@ -152,7 +152,7 @@ function lineCount(value: string): number {
 function appendTruncation(
   text: string,
   details: { truncation?: { truncated?: boolean } } | undefined,
-  theme: ThemeLike
+  theme: ThemeLike,
 ): string {
   return details?.truncation?.truncated
     ? `${text}${theme.fg("warning", " [truncated]")}`
@@ -163,7 +163,7 @@ function appendRtkCompactionHint(
   text: string,
   details: RtkCompactionDetails | undefined,
   theme: ThemeLike,
-  outputConfig?: ToolDisplayPreviewConfig | ToolDisplayBashOutputConfig
+  outputConfig?: ToolDisplayPreviewConfig | ToolDisplayBashOutputConfig,
 ): string {
   const rtkHints =
     outputConfig &&
@@ -176,7 +176,7 @@ function appendRtkCompactionHint(
 
   return `${text}${theme.fg(
     "warning",
-    ` [compacted by RTK: saved ${compaction.savedChars} chars, original ${compaction.originalChars}, final ${compaction.finalChars}]`
+    ` [compacted by RTK: saved ${compaction.savedChars} chars, original ${compaction.originalChars}, final ${compaction.finalChars}]`,
   )}`;
 }
 
@@ -184,7 +184,7 @@ function renderExpandedLines(
   text: string,
   lines: string[],
   theme: ThemeLike,
-  previewLines = 20
+  previewLines = 20,
 ): string {
   let rendered = text;
   for (const line of lines.slice(0, previewLines)) {
@@ -195,7 +195,7 @@ function renderExpandedLines(
 
 export function renderCompactReadCall(
   args: ReadToolInput,
-  theme: ThemeLike
+  theme: ThemeLike,
 ): Text {
   const parts: string[] = [];
   if (args.offset !== undefined) {
@@ -209,7 +209,7 @@ export function renderCompactReadCall(
   return new Text(
     `${theme.fg("toolTitle", theme.bold("read "))}${theme.fg("accent", truncateMiddle(args.path))}${suffix}`,
     0,
-    0
+    0,
   );
 }
 
@@ -217,7 +217,7 @@ export function renderCompactReadResult(
   result: ToolResultLike,
   options: RenderOptionsLike,
   theme: ThemeLike,
-  outputConfig?: ToolDisplayPreviewConfig
+  outputConfig?: ToolDisplayPreviewConfig,
 ): Text {
   if (options.isPartial) {
     return textLine(theme, "warning", "reading…");
@@ -236,7 +236,7 @@ export function renderCompactReadResult(
   let text = appendTruncation(
     theme.fg("success", `${lineCount(output)} lines`),
     details,
-    theme
+    theme,
   );
   text = appendRtkCompactionHint(text, details, theme, outputConfig);
   if (shouldRenderExpanded(options, outputConfig)) {
@@ -244,7 +244,7 @@ export function renderCompactReadResult(
       text,
       output.split("\n"),
       theme,
-      outputConfig?.previewLines
+      outputConfig?.previewLines,
     );
   }
   return new Text(text, 0, 0);
@@ -252,14 +252,14 @@ export function renderCompactReadResult(
 
 export function renderCompactBashCall(
   args: BashToolInput,
-  theme: ThemeLike
+  theme: ThemeLike,
 ): Text {
   const timeout =
     args.timeout === undefined ? "" : theme.fg("dim", ` (${args.timeout}s)`);
   return new Text(
     `${theme.fg("toolTitle", theme.bold("$ "))}${theme.fg("accent", truncateMiddle(args.command))}${timeout}`,
     0,
-    0
+    0,
   );
 }
 
@@ -267,7 +267,7 @@ export function renderCompactBashResult(
   result: ToolResultLike,
   options: RenderOptionsLike,
   theme: ThemeLike,
-  outputConfig?: ToolDisplayBashOutputConfig
+  outputConfig?: ToolDisplayBashOutputConfig,
 ): Text {
   if (options.isPartial) {
     return textLine(theme, "warning", "running…");
@@ -282,14 +282,14 @@ export function renderCompactBashResult(
     result.isError || (exitCode !== undefined && exitCode !== 0)
       ? theme.fg(
           "error",
-          exitCode === undefined ? "failed" : `exit ${exitCode}`
+          exitCode === undefined ? "failed" : `exit ${exitCode}`,
         )
       : theme.fg("success", "done");
   const details = result.details as BashToolDetails | undefined;
   let text = appendTruncation(
     `${status}${theme.fg("dim", ` (${lineCount(output)} lines)`)}`,
     details,
-    theme
+    theme,
   );
   text = appendRtkCompactionHint(text, details, theme, outputConfig);
   if (shouldRenderExpanded(options, outputConfig)) {
@@ -297,7 +297,7 @@ export function renderCompactBashResult(
       text,
       output.split("\n"),
       theme,
-      outputConfig?.previewLines
+      outputConfig?.previewLines,
     );
   }
   return new Text(text, 0, 0);
@@ -305,13 +305,13 @@ export function renderCompactBashResult(
 
 export function renderCompactGrepCall(
   args: GrepToolInput,
-  theme: ThemeLike
+  theme: ThemeLike,
 ): Text {
   const target = args.path ?? ".";
   return new Text(
     `${theme.fg("toolTitle", theme.bold("grep "))}${theme.fg("accent", truncateMiddle(args.pattern))}${theme.fg("dim", ` in ${target}`)}`,
     0,
-    0
+    0,
   );
 }
 
@@ -319,7 +319,7 @@ export function renderCompactGrepResult(
   result: ToolResultLike,
   options: RenderOptionsLike,
   theme: ThemeLike,
-  outputConfig?: ToolDisplayPreviewConfig
+  outputConfig?: ToolDisplayPreviewConfig,
 ): Text {
   if (options.isPartial) {
     return textLine(theme, "warning", "searching…");
@@ -332,7 +332,7 @@ export function renderCompactGrepResult(
   let text = appendTruncation(
     theme.fg("success", `${lineCount(output)} lines`),
     details,
-    theme
+    theme,
   );
   if (details?.matchLimitReached !== undefined) {
     text += theme.fg("warning", ` [limit ${details.matchLimitReached}]`);
@@ -343,7 +343,7 @@ export function renderCompactGrepResult(
       text,
       output.split("\n"),
       theme,
-      outputConfig?.previewLines
+      outputConfig?.previewLines,
     );
   }
   return new Text(text, 0, 0);
@@ -351,12 +351,12 @@ export function renderCompactGrepResult(
 
 export function renderCompactFindCall(
   args: FindToolInput,
-  theme: ThemeLike
+  theme: ThemeLike,
 ): Text {
   return new Text(
     `${theme.fg("toolTitle", theme.bold("find "))}${theme.fg("accent", truncateMiddle(args.pattern))}${theme.fg("dim", ` in ${args.path ?? "."}`)}`,
     0,
-    0
+    0,
   );
 }
 
@@ -364,7 +364,7 @@ export function renderCompactFindResult(
   result: ToolResultLike,
   options: RenderOptionsLike,
   theme: ThemeLike,
-  outputConfig?: ToolDisplayPreviewConfig
+  outputConfig?: ToolDisplayPreviewConfig,
 ): Text {
   if (options.isPartial) {
     return textLine(theme, "warning", "finding…");
@@ -377,7 +377,7 @@ export function renderCompactFindResult(
   let text = appendTruncation(
     theme.fg("success", `${lineCount(output)} paths`),
     details,
-    theme
+    theme,
   );
   if (details?.resultLimitReached !== undefined) {
     text += theme.fg("warning", ` [limit ${details.resultLimitReached}]`);
@@ -387,7 +387,7 @@ export function renderCompactFindResult(
       text,
       output.split("\n"),
       theme,
-      outputConfig?.previewLines
+      outputConfig?.previewLines,
     );
   }
   return new Text(text, 0, 0);
@@ -397,7 +397,7 @@ export function renderCompactLsCall(args: LsToolInput, theme: ThemeLike): Text {
   return new Text(
     `${theme.fg("toolTitle", theme.bold("ls "))}${theme.fg("accent", truncateMiddle(args.path ?? "."))}`,
     0,
-    0
+    0,
   );
 }
 
@@ -405,7 +405,7 @@ export function renderCompactLsResult(
   result: ToolResultLike,
   options: RenderOptionsLike,
   theme: ThemeLike,
-  outputConfig?: ToolDisplayPreviewConfig
+  outputConfig?: ToolDisplayPreviewConfig,
 ): Text {
   if (options.isPartial) {
     return textLine(theme, "warning", "listing…");
@@ -418,7 +418,7 @@ export function renderCompactLsResult(
   let text = appendTruncation(
     theme.fg("success", `${lineCount(output)} entries`),
     details,
-    theme
+    theme,
   );
   if (details?.entryLimitReached !== undefined) {
     text += theme.fg("warning", ` [limit ${details.entryLimitReached}]`);
@@ -428,7 +428,7 @@ export function renderCompactLsResult(
       text,
       output.split("\n"),
       theme,
-      outputConfig?.previewLines
+      outputConfig?.previewLines,
     );
   }
   return new Text(text, 0, 0);
@@ -538,7 +538,7 @@ export function renderEditCall(args: EditCallArgs, theme: ThemeLike): Text {
         theme.fg("toolTitle", theme.bold(`${label} ${files.length}`)) +
           theme.fg("accent", ` ${formatFileList(files)}`),
         0,
-        0
+        0,
       );
     } catch {
       return new Text(theme.fg("toolTitle", theme.bold("edit")), 0, 0);
@@ -554,7 +554,7 @@ export function renderEditCall(args: EditCallArgs, theme: ThemeLike): Text {
       theme.fg("toolTitle", theme.bold(`patch ${files.length}`)) +
         theme.fg("accent", ` ${formatFileList(files)}`),
       0,
-      0
+      0,
     );
   }
 
@@ -574,7 +574,7 @@ export function renderEditCall(args: EditCallArgs, theme: ThemeLike): Text {
   return new Text(
     `${theme.fg("toolTitle", theme.bold(label))}${theme.fg("accent", target)}`,
     0,
-    0
+    0,
   );
 }
 
@@ -642,7 +642,7 @@ interface ParsedHeaderlessEditLine {
 
 function parseHeaderlessEditLineNumber(
   text: string,
-  enabled: boolean
+  enabled: boolean,
 ): ParsedHeaderlessEditLine {
   if (!enabled) {
     return { matched: false, splitText: text, text };
@@ -664,7 +664,7 @@ function parseHeaderlessEditLineNumber(
 function parsedHeaderlessLineNumber(
   parsed: ParsedHeaderlessEditLine,
   fallback: number,
-  parsesInlineLineNumbers: boolean
+  parsesInlineLineNumbers: boolean,
 ): number | undefined {
   if (parsed.matched) {
     return parsed.number;
@@ -677,7 +677,7 @@ function parsedHeaderlessLineNumber(
 
 function nextDiffLineNumber(
   current: number,
-  parsedLineNumber: number | undefined
+  parsedLineNumber: number | undefined,
 ): number {
   return parsedLineNumber === undefined ? current : parsedLineNumber + 1;
 }
@@ -751,12 +751,12 @@ function parseUnifiedDiff(diff: string): ParsedDiffFile[] {
     } else if (line.startsWith("-")) {
       const parsed = parseHeaderlessEditLineNumber(
         line.slice(1),
-        parsesInlineLineNumbers
+        parsesInlineLineNumbers,
       );
       const parsedOldNumber = parsedHeaderlessLineNumber(
         parsed,
         oldNumber,
-        parsesInlineLineNumbers
+        parsesInlineLineNumbers,
       );
       file.lines.push({
         kind: "remove",
@@ -769,12 +769,12 @@ function parseUnifiedDiff(diff: string): ParsedDiffFile[] {
     } else if (line.startsWith("+")) {
       const parsed = parseHeaderlessEditLineNumber(
         line.slice(1),
-        parsesInlineLineNumbers
+        parsesInlineLineNumbers,
       );
       const parsedNewNumber = parsedHeaderlessLineNumber(
         parsed,
         newNumber,
-        parsesInlineLineNumbers
+        parsesInlineLineNumbers,
       );
       file.lines.push({
         kind: "add",
@@ -788,17 +788,17 @@ function parseUnifiedDiff(diff: string): ParsedDiffFile[] {
       const rawText = line.startsWith(" ") ? line.slice(1) : line;
       const parsed = parseHeaderlessEditLineNumber(
         rawText,
-        parsesInlineLineNumbers
+        parsesInlineLineNumbers,
       );
       const parsedOldNumber = parsedHeaderlessLineNumber(
         parsed,
         oldNumber,
-        parsesInlineLineNumbers
+        parsesInlineLineNumbers,
       );
       const parsedNewNumber = parsedHeaderlessLineNumber(
         parsed,
         newNumber,
-        parsesInlineLineNumbers
+        parsesInlineLineNumbers,
       );
       file.lines.push({
         kind: "context",
@@ -899,7 +899,7 @@ function rgbToBgAnsi(color: RgbColor): string {
 function readThemeAnsi(
   theme: ThemeLike,
   kind: "bg" | "fg",
-  token: string
+  token: string,
 ): string | undefined {
   try {
     if (kind === "bg") {
@@ -923,7 +923,7 @@ function resolveDiffPalette(theme: ThemeLike): DiffPalette {
   const baseBg = parseAnsiColorCode(baseBgAnsi);
   const addFg = parseAnsiColorCode(readThemeAnsi(theme, "fg", "toolDiffAdded"));
   const removeFg = parseAnsiColorCode(
-    readThemeAnsi(theme, "fg", "toolDiffRemoved")
+    readThemeAnsi(theme, "fg", "toolDiffRemoved"),
   );
 
   if (!(baseBg && addFg && removeFg)) {
@@ -934,17 +934,17 @@ function resolveDiffPalette(theme: ThemeLike): DiffPalette {
   const removeTint = mixRgb(removeFg, DELETION_TINT_TARGET, 0.65);
   return {
     addEmphasisBgAnsi: rgbToBgAnsi(
-      mixRgb(baseBg, addTint, ADD_INLINE_EMPHASIS_MIX_RATIO)
+      mixRgb(baseBg, addTint, ADD_INLINE_EMPHASIS_MIX_RATIO),
     ),
     addRowBgAnsi: rgbToBgAnsi(
-      mixRgb(baseBg, addTint, ADD_ROW_BACKGROUND_MIX_RATIO)
+      mixRgb(baseBg, addTint, ADD_ROW_BACKGROUND_MIX_RATIO),
     ),
     baseBgAnsi,
     removeEmphasisBgAnsi: rgbToBgAnsi(
-      mixRgb(baseBg, removeTint, REMOVE_INLINE_EMPHASIS_MIX_RATIO)
+      mixRgb(baseBg, removeTint, REMOVE_INLINE_EMPHASIS_MIX_RATIO),
     ),
     removeRowBgAnsi: rgbToBgAnsi(
-      mixRgb(baseBg, removeTint, REMOVE_ROW_BACKGROUND_MIX_RATIO)
+      mixRgb(baseBg, removeTint, REMOVE_ROW_BACKGROUND_MIX_RATIO),
     ),
   };
 }
@@ -967,7 +967,7 @@ function tokenizeInlineDiff(value: string): string[] {
 
 function inlineDiffRanges(
   oldText: string,
-  newText: string
+  newText: string,
 ): { oldChanged: boolean[]; newChanged: boolean[] } | undefined {
   if (
     oldText.length > INLINE_DIFF_MAX_LINE_LENGTH ||
@@ -987,7 +987,7 @@ function inlineDiffRanges(
   }
 
   const matrix: number[][] = Array.from({ length: oldTokens.length + 1 }, () =>
-    Array.from({ length: newTokens.length + 1 }, () => 0)
+    Array.from({ length: newTokens.length + 1 }, () => 0),
   );
   for (let oldIndex = oldTokens.length - 1; oldIndex >= 0; oldIndex -= 1) {
     for (let newIndex = newTokens.length - 1; newIndex >= 0; newIndex -= 1) {
@@ -996,7 +996,7 @@ function inlineDiffRanges(
           ? (matrix[oldIndex + 1]?.[newIndex + 1] ?? 0) + 1
           : Math.max(
               matrix[oldIndex + 1]?.[newIndex] ?? 0,
-              matrix[oldIndex]?.[newIndex + 1] ?? 0
+              matrix[oldIndex]?.[newIndex + 1] ?? 0,
             );
     }
   }
@@ -1028,14 +1028,14 @@ function renderInlineDiffText(
   text: string,
   changed: boolean[],
   emphasisBgAnsi: string | undefined,
-  restoreBgAnsi: string | undefined
+  restoreBgAnsi: string | undefined,
 ): string {
   const restore = restoreBgAnsi ?? ANSI_BG_RESET;
   return tokenizeInlineDiff(text)
     .map((token, index) =>
       changed[index] && emphasisBgAnsi
         ? `${emphasisBgAnsi}${token}${restore}`
-        : token
+        : token,
     )
     .join("");
 }
@@ -1043,7 +1043,7 @@ function renderInlineDiffText(
 function inlineDiffPair(
   oldText: string,
   newText: string,
-  palette: DiffPalette
+  palette: DiffPalette,
 ): { oldText: string; newText: string } {
   const ranges = inlineDiffRanges(oldText, newText);
   if (!ranges) {
@@ -1054,13 +1054,13 @@ function inlineDiffPair(
       newText,
       ranges.newChanged,
       palette.addEmphasisBgAnsi,
-      palette.addRowBgAnsi
+      palette.addRowBgAnsi,
     ),
     oldText: renderInlineDiffText(
       oldText,
       ranges.oldChanged,
       palette.removeEmphasisBgAnsi,
-      palette.removeRowBgAnsi
+      palette.removeRowBgAnsi,
     ),
   };
 }
@@ -1094,7 +1094,7 @@ function createLimitedDiffRows(config: ToolDisplayDiffConfig | undefined): {
 
 function diffIndicator(
   kind: ParsedDiffLine["kind"],
-  config: ToolDisplayDiffConfig | undefined
+  config: ToolDisplayDiffConfig | undefined,
 ): string {
   if (config?.indicatorMode === "none") {
     return "";
@@ -1117,7 +1117,7 @@ function diffIndicator(
 function splitSideIndicator(
   kind: ParsedDiffLine["kind"],
   side: "old" | "new",
-  config: ToolDisplayDiffConfig | undefined
+  config: ToolDisplayDiffConfig | undefined,
 ): string {
   if (kind === "remove" && side === "old") {
     return diffIndicator(kind, config);
@@ -1132,7 +1132,7 @@ function formatUnifiedRow(
   indicator: string,
   text: string,
   width: number,
-  config: ToolDisplayDiffConfig | undefined
+  config: ToolDisplayDiffConfig | undefined,
 ): string[] {
   const availableWidth = Math.max(1, width - visibleWidth(indicator));
   if (config?.wordWrap === false) {
@@ -1140,7 +1140,7 @@ function formatUnifiedRow(
   }
   return wrapTextWithAnsi(text, availableWidth).map(
     (line, index) =>
-      `${index === 0 ? indicator : " ".repeat(visibleWidth(indicator))}${line}`
+      `${index === 0 ? indicator : " ".repeat(visibleWidth(indicator))}${line}`,
   );
 }
 
@@ -1150,7 +1150,7 @@ function themedDiffRow(
   rowBgAnsi: string | undefined,
   theme: ThemeLike,
   restoreBgAnsi?: string,
-  fillWidth?: number
+  fillWidth?: number,
 ): string {
   const colored = theme.fg(token, text);
   if (!rowBgAnsi) {
@@ -1169,7 +1169,7 @@ function renderUnifiedDiff(
   theme: ThemeLike,
   config: ToolDisplayDiffConfig | undefined,
   width: number,
-  palette: DiffPalette
+  palette: DiffPalette,
 ): string {
   const limited = createLimitedDiffRows(config);
   for (const file of files) {
@@ -1197,7 +1197,7 @@ function renderUnifiedDiff(
             diffIndicator(line.kind, config),
             text,
             width,
-            config
+            config,
           ).map((row) =>
             themedDiffRow(
               "toolDiffAdded",
@@ -1205,9 +1205,9 @@ function renderUnifiedDiff(
               palette.addRowBgAnsi,
               theme,
               palette.baseBgAnsi,
-              width
-            )
-          )
+              width,
+            ),
+          ),
         );
         continue;
       }
@@ -1222,7 +1222,7 @@ function renderUnifiedDiff(
             diffIndicator(line.kind, config),
             text,
             width,
-            config
+            config,
           ).map((row) =>
             themedDiffRow(
               "toolDiffRemoved",
@@ -1230,9 +1230,9 @@ function renderUnifiedDiff(
               palette.removeRowBgAnsi,
               theme,
               palette.baseBgAnsi,
-              width
-            )
-          )
+              width,
+            ),
+          ),
         );
         continue;
       }
@@ -1241,8 +1241,8 @@ function renderUnifiedDiff(
           diffIndicator(line.kind, config),
           line.text,
           width,
-          config
-        ).map((row) => theme.fg("toolDiffContext", row))
+          config,
+        ).map((row) => theme.fg("toolDiffContext", row)),
       );
     }
   }
@@ -1260,7 +1260,7 @@ function fitCell(value: string, width: number): string {
 function wrapCell(
   value: string,
   width: number,
-  config: ToolDisplayDiffConfig | undefined
+  config: ToolDisplayDiffConfig | undefined,
 ): string[] {
   if (config?.wordWrap === false) {
     return [fitCell(value, width)];
@@ -1290,13 +1290,13 @@ interface SplitRowOptions {
 
 function renderSplitCell(
   cell: SplitCellInput,
-  options: SplitRowOptions
+  options: SplitRowOptions,
 ): string[] {
   const indicatorWidth = visibleWidth(cell.indicator);
   const lines = wrapCell(
     cell.text,
     Math.max(1, options.codeWidth),
-    options.config
+    options.config,
   );
   return lines.map((line, index) => {
     const marker = index === 0 ? cell.indicator : " ".repeat(indicatorWidth);
@@ -1308,7 +1308,7 @@ function renderSplitCell(
           text,
           cell.rowBgAnsi,
           options.theme,
-          options.restoreBgAnsi
+          options.restoreBgAnsi,
         )
       : options.theme.fg("toolDiffContext", text);
   });
@@ -1317,7 +1317,7 @@ function renderSplitCell(
 function renderSplitRow(
   oldCell: SplitCellInput,
   newCell: SplitCellInput,
-  options: SplitRowOptions
+  options: SplitRowOptions,
 ): string[] {
   const oldLines = renderSplitCell(oldCell, options);
   const newLines = renderSplitCell(newCell, options);
@@ -1347,7 +1347,7 @@ function splitContextCell(
   line: ParsedDiffLine,
   side: "old" | "new",
   file: ParsedDiffFile,
-  config: ToolDisplayDiffConfig | undefined
+  config: ToolDisplayDiffConfig | undefined,
 ): SplitCellInput {
   const lineNumber = side === "old" ? line.oldNumber : line.newNumber;
   const path = side === "old" ? file.oldPath : file.newPath;
@@ -1366,7 +1366,7 @@ function splitChangeCell(
   text: string,
   config: ToolDisplayDiffConfig | undefined,
   palette: DiffPalette,
-  indicatorWidth: number
+  indicatorWidth: number,
 ): SplitCellInput {
   if (!line) {
     return blankSplitCell(indicatorWidth);
@@ -1385,7 +1385,7 @@ function splitChangeCell(
 function splitLineNumberWidth(file: ParsedDiffFile): number {
   const maxLineNumber = file.lines.reduce(
     (max, line) => Math.max(max, line.oldNumber ?? 0, line.newNumber ?? 0),
-    0
+    0,
   );
   return Math.max(1, String(maxLineNumber).length);
 }
@@ -1405,7 +1405,7 @@ function renderSplitDiff(
   theme: ThemeLike,
   config: ToolDisplayDiffConfig | undefined,
   width: number,
-  palette: DiffPalette
+  palette: DiffPalette,
 ): string {
   const sideWidth = Math.max(20, Math.floor((width - 3) / 2));
   const limited = createLimitedDiffRows(config);
@@ -1414,7 +1414,7 @@ function renderSplitDiff(
     const indicatorWidth = Math.max(
       visibleWidth(diffIndicator("add", config)),
       visibleWidth(diffIndicator("remove", config)),
-      visibleWidth(diffIndicator("context", config))
+      visibleWidth(diffIndicator("context", config)),
     );
     const codeWidth = Math.max(1, sideWidth - indicatorWidth - numberWidth - 3);
     const splitRowOptions: SplitRowOptions = {
@@ -1465,7 +1465,7 @@ function renderSplitDiff(
               ? inlineDiffPair(
                   splitDiffText(oldLine),
                   splitDiffText(newLine),
-                  palette
+                  palette,
                 )
               : undefined;
           const oldText = oldLine
@@ -1485,7 +1485,7 @@ function renderSplitDiff(
                 oldText,
                 config,
                 palette,
-                indicatorWidth
+                indicatorWidth,
               ),
               splitChangeCell(
                 newLine,
@@ -1494,10 +1494,10 @@ function renderSplitDiff(
                 newText,
                 config,
                 palette,
-                indicatorWidth
+                indicatorWidth,
               ),
-              splitRowOptions
-            )
+              splitRowOptions,
+            ),
           );
         }
         continue;
@@ -1513,10 +1513,10 @@ function renderSplitDiff(
               highlightDiffText(file.newPath, splitDiffText(line)),
               config,
               palette,
-              indicatorWidth
+              indicatorWidth,
             ),
-            splitRowOptions
-          )
+            splitRowOptions,
+          ),
         );
         continue;
       }
@@ -1524,8 +1524,8 @@ function renderSplitDiff(
         renderSplitRow(
           splitContextCell(line, "old", file, config),
           splitContextCell(line, "new", file, config),
-          splitRowOptions
-        )
+          splitRowOptions,
+        ),
       );
     }
   }
@@ -1546,7 +1546,7 @@ function renderAdaptiveDiff(
   statsText: string,
   theme: ThemeLike,
   config: ToolDisplayDiffConfig | undefined,
-  width: number
+  width: number,
 ): string {
   const files = parseUnifiedDiff(diff);
   const palette = resolveDiffPalette(theme);
@@ -1560,17 +1560,17 @@ function renderAdaptiveDiff(
   } else if (config?.viewMode === "split") {
     choices.push(
       () => renderSplitDiff(files, theme, config, width, palette),
-      () => renderUnifiedDiff(files, theme, config, width, palette)
+      () => renderUnifiedDiff(files, theme, config, width, palette),
     );
   } else {
     choices.push(
       () => renderSplitDiff(files, theme, config, width, palette),
-      () => renderUnifiedDiff(files, theme, config, width, palette)
+      () => renderUnifiedDiff(files, theme, config, width, palette),
     );
   }
   choices.push(
     () => compactText,
-    () => summaryText
+    () => summaryText,
   );
   for (const renderChoice of choices) {
     const choice = renderChoice();
@@ -1586,7 +1586,7 @@ function renderFinalDiffText(
   options: RenderOptionsLike,
   theme: ThemeLike,
   diffConfig: ToolDisplayDiffConfig | undefined,
-  width: number
+  width: number,
 ): string {
   const editDetails = result.details as ToolDisplayEditDetails | undefined;
   const diff =
@@ -1633,7 +1633,7 @@ function renderFinalDiffText(
       text,
       theme,
       diffConfig,
-      width
+      width,
     );
     text += `\n${body}`;
   }
@@ -1651,7 +1651,7 @@ class ResponsiveDiffText implements Component {
     result: ToolResultLike,
     options: RenderOptionsLike,
     theme: ThemeLike,
-    diffConfig: ToolDisplayDiffConfig | undefined
+    diffConfig: ToolDisplayDiffConfig | undefined,
   ) {
     this.diffConfig = diffConfig;
     this.options = options;
@@ -1662,7 +1662,7 @@ class ResponsiveDiffText implements Component {
       options,
       theme,
       diffConfig,
-      terminalWidth()
+      terminalWidth(),
     );
   }
 
@@ -1672,7 +1672,7 @@ class ResponsiveDiffText implements Component {
       this.options,
       this.theme,
       this.diffConfig,
-      terminalWidth()
+      terminalWidth(),
     );
   }
 
@@ -1682,7 +1682,7 @@ class ResponsiveDiffText implements Component {
       this.options,
       this.theme,
       this.diffConfig,
-      width
+      width,
     );
     return new Text(this.text, 0, 0).render(width);
   }
@@ -1692,7 +1692,7 @@ export function renderFinalDiffResult(
   result: ToolResultLike,
   options: RenderOptionsLike,
   theme: ThemeLike,
-  diffConfig?: ToolDisplayDiffConfig
+  diffConfig?: ToolDisplayDiffConfig,
 ): Component {
   if (options.isPartial) {
     return textLine(theme, "warning", "editing…");
@@ -1708,14 +1708,14 @@ export function renderWriteCall(args: WriteToolInput, theme: ThemeLike): Text {
   return new Text(
     `${theme.fg("toolTitle", theme.bold("write "))}${theme.fg("accent", truncateMiddle(args.path))}${theme.fg("dim", ` (${lineCount(args.content)} lines)`)}`,
     0,
-    0
+    0,
   );
 }
 
 function generateLcsUnifiedDiff(
   path: string,
   oldContent: string,
-  newContent: string
+  newContent: string,
 ): { diff?: string; summary?: string } {
   const oldLines = oldContent.split("\n");
   const newLines = newContent.split("\n");
@@ -1731,7 +1731,7 @@ function generateLcsUnifiedDiff(
   }
 
   const matrix: number[][] = Array.from({ length: oldLines.length + 1 }, () =>
-    Array.from({ length: newLines.length + 1 }, () => 0)
+    Array.from({ length: newLines.length + 1 }, () => 0),
   );
   for (let oldIndex = oldLines.length - 1; oldIndex >= 0; oldIndex -= 1) {
     for (let newIndex = newLines.length - 1; newIndex >= 0; newIndex -= 1) {
@@ -1740,7 +1740,7 @@ function generateLcsUnifiedDiff(
           ? (matrix[oldIndex + 1]?.[newIndex + 1] ?? 0) + 1
           : Math.max(
               matrix[oldIndex + 1]?.[newIndex] ?? 0,
-              matrix[oldIndex]?.[newIndex + 1] ?? 0
+              matrix[oldIndex]?.[newIndex + 1] ?? 0,
             );
     }
   }
@@ -1776,7 +1776,7 @@ function generateLcsUnifiedDiff(
 
 function firstChangedLine(
   oldContent: string,
-  newContent: string
+  newContent: string,
 ): number | undefined {
   const oldLines = oldContent.split("\n");
   const newLines = newContent.split("\n");
@@ -1791,7 +1791,7 @@ function firstChangedLine(
 
 export async function capturePreviousWriteContent(
   cwd: string,
-  path: string
+  path: string,
 ): Promise<
   { ok: true; content: string | null } | { ok: false; summary: string }
 > {
@@ -1817,7 +1817,7 @@ export async function capturePreviousWriteContent(
           return null;
         }
         throw error;
-      }
+      },
     );
     if (!stats) {
       return { ok: true, content: null };
@@ -1850,7 +1850,7 @@ export async function capturePreviousWriteContent(
 export function createWriteDiffDetails(
   path: string,
   nextContent: string,
-  previous: Awaited<ReturnType<typeof capturePreviousWriteContent>>
+  previous: Awaited<ReturnType<typeof capturePreviousWriteContent>>,
 ): ToolDisplayWriteDiffDetails {
   if (!previous.ok) {
     return { toolDisplay: { writeSummary: previous.summary } };

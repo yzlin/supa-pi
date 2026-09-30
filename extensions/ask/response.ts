@@ -41,7 +41,7 @@ export function createAskEnvelope(result: AskResult): {
       ...result,
       summary,
       answersByQuestion: Object.fromEntries(
-        result.answers.map((answer) => [answer.id, answer])
+        result.answers.map((answer) => [answer.id, answer]),
       ),
     },
   };

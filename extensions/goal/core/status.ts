@@ -20,7 +20,7 @@ const ALLOWED: Record<GoalStatus, GoalStatus[]> = {
 
 export function transitionGoalStatus(
   current: GoalStatus,
-  next: GoalStatus
+  next: GoalStatus,
 ): Result<GoalStatus> {
   if (current === next) {
     return { ok: true, value: next };
@@ -56,7 +56,7 @@ export function isTerminalGoalStatus(status: GoalStatus): boolean {
 
 export function formatGoalStatus(
   status: GoalStatus,
-  taskStatuses: GoalTaskStatus[] = []
+  taskStatuses: GoalTaskStatus[] = [],
 ): string {
   const counts = new Map<GoalTaskStatus, number>();
   for (const taskStatus of taskStatuses) {
@@ -65,7 +65,7 @@ export function formatGoalStatus(
   const suffix = ["pending", "active", "blocked", "budget_limited", "complete"]
     .map(
       (taskStatus) =>
-        `${taskStatus}:${counts.get(taskStatus as GoalTaskStatus) ?? 0}`
+        `${taskStatus}:${counts.get(taskStatus as GoalTaskStatus) ?? 0}`,
     )
     .join(" ");
   return `goal:${status} ${suffix}`;

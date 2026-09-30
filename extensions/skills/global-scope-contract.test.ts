@@ -8,13 +8,13 @@ const developmentWorkflowPath = join(
   repositoryRoot,
   "rules",
   "common",
-  "development-workflow.md"
+  "development-workflow.md",
 );
 const tddWorkflowPath = join(
   repositoryRoot,
   "skills",
   "tdd-workflow",
-  "SKILL.md"
+  "SKILL.md",
 );
 
 function readFile(path: string): string {
@@ -28,7 +28,7 @@ function readGlobalAgents(): string {
 function section(
   document: string,
   heading: string,
-  nextHeading?: string
+  nextHeading?: string,
 ): string {
   const start = document.indexOf(`${heading}\n`);
   const end = nextHeading ? document.indexOf(`\n${nextHeading}\n`, start) : -1;
@@ -94,7 +94,7 @@ describe("global scope instruction contract", () => {
     const agentProtocol = section(
       readGlobalAgents(),
       "## Agent Protocol",
-      "## Docs"
+      "## Docs",
     );
 
     expect(agentProtocol).toBe(expectedAgentProtocol);
@@ -111,7 +111,7 @@ describe("global scope instruction contract", () => {
     const document = readGlobalAgents();
 
     expect(document).toContain(
-      "Prefer the narrowest sufficient proof; use end-to-end verification where boundaries need it."
+      "Prefer the narrowest sufficient proof; use end-to-end verification where boundaries need it.",
     );
     expect(document).not.toContain("Prefer end-to-end verify;");
   });
@@ -120,10 +120,10 @@ describe("global scope instruction contract", () => {
     const workflow = readFile(developmentWorkflowPath);
 
     expect(workflow).toContain(
-      "For phased work, validate each intermediate phase; the final requested outcome must be usable."
+      "For phased work, validate each intermediate phase; the final requested outcome must be usable.",
     );
     expect(workflow).not.toContain(
-      "For phased work, each phase must leave a usable, verified end-to-end path."
+      "For phased work, each phase must leave a usable, verified end-to-end path.",
     );
   });
 
@@ -146,7 +146,7 @@ describe("global scope instruction contract", () => {
     }
 
     expect(workflow).not.toContain(
-      "security, payment, data-integrity, or irreversible work is eligible"
+      "security, payment, data-integrity, or irreversible work is eligible",
     );
   });
 
@@ -154,16 +154,16 @@ describe("global scope instruction contract", () => {
     const workflow = readFile(tddWorkflowPath);
 
     expect(workflow).toContain(
-      "For eligible work, report `RED: unavailable because <specific reason>`"
+      "For eligible work, report `RED: unavailable because <specific reason>`",
     );
     expect(workflow).toContain(
-      "the main session independently inspects the result and runs current tests"
+      "the main session independently inspects the result and runs current tests",
     );
     expect(workflow).toContain(
-      "`GREEN:` the command and passing result after implementation"
+      "`GREEN:` the command and passing result after implementation",
     );
     expect(workflow).toContain(
-      "`COVERAGE:` the repository threshold/result, meaningful changed-behavior and failure-path coverage"
+      "`COVERAGE:` the repository threshold/result, meaningful changed-behavior and failure-path coverage",
     );
   });
 });

@@ -48,14 +48,14 @@ const expectHerdrFailure = (runtime: TestRuntime) => {
   expect(runtime.write).not.toHaveBeenCalled();
   expect(context.ui.notify).toHaveBeenCalledWith(
     "Desktop notification failed.",
-    "warning"
+    "warning",
   );
 };
 
 describe("notify extension", () => {
   it("is registered in package.json", () => {
     const packageJson = JSON.parse(
-      readFileSync(join(process.cwd(), "package.json"), "utf8")
+      readFileSync(join(process.cwd(), "package.json"), "utf8"),
     ) as { pi: { extensions: string[] } };
 
     expect(packageJson.pi.extensions).toContain("./extensions/notify.ts");
@@ -70,7 +70,7 @@ describe("notify extension", () => {
     expect(runtime.execFile).toHaveBeenCalledWith(
       "herdr",
       ["notification", "show", "π", "--body", "Finished", "--sound", "none"],
-      expect.any(Function)
+      expect.any(Function),
     );
     expect(runtime.write).not.toHaveBeenCalled();
   });
@@ -92,7 +92,7 @@ describe("notify extension", () => {
         "--sound",
         "none",
       ],
-      expect.any(Function)
+      expect.any(Function),
     );
   });
 
@@ -126,7 +126,7 @@ describe("notify extension", () => {
         "--sound",
         "none",
       ],
-      expect.any(Function)
+      expect.any(Function),
     );
   });
 
@@ -141,13 +141,13 @@ describe("notify extension", () => {
       1,
       "herdr",
       ["notification", "show", "π", "--body", "First", "--sound", "none"],
-      expect.any(Function)
+      expect.any(Function),
     );
     expect(runtime.execFile).toHaveBeenNthCalledWith(
       2,
       "herdr",
       ["notification", "show", "π", "--body", "Second", "--sound", "none"],
-      expect.any(Function)
+      expect.any(Function),
     );
   });
 
@@ -155,7 +155,7 @@ describe("notify extension", () => {
     const runtime = createRuntime({
       environment: { HERDR_ENV: "1" },
       execFile: mock((_command, _args, callback) =>
-        callback(null, JSON.stringify({ result: { shown: false } }))
+        callback(null, JSON.stringify({ result: { shown: false } })),
       ),
     });
 
@@ -175,7 +175,7 @@ describe("notify extension", () => {
     const runtime = createRuntime({
       environment: { HERDR_ENV: "1" },
       execFile: mock((_command, _args, callback) =>
-        callback(new Error("herdr unavailable"), "")
+        callback(new Error("herdr unavailable"), ""),
       ),
     });
 

@@ -16,7 +16,7 @@ const HASHED_IDENTITY = /^[a-f0-9]{64}:[01]$/u;
 const roots: string[] = [];
 afterEach(async () => {
   await Promise.all(
-    roots.splice(0).map((root) => rm(root, { recursive: true, force: true }))
+    roots.splice(0).map((root) => rm(root, { recursive: true, force: true })),
   );
 });
 
@@ -26,14 +26,14 @@ async function fixture(
     judge?: (
       names: string[],
       context: any,
-      signal?: AbortSignal
+      signal?: AbortSignal,
     ) => Promise<Map<string, number>>;
     verify?: (signal?: AbortSignal) => Promise<void>;
     hasUI?: boolean;
     mode?: "tui" | "rpc" | "print";
     confirm?: boolean | boolean[];
     secret?: string | undefined;
-  } = {}
+  } = {},
 ) {
   const root = await mkdtemp(join(tmpdir(), "skill-router-runtime-"));
   roots.push(root);
@@ -91,14 +91,14 @@ async function fixture(
         judgeBatch: async (
           candidates: readonly any[],
           context: any,
-          signal?: AbortSignal
+          signal?: AbortSignal,
         ) => {
           judgeCalls++;
           const scores = options.judge
             ? await options.judge(
                 candidates.map((candidate) => candidate.name),
                 context,
-                signal
+                signal,
               )
             : new Map(candidates.map((candidate) => [candidate.name, 1]));
           return {
@@ -106,7 +106,7 @@ async function fixture(
               candidates.map((candidate) => [
                 candidate.id,
                 scores.get(candidate.name) ?? 0,
-              ])
+              ]),
             ),
           };
         },
@@ -145,7 +145,7 @@ async function fixture(
     const filePath = join(baseDir, "SKILL.md");
     await writeFile(
       filePath,
-      `---\nname: ${name}\ndescription: ${name} description\n---\n\n${body}\n`
+      `---\nname: ${name}\ndescription: ${name} description\n---\n\n${body}\n`,
     );
     return {
       name,
@@ -159,12 +159,12 @@ async function fixture(
   const input = async (
     text: string,
     source: "interactive" | "rpc" | "extension" = "interactive",
-    extra: Record<string, unknown> = {}
+    extra: Record<string, unknown> = {},
   ) => handlers.get("input")?.({ type: "input", text, source, ...extra }, ctx);
   const before = async (
     text: string,
     skills: Skill[],
-    forceSystemPrompt?: string
+    forceSystemPrompt?: string,
   ) => {
     const systemPromptOptions = {
       cwd: root,
@@ -185,7 +185,7 @@ async function fixture(
         systemPrompt: forceSystemPrompt ?? "native prompt",
         systemPromptOptions,
       },
-      ctx
+      ctx,
     );
     return { result, systemPromptOptions };
   };
@@ -225,7 +225,7 @@ test("default-off and hard fallback paths preserve the effective catalog with ze
   await f.input("whatever");
   const forced = await f.before("whatever", [normal], "opaque inherited bytes");
   expect(forced.systemPromptOptions.forceSystemPrompt).toBe(
-    "opaque inherited bytes"
+    "opaque inherited bytes",
   );
   expect(forced.systemPromptOptions.skills).toEqual([normal]);
   await f.input("anything");
@@ -244,7 +244,7 @@ test("routes from captured raw input and effective skills, replaces catalog, and
         new Map([
           ["added-by-extension", 1],
           ["disabled-native", 1],
-        ])
+        ]),
       );
     },
   });
@@ -345,7 +345,7 @@ test("routing budget counts fresh requests rather than candidate judgments", asy
     judge: async (names) => new Map(names.map((name) => [name, 0])),
   });
   const skills = await Promise.all(
-    Array.from({ length: 101 }, (_, index) => f.skill(`budget-${index}`))
+    Array.from({ length: 101 }, (_, index) => f.skill(`budget-${index}`)),
   );
 
   for (let request = 1; request <= 100; request++) {
@@ -390,7 +390,7 @@ test("queued request receives a stable identity-anchored fallback prefix without
   ];
   const first = await f.handlers.get("context")?.(
     { type: "context", messages: canonical },
-    f.ctx
+    f.ctx,
   );
   const withTool = [
     ...canonical,
@@ -407,7 +407,7 @@ test("queued request receives a stable identity-anchored fallback prefix without
   ];
   const second = await f.handlers.get("context")?.(
     { type: "context", messages: withTool },
-    f.ctx
+    f.ctx,
   );
   await f.handlers.get("agent_settled")?.({ type: "agent_settled" }, f.ctx);
   const later = await f.handlers.get("context")?.(
@@ -419,13 +419,13 @@ test("queued request receives a stable identity-anchored fallback prefix without
         { role: "user", content: "later fresh", timestamp: 8 },
       ],
     },
-    f.ctx
+    f.ctx,
   );
   expect(canonical).toHaveLength(4);
   expect(withTool).toHaveLength(6);
   const fallback = (result: any) =>
     result.messages.find(
-      (message: any) => message.customType === "skill-router-native-fallback"
+      (message: any) => message.customType === "skill-router-native-fallback",
     );
   const firstFallback = fallback(first);
   expect(firstFallback).toEqual(fallback(second));
@@ -433,62 +433,62 @@ test("queued request receives a stable identity-anchored fallback prefix without
   for (const result of [first, second, later]) {
     expect(result.messages.indexOf(fallback(result))).toBe(
       result.messages.findIndex(
-        (message: any) => message.content === "EXPANDED queued B"
-      ) - 1
+        (message: any) => message.content === "EXPANDED queued B",
+      ) - 1,
     );
   }
   expect(JSON.stringify(firstFallback)).toContain("<available_skills>");
   expect(JSON.stringify(firstFallback)).toContain("x");
 });
 
-test.each([
-  "disable",
-  "logout",
-])("%s preserves queued native fallback after successful routing", async (action) => {
-  const f = await fixture({ enabled: true });
-  const x = await f.skill("x");
-  await f.input("request A");
-  const routed = await f.before("request A", [x]);
-  expect(routed.systemPromptOptions.skills).toEqual([]);
+test.each(["disable", "logout"])(
+  "%s preserves queued native fallback after successful routing",
+  async (action) => {
+    const f = await fixture({ enabled: true });
+    const x = await f.skill("x");
+    await f.input("request A");
+    const routed = await f.before("request A", [x]);
+    expect(routed.systemPromptOptions.skills).toEqual([]);
 
-  await f.commands.get("skill-router").handler(action, f.ctx);
-  await f.input("queued B", "interactive", { streamingBehavior: "followUp" });
-  const projected = await f.handlers.get("context")?.(
-    {
-      type: "context",
-      messages: [
-        { role: "user", content: "request A", timestamp: 1 },
-        {
-          role: "custom",
-          customType: "skill-router-selected",
-          content: routed.result.message.content,
-          details: routed.result.message.details,
-          display: false,
-          timestamp: 2,
-        },
-        { role: "assistant", content: "answer A", timestamp: 3 },
-        { role: "user", content: "EXPANDED queued B", timestamp: 4 },
-      ],
-    },
-    f.ctx
-  );
+    await f.commands.get("skill-router").handler(action, f.ctx);
+    await f.input("queued B", "interactive", { streamingBehavior: "followUp" });
+    const projected = await f.handlers.get("context")?.(
+      {
+        type: "context",
+        messages: [
+          { role: "user", content: "request A", timestamp: 1 },
+          {
+            role: "custom",
+            customType: "skill-router-selected",
+            content: routed.result.message.content,
+            details: routed.result.message.details,
+            display: false,
+            timestamp: 2,
+          },
+          { role: "assistant", content: "answer A", timestamp: 3 },
+          { role: "user", content: "EXPANDED queued B", timestamp: 4 },
+        ],
+      },
+      f.ctx,
+    );
 
-  const fallbackIndex = projected.messages.findIndex(
-    (message: any) => message.customType === "skill-router-native-fallback"
-  );
-  const queuedIndex = projected.messages.findIndex(
-    (message: any) => message.content === "EXPANDED queued B"
-  );
-  expect(fallbackIndex).toBe(queuedIndex - 1);
-  expect(projected.messages[fallbackIndex].content).toContain(
-    "<available_skills>"
-  );
-  expect(projected.messages[fallbackIndex].content).toContain("x");
-  expect(f.stats()).toMatchObject({
-    enabled: false,
-    cleared: action === "logout" ? 1 : 0,
-  });
-});
+    const fallbackIndex = projected.messages.findIndex(
+      (message: any) => message.customType === "skill-router-native-fallback",
+    );
+    const queuedIndex = projected.messages.findIndex(
+      (message: any) => message.content === "EXPANDED queued B",
+    );
+    expect(fallbackIndex).toBe(queuedIndex - 1);
+    expect(projected.messages[fallbackIndex].content).toContain(
+      "<available_skills>",
+    );
+    expect(projected.messages[fallbackIndex].content).toContain("x");
+    expect(f.stats()).toMatchObject({
+      enabled: false,
+      cleared: action === "logout" ? 1 : 0,
+    });
+  },
+);
 
 test("recent context is current-branch plain user/assistant text only and visible body provenance deduplicates until compaction", async () => {
   let recent = "";
@@ -525,7 +525,7 @@ test("recent context is current-branch plain user/assistant text only and visibl
         role: "toolResult",
         content: [{ type: "text", text: "tool secret" }],
       },
-    }
+    },
   );
   f.entries.push({
     type: "custom_message",
@@ -637,7 +637,7 @@ test("compaction restores a frozen body as stable provider-only history across l
   const compactedSnapshot = structuredClone(compacted);
   const first = await f.handlers.get("context")?.(
     { type: "context", messages: compacted },
-    f.ctx
+    f.ctx,
   );
   const continued = [
     ...compacted,
@@ -650,13 +650,13 @@ test("compaction restores a frozen body as stable provider-only history across l
   const continuedSnapshot = structuredClone(continued);
   const second = await f.handlers.get("context")?.(
     { type: "context", messages: continued },
-    f.ctx
+    f.ctx,
   );
   const injected = (result: any) =>
     result?.messages.find(
       (message: any) =>
         message.customType === "skill-router-selected" &&
-        String(message.content).includes("COMPACTION_BODY")
+        String(message.content).includes("COMPACTION_BODY"),
     );
   const recovered = injected(first);
   const recoveredIndex = first.messages.indexOf(recovered);
@@ -684,16 +684,16 @@ test("compaction restores a frozen body as stable provider-only history across l
   ];
   const afterFresh = await f.handlers.get("context")?.(
     { type: "context", messages: afterFreshCanonical },
-    f.ctx
+    f.ctx,
   );
   expect(injected(afterFresh)).toEqual(recovered);
   expect(afterFresh.messages.indexOf(injected(afterFresh))).toBe(
-    recoveredIndex
+    recoveredIndex,
   );
   expect(
     afterFresh.messages.filter((message: any) =>
-      String(message.content).includes("COMPACTION_BODY")
-    )
+      String(message.content).includes("COMPACTION_BODY"),
+    ),
   ).toHaveLength(1);
 
   await f.handlers.get("agent_settled")?.({ type: "agent_settled" }, f.ctx);
@@ -708,11 +708,11 @@ test("compaction restores a frozen body as stable provider-only history across l
   ];
   const afterFallback = await f.handlers.get("context")?.(
     { type: "context", messages: disabledCanonical },
-    f.ctx
+    f.ctx,
   );
   expect(injected(afterFallback)).toEqual(recovered);
   expect(afterFallback.messages.indexOf(injected(afterFallback))).toBe(
-    recoveredIndex
+    recoveredIndex,
   );
   expect(compacted).toEqual(compactedSnapshot);
   expect(continued).toEqual(continuedSnapshot);
@@ -721,8 +721,8 @@ test("compaction restores a frozen body as stable provider-only history across l
   expect(
     await f.handlers.get("context")?.(
       { type: "context", messages: compacted },
-      f.ctx
-    )
+      f.ctx,
+    ),
   ).toBeUndefined();
 });
 
@@ -744,7 +744,7 @@ test("retained recovered bodies preserve old source content when the skill chang
   const compacted = [{ role: "user", content: "retained", timestamp: 1 }];
   const recovered = await f.handlers.get("context")?.(
     { type: "context", messages: compacted },
-    f.ctx
+    f.ctx,
   );
   expect(JSON.stringify(recovered.messages)).toContain("OLD_RECOVERED_BODY");
 
@@ -766,7 +766,7 @@ test("retained recovered bodies preserve old source content when the skill chang
   ];
   const projected = await f.handlers.get("context")?.(
     { type: "context", messages: canonicalWithChangedBody },
-    f.ctx
+    f.ctx,
   );
   const visible = JSON.stringify(projected.messages);
   expect(visible).toContain("OLD_RECOVERED_BODY");
@@ -792,29 +792,29 @@ test("observed user identities are pruned to the visible canonical branch", asyn
   const repeatedUser = { role: "user", content: "same", timestamp: 1 };
   await f.handlers.get("context")?.(
     { type: "context", messages: [repeatedUser, selected] },
-    f.ctx
+    f.ctx,
   );
   const otherBranch = await f.handlers.get("context")?.(
     {
       type: "context",
       messages: [{ role: "user", content: "other", timestamp: 3 }, selected],
     },
-    f.ctx
+    f.ctx,
   );
   expect(
     otherBranch.messages.filter(
-      (message: any) => message.customType === "skill-router-native-fallback"
-    )
+      (message: any) => message.customType === "skill-router-native-fallback",
+    ),
   ).toHaveLength(1);
 
   const returnedIdentity = await f.handlers.get("context")?.(
     { type: "context", messages: [repeatedUser, selected] },
-    f.ctx
+    f.ctx,
   );
   expect(
     returnedIdentity.messages.filter(
-      (message: any) => message.customType === "skill-router-native-fallback"
-    )
+      (message: any) => message.customType === "skill-router-native-fallback",
+    ),
   ).toHaveLength(1);
 });
 
@@ -862,8 +862,8 @@ test("inactive context handling does not inspect canonical message content", asy
   expect(
     await f.handlers.get("context")?.(
       { type: "context", messages: [message] },
-      f.ctx
-    )
+      f.ctx,
+    ),
   ).toBeUndefined();
 });
 
@@ -878,7 +878,7 @@ test("management UX separates login and consent, blocks headless grants, and san
   expect(headless.stats().enabled).toBe(false);
   expect(headless.stats().clientCreates).toBe(0);
   expect(
-    headless.sent.every((item) => item.sendOptions.triggerTurn === false)
+    headless.sent.every((item) => item.sendOptions.triggerTurn === false),
   ).toBe(true);
 
   const declined = await fixture({

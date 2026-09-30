@@ -234,7 +234,7 @@ function clip(text: string, max = 48): string {
 }
 
 function textFromBlocks(
-  content: string | Array<{ type: string; text?: string }>
+  content: string | Array<{ type: string; text?: string }>,
 ): string {
   if (typeof content === "string") {
     return content;
@@ -248,7 +248,7 @@ function textFromBlocks(
 
 function suggestion(
   kind: ContextSuggestion["kind"],
-  text: string
+  text: string,
 ): ContextSuggestion {
   return { kind, text };
 }
@@ -272,7 +272,7 @@ function formatSuggestionTokens(count: number): string {
 function extractMatches(
   source: string,
   pattern: RegExp,
-  limit = Number.POSITIVE_INFINITY
+  limit = Number.POSITIVE_INFINITY,
 ): { matches: string[]; remaining: string } {
   const flags = pattern.flags.includes("g")
     ? pattern.flags
@@ -318,21 +318,21 @@ function analyzeSystemPrompt(systemPrompt?: string): SystemPromptBreakdown {
   const systemTools = extractMatches(
     remaining,
     AVAILABLE_TOOLS_BLOCK_PATTERN,
-    1
+    1,
   );
   remaining = systemTools.remaining;
 
   const customAgents = extractMatches(
     remaining,
     AVAILABLE_AGENTS_BLOCK_PATTERN,
-    1
+    1,
   );
   remaining = customAgents.remaining;
 
   const agentsFiles = extractMatches(
     remaining,
     AGENTS_MD_BLOCK_PATTERN,
-    Number.POSITIVE_INFINITY
+    Number.POSITIVE_INFINITY,
   );
   remaining = agentsFiles.remaining;
 
@@ -378,7 +378,7 @@ export function analyzeMessages({
     bucket: Exclude<ContextBucket, "residual">,
     tokens: number,
     turn: number | null,
-    source: string
+    source: string,
   ) => {
     if (tokens <= 0) {
       return;
@@ -391,7 +391,7 @@ export function analyzeMessages({
   const instructionBreakdown = analyzeSystemPrompt(systemPrompt);
   const instructionTokens = Object.values(instructionBreakdown).reduce(
     (sum, value) => sum + value,
-    0
+    0,
   );
 
   if (instructionTokens > 0) {
@@ -408,19 +408,19 @@ export function analyzeMessages({
           "user_text",
           estimateTokens(message),
           currentTurn,
-          `user: ${clip(textFromBlocks(message.content as unknown))}`
+          `user: ${clip(textFromBlocks(message.content as unknown))}`,
         );
         break;
       }
       case "assistant": {
         const textBlocks = message.content.filter(
-          (block) => block.type === "text"
+          (block) => block.type === "text",
         );
         const thinkingBlocks = message.content.filter(
-          (block) => block.type === "thinking"
+          (block) => block.type === "thinking",
         );
         const toolCalls = message.content.filter(
-          (block) => block.type === "toolCall"
+          (block) => block.type === "toolCall",
         );
 
         if (textBlocks.length > 0) {
@@ -431,8 +431,8 @@ export function analyzeMessages({
             `assistant text: ${clip(
               textBlocks
                 .map((block) => ("text" in block ? block.text : ""))
-                .join(" ")
-            )}`
+                .join(" "),
+            )}`,
           );
         }
 
@@ -441,7 +441,7 @@ export function analyzeMessages({
             "assistant_thinking",
             estimateTokens(createSyntheticAssistantMessage(thinkingBlocks)),
             currentTurn,
-            "assistant thinking"
+            "assistant thinking",
           );
         }
 
@@ -450,7 +450,7 @@ export function analyzeMessages({
             "tool_calls",
             estimateTokens(createSyntheticAssistantMessage([toolCall])),
             currentTurn,
-            `tool call: ${toolCall.name}`
+            `tool call: ${toolCall.name}`,
           );
         }
         break;
@@ -462,7 +462,7 @@ export function analyzeMessages({
           bucket,
           estimateTokens(message),
           currentTurn,
-          `${message.toolName === "bash" ? "bash result" : "tool result"}: ${message.toolName}`
+          `${message.toolName === "bash" ? "bash result" : "tool result"}: ${message.toolName}`,
         );
         break;
       }
@@ -472,7 +472,7 @@ export function analyzeMessages({
           "bash_output",
           estimateTokens(message),
           currentTurn,
-          `bash: ${clip(message.command)}`
+          `bash: ${clip(message.command)}`,
         );
         break;
       }
@@ -481,7 +481,7 @@ export function analyzeMessages({
           "summaries_custom",
           estimateTokens(message),
           currentTurn > 0 ? currentTurn : 0,
-          `custom: ${message.customType}`
+          `custom: ${message.customType}`,
         );
         break;
       }
@@ -490,7 +490,7 @@ export function analyzeMessages({
           "summaries_custom",
           estimateTokens(message),
           currentTurn > 0 ? currentTurn : 0,
-          "branch summary"
+          "branch summary",
         );
         break;
       }
@@ -499,7 +499,7 @@ export function analyzeMessages({
           "summaries_custom",
           estimateTokens(message),
           currentTurn > 0 ? currentTurn : 0,
-          "compaction summary"
+          "compaction summary",
         );
         break;
       }
@@ -508,7 +508,7 @@ export function analyzeMessages({
 
   const estimatedTotalTokens = Object.values(rawBuckets).reduce(
     (sum, value) => sum + value,
-    0
+    0,
   );
   const resolvedContextWindow =
     contextWindow ?? contextUsage?.contextWindow ?? 0;
@@ -516,7 +516,7 @@ export function analyzeMessages({
   const exactPercent = contextUsage?.percent ?? null;
   const estimatedPercent = roundPercent(
     estimatedTotalTokens,
-    resolvedContextWindow
+    resolvedContextWindow,
   );
   const residualTokens =
     exactTotalTokens === null
@@ -533,7 +533,7 @@ export function analyzeMessages({
       : Math.max(exactTotalTokens, estimatedTotalTokens);
   const displayUsedPercent = roundPercent(
     displayUsedTokens,
-    resolvedContextWindow
+    resolvedContextWindow,
   );
 
   const severitySource: ContextSeveritySource =
@@ -546,7 +546,7 @@ export function analyzeMessages({
   };
   const bucketPercentBase = Object.values(displayBuckets).reduce(
     (sum, value) => sum + value,
-    0
+    0,
   );
 
   const buckets: ContextBucketBreakdown[] = CONTEXT_BUCKET_ORDER.map((key) => ({
@@ -607,11 +607,11 @@ export function analyzeMessages({
     autoCompactBufferTokens ?? DEFAULT_COMPACTION_SETTINGS.reserveTokens,
     resolvedContextWindow > 0
       ? resolvedContextWindow
-      : (autoCompactBufferTokens ?? DEFAULT_COMPACTION_SETTINGS.reserveTokens)
+      : (autoCompactBufferTokens ?? DEFAULT_COMPACTION_SETTINGS.reserveTokens),
   );
   const autoCompactBufferPercent = roundPercent(
     resolvedAutoCompactBuffer,
-    resolvedContextWindow
+    resolvedContextWindow,
   );
 
   const topOffenders = [...artifacts]
@@ -623,8 +623,8 @@ export function analyzeMessages({
     suggestions.push(
       suggestion(
         "unknown_total",
-        "Exact total is unknown until the next model response. Category lines below are still estimated from active context."
-      )
+        "Exact total is unknown until the next model response. Category lines below are still estimated from active context.",
+      ),
     );
   }
 
@@ -632,8 +632,8 @@ export function analyzeMessages({
     suggestions.push(
       suggestion(
         "overestimate",
-        `Estimated categories currently exceed the exact total by about ${formatSuggestionTokens(overestimateTokens)}.`
-      )
+        `Estimated categories currently exceed the exact total by about ${formatSuggestionTokens(overestimateTokens)}.`,
+      ),
     );
   }
 
@@ -641,15 +641,15 @@ export function analyzeMessages({
     suggestions.push(
       suggestion(
         "critical",
-        "Context is tight. Run /compact now. If the task changed, start /new instead."
-      )
+        "Context is tight. Run /compact now. If the task changed, start /new instead.",
+      ),
     );
   } else if (severity === "caution") {
     suggestions.push(
       suggestion(
         "caution",
-        "Context is getting full. Plan a /compact before more tool-heavy turns."
-      )
+        "Context is getting full. Plan a /compact before more tool-heavy turns.",
+      ),
     );
   }
 
@@ -664,8 +664,8 @@ export function analyzeMessages({
     suggestions.push(
       suggestion(
         "bash",
-        "Bash output is large. Prefer quieter or filtered commands. Use !!command when output does not need to enter context."
-      )
+        "Bash output is large. Prefer quieter or filtered commands. Use !!command when output does not need to enter context.",
+      ),
     );
   }
 
@@ -676,8 +676,8 @@ export function analyzeMessages({
     suggestions.push(
       suggestion(
         "tool_results",
-        "Tool results are large. Narrow reads and searches, and avoid huge raw outputs."
-      )
+        "Tool results are large. Narrow reads and searches, and avoid huge raw outputs.",
+      ),
     );
   }
 
@@ -685,8 +685,8 @@ export function analyzeMessages({
     suggestions.push(
       suggestion(
         "conversation",
-        "Conversation text is the main driver. /compact will reclaim space with the least workflow change."
-      )
+        "Conversation text is the main driver. /compact will reclaim space with the least workflow change.",
+      ),
     );
   }
 
@@ -697,8 +697,8 @@ export function analyzeMessages({
     suggestions.push(
       suggestion(
         "carryover",
-        "Carry-over summaries are large. If the task changed, start /new for a cleaner context."
-      )
+        "Carry-over summaries are large. If the task changed, start /new for a cleaner context.",
+      ),
     );
   }
 

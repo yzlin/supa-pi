@@ -35,7 +35,7 @@ function createHarness(confirmResult = true) {
       options: {
         handler: (...args: any[]) => unknown;
         getArgumentCompletions?: (prefix: string) => unknown;
-      }
+      },
     ) {
       commands.set(name, options);
     },
@@ -81,7 +81,7 @@ describe("context-docs parsing", () => {
     const parsed = parseContextDocsArgs(
       "adr",
       "./extensions --title 'Use context docs' --status accepted -- Record decisions",
-      process.cwd()
+      process.cwd(),
     );
 
     expect(parsed.ok).toBe(true);
@@ -106,7 +106,7 @@ describe("context-docs parsing", () => {
     const parsed = parseContextDocsArgs(
       "context-review",
       "./extensions extra",
-      process.cwd()
+      process.cwd(),
     );
 
     expect(parsed).toEqual({
@@ -134,7 +134,7 @@ describe("context-docs parsing", () => {
       const parsed = parseContextDocsArgs(
         "context-review",
         ".. -- Check parent docs",
-        child
+        child,
       );
 
       expect(parsed).toEqual({
@@ -148,7 +148,7 @@ describe("context-docs parsing", () => {
 
   it("rejects separator and flag-looking tokens as missing flag values", () => {
     expect(
-      parseContextDocsArgs("adr", "--title -- Decide", process.cwd())
+      parseContextDocsArgs("adr", "--title -- Decide", process.cwd()),
     ).toEqual({
       ok: false,
       error: "--title requires a value.",
@@ -158,8 +158,8 @@ describe("context-docs parsing", () => {
       parseContextDocsArgs(
         "adr",
         "--title --status accepted -- Decide",
-        process.cwd()
-      )
+        process.cwd(),
+      ),
     ).toEqual({
       ok: false,
       error: "--title requires a value.",
@@ -185,22 +185,22 @@ describe("context-docs command registration", () => {
 
     await command?.handler(
       "./extensions --scope all -- Check stale docs",
-      harness.ctx
+      harness.ctx,
     );
 
     expect(harness.sentUserMessages).toHaveLength(1);
     expect(harness.sentUserMessages[0]?.options).toBeUndefined();
     expect(String(harness.sentUserMessages[0]?.content)).toContain(
-      "Resolved command input:"
+      "Resolved command input:",
     );
     expect(String(harness.sentUserMessages[0]?.content)).toContain(
-      "- command: /context-review"
+      "- command: /context-review",
     );
     expect(String(harness.sentUserMessages[0]?.content)).toContain(
-      `- target root: ${path.join(process.cwd(), "extensions")}`
+      `- target root: ${path.join(process.cwd(), "extensions")}`,
     );
     expect(String(harness.sentUserMessages[0]?.content)).toContain(
-      "- scope: all"
+      "- scope: all",
     );
   });
 
@@ -262,14 +262,14 @@ describe("context-docs completions", () => {
     const completions = getContextDocsArgumentCompletions(
       "context-setup",
       "",
-      process.cwd()
+      process.cwd(),
     );
 
     expect(completions).toContainEqual(
-      expect.objectContaining({ value: "--dry-run", label: "--dry-run" })
+      expect.objectContaining({ value: "--dry-run", label: "--dry-run" }),
     );
     expect(completions).toContainEqual(
-      expect.objectContaining({ value: "extensions/", label: "extensions/" })
+      expect.objectContaining({ value: "extensions/", label: "extensions/" }),
     );
   });
 
@@ -277,7 +277,7 @@ describe("context-docs completions", () => {
     const completions = getContextDocsArgumentCompletions(
       "adr",
       "--status a",
-      process.cwd()
+      process.cwd(),
     );
 
     expect(completions).toEqual([{ value: "accepted", label: "accepted" }]);
@@ -287,7 +287,7 @@ describe("context-docs completions", () => {
     const completions = getContextDocsArgumentCompletions(
       "context-review",
       "-- architecture",
-      process.cwd()
+      process.cwd(),
     );
 
     expect(completions).toBeNull();
@@ -305,19 +305,19 @@ describe("context-docs natural-language interception", () => {
       instruction: "use Bun tests",
     });
     expect(
-      matchNaturalLanguageInput("Remember that CONTEXT.md is product language")
+      matchNaturalLanguageInput("Remember that CONTEXT.md is product language"),
     ).toEqual({
       command: "context-note",
       instruction: "CONTEXT.md is product language",
     });
     expect(
-      matchNaturalLanguageInput("Record that ADRs capture tradeoffs")
+      matchNaturalLanguageInput("Record that ADRs capture tradeoffs"),
     ).toEqual({
       command: "context-note",
       instruction: "ADRs capture tradeoffs",
     });
     expect(
-      matchNaturalLanguageInput("context grill: auth boundaries")
+      matchNaturalLanguageInput("context grill: auth boundaries"),
     ).toBeNull();
     expect(matchNaturalLanguageInput("please write an adr")).toBeNull();
     expect(matchNaturalLanguageInput("Remember Bun.")).toBeNull();
@@ -334,7 +334,7 @@ describe("context-docs natural-language interception", () => {
         text: "adr: choose sqlite for local cache",
         source: "interactive",
       },
-      harness.ctx
+      harness.ctx,
     );
 
     expect(harness.confirms).toEqual([
@@ -346,10 +346,10 @@ describe("context-docs natural-language interception", () => {
     ]);
     expect(result).toMatchObject({ action: "transform" });
     expect(String((result as { text: string }).text)).toContain(
-      "- command: /adr"
+      "- command: /adr",
     );
     expect(String((result as { text: string }).text)).toContain(
-      "- instruction: choose sqlite for local cache"
+      "- instruction: choose sqlite for local cache",
     );
   });
 
@@ -363,7 +363,7 @@ describe("context-docs natural-language interception", () => {
         text: "Remember that CONTEXT.md stays domain/product only",
         source: "interactive",
       },
-      harness.ctx
+      harness.ctx,
     );
 
     expect(harness.confirms).toEqual([
@@ -375,7 +375,7 @@ describe("context-docs natural-language interception", () => {
     ]);
     expect(result).toMatchObject({ action: "transform" });
     expect(String((result as { text: string }).text)).toContain(
-      "- command: /context-note"
+      "- command: /context-note",
     );
   });
 
@@ -389,12 +389,12 @@ describe("context-docs natural-language interception", () => {
         text: "Remember that don't put secrets in CONTEXT.md",
         source: "interactive",
       },
-      harness.ctx
+      harness.ctx,
     );
 
     expect(result).toMatchObject({ action: "transform" });
     expect(String((result as { text: string }).text)).toContain(
-      "- instruction: don't put secrets in CONTEXT.md"
+      "- instruction: don't put secrets in CONTEXT.md",
     );
   });
 
@@ -408,7 +408,7 @@ describe("context-docs natural-language interception", () => {
         text: "Remember that token=super-secret-token-value",
         source: "interactive",
       },
-      harness.ctx
+      harness.ctx,
     );
 
     expect(result).toEqual({ action: "handled" });
@@ -431,7 +431,7 @@ describe("context-docs natural-language interception", () => {
         text: "context review: stale docs",
         source: "interactive",
       },
-      harness.ctx
+      harness.ctx,
     );
 
     expect(result).toEqual({ action: "continue" });
@@ -443,7 +443,7 @@ describe("context-docs runtime reminder", () => {
     const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "context-docs-"));
     try {
       expect(shouldInjectContextDocsReminder("what is 2+2?", tempRoot)).toBe(
-        false
+        false,
       );
     } finally {
       fs.rmSync(tempRoot, { force: true, recursive: true });
@@ -456,10 +456,10 @@ describe("context-docs runtime reminder", () => {
       fs.writeFileSync(path.join(tempRoot, "CONTEXT.md"), "# CONTEXT\n");
 
       expect(
-        shouldInjectContextDocsReminder("fix the cache bug", tempRoot)
+        shouldInjectContextDocsReminder("fix the cache bug", tempRoot),
       ).toBe(true);
       expect(shouldInjectContextDocsReminder("what is 2+2?", tempRoot)).toBe(
-        false
+        false,
       );
     } finally {
       fs.rmSync(tempRoot, { force: true, recursive: true });
@@ -472,8 +472,8 @@ describe("context-docs runtime reminder", () => {
       expect(
         shouldInjectContextDocsReminder(
           "/context-review -- Check drift",
-          tempRoot
-        )
+          tempRoot,
+        ),
       ).toBe(true);
     } finally {
       fs.rmSync(tempRoot, { force: true, recursive: true });
@@ -492,7 +492,7 @@ describe("context-docs runtime reminder", () => {
           prompt: "what is 2+2?",
           systemPrompt: "base",
         },
-        { ...harness.ctx, cwd: tempRoot }
+        { ...harness.ctx, cwd: tempRoot },
       );
 
       const injected = handler?.(
@@ -501,13 +501,13 @@ describe("context-docs runtime reminder", () => {
           prompt: "/context-note -- Keep docs scoped",
           systemPrompt: "base",
         },
-        { ...harness.ctx, cwd: tempRoot }
+        { ...harness.ctx, cwd: tempRoot },
       ) as { systemPrompt?: string } | undefined;
 
       expect(skipped).toBeUndefined();
       expect(injected?.systemPrompt).toContain("Context-docs:");
       expect(injected?.systemPrompt).toContain(
-        "CONTEXT.md domain/product only"
+        "CONTEXT.md domain/product only",
       );
       expect(injected?.systemPrompt).toContain("no pi-tasks");
     } finally {
@@ -519,54 +519,54 @@ describe("context-docs runtime reminder", () => {
 describe("context-docs helper modules", () => {
   it("classifies domain terms", () => {
     const result = classifyContextDocNote(
-      "Domain term: a leaf session means the active branch tip in Pi history."
+      "Domain term: a leaf session means the active branch tip in Pi history.",
     );
 
     expect(result).toEqual(
-      expect.objectContaining({ accepted: true, kind: "domain-term" })
+      expect.objectContaining({ accepted: true, kind: "domain-term" }),
     );
   });
 
   it("classifies ADR notes with rationale", () => {
     const result = classifyContextDocNote(
-      "ADR: Use Bun for extension tests because this repo runs TypeScript tests directly with bun test."
+      "ADR: Use Bun for extension tests because this repo runs TypeScript tests directly with bun test.",
     );
 
     expect(result).toEqual(
-      expect.objectContaining({ accepted: true, kind: "adr" })
+      expect.objectContaining({ accepted: true, kind: "adr" }),
     );
   });
 
   it("classifies agent conventions", () => {
     const result = classifyContextDocNote(
-      "Agent convention: agents must use Bun commands and must not run ./runner."
+      "Agent convention: agents must use Bun commands and must not run ./runner.",
     );
 
     expect(result).toEqual(
-      expect.objectContaining({ accepted: true, kind: "agent-convention" })
+      expect.objectContaining({ accepted: true, kind: "agent-convention" }),
     );
   });
 
   it("classifies context boundaries", () => {
     const result = classifyContextDocNote(
-      "CONTEXT-MAP: extensions/context-docs owns durable-doc classification, depends on no sibling extension, and coordinates with command handoff only through Pi APIs."
+      "CONTEXT-MAP: extensions/context-docs owns durable-doc classification, depends on no sibling extension, and coordinates with command handoff only through Pi APIs.",
     );
 
     expect(result).toEqual(
-      expect.objectContaining({ accepted: true, kind: "context-map" })
+      expect.objectContaining({ accepted: true, kind: "context-map" }),
     );
   });
 
   it("rejects rejected notes", () => {
     const result = classifyContextDocNote(
-      "Rejected: not worth documenting this one-off typo."
+      "Rejected: not worth documenting this one-off typo.",
     );
 
     expect(result).toEqual(
       expect.objectContaining({
         accepted: false,
         reason: "explicitly rejected",
-      })
+      }),
     );
   });
 
@@ -578,25 +578,25 @@ describe("context-docs helper modules", () => {
         accepted: false,
         reason: "weak adr",
         challenge: expect.stringContaining("rationale"),
-      })
+      }),
     );
   });
 
   it("classifies Bun package manager conventions", () => {
     const result = classifyContextDocNote(
-      "Use Bun as the package manager instead of npm for installs and tests."
+      "Use Bun as the package manager instead of npm for installs and tests.",
     );
 
     expect(result).toEqual(
-      expect.objectContaining({ accepted: true, kind: "project-convention" })
+      expect.objectContaining({ accepted: true, kind: "project-convention" }),
     );
   });
 
   it("requires the CONTEXT-MAP boundary threshold", () => {
     expect(
       reachesContextMapThreshold(
-        "context-map boundary: this module owns prompt handoff"
-      )
+        "context-map boundary: this module owns prompt handoff",
+      ),
     ).toBeTrue();
     expect(reachesContextMapThreshold("context-map boundary only")).toBeFalse();
   });
@@ -605,7 +605,7 @@ describe("context-docs helper modules", () => {
     const appended = planMarkedBlockUpdate(
       "# Docs\n",
       "glossary",
-      "- Leaf: branch tip"
+      "- Leaf: branch tip",
     );
     expect(appended.action).toBe("append");
     expect(appended.content).toContain("<!-- context-docs:start glossary -->");
@@ -613,7 +613,7 @@ describe("context-docs helper modules", () => {
     const replaced = planMarkedBlockUpdate(
       appended.content,
       "glossary",
-      "- Leaf: current branch tip"
+      "- Leaf: current branch tip",
     );
     expect(replaced.action).toBe("replace");
     expect(replaced.content).toContain("- Leaf: current branch tip");
@@ -624,35 +624,35 @@ describe("context-docs helper modules", () => {
     const missingEnd = planMarkedBlockUpdate(
       "# Docs\n<!-- context-docs:start glossary -->\n- stale\n",
       "glossary",
-      "- Leaf: branch tip"
+      "- Leaf: branch tip",
     );
     expect(missingEnd).toEqual(
       expect.objectContaining({
         action: "error",
         content: "# Docs\n<!-- context-docs:start glossary -->\n- stale\n",
         error: "Malformed managed block: missing end marker for glossary.",
-      })
+      }),
     );
 
     const misordered = planMarkedBlockUpdate(
       "# Docs\n<!-- context-docs:end glossary -->\n<!-- context-docs:start glossary -->\n",
       "glossary",
-      "- Leaf: branch tip"
+      "- Leaf: branch tip",
     );
     expect(misordered).toEqual(
       expect.objectContaining({
         action: "error",
         error:
           "Malformed managed block: end marker appears before start marker for glossary.",
-      })
+      }),
     );
   });
 
   it("refuses secret-bearing prompt evidence", () => {
     expect(
-      detectSecret("OPENAI_API_KEY=sk-abcdefghijklmnopqrstuvwxyz")
+      detectSecret("OPENAI_API_KEY=sk-abcdefghijklmnopqrstuvwxyz"),
     ).toEqual(
-      expect.objectContaining({ hasSecret: true, reason: "openai api key" })
+      expect.objectContaining({ hasSecret: true, reason: "openai api key" }),
     );
 
     const result = buildContextDocsPrompt({
@@ -665,7 +665,7 @@ describe("context-docs helper modules", () => {
       expect.objectContaining({
         ok: false,
         reason: expect.stringContaining("Refusing"),
-      })
+      }),
     );
   });
 
@@ -692,7 +692,7 @@ describe("context-docs helper modules", () => {
     expect(packet).toContain("leaf: leaf-123");
     expect(packet).toContain("message 1 (user):\nRemember Bun.");
     expect(packet).toContain(
-      "message 2 (assistant):\nUse bun test for validation."
+      "message 2 (assistant):\nUse bun test for validation.",
     );
     expect(packet).not.toContain("hidden");
   });
@@ -709,7 +709,7 @@ describe("context-docs helper modules", () => {
       expect.objectContaining({
         ok: true,
         prompt: expect.stringContaining("<handoff>"),
-      })
+      }),
     );
   });
 });
@@ -717,7 +717,7 @@ describe("context-docs helper modules", () => {
 describe("context-docs prompt", () => {
   function buildPromptMessage(
     command: ContextDocsCommand,
-    args: string
+    args: string,
   ): string {
     const parsed = parseContextDocsArgs(command, args, process.cwd());
 
@@ -733,7 +733,7 @@ describe("context-docs prompt", () => {
     const message = buildPromptMessage("context-setup", "-- Refresh docs");
 
     expect(message).toContain(
-      "Do not create, modify, schedule, or manage pi-tasks."
+      "Do not create, modify, schedule, or manage pi-tasks.",
     );
   });
 
@@ -741,12 +741,12 @@ describe("context-docs prompt", () => {
     const setupMessage = buildPromptMessage("context-setup", "-- Refresh docs");
     const reviewMessage = buildPromptMessage(
       "context-review",
-      "--scope all -- Find stale context"
+      "--scope all -- Find stale context",
     );
 
     for (const message of [setupMessage, reviewMessage]) {
       expect(message).toContain(
-        "Use the canonical `context-docs` skill for all shared and command-specific workflow behavior."
+        "Use the canonical `context-docs` skill for all shared and command-specific workflow behavior.",
       );
       expect(message).not.toContain("/context-setup guidance");
       expect(message).not.toContain("/context-review extraction rules");

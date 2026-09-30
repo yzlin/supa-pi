@@ -28,20 +28,22 @@ const CATALOG = `<available_skills>\n<skill>\n<name>${SKILL_NAME}</name>\n<descr
 
 afterEach(async () => {
   await Promise.all(
-    roots.splice(0).map((root) => fs.rm(root, { recursive: true, force: true }))
+    roots
+      .splice(0)
+      .map((root) => fs.rm(root, { recursive: true, force: true })),
   );
 });
 
 async function makeRoot(): Promise<string> {
   const root = await fs.mkdtemp(
-    path.join(os.tmpdir(), "skill-router-contract-")
+    path.join(os.tmpdir(), "skill-router-contract-"),
   );
   roots.push(root);
   const skillDirectory = path.join(root, "skills", SKILL_NAME);
   await fs.mkdir(skillDirectory, { recursive: true });
   await fs.writeFile(
     path.join(skillDirectory, "SKILL.md"),
-    `---\nname: ${SKILL_NAME}\ndescription: Proves the public skill routing contract.\n---\n\n${SKILL_BODY}\n`
+    `---\nname: ${SKILL_NAME}\ndescription: Proves the public skill routing contract.\n---\n\n${SKILL_BODY}\n`,
   );
   return root;
 }
@@ -53,7 +55,7 @@ type InlineExtension = NonNullable<
 async function makeSession(
   root: string,
   responses: Parameters<ReturnType<typeof fauxProvider>["setResponses"]>[0],
-  extensionFactory: InlineExtension | InlineExtension[]
+  extensionFactory: InlineExtension | InlineExtension[],
 ) {
   const provider = fauxProvider();
   provider.setResponses(responses);
@@ -106,7 +108,7 @@ test("mutable prompt options suppress native catalog while injection and /skill 
     (reply) => (context: Context) => {
       requests.push(structuredClone(context));
       return fauxAssistantMessage(reply);
-    }
+    },
   );
   const { provider, session } = await makeSession(root, responses, (pi) => {
     pi.on("before_agent_start", (event) => {
@@ -188,7 +190,7 @@ test("real router composes safely with forced-prompt appenders in either registr
         return fauxAssistantMessage("first");
       },
     ],
-    [first.router, appender]
+    [first.router, appender],
   );
   try {
     await firstSession.session.prompt("route this", { source: "interactive" });
@@ -211,7 +213,7 @@ test("real router composes safely with forced-prompt appenders in either registr
         return fauxAssistantMessage("second");
       },
     ],
-    [appender, second.router]
+    [appender, second.router],
   );
   try {
     await secondSession.session.prompt("route this", { source: "interactive" });
@@ -264,7 +266,7 @@ test("real router anchors transformed repeated queued fallbacks through tools, s
     pi.on("input", (event) =>
       event.text === "queued B"
         ? { action: "transform", text: "EXPANDED queued B" }
-        : { action: "continue" }
+        : { action: "continue" },
     );
   };
   const { provider, session } = await makeSession(
@@ -292,7 +294,7 @@ test("real router anchors transformed repeated queued fallbacks through tools, s
         return fauxAssistantMessage("fresh answer");
       },
     ],
-    [router, queuedTransformer]
+    [router, queuedTransformer],
   );
   try {
     const running = session.prompt("request A", { source: "interactive" });
@@ -309,29 +311,29 @@ test("real router anchors transformed repeated queued fallbacks through tools, s
     expect(provider.state.callCount).toBe(5);
     const fallbacks = (request: Context) =>
       request.messages.filter((message) =>
-        JSON.stringify(message).includes("<available_skills>")
+        JSON.stringify(message).includes("<available_skills>"),
       );
     expect(fallbacks(requests[1] as Context)).toHaveLength(1);
     expect(fallbacks(requests[1] as Context)[0]).toEqual(
-      fallbacks(requests[2] as Context)[0]
+      fallbacks(requests[2] as Context)[0],
     );
     expect(fallbacks(requests[3] as Context)).toHaveLength(2);
     expect(fallbacks(requests[4] as Context)).toHaveLength(2);
     for (const request of requests.slice(1)) {
       const queuedIndexes = request.messages.flatMap((message, index) =>
-        JSON.stringify(message).includes("EXPANDED queued B") ? [index] : []
+        JSON.stringify(message).includes("EXPANDED queued B") ? [index] : [],
       );
       const fallbackIndexes = request.messages.flatMap((message, index) =>
-        JSON.stringify(message).includes("<available_skills>") ? [index] : []
+        JSON.stringify(message).includes("<available_skills>") ? [index] : [],
       );
       expect(fallbackIndexes).toEqual(
-        queuedIndexes.map((queuedIndex) => queuedIndex - 1)
+        queuedIndexes.map((queuedIndex) => queuedIndex - 1),
       );
     }
     const canonical = session.sessionManager.getEntries();
     expect(JSON.stringify(canonical)).toContain("EXPANDED queued B");
     expect(JSON.stringify(canonical)).not.toContain(
-      "skill-router-native-fallback"
+      "skill-router-native-fallback",
     );
   } finally {
     session.dispose();
@@ -386,7 +388,7 @@ test("real provider retains a recovered body across controlled compaction, settl
           content: "Continue after controlled compaction.",
           display: false,
         },
-        { triggerTurn: true }
+        { triggerTurn: true },
       );
     });
   };
@@ -396,9 +398,9 @@ test("real provider retains a recovered body across controlled compaction, settl
       (reply) => (context: Context) => {
         requests.push(structuredClone(context));
         return fauxAssistantMessage(reply);
-      }
+      },
     ),
-    [router, controlledCompaction]
+    [router, controlledCompaction],
   );
   try {
     await session.prompt("initial route", { source: "interactive" });
@@ -412,7 +414,7 @@ test("real provider retains a recovered body across controlled compaction, settl
     expect(provider.state.callCount).toBe(5);
     const recoveredBody = (request: Context) =>
       request.messages.find((message) =>
-        JSON.stringify(message).includes(SKILL_BODY)
+        JSON.stringify(message).includes(SKILL_BODY),
       );
     const recovered = recoveredBody(requests[2] as Context);
     expect(recovered).toBeDefined();
@@ -421,14 +423,14 @@ test("real provider retains a recovered body across controlled compaction, settl
     for (const request of requests.slice(2)) {
       expect(
         request.messages.filter((message) =>
-          JSON.stringify(message).includes(SKILL_BODY)
-        )
+          JSON.stringify(message).includes(SKILL_BODY),
+        ),
       ).toHaveLength(1);
     }
     const canonical = session.sessionManager.buildContextEntries();
     expect(JSON.stringify(canonical)).not.toContain(SKILL_BODY);
     expect(JSON.stringify(canonical)).not.toContain(
-      "skill-router-native-fallback"
+      "skill-router-native-fallback",
     );
   } finally {
     session.dispose();
@@ -461,7 +463,7 @@ test("context hook covers queued follow-up without replacing persisted messages"
       });
       pi.on("context", (event) => {
         const hasQueuedPrompt = JSON.stringify(event.messages).includes(
-          "queued request"
+          "queued request",
         );
         if (!hasQueuedPrompt) {
           return;
@@ -479,7 +481,7 @@ test("context hook covers queued follow-up without replacing persisted messages"
           ],
         };
       });
-    }
+    },
   );
   try {
     const running = session.prompt("original request");

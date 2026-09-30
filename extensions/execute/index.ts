@@ -39,7 +39,7 @@ function extractTextContent(content: MessageLike["content"]): string {
 
   return content
     .flatMap((part) =>
-      part?.type === "text" && typeof part.text === "string" ? [part.text] : []
+      part?.type === "text" && typeof part.text === "string" ? [part.text] : [],
     )
     .join("\n")
     .trim();
@@ -48,7 +48,7 @@ function extractTextContent(content: MessageLike["content"]): string {
 function hasMarkdownHeading(
   text: string,
   heading: string,
-  level: number
+  level: number,
 ): boolean {
   const escapedHeading = heading.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   return new RegExp(`^#{${level}}\\s+${escapedHeading}\\s*$`, "im").test(text);
@@ -58,13 +58,13 @@ function isExecutionBrief(text: string): boolean {
   return (
     hasMarkdownHeading(text, EXECUTION_BRIEF_TITLE, 1) &&
     EXECUTION_BRIEF_REQUIRED_SECTIONS.every((section) =>
-      hasMarkdownHeading(text, section, 2)
+      hasMarkdownHeading(text, section, 2),
     )
   );
 }
 
 function getLastExecutionBriefFromSession(
-  ctx: ExtensionCommandContext
+  ctx: ExtensionCommandContext,
 ): string {
   const branch = ctx.sessionManager.getBranch();
 

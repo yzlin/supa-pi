@@ -43,7 +43,7 @@ describe("rtk rewrite", () => {
           exitCode: 1,
         }),
         resolveBinaryPath: () => "/usr/bin/rtk",
-      })
+      }),
     ).toThrow("boom");
   });
 
@@ -57,7 +57,7 @@ describe("rtk rewrite", () => {
         }),
         timeoutMs: 10,
         resolveBinaryPath: () => "/usr/bin/rtk",
-      })
+      }),
     ).toThrow("timed out");
   });
 
@@ -70,7 +70,7 @@ describe("rtk rewrite", () => {
           exitCode: 0,
         }),
         resolveBinaryPath: () => "/usr/bin/rtk",
-      })
+      }),
     ).toThrow("empty output");
   });
 

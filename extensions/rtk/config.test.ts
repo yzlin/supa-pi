@@ -70,7 +70,7 @@ describe("rtk config", () => {
       },
     });
     expect(normalized.outputCompaction.maxChars).toBe(
-      DEFAULT_RTK_CONFIG.outputCompaction.maxChars
+      DEFAULT_RTK_CONFIG.outputCompaction.maxChars,
     );
   });
 

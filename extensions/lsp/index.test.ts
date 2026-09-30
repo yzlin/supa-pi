@@ -16,7 +16,7 @@ interface LspOverlayComponent {
 }
 
 function withTempHome<T>(
-  run: (paths: { homeDir: string; cwd: string }) => Promise<T> | T
+  run: (paths: { homeDir: string; cwd: string }) => Promise<T> | T,
 ) {
   const previousHome = process.env.HOME;
   const rootDir = mkdtempSync(join(tmpdir(), "pi-lsp-index-test-"));
@@ -41,7 +41,7 @@ function withTempHome<T>(
 
 function createHarness(
   cwd: string,
-  options?: { customUI?: boolean; theme?: typeof TEST_THEME }
+  options?: { customUI?: boolean; theme?: typeof TEST_THEME },
 ) {
   const commands = new Map<
     string,
@@ -60,7 +60,7 @@ function createHarness(
       definition: {
         handler: (args: string, ctx: unknown) => Promise<void> | void;
         getArgumentCompletions?: (prefix: string) => unknown;
-      }
+      },
     ) {
       commands.set(name, definition);
     },
@@ -95,7 +95,7 @@ function createHarness(
                 {},
                 () => {
                   /* noop */
-                }
+                },
               );
 
               renders.push(component?.render(80) ?? []);
@@ -179,7 +179,7 @@ describe("lsp command", () => {
             },
           },
         }),
-        "utf8"
+        "utf8",
       );
 
       const harness = createHarness(cwd);
@@ -213,7 +213,7 @@ describe("lsp command", () => {
             },
           },
         }),
-        "utf8"
+        "utf8",
       );
 
       const harness = createHarness(cwd, { customUI: true });
@@ -249,7 +249,7 @@ describe("lsp command", () => {
             },
           },
         }),
-        "utf8"
+        "utf8",
       );
 
       const harness = createHarness(cwd, {

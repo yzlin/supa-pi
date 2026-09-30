@@ -5,7 +5,7 @@ import { parseBtwArgs, resolveModelAndThinking } from "./helper";
 describe("parseBtwArgs", () => {
   it("parses a leading -model option", () => {
     expect(
-      parseBtwArgs("-model anthropic/claude-haiku-4-5 count lines of code")
+      parseBtwArgs("-model anthropic/claude-haiku-4-5 count lines of code"),
     ).toEqual({
       model: "anthropic/claude-haiku-4-5",
       task: "count lines of code",
@@ -35,7 +35,7 @@ describe("resolveModelAndThinking", () => {
       modelRegistry,
       currentModel,
       "medium",
-      {}
+      {},
     );
 
     expect(result.model).toBe(currentModel);
@@ -48,7 +48,7 @@ describe("resolveModelAndThinking", () => {
       modelRegistry,
       currentModel,
       "medium",
-      { model: "anthropic/claude-haiku-4-5" }
+      { model: "anthropic/claude-haiku-4-5" },
     );
 
     expect(result.model).toEqual({
@@ -69,7 +69,7 @@ describe("resolveModelAndThinking", () => {
       currentModel,
       "medium",
       { model: "anthropic/claude-haiku-4-5" },
-      [{ model: scopedModel, thinkingLevel: "high" }]
+      [{ model: scopedModel, thinkingLevel: "high" }],
     );
 
     expect(result).toEqual({ model: scopedModel, thinkingLevel: "high" });
@@ -81,12 +81,12 @@ describe("resolveModelAndThinking", () => {
       currentModel,
       "medium",
       { model: "anthropic/claude-haiku-4-5" },
-      [{ model: currentModel }]
+      [{ model: currentModel }],
     );
 
     expect(result.model).toBeUndefined();
     expect(result.error).toBe(
-      "Model anthropic/claude-haiku-4-5 is outside the current model scope"
+      "Model anthropic/claude-haiku-4-5 is outside the current model scope",
     );
   });
 
