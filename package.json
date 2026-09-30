@@ -40,6 +40,7 @@
       "./extensions/no-sleep.ts",
       "./extensions/whimsical",
       "./extensions/fast",
+      "./extensions/model-profiles",
       "./extensions/uv"
     ]
   },

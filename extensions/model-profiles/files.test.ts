@@ -1,0 +1,143 @@
+import { afterEach, beforeEach, expect, test } from "bun:test";
+import {
+  existsSync,
+  lstatSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  readlinkSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+
+import { readRepoAgents } from "./agents";
+import { applyPlan, observeLive, planAgents } from "./files";
+
+let root: string;
+let repo: string;
+let live: string;
+const baseline = "---\nname: worker\nmodel: p/base\nthinking: low\n---\nBody\n";
+beforeEach(() => {
+  root = mkdtempSync(join(tmpdir(), "profiles-files-"));
+  repo = join(root, "repo", "agents");
+  live = join(root, "agent", "agents");
+  mkdirSync(repo, { recursive: true });
+  writeFileSync(join(repo, "file.md"), baseline);
+});
+afterEach(() => rmSync(root, { recursive: true, force: true }));
+function plan(overrides = true) {
+  return planAgents(
+    readRepoAgents(repo),
+    overrides ? { agents: { worker: { model: "p/new" } } } : {},
+    observeLive(live, repo)
+  );
+}
+function apply(overrides = true) {
+  return applyPlan(live, repo, plan(overrides));
+}
+function repoUnchanged() {
+  expect(readdirSync(repo)).toEqual(["file.md"]);
+  expect(readFileSync(join(repo, "file.md"), "utf8")).toBe(baseline);
+}
+
+test("missing directory, generated overrides, idempotency and default restoration", () => {
+  expect(apply()).toBeGreaterThan(0);
+  expect(readFileSync(join(live, "file.md"), "utf8")).toContain("model: p/new");
+  expect(plan().actions).toEqual([]);
+  expect(apply()).toBe(0);
+  expect(apply(false)).toBeGreaterThan(0);
+  expect(readlinkSync(join(live, "file.md"))).toBe(join(repo, "file.md"));
+  expect(apply(false)).toBe(0);
+  repoUnchanged();
+});
+
+test("user files and foreign symlinks remain untouched; shadow warnings", () => {
+  mkdirSync(live, { recursive: true });
+  writeFileSync(join(live, "file.md"), "user file");
+  expect(plan().warnings.join("\n")).toContain("worker");
+  expect(apply()).toBe(0);
+  expect(readFileSync(join(live, "file.md"), "utf8")).toBe("user file");
+  rmSync(join(live, "file.md"));
+  const other = join(root, "other.md");
+  writeFileSync(other, "other");
+  symlinkSync(other, join(live, "file.md"));
+  expect(apply()).toBe(0);
+  expect(readlinkSync(join(live, "file.md"))).toBe(other);
+  repoUnchanged();
+});
+
+test("deleted repo agents: remove marked files and stale repo links, preserve user entries", () => {
+  apply();
+  rmSync(join(repo, "file.md"));
+  symlinkSync(join(repo, "gone.md"), join(live, "gone.md"));
+  symlinkSync(join(repo, "nested", "gone.md"), join(live, "nested.md"));
+  symlinkSync(join(root, "missing.md"), join(live, "user.md"));
+  writeFileSync(join(live, "notes.md"), "user");
+  expect(apply(false)).toBe(3);
+  expect(readdirSync(live).sort()).toEqual(["notes.md", "user.md"]);
+});
+
+test("directory symlink remains for default; converts only for generated overrides without touching repo", () => {
+  mkdirSync(join(root, "agent"));
+  symlinkSync(repo, live);
+  expect(apply(false)).toBe(0);
+  expect(lstatSync(live).isSymbolicLink()).toBe(true);
+  repoUnchanged();
+  expect(apply()).toBeGreaterThan(0);
+  expect(lstatSync(live).isDirectory()).toBe(true);
+  repoUnchanged();
+  expect(apply()).toBe(0);
+  apply(false);
+  repoUnchanged();
+});
+
+test("foreign directory symlink and repo aliases fail safely", () => {
+  const actions = plan();
+  expect(() => applyPlan(repo, repo, actions)).toThrow("repository agents");
+  const alias = join(root, "alias");
+  symlinkSync(repo, alias);
+  expect(() => applyPlan(join(alias, "nested"), repo, actions)).toThrow(
+    "repository agents"
+  );
+  mkdirSync(join(root, "agent"));
+  const foreign = join(root, "foreign");
+  mkdirSync(foreign);
+  symlinkSync(foreign, live);
+  expect(() => apply()).toThrow();
+  expect(readdirSync(foreign)).toEqual([]);
+  repoUnchanged();
+});
+
+test("default creates per-file absolute symlinks in a missing live directory", () => {
+  apply(false);
+  expect(readlinkSync(join(live, "file.md"))).toBe(join(repo, "file.md"));
+  expect(existsSync(join(live, "file.md"))).toBe(true);
+  repoUnchanged();
+});
+
+test("conversion creates symlinks for unchanged agents and never edits either repo file", () => {
+  const other = baseline.replace("name: worker", "name: other");
+  writeFileSync(join(repo, "other.md"), other);
+  mkdirSync(join(root, "agent"));
+  symlinkSync(repo, live);
+  apply();
+  expect(readlinkSync(join(live, "other.md"))).toBe(join(repo, "other.md"));
+  expect(readdirSync(repo).sort()).toEqual(["file.md", "other.md"]);
+  expect(readFileSync(join(repo, "file.md"), "utf8")).toBe(baseline);
+  expect(readFileSync(join(repo, "other.md"), "utf8")).toBe(other);
+  expect(apply()).toBe(0);
+});
+
+test("a marker in a user file body does not confer ownership", () => {
+  mkdirSync(live, { recursive: true });
+  const user =
+    baseline +
+    "# generated by supa-pi model-profiles from /repo/file.md; do not edit\n";
+  writeFileSync(join(live, "file.md"), user);
+  expect(apply()).toBe(0);
+  expect(readFileSync(join(live, "file.md"), "utf8")).toBe(user);
+});

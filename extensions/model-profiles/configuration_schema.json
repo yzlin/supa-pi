@@ -1,0 +1,67 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/yzlin/supa-pi/extensions/model-profiles/configuration_schema.json",
+  "title": "SupaPi model profiles",
+  "type": "object",
+  "required": ["profiles"],
+  "additionalProperties": true,
+  "properties": {
+    "$schema": {
+      "type": "string"
+    },
+    "active": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Absent or default selects the Default profile; otherwise must name a profile."
+    },
+    "profiles": {
+      "type": "object",
+      "propertyNames": {
+        "allOf": [
+          {
+            "not": {
+              "const": "default"
+            }
+          },
+          {
+            "pattern": "^\\S+$"
+          }
+        ]
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/profile"
+      }
+    }
+  },
+  "$defs": {
+    "values": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "model": {
+          "type": "string",
+          "pattern": "^[^/\\s]+/[^\\s]+$"
+        },
+        "thinking": {
+          "enum": ["off", "minimal", "low", "medium", "high", "xhigh", "max"]
+        }
+      }
+    },
+    "profile": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "main": {
+          "$ref": "#/$defs/values"
+        },
+        "agents": {
+          "type": "object",
+          "description": "Keys match trimmed frontmatter name, falling back to filename without .md; * supplies per-field defaults. Names must exist in repo agents.",
+          "additionalProperties": {
+            "$ref": "#/$defs/values"
+          }
+        }
+      }
+    }
+  }
+}

@@ -33,6 +33,9 @@ The repository is optimized for local workflow quality and maintainable agent be
 - **Sift** — an active SupaPi Extension that screens explicit workspace file candidates for relevance before the main agent reads their full contents. _Avoid_: search, index.
 - **File judgment** — one independent Jev evaluation assigning a probability of relevance to one bounded file against the caller's query. _Avoid_: proof, authorization.
 - **Matt-compatible context docs** — `CONTEXT.md`, `CONTEXT-MAP.md`, `docs/adr/`, and optional `docs/context/` notes.
+- **Model profile** — a named, machine-local set of main-session and agent model/thinking choices that `/profile` applies in one switch. _Avoid_: mode, loadout, preset.
+- **Default profile** — the reserved Model profile meaning repo `agents/*.md` frontmatter verbatim, with main unchanged; it cannot be defined in profile config. _Avoid_: reset profile, base profile.
+- **Generated agent override** — a live agent file rendered from a repo agent plus the active Model profile, replacing only `model`/`thinking`. _Avoid_: agent patch, frontmatter rewrite.
 
 ## Product constraints
 
@@ -131,8 +134,22 @@ The canonical `skills/pr/SKILL.md` workflow uses the plain `prompts/pr.md` templ
 - `rules/common/git-workflow.md` PR guidance defers to the `pr` skill as the single PR-body source.
 - Adapted from [Matt Pocock's MIT-licensed in-progress `pr` skill at commit `c55ee46073ed923f86ce59a5eb3b6d895095d1b7`](https://github.com/mattpocock/skills/tree/c55ee46073ed923f86ce59a5eb3b6d895095d1b7/skills/in-progress/pr); its HumanLayer `show-me` credit is carried by `showing-me`.
 
+## Model profiles: implemented product direction
+
+Approved by `/grill-me` on 2026-09-30; implemented and registered as an active Extension `extensions/model-profiles` with command `/profile`, with focused tests. Live `/profile` use and E2E subagent spawning remain unverified. See `extensions/model-profiles/README.md` for the implemented contract.
+
+- Scope: main-session model/thinking and agent model/thinking only. `/review` is untouched; its workflow passes explicit `agent({model, effort})`, which pi-subagents 0.19.0 resolves before frontmatter (source-read inference, not E2E-verified).
+- Config: machine-local `~/.pi/agent/model-profiles.json` with a schema. Shape `{$schema?, active?, profiles: {<name>: {main?: {model?, thinking?}, agents?: {"*"?: {...}, <agent>?: {...}}}}}`; absent `active` means `default`. Per field, named agent > `*` > repo frontmatter. Repo `agents/*.md` stay the canonical baseline.
+- Commands: `/profile` selector showing the active profile; `/profile <name>` switches; `/profile save <name>` snapshots current main model/thinking, keeping the existing agents map. Agent maps are hand-edited.
+- Switching validates main and every override (registry, auth, scope) first; any failure lists all failures and applies nothing. Main applies to the current session and persists defaults to settings.
+- One global active profile. Agent changes affect every session's next spawn; other running sessions keep their current main until they switch. Writes are atomic.
+- Rationale for Generated agent overrides: pi-subagents frontmatter is authoritative over `Agent` params, `subagents.json` has no per-agent model setting, and workflow `agent()` calls are unreachable by `tool_call` hooks. Stripping repo pins would send model-less workflow spawns to the parent model. An upstream override setting was deferred as dependent on upstream.
+- Per-file ownership in `~/.pi/agent/agents/`: overridden agents become generated files with a marker comment; unoverridden agents stay setup-style per-file repo symlinks; user-authored files are never touched. Default profile restores symlinks; generated files for deleted repo agents are removed. `setup.sh` is unchanged. Never write into the repo: a directory-level symlink to repo `agents/` is automatically converted to a real directory of per-file symlinks on the first render that needs it.
+- Render on `session_start`, on switch, and in a pre-spawn `tool_call` hook for `Agent`/`SubagentWorkflow` with a cheap freshness check.
+
 ## Open questions
 
+- Model profiles (deferred): stale Generated agent overrides after disabling the Extension (documented; run Default profile first to clean up); status rendering when manual `/model` drifts from the active profile.
 - Live installation and end-to-end Wayfinder UX remain unverified. Integrated tests, loader checks, and static scenarios verify repository behavior and resources, but static scenarios do not prove model adherence.
 - PR workflow (deferred): feasibility of cheap base-branch Before evidence, screenshots, and fork→upstream PR support.
 

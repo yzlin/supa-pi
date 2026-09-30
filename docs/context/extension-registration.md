@@ -47,6 +47,8 @@ The provider hook only patches payloads when Fast Mode is enabled, the selected 
 
 Fast Mode persists global state and additive exact-match model support in `~/.pi/agent/fast-mode.json`. The config requires boolean `enabled` and array `allowlist` of canonical `provider/id` strings; invalid config fails fast. Writes preserve unknown top-level keys and the existing allowlist. Status notifications report the support source (`model`, `built-in allowlist`, `config allowlist`, or `unsupported`). Config changes are not live-reloaded.
 
+`extensions/model-profiles` is active. It registers `/profile` for machine-local main-session and agent model/thinking choices, persists one global active profile, and renders owned live agent overrides without editing repo agents. Commands, validation, global defaults, per-file ownership, and the cleanup required before disabling are documented in `extensions/model-profiles/README.md`.
+
 `extensions/execute` is active and registers `/execute` only. The command is a thin invocation packet: an explicit `/execute` invocation authorizes the main session to call upstream `@tintinweb/pi-subagents` `SubagentWorkflow`; task state and final verification remain main-session responsibilities. The command does not register retired execution tools or lifecycle hooks, read `.pi/execute`, or enforce a private TDD trajectory. Worker `StructuredOutput` is a report-shape contract only; null or missing results leave the originating task unresolved, and terminal blockers are recorded in task metadata because `pi-tasks` has no `blocked` status.
 
 ## Prompt-pipeline command ownership
