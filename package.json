@@ -72,7 +72,7 @@
       "./extensions/whimsical",
       "./extensions/fast",
       "./extensions/model-profiles",
-      "./extensions/uv"
+      "./extensions/uv.ts"
     ]
   },
   "readme": "README.md"

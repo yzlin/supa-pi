@@ -1,37 +1,22 @@
 /**
  * UV Extension - Redirects Python tooling to uv equivalents
  *
- * This extension wraps the bash tool to prepend intercepted-commands to PATH,
- * which contains shim scripts that intercept common Python tooling commands
- * and redirect agents to use uv instead.
+ * Blocks agent bash tool calls that use Python tooling uv replaces, returning
+ * the equivalent uv commands as the block reason. Uses `tool_call` instead of
+ * registering `bash` so it composes with the rtk bash override.
  *
- * Intercepted commands:
- * - pip/pip3: Blocked with suggestions to use `uv add` or `uv run --with`
- * - poetry: Blocked with uv equivalents (uv init, uv add, uv sync, uv run)
- * - python/python3: Redirected through `uv run` to a real interpreter path,
- *   with special handling to block `python -m pip`, `python -m venv`, and
- *   `python -m py_compile`
+ * Blocked commands (including explicit paths like `.venv/bin/python`):
+ * - pip/pip3: suggest `uv add` or `uv run --with`
+ * - poetry: suggest uv init, uv add, uv sync, uv run
+ * - python -m pip, python -m venv, python -m py_compile
  *
- * The shim scripts are located in the intercepted-commands directory and
- * provide helpful error messages with the equivalent uv commands.
- *
- * Note: PATH shims are bypassable via explicit interpreter paths
- * (for example `.venv/bin/python`). To close that gap, this extension also
- * blocks disallowed invocations at bash spawn time.
- *
- * This is borrowed from https://github.com/mitsuhiko/agent-stuff
+ * Adapted from https://github.com/mitsuhiko/agent-stuff
  */
 
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
-
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import { createBashTool } from "@earendil-works/pi-coding-agent";
+import { isToolCallEventType } from "@earendil-works/pi-coding-agent";
 
-const __dirname = dirname(fileURLToPath(import.meta.url));
-const interceptedCommandsPath = join(__dirname, "..", "intercepted-commands");
-
-function getBlockedCommandMessage(command: string): string | null {
+export function getBlockedCommandMessage(command: string): string | null {
   // Match commands at the start of a shell segment (start/newline/; /&& /|| /|)
   const pipCommandPattern = /(?:^|\n|[;|&]{1,2})\s*(?:\S+\/)?pip\s*(?:$|\s)/m;
   const pip3CommandPattern = /(?:^|\n|[;|&]{1,2})\s*(?:\S+\/)?pip3\s*(?:$|\s)/m;
@@ -111,17 +96,13 @@ function getBlockedCommandMessage(command: string): string | null {
 }
 
 export default function (pi: ExtensionAPI) {
-  const cwd = process.cwd();
-  const bashTool = createBashTool(cwd, {
-    commandPrefix: `export PATH="${interceptedCommandsPath}:$PATH"`,
-    spawnHook: (ctx) => {
-      const blockedMessage = getBlockedCommandMessage(ctx.command);
-      if (blockedMessage) {
-        throw new Error(blockedMessage);
-      }
-      return ctx;
-    },
+  pi.on("tool_call", (event) => {
+    if (!isToolCallEventType("bash", event)) {
+      return;
+    }
+    const blockedMessage = getBlockedCommandMessage(event.input.command);
+    if (blockedMessage) {
+      return { block: true, reason: blockedMessage };
+    }
   });
-
-  pi.registerTool(bashTool);
 }
