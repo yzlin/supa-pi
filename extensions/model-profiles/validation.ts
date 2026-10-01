@@ -48,6 +48,9 @@ export function validateRuntime(
       errors.push(`${field}.model: outside model scope: ${values.model}`);
     }
   }
+  if (active === "default") {
+    checkModel(raw.defaultMain, "defaultMain");
+  }
   for (const [name, profile] of Object.entries(profiles)) {
     // Inactive profiles may reference deleted agents; they must not block default cleanup.
     if (name !== active || !isRecord(profile)) {

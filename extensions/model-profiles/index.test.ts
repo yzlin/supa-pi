@@ -134,7 +134,7 @@ const work = {
   agents: { worker: { model: "p/new", thinking: "high" } },
 };
 
-test("switch validates then sets main/thinking, renders agents, persists defaults and active; default leaves main unchanged", async () => {
+test("switch validates then sets main/thinking, renders agents, persists defaults and active; default restores prior main", async () => {
   config({ $schema: "editor", note: "keep", profiles: { work } });
   const h = harness();
   await h.command.handler("work", h.ctx);
@@ -153,9 +153,69 @@ test("switch validates then sets main/thinking, renders agents, persists default
   );
   expect(h.statuses.at(-1)).toBe("profile: work");
   await h.command.handler("default", h.ctx);
-  expect(h.changes).toHaveLength(3);
+  expect(h.changes.slice(3)).toEqual([
+    "model:p/new",
+    "thinking:high",
+    'persist:{"model":"p/new","thinking":"high"}',
+  ]);
   expect(h.statuses.at(-1)).toBeUndefined();
   expect(readConfig().active).toBe("default");
+  expect(readConfig().defaultMain).toBeUndefined();
+});
+
+test("default restores main captured before the first main-changing profile", async () => {
+  config({
+    profiles: {
+      work,
+      other: { main: { thinking: "low" } },
+      agentsOnly: { agents: { worker: { thinking: "high" } } },
+    },
+  });
+  const h = harness();
+  h.ctx.model = {
+    provider: "p",
+    id: "base",
+  } as ExtensionCommandContext["model"];
+  // A profile that leaves main alone takes no snapshot.
+  await h.command.handler("agentsOnly", h.ctx);
+  expect(readConfig().defaultMain).toBeUndefined();
+  await h.command.handler("work", h.ctx);
+  expect(readConfig().defaultMain).toEqual({
+    model: "p/base",
+    thinking: "high",
+  });
+  // Profile-to-profile switches keep the original snapshot.
+  await h.command.handler("other", h.ctx);
+  expect(readConfig().defaultMain).toEqual({
+    model: "p/base",
+    thinking: "high",
+  });
+  h.changes.length = 0;
+  await h.command.handler("default", h.ctx);
+  expect(h.changes).toEqual([
+    "model:p/base",
+    "thinking:high",
+    'persist:{"model":"p/base","thinking":"high"}',
+  ]);
+  expect(readConfig()).not.toHaveProperty("defaultMain");
+  // Without a snapshot, default leaves main unchanged.
+  h.changes.length = 0;
+  await h.command.handler("default", h.ctx);
+  expect(h.changes).toEqual([]);
+});
+
+test("default with an unusable snapshot model fails closed", async () => {
+  config({
+    active: "work",
+    defaultMain: { model: "missing/gone", thinking: "low" },
+    profiles: { work },
+  });
+  const before = readFileSync(configPath, "utf8");
+  const h = harness();
+  await h.command.handler("default", h.ctx);
+  expect(h.notifications.join()).toContain("defaultMain.model");
+  expect(h.changes).toEqual([]);
+  expect(readFileSync(configPath, "utf8")).toBe(before);
 });
 
 test("all validation failures in one notification, no setModel and no writes", async () => {

@@ -14,6 +14,10 @@
       "minLength": 1,
       "description": "Absent or default selects the Default profile; otherwise must name a profile."
     },
+    "defaultMain": {
+      "$ref": "#/$defs/values",
+      "description": "Managed by /profile: main choices captured before a profile changed them; /profile default restores and clears it."
+    },
     "profiles": {
       "type": "object",
       "propertyNames": {

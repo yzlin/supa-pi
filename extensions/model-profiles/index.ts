@@ -143,38 +143,60 @@ export function registerModelProfiles(
     const config = state?.config ?? { profiles: {} };
     const agents = state?.agents ?? readRepoAgents(repoDir);
     const profile = name === "default" ? {} : config.profiles[name];
+    const main = name === "default" ? config.defaultMain : profile.main;
+    const changesMain = Boolean(main?.model || main?.thinking);
+    // Snapshot main the first time a profile changes it; default restores and clears it.
+    let defaultMain = name === "default" ? undefined : config.defaultMain;
+    if (
+      name !== "default" &&
+      changesMain &&
+      (!defaultMain || (config.active ?? "default") === "default")
+    ) {
+      defaultMain = {
+        ...(ctx.model && { model: `${ctx.model.provider}/${ctx.model.id}` }),
+        thinking: pi.getThinkingLevel(),
+      };
+    }
     // Build the full plan before any main changes, including directory ownership checks.
     const plan = planAgents(agents, profile, observeLive(liveDir, repoDir));
     assertOutsideRepo(configPath, repoDir);
-    if (profile.main?.model || profile.main?.thinking) {
+    if (changesMain) {
       assertOutsideRepo(join(agentDir, "settings.json"), repoDir);
     }
     // Pi's setModel resets thinking to model/global defaults; keep the current level unless the profile sets one.
     const currentThinking = pi.getThinkingLevel();
-    if (profile.main?.model) {
-      const slash = profile.main.model.indexOf("/");
+    if (main?.model) {
+      const slash = main.model.indexOf("/");
       const model = ctx.modelRegistry.find(
-        profile.main.model.slice(0, slash),
-        profile.main.model.slice(slash + 1),
+        main.model.slice(0, slash),
+        main.model.slice(slash + 1),
       );
       if (!(model && (await pi.setModel(model)))) {
+        const field =
+          name === "default" ? "defaultMain" : `profiles.${name}.main`;
         throw new Error(
-          `${configPath}: profiles.${name}.main.model: auth failure setting ${profile.main.model}`,
+          `${configPath}: ${field}.model: auth failure setting ${main.model}`,
         );
       }
     }
-    if (profile.main?.thinking) {
-      pi.setThinkingLevel(profile.main.thinking);
-    } else if (profile.main?.model) {
+    if (main?.thinking) {
+      pi.setThinkingLevel(main.thinking);
+    } else if (main?.model) {
       pi.setThinkingLevel(currentThinking);
     }
     applyPlan(liveDir, repoDir, plan);
-    if (profile.main && (profile.main.model || profile.main.thinking)) {
-      await persist(ctx.cwd, agentDir, profile.main);
+    if (main && changesMain) {
+      await persist(ctx.cwd, agentDir, main);
     }
     // Re-read after the awaits so profiles saved by other sessions meanwhile are not overwritten.
-    const latest = loadConfig(configPath) ?? { profiles: {} };
-    writeConfig(configPath, { ...latest, active: name });
+    const { defaultMain: _stale, ...latest } = loadConfig(configPath) ?? {
+      profiles: {},
+    };
+    writeConfig(configPath, {
+      ...latest,
+      active: name,
+      ...(defaultMain && { defaultMain }),
+    });
     if (plan.warnings.length) {
       ctx.ui.notify(plan.warnings.join("\n"), "warning");
     }

@@ -6,7 +6,7 @@ Model profiles is an active Extension registered from `package.json -> pi.extens
 
 - `/profile` opens a selector with an `(active)` marker. Without UI, it reports the active name instead.
 - `/profile <name>` switches to a configured profile.
-- `/profile default` restores repo agent frontmatter via symlinks, leaving the current main model/thinking and persisted main defaults unchanged.
+- `/profile default` restores repo agent frontmatter via symlinks and restores the main model/thinking captured in `defaultMain` (see below). Without a snapshot, main is left unchanged.
 - `/profile status` reports the active profile name, not whether manual `/model` changes still match it.
 - `/profile save <name>` creates or updates a profile by snapshotting the current main model and thinking level. It preserves that profile's existing `agents` map and does not switch or change `active`. Agent maps are hand-edited.
 
@@ -18,6 +18,7 @@ Config lives at `~/.pi/agent/model-profiles.json` (under Pi's `getAgentDir()` wh
 {
   $schema?: string,
   active?: string,
+  defaultMain?: { model?: "provider/id", thinking?: <level> },
   profiles: {
     <name>: {
       main?: { model?: "provider/id", thinking?: <level> },
@@ -62,6 +63,8 @@ Missing config is a no-op for lifecycle/pre-spawn refresh: no agent directory is
 Before switching, validation collects structural/thinking-level errors across the config, plus unknown agent names and model registry, configured-auth, and session-scope failures for the selected profile's main and every explicit agent override. Stale agent names in inactive profiles do not block `default`, so orphaned overrides can still be cleaned up. Scope restricts models only when the session's scoped-model list is non-empty. All collected failures are listed together; validation failure applies nothing.
 
 On a successful switch, main choices apply through `pi.setModel` / `pi.setThinkingLevel` to the current session and persist as global defaults using `SettingsManager.setDefaultModelAndProvider` / `setDefaultThinkingLevel`, then `flush`. `active` persists globally in the profile config. Config and individual generated-file replacements use atomic writes; the entire switch is not a rollback transaction for later I/O failures.
+
+`defaultMain` is managed by `/profile`. Switching to a profile whose `main` changes anything snapshots the current session's main model and thinking level, if active is `default` or no snapshot exists yet; profile-to-profile switches keep the original snapshot. `/profile default` applies and persists the snapshot like a profile `main`, then removes it. Manual `/model` changes made while a profile is active are not captured and are overwritten by the restore. The snapshot is validated like a selected profile's main; if its model becomes unknown, unauthenticated, or out of scope, `/profile default` fails closed — delete `defaultMain` to proceed.
 
 There is one global active profile, not session-local selection. Agent files affect every session's next spawn; other running sessions keep their current main choices until they switch. Session-start and pre-spawn refresh render agents only, never reapply main choices; new sessions use Pi's normal default resolution.
 

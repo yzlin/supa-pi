@@ -31,6 +31,8 @@ export interface Profile {
 }
 export interface Config {
   active?: string;
+  // Main choices captured before a profile first changed them; `default` restores them.
+  defaultMain?: Values;
   profiles: Record<string, Profile>;
   [key: string]: unknown;
 }
@@ -76,6 +78,9 @@ export function parseConfig(
   }
   if ("active" in raw && (typeof raw.active !== "string" || !raw.active)) {
     errors.push("active: expected profile name");
+  }
+  if ("defaultMain" in raw) {
+    values(raw.defaultMain, "defaultMain");
   }
   if (isRecord(raw.profiles)) {
     for (const [name, profile] of Object.entries(raw.profiles)) {
