@@ -48,6 +48,7 @@ const BUILT_IN_FAST_MODE_ALLOWLIST = new Set<string>([
   "openai-codex/gpt-6-astra",
   "openai-codex/gpt-6-luna",
   "openai-codex/gpt-6-sol",
+  "openai-codex/gpt-6.1-sol",
 ]);
 const CANONICAL_MODEL_ID_REGEX = /^[^/\s]+\/[^/\s]+$/;
 

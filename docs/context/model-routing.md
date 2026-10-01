@@ -20,6 +20,6 @@ These are repository defaults, not the effective settings of a running Pi sessio
 
 Other direct agent defaults live in their [`agents/` frontmatter](../../agents/). `/review` layers invocation flags, project config, global config, then built-in defaults **per field**; see [review configuration](../../extensions/review/README.md#configuration-and-disclosure).
 
-[Fast Mode](../../extensions/fast/README.md) recognizes GPT-6 Sol and Luna through its [built-in allowlist](../../extensions/fast/index.ts), but remains a separate user-enabled choice. Successful priority-injected Sol/Luna requests did not expose the actual response tier in Pi CLI JSON; allowlisting does not prove Fast-tier fulfillment.
+[Fast Mode](../../extensions/fast/README.md) recognizes GPT-6 Sol, Luna, Astra, and GPT-6.1 Sol through its [built-in allowlist](../../extensions/fast/index.ts), but remains a separate user-enabled choice. Successful priority-injected Sol/Luna requests did not expose the actual response tier in Pi CLI JSON; allowlisting does not prove Fast-tier fulfillment.
 
 The [GPT-5.6 optimization note](gpt-5.6-harness-optimization.md) preserves dated reasoning and service-tier benchmarks; the [GPT-6 Astra readiness note](gpt-6-astra-harness-readiness.md) preserves its historical approvals and comparison evidence. Neither establishes comparative performance for these GPT-6 Sol/Luna routes.
