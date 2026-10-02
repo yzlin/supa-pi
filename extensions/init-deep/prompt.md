@@ -33,6 +33,7 @@ During discovery, inspect the target with the strongest low-cost signals first:
 - directories with high file concentration
 
 Use broad exploration only when needed:
+- for countable scoring signals (files and child directories per directory up to max depth, existing `AGENTS.md`, local config files), prefer one `codemode` script when available that runs the `find`/`ls`/`bash` calls and returns a compact per-directory table instead of raw listings
 - if the target spans multiple unfamiliar modules, launch explorer agents in parallel
 - if direct file inspection is enough, stay local
 

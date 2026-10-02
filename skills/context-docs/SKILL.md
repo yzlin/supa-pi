@@ -129,6 +129,44 @@ Extract only source-grounded durable context: product purpose and constraints; d
 
 Exclude secrets, credentials, raw private data, pi-task state, generic advice, transient progress, temporary debugging output without a durable lesson, unverified memory, and unnecessarily stale-prone code snippets. Report contradictions before editing. With `--dry-run`, report findings and proposed edits only; otherwise make the smallest edits that preserve existing structure.
 
+### Doc-reference drift with codemode
+
+When the `codemode` tool is available, inventory review docs and check backticked repo-relative path references in one script to save main-context space. Set `root` and `scope` from the resolved command input. This scans root context files and ADRs; `--scope all` also includes context notes and READMEs referenced by the context map. Only file paths, line counts, and missing references reach the main thread.
+
+```js
+// @options: {"max_output_tokens": 2000}
+const root = "<resolved target root>", scope = "current";
+const q = (s) => "'" + s.replaceAll("'", "'\\''") + "'";
+const bash = async (command) => {
+  const r = await tools.bash({ reasoning: "context-review doc-reference drift", command: `cd ${q(root)} && ${command}` });
+  if (r.exit_code !== 0 || r.truncated) throw new Error("Incomplete doc-reference scan; narrow the batch or read full output");
+  return r.output;
+};
+const listed = await bash(`for p in CONTEXT.md CONTEXT-MAP.md AGENTS.md docs/adr/*.md ${scope === "all" ? "docs/context/*.md" : ""}; do if test -f "$p"; then printf '%s\\n' "$p"; fi; done`);
+const paths = listed.trim() ? listed.trim().split("\n") : [], docs = [], refs = [];
+for (const path of paths) {
+  const read = await bash(`if test -f ${q(path)}; then printf '1'; cat -- ${q(path)}; fi`);
+  if (!read) continue;
+  const text = read.slice(1);
+  docs.push({ path, lines: text ? text.split(/\r?\n/).length - Number(text.endsWith("\n")) : 0 });
+  for (const ref of new Set([...text.matchAll(/`([^`\r\n]+)`/g)].map((m) => m[1]))) {
+    if (!/^[\w.-]+(?:\/[\w.-]+)*\/?$/.test(ref) || ref.split("/").includes("..")) continue;
+    if (!ref.includes("/") && !/\.[a-zA-Z0-9]+$/.test(ref)) continue;
+    refs.push({ doc: path, ref });
+    if (scope === "all" && path === "CONTEXT-MAP.md" && /(^|\/)README\.md$/i.test(ref) && !paths.includes(ref)) paths.push(ref);
+  }
+}
+const unique = [...new Set(refs.map(({ ref }) => ref))];
+const absent = await bash(`for p in ${unique.map(q).join(" ")}; do if ! test -e "$p"; then printf '%s\\n' "$p"; fi; done`);
+const missing = new Set(absent.trim() ? absent.trim().split("\n") : []);
+return { docs, missing: refs.filter(({ ref }) => missing.has(ref)) };
+```
+
+- The script only inventories and checks existence; it does not decide contradictions or durable content. It conservatively accepts plain paths, skipping URLs, globs, placeholders such as `<...>`, and shell commands.
+- Read full doc contents in the main thread only when extraction needs them.
+- Respect `--dry-run`; this script is read-only. Missing references are findings to report, not auto-fix.
+- Nested calls use the tool's declared arguments and the same validation and hooks as direct calls. Do not treat failed or truncated reads as a complete scan.
+
 ## Output
 
 Summarize files read, files changed, decisions captured, open questions, and validation performed.

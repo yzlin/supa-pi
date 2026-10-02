@@ -150,7 +150,11 @@ export function rewriteCommandWithRtk(
   );
   const result = runner(binaryPath, ["rewrite", command], timeoutMs);
 
-  if (result.error || result.exitCode !== 0) {
+  if (!result.error && (result.exitCode === 1 || result.exitCode === 2)) {
+    return { rewritten: command, changed: false };
+  }
+
+  if (result.error || (result.exitCode !== 0 && result.exitCode !== 3)) {
     throw new Error(
       formatCommandFailure(result, timeoutMs, "RTK rewrite failed"),
     );

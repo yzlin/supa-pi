@@ -24,7 +24,7 @@ Use a review summary or raw review report to coordinate review fixes.
 - If a finding is invalid, already fixed, or not possible right now, briefly explain why and continue.
 - Treat Human Reviewer Callouts as informational only unless there is a separate explicit finding.
 - Follow fail-fast error handling: do not add silent local recovery unless this scope is a real boundary that can translate the failure correctly.
-- Run relevant checks for touched code where practical.
+- Run relevant checks for touched code where practical. When the `codemode` tool is available, use the [execute verification recipe](../execute/SKILL.md#verification-with-codemode) for these checks.
 - Return the existing executor JSON schema unchanged.
 
 ## Main-session final response

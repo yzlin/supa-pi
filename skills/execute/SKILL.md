@@ -95,6 +95,34 @@ return { plan: args.canonicalPlan, results };
 - Stop and ask the user for destructive actions, external/production effects, credentials, ambiguous ownership, material behavior choices, or a blocker that remains after the bounded repair budget. Do not waive a safety or integrity concern because a worker report looks plausible.
 - Finish only when every task is `completed` or has a terminal blocker recorded in metadata while retaining `pending` or `in_progress` status. Report completed work, unresolved tasks, blockers, files touched, validation actually run, and remaining follow-ups.
 
+### Verification with codemode
+
+When the `codemode` tool is available, run the narrowest targeted test command(s) and the repository's check command in one script, returning compact results:
+
+```js
+// @options: {"max_output_tokens": 2000}
+const commands = ["<narrowest targeted test command>", "<repository check command>"];
+const results = [];
+for (const command of commands) {
+  const r = await tools.bash({
+    reasoning: "execute verification",
+    command: `log=$(mktemp -t verify.XXXXXX); ( ${command} ) >"$log" 2>&1; code=$?; echo "LOG=$log"; tail -n 40 "$log"; exit $code`,
+  });
+  if (r.exit_code === 0) {
+    results.push({ command, exit: 0 });
+  } else {
+    const [header, ...tail] = r.output.split("\n");
+    results.push({ command, exit: r.exit_code, log: header.replace(/^LOG=/, ""), tail: tail.join("\n").trimEnd() });
+  }
+}
+return results;
+```
+
+- Run sequentially as shown when commands share state; use `Promise.all` only for commands that do not contend for shared state.
+- A passing script result is verification evidence (command + exit), but the main session still inspects claimed files and applicable diagnostics.
+- On failure, `read` the returned log path with a `reasoning` argument for more context instead of rerunning blindly.
+- Nested calls use the tools' declared arguments and the same validation and hooks as direct calls. The script runs commands; it does not judge completion or change the repair budget.
+
 ## Worker output
 
 The executor submits this object through upstream `StructuredOutput`:

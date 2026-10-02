@@ -1,8 +1,13 @@
 import { describe, expect, it } from "bun:test";
 
+import type { ToolResultEvent } from "@earendil-works/pi-coding-agent";
+
 import { DEFAULT_RTK_CONFIG } from "./config";
 import { createRtkMetricsStore } from "./metrics";
-import { createRtkToolResultHandler } from "./output-compaction";
+import {
+  createRtkToolExecutionStartHandler,
+  createRtkToolResultHandler,
+} from "./output-compaction";
 import type { RtkConfig, RtkRuntime } from "./types";
 
 function createRuntime(config?: RtkConfig): RtkRuntime {
@@ -75,6 +80,91 @@ describe("rtk output compaction", () => {
       },
     });
   });
+
+  it("leaves long nested bash output unchanged but still compacts direct output", async () => {
+    const runtime = createRuntime();
+    const handler = createRtkToolResultHandler(runtime);
+    const text = "x".repeat(20_000);
+    const event: ToolResultEvent = {
+      type: "tool_result",
+      toolCallId: "parent/1",
+      parentToolCallId: "parent",
+      toolName: "bash",
+      input: { command: "cat long.txt" },
+      content: [{ type: "text", text }],
+      details: undefined,
+      isError: false,
+    };
+    runtime.metrics.startCommand(event.toolCallId, "bash", "cat long.txt");
+
+    expect(await handler(event)).toBeUndefined();
+    expect(event.content).toEqual([{ type: "text", text }]);
+    expect(runtime.metrics.snapshot()).toMatchObject({
+      totalOriginalChars: 0,
+      totalFinalChars: 0,
+      totalSavedChars: 0,
+      toolSavingsByName: { bash: { calls: 0 } },
+      summary: {
+        totalCommands: 1,
+        totalInputTokens: 0,
+        totalOutputTokens: 0,
+        totalSavedTokens: 0,
+      },
+    });
+    runtime.metrics.completeCommand(event.toolCallId);
+    expect(runtime.metrics.snapshot().summary.totalCommands).toBe(1);
+
+    const result = await handler({
+      ...event,
+      toolCallId: "direct",
+      parentToolCallId: undefined,
+    });
+    expect(result?.content).toEqual([
+      { type: "text", text: `…${"x".repeat(11_999)}` },
+    ]);
+    expect(runtime.metrics.snapshot().toolSavingsByName.bash).toEqual({
+      calls: 1,
+      originalChars: 20_000,
+      finalChars: 12_000,
+    });
+  });
+
+  it.each(["grep", "read"] as const)(
+    "leaves nested %s output unchanged and completes execution-start metrics",
+    async (toolName) => {
+      const runtime = createRuntime();
+      const event: ToolResultEvent = {
+        type: "tool_result",
+        toolCallId: "parent/1",
+        parentToolCallId: "parent",
+        toolName,
+        input: toolName === "read" ? { path: "long.txt" } : { pattern: "x" },
+        content: [{ type: "text", text: "x".repeat(20_000) }],
+        details: undefined,
+        isError: false,
+      };
+      await createRtkToolExecutionStartHandler(runtime)({
+        type: "tool_execution_start",
+        toolCallId: event.toolCallId,
+        parentToolCallId: event.parentToolCallId,
+        toolName,
+        args: event.input,
+      });
+
+      expect(await createRtkToolResultHandler(runtime)(event)).toBeUndefined();
+      expect(
+        runtime.metrics.snapshot().toolSavingsByName[toolName]?.calls,
+      ).toBe(0);
+      expect(runtime.metrics.snapshot().summary).toMatchObject({
+        totalCommands: 1,
+        totalInputTokens: 0,
+        totalOutputTokens: 0,
+        totalSavedTokens: 0,
+      });
+      runtime.metrics.completeCommand(event.toolCallId);
+      expect(runtime.metrics.snapshot().summary.totalCommands).toBe(1);
+    },
+  );
 
   it("compacts read output from the head", async () => {
     const runtime = createRuntime({

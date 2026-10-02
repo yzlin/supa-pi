@@ -63,7 +63,7 @@ Candidate | Evidence for/against | Prediction | Discriminating probe
 
 Use progressive minimisation only when it improves the evidence. At each step retain the last known reproducer and compare the reduced case with it. A smaller example that changes the symptom, drops the relevant boundary, or merely becomes convenient is not progress.
 
-Do not delegate reasoning. A subagent request must be bounded mechanical collection such as “run these commands and return redacted outputs keyed by run ID.” Reconcile that evidence and update candidates in the main thread.
+Do not delegate reasoning. A subagent request must be bounded mechanical collection such as “run these commands and return redacted outputs keyed by run ID.” Reconcile that evidence and update candidates in the main thread. For fixed-count runs, prefer a `codemode` script when available; see [references/reproduction-loops.md](references/reproduction-loops.md#fixed-count-runs-with-codemode).
 
 ## 3. Probe plan, authorization, and privacy
 

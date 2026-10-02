@@ -34,6 +34,28 @@ During discovery, raise a low reproduction rate with fixed-count repetition, par
 
 **Discovery amplification is not proof.** After the bug is reproducible enough to investigate, return to predeclared fixed-count baseline, intervention, and reversal or matched-control runs under equivalent conditions. Never stop early after a favorable run.
 
+## Fixed-count runs with codemode
+
+When the `codemode` tool is available, run a predeclared fixed-count batch in one script instead of N separate tool calls or a subagent. Only counts and one redacted failure excerpt reach the main thread. The script is mechanical: it runs the declared loop and counts verdicts; it never decides proof.
+
+```js
+// @options: {"max_output_tokens": 2000}
+const N = 20; // predeclared; never stop early
+const command = "<already-run loop command>";
+const runs = [];
+for (let i = 0; i < N; i++) {
+  const r = await tools.bash({ reasoning: "diagnose fixed-count run", command });
+  runs.push({ i, exit: r.exit_code, tail: r.exit_code === 0 ? undefined : r.output.slice(-400) });
+}
+const fails = runs.filter((r) => r.exit !== 0);
+return { n: N, pass: N - fails.length, fail: fails.length, firstFail: fails[0] };
+```
+
+- The loop's own exit status must encode the exact anchored verdict; otherwise parse the specific assertion instead of trusting the exit code.
+- Run baseline, intervention, and control batches sequentially with the same `N` and conditions. Use `Promise.all` only for discovery amplification, and record that as a changed condition.
+- Nested calls take the tool's declared arguments (check `describeTool("bash")`) and go through the same tool hooks as direct calls.
+- Excerpts must already be allowlisted and redacted by the loop; do not return raw output.
+
 ## Human-in-the-loop fallback
 
 Copy `scripts/hitl-loop.template.sh` into a temporary diagnostic location and edit only the bounded instructions. Move the interaction across agent/user turns: ask the user to perform the unavoidable action and return only the requested observation, with authentication remaining entirely user-owned. Validate and redact that reply. Choose a unique Diagnose run ID containing only letters, digits, and hyphens. Resolve the current numeric user ID, create `/tmp/supa-pi-diagnose-<uid>-<run-id>` with mode `700`, and provide its concrete `/tmp/supa-pi-diagnose-<uid>-<run-id>/observation.txt` path literally to Pi's `write` tool. Then invoke the script with the same literal `--run-id` value. Do not pass `$(id -u)`, `${TMPDIR:-/tmp}`, a placeholder, or any other shell expression to `write`. Never accept a caller-selected observation path or interpolate an observation into a Bash command. The script validates the private directory and derived file, then removes them after consuming the observation. Do not run the script while waiting for terminal input; Pi's bash executor has no interactive stdin.

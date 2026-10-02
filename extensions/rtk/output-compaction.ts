@@ -145,6 +145,11 @@ export function createRtkToolResultHandler(
   runtime: RtkRuntime,
 ): ExtensionHandler<ToolResultEvent, ToolResultEventResult> {
   return (event) => {
+    if (event.parentToolCallId !== undefined) {
+      runtime.metrics.completeCommand(event.toolCallId);
+      return;
+    }
+
     const config = runtime.getConfig();
     const toolName = getCompactionTarget(event, config);
     if (!toolName) {

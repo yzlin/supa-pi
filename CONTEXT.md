@@ -161,6 +161,23 @@ Approved by `/grill-me` on 2026-09-30; implemented and registered as an active E
 - Per-file ownership in `~/.pi/agent/agents/`: overridden agents become generated files with a marker comment; unoverridden agents stay setup-style per-file repo symlinks; user-authored files are never touched. Default profile restores symlinks; generated files for deleted repo agents are removed. `setup.sh` is unchanged. Never write into the repo: a directory-level symlink to repo `agents/` is automatically converted to a real directory of per-file symlinks on the first render that needs it.
 - Render on `session_start`, on switch, and in a pre-spawn `tool_call` hook for `Agent`/`SubagentWorkflow` with a cheap freshness check.
 
+## Codemode: implemented recipes; measured pilot
+
+Approved by `/grill-me` on 2026-10-02. Optional recipes exist for `/diagnose`, `/init-deep`, `/context-review`, and `/execute` verification, with `/review-fix` linking to the verification recipe. RTK regression tests and headless probes verify the runtime changes below. A small benchmark measured main-session token usage; it does not establish general savings or equivalent review quality.
+
+- **Codemode recipe** — an optional, command-scoped script pattern that runs mechanical tool calls in one `codemode` call and returns compact results to the main context. _Avoid_: codemode subagent.
+- Codemode is an orchestration layer, not an agent runtime: scripts cannot run chat models or nest `codemode`. Subagents remain on `@tintinweb/pi-subagents`.
+- Goal: main-context savings per command run. Recipes live in the command's prompt or skill, phrased "when `codemode` is available"; no global codemode rule.
+- Nested calls use the same argument validation and `tool_call`/`tool_result` hooks as direct calls, with `parentToolCallId` set (verified on Pi 1.0.0 by source read and a headless probe).
+- RTK accepts `rtk rewrite` exits 0 and 3 as rewrite; exits 1 and 2 pass through unchanged. RTK skips output compaction and savings recording for nested tool calls (`parentToolCallId`), completing pending metrics while retaining command rewriting. This preserves data for scripts to process; direct tool results retain their existing compaction.
+- `/context-review` checks conservative plain backticked path references and returns a compact doc inventory and missing references. Semantic review still requires reading relevant docs; the inventory does not replace that review.
+- Verification recipe output: command and exit code on pass; on failure add the last ~40 lines and a `mktemp` log path holding the full output.
+- Promote a recipe to a repo-owned tool only when real runs show an identical script; otherwise keep it as a recipe.
+- Measurement: 12 completed `pi --mode json --no-session` runs on `openai-codex/gpt-6.1-sol` with high thinking, three runs per arm per case; baseline used `-xt codemode`. Mean main-session final-context tokens were 130,109 → 125,012 for context-review (−3.9%) and 43,432 → 44,091 for verification (+1.5%). Mean cumulative input across model turns was 3,602,974 → 2,967,769 (−17.6%) and 210,178 → 143,453 (−31.7%), respectively. Verification command-result text fell from 3,264 to 118 characters; all six verification runs passed 1,371 tests and `bun run check`.
+- Benchmark limits: final context is the last provider-reported input plus cache-read/write tokens; cumulative input sums those counts across turns, not unique tokens or billed cost. Removing codemode changes the tool-description surface, so this measures codemode enabled versus disabled, not recipe-only effects. Context-review used a direct skill prompt because the slash-command entrypoint produced no assistant turns headlessly. Review paths and delegation varied; worker costs and equal finding quality were not measured. Two recipe-arm reviews recovered from script errors (a missing README and exceeding the per-value `store()` limit). With three runs per arm, these results remain indicative.
+- Earlier Claude quota-interrupted context-review runs are excluded. The benchmark stayed read-only: the repository diff hash remained unchanged across all 12 current-model runs.
+- Deferred: `/pr`, a global codemode rule, `codemode.mode: "only"`, and `pi -p` fan-out from scripts.
+
 ## Open questions
 
 - Model profiles (deferred): stale Generated agent overrides after disabling the Extension (documented; run Default profile first to clean up); status rendering when manual `/model` drifts from the active profile.
