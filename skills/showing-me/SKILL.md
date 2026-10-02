@@ -12,6 +12,18 @@ Make the current topic easy to scan. Skip the preamble and keep prose brief. Pic
 
 Do not force a visual when one direct sentence is clearer.
 
+## Explainer Ladder
+
+If the first argument is `text`, `diagram`, or `html`, render at that Explainer rung.
+Otherwise, keep the existing smallest-useful choice.
+If no topic follows, re-render the latest result in this session.
+
+- `text`: Plain report prose per the `plain-report` skill; the same rung as `/wait-what`.
+- `diagram`: Use the existing views table for trees, pseudocode, focused diffs, or Mermaid via `architecture-diagrams`; do not choose HTML at this rung.
+- `html`: Use the `glimpse` skill to create one discardable Glimpse explainer under `$TMPDIR/supa-pi-show-me/`, never in the repository.
+
+Video is not a rung; it is deferred.
+
 ## Choose the View
 
 | Need | Default view |
@@ -36,7 +48,12 @@ Do not force a visual when one direct sentence is clearer.
 
 ## Rich Visuals
 
-Use the `glimpse` skill when the topic needs a visual UI, layout comparison, infographic, or concept too dense for text or Mermaid. Create one focused artifact with real labels and data, then show it through Glimpse. Do not create HTML for a simple code or control-flow explanation.
+Use the `glimpse` skill when the topic needs a visual UI, layout comparison, infographic, or concept too dense for text or Mermaid.
+Create one focused artifact with real labels and data, then show it through Glimpse.
+Write HTML explainers under `$TMPDIR/supa-pi-show-me/`, never in the repository.
+
+Do not create HTML for a simple code or control-flow explanation.
+An explicit `html` request overrides this default.
 
 ## Stop Condition
 

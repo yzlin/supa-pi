@@ -36,6 +36,9 @@ The repository is optimized for local workflow quality and maintainable agent be
 - **Model profile** — a named, machine-local set of main-session and agent model/thinking choices that `/profile` applies in one switch. _Avoid_: mode, loadout, preset.
 - **Default profile** — the reserved Model profile meaning repo `agents/*.md` frontmatter verbatim, with main unchanged; it cannot be defined in profile config. _Avoid_: reset profile, base profile.
 - **Generated agent override** — a live agent file rendered from a repo agent plus the active Model profile, replacing only `model`/`thinking`. _Avoid_: agent patch, frontmatter rewrite.
+- **Final report** — the reply that closes multi-step work: edits, investigations, delegated work, or review, diagnose, Wayfinder, and grill summaries. One-line answers and lookups are not Final reports. _Avoid_: summary turn, any long reply.
+- **Plain report** — the output style for Final reports and reviewer `why`/`change` text: roughly 80% of ASD-STE100 Simplified Technical English, using `CONTEXT.md` vocabulary. _Avoid_: STE mode, caveman.
+- **Explainer rung** — one output format on the `/show-me` ladder: text, diagram, or HTML. Video is a deferred rung. _Avoid_: view mode.
 
 ## Product constraints
 
@@ -47,6 +50,16 @@ The repository is optimized for local workflow quality and maintainable agent be
 - Root project license is MIT. Copied or adapted upstream materials must carry source and license notices in durable docs or README entries.
 - Domain modeling is skill composition, not a command or production runtime registration; grilling invokes it only when explicit domain signals arise.
 - Linting and formatting use oxlint (type-aware) and oxfmt extending Ultracite presets, tuned to prior Biome intent (Biome-equivalent strictness, Biome-style output, grouped imports) over all repo TypeScript and JSON; `bun run check` is the gate. Vendored upstream skill examples stay verbatim.
+
+## Oversight output: implemented product direction
+
+Implemented as prompt and skill text. Contract tests verify the wiring; they do not prove model adherence. The idea comes from Andrej Karpathy's 2026-10-02 post on making LLM output easier to understand. The goal is faster oversight of agent output.
+
+- Style is split by surface. Chat replies and progress updates stay telegraph. Final reports use Plain report style. Caveman mode, when on, overrides both.
+- The `plain-report` skill owns the Plain report rules. The core prompt `<output>`, `AGENTS.global.md`, reviewer, synthesizer, and verifier agents, `/wait-what`, and Wayfinder and grilling summaries reference it. The skill paraphrases a subset of ASD-STE100; it does not copy the spec text or dictionary.
+- `/review` takes part only through reviewer-written `why`/`change` text. The renderer and report contract stay unchanged.
+- `/show-me [text|diagram|html] [topic]` re-renders the last result at the chosen Explainer rung. With no argument, it picks the smallest useful rung. HTML explainers are discardable: they are written to `$TMPDIR/supa-pi-show-me/`, shown through Glimpse, and never stored in the repo.
+- Verification is contract tests that each surface references `plain-report`, plus a manual before/after comparison of 3–5 real reports. Model adherence is not tested automatically.
 
 ## Upstream-native execution
 
@@ -153,6 +166,7 @@ Approved by `/grill-me` on 2026-09-30; implemented and registered as an active E
 - Model profiles (deferred): stale Generated agent overrides after disabling the Extension (documented; run Default profile first to clean up); status rendering when manual `/model` drifts from the active profile.
 - Live installation and end-to-end Wayfinder UX remain unverified. Integrated tests, loader checks, and static scenarios verify repository behavior and resources, but static scenarios do not prove model adherence.
 - PR workflow (deferred): feasibility of cheap base-branch Before evidence, screenshots, and fork→upstream PR support.
+- Oversight output: it is not verified whether reviewer subagents receive the core prompt; agent files therefore reference `plain-report` directly. Deferred: the video Explainer rung (Manim, ffmpeg, TTS), an HTML review-report view, and a readability eval.
 
 ## Context map
 

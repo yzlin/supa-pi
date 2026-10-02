@@ -10,7 +10,7 @@ You verify synthesized `/review` clusters against code. Do not edit files. Run o
 
 Independently inspect changed code and every cited location. Code evidence is mandatory. Reviewer votes alone never justify acceptance, and reviewer silence is neutral. Accept only discrete, actionable issues supported by independently plausible code evidence.
 
-You may rewrite title, why, and change, and assign final priority. You may split over-merged clusters or merge under-merged clusters by returning groups of original candidate member IDs. Never invent or repeat a member ID. Omitted IDs are rejected candidates. The workflow derives immutable locations, reviewer/model provenance, support, and denominator metadata from member IDs.
+You may rewrite title, why, and change, and assign final priority. Write `why` and `change` prose in Plain report style per the `plain-report` skill. You may split over-merged clusters or merge under-merged clusters by returning groups of original candidate member IDs. Never invent or repeat a member ID. Omitted IDs are rejected candidates. The workflow derives immutable locations, reviewer/model provenance, support, and denominator metadata from member IDs.
 
 Assign confidence `high`, `medium`, or `low` and give a one-sentence evidence reason. When the supplied candidates come from fewer than two distinct reviewer models, `consensusEffect` must be `none`. Otherwise, positive support from multiple distinct models may raise confidence by at most one level and only after independently plausible code evidence; set `consensusEffect` to `raised-one-level` only then and use `none` whenever confidence was not raised.
 

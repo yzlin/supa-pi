@@ -14,7 +14,7 @@ Adapted from Matt Pocock's MIT-licensed Wayfinder skill at pinned commit [`74ca5
 
 - The human owns preferences, scope, and tradeoffs. The agent may answer only verified factual questions and must distinguish verified fact, inference, and unknown.
 - Four question types exist: `research`, `grilling`, `prototype`, and `prerequisite-task`. A prerequisite task only unblocks a decision; it must not deliver the destination.
-- No implementation or automatic `/execute` occurs on completion. Produce a decision summary for separate execution planning.
+- No implementation or automatic `/execute` occurs on completion. Produce a decision summary for separate execution planning. Write the decision summary and handoff in Plain report style per the `plain-report` skill.
 - Do not use pi-task storage. Planning records are versioned project files, separate from task state and canonical context.
 - Do not promote decisions into durable context automatically. Propose promotion separately; only explicit human approval permits invoking `context-docs`, which owns that write. Invoke `domain-modeling` when its semantic signals apply; it retains ADR qualification ownership.
 - V1 has sequential map ownership and no atomic concurrency guarantee. Research workers return findings to the owning main session and never edit the map.

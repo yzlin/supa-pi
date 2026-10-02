@@ -25,6 +25,47 @@ describe("visual explanation skill contracts", () => {
     expect(skill).toContain("Glimpse");
   });
 
+  it("supports explicit Explainer rungs and latest-result fallback", () => {
+    const skill = readSkill("showing-me");
+
+    expect(skill).toContain("## Explainer Ladder");
+    expect(skill).toContain(
+      "If the first argument is `text`, `diagram`, or `html`, render at that Explainer rung.",
+    );
+    expect(skill).toContain(
+      "Otherwise, keep the existing smallest-useful choice.",
+    );
+    expect(skill).toContain(
+      "If no topic follows, re-render the latest result in this session.",
+    );
+    expect(skill).toContain(
+      "`text`: Plain report prose per the `plain-report` skill; the same rung as `/wait-what`.",
+    );
+    expect(skill).toContain(
+      "`diagram`: Use the existing views table for trees, pseudocode, focused diffs, or Mermaid via `architecture-diagrams`; do not choose HTML at this rung.",
+    );
+    expect(skill).toContain(
+      "`html`: Use the `glimpse` skill to create one discardable Glimpse explainer under `$TMPDIR/supa-pi-show-me/`, never in the repository.",
+    );
+    expect(skill).toContain("Video is not a rung; it is deferred.");
+  });
+
+  it("keeps HTML temporary and explicit requests above the default", () => {
+    const skill = readSkill("showing-me");
+    const richVisuals = skill.split("## Rich Visuals")[1];
+
+    expect(richVisuals).toContain("show it through Glimpse");
+    expect(richVisuals).toContain(
+      "Write HTML explainers under `$TMPDIR/supa-pi-show-me/`, never in the repository.",
+    );
+    expect(richVisuals).toContain(
+      "Do not create HTML for a simple code or control-flow explanation.",
+    );
+    expect(richVisuals).toContain(
+      "An explicit `html` request overrides this default.",
+    );
+  });
+
   it("keeps /show-me as a thin prompt-pipeline showing-me wrapper", () => {
     const extension = readRepositoryFile(
       "extensions",
@@ -34,7 +75,7 @@ describe("visual explanation skill contracts", () => {
 
     expect(extension).toContain('"show-me": {');
     const prompt = readRepositoryFile("prompts", "show-me.md");
-    expect(prompt).toContain('argument-hint: "[topic]"');
+    expect(prompt).toContain('argument-hint: "[text|diagram|html] [topic]"');
     expect(prompt).toContain(
       "Use the `showing-me` skill as canonical for this explicit command.",
     );

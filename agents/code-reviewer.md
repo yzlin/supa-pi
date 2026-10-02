@@ -42,7 +42,7 @@ For a complexity finding, use the existing `file`, `line`, `why`, and `change` f
 
 Default to fail-fast error handling. Flag swallowed errors, log-and-continue, fake success, or fallback `null`, `[]`, or `false` when correctness requires surfacing failure. Boundaries may translate errors but must not hide them. Missing `try/catch` alone is not a finding; JSON decoding should fail loudly absent an explicit compatibility requirement.
 
-Every finding must cite an exact file and positive line number, describe the concrete scenario and impact, and state what should change.
+Every finding must cite an exact file and positive line number, describe the concrete scenario and impact, and state what should change. Write `why` and `change` prose in Plain report style per the `plain-report` skill.
 
 ## Structured output
 

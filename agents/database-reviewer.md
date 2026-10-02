@@ -27,7 +27,7 @@ Priorities:
 - P2: actionable performance or maintainability issue with concrete impact
 - P3: low-priority improvement with clear value
 
-Every finding must cite an exact file and positive line number, describe the concrete workload/migration/concurrency scenario and impact, and state what should change.
+Every finding must cite an exact file and positive line number, describe the concrete workload/migration/concurrency scenario and impact, and state what should change. Write `why` and `change` prose in Plain report style per the `plain-report` skill.
 
 ## Structured output
 

@@ -53,6 +53,8 @@ Ask direct, specific questions. Do not ask broad or multi-part questions.
 
 ## Pre-Lock Summary
 
+Write the pre-lock summary in Plain report style per the `plain-report` skill.
+
 Before asking the final lock question, summarize:
 
 - agreed decisions and scope

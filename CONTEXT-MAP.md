@@ -36,8 +36,10 @@
 - `extensions/diagnose/README.md` and `skills/diagnose/SKILL.md` — read before changing `/diagnose`, its evidence-first diagnosis contract, temporary probe consent, or the explicit post-Proven fix gate.
 - `extensions/code-improvement/IMPROVE-CODEBASE-ARCHITECTURE.md` — read before changing `/improve-codebase-architecture` architecture review behavior.
 - `skills/context-docs/SKILL.md` and `extensions/context-docs/README.md` — read before changing `/context-setup`, `/context-note`, `/adr`, or `/context-review`; the skill canonically owns shared and command-specific behavior while the extension supplies the runtime envelope.
+- `skills/plain-report/SKILL.md` — read before changing Final report style, reviewer `why`/`change` prose rules, the telegraph-versus-Plain-report split, or surfaces that reference `plain-report`.
 - `skills/grilling/SKILL.md` — read before changing natural-language adversarial interviews or the shared grilling contract.
 - `skills/grill-me/SKILL.md`, `prompts/grill-me.md`, and `extensions/prompt-commands/index.ts` — read before changing explicit `/grill-me <plan>` behavior. The prompt entrypoint stays queueable and retains a functional no-Extension fallback while the active Extension preserves its raw multiline argument before normal expansion; the command skill permits only lock-gated, qualifying changes to `CONTEXT.md`, `CONTEXT-MAP.md`, and ADRs.
+- `skills/showing-me/SKILL.md` and `prompts/show-me.md` — read before changing `/show-me`, its Explainer ladder, or where discardable HTML explainers are written.
 - `skills/pr/SKILL.md` and `prompts/pr.md` — read before changing `/pr`, PR-body format, PR submission gates, or `rules/common/git-workflow.md` PR guidance.
 - `extensions/execute/README.md` — read before changing `/execute`, Execution Brief reuse/synthesis, or execute orchestration behavior.
 - `extensions/goal/README.md` — read before changing `/goal`, goal task mode, goal checkpoint behavior, goal status rendering, or Goal Extension registration.

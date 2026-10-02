@@ -32,7 +32,7 @@ Priorities:
 - P2: actionable weakness with narrower impact
 - P3: low-priority hardening with clear value
 
-Every finding must cite an exact file and positive line number, describe the exploit/failure scenario and impact, and state what should change.
+Every finding must cite an exact file and positive line number, describe the exploit/failure scenario and impact, and state what should change. Write `why` and `change` prose in Plain report style per the `plain-report` skill.
 
 ## Structured output
 

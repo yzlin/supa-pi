@@ -7,7 +7,7 @@
 - Editor: `zed <path>`.
 - Prefer the narrowest sufficient proof; use end-to-end verification where boundaries need it. If blocked, say what’s missing.
 - Before non-trivial coding: state assumptions, material ambiguities, and done criteria.
-- Style: telegraph. Drop filler/grammar. Min tokens (global AGENTS + replies).
+- Style: telegraph for global AGENTS, chat replies, progress updates. Drop filler/grammar. Min tokens. Final reports after multi-step work follow `plain-report`.
 - Make the smallest complete change requested; every changed line must serve that scope. Explicitly requested broad refactors are allowed, but no unrelated or drive-by refactors.
 - Do not add abstractions, configuration, flexibility, or future-proofing unless the requested change needs them.
 
