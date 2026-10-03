@@ -130,6 +130,10 @@ Build and debug safeguards now live in the existing `skills/tdd-workflow/SKILL.m
 
 Active README, rule, skill, eval corpus, and eval-runner references now point to the retained owners. The `build-fix` eval uses `skills/tdd-workflow/SKILL.md`; `docs-update` uses `skills/context-docs/SKILL.md`, and supported prompt-path lists include the context-docs skill. Historical benchmark/eval artifacts and records for the retired routes remain unchanged; no paid eval was run.
 
+### Superseding approved architect and planner retirement
+
+The historical inventory above records the initial audit's `KEEP` decision for `architect` and `planner`; that decision remains historical. A later user-approved retirement supersedes it: both agent files were removed using the repository trash guardrail. No runtime code dispatched either role; the only active route was prose in `skills/search-first/SKILL.md`. The main session now owns planning and design decisions, with `skills/wayfinder/SKILL.md` and `skills/grilling/SKILL.md` covering larger decisions. The search-first integration sections, their contract test, the README agent list, and the `architect-design` and `implementation-plan` eval cases were removed; the `explanation` and `multi-file implementation` workloads keep other cases. Historical records above, including the search-first resolution, remain unchanged; no paid eval was run.
+
 A follow-up check for item 7 located the exact active-harness instruction in the installed `@earendil-works/pi-coding-agent@0.84.0` at `dist/core/system-prompt.js`. Its maintained source is external `earendil-works/pi`, under `packages/coding-agent`; it is outside this repository's editable scope, so item 7 remains unavailable. No external file was changed.
 
 The initial plan proposed no entire agent or skill package for removal. **REMOVE** applied to proven misplaced or repeated sections, not a deletion quota.

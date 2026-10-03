@@ -131,18 +131,6 @@ Agent({
 
 ## Integration Points
 
-### With planner agent
-The main session supplies relevant researcher findings to the planner before Phase 1 (Architecture Review):
-- Researcher findings identify available tools
-- Planner incorporates them into the implementation plan
-- Avoids "reinventing the wheel" in the plan
-
-### With architect agent
-The main session supplies relevant researcher findings to the architect for:
-- Technology stack decisions
-- Integration pattern discovery
-- Existing reference architectures
-
 ### With iterative-retrieval skill
 Combine for progressive discovery:
 - Cycle 1: Cheap capability check (repository, stdlib, native platform, installed dependency)

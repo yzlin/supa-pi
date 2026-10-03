@@ -52,9 +52,7 @@ See `package.json` for the full registration list.
 
 `agents/` ships custom subagents for common coding workflows, including:
 
-- `planner`
 - `explorer` / `Explore`
-- `architect`
 - `researcher`
 - `code-reviewer`
 - `code-simplifier`

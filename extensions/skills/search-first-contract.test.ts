@@ -21,19 +21,6 @@ describe("search-first skill contract", () => {
     expect(skill).not.toContain('subagent_type="general-purpose"');
   });
 
-  it("has the main session hand researcher findings to restricted workers", () => {
-    const skill = readSkill("search-first");
-
-    expect(skill).toContain(
-      "The main session supplies relevant researcher findings to the planner",
-    );
-    expect(skill).toContain(
-      "The main session supplies relevant researcher findings to the architect",
-    );
-    expect(skill).not.toContain("The planner should invoke researcher");
-    expect(skill).not.toContain("The architect should consult researcher");
-  });
-
   it("keeps simple repository lookups direct and outside researcher dispatch", () => {
     const skill = readSkill("search-first");
 

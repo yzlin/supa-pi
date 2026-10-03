@@ -321,14 +321,12 @@ describe("committed corpus", () => {
     );
     const expectedPaths = [
       "extensions/core-prompt/prompt.md",
-      "architect",
       "code-reviewer",
       "code-simplifier",
       "database-reviewer",
       "executor",
       "explorer",
       "performance-reviewer",
-      "planner",
       "researcher",
       "review-verifier",
       "security-reviewer",

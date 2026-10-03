@@ -478,28 +478,6 @@
       ]
     },
     {
-      "id": "architect-design",
-      "workload": "explanation",
-      "promptPath": "agents/architect.md",
-      "task": "Explain a minimal architecture change that removes the debug bypass in src/auth.ts while preserving the documented role contract. Cite repository evidence. Do not edit files.",
-      "tools": ["read", "grep", "find", "ls"],
-      "checks": [
-        {
-          "type": "outputIncludes",
-          "value": "src/auth.ts",
-          "domain": "evidence",
-          "weight": 1
-        },
-        {
-          "type": "outputMatches",
-          "pattern": "debug|bypass",
-          "flags": "i",
-          "domain": "quality",
-          "weight": 1
-        }
-      ]
-    },
-    {
       "id": "code-review",
       "workload": "code review",
       "promptPath": "agents/code-reviewer.md",
@@ -712,28 +690,6 @@
         {
           "type": "outputMatches",
           "pattern": "sort|sorting",
-          "flags": "i",
-          "domain": "quality",
-          "weight": 1
-        }
-      ]
-    },
-    {
-      "id": "implementation-plan",
-      "workload": "multi-file implementation",
-      "promptPath": "agents/planner.md",
-      "task": "Plan a minimal implementation that removes the auth debug bypass and adds regression coverage. Name exact files, ordered steps, and verification. Do not edit files.",
-      "tools": ["read", "grep", "find", "ls"],
-      "checks": [
-        {
-          "type": "outputIncludes",
-          "value": "src/auth.ts",
-          "domain": "evidence",
-          "weight": 1
-        },
-        {
-          "type": "outputMatches",
-          "pattern": "test|coverage|verify",
           "flags": "i",
           "domain": "quality",
           "weight": 1
