@@ -74,10 +74,9 @@ const BACKSLASH_RE = /\\/g;
 function withSkillOperationPromptsSuspended(
   ctx: ExtensionCommandContext,
   activity: SkillOperationActivity,
-  label: string,
 ): ExtensionCommandContext {
   const resumeAfterPrompt = (): void => {
-    activity.start(label);
+    activity.start();
   };
   const suspend = (): void => {
     activity.suspendBeforePrompt();
@@ -528,7 +527,8 @@ async function installLocalSource(
   requestedSkillName?: string,
   resolvedSource?: ResolvedSkillSource,
   materializedSource?: MaterializedRemoteSource,
-): Promise<void> {
+  options: { skipSuccessNotify?: boolean } = {},
+): Promise<ManagedSkillEntry[] | undefined> {
   const paths = createSkillsManagerPaths();
   const resolved = resolvedSource ?? parseSkillSource(source);
   let exactSourceIdentity =
@@ -560,6 +560,9 @@ async function installLocalSource(
   }
   const entries = listSkillsInSource(sourceRoot);
   if (entries.length === 0) {
+    if (options.skipSuccessNotify) {
+      throw new Error("No SKILL.md files found in source.");
+    }
     ctx.ui.notify("No SKILL.md files found in source.", "warning");
     return;
   }
@@ -650,8 +653,10 @@ async function installLocalSource(
         }`,
       );
     }
-    ctx.ui.notify(formatInstalledMessage(result.installed), "info");
-    return;
+    if (!options.skipSuccessNotify) {
+      ctx.ui.notify(formatInstalledMessage(result.installed), "info");
+    }
+    return result.installed;
   }
   const choice = requestedSkillName
     ? findListedSkillSourceDir(entries, requestedSkillName)
@@ -701,7 +706,10 @@ async function installLocalSource(
     }
     return entry;
   });
-  ctx.ui.notify(formatInstalledMessage([installed]), "info");
+  if (!options.skipSuccessNotify) {
+    ctx.ui.notify(formatInstalledMessage([installed]), "info");
+  }
+  return [installed];
 }
 
 interface PendingSkillUpdate {
@@ -991,7 +999,10 @@ async function checkGithubUpdateGroup(
 
 async function findRemoteUpdates(
   manifest = readManagedManifest(createSkillsManagerPaths().manifestPath),
-  options: { suppressFailures?: boolean } = {},
+  options: {
+    suppressFailures?: boolean;
+    onProgress?: (index: number, total: number, source: string) => void;
+  } = {},
 ): Promise<RemoteUpdateCheckResult> {
   const paths = createSkillsManagerPaths();
   const updates: PendingSkillUpdate[] = [];
@@ -1015,7 +1026,10 @@ async function findRemoteUpdates(
       otherCandidates.push(skill);
     }
   }
-  for (const skills of githubGroups.values()) {
+  const totalSources = githubGroups.size + otherCandidates.length;
+  let sourceIndex = 0;
+  for (const [source, skills] of githubGroups) {
+    options.onProgress?.(++sourceIndex, totalSources, source);
     await checkGithubUpdateGroup(
       paths,
       skills,
@@ -1029,6 +1043,7 @@ async function findRemoteUpdates(
   }
   for (const skill of otherCandidates) {
     const source = sourceText(skill);
+    options.onProgress?.(++sourceIndex, totalSources, source);
     try {
       const resolvedSource = resolvedSourceForSkill(skill);
       const sourceRoot = await materializeResolvedSkillSource(
@@ -1058,11 +1073,16 @@ async function findRemoteUpdates(
 
 async function updateManaged(
   ctx: ExtensionCommandContext,
+  activity: SkillOperationActivity,
   idArgs = "",
 ): Promise<void> {
   const paths = createSkillsManagerPaths();
   const manifest = readManagedManifest(paths.manifestPath);
-  const { updates, sourceHeals, failures } = await findRemoteUpdates(manifest);
+  const { updates, sourceHeals, failures } = await findRemoteUpdates(manifest, {
+    onProgress: (index, total, source) => {
+      activity.setLabel(`Checking sources ${index}/${total} (${source})`);
+    },
+  });
   const requestedId = idArgs.split(WHITESPACE_RE).filter(Boolean)[0];
   const matchingFailures = requestedId
     ? failures.filter(({ skill }) => skill.id === requestedId)
@@ -1110,28 +1130,56 @@ async function updateManaged(
     }
     return;
   }
-  let updatedCount = 0;
-  for (const { skill, source, resolvedSource } of targets) {
-    const ok = await confirmCleanOverwrite(ctx, skill, manifest);
-    if (ok) {
+  const updated: string[] = [];
+  const failed: string[] = [];
+  const skipped: string[] = [];
+  for (const [index, { skill, source, resolvedSource }] of targets.entries()) {
+    activity.setLabel(
+      `Updating skills ${index + 1}/${targets.length}: ${skill.name}`,
+    );
+    try {
+      const ok = await confirmCleanOverwrite(ctx, skill, manifest);
+      if (!ok) {
+        skipped.push(skill.name);
+        continue;
+      }
       const materializedSource = await materializeGithubUpdateSource(
         paths,
         skill,
         resolvedSource,
       );
-      await installLocalSource(
+      const installed = await installLocalSource(
         ctx,
         source,
         false,
         skill.id,
         resolvedSource,
         materializedSource,
+        { skipSuccessNotify: true },
       );
-      updatedCount += 1;
+      if (!installed?.length) {
+        throw new Error("No matching skill found in source.");
+      }
+      updated.push(...installed.map((entry) => entry.name));
+    } catch (error) {
+      failed.push(
+        `${skill.name} (${error instanceof Error ? error.message : String(error)})`,
+      );
     }
   }
-  refreshStatus(ctx, updates.length - updatedCount);
-  ctx.ui.notify(`Updated ${updatedCount} skill(s). ${RELOAD_MESSAGE}`, "info");
+  refreshStatus(ctx, updates.length - updated.length);
+  const updatedNames = updated.length ? `: ${updated.join(", ")}` : "";
+  const summary = [
+    `Updated ${updated.length}/${targets.length} skills${updatedNames}.`,
+  ];
+  if (failed.length > 0) {
+    summary.push(`Failed: ${failed.join(", ")}.`);
+  }
+  if (skipped.length > 0) {
+    summary.push(`Skipped: ${skipped.join(", ")}.`);
+  }
+  summary.push(RELOAD_MESSAGE);
+  ctx.ui.notify(summary.join(" "), failed.length ? "warning" : "info");
 }
 
 function trashPath(targetPath: string): void {
@@ -1301,11 +1349,7 @@ export default function skillsExtension(pi: ExtensionAPI): void {
       const operand = parsed.operand;
       const activity = createSkillOperationActivity(ctx);
       const label = skillOperationLabel(subcommand, parsed.enteredSubcommand);
-      const activityCtx = withSkillOperationPromptsSuspended(
-        ctx,
-        activity,
-        label,
-      );
+      const activityCtx = withSkillOperationPromptsSuspended(ctx, activity);
       activity.start(label);
       try {
         switch (subcommand) {
@@ -1332,7 +1376,7 @@ export default function skillsExtension(pi: ExtensionAPI): void {
             );
             break;
           case "update":
-            await updateManaged(activityCtx, operand);
+            await updateManaged(activityCtx, activity, operand);
             break;
           case "remove":
             await removeManaged(activityCtx, operand);

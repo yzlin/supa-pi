@@ -114,4 +114,61 @@ describe("skill operation activity", () => {
       "widget:",
     ]);
   });
+  it("updates a running widget and status, retains suspended labels, and ignores UI without hasUI", () => {
+    const statuses: Array<string | undefined> = [];
+    const widgets: unknown[] = [];
+    const activity = createSkillOperationActivity({
+      hasUI: true,
+      ui: {
+        setStatus(_key: string, text: string | undefined) {
+          statuses.push(text);
+        },
+        setWidget(_key: string, value: unknown) {
+          widgets.push(value);
+        },
+      },
+    } as never);
+    activity.start("Initial");
+    activity.setLabel("Updating skills 1/3: alpha");
+    expect(statuses.at(-1)).toBe("Updating skills 1/3: alpha");
+    const factory = widgets.at(-1) as (
+      tui: { requestRender(): void },
+      activeTheme: typeof theme,
+    ) => { render(width: number): string[]; dispose(): void };
+    const component = factory({ requestRender() {} }, theme);
+    try {
+      expect(component.render(100).join("\n")).toContain(
+        "Updating skills 1/3: alpha",
+      );
+    } finally {
+      component.dispose();
+    }
+    activity.suspendBeforePrompt();
+    const suspendedCallCount = statuses.length;
+    activity.setLabel("Updating skills 2/3: beta");
+    expect(statuses).toHaveLength(suspendedCallCount);
+    activity.start();
+    expect(statuses.at(-1)).toBe("Updating skills 2/3: beta");
+    activity.finishSuccess();
+    const finishedCallCount = statuses.length;
+    activity.setLabel("Finished");
+    expect(statuses).toHaveLength(finishedCallCount);
+
+    const headless = createSkillOperationActivity({
+      hasUI: false,
+      ui: {
+        setStatus() {
+          throw new Error("headless status");
+        },
+        setWidget() {
+          throw new Error("headless widget");
+        },
+      },
+    } as never);
+    headless.start("Initial");
+    headless.setLabel("Progress");
+    headless.suspendBeforePrompt();
+    headless.start();
+    headless.finishFailure();
+  });
 });

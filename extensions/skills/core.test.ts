@@ -5829,7 +5829,7 @@ describe("skills extension", () => {
       expect(notifications.some((item) => item.level === "error")).toBe(false);
       expect(notifications).toContainEqual({
         message:
-          "Updated 1 skill(s). Changes apply after /reload or next session.",
+          "Updated 1/1 skills: AI SDK. Changes apply after /reload or next session.",
         level: "info",
       });
       expect(requestedUrls).not.toContain(

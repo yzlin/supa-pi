@@ -21,7 +21,8 @@ export const SKILL_ACTIVITY_FRAMES = [
 export const SKILL_ACTIVITY_INTERVAL_MS = 80;
 
 export interface SkillOperationActivity {
-  start(label: string): void;
+  start(label?: string): void;
+  setLabel(label: string): void;
   suspendBeforePrompt(): void;
   finishSuccess(): void;
   finishFailure(): void;
@@ -75,6 +76,8 @@ function createSkillActivityWidget(label: string) {
 export function createSkillOperationActivity(
   ctx: ExtensionCommandContext,
 ): SkillOperationActivity {
+  let currentLabel = "";
+  let running = false;
   const setRunning = (label: string): void => {
     if (!ctx.hasUI) {
       return;
@@ -86,6 +89,7 @@ export function createSkillOperationActivity(
     );
   };
   const stop = (): void => {
+    running = false;
     if (!ctx.hasUI) {
       return;
     }
@@ -93,8 +97,16 @@ export function createSkillOperationActivity(
     ctx.ui.setWidget?.(SKILL_ACTIVITY_STATUS_KEY, undefined);
   };
   return {
-    start(label) {
-      setRunning(label);
+    start(label = currentLabel) {
+      currentLabel = label;
+      running = true;
+      setRunning(currentLabel);
+    },
+    setLabel(label) {
+      currentLabel = label;
+      if (running) {
+        setRunning(currentLabel);
+      }
     },
     suspendBeforePrompt() {
       stop();
