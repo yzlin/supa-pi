@@ -1,17 +1,7 @@
 import { afterEach, expect, test } from "bun:test";
-import { execFile } from "node:child_process";
-import {
-  chmod,
-  mkdir,
-  mkdtemp,
-  readFile,
-  rm,
-  symlink,
-  writeFile,
-} from "node:fs/promises";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { promisify } from "node:util";
 
 import {
   createSyntheticSourceInfo,
@@ -20,10 +10,15 @@ import {
 
 import { RouterConfigStore } from "./config";
 import { classifyRoute, prepareRoute } from "./core";
-import { CredentialStore } from "./credentials";
-import { JevClient, JevError } from "./jev";
+import {
+  type ClassifierModel,
+  type ClassifierRegistry,
+  JevClient,
+  selectJevModel,
+} from "./jev";
 
 const FORBIDDEN_CLASSIFIER_FIELDS = /tool|attachment|filePath/;
+const JEV = { provider: "typesafe", id: "jev-latest" } as ClassifierModel;
 const roots: string[] = [];
 afterEach(async () => {
   await Promise.all(
@@ -49,6 +44,18 @@ function skill(name: string, hidden = false): Skill {
     disableModelInvocation: hidden,
   };
 }
+function fakeRegistry(
+  classify: (...args: Parameters<ClassifierRegistry["classify"]>) => unknown,
+  available: { provider: string; id: string }[] = [JEV],
+): ClassifierRegistry {
+  return {
+    getAvailableOfType: async () => available,
+    classify,
+  } as unknown as ClassifierRegistry;
+}
+function stop(answers: Record<string, unknown>, usage?: unknown) {
+  return { stopReason: "stop", answers, ...(usage ? { usage } : {}) };
+}
 test("config absent disabled, strict invalid fails closed and save is owner-only", async () => {
   const r = await makeRoot();
   const store = new RouterConfigStore({ agentDir: r, env: {} });
@@ -59,87 +66,56 @@ test("config absent disabled, strict invalid fails closed and save is owner-only
   expect(store.load()).rejects.toThrow("unusable");
   expect(store.save(false)).rejects.toThrow("unusable");
 });
-test("credentials are isolated, env wins, status does not expose key, unsafe store rejected", async () => {
-  const r = await makeRoot();
-  const key = "ABCDEFGHIJKLMNOP";
-  const stored = new CredentialStore({ agentDir: r, env: {} });
-  await stored.save(key);
-  expect(JSON.stringify(await stored.status())).not.toContain(key);
-  const env = new CredentialStore({
-    agentDir: r,
-    env: { TYPESAFE_API_KEY: "QRSTUVWXYZabcdef" },
-  });
-  expect((await env.resolve()).source).toBe("environment");
-  if (process.platform !== "win32") {
-    await chmod(join(r, "skill-router", "auth.json"), 0o644);
-    expect(await stored.status()).toEqual({
-      source: "stored",
-      usable: false,
-      reason: "permissions",
-    });
-  }
-});
-test("credential FIFO and symlink destinations are rejected without outside mutation", async () => {
-  const r = await makeRoot();
-  const directory = join(r, "skill-router");
-  await mkdir(directory, { mode: 0o700 });
-  const auth = join(directory, "auth.json");
-  await promisify(execFile)("mkfifo", [auth]);
-  const store = new CredentialStore({ agentDir: r, env: {} });
-  const status = await Promise.race([
-    store.status(),
-    new Promise<never>((_, reject) =>
-      setTimeout(() => reject(new Error("FIFO blocked")), 100),
-    ),
-  ]);
-  expect(status).toMatchObject({ usable: false });
-  await rm(auth);
-  const outside = join(r, "outside.json");
-  await writeFile(outside, "untouched");
-  await symlink(outside, auth);
-  expect(store.clear()).rejects.toThrow("unsafe");
-  expect(await readFile(outside, "utf8")).toBe("untouched");
+
+test("Jev model selection prefers direct TypeSafe, then any credentialed Jev", async () => {
+  const openrouter = { provider: "openrouter", id: "typesafe/jev-1.13" };
+  const llama = { provider: "llama-cpp", id: "qwen3" };
+  const select = (available: { provider: string; id: string }[]) =>
+    selectJevModel(fakeRegistry(() => undefined, available));
+  expect(await select([llama, openrouter, JEV])).toBe(JEV);
+  expect(await select([llama, openrouter])).toBe(openrouter);
+  expect(await select([llama])).toBeUndefined();
+  expect(await select([])).toBeUndefined();
 });
 
-test("Jev schema has only bounded text/metadata and validates exact answers", async () => {
-  let body = "";
+test("Jev schema has only bounded text/metadata, uses bool questions, and does not retry", async () => {
+  let request: Parameters<ClassifierRegistry["classify"]> | undefined;
   let calls = 0;
   const client = new JevClient({
-    apiKey: "ABCDEFGHIJKLMNOP",
-    fetch: (_url, init) => {
+    model: JEV,
+    registry: fakeRegistry((...args) => {
       calls++;
-      if (typeof init?.body !== "string") {
-        throw new TypeError("Expected a JSON string request body");
-      }
-      body = init.body;
+      request = args;
       return Promise.resolve(
-        Response.json({
-          answers: { applicable_s0: { type: "noul", noul: 1 } },
-        }),
+        stop(
+          { applicable_s0: { type: "bool", probability: 1 } },
+          { input: 7, output: 1, totalTokens: 8, cost: { total: 0 } },
+        ),
       );
-    },
+    }),
   });
   const result = await client.judgeBatch(
     [{ id: "s0", name: "unknown", description: "data" }],
     { currentRequest: "request", recentText: "recent" },
   );
-  expect(result.scores.get("s0")).toBe(1);
-  expect(body).not.toMatch(FORBIDDEN_CLASSIFIER_FIELDS);
+  expect(result).toEqual({
+    scores: new Map([["s0", 1]]),
+    inputTokens: 7,
+    outputTokens: 1,
+  });
   expect(calls).toBe(1);
+  const [model, context, options] = request ?? [];
+  expect(model).toBe(JEV);
+  expect(JSON.stringify(context)).not.toMatch(FORBIDDEN_CLASSIFIER_FIELDS);
+  expect(context?.questions.applicable_s0).toMatchObject({ type: "bool" });
+  expect(options).toMatchObject({ maxRetries: 0 });
+  expect(options?.signal).toBeInstanceOf(AbortSignal);
 });
-test("deadline covers response json that ignores abort and cancellation is sanitized", async () => {
+test("deadline covers a classifier that ignores abort and cancellation is sanitized", async () => {
   const client = new JevClient({
-    apiKey: "ABCDEFGHIJKLMNOP",
+    model: JEV,
     timeoutMs: 10,
-    fetch: async () =>
-      new Response(
-        new ReadableStream({
-          start(streamController) {
-            streamController.enqueue(new TextEncoder().encode("{"));
-          },
-        }),
-        { status: 200 },
-      ),
+    registry: fakeRegistry(() => new Promise(() => undefined)),
   });
   expect(
     client.judgeBatch([{ id: "s0", name: "x", description: "x" }], {
@@ -151,94 +127,85 @@ test("deadline covers response json that ignores abort and cancellation is sanit
   controller.abort();
   let preAbortedCalls = 0;
   const preAborted = new JevClient({
-    apiKey: "ABCDEFGHIJKLMNOP",
-    fetch: () => {
+    model: JEV,
+    registry: fakeRegistry(() => {
       preAbortedCalls++;
-      return Promise.resolve(Response.json({ answers: {} }));
-    },
+      return Promise.resolve(stop({}));
+    }),
   });
-  expect(preAborted.verify(controller.signal)).rejects.toBeInstanceOf(JevError);
+  expect(
+    preAborted.judgeBatch(
+      [{ id: "s0", name: "x", description: "x" }],
+      { currentRequest: "x", recentText: "" },
+      controller.signal,
+    ),
+  ).rejects.toMatchObject({ category: "cancelled" });
   expect(preAbortedCalls).toBe(0);
 });
-test("Jev failures are categorized and malformed answer/usage matrices are rejected without retries", async () => {
+test("Jev failures are categorized and malformed answers are rejected without retries", async () => {
   const candidate = [{ id: "s0", name: "x", description: "x" }];
   const context = { currentRequest: "x", recentText: "" };
-  for (const [status, category] of [
-    [401, "authentication"],
-    [403, "authentication"],
-    [500, "http"],
-  ] as const) {
-    let calls = 0;
-    const client = new JevClient({
-      apiKey: "ABCDEFGHIJKLMNOP",
-      fetch: () => {
-        calls++;
-        return Promise.resolve(new Response("failure", { status }));
+  const outcomes: [unknown, string][] = [
+    [
+      {
+        stopReason: "error",
+        answers: {},
+        errorMessage: "secret provider detail",
       },
-    });
-    expect(client.judgeBatch(candidate, context)).rejects.toMatchObject({
-      category,
-    });
-    expect(calls).toBe(1);
-  }
-  const malformed: unknown[] = [
-    "not json",
-    { answers: {} },
-    {
-      answers: {
-        applicable_s0: { type: "noul", noul: 1 },
-        extra: { type: "noul", noul: 0 },
-      },
-    },
-    { answers: { applicable_s0: { type: "other", noul: 1 } } },
-    { answers: { applicable_s0: { type: "noul", noul: Number.NaN } } },
-    { answers: { applicable_s0: { type: "noul", noul: 2 } } },
-    {
-      answers: { applicable_s0: { type: "noul", noul: 1 } },
-      usage: { input_tokens: -1 },
-    },
+      "provider",
+    ],
+    [{ stopReason: "aborted", answers: {} }, "cancelled"],
+    [stop({}), "malformed"],
+    [
+      stop({
+        applicable_s0: { type: "bool", probability: 1 },
+        extra: { type: "bool", probability: 0 },
+      }),
+      "malformed",
+    ],
+    [stop({ applicable_s0: { type: "choice", probability: 1 } }), "malformed"],
+    [
+      stop({ applicable_s0: { type: "bool", probability: Number.NaN } }),
+      "malformed",
+    ],
+    [stop({ applicable_s0: { type: "bool", probability: 2 } }), "malformed"],
   ];
-  for (const value of malformed) {
+  for (const [result, category] of outcomes) {
     let calls = 0;
     const client = new JevClient({
-      apiKey: "ABCDEFGHIJKLMNOP",
-      fetch: () => {
+      model: JEV,
+      registry: fakeRegistry(() => {
         calls++;
-        return Promise.resolve(
-          value === "not json"
-            ? new Response("{", { status: 200 })
-            : Response.json(value),
-        );
-      },
+        return Promise.resolve(result);
+      }),
     });
-    expect(client.judgeBatch(candidate, context)).rejects.toMatchObject({
-      category: "malformed",
+    const failure = client.judgeBatch(candidate, context);
+    expect(failure).rejects.toMatchObject({ category });
+    expect(failure).rejects.not.toMatchObject({
+      message: expect.stringContaining("secret"),
     });
     expect(calls).toBe(1);
   }
-  let connectionCalls = 0;
-  const connection = new JevClient({
-    apiKey: "ABCDEFGHIJKLMNOP",
-    fetch: () => {
-      connectionCalls++;
-      return Promise.reject(new Error("secret transport detail"));
-    },
+  const thrown = new JevClient({
+    model: JEV,
+    registry: fakeRegistry(() =>
+      Promise.reject(new Error("secret transport detail")),
+    ),
   });
-  expect(connection.judgeBatch(candidate, context)).rejects.toMatchObject({
-    category: "connection",
-    message: "Jev connection failed",
+  expect(thrown.judgeBatch(candidate, context)).rejects.toMatchObject({
+    category: "provider",
+    message: "Jev request failed",
   });
-  expect(connectionCalls).toBe(1);
 });
 
-test("Jev request and payload bounds fail before fetch", async () => {
+test("Jev request and payload bounds fail before classification", async () => {
   let calls = 0;
   const client = new JevClient({
-    apiKey: "ABCDEFGHIJKLMNOP",
-    fetch: () => {
+    model: JEV,
+    registry: fakeRegistry(() => {
       calls++;
-      return Promise.resolve(Response.json({ answers: {} }));
-    },
+      return Promise.resolve(stop({}));
+    }),
   });
   const context = { currentRequest: "x", recentText: "" };
   expect(client.judgeBatch([], context)).rejects.toThrow("1 to 16");

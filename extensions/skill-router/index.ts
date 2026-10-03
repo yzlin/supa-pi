@@ -9,7 +9,7 @@ import {
 } from "@earendil-works/pi-coding-agent";
 
 import { writeRecoveryCatalog } from "./catalog";
-import { RouterConfigStore } from "./config";
+import { resolveAgentDir, RouterConfigStore } from "./config";
 import {
   classifyRoute,
   loadSelectedSkills,
@@ -17,46 +17,26 @@ import {
   prepareRoute,
 } from "./core";
 import {
-  type CredentialStatus,
-  CredentialStore,
-  type ResolvedCredential,
-  resolveAgentDir,
-} from "./credentials";
-import {
-  JEV_MODEL,
-  type JevBatchResult,
-  type JevCandidate,
+  type ClassifierModel,
+  type ClassifierRegistry,
   JevClient,
-  JevError,
   ROUTING_DEADLINE_MS,
+  selectJevModel,
 } from "./jev";
 import { EXPLICIT_ONLY_SKILLS } from "./policy";
 import { identifyCanonicalMessages } from "./runtime-helpers";
-import { hiddenRouterInput } from "./ui";
 
 interface ConfigStore {
   load(): Promise<boolean>;
   save(enabled: boolean): Promise<void>;
 }
-interface Store {
-  status(): Promise<CredentialStatus>;
-  resolve(): Promise<ResolvedCredential>;
-  save(value: string): Promise<void>;
-  clear(): Promise<void>;
-}
-interface Client {
-  judgeBatch(
-    candidates: readonly JevCandidate[],
-    context: { currentRequest: string; recentText: string },
-    signal?: AbortSignal,
-  ): Promise<JevBatchResult>;
-  verify(signal?: AbortSignal): Promise<void>;
-}
 export interface SkillRouterDependencies {
   configStore?: ConfigStore;
-  credentialStore?: Store;
-  createClient?: (apiKey: string) => Client;
-  readSecret?: (ctx: ExtensionContext) => Promise<string | undefined>;
+  selectModel?: typeof selectJevModel;
+  createClient?: (
+    registry: ClassifierRegistry,
+    model: ClassifierModel,
+  ) => Pick<JevClient, "judgeBatch">;
   env?: Record<string, string | undefined>;
   agentDir?: string;
   /** Test seam; production always uses the fixed two-second deadline. */
@@ -80,8 +60,7 @@ interface SelectedDetails {
   skills: SelectedSkillDetails[];
 }
 
-const ACTIONS = ["status", "login", "logout", "enable", "disable"] as const;
-const PRINTABLE_KEY = /^[!-~]+$/;
+const ACTIONS = ["status", "enable", "disable"] as const;
 const WORD_SEPARATOR = /[^a-z0-9-]+/u;
 const BODY_HASH = /^[a-f0-9]{64}$/u;
 const MAX_REQUESTS = 100;
@@ -98,12 +77,11 @@ export function createSkillRouterExtension(
       dependencies.agentDir ?? resolveAgentDir(env.PI_CODING_AGENT_DIR);
     const configStore =
       dependencies.configStore ?? new RouterConfigStore({ agentDir, env });
-    const credentialStore =
-      dependencies.credentialStore ?? new CredentialStore({ agentDir, env });
+    const selectModel = dependencies.selectModel ?? selectJevModel;
     const createClient =
       dependencies.createClient ??
-      ((apiKey: string) => new JevClient({ apiKey }));
-    const readSecret = dependencies.readSecret ?? hiddenRouterInput;
+      ((registry: ClassifierRegistry, model: ClassifierModel) =>
+        new JevClient({ registry, model }));
     const deadlineMs = dependencies.deadlineMs ?? ROUTING_DEADLINE_MS;
 
     let generation = 0;
@@ -254,8 +232,12 @@ export function createSkillRouterExtension(
           lastFallback = "disabled";
           return;
         }
-        const credential = await credentialStore.resolve();
+        const model = await selectModel(ctx.modelRegistry);
         if (!valid()) {
+          return;
+        }
+        if (!model) {
+          lastFallback = "no Jev classifier model";
           return;
         }
         const prepared = prepareRoute({
@@ -276,7 +258,7 @@ export function createSkillRouterExtension(
         requests++;
         safeRawInputs.add(current.text);
         trimRawInputSet(safeRawInputs);
-        const client = createClient(credential.apiKey);
+        const client = createClient(ctx.modelRegistry, model);
         const result = await classifyRoute(
           prepared,
           (batch, context, signal) => client.judgeBatch(batch, context, signal),
@@ -516,7 +498,7 @@ export function createSkillRouterExtension(
     });
 
     pi.registerCommand("skill-router", {
-      description: "Manage skill-router authentication, consent, and status",
+      description: "Manage skill-router consent and status",
       getArgumentCompletions(prefix) {
         return ACTIONS.filter((action) => action.startsWith(prefix)).map(
           (action) => ({ value: action, label: action }),
@@ -525,24 +507,18 @@ export function createSkillRouterExtension(
       handler: async (raw, ctx) => {
         const action = raw.trim() || "status";
         if (!ACTIONS.includes(action as (typeof ACTIONS)[number])) {
-          report(
-            ctx,
-            "Usage: /skill-router [status|login|logout|enable|disable]",
-            "error",
-          );
+          report(ctx, "Usage: /skill-router [status|enable|disable]", "error");
           return;
         }
         try {
           if (action === "status") {
-            const [enabled, status] = await Promise.all([
+            const [enabled, model] = await Promise.all([
               configStore.load(),
-              credentialStore.status(),
+              selectModel(ctx.modelRegistry),
             ]);
-            const reason = "reason" in status ? ` (${status.reason})` : "";
-            const usability = status.usable ? "usable" : `unusable${reason}`;
             report(
               ctx,
-              `Skill router ${enabled ? "enabled" : "disabled"}; credential=${status.source}:${usability}; requests=${requests}/${MAX_REQUESTS}; lastFallback=${lastFallback}; model=${JEV_MODEL}. No input is sent by this status command.`,
+              `Skill router ${enabled ? "enabled" : "disabled"}; model=${model ? `${model.provider}/${model.id}` : "none"}; requests=${requests}/${MAX_REQUESTS}; lastFallback=${lastFallback}. No input is sent by this status command.`,
               "info",
             );
             return;
@@ -553,112 +529,33 @@ export function createSkillRouterExtension(
             report(ctx, "Skill router disabled globally.", "info");
             return;
           }
-          if (action === "logout") {
-            cancelInflight();
-            await configStore.save(false);
-            await credentialStore.clear();
+          const model = await selectModel(ctx.modelRegistry);
+          if (!model) {
             report(
               ctx,
-              `Stored skill-router credential cleared; routing disabled.${env.TYPESAFE_API_KEY === undefined ? "" : " TYPESAFE_API_KEY remains and takes precedence."}`,
-              "info",
-            );
-            return;
-          }
-          if (action === "enable") {
-            const status = await credentialStore.status();
-            if (!status.usable) {
-              report(
-                ctx,
-                "Skill router needs a usable TypeSafe credential. Run /skill-router login or set TYPESAFE_API_KEY.",
-                "error",
-              );
-              return;
-            }
-            if (!interactive(ctx)) {
-              report(
-                ctx,
-                "Persistent enablement requires an interactive TUI.",
-                "error",
-              );
-              return;
-            }
-            const confirmed = await ctx.ui.confirm(
-              "Enable experimental paid skill routing?",
-              "Skill names/descriptions plus bounded current and recent user/assistant text will leave this machine for charged TypeSafe judgments. Conversation may contain sensitive text. Filtering is source-based, not secret-proof; routing is experimental and uncalibrated. Enable for future sessions?",
-            );
-            if (!confirmed) {
-              report(ctx, "Skill router remains disabled.", "info");
-              return;
-            }
-            await configStore.save(true);
-            report(ctx, "Skill router enabled globally.", "info");
-            return;
-          }
-          const current = await credentialStore.status();
-          if (current.source === "environment") {
-            report(
-              ctx,
-              "TYPESAFE_API_KEY takes precedence; stored authentication was not changed.",
-              "info",
-            );
-            return;
-          }
-          if (!interactive(ctx) || typeof ctx.ui.custom !== "function") {
-            report(
-              ctx,
-              "Secure login requires an interactive TUI; set TYPESAFE_API_KEY for headless use.",
+              "Skill router needs a Jev classifier model with credentials. Set TYPESAFE_API_KEY or log in to a Jev provider with /login.",
               "error",
             );
             return;
           }
-          const chargeConfirmed = await ctx.ui.confirm(
-            "Verify a TypeSafe credential?",
-            "Login sends one tiny synthetic verification judgment, which may incur a small charge. No workspace or conversation content is included. Continue?",
+          if (!interactive(ctx)) {
+            report(
+              ctx,
+              "Persistent enablement requires an interactive TUI.",
+              "error",
+            );
+            return;
+          }
+          const confirmed = await ctx.ui.confirm(
+            "Enable experimental paid skill routing?",
+            `Skill names/descriptions plus bounded current and recent user/assistant text will leave this machine for charged Jev judgments through ${model.provider}/${model.id} or another credentialed Jev provider. Conversation may contain sensitive text. Filtering is source-based, not secret-proof; routing is experimental and uncalibrated. Enable for future sessions?`,
           );
-          if (!chargeConfirmed) {
-            report(ctx, "Skill-router login cancelled.", "info");
+          if (!confirmed) {
+            report(ctx, "Skill router remains disabled.", "info");
             return;
           }
-          const key = await readSecret(ctx);
-          if (key === undefined) {
-            report(ctx, "Skill-router login cancelled.", "info");
-            return;
-          }
-          const normalized = key.trim();
-          if (
-            normalized.length < 16 ||
-            normalized.length > 512 ||
-            !PRINTABLE_KEY.test(normalized)
-          ) {
-            report(
-              ctx,
-              "TypeSafe credential is invalid; authentication unchanged.",
-              "error",
-            );
-            return;
-          }
-          const controller = new AbortController();
-          controllers.add(controller);
-          try {
-            await createClient(normalized).verify(controller.signal);
-            if (controller.signal.aborted) {
-              throw new Error("cancelled");
-            }
-            await credentialStore.save(normalized);
-            report(
-              ctx,
-              "TypeSafe credential verified and saved. Existing routing consent is unchanged.",
-              "info",
-            );
-          } catch (error) {
-            report(
-              ctx,
-              `TypeSafe credential verification failed (${safeFailure(error)}); authentication unchanged.`,
-              "error",
-            );
-          } finally {
-            controllers.delete(controller);
-          }
+          await configStore.save(true);
+          report(ctx, "Skill router enabled globally.", "info");
         } catch {
           report(ctx, "Skill-router operation failed safely.", "error");
         }
@@ -871,9 +768,6 @@ function rememberContextUsers(
       knownUsers.add(message.identity);
     }
   }
-}
-function safeFailure(error: unknown): string {
-  return error instanceof JevError ? error.category : "connection";
 }
 
 export default createSkillRouterExtension();

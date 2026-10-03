@@ -28,11 +28,10 @@ async function fixture(
       context: any,
       signal?: AbortSignal,
     ) => Promise<Map<string, number>>;
-    verify?: (signal?: AbortSignal) => Promise<void>;
+    model?: { provider: string; id: string } | null;
     hasUI?: boolean;
     mode?: "tui" | "rpc" | "print";
     confirm?: boolean | boolean[];
-    secret?: string | undefined;
   } = {},
 ) {
   const root = await mkdtemp(join(tmpdir(), "skill-router-runtime-"));
@@ -42,9 +41,8 @@ async function fixture(
   const sent: any[] = [];
   const notifications: [string, string][] = [];
   const entries: any[] = [];
-  const savedKeys: string[] = [];
+  const confirmTexts: string[] = [];
   let enabled = options.enabled ?? false;
-  let cleared = 0;
   let clientCreates = 0;
   let judgeCalls = 0;
   let loadCalls = 0;
@@ -58,33 +56,19 @@ async function fixture(
       return Promise.resolve();
     },
   };
-  const credentialStore = {
-    status: () =>
-      Promise.resolve({ source: "stored" as const, usable: true as const }),
-    resolve: () =>
-      Promise.resolve({
-        apiKey: "ABCDEFGHIJKLMNOP",
-        source: "stored" as const,
-      }),
-    save: (key: string) => {
-      savedKeys.push(key);
-      return Promise.resolve();
-    },
-    clear: () => {
-      cleared++;
-      return Promise.resolve();
-    },
-  };
+  const model =
+    options.model === null
+      ? undefined
+      : (options.model ?? { provider: "typesafe", id: "jev-latest" });
   const confirmations = Array.isArray(options.confirm)
     ? [...options.confirm]
     : undefined;
   const extension = createSkillRouterExtension({
     configStore,
-    credentialStore,
     env: {},
     agentDir: root,
     deadlineMs: 100,
-    readSecret: () => Promise.resolve(options.secret),
+    selectModel: () => Promise.resolve(model as never),
     createClient: () => {
       clientCreates++;
       return {
@@ -110,7 +94,6 @@ async function fixture(
             ),
           };
         },
-        verify: options.verify ?? (() => Promise.resolve()),
       };
     },
   });
@@ -128,6 +111,7 @@ async function fixture(
     cwd: root,
     hasUI: options.hasUI ?? false,
     mode: options.mode ?? "rpc",
+    modelRegistry: {},
     sessionManager: {
       getSessionId: () => "session-1",
       buildContextEntries: () => entries,
@@ -135,8 +119,10 @@ async function fixture(
     ui: {
       notify: (message: string, level: string) =>
         notifications.push([message, level]),
-      confirm: async () => confirmations?.shift() ?? options.confirm ?? false,
-      custom: async () => options.secret,
+      confirm: async (_title: string, message: string) => {
+        confirmTexts.push(message);
+        return confirmations?.shift() ?? options.confirm ?? false;
+      },
     },
   };
   const skill = async (name: string, body = `BODY_${name}`, hidden = false) => {
@@ -196,14 +182,13 @@ async function fixture(
     sent,
     notifications,
     entries,
-    savedKeys,
+    confirmTexts,
     configStore,
-    credentialStore,
     ctx,
     skill,
     input,
     before,
-    stats: () => ({ enabled, cleared, clientCreates, judgeCalls, loadCalls }),
+    stats: () => ({ enabled, clientCreates, judgeCalls, loadCalls }),
   };
 }
 
@@ -441,7 +426,7 @@ test("queued request receives a stable identity-anchored fallback prefix without
   expect(JSON.stringify(firstFallback)).toContain("x");
 });
 
-test.each(["disable", "logout"])(
+test.each(["disable"])(
   "%s preserves queued native fallback after successful routing",
   async (action) => {
     const f = await fixture({ enabled: true });
@@ -483,10 +468,7 @@ test.each(["disable", "logout"])(
       "<available_skills>",
     );
     expect(projected.messages[fallbackIndex].content).toContain("x");
-    expect(f.stats()).toMatchObject({
-      enabled: false,
-      cleared: action === "logout" ? 1 : 0,
-    });
+    expect(f.stats()).toMatchObject({ enabled: false });
   },
 );
 
@@ -867,61 +849,63 @@ test("inactive context handling does not inspect canonical message content", asy
   ).toBeUndefined();
 });
 
-test("management UX separates login and consent, blocks headless grants, and sanitizes failures", async () => {
-  const headless = await fixture({
-    enabled: false,
-    secret: "ABCDEFGHIJKLMNOP",
-  });
-  await headless.commands.get("skill-router").handler("login", headless.ctx);
+test("management UX requires a Jev model, blocks headless grants, and names the model in consent", async () => {
+  const headless = await fixture({ enabled: false });
   await headless.commands.get("skill-router").handler("enable", headless.ctx);
-  expect(headless.savedKeys).toEqual([]);
   expect(headless.stats().enabled).toBe(false);
   expect(headless.stats().clientCreates).toBe(0);
   expect(
     headless.sent.every((item) => item.sendOptions.triggerTurn === false),
   ).toBe(true);
 
-  const declined = await fixture({
-    hasUI: true,
-    mode: "tui",
-    confirm: [true, false],
-    secret: "ABCDEFGHIJKLMNOP",
-  });
-  await declined.commands.get("skill-router").handler("login", declined.ctx);
-  expect(declined.savedKeys).toEqual(["ABCDEFGHIJKLMNOP"]);
-  expect(declined.stats().enabled).toBe(false);
-  await declined.commands.get("skill-router").handler("enable", declined.ctx);
-  expect(declined.stats().enabled).toBe(false);
-
-  const invalid = await fixture({ hasUI: true, mode: "tui", secret: "short" });
-  await invalid.commands.get("skill-router").handler("login", invalid.ctx);
-  expect(invalid.savedKeys).toEqual([]);
-  expect(JSON.stringify(invalid.notifications)).not.toContain("short");
-
-  let releaseVerification: (() => void) | undefined;
-  const verification = new Promise<void>((resolve) => {
-    releaseVerification = resolve;
-  });
-  const cancelled = await fixture({
+  const missing = await fixture({
     hasUI: true,
     mode: "tui",
     confirm: true,
-    secret: "ABCDEFGHIJKLMNOP",
-    verify: () => verification,
+    model: null,
   });
-  const login = cancelled.commands
-    .get("skill-router")
-    .handler("login", cancelled.ctx);
-  while (cancelled.stats().clientCreates === 0) {
-    await new Promise((resolve) => setTimeout(resolve, 1));
-  }
-  await cancelled.commands
-    .get("skill-router")
-    .handler("disable", cancelled.ctx);
-  releaseVerification?.();
-  await login;
-  expect(cancelled.savedKeys).toEqual([]);
+  await missing.commands.get("skill-router").handler("enable", missing.ctx);
+  expect(missing.stats().enabled).toBe(false);
+  expect(missing.confirmTexts).toEqual([]);
+  expect(missing.notifications.at(-1)?.[1]).toBe("error");
 
-  await declined.commands.get("skill-router").handler("logout", declined.ctx);
-  expect(declined.stats()).toMatchObject({ enabled: false, cleared: 1 });
+  const declined = await fixture({ hasUI: true, mode: "tui", confirm: false });
+  await declined.commands.get("skill-router").handler("enable", declined.ctx);
+  expect(declined.stats().enabled).toBe(false);
+
+  const accepted = await fixture({
+    hasUI: true,
+    mode: "tui",
+    confirm: true,
+    model: { provider: "openrouter", id: "typesafe/jev-1.13" },
+  });
+  await accepted.commands.get("skill-router").handler("enable", accepted.ctx);
+  expect(accepted.stats().enabled).toBe(true);
+  expect(accepted.confirmTexts[0]).toContain("openrouter/typesafe/jev-1.13");
+  await accepted.commands.get("skill-router").handler("status", accepted.ctx);
+  expect(accepted.notifications.at(-1)?.[0]).toContain(
+    "model=openrouter/typesafe/jev-1.13",
+  );
+
+  for (const removed of ["login", "logout"]) {
+    await accepted.commands.get("skill-router").handler(removed, accepted.ctx);
+    expect(accepted.notifications.at(-1)).toEqual([
+      "Usage: /skill-router [status|enable|disable]",
+      "error",
+    ]);
+  }
+  expect(accepted.stats().enabled).toBe(true);
+});
+
+test("missing Jev model falls back to native discovery without spending a request", async () => {
+  const f = await fixture({ enabled: true, model: null });
+  const x = await f.skill("x");
+  await f.input("please route");
+  const routed = await f.before("please route", [x]);
+  expect(routed.systemPromptOptions.skills).toEqual([x]);
+  expect(f.stats().clientCreates).toBe(0);
+  await f.commands.get("skill-router").handler("status", f.ctx);
+  expect(f.sent.at(-1)?.message.content).toContain(
+    "requests=0/100; lastFallback=no Jev classifier model",
+  );
 });

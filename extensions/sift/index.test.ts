@@ -3,7 +3,7 @@ import { mkdtemp, writeFile } from "node:fs/promises";
 import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { resolveAgentDir } from "./credentials";
+import { resolveAgentDir } from "./config";
 import { createSiftExtension } from "./index";
 
 interface Command {
@@ -42,12 +42,18 @@ interface Tool {
 }
 type TestContext = ReturnType<typeof context>;
 
+const JEV = { provider: "typesafe", id: "jev-latest" };
+function selectModel(model: { provider: string; id: string } | undefined) {
+  return () => Promise.resolve(model as never);
+}
+
 function runtime(
   extension = createSiftExtension({
     configStore: {
       load: async () => false,
       save: () => Promise.resolve(),
     },
+    selectModel: selectModel(JEV),
   }),
 ) {
   const tools: Tool[] = [];
@@ -69,40 +75,29 @@ function runtime(
   } as never);
   return { tools, commands, events, messages };
 }
-interface PromptComponent {
-  render(width: number): string[];
-}
-interface PromptTheme {
-  fg(name: string, text: string): string;
-  bold(text: string): string;
-}
-type CustomPrompt = (
-  factory: (
-    tui: unknown,
-    theme: PromptTheme,
-    keybindings: unknown,
-    done: (value: string | undefined) => void,
-  ) => PromptComponent,
-) => Promise<string | undefined>;
 
 function context(
   options: {
     cwd?: string;
     hasUI?: boolean;
     confirm?: boolean;
-    custom?: CustomPrompt;
   } = {},
 ) {
   const notifications: string[] = [];
+  const confirmTexts: string[] = [];
   return {
     cwd: options.cwd ?? process.cwd(),
     hasUI: options.hasUI ?? true,
     mode: options.hasUI === false ? "print" : "tui",
+    modelRegistry: {},
     notifications,
+    confirmTexts,
     ui: {
       notify: (message: string) => notifications.push(message),
-      confirm: async () => options.confirm ?? true,
-      custom: options.custom ?? (async () => undefined),
+      confirm: async (_title: string, message: string) => {
+        confirmTexts.push(message);
+        return options.confirm ?? true;
+      },
     },
   };
 }
@@ -134,7 +129,7 @@ describe("sift extension", () => {
         .get("sift")
         ?.getArgumentCompletions?.("")
         .map((x) => x.value),
-    ).toEqual(["login", "logout", "status", "enable", "disable"]);
+    ).toEqual(["status", "enable", "disable"]);
   });
 
   it("fails while disabled and enable requires confirmation", async () => {
@@ -176,17 +171,9 @@ describe("sift extension", () => {
     };
     const dependencies = {
       configStore,
-      credentialStore: {
-        status: async () => ({ source: "stored", usable: true }) as const,
-        resolve: async () => ({
-          apiKey: "secret-key-123456",
-          source: "stored" as const,
-        }),
-        save: () => Promise.resolve(),
-        clear: () => Promise.resolve(),
-      },
+      selectModel: selectModel(JEV),
       createClient: () => ({
-        judge: async () => ({ probability: 1, model: "jev-latest" }),
+        judge: async () => ({ probability: 1, model: "typesafe/jev-latest" }),
       }),
       env: {},
     };
@@ -220,54 +207,53 @@ describe("sift extension", () => {
     ).rejects.toThrow("enable");
   });
 
-  it("explains which TypeSafe key to enter and where to get it", async () => {
-    let prompt = "";
-    const ctx = context({
-      custom: (factory) => {
-        const component = factory(
-          {},
-          {
-            fg: (_name, text) => text,
-            bold: (text) => text,
-          },
-          {},
-          () => undefined,
-        );
-        prompt = component.render(100).join("\n");
-        return Promise.resolve("");
+  it("enable requires a Jev model and names it in consent", async () => {
+    let enabled = false;
+    const configStore = {
+      load: async () => enabled,
+      save: (value: boolean) => {
+        enabled = value;
+        return Promise.resolve();
       },
-    });
-    const app = runtime(
-      createSiftExtension({
-        configStore: {
-          load: async () => false,
-          save: () => Promise.resolve(),
-        },
-        credentialStore: {
-          status: async () => ({ source: "missing", usable: false }) as const,
-          resolve: () => Promise.reject(new Error("not used")),
-          save: () => Promise.resolve(),
-          clear: () => Promise.resolve(),
-        },
-        env: {},
-      }),
+    };
+    const missing = runtime(
+      createSiftExtension({ configStore, selectModel: selectModel(undefined) }),
+    );
+    const missingCtx = context();
+    await missing.commands.get("sift")?.handler("enable", missingCtx);
+    expect(enabled).toBe(false);
+    expect(missingCtx.confirmTexts).toEqual([]);
+    expect(missingCtx.notifications.join(" ")).toContain(
+      "Jev classifier model",
     );
 
-    await app.commands.get("sift")?.handler("login", ctx);
-
-    const normalizedPrompt = prompt.replace(/\s+/g, " ");
-    expect(normalizedPrompt).toContain("TypeSafe API key");
-    expect(normalizedPrompt).toContain("console.typesafe.ai");
-    expect(normalizedPrompt).toContain("API Keys");
-    expect(normalizedPrompt).toContain("Input is hidden");
-    expect(normalizedPrompt).toContain("Enter verifies and saves");
-    expect(normalizedPrompt).toContain("Esc cancels");
+    const openrouter = { provider: "openrouter", id: "typesafe/jev-1.13" };
+    const app = runtime(
+      createSiftExtension({
+        configStore,
+        selectModel: selectModel(openrouter),
+      }),
+    );
+    const ctx = context();
+    await app.commands.get("sift")?.handler("enable", ctx);
+    expect(enabled).toBe(true);
+    expect(ctx.confirmTexts[0]).toContain("openrouter/typesafe/jev-1.13");
+    await app.commands.get("sift")?.handler("status", ctx);
+    expect(ctx.notifications.at(-1)).toContain(
+      "model=openrouter/typesafe/jev-1.13",
+    );
+    for (const removed of ["login", "logout"]) {
+      await app.commands.get("sift")?.handler(removed, ctx);
+      expect(ctx.notifications.at(-1)).toBe(
+        "Usage: /sift [status|enable|disable]",
+      );
+    }
+    expect(enabled).toBe(true);
   });
 
-  it("supports verified login, safe status, successful output, logout, and session reset", async () => {
+  it("supports safe status, successful output, and session reset", async () => {
     const cwd = await mkdtemp(join(tmpdir(), "sift-extension-"));
     await writeFile(join(cwd, "a.txt"), "ordinary content");
-    let saved = "";
     let configEnabled = false;
     const extension = createSiftExtension({
       configStore: {
@@ -277,32 +263,14 @@ describe("sift extension", () => {
           return Promise.resolve();
         },
       },
-      credentialStore: {
-        status: async () =>
-          saved
-            ? ({ source: "stored", usable: true } as const)
-            : ({ source: "missing", usable: false } as const),
-        resolve: async () => ({ apiKey: saved, source: "stored" as const }),
-        save: (key: string) => {
-          saved = key;
-          return Promise.resolve();
-        },
-        clear: () => {
-          saved = "";
-          return Promise.resolve();
-        },
-      },
-      readSecret: async () => "secret-key-123456",
+      selectModel: selectModel(JEV),
       createClient: () => ({
-        judge: async () => ({ probability: 0.8, model: "jev-latest" }),
+        judge: async () => ({ probability: 0.8, model: "typesafe/jev-latest" }),
       }),
       env: {},
     });
     const app = runtime(extension);
     const ctx = context({ cwd });
-    await app.commands.get("sift")?.handler("login", ctx);
-    expect(saved).toBe("secret-key-123456");
-    expect(ctx.notifications.join(" ")).not.toContain(saved);
     await app.commands.get("sift")?.handler("enable", ctx);
     const result = await app.tools[0].execute(
       "x",
@@ -328,7 +296,9 @@ describe("sift extension", () => {
     expect(expanded).toContain("a.txt: P(relevant)=0.800");
     expect(expanded).not.toContain("ordinary content");
     await app.commands.get("sift")?.handler("status", ctx);
-    expect(ctx.notifications.join(" ")).not.toContain(saved);
+    expect(ctx.notifications.at(-1)).toBe(
+      "Sift enabled; model=typesafe/jev-latest; attempted=1, remaining=99; secret detection is incomplete.",
+    );
     app.events.get("session_start")?.();
     const afterReset = await app.tools[0].execute(
       "x",
@@ -338,9 +308,6 @@ describe("sift extension", () => {
       ctx,
     );
     expect(afterReset.content[0].text).toContain("remaining=99");
-    await app.commands.get("sift")?.handler("logout", ctx);
-    expect(saved).toBe("");
-    expect(configEnabled).toBe(false);
   });
 
   it("renders mixed results without changing error or truncation text", () => {
@@ -381,19 +348,14 @@ describe("sift extension", () => {
           load: async () => true,
           save: () => Promise.resolve(),
         },
-        credentialStore: {
-          status: async () => ({ source: "stored", usable: true }) as const,
-          resolve: async () => ({
-            apiKey: "secret-key-123456",
-            source: "stored" as const,
-          }),
-          save: () => Promise.resolve(),
-          clear: () => Promise.resolve(),
-        },
+        selectModel: selectModel(JEV),
         createClient: () => ({
           judge: (_query, path) => {
             seen.push(path);
-            return Promise.resolve({ probability: 0.5, model: "jev-latest" });
+            return Promise.resolve({
+              probability: 0.5,
+              model: "typesafe/jev-latest",
+            });
           },
         }),
       }),
@@ -410,29 +372,31 @@ describe("sift extension", () => {
     expect(result.content[0].text).toContain(absolute);
   });
 
-  it("does not expose arbitrary login verification errors", async () => {
-    const secret = "provider-body-secret";
+  it("fails enabled tool calls without a Jev model before reading files", async () => {
+    let clients = 0;
     const app = runtime(
       createSiftExtension({
-        env: {},
-        credentialStore: {
-          status: async () => ({ source: "missing", usable: false }) as const,
-          resolve: () => Promise.reject(new Error("unused")),
+        configStore: {
+          load: async () => true,
           save: () => Promise.resolve(),
-          clear: () => Promise.resolve(),
         },
-        readSecret: async () => "valid-key-1234567",
-        createClient: () => ({
-          judge: () => Promise.reject(new Error(secret)),
-        }),
+        selectModel: selectModel(undefined),
+        createClient: () => {
+          clients++;
+          return { judge: () => Promise.reject(new Error("unused")) };
+        },
       }),
     );
-    const ctx = context();
-    await app.commands.get("sift")?.handler("login", ctx);
-    expect(ctx.notifications.join(" ")).toBe(
-      "TypeSafe credential verification failed (connection); authentication unchanged.",
-    );
-    expect(ctx.notifications.join(" ")).not.toContain(secret);
+    expect(
+      app.tools[0].execute(
+        "x",
+        { query: "q", paths: ["a"] },
+        new AbortController().signal,
+        undefined,
+        context({ hasUI: false }),
+      ),
+    ).rejects.toThrow("Jev classifier model");
+    expect(clients).toBe(0);
   });
 
   it("fails closed when persisted enablement cannot be read", async () => {
@@ -443,15 +407,7 @@ describe("sift extension", () => {
           load: () => Promise.reject(failure),
           save: () => Promise.resolve(),
         },
-        credentialStore: {
-          status: async () => ({ source: "stored", usable: true }) as const,
-          resolve: async () => ({
-            apiKey: "secret-key-123456",
-            source: "stored" as const,
-          }),
-          save: () => Promise.resolve(),
-          clear: () => Promise.resolve(),
-        },
+        selectModel: selectModel(JEV),
       }),
     );
     expect(
@@ -476,18 +432,15 @@ describe("sift extension", () => {
           save: () => Promise.resolve(),
         },
         env: {},
-        credentialStore: {
-          status: async () => ({ source: "missing", usable: false }) as const,
-          resolve: () => Promise.reject(new Error("unused")),
-          save: () => Promise.resolve(),
-          clear: () => Promise.resolve(),
-        },
+        selectModel: selectModel(undefined),
       }),
     );
     await app.commands
       .get("sift")
       ?.handler("status", context({ hasUI: false }));
-    expect(app.messages[0]?.message.content).toContain("Sift disabled");
+    expect(app.messages[0]?.message.content).toContain(
+      "Sift disabled; model=none",
+    );
     expect(app.messages[0]?.options?.triggerTurn).toBe(false);
   });
 
@@ -504,19 +457,10 @@ describe("sift extension", () => {
         save: () => Promise.resolve(),
       },
       env: {},
-      credentialStore: {
-        status: async () => ({ source: "stored", usable: true }) as const,
-        resolve: async () => ({
-          apiKey: "secret-key-123456",
-          source: "stored" as const,
-        }),
-        save: () => Promise.resolve(),
-        clear: () => Promise.resolve(),
-      },
+      selectModel: selectModel(JEV),
       createClient: () => ({
-        judge: async () => ({ probability: 1, model: "jev-latest" }),
+        judge: async () => ({ probability: 1, model: "typesafe/jev-latest" }),
       }),
-      readSecret: async () => undefined,
     });
     const app = runtime(extension);
     const cwd = await mkdtemp(join(tmpdir(), "sift-headless-"));

@@ -8,9 +8,22 @@ import {
   rm,
   stat,
 } from "node:fs/promises";
+import { homedir } from "node:os";
 import { join } from "node:path";
 
-import { resolveAgentDir } from "./credentials";
+export function resolveAgentDir(value?: string): string {
+  const home = homedir();
+  if (!value) {
+    return join(home, ".pi", "agent");
+  }
+  if (value === "~") {
+    return home;
+  }
+  if (value.startsWith("~/")) {
+    return join(home, value.slice(2));
+  }
+  return value;
+}
 
 export class SiftConfigStore {
   readonly #directory: string;

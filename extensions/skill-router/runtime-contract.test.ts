@@ -22,6 +22,7 @@ import {
 import { createSkillRouterExtension } from "./index";
 
 const roots: string[] = [];
+const JEV = { provider: "typesafe", id: "jev-latest" };
 const SKILL_NAME = "router-contract-proof";
 const SKILL_BODY = "ROUTER_CONTRACT_BODY";
 const CATALOG = `<available_skills>\n<skill>\n<name>${SKILL_NAME}</name>\n<description>Proves the public skill routing contract.</description>\n<location>`;
@@ -150,18 +151,7 @@ test("real router composes safely with forced-prompt appenders in either registr
         load: async () => true,
         save: async () => undefined,
       },
-      credentialStore: {
-        status: async () => ({
-          source: "stored" as const,
-          usable: true as const,
-        }),
-        resolve: async () => ({
-          source: "stored" as const,
-          apiKey: "ABCDEFGHIJKLMNOP",
-        }),
-        save: async () => undefined,
-        clear: async () => undefined,
-      },
+      selectModel: async () => JEV as never,
       createClient: () => ({
         judgeBatch: (candidates) => {
           calls++;
@@ -169,7 +159,6 @@ test("real router composes safely with forced-prompt appenders in either registr
             scores: new Map(candidates.map((candidate) => [candidate.id, 1])),
           });
         },
-        verify: async () => undefined,
       }),
     });
     return { router, calls: () => calls };
@@ -243,23 +232,11 @@ test("real router anchors transformed repeated queued fallbacks through tools, s
       load: async () => true,
       save: async () => undefined,
     },
-    credentialStore: {
-      status: async () => ({
-        source: "stored" as const,
-        usable: true as const,
-      }),
-      resolve: async () => ({
-        source: "stored" as const,
-        apiKey: "ABCDEFGHIJKLMNOP",
-      }),
-      save: async () => undefined,
-      clear: async () => undefined,
-    },
+    selectModel: async () => JEV as never,
     createClient: () => ({
       judgeBatch: async (candidates) => ({
         scores: new Map(candidates.map((candidate) => [candidate.id, 1])),
       }),
-      verify: async () => undefined,
     }),
   });
   const queuedTransformer = (pi: ExtensionAPI) => {
@@ -354,23 +331,11 @@ test("real provider retains a recovered body across controlled compaction, settl
         return Promise.resolve();
       },
     },
-    credentialStore: {
-      status: async () => ({
-        source: "stored" as const,
-        usable: true as const,
-      }),
-      resolve: async () => ({
-        source: "stored" as const,
-        apiKey: "ABCDEFGHIJKLMNOP",
-      }),
-      save: async () => undefined,
-      clear: async () => undefined,
-    },
+    selectModel: async () => JEV as never,
     createClient: () => ({
       judgeBatch: async (candidates) => ({
         scores: new Map(candidates.map((candidate) => [candidate.id, 1])),
       }),
-      verify: async () => undefined,
     }),
   });
   const controlledCompaction = (pi: ExtensionAPI) => {
