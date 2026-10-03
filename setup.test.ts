@@ -194,6 +194,15 @@ describe("setup local package deployment", () => {
     expect(result.stdout.indexOf("local package deployed")).toBeLessThan(
       result.stdout.indexOf("Linking prompts..."),
     );
+    expect(
+      JSON.parse(
+        await readFile(join(home, ".pi", "agent", "settings.json"), "utf8"),
+      ),
+    ).toMatchObject({
+      defaultProvider: "openai-codex",
+      defaultModel: "gpt-6.1-sol",
+      defaultThinkingLevel: "high",
+    });
   });
 
   test("upgrades deploy the transformer before reconciling queueable prompt entrypoints", async () => {
@@ -208,6 +217,9 @@ describe("setup local package deployment", () => {
     await mkdir(promptsDirectory, { recursive: true });
     await mkdir(bin, { recursive: true });
     await writeBunStub(bin);
+    const settingsPath = join(home, ".pi", "agent", "settings.json");
+    const existingSettings = '{ "defaultModel": "user-selected-model" }\n';
+    await writeFile(settingsPath, existingSettings);
 
     for (const command of ["grill-me", "research-brief", "show-me"]) {
       await symlink(
@@ -247,6 +259,7 @@ fi
     expect((await readFile(callLog, "utf8")).split("\n")).toContain(
       `install ${repositoryDir}`,
     );
+    expect(await readFile(settingsPath, "utf8")).toBe(existingSettings);
     for (const command of ["grill-me", "research-brief", "show-me"]) {
       const promptPath = join(promptsDirectory, `${command}.md`);
       expect((await lstat(promptPath)).isSymbolicLink()).toBe(true);

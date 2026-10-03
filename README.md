@@ -160,7 +160,7 @@ After setup, restart Pi to pick up the changes.
 
 ### Existing subagents registration migration
 
-If an older live config still registers the fork runtime, run `pi remove npm:@yzlin/pi-subagents` when that registration is present, rerun `./setup.sh`, and restart Pi. Verify `pi list` contains only the upstream `npm:@tintinweb/pi-subagents` subagents runtime. The unused fork SDK dependency has been removed: execute and review use public tools from the setup/global upstream companion, without adding a repository npm dependency on that runtime. The duplicate-fork setup guard remains. This is manual migration guidance, not a claim that live settings were changed.
+If an older live config still registers the fork runtime, run `pi remove npm:@yzlin/pi-subagents` when that registration is present, rerun `./setup.sh`, and restart Pi. Verify `pi list` contains only the upstream `npm:@tintinweb/pi-subagents` subagents runtime. The unused fork SDK dependency has been removed: execute and review use public tools from the setup/global upstream companion, without adding a repository npm dependency on that runtime. Setup does not detect or reject duplicate subagents runtimes; verify registration manually. This is manual migration guidance, not a claim that live settings were changed.
 
 ## Companion packages installed by setup
 
@@ -182,7 +182,7 @@ The setup script installs or reconciles these Pi packages. It no longer installs
 - Extension registration lives in `package.json`
 - Installing this package globally exposes `docs-list`, which runs `scripts/docs-list.ts` against the current working directory's `docs/` folder.
 - Active Pi registers `docs_list`, a tool for the same docs-discovery behavior. It defaults to `cwd/docs`, accepts an optional safe relative docs path, strips a leading `@`, rejects absolute or escaping paths, skips `archive` and `research` directories, and returns readable output plus structured doc metadata and front matter warnings.
-- Use `docs_list` first when it is available; otherwise run `docs-list` or inspect the docs folder directly before coding.
+- Discover relevant docs for unfamiliar project/domain context or when scoped instructions require it. Use `docs_list` when available; otherwise run `docs-list` or inspect the docs folder. Skip obvious typos, mechanical edits, and understood local changes unless scoped instructions require discovery.
 - Linting uses type-aware oxlint; formatting uses oxfmt (TypeScript and JSON only). Both extend Ultracite presets with local overrides in `oxlint.config.ts` and `oxfmt.config.ts`.
 - Development scripts:
   - `bun run format`

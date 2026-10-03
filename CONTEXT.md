@@ -9,7 +9,8 @@ The repository is optimized for local workflow quality and maintainable agent be
 ## Domain model
 
 - **Extension** — a Pi runtime module registered through `package.json -> pi.extensions`. Extensions add commands, tools, UI behavior, or workflow prompts.
-- **Command** — a slash-command interface exposed by an Extension.
+- **Command** — a slash-command interface supplied by an Extension or a native prompt template. _Avoid_: Extension-only command.
+- **Prompt transformer** — an Extension input hook that expands selected prompt invocations without registering their slash commands. _Avoid_: command registrar.
 - **Agent** — a specialized subagent definition under `agents/` used for delegated work.
 - **Skill** — reusable task-specific instructions under `skills/` or imported skill locations.
 - **Domain-modeling skill** — reusable canonical semantic primitive under `skills/domain-modeling/` that owns terminology sharpening, scenario testing, contradiction discovery, boundary analysis, and ADR-candidacy assessment.
@@ -34,7 +35,7 @@ The repository is optimized for local workflow quality and maintainable agent be
 - **File judgment** — one independent Jev evaluation assigning a probability of relevance to one bounded file against the caller's query. _Avoid_: proof, authorization.
 - **Matt-compatible context docs** — `CONTEXT.md`, `CONTEXT-MAP.md`, `docs/adr/`, and optional `docs/context/` notes.
 - **Model profile** — a named, machine-local set of main-session and agent model/thinking choices that `/profile` applies in one switch. _Avoid_: mode, loadout, preset.
-- **Default profile** — the reserved Model profile meaning repo `agents/*.md` frontmatter verbatim, with main unchanged; it cannot be defined in profile config. _Avoid_: reset profile, base profile.
+- **Default profile** — the reserved Model profile that restores repo `agents/*.md` frontmatter and any captured `defaultMain` model/thinking choices, then clears that snapshot; without a snapshot, main remains unchanged. It cannot be defined in profile config. _Avoid_: reset profile, base profile.
 - **Generated agent override** — a live agent file rendered from a repo agent plus the active Model profile, replacing only `model`/`thinking`. _Avoid_: agent patch, frontmatter rewrite.
 - **Final report** — the reply that closes multi-step work: edits, investigations, delegated work, or review, diagnose, Wayfinder, and grill summaries. One-line answers and lookups are not Final reports. _Avoid_: summary turn, any long reply.
 - **Plain report** — the output style for Final reports and reviewer `why`/`change` text: roughly 80% of ASD-STE100 Simplified Technical English, using `CONTEXT.md` vocabulary. _Avoid_: STE mode, caveman.
@@ -81,7 +82,7 @@ The approved migration is implemented after public-sandbox and local lifecycle v
 - Preserve target selection, model configuration/trust and preflight, role-by-model coverage and concurrency limits, independent verification, and `/review-summary` and `/review-fix` integration. Reviewer jobs use awaited native parallel batches of at most four inside one workflow, retaining dispatch/result order. Reject unsupported `off` in preflight/preparation without changing saved configs; supported efforts pass through. Provider schemas explicitly type every enum, use singleton reviewer enums, and require notes arrays (local validation still allows omission).
 - Use upstream schema retry only. Semantic validation failures receive no additional local repair; reviewer failures follow existing degraded-coverage rules, while invalid downstream stages fail review.
 - Synthesizer tool isolation becomes upstream agent configuration rather than override-proof local enforcement. `/review cancel` invalidates report publication; native Workflows UI stops workers. Parent cancellation no longer guarantees worker termination.
-- Interrupted reviews require a fresh invocation; workflow resume is outside this migration. The unused fork SDK dependency is removed; setup retains the duplicate-runtime guard. Missing/incompatible journals fail closed; at most one report is published. No private upstream API adapter is used.
+- Interrupted reviews require a fresh invocation; workflow resume is outside this migration. The unused fork SDK dependency is removed. Setup does not detect or reject duplicate subagents runtimes; verify registration manually. Missing/incompatible journals fail closed; at most one report is published. No private upstream API adapter is used.
 
 ## Wayfinder: implemented product direction
 
@@ -153,7 +154,7 @@ The canonical `skills/pr/SKILL.md` workflow uses the plain `prompts/pr.md` templ
 Approved by `/grill-me` on 2026-09-30; implemented and registered as an active Extension `extensions/model-profiles` with command `/profile`, with focused tests. Live `/profile` use and E2E subagent spawning remain unverified. See `extensions/model-profiles/README.md` for the implemented contract.
 
 - Scope: main-session model/thinking and agent model/thinking only. `/review` is untouched; its workflow passes explicit `agent({model, effort})`, which pi-subagents 0.19.0 resolves before frontmatter (source-read inference, not E2E-verified).
-- Config: machine-local `~/.pi/agent/model-profiles.json` with a schema. Shape `{$schema?, active?, profiles: {<name>: {main?: {model?, thinking?}, agents?: {"*"?: {...}, <agent>?: {...}}}}}`; absent `active` means `default`. Per field, named agent > `*` > repo frontmatter. Repo `agents/*.md` stay the canonical baseline.
+- Config: machine-local `~/.pi/agent/model-profiles.json` with a schema. Shape `{$schema?, active?, defaultMain?: {model?, thinking?}, profiles: {<name>: {main?: {model?, thinking?}, agents?: {"*"?: {...}, <agent>?: {...}}}}}`; absent `active` means `default`. Per field, named agent > `*` > repo frontmatter. Repo `agents/*.md` stay the canonical baseline.
 - Commands: `/profile` selector showing the active profile; `/profile <name>` switches; `/profile save <name>` snapshots current main model/thinking, keeping the existing agents map. Agent maps are hand-edited.
 - Switching validates main and every override (registry, auth, scope) first; any failure lists all failures and applies nothing. Main applies to the current session and persists defaults to settings.
 - One global active profile. Agent changes affect every session's next spawn; other running sessions keep their current main until they switch. Writes are atomic.
@@ -180,6 +181,7 @@ Approved by `/grill-me` on 2026-10-02. Optional recipes exist for `/diagnose`, `
 
 ## Open questions
 
+- Extension isolation: RTK imports tool-display configuration and rendering helpers despite the sibling-import prohibition in `extensions/AGENTS.md`. Was a narrow exception approved, with what scope and rationale, or should the dependency be removed? Owner: user; resolve before changing this boundary.
 - Model profiles (deferred): stale Generated agent overrides after disabling the Extension (documented; run Default profile first to clean up); status rendering when manual `/model` drifts from the active profile.
 - Live installation and end-to-end Wayfinder UX remain unverified. Integrated tests, loader checks, and static scenarios verify repository behavior and resources, but static scenarios do not prove model adherence.
 - PR workflow (deferred): feasibility of cheap base-branch Before evidence, screenshots, and fork→upstream PR support.

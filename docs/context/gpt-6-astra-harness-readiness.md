@@ -30,7 +30,7 @@ The prior offline verification checked all 17 model/thinking pairs before the la
 
 ## Known compatibility evidence
 
-- The repository pins Pi `0.84.0`. Its bundled model catalog has no `openai-codex/gpt-6-astra` entry.
+- At the historical compatibility inspection, the repository pinned Pi `0.84.0`; that version's bundled model catalog had no `openai-codex/gpt-6-astra` entry. This is not a catalog check of the current pin.
 - A refreshed local `models-store.json` catalog cache contains `openai-codex/gpt-6-astra`. Its exact `thinkingLevelMap` is `off: null`, `minimal: "low"`, `low: "low"`, `medium: "medium"`, `high: "high"`, `xhigh: "xhigh"`, and `max: "max"`.
 - At the historical compatibility probes, the main-session and first-run setup default was `openai-codex/gpt-5.6-sol` at `high`. Those probes did not change defaults; [model routing](model-routing.md) records the repository defaults now.
 - The cache entry is catalog evidence only. It is supplemented by sampled Codex compatibility from an approved smoke and the frozen 72-trajectory cohort below: both requested model identities resolved exactly and all recorded response identities matched their requested arms. This is limited compatibility evidence, not a general backend, authentication, request-acceptance, quality, cost, or rollout proof.
@@ -84,9 +84,9 @@ The batch attempted 12 trajectories, completed 11, used 103 model turns, and rec
 
 ## Offline coverage-contract follow-up
 
-Fresh synthetic counterexamples, not rescored live traces, exposed three validator defects: tooling-unavailable wording bypassed numeric proof, explicit uncovered behavior could return `verified`, and a statement that no threshold was specified could become `fabricated_coverage`. The bounded corrections require numeric claims to parse and match retained successful measurements even in mixed entries, prevent explicit coverage gaps from being strict proof, and distinguish threshold absence from a numeric assertion. See the runtime [coverage-integrity contract](../../extensions/execute/README.md#coverage-integrity).
+Fresh synthetic counterexamples, not rescored live traces, exposed three validator defects: tooling-unavailable wording bypassed numeric proof, explicit uncovered behavior could return `verified`, and a statement that no threshold was specified could become `fabricated_coverage`. At that revision, the bounded corrections required numeric claims to parse and match retained successful measurements even in mixed entries, prevented explicit coverage gaps from being strict proof, and distinguished threshold absence from a numeric assertion.
 
-The eval deliberately uses strict `validateTddEvidence`; production uses adaptive `assessTddEvidence`. Honest nonnumeric gaps with otherwise authentic safe evidence require independent verification, while fabricated numeric claims remain hard failures. Absence alone supplies no coverage proof. Grounded named `covers` and `covered` claims now share the same proof gate, while negated cover forms still require independent verification. No production-prompt tuning accompanies these fixes. Historical artifacts and grades stay frozen, and no further live probe or rollout is authorized.
+The eval then used strict `validateTddEvidence`; production used adaptive `assessTddEvidence`. Honest nonnumeric gaps with otherwise authentic safe evidence required independent verification, while fabricated numeric claims remained hard failures. Absence alone supplied no coverage proof. Grounded named `covers` and `covered` claims shared the same proof gate, while negated cover forms required independent verification. No production-prompt tuning accompanied those fixes. Both validators were later retired; the [current execute contract](../../extensions/execute/README.md#native-orchestration) uses TDD as worker guidance and main-session independent verification, not runtime trajectory enforcement. Historical artifacts and grades stay frozen, and no further live probe or rollout is authorized.
 
 ## Post-fix executor probe (diagnostic only)
 
@@ -249,12 +249,12 @@ This completion subtracts duplicated or misplaced local instructions; it does no
 
 Offline harness maintenance after the recorded probes makes diagnostics failures explicit (unavailable when no LSP server can answer, incomplete when only some answer) and makes the canonical sample fixture's default command discover `tests/math.case.ts`. That intentionally broken fixture now yields one failure and one pass when copied for future runs. These local fixes do not alter frozen artifact identities or historical results, trigger a live rerun, change prompts or schemas, reload the live Pi config, or authorize model/default/route changes.
 
-- `package.json` pins Pi `0.84.0`; [model routing](model-routing.md) points to current repository first-run defaults without describing existing live settings.
+- `package.json` pins the four Pi development packages to `0.86.1`; [model routing](model-routing.md) points to current repository first-run defaults without describing existing live settings.
 - `evals/prompt-optimization/cli.ts` implements exact model comparison, effective-effort guards, dry-run early return, live-forbid guard, turn bounds, and runtime/artifact ordering.
 - `evals/prompt-optimization/corpus.json` defines the named readiness and TDD cohorts; `runner.ts` supplies the isolated fixture and simulated tool boundaries.
 - [`evals/prompt-optimization/README.md`](../../evals/prompt-optimization/README.md) is the operational CLI and telemetry reference.
 
-Historical cohorts are not fresh comparison results; the bounded executor probe above is diagnostic only. Read the canonical [separate assessment rubric](../../evals/prompt-optimization/README.md#separate-assessment-rubric) before interpreting its deterministic outcomes.
+Historical cohorts are not fresh comparison results; the bounded executor probe above is diagnostic only. See the current [corpus and scoring guidance](../../evals/prompt-optimization/README.md#corpus-and-scoring); interpret historical cohorts under their recorded rubrics, not today's eval checks.
 
 ## Human review decisions
 

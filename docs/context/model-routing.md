@@ -10,9 +10,9 @@ These are repository defaults, not the effective settings of a running Pi sessio
 
 | Route | Repository default | Source |
 | --- | --- | --- |
-| First-run main session | `openai-codex/gpt-6-sol`, `high` | [`setup.sh`](../../setup.sh) |
-| Direct executor agent | `openai-codex/gpt-6-sol`, `medium` | [`agents/executor.md`](../../agents/executor.md) |
-| Direct explorer agent | `openai-codex/gpt-6-sol`, `low` | [`agents/explorer.md`](../../agents/explorer.md) |
+| First-run main session | `openai-codex/gpt-6.1-sol`, `high` | [`setup.sh`](../../setup.sh) |
+| Direct executor agent | `openai-codex/gpt-6.1-sol`, `high` | [`agents/executor.md`](../../agents/executor.md) |
+| Direct explorer agent | `openai-codex/gpt-6.1-sol`, `low` | [`agents/explorer.md`](../../agents/explorer.md) |
 | Direct review-synthesizer agent | `openai-codex/gpt-6-luna`, `low` | [`agents/review-synthesizer.md`](../../agents/review-synthesizer.md) |
 | `/review` built-in reviewer panel / verifier | `openai-codex/gpt-6-astra`, `medium` | [`workflow.ts`](../../extensions/review/workflow.ts), [`public-workflow.ts`](../../extensions/review/public-workflow.ts) |
 | `/review` built-in synthesizer | `openai-codex/gpt-6-luna`, `medium` | [`workflow.ts`](../../extensions/review/workflow.ts), [`public-workflow.ts`](../../extensions/review/public-workflow.ts) |

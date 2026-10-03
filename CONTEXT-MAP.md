@@ -22,6 +22,7 @@
 - `docs/context/model-routing.md` — read before checking or documenting current repository model defaults for setup, agents, review, evals, or Fast Mode; live settings and overrides may differ.
 - `docs/context/gpt-5.6-harness-optimization.md` — read before interpreting historical GPT-5.6 reasoning, service-tier, prompt, caching, tool-surface, or eval evidence.
 - `docs/context/gpt-6-astra-harness-readiness.md` — read before interpreting historical Astra approvals and comparisons, or planning an approval-gated Astra eval or full-stack probe.
+- `docs/context/harness-contract-audit.md` — read before changing research-artifact ownership, search-first delegation, or instruction ownership across prompts, agents, skills, and rules; preserves historical audit evidence and deferred live-calibration gates.
 - `extensions/review/README.md` — read before changing `/review`, `/review-summary`, `/review-fix`, reviewer-agent orchestration, or review prompt contracts.
 
 ## Major extension docs

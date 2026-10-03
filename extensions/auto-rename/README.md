@@ -65,7 +65,7 @@ The extension does not require dialogs or TUI components. Naming works in TUI, R
 - This rewrite does not preserve upstream configuration compatibility.
 - It does not support explicit primary/fallback model selection, cheapest-model discovery, direct OpenAI-compatible endpoints, endpoint credentials, provider retry chains, or connectivity commands.
 - It does not support static/dynamic prefixes, `prefixCommand`, shell execution, prefix-only mode, readable adjective/noun IDs, custom wordlists, environment-provided readable IDs, or config initialization commands.
-- It intentionally uses the active Pi model, a single request with no retry, a private hash fallback, strict validation, post-`agent_settled` timing, and `/auto-rename status|regen` instead of those upstream facilities.
+- It intentionally uses the active Pi model, a single request with no retry, a private hash fallback, strict validation, accepted raw-prompt timing with `agent_settled` fallback, and `/auto-rename status|regen` instead of those upstream facilities.
 
 ## Attribution
 

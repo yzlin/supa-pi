@@ -31,11 +31,10 @@ Command notifications use the model support source: `model`, `built-in allowlist
 }
 ```
 
-Editor schema help ships at `extensions/fast/configuration_schema.json`. It is tooling only; runtime reads the file directly. For example, in this repo a project-local `.pi/fast-mode.json` can start with:
+Editor schema help ships at `extensions/fast/configuration_schema.json`. It is tooling only; runtime reads the file directly. Only the global `~/.pi/agent/fast-mode.json` is read; project-local config is not supported. The example below omits optional `$schema`; for editor help, set it to the absolute path to this checkout's `extensions/fast/configuration_schema.json`.
 
 ```json
 {
-  "$schema": "../extensions/fast/configuration_schema.json",
   "enabled": true,
   "warned": true,
   "allowlist": []
@@ -77,7 +76,7 @@ When those checks pass, the extension returns a patched payload with `service_ti
 
 An authenticated `openai-codex` ChatGPT-backend probe returned a successful response with GPT-5.6 Sol and the priority field enabled through the config allowlist on 2026-07-11. This proves that the backend accepts the request contract, but acceptance alone does not prove actual priority-tier fulfillment. Separately, recent paid GPT-6 Sol/Luna priority-injected requests succeeded, but Pi CLI JSON did not expose a response tier; the new built-in allowlist does not establish actual Fast-tier fulfillment.
 
-An order-balanced four-repetition paired benchmark on 2026-07-12 found equal quality but route-dependent latency: priority was 36.5% faster for core orchestration and 15.6% slower for executor fixing, while costing 81% and 100% more. A clean low-effort exploration rerun was 19.6% faster at 98% higher cost; production exploration used Luna rather than Sol at that time and now uses GPT-6 Sol/low. Fast Mode therefore remains user-controlled rather than default-on policy; supported-model detection reflects backend capability instead of benchmark preference. See `docs/context/gpt-5.6-harness-optimization.md` for artifacts and methodology.
+An order-balanced four-repetition paired benchmark on 2026-07-12 found equal quality but route-dependent latency: priority was 36.5% faster for core orchestration and 15.6% slower for executor fixing, while costing 81% and 100% more. A clean low-effort exploration rerun was 19.6% faster at 98% higher cost; production exploration used Luna rather than Sol at that time. See [model routing](../../docs/context/model-routing.md) for current explorer defaults. Fast Mode therefore remains user-controlled rather than default-on policy; supported-model detection reflects backend capability instead of benchmark preference. See `docs/context/gpt-5.6-harness-optimization.md` for artifacts and methodology.
 
 ## Limitations
 

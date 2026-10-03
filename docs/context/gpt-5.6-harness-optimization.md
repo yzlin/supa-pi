@@ -168,7 +168,7 @@ Pi exposes `getActiveTools()` and `setActiveTools()`. Automatic intent-based pru
 
 ### 7. Recorded model, transport, and service-tier evidence
 
-At that stage, `setup.sh` and inspected live settings used GPT-5.6 Sol, `high`, and `transport: "auto"`. `rules/common/performance.md` documents the measured GPT-5.6 routing strategy. For repository defaults and current Fast Mode support, see [model routing](model-routing.md).
+At that stage, `setup.sh` and inspected live settings used GPT-5.6 Sol, `high`, and `transport: "auto"`. At that snapshot, `rules/common/performance.md` documented the measured GPT-5.6 routing strategy; it now owns application-performance policy only. For repository defaults and current Fast Mode support, see [model routing](model-routing.md).
 
 Pi documents `auto` as its transport default. Preserve `auto` unless an SSE or WebSocket benchmark demonstrates a better choice.
 
