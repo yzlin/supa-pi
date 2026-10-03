@@ -14,23 +14,23 @@
  */
 
 import type { AgentTool } from "@earendil-works/pi-agent-core";
-import type {
-  ExtensionAPI,
-  SessionEntry,
-} from "@earendil-works/pi-coding-agent";
+import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import {
-  convertToLlm,
   createBashTool,
   createEditTool,
   createReadTool,
   createWriteTool,
   getMarkdownTheme,
-  serializeConversation,
 } from "@earendil-works/pi-coding-agent";
 import { Box, Markdown, Spacer, Text } from "@earendil-works/pi-tui";
 
 import { getProviderApiKeyForModel } from "../llm-auth";
-import { parseBtwArgs, resolveModelAndThinking } from "./helper";
+import {
+  BTW_MESSAGE_TYPE,
+  buildBtwConversationContext,
+  parseBtwArgs,
+  resolveModelAndThinking,
+} from "./helper";
 import {
   btwTaskPreview,
   formatToolCall,
@@ -43,8 +43,6 @@ import {
 // ---------------------------------------------------------------------------
 // Custom message type
 // ---------------------------------------------------------------------------
-
-const BTW_MESSAGE_TYPE = "btw-result";
 
 interface BtwMessageDetails {
   task: string;
@@ -202,17 +200,10 @@ export default function (pi: ExtensionAPI) {
         getProviderApiKeyForModel(ctx.modelRegistry, targetModel!);
 
       // Serialize current conversation context for the subagent
-      const branch = ctx.sessionManager.getBranch();
-      const messages = branch
-        .filter(
-          (entry): entry is SessionEntry & { type: "message" } =>
-            entry.type === "message",
-        )
-        .map((entry) => entry.message);
-      const conversationContext =
-        messages.length > 0
-          ? serializeConversation(convertToLlm(messages))
-          : "";
+      const conversationContext = buildBtwConversationContext(
+        ctx.sessionManager.getEntries(),
+        ctx.sessionManager.getLeafId(),
+      );
 
       // Build enriched task with conversation context
       const taskWithContext = conversationContext

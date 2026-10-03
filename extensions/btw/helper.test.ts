@@ -1,6 +1,45 @@
 import { describe, expect, it } from "bun:test";
 
-import { parseBtwArgs, resolveModelAndThinking } from "./helper";
+import { SessionManager } from "@earendil-works/pi-coding-agent";
+
+import {
+  buildBtwConversationContext,
+  parseBtwArgs,
+  resolveModelAndThinking,
+} from "./helper";
+
+describe("buildBtwConversationContext", () => {
+  function userMessage(text: string) {
+    return { role: "user" as const, content: text, timestamp: Date.now() };
+  }
+
+  it("uses compacted context instead of the raw branch", () => {
+    const sm = SessionManager.inMemory("/tmp");
+    sm.appendMessage(userMessage("PRE_COMPACTION_ONLY"));
+    const keptId = sm.appendMessage(userMessage("KEPT_AFTER_COMPACTION"));
+    sm.appendCompaction("COMPACTION_SUMMARY", keptId, 1000);
+    sm.appendMessage(userMessage("AFTER_COMPACTION"));
+    sm.appendCustomMessageEntry("btw-result", "OLD_BTW_RESULT", true);
+
+    const context = buildBtwConversationContext(
+      sm.getEntries(),
+      sm.getLeafId(),
+    );
+
+    expect(context).toContain("COMPACTION_SUMMARY");
+    expect(context).toContain("KEPT_AFTER_COMPACTION");
+    expect(context).toContain("AFTER_COMPACTION");
+    expect(context).not.toContain("PRE_COMPACTION_ONLY");
+    expect(context).not.toContain("OLD_BTW_RESULT");
+  });
+
+  it("returns empty text for an empty session", () => {
+    const sm = SessionManager.inMemory("/tmp");
+    expect(buildBtwConversationContext(sm.getEntries(), sm.getLeafId())).toBe(
+      "",
+    );
+  });
+});
 
 describe("parseBtwArgs", () => {
   it("parses a leading -model option", () => {

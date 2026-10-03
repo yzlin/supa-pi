@@ -1,4 +1,30 @@
+import {
+  buildSessionContext,
+  convertToLlm,
+  type SessionEntry,
+  serializeConversation,
+} from "@earendil-works/pi-coding-agent";
+
 const TOP_LEVEL_REGEX_1 = /^-model\s+(\S+)(?:\s+|$)/;
+
+export const BTW_MESSAGE_TYPE = "btw-result";
+
+/**
+ * Serialize the conversation for a /btw subagent.
+ * Uses the compaction-aware session context (same view as the main agent),
+ * not the raw branch, so long sessions stay within the model window.
+ */
+export function buildBtwConversationContext(
+  entries: SessionEntry[],
+  leafId: string | null,
+): string {
+  const messages = buildSessionContext(entries, leafId).messages.filter(
+    (m) => !(m.role === "custom" && m.customType === BTW_MESSAGE_TYPE),
+  );
+  return messages.length > 0
+    ? serializeConversation(convertToLlm(messages))
+    : "";
+}
 export interface ParsedBtwArgs {
   task: string;
   model?: string;
