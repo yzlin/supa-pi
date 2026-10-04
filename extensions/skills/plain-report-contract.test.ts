@@ -81,6 +81,9 @@ describe("plain-report skill contract", () => {
 
     expect(skill).toContain("Lead with the conclusion.");
     expect(skill).toContain(
+      "If a Final report needs user action, put the specific action and missing prerequisite before completed-work details.",
+    );
+    expect(skill).toContain(
       "Separate verified facts, inferences, and unknowns.",
     );
     expect(skill).toContain(

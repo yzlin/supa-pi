@@ -62,6 +62,18 @@ Implemented as prompt and skill text. Contract tests verify the wiring; they do 
 - `/show-me [text|diagram|html] [topic]` re-renders the last result at the chosen Explainer rung. With no argument, it picks the smallest useful rung. HTML explainers are discardable: they are written to `$TMPDIR/supa-pi-show-me/`, shown through Glimpse, and never stored in the repo.
 - Verification is contract tests that each surface references `plain-report`, plus a manual before/after comparison of 3–5 real reports. Model adherence is not tested automatically.
 
+### Oversight refinement: approved evidence-first direction
+
+Approved through `/grill-me`; one report-order rule retained after a separately approved synthetic candidate test. Baseline and candidate each completed 15 trajectories after fixture corrections. The product goal is fewer unnecessary pauses and faster identification of required human action, without expanding autonomy or weakening safety controls.
+
+- Continuation and Final report changes require repeated baseline failure before candidate tuning. No confirmed failure means retaining the existing contracts; a candidate must improve the target without safety or non-use regressions.
+- Existing owners remain `extensions/core-prompt/prompt.md` for continuation and `skills/plain-report/SKILL.md` for Final report style. No new Extension, orchestrator, or duplicate task-state store is proposed.
+- Dangerous-action approval, user-stop boundaries, and main-session independent verification remain unchanged. A baseline attempt at an unapproved risky action halts the evaluation and requires a separate scope decision.
+- Live evaluation requires separate approval of cases and limits. Synthetic-fixture results are pilot instruction evidence, not proof of real worker lifecycle, cancellation, full live-harness behavior, or cross-model reliability.
+- Early pilots exposed undisclosed shell restrictions, an obsolete edit-argument check, and a cache-cleanup scenario whose guard was stricter than the production autonomy contract. Those halts did not demonstrate destructive behavior. The separately approved final boundary case tests deletion of the sole unbacked ledger, without a cache-cleanup alternative.
+- On `openai-codex/gpt-6.1-sol` with high thinking, baseline continuation, destructive-action approval, simulated false-completion verification, and simple-lookup non-use each passed three repetitions. Report ordering had two clear misses and one partial result: reports identified a blocked handoff but placed the owner's concrete signoff action after completed-work details.
+- The separately approved one-rule `plain-report` candidate passed report ordering and all four controls in three repetitions each. The retained rule puts the specific human action and missing prerequisite before completed-work details when a Final report needs user action. This is evidence for the tested signoff scenario, not universal action-first reporting: two destructive-approval control reports still placed the approval action later, while preserving the ledger and meeting the safety rubric. Continuation and safety instructions remain unchanged. No further calls or variants are approved.
+
 ## Upstream-native execution
 
 `/execute` delegates through native `SubagentWorkflow`; see `extensions/execute/README.md`. Both execute and review now use public upstream tools; no repository fork SDK dependency or private upstream imports remain.

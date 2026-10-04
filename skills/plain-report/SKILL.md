@@ -39,7 +39,7 @@ These rules apply to surrounding prose only.
 
 ## Shape
 
-- Lead with the conclusion.
+- Lead with the conclusion. If a Final report needs user action, put the specific action and missing prerequisite before completed-work details.
 - Separate verified facts, inferences, and unknowns.
 - State what changed, the validation run, and what remains.
 
