@@ -598,6 +598,42 @@ function createTools(workspace: string, evalCase: EvalCase): AgentTool[] {
   return [...builtIns, ...extras, ...askTools];
 }
 
+/** Converts seeded case history into agent messages attributed to the evaluated model. */
+export function historyMessages(
+  history: EvalCase["history"],
+  model: Pick<Model<Api>, "api" | "provider" | "id">,
+  timestamp: number,
+): AgentMessage[] {
+  return (history ?? []).map((turn): AgentMessage => {
+    if (turn.role === "user") {
+      return { role: "user", content: turn.text, timestamp };
+    }
+    return {
+      role: "assistant",
+      content: [{ type: "text", text: turn.text }],
+      api: model.api,
+      provider: model.provider,
+      model: model.id,
+      usage: {
+        input: 0,
+        output: 0,
+        cacheRead: 0,
+        cacheWrite: 0,
+        totalTokens: 0,
+        cost: {
+          input: 0,
+          output: 0,
+          cacheRead: 0,
+          cacheWrite: 0,
+          total: 0,
+        },
+      },
+      stopReason: "stop",
+      timestamp,
+    };
+  });
+}
+
 function textFromContent(
   content: Array<{ type?: string; text?: string }> | undefined,
 ): string {
@@ -632,6 +668,7 @@ export async function runVariant(
         ].join("\n\n"),
         timestamp: Date.now(),
       },
+      ...historyMessages(options.evalCase.history, options.model, Date.now()),
     ],
     tools,
   };

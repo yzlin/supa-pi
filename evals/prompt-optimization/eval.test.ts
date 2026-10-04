@@ -24,6 +24,7 @@ import {
   CORE_EVAL_BASE_PROMPT,
   composePrompt,
   createEmptyMetrics,
+  type HistoryTurn,
   loadPromptPair,
   parseCorpus,
   reduceRunEvent,
@@ -61,6 +62,29 @@ afterEach(() => {
   for (const directory of temporaryDirectories.splice(0)) {
     rmSync(directory, { force: true, recursive: true });
   }
+});
+
+describe("plainReport check", () => {
+  const check = { type: "plainReport", domain: "quality", weight: 1 } as const;
+
+  it("passes complete Plain report prose and fails telegraph fragments", async () => {
+    const plain = Array.from(
+      { length: 6 },
+      () =>
+        "I fixed the bug in the add function. The test suite passes after the change.",
+    ).join("\n\n");
+    const telegraph = Array.from(
+      { length: 12 },
+      () => "Fixed add. Tests pass. No push.",
+    ).join("\n\n");
+
+    const passed = await scoreOutput(plain, [check]);
+    const failed = await scoreOutput(telegraph, [check]);
+
+    expect(passed.overall).toBe(1);
+    expect(failed.overall).toBe(0);
+    expect(failed.checks[0]?.evidence).toContain("telegraph");
+  });
 });
 
 describe("parseCorpus", () => {
@@ -144,6 +168,36 @@ describe("parseCorpus", () => {
         cases: [{ ...evalCase, tools: ["questionnaire"] }],
       }),
     ).toThrow("tools contains an unsupported tool");
+  });
+
+  it("accepts alternating history ending with assistant and rejects other shapes", () => {
+    const evalCase = {
+      id: "history",
+      workload: "explanation",
+      promptPath: "AGENTS.global.md",
+      task: "Report.",
+      tools: ["read"],
+      checks: [{ type: "plainReport", domain: "quality", weight: 1 }],
+    };
+    const history: HistoryTurn[] = [
+      { role: "user", text: "scan?" },
+      { role: "assistant", text: "Scanned." },
+    ];
+
+    expect(
+      parseCorpus({ version: 1, cases: [{ ...evalCase, history }] }).cases[0]
+        ?.history,
+    ).toEqual(history);
+    for (const invalid of [
+      [],
+      history.slice(0, 1),
+      [...history].reverse(),
+      [{ role: "user", text: " " }, history[1]],
+    ]) {
+      expect(() =>
+        parseCorpus({ version: 1, cases: [{ ...evalCase, history: invalid }] }),
+      ).toThrow("history must alternate");
+    }
   });
 
   it("rejects unlisted skill prompts", () => {
@@ -336,6 +390,7 @@ describe("committed corpus", () => {
       "skills/showing-me/SKILL.md",
       "skills/e2e-testing/SKILL.md",
       "skills/context-docs/SKILL.md",
+      "AGENTS.global.md",
     );
     expect(coveredPaths).toEqual(new Set(expectedPaths));
   });
@@ -2054,6 +2109,7 @@ describe("changedPromptPaths", () => {
     run(repository, "git", ["config", "user.email", "eval@example.com"]);
     run(repository, "git", ["config", "user.name", "Eval Test"]);
     const paths = [
+      "AGENTS.global.md",
       "agents/explorer.md",
       "extensions/core-prompt/prompt.md",
       "skills/diagnose/SKILL.md",
@@ -2073,6 +2129,7 @@ describe("changedPromptPaths", () => {
     }
 
     expect(await changedPromptPaths(repository)).toEqual([
+      "AGENTS.global.md",
       "agents/explorer.md",
       "extensions/core-prompt/prompt.md",
       "skills/context-docs/SKILL.md",
@@ -2301,6 +2358,22 @@ describe("composePrompt", () => {
     expect(prompt).toContain("You are a SupaPi subagent.");
     expect(prompt).toContain("# Explorer\nRead only.");
     expect(prompt).not.toContain("description: Explore");
+  });
+
+  it("layers global AGENTS between the base, core prompt, and plain-report skill", () => {
+    const prompt = composePrompt("AGENTS.global.md", "- Style: telegraph.");
+    const core = readFileSync(
+      join(moduleDirectory, "../../extensions/core-prompt/prompt.md"),
+      "utf8",
+    ).trim();
+
+    expect(prompt).toStartWith(CORE_EVAL_BASE_PROMPT);
+    expect(prompt).toContain("# Global instructions\n\n- Style: telegraph.");
+    expect(prompt.indexOf("- Style: telegraph.")).toBeLessThan(
+      prompt.indexOf(core),
+    );
+    expect(prompt).toContain("# Loaded skill: plain-report\n\n# Plain Report");
+    expect(prompt).not.toContain("name: plain-report");
   });
 
   it("strips diagnose skill frontmatter while retaining its body", () => {

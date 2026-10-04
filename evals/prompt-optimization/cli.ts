@@ -360,6 +360,7 @@ export async function changedPromptPaths(
     "skills/showing-me/SKILL.md",
     "skills/e2e-testing/SKILL.md",
     "skills/context-docs/SKILL.md",
+    "AGENTS.global.md",
   ];
   const pathspecs = ["agents", ...supportedFiles];
   const outputs = await Promise.all([

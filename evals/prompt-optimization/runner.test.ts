@@ -14,6 +14,7 @@ import { ModelRegistry, ModelRuntime } from "@earendil-works/pi-coding-agent";
 
 import type { EvalCase } from "./index";
 import {
+  historyMessages,
   isContainedRelativePath,
   planRuns,
   runAllowedFixtureTest,
@@ -25,6 +26,39 @@ const fixturePath = resolve(
   "fixtures/sample-project",
 );
 const modelRegistry = new ModelRegistry(await ModelRuntime.create());
+describe("seeded history", () => {
+  it("attributes assistant turns to the evaluated model", () => {
+    const model = {
+      api: "openai-codex-responses",
+      provider: "openai-codex",
+      id: "gpt-test",
+    } as const;
+    const messages = historyMessages(
+      [
+        { role: "user", text: "scan?" },
+        { role: "assistant", text: "Scanned. Fine." },
+      ],
+      model,
+      1,
+    );
+
+    expect(messages[0]).toEqual({
+      role: "user",
+      content: "scan?",
+      timestamp: 1,
+    });
+    expect(messages[1]).toMatchObject({
+      role: "assistant",
+      content: [{ type: "text", text: "Scanned. Fine." }],
+      api: model.api,
+      provider: model.provider,
+      model: model.id,
+      stopReason: "stop",
+    });
+    expect(historyMessages(undefined, model, 1)).toEqual([]);
+  });
+});
+
 describe("run planning", () => {
   it("preserves paired arm ordering for each repetition", () => {
     expect(planRuns(["a"], 1)).toEqual([

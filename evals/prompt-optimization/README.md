@@ -35,7 +35,11 @@ Every arm runs in a fresh temporary fixture copy and a fresh session. File tools
 
 The committed corpus covers explanation, focused fixes, multi-file implementation, exploration, review, web research, orchestration, and diagnosis. The evals measure deterministic prompt behavior; they do not replace main-session code verification or establish production correctness.
 
-Checks score independent `task`, `tests`, `evidence`, and `quality` domains. Supported checks include output and file assertions, tool-call ordering/counts, approval gates, and workspace immutability. Efficiency metrics are reported separately, and no LLM judge is used.
+`AGENTS.global.md` cases compose a layered prompt: the eval base, the varied global AGENTS text, the working-tree core prompt, and the working-tree `plain-report` skill body, preloaded. Only the global AGENTS layer differs between arms.
+
+A case may set `history`: user and assistant text turns, alternating and ending with assistant. The runner inserts them before the task and attributes assistant turns to the evaluated model.
+
+Checks score independent `task`, `tests`, `evidence`, and `quality` domains. The `plainReport` check scores the final output with `evals/plain-report/lint.ts`; it passes at the 80% clean-sentence target with no `telegraph` warning. Supported checks include output and file assertions, tool-call ordering/counts, approval gates, and workspace immutability. Efficiency metrics are reported separately, and no LLM judge is used.
 
 ## Artifacts
 

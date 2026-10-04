@@ -11,15 +11,19 @@ import {
 } from "node:fs";
 import { lstat, readdir, readFile, readlink, realpath } from "node:fs/promises";
 import { isAbsolute, relative, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { isDeepStrictEqual } from "node:util";
 
 import { parseFrontmatter } from "@earendil-works/pi-coding-agent";
+
+import { lintPlainReport, TARGET_COMPLIANCE } from "../plain-report/lint";
 
 export const CHECK_DOMAINS = ["quality", "task", "tests", "evidence"] as const;
 export const CORE_EVAL_BASE_PROMPT = `You are an expert coding assistant operating inside Pi.
 
 Work inside the provided workspace. Inspect before editing. Make the smallest complete change. Preserve safety and type correctness. Verify changed behavior. Lead with the result and retain concrete evidence.`;
 export type CheckDomain = (typeof CHECK_DOMAINS)[number];
+const REPOSITORY_ROOT = fileURLToPath(new URL("../..", import.meta.url));
 
 const CASE_ID_PATTERN = /^[a-z0-9][a-z0-9_-]*$/;
 const LEADING_DOT_SLASH_PATTERN = /^(?:\.\/)+/;
@@ -145,12 +149,20 @@ export type EvalCheck =
       visual: boolean;
     })
   | (CheckBase & { type: "workspaceUnchanged" })
-  | (CheckBase & { type: "workspaceChangesOnly"; paths: string[] });
+  | (CheckBase & { type: "workspaceChangesOnly"; paths: string[] })
+  | (CheckBase & { type: "plainReport" });
+
+export interface HistoryTurn {
+  role: "user" | "assistant";
+  text: string;
+}
 
 export interface EvalCase {
   id: string;
   workload: string;
   promptPath: string;
+  /** Prior conversation seeded before the task; alternates user/assistant and ends with assistant. */
+  history?: HistoryTurn[];
   task: string;
   tools: ToolName[];
   askResponse?: AskResponse;
@@ -467,6 +479,7 @@ function parseCheck(value: unknown, label: string): EvalCheck {
     case "askGate":
     case "authPolicyClarification":
     case "workspaceUnchanged":
+    case "plainReport":
       return { ...base, type: value.type };
     case "fixtureAdminGrounding":
       if (!["readme", "readme-or-auth"].includes(String(value.source))) {
@@ -531,11 +544,33 @@ export function parseCorpus(value: unknown): EvalCorpus {
       caseValue.promptPath !== "skills/showing-me/SKILL.md" &&
       caseValue.promptPath !== "skills/e2e-testing/SKILL.md" &&
       caseValue.promptPath !== "skills/context-docs/SKILL.md" &&
+      caseValue.promptPath !== "AGENTS.global.md" &&
       !caseValue.promptPath.startsWith("agents/")
     ) {
       throw new Error(`${label}.promptPath must target a SupaPi prompt`);
     }
     assertNonEmptyString(caseValue.task, `${label}.task`);
+    const history = caseValue.history;
+    if (
+      history !== undefined &&
+      !(
+        Array.isArray(history) &&
+        history.length > 0 &&
+        history.length % 2 === 0 &&
+        history.every((turn, turnIndex) => {
+          const entry = turn as Partial<HistoryTurn> | null;
+          return (
+            entry?.role === (turnIndex % 2 === 0 ? "user" : "assistant") &&
+            typeof entry.text === "string" &&
+            entry.text.trim().length > 0
+          );
+        })
+      )
+    ) {
+      throw new Error(
+        `${label}.history must alternate user/assistant text turns and end with assistant`,
+      );
+    }
     if (
       !(
         Array.isArray(caseValue.tools) &&
@@ -567,6 +602,7 @@ export function parseCorpus(value: unknown): EvalCorpus {
       id: caseValue.id,
       workload: caseValue.workload,
       promptPath: caseValue.promptPath,
+      ...(history === undefined ? {} : { history: history as HistoryTurn[] }),
       task: caseValue.task,
       tools: caseValue.tools as ToolName[],
       askResponse: caseValue.askResponse as AskResponse | undefined,
@@ -735,6 +771,21 @@ export async function loadPromptPair(
 export function composePrompt(promptPath: string, content: string): string {
   if (promptPath === "extensions/core-prompt/prompt.md") {
     return `${CORE_EVAL_BASE_PROMPT}\n\n${content}`;
+  }
+  if (promptPath === "AGENTS.global.md") {
+    // Global AGENTS is the only varied layer. Core prompt and the preloaded
+    // plain-report skill come from the working tree for both arms.
+    const fixedFile = (path: string) =>
+      readStableContainedFile(REPOSITORY_ROOT, path).toString("utf8").trim();
+    const skill = parseFrontmatter(
+      fixedFile("skills/plain-report/SKILL.md"),
+    ).body.trim();
+    return [
+      CORE_EVAL_BASE_PROMPT,
+      `# Global instructions\n\n${content.trim()}`,
+      fixedFile("extensions/core-prompt/prompt.md"),
+      `# Loaded skill: plain-report\n\n${skill}`,
+    ].join("\n\n");
   }
 
   const { body } = parseFrontmatter(content);
@@ -1164,6 +1215,17 @@ async function scoreCheck(
   check: EvalCheck,
 ): Promise<CheckResult> {
   switch (check.type) {
+    case "plainReport": {
+      const result = lintPlainReport(input.output);
+      const telegraph = result.warnings.some(
+        (warning) => warning.rule === "telegraph",
+      );
+      return {
+        check,
+        passed: result.compliance >= TARGET_COMPLIANCE && !telegraph,
+        evidence: `clean sentences ${Math.round(result.compliance * 100)}%; ${result.articleRate.toFixed(1)} articles/100 words${telegraph ? "; telegraph" : ""}`,
+      };
+    }
     case "outputIncludes": {
       const passed = input.output.includes(check.value);
       return {

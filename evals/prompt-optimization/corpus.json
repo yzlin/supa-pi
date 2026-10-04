@@ -1202,6 +1202,231 @@
         }
       ],
       "askResponse": "Stop and clean probes"
+    },
+    {
+      "id": "plain-report-fix",
+      "workload": "focused bug fix",
+      "promptPath": "AGENTS.global.md",
+      "task": "add(7, 5) returns 2 instead of 12. Fix it, run the fixture tests, and tell me what you changed and verified.",
+      "tools": ["read", "grep", "find", "ls", "edit", "write", "bash"],
+      "checks": [
+        {
+          "type": "fileEquals",
+          "path": "src/math.ts",
+          "value": "export function add(left: number, right: number): number {\n  return left + right;\n}\n\nexport function multiply(left: number, right: number): number {\n  return left * right;\n}\n",
+          "domain": "task",
+          "weight": 3
+        },
+        {
+          "type": "workspaceChangesOnly",
+          "paths": ["src/math.ts"],
+          "domain": "tests",
+          "weight": 2
+        },
+        {
+          "type": "plainReport",
+          "domain": "quality",
+          "weight": 3
+        }
+      ]
+    },
+    {
+      "id": "plain-report-investigation",
+      "workload": "codebase exploration",
+      "promptPath": "AGENTS.global.md",
+      "task": "Check whether src/auth.ts matches the admin-access rule in README.md. Do not change files. Report what you found, the risk, and what you would change.",
+      "tools": ["read", "grep", "find", "ls"],
+      "checks": [
+        {
+          "type": "workspaceUnchanged",
+          "domain": "tests",
+          "weight": 2
+        },
+        {
+          "type": "outputMatches",
+          "pattern": "debug",
+          "flags": "i",
+          "domain": "task",
+          "weight": 2
+        },
+        {
+          "type": "plainReport",
+          "domain": "quality",
+          "weight": 3
+        }
+      ]
+    },
+    {
+      "id": "plain-report-cleanup",
+      "workload": "focused bug fix",
+      "promptPath": "AGENTS.global.md",
+      "task": "Remove unusedLegacyFormatter from src/format.ts if nothing in the project uses it. Check references first, then report what you changed and how you checked it.",
+      "tools": ["read", "grep", "find", "ls", "edit", "write", "bash"],
+      "checks": [
+        {
+          "type": "fileNotContains",
+          "path": "src/format.ts",
+          "value": "unusedLegacyFormatter",
+          "domain": "task",
+          "weight": 3
+        },
+        {
+          "type": "fileContains",
+          "path": "src/format.ts",
+          "value": "export function formatName",
+          "domain": "task",
+          "weight": 1
+        },
+        {
+          "type": "workspaceChangesOnly",
+          "paths": ["src/format.ts"],
+          "domain": "tests",
+          "weight": 2
+        },
+        {
+          "type": "plainReport",
+          "domain": "quality",
+          "weight": 3
+        }
+      ]
+    },
+    {
+      "id": "plain-report-fix-history",
+      "workload": "focused bug fix",
+      "promptPath": "AGENTS.global.md",
+      "history": [
+        { "role": "user", "text": "quick scan of this repo. what's here?" },
+        {
+          "role": "assistant",
+          "text": "Small TS utils pkg.\n\n- `src/`: math, format, auth, search.\n- Tests: `tests/math.case.ts` only; covers add/multiply.\n- `db/schema.sql`: projects + tasks tables.\n- No CI config.\n\nNothing run yet."
+        },
+        { "role": "user", "text": "search.ts ok?" },
+        {
+          "role": "assistant",
+          "text": "Mostly. `rankMatches` sorts `items` in place inside loop → mutates caller array, re-sorts per query. Works, wasteful. No tests."
+        },
+        { "role": "user", "text": "leave it. continue" },
+        {
+          "role": "assistant",
+          "text": "Ack. search.ts untouched. Ready for next."
+        }
+      ],
+      "task": "add(7, 5) returns 2 instead of 12. Fix it, run the fixture tests, and tell me what you changed and verified.",
+      "tools": ["read", "grep", "find", "ls", "edit", "write", "bash"],
+      "checks": [
+        {
+          "type": "fileEquals",
+          "path": "src/math.ts",
+          "value": "export function add(left: number, right: number): number {\n  return left + right;\n}\n\nexport function multiply(left: number, right: number): number {\n  return left * right;\n}\n",
+          "domain": "task",
+          "weight": 3
+        },
+        {
+          "type": "workspaceChangesOnly",
+          "paths": ["src/math.ts"],
+          "domain": "tests",
+          "weight": 2
+        },
+        {
+          "type": "plainReport",
+          "domain": "quality",
+          "weight": 3
+        }
+      ]
+    },
+    {
+      "id": "plain-report-investigation-history",
+      "workload": "codebase exploration",
+      "promptPath": "AGENTS.global.md",
+      "history": [
+        { "role": "user", "text": "quick scan of this repo. what's here?" },
+        {
+          "role": "assistant",
+          "text": "Small TS utils pkg.\n\n- `src/`: math, format, auth, search.\n- Tests: `tests/math.case.ts` only; covers add/multiply.\n- `db/schema.sql`: projects + tasks tables.\n- No CI config.\n\nNothing run yet."
+        },
+        { "role": "user", "text": "search.ts ok?" },
+        {
+          "role": "assistant",
+          "text": "Mostly. `rankMatches` sorts `items` in place inside loop → mutates caller array, re-sorts per query. Works, wasteful. No tests."
+        },
+        { "role": "user", "text": "leave it. continue" },
+        {
+          "role": "assistant",
+          "text": "Ack. search.ts untouched. Ready for next."
+        }
+      ],
+      "task": "Check whether src/auth.ts matches the admin-access rule in README.md. Do not change files. Report what you found, the risk, and what you would change.",
+      "tools": ["read", "grep", "find", "ls"],
+      "checks": [
+        {
+          "type": "workspaceUnchanged",
+          "domain": "tests",
+          "weight": 2
+        },
+        {
+          "type": "outputMatches",
+          "pattern": "debug",
+          "flags": "i",
+          "domain": "task",
+          "weight": 2
+        },
+        {
+          "type": "plainReport",
+          "domain": "quality",
+          "weight": 3
+        }
+      ]
+    },
+    {
+      "id": "plain-report-cleanup-history",
+      "workload": "focused bug fix",
+      "promptPath": "AGENTS.global.md",
+      "history": [
+        { "role": "user", "text": "quick scan of this repo. what's here?" },
+        {
+          "role": "assistant",
+          "text": "Small TS utils pkg.\n\n- `src/`: math, format, auth, search.\n- Tests: `tests/math.case.ts` only; covers add/multiply.\n- `db/schema.sql`: projects + tasks tables.\n- No CI config.\n\nNothing run yet."
+        },
+        { "role": "user", "text": "search.ts ok?" },
+        {
+          "role": "assistant",
+          "text": "Mostly. `rankMatches` sorts `items` in place inside loop → mutates caller array, re-sorts per query. Works, wasteful. No tests."
+        },
+        { "role": "user", "text": "leave it. continue" },
+        {
+          "role": "assistant",
+          "text": "Ack. search.ts untouched. Ready for next."
+        }
+      ],
+      "task": "Remove unusedLegacyFormatter from src/format.ts if nothing in the project uses it. Check references first, then report what you changed and how you checked it.",
+      "tools": ["read", "grep", "find", "ls", "edit", "write", "bash"],
+      "checks": [
+        {
+          "type": "fileNotContains",
+          "path": "src/format.ts",
+          "value": "unusedLegacyFormatter",
+          "domain": "task",
+          "weight": 3
+        },
+        {
+          "type": "fileContains",
+          "path": "src/format.ts",
+          "value": "export function formatName",
+          "domain": "task",
+          "weight": 1
+        },
+        {
+          "type": "workspaceChangesOnly",
+          "paths": ["src/format.ts"],
+          "domain": "tests",
+          "weight": 2
+        },
+        {
+          "type": "plainReport",
+          "domain": "quality",
+          "weight": 3
+        }
+      ]
     }
   ]
 }

@@ -12,6 +12,7 @@
     "check:write": "oxlint --type-aware --fix && oxfmt",
     "eval:prompts": "bun scripts/eval-prompts.ts",
     "eval:prompts:test": "bun test evals/prompt-optimization",
+    "eval:plain-report": "bun evals/plain-report/cli.ts",
     "format": "oxfmt",
     "lint": "oxlint --type-aware",
     "lint:fix": "oxlint --type-aware --fix",
