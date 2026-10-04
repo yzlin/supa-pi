@@ -168,6 +168,7 @@ describe("tool-display commands", () => {
       writeFileSync(
         getProjectToolDisplayConfigPath(cwd),
         JSON.stringify({
+          output: { codemode: { previewLines: 999 } },
           tools: {
             read: {
               fullRead: {
@@ -203,6 +204,13 @@ describe("tool-display commands", () => {
         }),
       );
 
+      expect(messages[0]).toContain(
+        "output.codemode: enabled=on, collapsed=on",
+      );
+      expect(messages[0]).not.toContain("output.codemode: enabled=on, compact");
+      expect(messages[0]).toContain(
+        "tool-display.warning: output.codemode.previewLines ignored",
+      );
       expect(messages[0]).toContain(
         "docs | patterns | off | project | 42 | paged | base=docs include=**/*.md exclude=drafts/**",
       );
@@ -271,6 +279,31 @@ describe("tool-display commands", () => {
       expect(config.tools.search.enabled).toBe(false);
       expect(config.output.bash.rtkHints).toBe(true);
       expect(config.output.bash.enabled).toBe(false);
+      for (const group of ["tasks", "mcp", "codemode", "web"]) {
+        expect(config.output[group].enabled).toBe(false);
+      }
+      await command.handler(
+        "show",
+        createContext(cwd, (message) => messages.push(message)),
+      );
+      for (const group of ["tasks", "mcp", "web"]) {
+        expect(messages.at(-1)).toContain(
+          `output.${group}: enabled=off, compact, collapsed=on, previewLines=20`,
+        );
+      }
+      await command.handler(
+        "preset compact",
+        createContext(cwd, () => {}),
+      );
+      expect(messages.at(-1)).toContain(
+        "output.codemode: enabled=off, collapsed=on",
+      );
+      const compact = JSON.parse(
+        readFileSync(getProjectToolDisplayConfigPath(cwd), "utf8"),
+      );
+      for (const group of ["tasks", "mcp", "codemode", "web"]) {
+        expect(compact.output[group].enabled).toBe(true);
+      }
     } finally {
       rmSync(cwd, { force: true, recursive: true });
     }

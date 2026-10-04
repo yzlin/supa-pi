@@ -466,35 +466,46 @@ describe("owned tool presentation", () => {
     expect(rendered.at(-1)).toBe("line 3999");
   });
 
-  test("colors tool names by Tidy category", () => {
-    const foregroundCalls: [string, string][] = [];
-    const colorTheme = {
-      bg: (_token: string, text: string) => text.trimEnd(),
-      bold: (text: string) => text,
-      fg: (token: string, text: string) => {
-        foregroundCalls.push([token, text]);
-        return text;
-      },
-    };
-    const context = {
-      state: {} as PresentationState,
-      invalidate() {
-        return;
-      },
-    };
+  test.each([
+    ["read", "📖", "accent"],
+    ["grep", "🔍", "accent"],
+    ["find", "🔍", "accent"],
+    ["ls", "📁", "accent"],
+    ["edit", "✏️", "warning"],
+    ["write", "📄", "warning"],
+    ["bash", "⚡️", "thinkingXhigh"],
+  ] as const)(
+    "%s uses its tool-kind icon and risk-group color",
+    (name, icon, color) => {
+      const foregroundCalls: [string, string][] = [];
+      const colorTheme = {
+        bg: (_token: string, text: string) => text.trimEnd(),
+        bold: (text: string) => text,
+        fg: (token: string, text: string) => {
+          foregroundCalls.push([token, text]);
+          return text;
+        },
+      };
+      const context = {
+        state: {} as PresentationState,
+        invalidate() {
+          return;
+        },
+      };
 
-    renderOwnedToolCall("read", {}, colorTheme, context).render(80);
-    renderOwnedToolCall("edit", {}, colorTheme, context).render(80);
-    renderBashToolCall({}, colorTheme, context).render(80);
-
-    expect(foregroundCalls).toContainEqual(["accent", "📖"]);
-    expect(foregroundCalls).toContainEqual(["accent", "read"]);
-    expect(foregroundCalls).toContainEqual(["warning", "✏️"]);
-    expect(foregroundCalls).toContainEqual(["warning", "edit"]);
-    expect(foregroundCalls).toContainEqual(["thinkingXhigh", "⚡️"]);
-    expect(foregroundCalls).toContainEqual(["thinkingXhigh", "bash"]);
-    cleanupToolDisplayTimers();
-  });
+      const call = renderOwnedToolCall(name, {}, colorTheme, context);
+      expect(call.render(80)[0]).toStartWith(`┊ • ${icon} ${name}`);
+      expect(foregroundCalls).toContainEqual([color, icon]);
+      expect(foregroundCalls).toContainEqual([color, name]);
+      expect(visibleWidth(icon)).toBe(2);
+      for (const width of [8, 16, 24, 80]) {
+        expect(
+          call.render(width).every((line) => visibleWidth(line) <= width),
+        ).toBe(true);
+      }
+      cleanupToolDisplayTimers();
+    },
+  );
 
   test("formats elapsed durations", () => {
     expect(formatToolDuration(1)).toBe("<1s");

@@ -342,3 +342,40 @@ describe("tool-display config", () => {
     });
   });
 });
+
+describe("companion output gates", () => {
+  it("normalizes and merges every companion group and enables/disables presets", () => {
+    for (const group of ["tasks", "mcp", "web"] as const) {
+      const config = loadToolDisplayConfigFromLayers(
+        {
+          output: {
+            [group]: { enabled: false, collapsed: false, previewLines: 4 },
+          },
+        },
+        {
+          output: {
+            [group]: { enabled: true, collapsed: "invalid", previewLines: 2 },
+          },
+        },
+      );
+      expect(config.output[group]).toEqual({
+        enabled: true,
+        mode: "compact",
+        collapsed: false,
+        previewLines: 2,
+      });
+      expect(
+        normalizeToolDisplayConfig({
+          output: {
+            [group]: { enabled: "yes", collapsed: 1, previewLines: 0 },
+          },
+        }),
+      ).toEqual({});
+      for (const preset of ["compact", "verbose", "off"] as const) {
+        expect(getToolDisplayPresetConfig(preset).output[group].enabled).toBe(
+          preset !== "off",
+        );
+      }
+    }
+  });
+});

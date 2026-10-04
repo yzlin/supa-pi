@@ -193,6 +193,20 @@ Approved by `/grill-me` on 2026-10-04; implemented with `pi.registerToolRenderer
 - Verification: resolver-composition unit tests, updated TUI smoke, a headless or SDK probe rendering a resumed session with an unconnected MCP call, and `bun run check`. Live TUI and HTML export checks are deferred.
 - Unknown: whether Pi's built-in MCP support ships its own renderers or resolver; fill-only composition covers either case. Not an ADR: surprising and a real tradeoff, but an internal two-way refactor.
 
+### Companion tool rendering: implemented
+
+Implemented 2026-10-04; unit/resolver tests and TUI smoke verify drawing; live TUI unverified. Approved by `/grill-me` on 2026-10-04. Extends the owned-name contract to a curated set of companion and core tools; drawing only, never execution or schema.
+
+- Owned set: `@tintinweb/pi-tasks` names `TaskCreate`, `TaskList`, `TaskGet`, `TaskUpdate`, `TaskOutput`, `TaskStop`, `TaskExecute`; exact `mcp` gateway and every `mcp__*` namespace proxy (the only prefix match); Pi core `codemode`; `pi-web-access` default names `web_search`, `source_check`, `fetch_content`, `get_search_content`. `Agent`, `SubagentWorkflow`, adapter direct tools, `mcpScript`, and renamed web tool names keep their own renderers.
+- MCP provider: the live config uses `pi-mcp-adapter` for `mcp` and `mcp__*`; Pi's built-in MCP is disabled via `-builtin:mcp`. Either provider's renderers are replaced while the gate is on.
+- Precedence: same as other owned names. Gate on: tool-display returns `renderShell: 'self'`, `renderCall`, and `renderResult` without `next()`. Gate off: returns `next()` unchanged, preserving the package or core renderer.
+- Config: group gates `output.tasks`, `output.mcp`, `output.web`, each `{enabled, collapsed, previewLines}`, and `output.codemode` `{enabled, collapsed}`, with existing output normalization and project > global > default precedence; on by default and in the compact preset; `preset off` disables them. Codemode follows Pi's fixed preview counts, so a stale `output.codemode.previewLines` is ignored with a warning (implemented; live TUI unverified).
+- Drift: read external args/details through narrow type guards; an unknown or mismatched shape draws that call or result with the Fallback renderer, without throwing.
+- Codemode (implemented; approved by `/grill-me` 2026-10-04; live TUI unverified): row 1 shows the nested call count and status (`3 tool calls · 47 bytes → done in <1s`); while running it shows the live count from partial `details.calls`, and bytes appear once settled. Below, with the `┊` prefix: the script, JS-highlighted, up to 10 visual lines plus a `Ctrl+O` hint; then the last 8 calls as `<status icon> <name> <args> <duration>` (✓ ok, ✗ error, … running, ⊘ cancelled), width-fitted with duration kept, and an earlier-calls hint when more exist. Compact view shows no script output. `Ctrl+O` shows the full script, all calls with error text, and full output without the `Script completed / Wall time / Output:` header. Counts follow Pi's core codemode renderer; highlighting uses the public `highlightCode`. The result uses Fallback when `details.calls` is not an array.
+- Theme groups: web and mcp accent (external reads), tasks warning (state mutation), codemode `thinkingXhigh` (code execution).
+- Verification: per-tool args/details fixtures recorded from installed package versions; resolver tests for owned drawing, gate-off passthrough, unknown-shape Fallback, and `mcp__` prefix matching; extended TUI smoke; `bun run check`.
+- Open: none besides live TUI. The web name list and codemode missing-calls behavior are resolved; provider renderers are replaced under the same gate. Not an ADR: reversible through gates, like the parent decision.
+
 ## Open questions
 
 - Extension isolation (resolved 2026-10-04): no approved exception; RTK's tool-display dependency is removed under "Tool rendering: implemented product direction".

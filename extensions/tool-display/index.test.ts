@@ -8,6 +8,7 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { stripVTControlCharacters } from "node:util";
 
 import {
   createEditToolDefinition,
@@ -16,12 +17,15 @@ import {
   type ToolRenderContext,
   type ToolRenderers,
 } from "@earendil-works/pi-coding-agent";
-import { Text } from "@earendil-works/pi-tui";
+import { Text, visibleWidth } from "@earendil-works/pi-tui";
 
+import { companionFixtures } from "./companion-fixtures";
 import * as configModule from "./config";
 import toolDisplayExtension from "./index";
 import {
   cleanupToolDisplayTimers,
+  renderGenericToolCall,
+  renderGenericToolResult,
   type PresentationState,
 } from "./presentation";
 
@@ -221,6 +225,10 @@ describe("renderer resolver", () => {
           search: { enabled: false },
           bash: { enabled: false },
           fallback: { enabled: false },
+          tasks: { enabled: false },
+          mcp: { enabled: false },
+          codemode: { enabled: false },
+          web: { enabled: false },
         },
         diff: { enabled: false },
       }),
@@ -298,7 +306,7 @@ describe("renderer resolver", () => {
       try {
         context.isPartial = false;
         context.isError = isError;
-        expect(drawCall()).toContain(isError ? "×" : "✓");
+        expect(drawCall()).toContain(isError ? "✗" : "✓");
         expect(drawCall()).not.toContain("→");
         expect(context.state.toolDisplayPresentation?.settled).toBe(true);
         expect(context.state.toolDisplayPresentation?.error).toBe(isError);
@@ -322,7 +330,7 @@ describe("renderer resolver", () => {
         // Stored results can settle without markExecutionStarted ever being called.
         context.state = {};
         context.executionStarted = false;
-        expect(drawCall()).toContain(isError ? "×" : "✓");
+        expect(drawCall()).toContain(isError ? "✗" : "✓");
         expect(context.state.toolDisplayPresentation?.timer).toBeUndefined();
       } finally {
         clear.mockRestore();
@@ -331,7 +339,7 @@ describe("renderer resolver", () => {
   );
 
   test("draws unregistered resumed MCP calls, sanitizes args and body, expands previews", () => {
-    const h = harness({ output: { fallback: { previewLines: 1 } } });
+    const h = harness({ output: { mcp: { previewLines: 1 } } });
     const r = h.resolve("mcp__figma__get_file") as ToolRenderers;
     expect(r.renderShell).toBe("self");
     const rendered = renderFixture(
@@ -511,4 +519,355 @@ describe("execution registration", () => {
     expect(readFileSync(join(nextCwd, "a.ts"), "utf8")).toBe("next\n");
     expect(readFileSync(join(h.cwd, "a.ts"), "utf8")).toBe("new\n");
   });
+});
+
+describe("companion renderer ownership", () => {
+  test("owns every curated tool without resolving package renderers", () => {
+    const h = harness();
+    const upstream: ToolRenderers = {
+      renderShell: "default",
+      renderCall: () => new Text("package call", 0, 0),
+      renderResult: () => new Text("package result", 0, 0),
+    };
+    for (const fixture of companionFixtures) {
+      let nextCalls = 0;
+      const renderer = h.resolve(fixture.name, () => {
+        nextCalls += 1;
+        return upstream;
+      });
+      expect(nextCalls).toBe(0);
+      expect(renderer?.renderShell).toBe("self");
+      const context = {
+        args: fixture.args,
+        state: {},
+        invalidate() {},
+        argsComplete: true,
+      };
+      const call = renderer?.renderCall?.(
+        fixture.args,
+        plainTheme as never,
+        context as never,
+      );
+      expect(call?.render(180).join("\n")).toContain(fixture.call);
+      const result = renderer?.renderResult?.(
+        {
+          content: [{ type: "text", text: fixture.text }],
+          details: fixture.details,
+        },
+        { expanded: false, isPartial: false },
+        plainTheme as never,
+        context as never,
+      );
+      if (fixture.name === "codemode") {
+        expect(call?.render(180)[0]).toContain(fixture.summary);
+        expect(result?.render(180)).toHaveLength(1);
+        expect(result?.render(180)[0]).toContain("✓ read");
+      } else {
+        expect(result?.render(180).join("\n")).toContain(fixture.summary);
+        expect(result?.render(180)).toHaveLength(1);
+      }
+      expect(h.tools.some((tool) => tool.name === fixture.name)).toBe(false);
+    }
+  });
+
+  test("each group gate passes next() through unchanged, independent of fallback", () => {
+    for (const group of ["tasks", "mcp", "codemode", "web"]) {
+      const h = harness({ output: { [group]: { enabled: false } } });
+      const upstream: ToolRenderers = { renderShell: "default" };
+      for (const fixture of companionFixtures.filter(
+        (item) => item.group === group,
+      )) {
+        let calls = 0;
+        expect(
+          h.resolve(fixture.name, () => {
+            calls += 1;
+            return upstream;
+          }),
+        ).toBe(upstream);
+        expect(calls).toBe(1);
+        expect(h.resolve(fixture.name, () => undefined)).toBeUndefined();
+      }
+    }
+  });
+
+  test("the MCP prefix is the only prefix rule; Agent and workflows remain package-owned", () => {
+    const h = harness();
+    const upstream: ToolRenderers = {
+      renderCall: () => new Text("package", 0, 0),
+      renderResult: () => new Text("package", 0, 0),
+    };
+    for (const name of [
+      "mcpScript",
+      "xmcp__a",
+      "TaskSomething",
+      "Agent",
+      "SubagentWorkflow",
+      "renamed_web_search",
+      "web_search_extra",
+    ]) {
+      expect(h.resolve(name, () => upstream)).toBe(upstream);
+    }
+    for (const name of ["mcp__", "mcp__server", "mcp__server__prompt"]) {
+      expect(h.resolve(name, () => upstream)?.renderShell).toBe("self");
+    }
+  });
+
+  test("shape drift uses the exact generic call/result paths instead of package renderers", () => {
+    const h = harness({ output: { fallback: { enabled: false } } });
+    for (const fixture of companionFixtures) {
+      const renderer = h.resolve(fixture.name) as ToolRenderers;
+      const args = { unfamiliar: ["shape"] };
+      const context = { args, state: {}, invalidate() {} };
+      expect(
+        renderer
+          .renderCall?.(args, plainTheme as never, context as never)
+          ?.render(180),
+      ).toEqual(
+        renderGenericToolCall(fixture.name, args, plainTheme, context).render(
+          180,
+        ),
+      );
+      const result = {
+        content: [{ type: "text", text: "unknown\nbody\u001b[31m" }],
+        details: { unfamiliar: true },
+      };
+      expect(
+        renderer
+          .renderResult?.(
+            result,
+            { expanded: false },
+            plainTheme as never,
+            context as never,
+          )
+          ?.render(180),
+      ).toEqual(
+        renderGenericToolResult(
+          fixture.name,
+          result,
+          { expanded: false },
+          plainTheme,
+          context,
+          configModule.DEFAULT_TOOL_DISPLAY_CONFIG.output.fallback,
+        ).render(180),
+      );
+    }
+  });
+
+  test("codemode missing calls falls back even with valid script args, while expansion reveals script and output", () => {
+    const h = harness();
+    const renderer = h.resolve("codemode") as ToolRenderers;
+    const args = { code: "first();\n\nsecond();\nthird();" };
+    const context = { args, state: {}, invalidate() {} };
+    const call = renderer.renderCall?.(
+      args,
+      plainTheme as never,
+      context as never,
+    );
+    const result = {
+      content: [{ type: "text", text: "Script completed\nfull output" }],
+      details: {},
+    };
+    expect(
+      renderer
+        .renderResult?.(
+          result,
+          { expanded: false },
+          plainTheme as never,
+          context as never,
+        )
+        ?.render(180),
+    ).toEqual(
+      renderGenericToolResult(
+        "codemode",
+        result,
+        { expanded: false },
+        plainTheme,
+        context,
+        configModule.DEFAULT_TOOL_DISPLAY_CONFIG.output.fallback,
+      ).render(180),
+    );
+    const expanded = renderer
+      .renderResult?.(
+        { ...result, details: { calls: [] } },
+        { expanded: true },
+        plainTheme as never,
+        context as never,
+      )
+      ?.render(180)
+      .join("\n");
+    expect(
+      call?.render(180).map(stripVTControlCharacters).join("\n"),
+    ).toContain("second();");
+    expect(
+      call?.render(180).map(stripVTControlCharacters).join("\n"),
+    ).toContain("third();");
+    expect(expanded).toContain("full output");
+  });
+});
+
+describe("companion presentation groups", () => {
+  test("icons and names use curated theme tokens", () => {
+    const h = harness();
+    for (const fixture of companionFixtures) {
+      const tokens: Array<[string, string]> = [];
+      const tokenTheme = {
+        ...plainTheme,
+        fg(token: string, text: string) {
+          tokens.push([token, text]);
+          return text;
+        },
+      };
+      const renderer = h.resolve(fixture.name);
+      renderer
+        ?.renderCall?.(
+          fixture.args,
+          tokenTheme as never,
+          { args: fixture.args, state: {}, invalidate() {} } as never,
+        )
+        ?.render(180);
+      const color = {
+        tasks: "warning",
+        mcp: "accent",
+        codemode: "thinkingXhigh",
+        web: "accent",
+      }[fixture.group];
+      const icon = { tasks: "📋", mcp: "🔌", codemode: "🧩", web: "🌐" }[
+        fixture.group
+      ];
+      expect(tokens).toContainEqual([color, fixture.name]);
+      expect(tokens).toContainEqual([color, icon]);
+      expect(visibleWidth(icon)).toBe(2);
+    }
+  });
+
+  test("partial snapshots retain pending rows; result settings refresh on existing renderers", async () => {
+    const h = harness();
+    const fixture = companionFixtures.find((item) => item.name === "codemode");
+    if (!fixture) {
+      throw new Error("missing fixture");
+    }
+    const renderer = h.resolve(fixture.name) as ToolRenderers;
+    const context = { args: fixture.args, state: {}, invalidate() {} };
+    const result = {
+      content: [{ type: "text", text: "Script completed\nfull output" }],
+      details: fixture.details,
+    };
+    const call = renderer.renderCall?.(
+      fixture.args,
+      plainTheme as never,
+      context as never,
+    );
+    call?.render(180);
+    expect(
+      renderer
+        .renderResult?.(
+          { content: [], details: fixture.details },
+          { expanded: false, isPartial: true },
+          plainTheme as never,
+          context as never,
+        )
+        ?.render(180),
+    ).toHaveLength(1);
+    expect(call?.render(180)[0]).toContain("1 tool call → running");
+    expect(
+      renderer
+        .renderResult?.(
+          result,
+          { expanded: false },
+          plainTheme as never,
+          context as never,
+        )
+        ?.render(180),
+    ).toHaveLength(1);
+    await h.runCommand("preset verbose");
+    expect(
+      renderer
+        .renderResult?.(
+          result,
+          { expanded: false },
+          plainTheme as never,
+          context as never,
+        )
+        ?.render(180)
+        .join("\n"),
+    ).toContain("full output");
+    expect(
+      call?.render(180).map(stripVTControlCharacters).join("\n"),
+    ).toContain("console.log(x)");
+    await h.runCommand("preset off");
+    const upstream: ToolRenderers = { renderShell: "default" };
+    for (const item of companionFixtures) {
+      expect(h.resolve(item.name, () => upstream)).toBe(upstream);
+    }
+  });
+});
+
+test("companion call and result drift degrade independently", () => {
+  const h = harness();
+  const renderer = h.resolve("codemode") as ToolRenderers;
+  const args = { code: ["legacy shape"] };
+  const context = { args, state: {}, invalidate() {} };
+  expect(
+    renderer
+      .renderCall?.(args, plainTheme as never, context as never)
+      ?.render(180)
+      .join("\n"),
+  ).toContain("🔧");
+  const result = {
+    content: [{ type: "text", text: "Script completed" }],
+    details: { calls: [] },
+  };
+  expect(
+    renderer
+      .renderResult?.(
+        result,
+        { expanded: false },
+        plainTheme as never,
+        context as never,
+      )
+      ?.render(180)
+      .join("\n"),
+  ).toContain("0 tool calls · 16 bytes");
+});
+
+test("companion fallback safely handles malformed reasoning and non-object stored args", () => {
+  const h = harness();
+  const renderer = h.resolve("codemode") as ToolRenderers;
+  for (const args of [
+    null,
+    [],
+    "legacy",
+    { code: 123, reasoning: { legacy: true } },
+  ]) {
+    const context = { args, state: {}, invalidate() {} };
+    expect(() =>
+      renderer
+        .renderCall?.(args as never, plainTheme as never, context as never)
+        ?.render(100),
+    ).not.toThrow();
+    const result = {
+      content: [{ type: "text", text: "Legacy output" }],
+      details: {},
+    };
+    expect(() =>
+      renderer
+        .renderResult?.(
+          result,
+          { expanded: false },
+          plainTheme as never,
+          context as never,
+        )
+        ?.render(100),
+    ).not.toThrow();
+    expect(() =>
+      renderer
+        .renderResult?.(
+          { ...result, details: { calls: [] } },
+          { expanded: true },
+          plainTheme as never,
+          context as never,
+        )
+        ?.render(100),
+    ).not.toThrow();
+  }
 });

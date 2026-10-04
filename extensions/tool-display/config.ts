@@ -58,6 +58,11 @@ export interface ToolDisplayPreviewConfig {
   previewLines: number;
 }
 
+export interface ToolDisplayCodemodeOutputConfig {
+  enabled: boolean;
+  collapsed: boolean;
+}
+
 export interface ToolDisplayOutputConfig extends ToolDisplayPreviewConfig {
   enabled: boolean;
 }
@@ -77,6 +82,7 @@ export interface ToolDisplayDiffConfig {
 }
 
 export interface ToolDisplayConfig {
+  warnings: string[];
   tools: {
     read: ToolDisplayReadConfig;
     search: ToolDisplayToolConfig;
@@ -88,6 +94,10 @@ export interface ToolDisplayConfig {
     search: ToolDisplayOutputConfig;
     bash: ToolDisplayBashOutputConfig;
     fallback: ToolDisplayOutputConfig;
+    tasks: ToolDisplayOutputConfig;
+    mcp: ToolDisplayOutputConfig;
+    codemode: ToolDisplayCodemodeOutputConfig;
+    web: ToolDisplayOutputConfig;
   };
   diff: ToolDisplayDiffConfig;
 }
@@ -104,6 +114,7 @@ interface ToolDisplayReadConfigLayer extends Partial<
 }
 
 export interface ToolDisplayConfigLayer {
+  warnings?: string[];
   tools?: {
     read?: ToolDisplayReadConfigLayer;
     search?: Partial<ToolDisplayToolConfig>;
@@ -115,11 +126,16 @@ export interface ToolDisplayConfigLayer {
     search?: Partial<ToolDisplayOutputConfig>;
     bash?: Partial<ToolDisplayBashOutputConfig>;
     fallback?: Partial<ToolDisplayOutputConfig>;
+    tasks?: Partial<ToolDisplayOutputConfig>;
+    mcp?: Partial<ToolDisplayOutputConfig>;
+    codemode?: Partial<ToolDisplayCodemodeOutputConfig>;
+    web?: Partial<ToolDisplayOutputConfig>;
   };
   diff?: Partial<ToolDisplayDiffConfig>;
 }
 
 export const DEFAULT_TOOL_DISPLAY_CONFIG: ToolDisplayConfig = {
+  warnings: [],
   tools: {
     read: {
       enabled: true,
@@ -193,6 +209,25 @@ export const DEFAULT_TOOL_DISPLAY_CONFIG: ToolDisplayConfig = {
       rtkHints: true,
     },
     fallback: {
+      enabled: true,
+      mode: "compact",
+      collapsed: true,
+      previewLines: 20,
+    },
+    tasks: {
+      enabled: true,
+      mode: "compact",
+      collapsed: true,
+      previewLines: 20,
+    },
+    mcp: {
+      enabled: true,
+      mode: "compact",
+      collapsed: true,
+      previewLines: 20,
+    },
+    codemode: { enabled: true, collapsed: true },
+    web: {
       enabled: true,
       mode: "compact",
       collapsed: true,
@@ -455,6 +490,19 @@ function normalizePreviewConfig(
   return Object.keys(next).length > 0 ? next : undefined;
 }
 
+function normalizeCodemodeOutputConfig(
+  value: unknown,
+): Partial<ToolDisplayCodemodeOutputConfig> | undefined {
+  if (!isPlainObject(value)) {
+    return;
+  }
+  const next = compactConfigSection({
+    enabled: normalizeBoolean(value.enabled),
+    collapsed: normalizeBoolean(value.collapsed),
+  });
+  return Object.keys(next).length > 0 ? next : undefined;
+}
+
 function normalizeBashOutputConfig(
   value: unknown,
 ): Partial<ToolDisplayBashOutputConfig> | undefined {
@@ -545,10 +593,19 @@ export function normalizeToolDisplayConfig(
     search: outputSearch,
     bash: outputBash,
     fallback: normalizePreviewConfig(output.fallback),
+    tasks: normalizePreviewConfig(output.tasks),
+    mcp: normalizePreviewConfig(output.mcp),
+    codemode: normalizeCodemodeOutputConfig(output.codemode),
+    web: normalizePreviewConfig(output.web),
   }) as NonNullable<ToolDisplayConfigLayer["output"]>;
 
   const diff = normalizeDiffConfig(input.diff);
   const next: ToolDisplayConfigLayer = {};
+  if (isPlainObject(output.codemode) && "previewLines" in output.codemode) {
+    next.warnings = [
+      "output.codemode.previewLines ignored: codemode uses fixed preview counts",
+    ];
+  }
   if (Object.keys(compactTools).length > 0) {
     next.tools = compactTools;
   }
@@ -648,6 +705,10 @@ export function loadToolDisplayConfigFromLayers(
     : null;
 
   return {
+    warnings: [
+      ...(normalizedGlobalConfig?.warnings ?? []),
+      ...(normalizedProjectConfig?.warnings ?? []),
+    ],
     tools: {
       read: {
         ...DEFAULT_TOOL_DISPLAY_CONFIG.tools.read,
@@ -694,6 +755,26 @@ export function loadToolDisplayConfigFromLayers(
         ...DEFAULT_TOOL_DISPLAY_CONFIG.output.fallback,
         ...normalizedGlobalConfig?.output?.fallback,
         ...normalizedProjectConfig?.output?.fallback,
+      },
+      tasks: {
+        ...DEFAULT_TOOL_DISPLAY_CONFIG.output.tasks,
+        ...normalizedGlobalConfig?.output?.tasks,
+        ...normalizedProjectConfig?.output?.tasks,
+      },
+      mcp: {
+        ...DEFAULT_TOOL_DISPLAY_CONFIG.output.mcp,
+        ...normalizedGlobalConfig?.output?.mcp,
+        ...normalizedProjectConfig?.output?.mcp,
+      },
+      codemode: {
+        ...DEFAULT_TOOL_DISPLAY_CONFIG.output.codemode,
+        ...normalizedGlobalConfig?.output?.codemode,
+        ...normalizedProjectConfig?.output?.codemode,
+      },
+      web: {
+        ...DEFAULT_TOOL_DISPLAY_CONFIG.output.web,
+        ...normalizedGlobalConfig?.output?.web,
+        ...normalizedProjectConfig?.output?.web,
       },
     },
     diff: {
@@ -864,6 +945,10 @@ export function getToolDisplayPresetConfig(
         search: { ...compact.output.search, enabled: false },
         bash: { ...compact.output.bash, enabled: false },
         fallback: { ...compact.output.fallback, enabled: false },
+        tasks: { ...compact.output.tasks, enabled: false },
+        mcp: { ...compact.output.mcp, enabled: false },
+        codemode: { ...compact.output.codemode, enabled: false },
+        web: { ...compact.output.web, enabled: false },
       },
       diff: { ...compact.diff, enabled: false },
       tools: {
@@ -890,6 +975,25 @@ export function getToolDisplayPresetConfig(
         previewLines: 80,
       },
       fallback: {
+        enabled: true,
+        mode: "expanded",
+        collapsed: false,
+        previewLines: 80,
+      },
+      tasks: {
+        enabled: true,
+        mode: "expanded",
+        collapsed: false,
+        previewLines: 80,
+      },
+      mcp: {
+        enabled: true,
+        mode: "expanded",
+        collapsed: false,
+        previewLines: 80,
+      },
+      codemode: { enabled: true, collapsed: false },
+      web: {
         enabled: true,
         mode: "expanded",
         collapsed: false,

@@ -13,6 +13,7 @@ import {
 import type { Component } from "@earendil-works/pi-tui";
 
 import { registerToolDisplayCommands } from "./commands";
+import { companionGroup } from "./companion";
 import { loadToolDisplayConfig } from "./config";
 import { editTool, resolveToCwd, withFileMutationQueue } from "./edit-tool";
 import {
@@ -20,6 +21,8 @@ import {
   composeReasonedTool,
   type OwnedToolName,
   renderBashToolCall,
+  renderCompanionToolCall,
+  renderCompanionToolResult,
   renderBashToolResult,
   renderGenericToolCall,
   renderGenericToolResult,
@@ -166,6 +169,32 @@ export default function toolDisplayExtension(pi: ExtensionAPI): void {
             ),
           );
         },
+      } satisfies ToolRenderers;
+    }
+    const group = companionGroup(toolName);
+    if (group) {
+      if (!drawing.output[group].enabled) {
+        return next();
+      }
+      return {
+        renderShell: "self",
+        renderCall: (args, theme, context) =>
+          renderCompanionToolCall(
+            toolName,
+            args,
+            theme,
+            context,
+            config.output.codemode,
+          ),
+        renderResult: (result, options, theme, context) =>
+          renderCompanionToolResult(
+            toolName,
+            result,
+            options,
+            theme,
+            context,
+            config.output[group],
+          ),
       } satisfies ToolRenderers;
     }
     const resolved = next();

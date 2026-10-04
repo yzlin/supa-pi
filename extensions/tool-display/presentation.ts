@@ -1,6 +1,11 @@
 import { stripVTControlCharacters } from "node:util";
 
 import { type Static, Type } from "@earendil-works/pi-ai";
+import {
+  highlightCode,
+  keyHint,
+  truncateToVisualLines,
+} from "@earendil-works/pi-coding-agent";
 import type {
   AgentToolResult,
   AgentToolUpdateCallback,
@@ -21,7 +26,17 @@ import type {
   TProperties,
   TString,
 } from "../../node_modules/@earendil-works/pi-ai/node_modules/typebox";
-import type { ToolDisplayPreviewConfig } from "./config";
+import {
+  codemodeCalls,
+  isCodemodeNestedCall,
+  companionCallSummary,
+  companionGroup,
+  companionResultSummary,
+} from "./companion";
+import type {
+  ToolDisplayCodemodeOutputConfig,
+  ToolDisplayPreviewConfig,
+} from "./config";
 import { MAX_DIFF_BYTES, MAX_DIFF_LINES } from "./edit-tool";
 import { collectPatchCallPreviewFiles } from "./renderers";
 import {
@@ -122,6 +137,10 @@ export interface PresentationState {
     settled?: boolean;
     startedAt?: number;
     timer?: ReturnType<typeof setTimeout>;
+    codemodeHeader?: boolean;
+    codemodeCount?: number;
+    codemodeBytes?: number;
+    codemodeExpanded?: boolean;
     plannedPreview?: string;
     plannedPreviewError?: string;
     plannedPreviewKey?: string;
@@ -140,11 +159,11 @@ type PresentedToolName = OwnedToolName | "bash";
 
 const ICONS: Record<PresentedToolName, string> = {
   read: "📖",
-  grep: "📖",
-  find: "📖",
-  ls: "📖",
+  grep: "🔍",
+  find: "🔍",
+  ls: "📁",
   edit: "✏️",
-  write: "✏️",
+  write: "📄",
   bash: "⚡️",
 };
 const TOOL_NAME_COLORS: Record<PresentedToolName, string> = {
@@ -642,6 +661,9 @@ class HeaderComponent implements Component {
   private readonly expanded: boolean;
   private readonly name: string;
   private readonly generic: boolean;
+  private readonly companion:
+    | { target: string; icon: string; color: string }
+    | undefined;
   private readonly state: PresentationState;
   private readonly theme: ThemeLike;
 
@@ -654,7 +676,9 @@ class HeaderComponent implements Component {
     expanded = false,
     argsComplete = true,
     generic = false,
+    companion?: { target: string; icon: string; color: string },
   ) {
+    this.companion = companion;
     this.name = name;
     this.generic = generic;
     this.args = args;
@@ -672,11 +696,13 @@ class HeaderComponent implements Component {
     let status = "•";
     let statusToken = "warning";
     if (state.settled) {
-      status = state.error ? "×" : "✓";
+      status = state.error ? "✗" : "✓";
       statusToken = state.error ? "error" : "success";
     }
     let target: string;
-    if (this.generic) {
+    if (this.companion) {
+      target = this.companion.target;
+    } else if (this.generic) {
       target = genericArgsSummary(this.args);
     } else if (this.name === "bash") {
       target = bashCommandPreview(this.args.command ?? "") || "bash command";
@@ -692,10 +718,14 @@ class HeaderComponent implements Component {
         ? editOperationSummary(this.args)
         : "Apply edit";
     }
-    const color = this.generic
-      ? "accent"
-      : TOOL_NAME_COLORS[this.name as PresentedToolName];
-    const icon = this.generic ? "🔧" : ICONS[this.name as PresentedToolName];
+    const color =
+      this.companion?.color ??
+      (this.generic
+        ? "accent"
+        : TOOL_NAME_COLORS[this.name as PresentedToolName]);
+    const icon =
+      this.companion?.icon ??
+      (this.generic ? "🔧" : ICONS[this.name as PresentedToolName]);
     const first = `${this.theme.fg("dim", "┊")} ${this.theme.fg(statusToken, status)} ${this.theme.fg(color, icon)} ${this.theme.fg(color, this.theme.bold(singleLine(this.name)))} ${headline}`;
     const lines = [first];
     if (!state.settled) {
@@ -876,12 +906,10 @@ export function renderGenericToolCall(
   );
 }
 
-export function renderGenericToolResult(
-  _name: string,
+function genericResultBody(
   result: ToolResultLike,
   options: RenderOptionsLike,
   theme: ThemeLike,
-  context: Pick<RenderContextLike<ArgsLike>, "args" | "state" | "isError">,
   output: ToolDisplayPreviewConfig,
 ): Component {
   const text = result.content
@@ -905,7 +933,7 @@ export function renderGenericToolResult(
     options.expanded || output.mode === "expanded" || !output.collapsed;
   const shown = expanded ? lines : lines.slice(0, output.previewLines);
   const omitted = lines.length - shown.length;
-  const body = new Text(
+  return new Text(
     [
       ...shown,
       ...(omitted > 0
@@ -915,6 +943,17 @@ export function renderGenericToolResult(
     0,
     0,
   );
+}
+
+export function renderGenericToolResult(
+  _name: string,
+  result: ToolResultLike,
+  options: RenderOptionsLike,
+  theme: ThemeLike,
+  context: Pick<RenderContextLike<ArgsLike>, "args" | "state" | "isError">,
+  output: ToolDisplayPreviewConfig,
+): Component {
+  const body = genericResultBody(result, options, theme, output);
   return renderBashToolResult(
     result,
     options,
@@ -1048,6 +1087,391 @@ export function renderOwnedToolResult(
     theme,
     error,
     body,
+    !options.isPartial,
+  );
+}
+
+function codemodeHeader(
+  state: PresentationState,
+  theme: ThemeLike,
+  width: number,
+): string {
+  const presentation = stateFor(state);
+  const settled = presentation.settled === true;
+  const error = presentation.error === true;
+  const count = presentation.codemodeCount;
+  let summary = "";
+  if (count !== undefined) {
+    summary = ` ${count} tool call${count === 1 ? "" : "s"}`;
+    if (settled) {
+      summary += ` · ${presentation.codemodeBytes ?? 0} bytes`;
+    }
+  }
+  const duration = formatToolDuration(
+    presentation.durationMs ??
+      Date.now() - (presentation.startedAt ?? Date.now()),
+  );
+  let status = "running";
+  let token = "warning";
+  let icon = "•";
+  if (settled) {
+    status = "done";
+    token = "success";
+    icon = "✓";
+  }
+  if (error) {
+    status = "error";
+    token = "error";
+    icon = "✗";
+  }
+  const prefix = `${theme.fg("dim", "┊")} ${theme.fg(token, icon)} ${theme.fg("thinkingXhigh", "🧩")} ${theme.fg("thinkingXhigh", theme.bold("codemode"))}`;
+  return fitMiddle(
+    prefix,
+    summary,
+    ` ${theme.fg(error ? "error" : "dim", `→ ${status}${settled || error ? " in" : ""} ${duration}`)}`,
+    width,
+  );
+}
+
+function codemodePrefixedLines(
+  text: string,
+  theme: ThemeLike,
+  width: number,
+): string[] {
+  const prefix = theme.fg("dim", "┊   ");
+  return new Text(text, 0, 0)
+    .render(Math.max(1, width - visibleWidth(prefix)))
+    .map((line) => truncateToWidth(`${prefix}${line}`, width, ""));
+}
+
+function sanitizeCodemodeText(value: string): string {
+  return stripVTControlCharacters(value)
+    .replace(/\t/gu, "    ")
+    .replace(/\p{Cc}/gu, (control) => (control === "\n" ? control : ""));
+}
+
+class CodemodeCallComponent implements Component {
+  private readonly highlighted: string;
+  private readonly theme: ThemeLike;
+  private readonly state: PresentationState;
+  constructor(code: string, theme: ThemeLike, state: PresentationState) {
+    this.theme = theme;
+    this.state = state;
+    this.highlighted = highlightCode(
+      sanitizeCodemodeText(code).trimEnd(),
+      "javascript",
+    ).join("\n");
+  }
+  invalidate(): void {
+    return;
+  }
+  render(width: number): string[] {
+    const state = stateFor(this.state);
+    const prefix = this.theme.fg("dim", "┊   ");
+    const innerWidth = Math.max(1, width - visibleWidth(prefix));
+    let script: string[];
+    if (state.codemodeExpanded) {
+      script = codemodePrefixedLines(this.highlighted, this.theme, width);
+    } else {
+      const preview = truncateToVisualLines(
+        this.highlighted,
+        10,
+        innerWidth,
+        0,
+        "start",
+      );
+      script = preview.visualLines.map((line) => `${prefix}${line}`);
+      if (preview.skippedCount > 0) {
+        script.push(
+          `${prefix}${this.theme.fg("dim", `… (${preview.skippedCount} more lines, `)}${keyHint("app.tools.expand", "to expand")}${this.theme.fg("dim", ")")}`,
+        );
+      }
+    }
+    return [codemodeHeader(this.state, this.theme, width), ...script].map(
+      (line) =>
+        backgroundLine(
+          line,
+          width,
+          this.theme,
+          state.error === true,
+          state.settled === true,
+        ),
+    );
+  }
+}
+
+function renderCodemodeResult(
+  result: ToolResultLike,
+  calls: unknown[],
+  options: RenderOptionsLike,
+  theme: ThemeLike,
+  context: Pick<
+    RenderContextLike<Record<string, unknown>>,
+    "args" | "state" | "isError"
+  >,
+  output: { collapsed: boolean; mode?: string },
+): Component {
+  const state = stateFor(context.state);
+  const error = result.isError === true || context.isError === true;
+  const expanded =
+    options.expanded === true ||
+    output.mode === "expanded" ||
+    !output.collapsed;
+  state.codemodeExpanded = expanded;
+  state.codemodeCount = calls.length;
+  if (!options.isPartial) {
+    state.codemodeBytes = Buffer.byteLength(
+      result.content
+        .filter((item) => item.type === "text")
+        .map((item) => item.text ?? "")
+        .join(""),
+      "utf8",
+    );
+    state.settled = true;
+    state.error = error;
+    state.durationMs ??=
+      state.startedAt === undefined ? 0 : Date.now() - state.startedAt;
+    stopTimer(context.state);
+  }
+  const shown = expanded ? calls : calls.slice(-8);
+  const lines: Array<string | ((width: number) => string[])> = [];
+  if (shown.length < calls.length) {
+    lines.push(
+      `${theme.fg("dim", `… (${calls.length - shown.length} earlier calls, `)}${keyHint("app.tools.expand", "to expand")}${theme.fg("dim", ")")}`,
+    );
+  }
+  for (const call of shown) {
+    if (!isCodemodeNestedCall(call)) {
+      continue;
+    }
+    const [icon, token] = {
+      ok: ["✓", "success"],
+      error: ["✗", "error"],
+      running: ["…", "warning"],
+      cancelled: ["⊘", "muted"],
+    }[call.status];
+    let duration = "";
+    if (call.durationMs !== undefined) {
+      duration =
+        call.durationMs < 1000
+          ? `${Math.round(call.durationMs)}ms`
+          : `${(call.durationMs / 1000).toFixed(1)}s`;
+    }
+    lines.push((width) => [
+      fitMiddle(
+        `${theme.fg("dim", "┊   ")}${theme.fg(token, icon)} ${theme.fg("toolTitle", singleLine(call.name))} `,
+        theme.fg("muted", singleLine(call.args)),
+        duration ? ` ${theme.fg("dim", duration)}` : "",
+        width,
+      ),
+    ]);
+    if (expanded && call.status === "error" && call.error) {
+      lines.push(
+        ...sanitizeCodemodeText(call.error)
+          .split("\n")
+          .map((line) => `    ${theme.fg("error", line)}`),
+      );
+    }
+  }
+  if (expanded && !options.isPartial) {
+    const [first, ...rest] = result.content;
+    const content =
+      first?.type === "text" &&
+      /^Script (completed|failed)\nWall time [\d.]+ seconds\nOutput:\n$/u.test(
+        first.text ?? "",
+      )
+        ? rest
+        : result.content;
+    for (const item of content) {
+      if (item.type === "text" && item.text) {
+        lines.push(
+          theme.fg(
+            error ? "error" : "toolOutput",
+            sanitizeCodemodeText(item.text),
+          ),
+        );
+      }
+    }
+  }
+  const body: Component = {
+    invalidate() {
+      return;
+    },
+    render(width) {
+      return lines.flatMap((line) =>
+        typeof line === "function"
+          ? line(width)
+          : codemodePrefixedLines(line, theme, width),
+      );
+    },
+  };
+  // A recognized call owns the top row. Unknown stored args keep their generic
+  // call; the valid result then owns its own codemode summary, independently.
+  return new ResultComponent(
+    (width) => codemodeHeader(context.state, theme, width),
+    theme,
+    error,
+    body,
+    !options.isPartial,
+    !state.codemodeHeader,
+  );
+}
+
+function companionFallbackArgs(args: unknown): Record<string, unknown> {
+  if (args === null || typeof args !== "object" || Array.isArray(args)) {
+    return {};
+  }
+  return {
+    ...args,
+    reasoning:
+      "reasoning" in args && typeof args.reasoning === "string"
+        ? args.reasoning
+        : undefined,
+  };
+}
+
+/** Curated external tools use the same shell, timers, sanitization and body as Fallback. */
+export function renderCompanionToolCall(
+  name: string,
+  args: Record<string, unknown>,
+  theme: ThemeLike,
+  context: Pick<
+    RenderContextLike<ArgsLike>,
+    "state" | "invalidate" | "isPartial" | "isError" | "expanded"
+  >,
+  output?: ToolDisplayCodemodeOutputConfig,
+): Component {
+  const summary = companionCallSummary(name, args);
+  if (summary === undefined) {
+    return renderGenericToolCall(
+      name,
+      companionFallbackArgs(args),
+      theme,
+      context,
+    );
+  }
+  const group = companionGroup(name);
+  if (group === "codemode") {
+    const state = stateFor(context.state);
+    state.codemodeHeader = true;
+    state.codemodeExpanded =
+      context.expanded === true || output?.collapsed === false;
+    startTimer(context.state, context.invalidate, "file");
+    return new CodemodeCallComponent(summary, theme, context.state);
+  }
+  let icon = "🌐";
+  let color = "accent";
+  if (group === "mcp") {
+    icon = "🔌";
+  }
+  if (group === "tasks") {
+    icon = "📋";
+    color = "warning";
+  }
+  const target = singleLine(summary);
+  return new HeaderComponent(
+    name,
+    {},
+    theme,
+    context.state,
+    context.invalidate,
+    false,
+    true,
+    false,
+    {
+      target,
+      icon,
+      color,
+    },
+  );
+}
+
+export function renderCompanionToolResult(
+  name: string,
+  result: ToolResultLike,
+  options: RenderOptionsLike,
+  theme: ThemeLike,
+  context: Pick<
+    RenderContextLike<Record<string, unknown>>,
+    "args" | "state" | "isError"
+  >,
+  output: ToolDisplayPreviewConfig | ToolDisplayCodemodeOutputConfig,
+): Component {
+  const args = companionFallbackArgs(context.args);
+  const summary = companionResultSummary(
+    name,
+    args,
+    result.details,
+    firstText(result),
+  );
+  const previewOutput: ToolDisplayPreviewConfig = {
+    mode: "compact",
+    previewLines: 20,
+    ...output,
+  };
+  if (name === "codemode") {
+    const calls = codemodeCalls(result.details);
+    if (calls !== undefined) {
+      return renderCodemodeResult(
+        result,
+        calls,
+        options,
+        theme,
+        context,
+        output,
+      );
+    }
+  }
+  if (summary === undefined) {
+    return renderGenericToolResult(
+      name,
+      result,
+      options,
+      theme,
+      { ...context, args },
+      previewOutput,
+    );
+  }
+  const state = stateFor(context.state);
+  const error = result.isError === true || context.isError === true;
+  const durationMs =
+    state.durationMs ??
+    (state.startedAt === undefined ? 0 : Date.now() - state.startedAt);
+  if (!options.isPartial) {
+    state.settled = true;
+    state.error = error;
+    state.durationMs = durationMs;
+    stopTimer(context.state);
+  }
+  let body: Component | undefined;
+  if (
+    options.expanded ||
+    previewOutput.mode === "expanded" ||
+    !output.collapsed
+  ) {
+    body = genericResultBody(
+      result,
+      { ...options, expanded: true },
+      theme,
+      previewOutput,
+    );
+  }
+  let status = options.isPartial ? "running" : "done";
+  if (error) {
+    status = "error";
+  }
+  return new ResultComponent(
+    (width) =>
+      fitMiddle(
+        theme.fg("dim", "┊   "),
+        singleLine(summary),
+        ` ${theme.fg(error ? "error" : "dim", `→ ${status} in ${formatToolDuration(durationMs)}`)}`,
+        width,
+      ),
+    theme,
+    error,
+    body,
+    !options.isPartial,
     !options.isPartial,
   );
 }

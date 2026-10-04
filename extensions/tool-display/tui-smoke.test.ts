@@ -15,6 +15,7 @@ import {
   initTheme,
   theme,
 } from "../../node_modules/@earendil-works/pi-coding-agent/dist/modes/interactive/theme/theme.js";
+import { companionFixtures } from "./companion-fixtures";
 import toolDisplayExtension from "./index";
 import { cleanupToolDisplayTimers } from "./presentation";
 
@@ -268,7 +269,12 @@ describe("real Pi ToolExecutionComponent smoke", () => {
   });
 
   test("draws the remaining owned names without execution registrations", () => {
-    for (const name of ["grep", "find", "ls", "write"]) {
+    for (const [name, icon] of [
+      ["grep", "🔍"],
+      ["find", "🔍"],
+      ["ls", "📁"],
+      ["write", "📄"],
+    ]) {
       const component = new ToolExecutionComponent(
         name,
         `${name}-call`,
@@ -279,6 +285,10 @@ describe("real Pi ToolExecutionComponent smoke", () => {
         process.cwd(),
       );
       expect(contentRows(component, 64)).toHaveLength(2);
+      expect(contentRows(component, 64)[0]).toContain(icon);
+      for (const width of [16, 28, 64]) {
+        expectRowsFit(contentRows(component, width), width);
+      }
       component.updateResult(
         {
           content: [
@@ -350,9 +360,166 @@ describe("real Pi ToolExecutionComponent smoke", () => {
     const rows = contentRows(component, 42);
     expect(rows).toHaveLength(2);
     expect(rows.join("\n")).toContain("permission denied");
+    expect(stripVTControlCharacters(rows[0])).toStartWith("┊ ✗ 📖 read");
     expect(
       rows.every((line) => line.includes(theme.getBgAnsi("toolErrorBg"))),
     ).toBe(true);
     expectRowsFit(rows, 42);
   });
+});
+
+describe("companion ToolExecutionComponent smoke", () => {
+  test("companion tools keep themed states and expandable content", () => {
+    for (const fixture of companionFixtures) {
+      const component = new ToolExecutionComponent(
+        fixture.name,
+        `companion-${fixture.name}`,
+        fixture.args,
+        {},
+        resolvedRenderers(fixture.name),
+        ui as never,
+        process.cwd(),
+      );
+      for (const width of [36, 120]) {
+        const rows = contentRows(component, width);
+        const icon = { tasks: "📋", mcp: "🔌", codemode: "🧩", web: "🌐" }[
+          fixture.group
+        ];
+        expect(rows[0]).toContain(icon);
+        if (fixture.name === "codemode") {
+          expect(rows.length).toBeGreaterThan(2);
+        } else {
+          expect(rows).toHaveLength(2);
+        }
+        expectRowsFit(rows, width);
+        expect(
+          rows.every((line) => line.includes(theme.getBgAnsi("toolPendingBg"))),
+        ).toBe(true);
+      }
+      component.updateResult({ content: [], details: fixture.details }, true);
+      if (fixture.name === "codemode") {
+        expect(
+          contentRows(component, 120)[0] &&
+            stripVTControlCharacters(contentRows(component, 120)[0]),
+        ).toContain("1 tool call → running");
+      } else {
+        expect(contentRows(component, 120)).toHaveLength(2);
+      }
+      component.updateResult(
+        {
+          content: [{ type: "text", text: fixture.text }],
+          details: fixture.details,
+        },
+        false,
+      );
+      const settled = contentRows(component, 120);
+      if (fixture.name === "codemode") {
+        expect(settled.length).toBeGreaterThan(2);
+        expect(stripVTControlCharacters(settled[0])).toContain(
+          "codemode 1 tool call · 23 bytes → done",
+        );
+        expect(settled.map(stripVTControlCharacters).join("\n")).toContain(
+          "✓ read",
+        );
+        expect(settled.map(stripVTControlCharacters).join("\n")).not.toContain(
+          "Script completed",
+        );
+      } else {
+        expect(settled).toHaveLength(2);
+      }
+      expectRowsFit(settled, 120);
+      expect(
+        settled.every((line) =>
+          line.includes(theme.getBgAnsi("toolSuccessBg")),
+        ),
+      ).toBe(true);
+      expect(settled.map(stripVTControlCharacters).join("\n")).toContain(
+        fixture.summary,
+      );
+      component.setExpanded(true);
+      const expanded = contentRows(component, 120);
+      expect(expanded.length).toBeGreaterThan(2);
+      expectRowsFit(expanded, 120);
+      expect(expanded.map(stripVTControlCharacters).join("\n")).toContain(
+        fixture.text.split("\n")[0],
+      );
+      if (fixture.name === "codemode") {
+        expect(expanded.map(stripVTControlCharacters).join("\n")).toContain(
+          "console.log(x)",
+        );
+      }
+      component.updateResult(
+        {
+          content: [{ type: "text", text: "Failed" }],
+          details: { error: "Failed" },
+          isError: true,
+        },
+        false,
+      );
+      expect(
+        contentRows(component, 120).every((line) =>
+          line.includes(theme.getBgAnsi("toolErrorBg")),
+        ),
+      ).toBe(true);
+    }
+  });
+});
+
+test("codemode TUI shares a single live summary and expands fixed previews with clean output", () => {
+  const code = Array.from({ length: 12 }, (_, i) => `const x${i} = ${i};`).join(
+    "\n",
+  );
+  const calls = Array.from({ length: 10 }, (_, i) => ({
+    id: `nested-${i}`,
+    name: `tool${i}`,
+    args: `{"path":"${"a".repeat(80)}tail"}`,
+    status: i === 9 ? "error" : "ok",
+    durationMs: 1234,
+    ...(i === 9 ? { error: "first failure\nsecond failure" } : {}),
+  }));
+  const component = new ToolExecutionComponent(
+    "codemode",
+    "codemode-preview",
+    { code },
+    {},
+    resolvedRenderers("codemode"),
+    ui as never,
+    process.cwd(),
+  );
+  component.updateResult({ content: [], details: { calls } }, true);
+  let rows = contentRows(component, 120).map(stripVTControlCharacters);
+  expect(rows[0]).toContain("codemode 10 tool calls → running");
+  expect(rows.join("\n")).toContain("2 more lines");
+  expect(rows.join("\n")).toContain("2 earlier calls");
+  expect(rows.join("\n")).not.toContain("bytes");
+  for (const width of [36, 120]) {
+    const fitted = contentRows(component, width);
+    expectRowsFit(fitted, width);
+    expect(fitted.map(stripVTControlCharacters).join("\n")).toContain("1.2s");
+  }
+  const result = {
+    content: [
+      {
+        type: "text" as const,
+        text: "Script failed\nWall time 1.2 seconds\nOutput:\n",
+      },
+      { type: "text" as const, text: "unique full output" },
+    ],
+    details: { calls },
+    isError: true,
+  };
+  component.updateResult(result, false);
+  rows = contentRows(component, 120).map(stripVTControlCharacters);
+  expect(rows[0]).toContain("→ error in");
+  expect(rows[0]).toStartWith("┊ ✗ 🧩 codemode");
+  expect(rows.filter((row) => row.includes("10 tool calls"))).toHaveLength(1);
+  expect(rows.join("\n")).not.toContain("unique full output");
+  component.setExpanded(true);
+  rows = contentRows(component, 120).map(stripVTControlCharacters);
+  expect(rows.join("\n")).toContain("const x11 = 11;");
+  expect(rows.join("\n")).toContain("tool0");
+  expect(rows.join("\n")).toContain("┊       second failure");
+  expect(rows.join("\n")).toContain("unique full output");
+  expect(rows.join("\n")).not.toContain("Wall time");
+  expect(rows.every((row) => row.startsWith("┊"))).toBe(true);
 });

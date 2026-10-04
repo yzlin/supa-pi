@@ -55,6 +55,28 @@
       "mode": "compact",
       "collapsed": true,
       "previewLines": 20
+    },
+    "tasks": {
+      "enabled": true,
+      "mode": "compact",
+      "collapsed": true,
+      "previewLines": 20
+    },
+    "mcp": {
+      "enabled": true,
+      "mode": "compact",
+      "collapsed": true,
+      "previewLines": 20
+    },
+    "codemode": {
+      "enabled": true,
+      "collapsed": true
+    },
+    "web": {
+      "enabled": true,
+      "mode": "compact",
+      "collapsed": true,
+      "previewLines": 20
     }
   },
   "diff": {
