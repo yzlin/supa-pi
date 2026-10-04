@@ -179,9 +179,23 @@ Approved by `/grill-me` on 2026-10-02. Optional recipes exist for `/diagnose`, `
 - Earlier Claude quota-interrupted context-review runs are excluded. The benchmark stayed read-only: the repository diff hash remained unchanged across all 12 current-model runs.
 - Deferred: `/pr`, a global codemode rule, `codemode.mode: "only"`, and `pi -p` fan-out from scripts.
 
+## Tool rendering: implemented product direction
+
+Approved by `/grill-me` on 2026-10-04; implemented with `pi.registerToolRenderer()` from Pi 1.0.1. Resolver-composition unit tests, automated TUI smoke, and a real ExtensionRunner SDK probe verify drawing, including a disconnected MCP-style resumed call. Live TUI and HTML export checks remain unverified.
+
+- **Renderer resolver** — tool-display's single `pi.registerToolRenderer()` entry point that draws every tool call it renders. _Avoid_: render override, display hook.
+- **Fallback renderer** — tool-display's generic two-row shell for a tool whose resolved renderers lack `renderCall` or `renderResult`. _Avoid_: default renderer, MCP renderer.
+- Split: `registerTool` owns execution and schema only (reasoning field, full-read, unified edit); the Renderer resolver owns all drawing for `read`, `grep`, `find`, `ls`, `edit`, `write`, `bash`, and the Fallback renderer. Disabled edit is never registered solely for drawing: the never-enabled path registers no edit, while disabled session reloads after opt-in restore Pi's native schema and execution for the current working directory.
+- Extension isolation: RTK imports nothing from tool-display. RTK owns `bash` execution, rewrite, statistics, and compaction, and always adds the required `reasoning` field through a minimal local wrapper. Tool-display draws `bash` by tool name, with or without RTK; RTK badges appear only when `details.rtkCompaction` exists.
+- Config: `tools.*.enabled` gates only the execution/schema override. Drawing is gated by `output.read/search/bash/fallback.enabled` and `diff.enabled`; new `output.fallback` has `enabled`, `collapsed`, and `previewLines`. `preset off` disables every drawing gate. Renderers must tolerate a missing `reasoning` argument.
+- Composition: Pi's `next()` ends with the registered definition merged with built-in renderers, so it is rarely `undefined`. For owned names, tool-display wins while the matching gate is on and passes `next()` through when off. For other tools, the Fallback renderer fills only missing `renderCall`/`renderResult` fields; tools that ship renderers keep them.
+- Version floor: dev dependencies `1.0.1`, peer range `>=1.0.1`; no feature detection.
+- Verification: resolver-composition unit tests, updated TUI smoke, a headless or SDK probe rendering a resumed session with an unconnected MCP call, and `bun run check`. Live TUI and HTML export checks are deferred.
+- Unknown: whether Pi's built-in MCP support ships its own renderers or resolver; fill-only composition covers either case. Not an ADR: surprising and a real tradeoff, but an internal two-way refactor.
+
 ## Open questions
 
-- Extension isolation: RTK imports tool-display configuration and rendering helpers despite the sibling-import prohibition in `extensions/AGENTS.md`. Was a narrow exception approved, with what scope and rationale, or should the dependency be removed? Owner: user; resolve before changing this boundary.
+- Extension isolation (resolved 2026-10-04): no approved exception; RTK's tool-display dependency is removed under "Tool rendering: implemented product direction".
 - Model profiles (deferred): stale Generated agent overrides after disabling the Extension (documented; run Default profile first to clean up); status rendering when manual `/model` drifts from the active profile.
 - Live installation and end-to-end Wayfinder UX remain unverified. Integrated tests, loader checks, and static scenarios verify repository behavior and resources, but static scenarios do not prove model adherence.
 - PR workflow (deferred): feasibility of cheap base-branch Before evidence, screenshots, and fork→upstream PR support.

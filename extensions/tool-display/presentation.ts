@@ -5,12 +5,11 @@ import type {
   AgentToolResult,
   AgentToolUpdateCallback,
   ExtensionContext,
-  Theme,
   ToolDefinition,
-  ToolRenderResultOptions,
 } from "@earendil-works/pi-coding-agent";
 import {
   type Component,
+  Text,
   sliceByColumn,
   truncateToWidth,
   visibleWidth,
@@ -22,7 +21,7 @@ import type {
   TProperties,
   TString,
 } from "../../node_modules/@earendil-works/pi-ai/node_modules/typebox";
-import type { ToolRenderContext } from "../../node_modules/@earendil-works/pi-coding-agent/dist/core/extensions/types";
+import type { ToolDisplayPreviewConfig } from "./config";
 import { MAX_DIFF_BYTES, MAX_DIFF_LINES } from "./edit-tool";
 import { collectPatchCallPreviewFiles } from "./renderers";
 import {
@@ -56,13 +55,12 @@ interface ToolResultLike<D = unknown> {
   isError?: boolean;
 }
 
-interface ComposableTool<P extends TProperties, D, S> {
+interface ComposableTool<P extends TProperties, D> {
   name: string;
   label: string;
   description: string;
   parameters: TObject<P>;
   promptGuidelines?: string[];
-  renderShell?: "default" | "self";
   execute(
     toolCallId: string,
     params: Static<TObject<P>>,
@@ -70,17 +68,6 @@ interface ComposableTool<P extends TProperties, D, S> {
     onUpdate: AgentToolUpdateCallback<D> | undefined,
     context: ExtensionContext,
   ): Promise<AgentToolResult<D>>;
-  renderCall?(
-    args: Static<TObject<P>>,
-    theme: Theme,
-    context: ToolRenderContext<S, Static<TObject<P>>>,
-  ): Component;
-  renderResult?(
-    result: AgentToolResult<D>,
-    options: ToolRenderResultOptions,
-    theme: Theme,
-    context: ToolRenderContext<S, Static<TObject<P>>>,
-  ): Component;
 }
 
 interface RenderContextLike<A> {
@@ -91,6 +78,7 @@ interface RenderContextLike<A> {
   cwd?: string;
   expanded?: boolean;
   isError?: boolean;
+  isPartial?: boolean;
 }
 
 interface RenderOptionsLike {
@@ -142,7 +130,7 @@ export interface PresentationState {
 }
 
 const GREP_FILE_PATTERN = /^(.+?):\d+(?::|$)/;
-type TimerOwner = "file" | "rtk";
+type TimerOwner = "file" | "bash";
 interface TimerRegistration {
   owner: TimerOwner;
   state: PresentationState;
@@ -168,14 +156,6 @@ const TOOL_NAME_COLORS: Record<PresentedToolName, string> = {
   write: "warning",
   bash: "thinkingXhigh",
 };
-const FALLBACK_REASONING: Record<OwnedToolName, string> = {
-  read: "Read file",
-  grep: "Search files",
-  find: "Find files",
-  ls: "List directory",
-  edit: "Edit file",
-  write: "Write file",
-};
 
 function singleLine(value: string): string {
   // oxlint-disable-next-line typescript/no-misused-spread -- Filter control code points, then rejoin without splitting or truncating graphemes.
@@ -200,14 +180,10 @@ function bashCommandPreview(value: string): string {
 }
 
 /** Add the shared required reasoning field while preserving delegated behavior. */
-export function composeReasonedTool<
-  P extends TProperties,
-  D = unknown,
-  S extends PresentationState = PresentationState,
->(
-  tool: ComposableTool<P, D, S>,
+export function composeReasonedTool<P extends TProperties, D = unknown>(
+  tool: ComposableTool<P, D>,
   options: ComposeOptions,
-): ToolDefinition<ReasonedSchema<P>, D, S> {
+): ToolDefinition<ReasonedSchema<P>, D> {
   const parameters = Type.Object({
     reasoning: Type.String({ description: options.reasoningDescription }),
     ...tool.parameters.properties,
@@ -220,24 +196,6 @@ export function composeReasonedTool<
       ...(tool.promptGuidelines ?? []),
       ...(options.promptGuidelines ?? []),
     ],
-    renderCall: tool.renderCall
-      ? (args, theme, context) => {
-          const delegatedArgs = args as Static<TObject<P>>;
-          return tool.renderCall?.(delegatedArgs, theme, {
-            ...context,
-            args: delegatedArgs,
-          }) as Component;
-        }
-      : undefined,
-    renderResult: tool.renderResult
-      ? (result, renderOptions, theme, context) => {
-          const delegatedArgs = context.args as Static<TObject<P>>;
-          return tool.renderResult?.(result, renderOptions, theme, {
-            ...context,
-            args: delegatedArgs,
-          }) as Component;
-        }
-      : undefined,
     async execute(toolCallId, params, signal, onUpdate, ctx) {
       const parameterRecord = params as Static<TObject<P>> & {
         reasoning: string;
@@ -377,7 +335,7 @@ function editOperationSummary(args: ArgsLike): string {
   return `Apply ${mode} · ${scope}${targetText}`;
 }
 
-function targetFor(name: OwnedToolName, args: ArgsLike): string {
+function targetFor(name: string, args: ArgsLike): string {
   if (name === "grep" || name === "find") {
     return `${args.pattern ?? "?"} in ${args.path ?? "."}`;
   }
@@ -682,26 +640,29 @@ class HeaderComponent implements Component {
   private readonly args: ArgsLike;
   private readonly argsComplete: boolean;
   private readonly expanded: boolean;
-  private readonly name: PresentedToolName;
+  private readonly name: string;
+  private readonly generic: boolean;
   private readonly state: PresentationState;
   private readonly theme: ThemeLike;
 
   constructor(
-    name: PresentedToolName,
+    name: string,
     args: ArgsLike,
     theme: ThemeLike,
     state: PresentationState,
     invalidateCallback: () => void,
     expanded = false,
     argsComplete = true,
+    generic = false,
   ) {
     this.name = name;
+    this.generic = generic;
     this.args = args;
     this.argsComplete = argsComplete;
     this.expanded = expanded;
     this.theme = theme;
     this.state = state;
-    startTimer(state, invalidateCallback, name === "bash" ? "rtk" : "file");
+    startTimer(state, invalidateCallback, name === "bash" ? "bash" : "file");
   }
   invalidate(): void {
     return;
@@ -715,7 +676,9 @@ class HeaderComponent implements Component {
       statusToken = state.error ? "error" : "success";
     }
     let target: string;
-    if (this.name === "bash") {
+    if (this.generic) {
+      target = genericArgsSummary(this.args);
+    } else if (this.name === "bash") {
       target = bashCommandPreview(this.args.command ?? "") || "bash command";
     } else {
       target = singleLine(targetFor(this.name, this.args));
@@ -723,16 +686,17 @@ class HeaderComponent implements Component {
         target = "edit target";
       }
     }
-    let headline =
-      singleLine(this.args.reasoning ?? "") ||
-      (this.name === "bash" ? target : FALLBACK_REASONING[this.name]);
+    let headline = singleLine(this.args.reasoning ?? "") || target;
     if (this.name === "edit") {
       headline = this.argsComplete
         ? editOperationSummary(this.args)
         : "Apply edit";
     }
-    const color = TOOL_NAME_COLORS[this.name];
-    const first = `${this.theme.fg("dim", "┊")} ${this.theme.fg(statusToken, status)} ${this.theme.fg(color, ICONS[this.name])} ${this.theme.fg(color, this.theme.bold(this.name))} ${headline}`;
+    const color = this.generic
+      ? "accent"
+      : TOOL_NAME_COLORS[this.name as PresentedToolName];
+    const icon = this.generic ? "🔧" : ICONS[this.name as PresentedToolName];
+    const first = `${this.theme.fg("dim", "┊")} ${this.theme.fg(statusToken, status)} ${this.theme.fg(color, icon)} ${this.theme.fg(color, this.theme.bold(singleLine(this.name)))} ${headline}`;
     const lines = [first];
     if (!state.settled) {
       const elapsed = Date.now() - (state.startedAt ?? Date.now());
@@ -865,6 +829,104 @@ export function toolResultBody(
   return new ResultBodyComponent(component, dropsSummary);
 }
 
+function genericArgsSummary(args: object): string {
+  const entries = Object.entries(args).filter(([key]) => key !== "reasoning");
+  return (
+    singleLine(
+      entries
+        .map(
+          ([key, value]) =>
+            `${key}=${typeof value === "string" ? value : JSON.stringify(value)}`,
+        )
+        .join(" · "),
+    ) || "no arguments"
+  );
+}
+
+/** Fill-only presentation for tools without a registered drawing definition. */
+export function renderGenericToolCall(
+  name: string,
+  args: ArgsLike,
+  theme: ThemeLike,
+  context: Pick<
+    RenderContextLike<ArgsLike>,
+    "state" | "invalidate" | "isPartial" | "isError"
+  >,
+): Component {
+  // Pi starts rows with isPartial=true and sets it false on final results,
+  // including resumed calls that never mark executionStarted. Settle here too
+  // because a preserved custom result renderer does not manage our state.
+  if (context.isPartial === false) {
+    const state = stateFor(context.state);
+    state.settled = true;
+    state.error = context.isError === true;
+    state.durationMs ??=
+      state.startedAt === undefined ? 0 : Date.now() - state.startedAt;
+    stopTimer(context.state);
+  }
+  return new HeaderComponent(
+    name,
+    args,
+    theme,
+    context.state,
+    context.invalidate,
+    false,
+    true,
+    true,
+  );
+}
+
+export function renderGenericToolResult(
+  _name: string,
+  result: ToolResultLike,
+  options: RenderOptionsLike,
+  theme: ThemeLike,
+  context: Pick<RenderContextLike<ArgsLike>, "args" | "state" | "isError">,
+  output: ToolDisplayPreviewConfig,
+): Component {
+  const text = result.content
+    .map((item) =>
+      item.type === "text" ? (item.text ?? "") : `[${singleLine(item.type)}]`,
+    )
+    .join("\n");
+  // Preserve body line structure but never emit terminal controls from a tool.
+  const lines = stripVTControlCharacters(text)
+    .split(/\r?\n|\r/u)
+    .map((line) =>
+      // oxlint-disable-next-line typescript/no-misused-spread -- Filter unsafe control code points, preserving indentation.
+      [...line]
+        .filter((character) => {
+          const code = character.codePointAt(0) ?? 0;
+          return code >= 0x20 && !(code >= 0x7f && code <= 0x9f);
+        })
+        .join(""),
+    );
+  const expanded =
+    options.expanded || output.mode === "expanded" || !output.collapsed;
+  const shown = expanded ? lines : lines.slice(0, output.previewLines);
+  const omitted = lines.length - shown.length;
+  const body = new Text(
+    [
+      ...shown,
+      ...(omitted > 0
+        ? [theme.fg("dim", `… ${omitted} lines hidden (Ctrl+O to expand)`)]
+        : []),
+    ].join("\n"),
+    0,
+    0,
+  );
+  return renderBashToolResult(
+    result,
+    options,
+    theme,
+    {
+      ...context,
+      args: { command: genericArgsSummary(context.args) },
+    },
+    body,
+  );
+}
+
 export function renderBashToolCall(
   args: ArgsLike,
   theme: ThemeLike,
@@ -890,6 +952,7 @@ export function renderBashToolResult(
   const details = (result.details ?? {}) as ToolDisplayDetails;
   const durationMs =
     details.toolDisplay?.durationMs ??
+    state.durationMs ??
     (state.startedAt === undefined ? 0 : Date.now() - state.startedAt);
   const error = result.isError === true || context.isError === true;
   if (!options.isPartial) {

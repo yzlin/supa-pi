@@ -3,6 +3,7 @@ import {
   existsSync,
   mkdirSync,
   readFileSync,
+  readdirSync,
   rmSync,
   writeFileSync,
 } from "node:fs";
@@ -25,6 +26,7 @@ const toolDisplayIndexSource = readFileSync(
   "utf8",
 );
 type RegisteredTool = Parameters<ExtensionAPI["registerTool"]>[0];
+type RendererResolver = Parameters<ExtensionAPI["registerToolRenderer"]>[0];
 type EventHandler = (event: unknown, ctx: { cwd: string }) => void;
 
 const tempDirs: string[] = [];
@@ -49,6 +51,7 @@ function writeToolDisplayConfig(cwd: string, tools: unknown): void {
 
 function createExtensionHarness() {
   const tools: RegisteredTool[] = [];
+  const resolvers: RendererResolver[] = [];
   const commands: string[] = [];
   const handlers: string[] = [];
   const eventHandlers = new Map<string, EventHandler[]>();
@@ -64,9 +67,12 @@ function createExtensionHarness() {
     registerTool(tool: RegisteredTool) {
       tools.push(tool);
     },
+    registerToolRenderer(resolver: RendererResolver) {
+      resolvers.push(resolver);
+    },
   } as unknown as ExtensionAPI;
 
-  return { api, commands, eventHandlers, handlers, tools };
+  return { api, commands, eventHandlers, handlers, tools, resolvers };
 }
 
 afterEach(() => {
@@ -92,13 +98,10 @@ describe("extension registration compatibility", () => {
 
     expect(extensions).toContain("./extensions/rtk");
     expect(extensions).toContain("./extensions/tool-display");
-    expect(extensions.indexOf("./extensions/rtk")).toBeLessThan(
-      extensions.indexOf("./extensions/tool-display"),
-    );
     expect(extensions).not.toContain("./extensions/multi-edit.ts");
   });
 
-  test("tool-display leaves built-in edit and bash available by default", () => {
+  test("tool-display draws edit and bash without registering either by default", () => {
     const harness = createExtensionHarness();
 
     toolDisplayExtension(harness.api);
@@ -108,23 +111,24 @@ describe("extension registration compatibility", () => {
       "grep",
       "find",
       "ls",
-      "edit",
       "write",
     ]);
-    const edit = harness.tools.find((tool) => tool.name === "edit");
-    expect(Object.keys(edit?.parameters.properties ?? {})).toEqual([
-      "path",
-      "edits",
-    ]);
-    expect(harness.tools.map((tool) => tool.name)).not.toContain("bash");
-    expect(
-      harness.tools
-        .filter((tool) => tool.renderShell === "default")
-        .map((tool) => tool.name),
-    ).toEqual([]);
+    expect(harness.resolvers).toHaveLength(1);
+    for (const name of ["edit", "bash"]) {
+      expect(harness.tools.map((tool) => tool.name)).not.toContain(name);
+      const renderers = harness.resolvers[0]?.(name, () => undefined);
+      expect(renderers?.renderShell).toBe("self");
+      expect(renderers?.renderCall).toBeFunction();
+      expect(renderers?.renderResult).toBeFunction();
+    }
+    for (const tool of harness.tools) {
+      expect(tool.renderShell).toBeUndefined();
+      expect(tool.renderCall).toBeUndefined();
+      expect(tool.renderResult).toBeUndefined();
+    }
   });
 
-  test("edit patch add permission follows current session config", async () => {
+  test("opt-in candidate edit patch adds follow switched session write permission", async () => {
     const cwd = tempDir();
     const originalCwd = process.cwd();
     writeToolDisplayConfig(cwd, {
@@ -139,6 +143,11 @@ describe("extension registration compatibility", () => {
     } finally {
       process.chdir(originalCwd);
     }
+    const initialEdit = harness.tools.find((tool) => tool.name === "edit");
+    expect(initialEdit).toBeDefined();
+    expect(Object.keys(initialEdit?.parameters.properties ?? {})).toEqual([
+      "text",
+    ]);
     writeToolDisplayConfig(cwd, {
       edit: { enabled: true },
       write: { enabled: false },
@@ -146,10 +155,13 @@ describe("extension registration compatibility", () => {
     for (const handler of harness.eventHandlers.get("session_switch") ?? []) {
       handler({}, { cwd });
     }
-    const edit = harness.tools.find((tool) => tool.name === "edit");
+    const edit = harness.tools.findLast((tool) => tool.name === "edit");
+    if (!edit) {
+      throw new Error("Expected enabled candidate edit registration");
+    }
 
     expect(
-      edit?.execute(
+      edit.execute(
         "tool-call-id",
         {
           text: `*** Begin Patch
@@ -165,17 +177,39 @@ describe("extension registration compatibility", () => {
     expect(existsSync(join(cwd, "should-not-exist.txt"))).toBe(false);
   });
 
-  test("rtk actively owns bash execution while using tool-display bash renderers", () => {
+  test("rtk owns reasoned bash execution without renderers; tool-display resolves bash drawing", () => {
     const harness = createExtensionHarness();
 
     rtkExtension(harness.api);
 
     expect(harness.tools.map((tool) => tool.name)).toEqual(["bash"]);
+    const bash = harness.tools[0];
+    expect(bash?.parameters.properties.reasoning.type).toBe("string");
+    expect(bash?.parameters.required).toContain("reasoning");
+    expect(bash?.renderShell).toBeUndefined();
+    expect(bash?.renderCall).toBeUndefined();
+    expect(bash?.renderResult).toBeUndefined();
+    expect(harness.resolvers).toHaveLength(0);
     expect(rtkIndexSource).toContain("createBashTool");
-    expect(rtkIndexSource).toContain("renderBashToolCall");
-    expect(rtkIndexSource).toContain("renderCompactBashResult");
-    expect(rtkIndexSource).toContain("toolDisplayConfig.output.bash");
+    expect(rtkIndexSource).toContain("withReasonedBash");
     expect(rtkIndexSource).toContain("resolveRtkCommand");
+    for (const file of readdirSync(join(import.meta.dir, "rtk"))) {
+      if (file.endsWith(".ts") && !file.endsWith(".test.ts")) {
+        expect(
+          readFileSync(join(import.meta.dir, "rtk", file), "utf8"),
+        ).not.toContain("../tool-display");
+      }
+    }
+
+    toolDisplayExtension(harness.api);
+    expect(harness.tools.filter((tool) => tool.name === "bash")).toEqual([
+      bash,
+    ]);
+    expect(harness.resolvers).toHaveLength(1);
+    const renderers = harness.resolvers[0]?.("bash", () => bash);
+    expect(renderers?.renderShell).toBe("self");
+    expect(renderers?.renderCall).toBeFunction();
+    expect(renderers?.renderResult).toBeFunction();
   });
 
   test("full reads render through shared tool-display details", () => {

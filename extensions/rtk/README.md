@@ -27,9 +27,9 @@ Default limits:
 - `/rtk` defaults to the stats dashboard; `/rtk stats` opens the same custom TUI view instead of plain notify text
 - stats are **session-only**; switching sessions or clearing stats resets the dashboard
 - token counts in `/rtk stats` are **estimated**, not exact
-- RTK always owns and executes `bash`; when `tool-display.output.bash.enabled` is true it uses the shared reasoned two-line presentation, and when false it retains the native bash schema and renderers
-
-The shared two-row bash presentation is adapted from Mikey O'Brien's [`pi-tidy-tools`](https://github.com/mikeyobrien/pi-tidy-tools), licensed under the MIT license.
+- RTK always owns and executes `bash` with a required `reasoning` field: a short present-tense intent, at most 12 words, without restating the target. Reasoning is stripped before rewriting/execution.
+- results include `details.toolDisplay.durationMs`, preserving existing details and compaction metadata
+- RTK registers no renderers and imports no tool-display code. Tool-display's renderer resolver draws bash independently; when its bash drawing is off, Pi's native bash renderers apply. Drawing configuration never changes RTK's schema or execution.
 
 ## `/rtk` / `/rtk stats`
 

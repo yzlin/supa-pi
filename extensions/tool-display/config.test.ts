@@ -30,6 +30,58 @@ describe("tool-display config", () => {
     return dir;
   }
 
+  it("normalizes and merges independent drawing gates with validated fallback previews", () => {
+    const config = loadToolDisplayConfigFromLayers(
+      {
+        output: {
+          read: { enabled: false },
+          search: { enabled: false },
+          fallback: { enabled: false, previewLines: 3 },
+        },
+      },
+      {
+        output: {
+          read: { enabled: true },
+          search: { enabled: "yes" },
+          fallback: {
+            enabled: true,
+            collapsed: false,
+            mode: "expanded",
+            previewLines: -1,
+          },
+        },
+      },
+    );
+    expect(config.output.read.enabled).toBe(true);
+    expect(config.output.search.enabled).toBe(false);
+    expect(config.output.fallback).toEqual({
+      enabled: true,
+      mode: "expanded",
+      collapsed: false,
+      previewLines: 3,
+    });
+    expect(config.tools.search.enabled).toBe(true);
+    expect(
+      normalizeToolDisplayConfig({
+        output: {
+          fallback: {
+            enabled: "no",
+            mode: "bad",
+            collapsed: "no",
+            previewLines: 0,
+          },
+        },
+      }),
+    ).toEqual({});
+    for (const preset of ["compact", "verbose", "off"] as const) {
+      const value = getToolDisplayPresetConfig(preset);
+      for (const section of Object.values(value.output)) {
+        expect(section.enabled).toBe(preset !== "off");
+      }
+      expect(value.diff.enabled).toBe(preset !== "off");
+    }
+  });
+
   it("uses grouped defaults when config files are missing", () => {
     expect(
       loadToolDisplayConfig(

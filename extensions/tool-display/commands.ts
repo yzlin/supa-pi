@@ -26,7 +26,10 @@ const TOOL_DISPLAY_SUBCOMMANDS = [
 const TOOL_DISPLAY_PRESETS = [
   { value: "compact", description: "Enable compact opencode-like output" },
   { value: "verbose", description: "Enable expanded output previews" },
-  { value: "off", description: "Disable tool-display tool overrides" },
+  {
+    value: "off",
+    description: "Disable tool-display drawing and tool overrides",
+  },
 ] as const;
 
 function formatBoolean(value: boolean): string {
@@ -92,9 +95,10 @@ function buildShowMessage(ctx: ExtensionCommandContext): string {
     `tools.search.enabled: ${formatBoolean(config.tools.search.enabled)}`,
     `tools.edit.enabled: ${formatBoolean(config.tools.edit.enabled)}`,
     `tools.write.enabled: ${formatBoolean(config.tools.write.enabled)}`,
-    `output.read: ${config.output.read.mode}, collapsed=${formatBoolean(config.output.read.collapsed)}, previewLines=${config.output.read.previewLines}`,
-    `output.search: ${config.output.search.mode}, collapsed=${formatBoolean(config.output.search.collapsed)}, previewLines=${config.output.search.previewLines}`,
+    `output.read: enabled=${formatBoolean(config.output.read.enabled)}, ${config.output.read.mode}, collapsed=${formatBoolean(config.output.read.collapsed)}, previewLines=${config.output.read.previewLines}`,
+    `output.search: enabled=${formatBoolean(config.output.search.enabled)}, ${config.output.search.mode}, collapsed=${formatBoolean(config.output.search.collapsed)}, previewLines=${config.output.search.previewLines}`,
     `output.bash: enabled=${formatBoolean(config.output.bash.enabled)}, ${config.output.bash.mode}, collapsed=${formatBoolean(config.output.bash.collapsed)}, previewLines=${config.output.bash.previewLines}, rtkHints=${formatBoolean(config.output.bash.rtkHints)}`,
+    `output.fallback: enabled=${formatBoolean(config.output.fallback.enabled)}, ${config.output.fallback.mode}, collapsed=${formatBoolean(config.output.fallback.collapsed)}, previewLines=${config.output.fallback.previewLines}`,
     `diff: enabled=${formatBoolean(config.diff.enabled)}, collapsed=${formatBoolean(config.diff.collapsed)}, previewLines=${config.diff.previewLines}`,
   ].join("\n");
 }
@@ -105,7 +109,7 @@ function buildHelpMessage(): string {
     "show             Show resolved config",
     "preset compact   Write compact defaults to .pi/tool-display.json",
     "preset verbose   Write expanded preview config to .pi/tool-display.json",
-    "preset off       Disable tool-display tool overrides in project config",
+    "preset off       Disable drawing and tool overrides in project config",
     "reset            Write default project config",
     "help             Show this help",
   ].join("\n");
@@ -163,15 +167,20 @@ function notifyWriteResult(
     | { ok: true; configPath: string; config: ToolDisplayConfig }
     | { ok: false; configPath: string; error: string },
   successMessage: string,
+  onConfigWritten: (() => void) | undefined,
 ): void {
   if (result.ok) {
+    onConfigWritten?.();
     ctx.ui.notify(`${successMessage}: ${result.configPath}`, "info");
     return;
   }
   ctx.ui.notify(`tool-display config write failed: ${result.error}`, "warning");
 }
 
-export function registerToolDisplayCommands(pi: ExtensionAPI): void {
+export function registerToolDisplayCommands(
+  pi: ExtensionAPI,
+  options: { onConfigWritten?: () => void } = {},
+): void {
   pi.registerCommand("tool-display", {
     description: "Manage tool-display settings",
     getArgumentCompletions: getToolDisplayArgumentCompletions,
@@ -203,6 +212,7 @@ export function registerToolDisplayCommands(pi: ExtensionAPI): void {
               getToolDisplayPresetConfig(preset),
             ),
             `tool-display ${preset} preset written`,
+            options.onConfigWritten,
           );
           return;
         }
@@ -211,6 +221,7 @@ export function registerToolDisplayCommands(pi: ExtensionAPI): void {
             ctx,
             resetProjectToolDisplayConfig(ctx.cwd),
             "tool-display defaults written",
+            options.onConfigWritten,
           );
           return;
         }

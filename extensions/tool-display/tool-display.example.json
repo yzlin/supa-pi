@@ -32,11 +32,13 @@
   },
   "output": {
     "read": {
+      "enabled": true,
       "mode": "compact",
       "collapsed": true,
       "previewLines": 20
     },
     "search": {
+      "enabled": true,
       "mode": "compact",
       "collapsed": true,
       "previewLines": 20
@@ -47,6 +49,12 @@
       "collapsed": true,
       "previewLines": 20,
       "rtkHints": true
+    },
+    "fallback": {
+      "enabled": true,
+      "mode": "compact",
+      "collapsed": true,
+      "previewLines": 20
     }
   },
   "diff": {

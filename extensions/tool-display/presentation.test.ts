@@ -53,7 +53,10 @@ describe("reasoned tool composition", () => {
       promptGuidelines: ["Keep existing guidance"],
       execute(_id: string, params: { path: string }) {
         delegated = params;
-        return Promise.resolve({ content: [] });
+        return Promise.resolve({
+          content: [],
+          details: { preserved: true, toolDisplay: { fullRead: true } },
+        });
       },
     };
     const tool = composeReasonedTool(base as never, {
@@ -71,7 +74,7 @@ describe("reasoned tool composition", () => {
       "Keep existing guidance",
       "Give sample a short reasoning goal",
     ]);
-    await tool.execute(
+    const result = await tool.execute(
       "id",
       { reasoning: "Inspect configuration", path: "a.ts" },
       undefined,
@@ -79,6 +82,13 @@ describe("reasoned tool composition", () => {
       { cwd: "." } as never,
     );
     expect(delegated).toEqual({ path: "a.ts" });
+    expect(result.details).toMatchObject({
+      preserved: true,
+      toolDisplay: { fullRead: true, durationMs: expect.any(Number) },
+    });
+    expect(tool.renderCall).toBeUndefined();
+    expect(tool.renderResult).toBeUndefined();
+    expect(tool.renderShell).toBeUndefined();
   });
 });
 
@@ -99,7 +109,7 @@ describe("owned tool presentation", () => {
       context as never,
     );
     expect(call.render(80)).toEqual([
-      "┊ • 📖 read Read file",
+      "┊ • 📖 read src/deep/target.ts",
       "┊   src/deep/target.ts → <1s",
     ]);
 
@@ -110,7 +120,7 @@ describe("owned tool presentation", () => {
       plainTheme,
       context as never,
     );
-    expect(call.render(80)).toEqual(["┊ ✓ 📖 read Read file"]);
+    expect(call.render(80)).toEqual(["┊ ✓ 📖 read src/deep/target.ts"]);
     expect(result.render(80)).toEqual(["┊   src/deep/target.ts → 2 lines"]);
   });
 
@@ -396,9 +406,9 @@ describe("owned tool presentation", () => {
     cleanupToolDisplayTimers("file");
   });
 
-  test("owner cleanup leaves other extension timers active", () => {
+  test("bash owner cleanup leaves file tool timers active", () => {
     const fileState: PresentationState = {};
-    const rtkState: PresentationState = {};
+    const bashState: PresentationState = {};
     const context = {
       invalidate() {
         // Timer callback intentionally does no rendering in this unit test.
@@ -408,10 +418,10 @@ describe("owned tool presentation", () => {
       ...context,
       state: fileState,
     });
-    renderBashToolCall({}, plainTheme, { ...context, state: rtkState });
+    renderBashToolCall({}, plainTheme, { ...context, state: bashState });
 
-    cleanupToolDisplayTimers("rtk");
-    expect(rtkState.toolDisplayPresentation?.timer).toBeUndefined();
+    cleanupToolDisplayTimers("bash");
+    expect(bashState.toolDisplayPresentation?.timer).toBeUndefined();
     expect(fileState.toolDisplayPresentation?.timer).toBeDefined();
     cleanupToolDisplayTimers("file");
   });

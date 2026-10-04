@@ -29,14 +29,17 @@ type HarnessCommandOptions = RegisteredCommandOptions & {
   handler: NonNullable<RegisteredCommandOptions["handler"]>;
 };
 
-function registerHarness(): HarnessCommandOptions {
+function registerHarness(onConfigWritten?: () => void): HarnessCommandOptions {
   let commandOptions: RegisteredCommandOptions | undefined;
 
-  registerToolDisplayCommands({
-    registerCommand(_name: string, options: RegisteredCommandOptions) {
-      commandOptions = options;
-    },
-  } as ExtensionAPI);
+  registerToolDisplayCommands(
+    {
+      registerCommand(_name: string, options: RegisteredCommandOptions) {
+        commandOptions = options;
+      },
+    } as ExtensionAPI,
+    { onConfigWritten },
+  );
 
   if (!commandOptions) {
     throw new Error("tool-display command was not registered");
@@ -58,6 +61,37 @@ function createContext(cwd: string, notify: (message: string) => void) {
 }
 
 describe("tool-display commands", () => {
+  it("notifies the config owner after successful preset and reset writes only", async () => {
+    const cwd = mkdtempSync(join(tmpdir(), "tool-display-command-"));
+    const writtenConfigs: unknown[] = [];
+    const command = registerHarness(() => {
+      writtenConfigs.push(
+        JSON.parse(readFileSync(getProjectToolDisplayConfigPath(cwd), "utf8")),
+      );
+    });
+    const context = createContext(cwd, () => {});
+    try {
+      await command.handler("preset off", context);
+      await command.handler("reset", context);
+      expect(writtenConfigs).toEqual([
+        expect.objectContaining({
+          diff: expect.objectContaining({ enabled: false }),
+        }),
+        DEFAULT_TOOL_DISPLAY_CONFIG,
+      ]);
+      await command.handler("show", context);
+      await command.handler("preset invalid", context);
+      expect(writtenConfigs).toHaveLength(2);
+      rmSync(join(cwd, ".pi"), { recursive: true });
+      writeFileSync(join(cwd, ".pi"), "blocked config directory");
+      await command.handler("preset compact", context);
+      await command.handler("reset", context);
+      expect(writtenConfigs).toHaveLength(2);
+    } finally {
+      rmSync(cwd, { force: true, recursive: true });
+    }
+  });
+
   it("registers completions", () => {
     const command = registerHarness();
 
@@ -113,7 +147,12 @@ describe("tool-display commands", () => {
       expect(messages[0]).toContain(
         "user-rules | patterns | on | default | 262144 | full | base=~/.pi/agent/rules include=**/*.md",
       );
-      expect(messages[0]).toContain("output.bash: enabled=on, compact");
+      for (const name of ["read", "search", "bash", "fallback"]) {
+        expect(messages[0]).toContain(`output.${name}: enabled=on, compact`);
+      }
+      expect(messages[0]).toContain(
+        "output.fallback: enabled=on, compact, collapsed=on, previewLines=20",
+      );
     } finally {
       rmSync(cwd, { force: true, recursive: true });
     }

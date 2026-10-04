@@ -1,5 +1,11 @@
-import { afterEach, beforeAll, describe, expect, test } from "bun:test";
-import { mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { afterEach, beforeAll, describe, expect, spyOn, test } from "bun:test";
+import {
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { join } from "node:path";
 
 import {
@@ -13,16 +19,13 @@ import { ToolExecutionComponent } from "../../node_modules/@earendil-works/pi-co
 import { initTheme } from "../../node_modules/@earendil-works/pi-coding-agent/dist/modes/interactive/theme/theme.js";
 import { DEFAULT_RTK_CONFIG } from "./config";
 import rtkExtension, { createRtkBashTool } from "./index";
+import { withReasonedBash } from "./reasoned-bash";
+import * as rewrite from "./rewrite";
 import { createRtkRuntime } from "./runtime";
 
-const theme = {
-  bg: (_token: string, text: string) => text.trimEnd(),
-  bold: (text: string) => text,
-  fg: (_token: string, text: string) => text,
-};
 const tempDirs: string[] = [];
 
-function fakeBashTool() {
+function fakeBashTool(details?: unknown) {
   let delegated: unknown;
   const tool = {
     name: "bash",
@@ -49,20 +52,11 @@ function fakeBashTool() {
       delegated = params;
       return Promise.resolve({
         content: [{ type: "text" as const, text: "ok" }],
+        details,
       });
     },
   };
   return { getDelegated: () => delegated, tool };
-}
-
-function displayConfig(enabled: boolean) {
-  return {
-    enabled,
-    mode: "compact" as const,
-    collapsed: true,
-    previewLines: 20,
-    rtkHints: true,
-  };
 }
 
 function writeDisplayConfig(cwd: string, enabled: boolean): void {
@@ -83,13 +77,11 @@ afterEach(() => {
   }
 });
 
-describe("RTK bash presentation", () => {
-  test("enabled presentation requires reasoning, owns its shell, and strips reasoning", async () => {
+describe("RTK bash execution contract", () => {
+  test("always requires reasoning first and strips it before RTK execution", async () => {
     const base = fakeBashTool();
     const runtime = createRtkRuntime({ ...DEFAULT_RTK_CONFIG, enabled: false });
-    const tool = createRtkBashTool(base.tool as never, runtime, () =>
-      displayConfig(true),
-    );
+    const tool = createRtkBashTool(base.tool, runtime);
 
     expect(Object.keys(tool.parameters.properties)).toEqual([
       "reasoning",
@@ -97,7 +89,12 @@ describe("RTK bash presentation", () => {
       "timeout",
     ]);
     expect(tool.parameters.required as string[]).toContain("reasoning");
-    expect(tool.renderShell).toBe("self");
+    expect(tool.parameters.properties.reasoning.description).toBe(
+      "State short present-tense intent, maximum 12 words, without restating target",
+    );
+    expect(tool.promptGuidelines).toContain(
+      "Give bash a short present-tense reasoning goal without repeating its command",
+    );
 
     const result = await tool.execute(
       "id" as never,
@@ -113,25 +110,50 @@ describe("RTK bash presentation", () => {
     ).toBeNumber();
   });
 
-  test("disabled presentation retains native schema, renderers, and shell", () => {
+  test("RTK rewrite gets only the command and execution receives no reasoning", async () => {
     const base = fakeBashTool();
     const runtime = createRtkRuntime(DEFAULT_RTK_CONFIG);
-    const tool = createRtkBashTool(base.tool as never, runtime, () =>
-      displayConfig(false),
-    );
-
-    expect(tool.parameters).toBe(base.tool.parameters);
-    expect(tool.renderShell).toBe("default");
-    expect(tool.renderCall).toBe(base.tool.renderCall);
-    expect(tool.renderResult).toBe(base.tool.renderResult);
+    const resolve = spyOn(rewrite, "resolveRtkCommand").mockReturnValue({
+      status: "rewritten",
+      command: "rtk git status",
+      changed: true,
+    });
+    try {
+      const tool = createRtkBashTool(base.tool, runtime);
+      await tool.execute(
+        "rewritten",
+        { reasoning: "Check status", command: "git status", timeout: 4 },
+        undefined,
+        undefined,
+        { hasUI: false } as never,
+      );
+      expect(resolve).toHaveBeenCalledWith("git status", expect.any(Object));
+      expect(base.getDelegated()).toEqual({
+        command: "rtk git status",
+        timeout: 4,
+      });
+      expect(runtime.metrics.snapshot().rewritesApplied).toBe(1);
+    } finally {
+      resolve.mockRestore();
+    }
   });
 
-  test("disabled real bash tool uses Pi native ToolExecutionComponent presentation", () => {
+  test("definition has no renderers, even when the base tool has them", () => {
+    const base = fakeBashTool();
+    const runtime = createRtkRuntime(DEFAULT_RTK_CONFIG);
+    const tool = createRtkBashTool(base.tool, runtime);
+
+    expect(tool).not.toHaveProperty("renderShell");
+    expect(tool).not.toHaveProperty("renderCall");
+    expect(tool).not.toHaveProperty("renderResult");
+  });
+
+  test("real bash tool can use Pi native ToolExecutionComponent presentation", () => {
     const runtime = createRtkRuntime(DEFAULT_RTK_CONFIG);
     const native = createBashTool(process.cwd());
-    const tool = createRtkBashTool(native, runtime, () => displayConfig(false));
-    expect(tool.renderCall).toBeUndefined();
-    expect(tool.renderResult).toBeUndefined();
+    const tool = createRtkBashTool(native, runtime);
+    expect(tool).not.toHaveProperty("renderCall");
+    expect(tool).not.toHaveProperty("renderResult");
 
     const component = new ToolExecutionComponent(
       "bash",
@@ -154,70 +176,117 @@ describe("RTK bash presentation", () => {
     expect(component.render(80).join("\n")).toContain("ok");
   });
 
-  test("renders command fallback, elapsed restored duration, errors, and badges", () => {
-    const base = fakeBashTool();
-    const runtime = createRtkRuntime(DEFAULT_RTK_CONFIG);
-    const tool = createRtkBashTool(base.tool as never, runtime, () =>
-      displayConfig(true),
-    );
-    const state = {};
-    const context = {
-      args: { command: "false" },
-      state,
-      invalidate() {
-        // Test renderer does not need redraw scheduling.
-      },
+  test("elapsed duration merges existing details and presentation metadata", async () => {
+    const priorDetails = {
+      toolDisplay: { durationMs: -1, restored: true },
+      rtkCompaction: { savedChars: 99, originalChars: 120, finalChars: 21 },
+      fullOutputPath: "/tmp/bash-output",
     };
-    const call = tool.renderCall(
-      context.args as never,
-      theme as never,
-      context as never,
+    const base = fakeBashTool(priorDetails);
+    const runtime = createRtkRuntime({ ...DEFAULT_RTK_CONFIG, enabled: false });
+    const tool = createRtkBashTool(base.tool, runtime);
+    const result = await tool.execute(
+      "id" as never,
+      { reasoning: "Check status", command: "git status" } as never,
+      undefined as never,
+      undefined as never,
+      { hasUI: false } as never,
     );
-    expect(call.render(100)).toEqual(["┊ • ⚡️ bash false", "┊   false → <1s"]);
-
-    const result = tool.renderResult(
-      {
-        content: [{ type: "text", text: "Command failed with exit code: 7" }],
-        details: {
-          toolDisplay: { durationMs: 2100 },
-          truncation: { truncated: true },
-          rtkCompaction: { savedChars: 99, originalChars: 120, finalChars: 21 },
-        },
-        isError: true,
-      } as never,
-      {} as never,
-      theme as never,
-      { ...context, isError: true } as never,
-    );
-    expect(call.render(100)).toEqual(["┊ × ⚡️ bash false"]);
-    expect(result.render(100)[0]).toBe(
-      "┊   false → error in 2s [truncated] [RTK saved 99]",
-    );
-
-    const expanded = tool.renderResult(
-      {
-        content: [{ type: "text", text: "one\ntwo" }],
-        details: { toolDisplay: { durationMs: 500 } },
-      },
-      { expanded: true } as never,
-      theme as never,
-      { args: { command: "printf 'one\\ntwo'" }, state: {} } as never,
-    );
-    expect(expanded.render(100).map((line) => line.trimEnd())).toEqual([
-      "┊   printf 'one\\ntwo' → done in <1s",
-      "one",
-      "two",
-    ]);
+    const details = result.details as typeof priorDetails;
+    expect(details.toolDisplay.durationMs).toBeGreaterThanOrEqual(0);
+    expect(details.toolDisplay.restored).toBe(true);
+    expect(details.rtkCompaction).toEqual(priorDetails.rtkCompaction);
+    expect(details.fullOutputPath).toBe(priorDetails.fullOutputPath);
+    expect(priorDetails.toolDisplay.durationMs).toBe(-1);
   });
 
-  test("session reload refreshes copied runtime metadata in both directions", () => {
+  test.each([null, "legacy", { toolDisplay: "legacy" }])(
+    "elapsed duration tolerates legacy details: %j",
+    async (details) => {
+      const base = fakeBashTool(details);
+      const runtime = createRtkRuntime({
+        ...DEFAULT_RTK_CONFIG,
+        enabled: false,
+      });
+      const result = await createRtkBashTool(base.tool, runtime).execute(
+        "legacy",
+        { reasoning: "Check status", command: "git status" },
+        undefined,
+        undefined,
+        { hasUI: false } as never,
+      );
+      expect(result.details.toolDisplay.durationMs).toBeGreaterThanOrEqual(0);
+    },
+  );
+
+  test("reasoned wrapper preserves guidelines, callbacks, and execution failures", async () => {
+    const base = fakeBashTool();
+    const controller = new AbortController();
+    const failure = new Error("execution failed");
+    const update = () => {};
+    const context = { hasUI: false } as never;
+    const tool = withReasonedBash({
+      ...base.tool,
+      promptGuidelines: ["Existing guideline"],
+      async execute(id, params, signal, onUpdate, ctx) {
+        expect(id).toBe("failed");
+        expect(params).toEqual({ command: "false" });
+        expect(signal).toBe(controller.signal);
+        expect(onUpdate).toBe(update);
+        expect(ctx).toBe(context);
+        throw failure;
+      },
+    });
+    expect(tool.promptGuidelines).toEqual([
+      "Existing guideline",
+      "Give bash a short present-tense reasoning goal without repeating its command",
+    ]);
+    const error = await tool
+      .execute(
+        "failed",
+        { reasoning: "Check failure", command: "false" },
+        controller.signal,
+        update,
+        context,
+      )
+      .then(
+        () => undefined,
+        (caught: unknown) => caught,
+      );
+    expect(error).toBe(failure);
+  });
+
+  test("RTK source files do not depend on a sibling display extension", () => {
+    const siblingPath = ["..", "tool-display"].join("/");
+    for (const file of readdirSync(import.meta.dir).filter((name) =>
+      name.endsWith(".ts"),
+    )) {
+      expect(readFileSync(join(import.meta.dir, file), "utf8")).not.toContain(
+        siblingPath,
+      );
+    }
+  });
+
+  test("session reload refreshes cwd and keeps reasoning regardless of drawing config", async () => {
     const cwd = join(
       import.meta.dir,
       `.tmp-rtk-${Date.now()}-${Math.random()}`,
     );
     mkdirSync(cwd, { recursive: true });
     tempDirs.push(cwd);
-    writeDisplayConfig(cwd, true);
+    const otherCwd = join(cwd, "other");
+    mkdirSync(otherCwd);
+    for (const [dir, marker] of [
+      [cwd, "first"],
+      [otherCwd, "second"],
+    ]) {
+      writeDisplayConfig(dir, true);
+      writeFileSync(
+        join(dir, ".pi", "rtk.json"),
+        JSON.stringify({ enabled: false }),
+      );
+      writeFileSync(join(dir, "marker.txt"), marker);
+    }
     const tools: ToolDefinition[] = [];
     let registry: ToolDefinition | undefined;
     let refreshCount = 0;
@@ -252,28 +321,46 @@ describe("RTK bash presentation", () => {
       }
       return Object.keys(parameters.properties as object);
     };
+    async function readMarker(): Promise<string> {
+      if (!registry) {
+        throw new Error("Bash was not registered");
+      }
+      const result = await registry.execute(
+        "marker",
+        { reasoning: "Check working directory", command: "cat marker.txt" },
+        undefined,
+        undefined,
+        { hasUI: false } as never,
+      );
+      return result.content
+        .flatMap((block) => (block.type === "text" ? [block.text] : []))
+        .join("");
+    }
     rtkExtension(api);
 
     for (const handler of handlers.get("session_start") ?? []) {
       handler({ type: "session_start" }, { cwd });
     }
-    expect(registry?.renderShell).toBe("self");
+    expect(registry?.renderShell).toBeUndefined();
     expect(parameterNames()).toContain("reasoning");
 
-    writeDisplayConfig(cwd, false);
+    expect(await readMarker()).toBe("first");
+    writeDisplayConfig(otherCwd, false);
     for (const handler of handlers.get("session_switch") ?? []) {
-      handler({ type: "session_switch" }, { cwd });
+      handler({ type: "session_switch" }, { cwd: otherCwd });
     }
+    expect(await readMarker()).toBe("second");
     expect(registry?.renderShell).toBeUndefined();
     expect(registry?.renderCall).toBeUndefined();
-    expect(parameterNames()).not.toContain("reasoning");
+    expect(parameterNames()).toContain("reasoning");
 
     writeDisplayConfig(cwd, true);
     for (const handler of handlers.get("session_start") ?? []) {
       handler({ type: "session_start" }, { cwd });
     }
-    expect(registry?.renderShell).toBe("self");
+    expect(registry?.renderShell).toBeUndefined();
     expect(parameterNames()).toContain("reasoning");
+    expect(await readMarker()).toBe("first");
     expect(tools).toHaveLength(1);
     expect(refreshCount).toBe(4);
   });

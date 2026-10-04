@@ -58,8 +58,11 @@ export interface ToolDisplayPreviewConfig {
   previewLines: number;
 }
 
-export interface ToolDisplayBashOutputConfig extends ToolDisplayPreviewConfig {
+export interface ToolDisplayOutputConfig extends ToolDisplayPreviewConfig {
   enabled: boolean;
+}
+
+export interface ToolDisplayBashOutputConfig extends ToolDisplayOutputConfig {
   rtkHints: boolean;
 }
 
@@ -81,9 +84,10 @@ export interface ToolDisplayConfig {
     write: ToolDisplayToolConfig;
   };
   output: {
-    read: ToolDisplayPreviewConfig;
-    search: ToolDisplayPreviewConfig;
+    read: ToolDisplayOutputConfig;
+    search: ToolDisplayOutputConfig;
     bash: ToolDisplayBashOutputConfig;
+    fallback: ToolDisplayOutputConfig;
   };
   diff: ToolDisplayDiffConfig;
 }
@@ -107,9 +111,10 @@ export interface ToolDisplayConfigLayer {
     write?: Partial<ToolDisplayToolConfig>;
   };
   output?: {
-    read?: Partial<ToolDisplayPreviewConfig>;
-    search?: Partial<ToolDisplayPreviewConfig>;
+    read?: Partial<ToolDisplayOutputConfig>;
+    search?: Partial<ToolDisplayOutputConfig>;
     bash?: Partial<ToolDisplayBashOutputConfig>;
+    fallback?: Partial<ToolDisplayOutputConfig>;
   };
   diff?: Partial<ToolDisplayDiffConfig>;
 }
@@ -169,11 +174,13 @@ export const DEFAULT_TOOL_DISPLAY_CONFIG: ToolDisplayConfig = {
   },
   output: {
     read: {
+      enabled: true,
       mode: "compact",
       collapsed: true,
       previewLines: 20,
     },
     search: {
+      enabled: true,
       mode: "compact",
       collapsed: true,
       previewLines: 20,
@@ -184,6 +191,12 @@ export const DEFAULT_TOOL_DISPLAY_CONFIG: ToolDisplayConfig = {
       collapsed: true,
       previewLines: 20,
       rtkHints: true,
+    },
+    fallback: {
+      enabled: true,
+      mode: "compact",
+      collapsed: true,
+      previewLines: 20,
     },
   },
   diff: {
@@ -415,12 +428,16 @@ function normalizeReadConfig(
 
 function normalizePreviewConfig(
   value: unknown,
-): Partial<ToolDisplayPreviewConfig> | undefined {
+): Partial<ToolDisplayOutputConfig> | undefined {
   if (!isPlainObject(value)) {
     return;
   }
 
-  const next: Partial<ToolDisplayPreviewConfig> = {};
+  const next: Partial<ToolDisplayOutputConfig> = {};
+  const enabled = normalizeBoolean(value.enabled);
+  if (enabled !== undefined) {
+    next.enabled = enabled;
+  }
   const mode = normalizeOutputMode(value.mode);
   const collapsed = normalizeBoolean(value.collapsed);
   const previewLines = normalizePositiveInteger(value.previewLines);
@@ -527,6 +544,7 @@ export function normalizeToolDisplayConfig(
     read: outputRead,
     search: outputSearch,
     bash: outputBash,
+    fallback: normalizePreviewConfig(output.fallback),
   }) as NonNullable<ToolDisplayConfigLayer["output"]>;
 
   const diff = normalizeDiffConfig(input.diff);
@@ -671,6 +689,11 @@ export function loadToolDisplayConfigFromLayers(
         ...DEFAULT_TOOL_DISPLAY_CONFIG.output.bash,
         ...normalizedGlobalConfig?.output?.bash,
         ...normalizedProjectConfig?.output?.bash,
+      },
+      fallback: {
+        ...DEFAULT_TOOL_DISPLAY_CONFIG.output.fallback,
+        ...normalizedGlobalConfig?.output?.fallback,
+        ...normalizedProjectConfig?.output?.fallback,
       },
     },
     diff: {
@@ -837,9 +860,12 @@ export function getToolDisplayPresetConfig(
     return {
       ...compact,
       output: {
-        ...compact.output,
+        read: { ...compact.output.read, enabled: false },
+        search: { ...compact.output.search, enabled: false },
         bash: { ...compact.output.bash, enabled: false },
+        fallback: { ...compact.output.fallback, enabled: false },
       },
+      diff: { ...compact.diff, enabled: false },
       tools: {
         read: { ...compact.tools.read, enabled: false },
         search: { enabled: false },
@@ -851,8 +877,24 @@ export function getToolDisplayPresetConfig(
   return {
     ...compact,
     output: {
-      read: { mode: "expanded", collapsed: false, previewLines: 80 },
-      search: { mode: "expanded", collapsed: false, previewLines: 80 },
+      read: {
+        enabled: true,
+        mode: "expanded",
+        collapsed: false,
+        previewLines: 80,
+      },
+      search: {
+        enabled: true,
+        mode: "expanded",
+        collapsed: false,
+        previewLines: 80,
+      },
+      fallback: {
+        enabled: true,
+        mode: "expanded",
+        collapsed: false,
+        previewLines: 80,
+      },
       bash: {
         enabled: true,
         mode: "expanded",

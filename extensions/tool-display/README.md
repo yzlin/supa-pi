@@ -41,15 +41,16 @@ Shape:
     "write": { "enabled": true }
   },
   "output": {
-    "read": { "mode": "compact", "collapsed": true, "previewLines": 20 },
-    "search": { "mode": "compact", "collapsed": true, "previewLines": 20 },
+    "read": { "enabled": true, "mode": "compact", "collapsed": true, "previewLines": 20 },
+    "search": { "enabled": true, "mode": "compact", "collapsed": true, "previewLines": 20 },
     "bash": {
       "enabled": true,
       "mode": "compact",
       "collapsed": true,
       "previewLines": 20,
       "rtkHints": true
-    }
+    },
+    "fallback": { "enabled": true, "mode": "compact", "collapsed": true, "previewLines": 20 }
   },
   "diff": {
     "enabled": true,
@@ -64,6 +65,10 @@ Shape:
 ```
 
 See `tool-display.example.json` for a project config example matching the default compact renderer setup.
+
+`tools.*.enabled` gates execution/schema overrides only; it does not control drawing. Drawing gates are `output.read.enabled` for read, `output.search.enabled` for grep/find/ls, `diff.enabled` for edit/write, `output.bash.enabled` for bash, and `output.fallback.enabled` for all other tools. All drawing gates default on, are normalized as booleans, and follow the same layer precedence. The resolver reads current session config rather than capturing registration-time gates; preview settings are also read when rendering. Missing reasoning arguments in native tools or old sessions fall back to a target/args summary.
+
+The compact and verbose presets enable every drawing gate. The off preset disables every drawing gate as well as the execution/schema overrides. Fallback previews use `mode`, `collapsed`, and `previewLines`; `Ctrl+O` reveals the complete result body.
 
 Commands:
 
@@ -120,11 +125,13 @@ Pending expanded edit calls show an asynchronously planned diff; settled renderi
 
 ## Renderers
 
-Tool-display registers reasoned, self-framed renderers for `read`, `grep`, `find`, `ls`, and `write` by default. Its `edit` registration follows session config: it installs the candidate override when explicitly enabled; when disabled, it preserves Pi's built-in edit schema and execution while applying the same tool-display shell and compact/expanded diff rendering. `search.enabled` owns `grep`/`find`/`ls` together. Pending and settled tools use stable two-row presentation, Pi theme pending/success/error backgrounds, width-aware emoji and tail-preserving truncation, and elapsed time. Tool icons and names use Tidy-style theme groups: accent for read/search tools, warning for edit/write, and `thinkingXhigh` for RTK-owned bash. Collapsed reasoning, targets, commands, and summaries collapse whitespace and strip terminal control sequences; multiline bash commands show their first non-empty line plus the remaining non-empty line count. Partial bash results keep the pending two-row summary instead of repeating the command. Expanded output keeps its original line structure. `Ctrl+O` expansion reveals the existing detailed output beneath the two-row summary. Full reads retain their target and pagination-ignored badges.
+Tool-display draws through one `pi.registerToolRenderer()` Renderer resolver, not through execution registrations. For owned names (`read`, `grep`, `find`, `ls`, `edit`, `write`, `bash`), an enabled drawing gate returns tool-display's `renderShell: 'self'`, `renderCall`, and `renderResult` without calling `next()`. A disabled gate returns `next()` unchanged. `tools.search.enabled` independently gates the reasoning/schema override for `grep`/`find`/`ls` together. With candidate edit never enabled, no edit is registered: Pi's built-in schema and execution stay in place and the resolver draws its final `details.diff`. After opt-in, a session start or switch with candidate edit disabled restores Pi's native definition without renderers; later disabled sessions refresh that definition for their working directory because Pi retains extension tool registrations and exposes no unregister API. Pending and settled tools use stable two-row presentation, Pi theme pending/success/error backgrounds, width-aware emoji and tail-preserving truncation, and elapsed time. Tool icons and names use Tidy-style theme groups: accent for read/search tools, warning for edit/write, and `thinkingXhigh` for bash. Collapsed reasoning, targets, commands, and summaries collapse whitespace and strip terminal control sequences; multiline bash commands show their first non-empty line plus the remaining non-empty line count. Partial bash results keep the pending two-row summary instead of repeating the command. Expanded output keeps its original line structure. `Ctrl+O` expansion reveals the existing detailed output beneath the two-row summary. Full reads retain their target and pagination-ignored badges.
 
 `edit` renders the final applied diff from tool details. `write` captures previous file content before execution and renders a final diff after success. Final diffs use the standard tool block shell/background, compact summaries by default, expand to unified diffs on narrow terminals, switch to split diffs on wide terminals, color additions/removals, and collapse expanded output to `diff.previewLines` when `diff.collapsed` is true. Split diffs keep path and hunk meta rows compact across the full diff width: unchanged paths render once, while renames/path changes render old-to-new. If previous content cannot be captured safely, `write` falls back to a capped compact summary instead of a diff; previous-content capture is limited to paths inside the workspace.
 
-RTK remains the `bash` owner. Tool-display exports the shared bash presentation that RTK imports, but does not register `bash`. `output.bash.enabled` defaults to `true`; setting it to `false` disables only the shared reasoned presentation and preserves RTK ownership, rewriting, execution, native bash schema, and native renderers.
+Bash drawing is selected by tool name regardless of who registers or executes it, including native bash without RTK. RTK owns only execution, rewriting, statistics, compaction, and its required reasoning schema; it imports nothing from tool-display. RTK badges/hints appear only with `details.rtkCompaction`. Setting `output.bash.enabled` to `false` passes resolved renderers through without affecting execution or schema.
+
+For non-owned tools, the Fallback renderer calls `next()` and fills only missing `renderCall`/`renderResult` fields. Complete resolved renderers remain unchanged. Pi's terminal `next()` normally merges registered definitions with built-in renderers, so it is rarely undefined; the fallback also handles undefined for unregistered tools such as disconnected MCP calls in resumed sessions. Its generic icon/name, optional reasoning, one-line args summary, duration, themed status background, and compact text body need no tool definition. Text blocks form the body, while images and other content use short placeholders. Terminal control sequences are stripped. The fallback chooses a self shell only when both renderers were generic; otherwise it preserves the resolved shell. Generic call headers also settle and clear their elapsed-time timers directly from Pi's final-result/error context, even when a custom result renderer is preserved.
 
 ## Registration and ownership
 
@@ -132,10 +139,11 @@ RTK remains the `bash` owner. Tool-display exports the shared bash presentation 
 
 Runtime ownership:
 
-- `tool-display`: `read`, optional `grep`/`find`/`ls`, session-configured candidate-or-built-in `edit` delegation, optional `write`
-- `rtk`: `bash` execution, rewrite, statistics, and compaction metadata
+- `tool-display` execution/schema: optional reasoned full-read `read`, optional reasoned `grep`/`find`/`ls`, opt-in candidate `edit`, optional reasoned `write` with diff-details capture; execution registrations contain no renderers
+- `tool-display` drawing: one Renderer resolver for all owned names and fill-only fallback composition, independently gated from execution
+- `rtk`: `bash` execution, required reasoning schema, rewrite, statistics, and compaction metadata; no tool-display imports
 
-Keep `./extensions/rtk` before `./extensions/tool-display` in `package.json`. RTK owns `bash`; tool-display owns the other tool renderers and read override path.
+Renderer resolvers compose in extension load order. Owned gates on make tool-display authoritative regardless of an upstream registered definition; gates off preserve `next()`. Non-owned tools keep every renderer they supply. Disabled candidate edit is never re-registered solely for drawing. The never-enabled path registers no edit; after opt-in, disabled session reloads re-register native edit's schema and execution only to replace the retained candidate and refresh the working directory.
 
 ## Attribution
 

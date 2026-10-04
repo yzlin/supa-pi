@@ -4,28 +4,19 @@ import { join } from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
 import { stripVTControlCharacters } from "node:util";
 
-import { Type } from "@earendil-works/pi-ai";
 import type {
-  AgentToolResult,
-  ToolDefinition,
+  ExtensionAPI,
+  ToolRenderers,
 } from "@earendil-works/pi-coding-agent";
-import { Text, visibleWidth } from "@earendil-works/pi-tui";
+import { visibleWidth } from "@earendil-works/pi-tui";
 
 import { ToolExecutionComponent } from "../../node_modules/@earendil-works/pi-coding-agent/dist/modes/interactive/components/tool-execution.js";
 import {
   initTheme,
   theme,
 } from "../../node_modules/@earendil-works/pi-coding-agent/dist/modes/interactive/theme/theme.js";
-import {
-  cleanupToolDisplayTimers,
-  type PresentationState,
-  renderBashToolCall,
-  renderBashToolResult,
-  renderOwnedToolCall,
-  renderOwnedToolResult,
-  toolResultBody,
-} from "./presentation";
-import { renderFinalDiffResult } from "./renderers";
+import toolDisplayExtension from "./index";
+import { cleanupToolDisplayTimers } from "./presentation";
 
 const ui = {
   requestRender() {
@@ -33,54 +24,21 @@ const ui = {
   },
 };
 
-const fixtureSchema = Type.Object({
-  reasoning: Type.String(),
-  path: Type.String(),
-});
-
-interface FixtureDetails {
-  toolDisplay?: {
-    durationMs?: number;
-    fullRead?: boolean;
-    targetName?: string;
-    ignoredLimit?: number;
-  };
-}
-
-interface BashFixtureDetails {
-  rtkCompaction?: {
-    savedChars: number;
-    originalChars: number;
-    finalChars: number;
-  };
-}
-
-function fixtureDefinition(): ToolDefinition<
-  typeof fixtureSchema,
-  FixtureDetails,
-  PresentationState
-> {
-  return {
-    name: "read",
-    label: "read",
-    description: "fixture",
-    parameters: fixtureSchema,
-    renderShell: "self",
-    execute: async () => ({ content: [], details: {} }),
-    renderCall: (args, activeTheme, context) =>
-      renderOwnedToolCall("read", args, activeTheme, context),
-    renderResult: (result, options, activeTheme, context) =>
-      renderOwnedToolResult(
-        "read",
-        result,
-        options,
-        activeTheme,
-        context,
-        options.expanded
-          ? toolResultBody(new Text("expanded-one\nexpanded-two", 0, 0))
-          : undefined,
-      ),
-  };
+function resolvedRenderers(name: string): ToolRenderers | undefined {
+  let resolver: Parameters<ExtensionAPI["registerToolRenderer"]>[0] | undefined;
+  const pi = Object.create(null) as ExtensionAPI;
+  Object.assign(pi, {
+    on() {},
+    registerCommand() {},
+    registerTool() {},
+    registerToolRenderer(
+      value: Parameters<ExtensionAPI["registerToolRenderer"]>[0],
+    ) {
+      resolver = value;
+    },
+  });
+  toolDisplayExtension(pi);
+  return resolver?.(name, () => undefined);
 }
 
 function createFixture(reasoning: string) {
@@ -92,7 +50,7 @@ function createFixture(reasoning: string) {
       path: "packages/deeply/nested/path/ending-in-important-📦-target.ts",
     },
     {},
-    fixtureDefinition(),
+    resolvedRenderers("read"),
     ui as never,
     process.cwd(),
   );
@@ -158,8 +116,12 @@ describe("real Pi ToolExecutionComponent smoke", () => {
     component.setExpanded(true);
     const expanded = contentRows(component, 37);
     expect(expanded.slice(0, 2)).toHaveLength(2);
-    expect(expanded.join("\n")).toContain("expanded-one");
-    expect(expanded.join("\n")).toContain("expanded-two");
+    expect(
+      expanded.slice(2).map(stripVTControlCharacters).join("\n"),
+    ).toContain("one");
+    expect(
+      expanded.slice(2).map(stripVTControlCharacters).join("\n"),
+    ).toContain("two");
     expectRowsFit(expanded, 37);
   });
 
@@ -187,29 +149,6 @@ describe("real Pi ToolExecutionComponent smoke", () => {
       ),
     ).toBe(true);
 
-    const bashSchema = Type.Object({
-      reasoning: Type.String(),
-      command: Type.String(),
-    });
-    const bashDefinition: ToolDefinition<
-      typeof bashSchema,
-      BashFixtureDetails,
-      PresentationState
-    > = {
-      name: "bash",
-      label: "bash",
-      description: "fixture",
-      parameters: bashSchema,
-      renderShell: "self",
-      execute: async (): Promise<AgentToolResult<BashFixtureDetails>> => ({
-        content: [],
-        details: {},
-      }),
-      renderCall: (args, activeTheme, context) =>
-        renderBashToolCall(args, activeTheme, context),
-      renderResult: (result, options, activeTheme, context) =>
-        renderBashToolResult(result, options, activeTheme, context),
-    };
     const bash = new ToolExecutionComponent(
       "bash",
       "bash-call",
@@ -218,7 +157,7 @@ describe("real Pi ToolExecutionComponent smoke", () => {
         command: "printf one\nsleep 20\necho hidden-tail",
       },
       {},
-      bashDefinition,
+      resolvedRenderers("bash"),
       ui as never,
       process.cwd(),
     );
@@ -251,29 +190,6 @@ describe("real Pi ToolExecutionComponent smoke", () => {
   });
 
   test("sanitizes multiline and terminal-control bash headers", () => {
-    const bashSchema = Type.Object({
-      reasoning: Type.String(),
-      command: Type.String(),
-    });
-    const bashDefinition: ToolDefinition<
-      typeof bashSchema,
-      BashFixtureDetails,
-      PresentationState
-    > = {
-      name: "bash",
-      label: "bash",
-      description: "fixture",
-      parameters: bashSchema,
-      renderShell: "self",
-      execute: async (): Promise<AgentToolResult<BashFixtureDetails>> => ({
-        content: [],
-        details: {},
-      }),
-      renderCall: (args, activeTheme, context) =>
-        renderBashToolCall(args, activeTheme, context),
-      renderResult: (result, options, activeTheme, context) =>
-        renderBashToolResult(result, options, activeTheme, context),
-    };
     const bash = new ToolExecutionComponent(
       "bash",
       "control-call",
@@ -283,7 +199,7 @@ describe("real Pi ToolExecutionComponent smoke", () => {
           "node \u001b[31m- <<'NODE'\u001b[0m\nconsole.log('\\u001b[31mred\\u001b[0m')\r\nNODE\t\u001b[31munsafe\u001b[0m",
       },
       {},
-      bashDefinition,
+      resolvedRenderers("bash"),
       ui as never,
       process.cwd(),
     );
@@ -309,56 +225,13 @@ describe("real Pi ToolExecutionComponent smoke", () => {
     );
     mkdirSync(cwd, { recursive: true });
     writeFileSync(join(cwd, "target.txt"), "old\n");
-    const schema = Type.Object({ text: Type.String() });
-    const definition: ToolDefinition<
-      typeof schema,
-      {
-        diff?: string;
-        files?: string[];
-        toolDisplay?: { durationMs?: number };
-      },
-      PresentationState
-    > = {
-      name: "edit",
-      label: "edit",
-      description: "fixture",
-      parameters: schema,
-      renderShell: "self",
-      execute: async () => ({ content: [], details: {} }),
-      renderCall: (args, activeTheme, context) =>
-        renderOwnedToolCall("edit", args, activeTheme, context),
-      renderResult: (result, options, activeTheme, context) =>
-        renderOwnedToolResult(
-          "edit",
-          result,
-          options,
-          activeTheme,
-          context,
-          options.expanded
-            ? toolResultBody(
-                renderFinalDiffResult(
-                  result,
-                  { ...options, expanded: true },
-                  activeTheme,
-                  {
-                    collapsed: false,
-                    enabled: true,
-                    previewLines: 20,
-                    viewMode: "unified",
-                  },
-                ),
-                true,
-              )
-            : undefined,
-        ),
-    };
     try {
       const component = new ToolExecutionComponent(
         "edit",
         "edit-call",
         { text: "[target.txt]\n@REPLACE\n-old\n+planned" },
         {},
-        definition,
+        resolvedRenderers("edit"),
         ui as never,
         cwd,
       );
@@ -392,6 +265,75 @@ describe("real Pi ToolExecutionComponent smoke", () => {
     } finally {
       rmSync(cwd, { force: true, recursive: true });
     }
+  });
+
+  test("draws the remaining owned names without execution registrations", () => {
+    for (const name of ["grep", "find", "ls", "write"]) {
+      const component = new ToolExecutionComponent(
+        name,
+        `${name}-call`,
+        { path: "a.ts", pattern: "needle", content: "new\n" },
+        {},
+        resolvedRenderers(name),
+        ui as never,
+        process.cwd(),
+      );
+      expect(contentRows(component, 64)).toHaveLength(2);
+      component.updateResult(
+        {
+          content: [
+            { type: "text", text: name === "grep" ? "a.ts:1:needle" : "a.ts" },
+          ],
+          details: {
+            toolDisplay: {
+              writeDiff: "--- a.ts\n+++ a.ts\n@@ -1 +1 @@\n-old\n+new",
+            },
+          },
+          isError: false,
+        },
+        false,
+      );
+      const rows = contentRows(component, 64);
+      expect(rows).toHaveLength(2);
+      expectRowsFit(rows, 64);
+      expect(rows.join("\n")).toContain(name);
+      component.setExpanded(true);
+      expect(contentRows(component, 64).length).toBeGreaterThan(2);
+    }
+  });
+
+  test("renders an unregistered MCP tool through the fallback resolver", () => {
+    const component = new ToolExecutionComponent(
+      "mcp__figma__get_file",
+      "resumed-call",
+      { key: "abc" },
+      {},
+      resolvedRenderers("mcp__figma__get_file"),
+      ui as never,
+      process.cwd(),
+    );
+    const pending = contentRows(component, 64);
+    expect(pending).toHaveLength(2);
+    expectRowsFit(pending, 64);
+    expect(pending.join("\n")).toContain("mcp__figma__get_file");
+    expect(pending.join("\n")).not.toContain("undefined");
+    component.updateResult(
+      {
+        content: [{ type: "text", text: "file body" }],
+        details: { toolDisplay: { durationMs: 1200 } },
+        isError: false,
+      },
+      false,
+    );
+    const settled = contentRows(component, 64);
+    expect(settled.join("\n")).toContain("file body");
+    expect(settled.join("\n")).toContain("1s");
+    expectRowsFit(settled, 64);
+    expect(
+      settled.every((line) => line.includes(theme.getBgAnsi("toolSuccessBg"))),
+    ).toBe(true);
+    component.setExpanded(true);
+    expect(contentRows(component, 37).join("\n")).toContain("file body");
   });
 
   test("uses Pi error context and error theme background", () => {

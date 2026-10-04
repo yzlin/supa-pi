@@ -8,6 +8,7 @@ import {
   type ExtensionAPI,
   type ExtensionContext,
   type WriteToolInput,
+  type ToolRenderers,
 } from "@earendil-works/pi-coding-agent";
 import type { Component } from "@earendil-works/pi-tui";
 
@@ -18,6 +19,10 @@ import {
   cleanupToolDisplayTimers,
   composeReasonedTool,
   type OwnedToolName,
+  renderBashToolCall,
+  renderBashToolResult,
+  renderGenericToolCall,
+  renderGenericToolResult,
   renderOwnedToolCall,
   renderOwnedToolResult,
   toolResultBody,
@@ -32,6 +37,7 @@ import {
 import {
   capturePreviousWriteContent,
   createWriteDiffDetails,
+  renderCompactBashResult,
   renderCompactFindResult,
   renderCompactGrepResult,
   renderCompactLsResult,
@@ -54,18 +60,145 @@ function expandedBody(
 }
 
 export default function toolDisplayExtension(pi: ExtensionAPI): void {
-  registerToolDisplayCommands(pi);
   let cwd = process.cwd();
   let config = loadToolDisplayConfig(cwd);
+  registerToolDisplayCommands(pi, {
+    onConfigWritten: () => {
+      config = loadToolDisplayConfig(cwd);
+    },
+  });
   let readTool = createReadTool(cwd);
   let grepTool = createGrepTool(cwd);
   let findTool = createFindTool(cwd);
   let lsTool = createLsTool(cwd);
   let writeTool = createWriteTool(cwd);
   let skillFilePaths = new Set<string>();
+  let editOverridden = false;
+
+  pi.registerToolRenderer((toolName, next) => {
+    const drawing = config;
+    const fileNames: OwnedToolName[] = [
+      "read",
+      "grep",
+      "find",
+      "ls",
+      "edit",
+      "write",
+    ];
+    const name = fileNames.find((candidate) => candidate === toolName);
+    if (name) {
+      const gates: Record<OwnedToolName, boolean> = {
+        read: drawing.output.read.enabled,
+        grep: drawing.output.search.enabled,
+        find: drawing.output.search.enabled,
+        ls: drawing.output.search.enabled,
+        edit: drawing.diff.enabled,
+        write: drawing.diff.enabled,
+      };
+      if (!gates[name]) {
+        return next();
+      }
+      return {
+        renderShell: "self",
+        renderCall: (args, theme, context) =>
+          renderOwnedToolCall(name, args, theme, context),
+        renderResult(result, options, theme, context) {
+          const current = config;
+          const expandedOptions = { ...options, expanded: true };
+          let body: Component | undefined;
+          if (name === "edit" || name === "write") {
+            body = expandedBody(
+              options.expanded || !current.diff.collapsed,
+              () =>
+                renderFinalDiffResult(
+                  result,
+                  expandedOptions,
+                  theme,
+                  current.diff,
+                ),
+            );
+          } else {
+            const output =
+              name === "read" ? current.output.read : current.output.search;
+            const render = {
+              read: renderCompactReadResult,
+              grep: renderCompactGrepResult,
+              find: renderCompactFindResult,
+              ls: renderCompactLsResult,
+            }[name];
+            body = expandedBody(
+              options.expanded || output.mode === "expanded",
+              () => render(result, expandedOptions, theme, output),
+            );
+          }
+          return renderOwnedToolResult(
+            name,
+            result,
+            options,
+            theme,
+            context,
+            body,
+          );
+        },
+      } satisfies ToolRenderers;
+    }
+    if (toolName === "bash") {
+      if (!drawing.output.bash.enabled) {
+        return next();
+      }
+      return {
+        renderShell: "self",
+        renderCall: renderBashToolCall,
+        renderResult(result, options, theme, context) {
+          const output = config.output.bash;
+          return renderBashToolResult(
+            result,
+            options,
+            theme,
+            context,
+            expandedBody(options.expanded || output.mode === "expanded", () =>
+              renderCompactBashResult(
+                result,
+                { ...options, expanded: true },
+                theme,
+                output,
+              ),
+            ),
+          );
+        },
+      } satisfies ToolRenderers;
+    }
+    const resolved = next();
+    if (
+      !drawing.output.fallback.enabled ||
+      (resolved?.renderCall && resolved.renderResult)
+    ) {
+      return resolved;
+    }
+    const bothGeneric = !resolved?.renderCall && !resolved?.renderResult;
+    return {
+      ...resolved,
+      renderShell: bothGeneric ? "self" : resolved?.renderShell,
+      renderCall:
+        resolved?.renderCall ??
+        ((args, theme, context) =>
+          renderGenericToolCall(toolName, args, theme, context)),
+      renderResult:
+        resolved?.renderResult ??
+        ((result, options, theme, context) =>
+          renderGenericToolResult(
+            toolName,
+            result,
+            options,
+            theme,
+            context,
+            config.output.fallback,
+          )),
+    } satisfies ToolRenderers;
+  });
 
   function reloadSession(nextCwd: string): void {
-    cleanupToolDisplayTimers("file");
+    cleanupToolDisplayTimers();
     cwd = nextCwd;
     config = loadToolDisplayConfig(cwd);
     readTool = createReadTool(cwd);
@@ -87,7 +220,7 @@ export default function toolDisplayExtension(pi: ExtensionAPI): void {
     },
   ]);
   pi.on("session_shutdown", () => {
-    cleanupToolDisplayTimers("file");
+    cleanupToolDisplayTimers();
   });
 
   pi.on("before_agent_start", async (event) => {
@@ -100,7 +233,6 @@ export default function toolDisplayExtension(pi: ExtensionAPI): void {
     const definition = composeReasonedTool(
       {
         ...readTool,
-        renderShell: "self" as const,
         promptGuidelines: ["Use read to examine files instead of cat or sed"],
         async execute(toolCallId, params, signal, onUpdate, _ctx) {
           if (!config.tools.read.fullRead.enabled) {
@@ -139,28 +271,6 @@ export default function toolDisplayExtension(pi: ExtensionAPI): void {
             };
           }
         },
-        renderCall(args, theme, context) {
-          return renderOwnedToolCall("read", args, theme, context);
-        },
-        renderResult(result, options, theme, context) {
-          const expanded =
-            options.expanded || config.output.read.mode === "expanded";
-          return renderOwnedToolResult(
-            "read",
-            result,
-            options,
-            theme,
-            context,
-            expandedBody(expanded, () =>
-              renderCompactReadResult(
-                result,
-                { ...options, expanded: true },
-                theme,
-                config.output.read,
-              ),
-            ),
-          );
-        },
       },
       {
         reasoningDescription: REASONING_DESCRIPTION,
@@ -171,141 +281,33 @@ export default function toolDisplayExtension(pi: ExtensionAPI): void {
   }
 
   if (config.tools.search.enabled) {
-    const registrations = [
-      composeReasonedTool(
-        {
-          ...grepTool,
-          renderShell: "self" as const,
-          renderCall: (args, theme, context) =>
-            renderOwnedToolCall("grep", args, theme, context),
-          renderResult: (result, options, theme, context) =>
-            renderOwnedToolResult(
-              "grep",
-              result,
-              options,
-              theme,
-              context,
-              expandedBody(
-                options.expanded || config.output.search.mode === "expanded",
-                () =>
-                  renderCompactGrepResult(
-                    result,
-                    { ...options, expanded: true },
-                    theme,
-                    config.output.search,
-                  ),
-              ),
-            ),
-        },
-        {
+    for (const tool of [grepTool, findTool, lsTool]) {
+      pi.registerTool(
+        composeReasonedTool(tool, {
           reasoningDescription: REASONING_DESCRIPTION,
-          promptGuidelines: [reasoningGuideline("grep")],
-        },
-      ),
-      composeReasonedTool(
-        {
-          ...findTool,
-          renderShell: "self" as const,
-          renderCall: (args, theme, context) =>
-            renderOwnedToolCall("find", args, theme, context),
-          renderResult: (result, options, theme, context) =>
-            renderOwnedToolResult(
-              "find",
-              result,
-              options,
-              theme,
-              context,
-              expandedBody(
-                options.expanded || config.output.search.mode === "expanded",
-                () =>
-                  renderCompactFindResult(
-                    result,
-                    { ...options, expanded: true },
-                    theme,
-                    config.output.search,
-                  ),
-              ),
-            ),
-        },
-        {
-          reasoningDescription: REASONING_DESCRIPTION,
-          promptGuidelines: [reasoningGuideline("find")],
-        },
-      ),
-      composeReasonedTool(
-        {
-          ...lsTool,
-          renderShell: "self" as const,
-          renderCall: (args, theme, context) =>
-            renderOwnedToolCall("ls", args, theme, context),
-          renderResult: (result, options, theme, context) =>
-            renderOwnedToolResult(
-              "ls",
-              result,
-              options,
-              theme,
-              context,
-              expandedBody(
-                options.expanded || config.output.search.mode === "expanded",
-                () =>
-                  renderCompactLsResult(
-                    result,
-                    { ...options, expanded: true },
-                    theme,
-                    config.output.search,
-                  ),
-              ),
-            ),
-        },
-        {
-          reasoningDescription: REASONING_DESCRIPTION,
-          promptGuidelines: [reasoningGuideline("ls")],
-        },
-      ),
-    ];
-    for (const definition of registrations) {
-      pi.registerTool(definition);
+          promptGuidelines: [reasoningGuideline(tool.name as OwnedToolName)],
+        }),
+      );
     }
   }
 
   function registerEditTool(): void {
     if (!config.tools.edit.enabled) {
-      const builtInEditTool = createEditToolDefinition(cwd);
-      pi.registerTool({
-        ...builtInEditTool,
-        renderShell: "self" as const,
-        renderCall(args, theme, context) {
-          return renderOwnedToolCall(
-            "edit",
-            args as never,
-            theme,
-            context as never,
-          );
-        },
-        renderResult(result, options, theme, context) {
-          const expanded = options.expanded || config.diff.collapsed === false;
-          return renderOwnedToolResult(
-            "edit",
-            result,
-            options,
-            theme,
-            context as never,
-            expandedBody(expanded, () =>
-              renderFinalDiffResult(
-                result,
-                { ...options, expanded: true },
-                theme,
-                config.diff,
-              ),
-            ),
-          );
-        },
-      });
+      // Pi retains registered tools across sessions and has no unregister API.
+      // Once overridden, refresh the native definition for each session's cwd.
+      if (editOverridden) {
+        const {
+          renderCall: _renderCall,
+          renderResult: _renderResult,
+          renderShell: _renderShell,
+          ...nativeEdit
+        } = createEditToolDefinition(cwd);
+        pi.registerTool(nativeEdit);
+      }
       return;
     }
     pi.registerTool({
       ...editTool,
-      renderShell: "self" as const,
       async execute(
         toolCallId,
         params,
@@ -340,33 +342,8 @@ export default function toolDisplayExtension(pi: ExtensionAPI): void {
           },
         };
       },
-      renderCall(args, theme, context) {
-        return renderOwnedToolCall(
-          "edit",
-          args as never,
-          theme,
-          context as never,
-        );
-      },
-      renderResult(result, options, theme, context) {
-        const expanded = options.expanded || config.diff.collapsed === false;
-        return renderOwnedToolResult(
-          "edit",
-          result,
-          options,
-          theme,
-          context as never,
-          expandedBody(expanded, () =>
-            renderFinalDiffResult(
-              result,
-              { ...options, expanded: true },
-              theme,
-              config.diff,
-            ),
-          ),
-        );
-      },
     });
+    editOverridden = true;
   }
 
   registerEditTool();
@@ -376,7 +353,6 @@ export default function toolDisplayExtension(pi: ExtensionAPI): void {
       composeReasonedTool(
         {
           ...writeTool,
-          renderShell: "self" as const,
           execute(
             toolCallId,
             params: WriteToolInput,
@@ -413,28 +389,6 @@ export default function toolDisplayExtension(pi: ExtensionAPI): void {
                 };
               },
               signal,
-            );
-          },
-          renderCall(args, theme, context) {
-            return renderOwnedToolCall("write", args, theme, context);
-          },
-          renderResult(result, options, theme, context) {
-            const expanded =
-              options.expanded || config.diff.collapsed === false;
-            return renderOwnedToolResult(
-              "write",
-              result,
-              options,
-              theme,
-              context,
-              expandedBody(expanded, () =>
-                renderFinalDiffResult(
-                  result,
-                  { ...options, expanded: true },
-                  theme,
-                  config.diff,
-                ),
-              ),
             );
           },
         },
