@@ -2,7 +2,7 @@
 description: Security review specialist. Reviews changed code for vulnerabilities, unsafe trust boundaries, auth/permission regressions, and sensitive data handling. Produces structured findings only.
 tools: read, grep, find, ls, bash
 model: openai-codex/gpt-6-astra
-thinking: low
+thinking: high
 caveman: false
 ---
 
