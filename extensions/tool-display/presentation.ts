@@ -474,8 +474,10 @@ function fitTail(
   if (textWidth <= width) {
     return text;
   }
+  // sliceByColumn keeps the head without truncateToWidth's trailing full
+  // reset, which would clear the tool block background for the rest of the line.
   if (width <= 1) {
-    return truncateToWidth(text, width, "");
+    return sliceByColumn(text, 0, width, true);
   }
   const requestedTailWidth = Math.max(1, Math.floor((width - 1) / 2));
   const tail = sliceByColumn(
@@ -484,7 +486,7 @@ function fitTail(
     requestedTailWidth,
     true,
   );
-  return `${truncateToWidth(text, width - visibleWidth(tail) - 1, "")}…${tail}`;
+  return `${sliceByColumn(text, 0, width - visibleWidth(tail) - 1, true)}…${tail}`;
 }
 
 function fitMiddle(

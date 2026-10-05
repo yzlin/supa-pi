@@ -209,7 +209,6 @@ describe("Pi 1.0.1 renderer resolver SDK probe", () => {
 
   test("fills only the missing result renderer on a registered tool", () => {
     const renderers = resolve(rtkRunner, "custom_partial");
-    expect(renderers.renderCall).toBe(ownCall);
     expect(renderers.renderResult).toBeFunction();
     expect(renderers.renderShell).toBe("default");
     const { call, result } = renderStoredCall(renderers, {});
@@ -217,11 +216,15 @@ describe("Pi 1.0.1 renderer resolver SDK probe", () => {
     expect(result.join("\n")).toContain("Design document");
   });
 
-  test("preserves complete registered renderers unchanged", () => {
+  test("draws complete registered renderers unchanged", () => {
     const definition = rtkRunner.getToolDefinition("custom_complete");
-    expect(resolve(rtkRunner, "custom_complete")).toBe(definition);
     expect(definition?.renderCall).toBe(ownCall);
     expect(definition?.renderResult).toBe(ownResult);
+    const renderers = resolve(rtkRunner, "custom_complete");
+    expect(renderers.renderShell).toBe(definition?.renderShell);
+    const { call, result } = renderStoredCall(renderers, {});
+    expect(call.join("\n").trimEnd()).toBe("custom call");
+    expect(result.join("\n").trimEnd()).toBe("custom result");
   });
 
   test("draws bash by name both with RTK execution and without a registration", () => {

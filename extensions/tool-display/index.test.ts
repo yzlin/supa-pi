@@ -17,7 +17,13 @@ import {
   type ToolRenderContext,
   type ToolRenderers,
 } from "@earendil-works/pi-coding-agent";
-import { Text, visibleWidth } from "@earendil-works/pi-tui";
+import {
+  Box,
+  type Component,
+  Text,
+  truncateToWidth,
+  visibleWidth,
+} from "@earendil-works/pi-tui";
 
 import { companionFixtures } from "./companion-fixtures";
 import * as configModule from "./config";
@@ -249,14 +255,23 @@ describe("renderer resolver", () => {
   test("fills only missing non-owned fields and preserves a complete renderer", () => {
     const h = harness();
     const full = h.resolve("read") as ToolRenderers;
-    expect(h.resolve("custom", () => full)).toBe(full);
+    const args = { reasoning: "Read file", path: "a.ts" };
+    const original = renderFixture(full, args);
+    const preserved = h.resolve("custom", () => full) as ToolRenderers;
+    expect(preserved.renderShell).toBe(full.renderShell);
+    const drawn = renderFixture(preserved, args);
+    expect([drawn.call, drawn.result]).toEqual([
+      original.call,
+      original.result,
+    ]);
     for (const field of ["renderCall", "renderResult"] as const) {
       const partial: ToolRenderers = {
         renderShell: "default",
         [field]: full[field],
       };
-      const composed = h.resolve("custom", () => partial);
-      expect(composed?.[field]).toBe(partial[field]);
+      const composed = h.resolve("custom", () => partial) as ToolRenderers;
+      const key = field === "renderCall" ? "call" : "result";
+      expect(renderFixture(composed, args)[key]).toBe(original[key]);
       expect(composed?.renderCall).toBeFunction();
       expect(composed?.renderResult).toBeFunction();
       expect(composed?.renderShell).toBe("default");
@@ -273,7 +288,6 @@ describe("renderer resolver", () => {
       const r = h.resolve("result_only", () => ({
         renderResult: customResult,
       })) as ToolRenderers;
-      expect(r.renderResult).toBe(customResult);
       const context: ToolRenderContext<
         PresentationState,
         Record<string, unknown>
@@ -605,7 +619,15 @@ describe("companion renderer ownership", () => {
       "renamed_web_search",
       "web_search_extra",
     ]) {
-      expect(h.resolve(name, () => upstream)).toBe(upstream);
+      const r = h.resolve(name, () => upstream);
+      expect(r?.renderShell).toBeUndefined();
+      expect(
+        r
+          ?.renderCall?.({}, plainTheme as never, {} as never)
+          .render(80)
+          .join("\n")
+          .trimEnd(),
+      ).toBe("package");
     }
     for (const name of ["mcp__", "mcp__server", "mcp__server__prompt"]) {
       expect(h.resolve(name, () => upstream)?.renderShell).toBe("self");
@@ -870,4 +892,140 @@ test("companion fallback safely handles malformed reasoning and non-object store
         ?.render(100),
     ).not.toThrow();
   }
+});
+
+describe("tool block background", () => {
+  const ansiTheme = {
+    bg: (_token: string, text: string) => `\u001b[48;5;22m${text}\u001b[49m`,
+    bold: (text: string) => `\u001b[1m${text}\u001b[22m`,
+    fg: (_token: string, text: string) => `\u001b[38;5;245m${text}\u001b[39m`,
+  };
+
+  // Returns visible columns drawn without a background colour.
+  function columnsWithoutBackground(line: string): number[] {
+    let background = false;
+    let column = 0;
+    const missing: number[] = [];
+    // oxlint-disable-next-line no-control-regex -- SGR codes start with the terminal escape character.
+    for (const match of line.matchAll(/\u001b\[([0-9;]*)m|([^\u001b])/g)) {
+      if (match[2] !== undefined) {
+        if (!background) {
+          missing.push(column);
+        }
+        column += 1;
+        continue;
+      }
+      const codes = (match[1] || "0").split(";").map(Number);
+      for (let index = 0; index < codes.length; index += 1) {
+        const code = codes[index];
+        if (code === 0 || code === 49) {
+          background = false;
+        } else if (code === 38 || code === 48) {
+          background ||= code === 48;
+          index += codes[index + 1] === 5 ? 2 : 4;
+        } else if (code >= 40 && code <= 47) {
+          background = true;
+        }
+      }
+    }
+    return missing;
+  }
+
+  function inHostShell(component: Component | undefined): string[] {
+    const box = new Box(1, 0, (text) => ansiTheme.bg("toolSuccessBg", text));
+    if (component) {
+      box.addChild(component);
+    }
+    return box.render(100);
+  }
+
+  const truncatedHeader = () =>
+    new Text(
+      `ask ${ansiTheme.fg("dim", `(${truncateToWidth("label, ".repeat(10), 40)})`)}`,
+      0,
+      0,
+    );
+
+  test("keeps the background after resets in other tools' renderers", () => {
+    const h = harness();
+    const upstream: ToolRenderers = {
+      renderCall: truncatedHeader,
+      renderResult: truncatedHeader,
+    };
+    const context = { args: {}, state: {}, invalidate() {} };
+    expect(
+      inHostShell(
+        upstream.renderCall?.({}, ansiTheme as never, context as never),
+      ).flatMap(columnsWithoutBackground),
+    ).not.toEqual([]);
+
+    const resolved = h.resolve("ask", () => upstream);
+    const call = resolved?.renderCall?.(
+      {},
+      ansiTheme as never,
+      context as never,
+    );
+    const result = resolved?.renderResult?.(
+      { content: [], details: {} },
+      { expanded: false, isPartial: false },
+      ansiTheme as never,
+      context as never,
+    );
+    expect(inHostShell(call).flatMap(columnsWithoutBackground)).toEqual([]);
+    expect(inHostShell(result).flatMap(columnsWithoutBackground)).toEqual([]);
+    expect(stripVTControlCharacters(inHostShell(call).join(""))).toContain(
+      "ask (label, label,",
+    );
+  });
+
+  test("keeps the background after a tail-truncated self-drawn header", () => {
+    const h = harness();
+    const args = {
+      reasoning: "Inspect current pane and read options",
+      command: "herdr pane read --help 2>&1 | head -30",
+    };
+    const call = h.resolve("bash")?.renderCall?.(
+      args,
+      ansiTheme as never,
+      {
+        args,
+        state: {},
+        invalidate() {},
+        argsComplete: true,
+      } as never,
+    );
+    const lines = call?.render(30) ?? [];
+    expect(stripVTControlCharacters(lines.join("\n"))).toContain("…");
+    expect(lines.flatMap(columnsWithoutBackground)).toEqual([]);
+  });
+
+  test("passes the original component back to other tools' renderers", () => {
+    const h = harness();
+    const original = new Text("call", 0, 0);
+    const seen: unknown[] = [];
+    const resolved = h.resolve("ask", () => ({
+      renderCall: (_args, _theme, context) => {
+        seen.push(context.lastComponent);
+        return original;
+      },
+      renderResult: () => new Text("result", 0, 0),
+    }));
+    const first = resolved?.renderCall?.(
+      {},
+      ansiTheme as never,
+      {
+        lastComponent: undefined,
+      } as never,
+    );
+    const second = resolved?.renderCall?.(
+      {},
+      ansiTheme as never,
+      {
+        lastComponent: first,
+      } as never,
+    );
+    expect(seen).toEqual([undefined, original]);
+    expect(second).toBe(first);
+    first?.invalidate();
+  });
 });

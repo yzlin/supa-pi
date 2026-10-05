@@ -12,6 +12,7 @@ import {
 } from "@earendil-works/pi-coding-agent";
 import type { Component } from "@earendil-works/pi-tui";
 
+import { keepRendererBackground } from "./background";
 import { registerToolDisplayCommands } from "./commands";
 import { companionGroup } from "./companion";
 import { loadToolDisplayConfig } from "./config";
@@ -198,22 +199,23 @@ export default function toolDisplayExtension(pi: ExtensionAPI): void {
       } satisfies ToolRenderers;
     }
     const resolved = next();
-    if (
-      !drawing.output.fallback.enabled ||
-      (resolved?.renderCall && resolved.renderResult)
-    ) {
+    if (!drawing.output.fallback.enabled) {
       return resolved;
     }
+    if (resolved?.renderCall && resolved.renderResult) {
+      return keepRendererBackground(resolved);
+    }
     const bothGeneric = !resolved?.renderCall && !resolved?.renderResult;
+    const kept = resolved && keepRendererBackground(resolved);
     return {
-      ...resolved,
+      ...kept,
       renderShell: bothGeneric ? "self" : resolved?.renderShell,
       renderCall:
-        resolved?.renderCall ??
+        kept?.renderCall ??
         ((args, theme, context) =>
           renderGenericToolCall(toolName, args, theme, context)),
       renderResult:
-        resolved?.renderResult ??
+        kept?.renderResult ??
         ((result, options, theme, context) =>
           renderGenericToolResult(
             toolName,
