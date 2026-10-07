@@ -122,8 +122,11 @@ whole-session cancellation is for the parent owner.
 ## Process/resource boundary
 
 Requires tmux, Pi 1.0.1+, and the complete repo checkout. Generic/ordinary children
-use the installed Pi CLI. Roles that explicitly disable or select skills use
-an interactive public-SDK Pi host, requiring `bun` on PATH: its resource-loader
+use the parent runtime's Pi CLI, located through Pi's public `getPackageDir()`
+API, not the checkout's independently pinned development dependency. Updating
+the parent Pi installation therefore updates ordinary CLI children too. Roles
+that explicitly disable or select skills use an interactive public-SDK Pi host
+from the checkout's Pi dependency, requiring `bun` on PATH: its resource-loader
 `skillsOverride` keeps the catalog disabled/selected even if extensions try to
 add resource paths. This host supplies public codemode/MCP/tool-search built-ins
 when permitted; it does not activate native llama.cpp management. Explicit
@@ -194,9 +197,10 @@ bun run check
 
 The smoke uses temporary `PI_CODING_AGENT_DIR`, `PI_OFFLINE=1`, and a native faux
 provider, with no auth/network calls. It crosses actual tmux/Pi CLI and public-SDK
-child boundaries, proves fresh task/role separation and final correction, checks
-private evidence/finished cleanup, detects a ready child exiting without a
-report, and kills an actually started child on abort. It invokes the native attachment
+child boundaries, proves fresh task/role separation and final correction,
+checks ordinary children use the parent Pi package/version, checks private
+evidence/finished cleanup, detects a ready child exiting without a report, and
+kills an actually started child on abort. It invokes the native attachment
 CLI against launched children through a tmux wrapper that forwards live-target
 checks but replaces interactive attachment, proving CLI dispatch without a TTY
 block. Separate native CLI fixtures cover parsing, unsafe/malformed/ambiguous

@@ -13,11 +13,18 @@ import { atomicJson, type ChildConfig } from "./protocol";
 import { runSubagent, type RunnerAPI, type RunnerContext } from "./runner";
 
 let previousAgentDir: string | undefined;
+let previousPackageDir: string | undefined;
 beforeEach(async () => {
+  previousPackageDir = process.env.PI_PACKAGE_DIR;
   previousAgentDir = process.env.PI_CODING_AGENT_DIR;
   process.env.PI_CODING_AGENT_DIR = await root();
 });
 afterEach(() => {
+  if (previousPackageDir === undefined) {
+    delete process.env.PI_PACKAGE_DIR;
+  } else {
+    process.env.PI_PACKAGE_DIR = previousPackageDir;
+  }
   if (previousAgentDir === undefined) {
     delete process.env.PI_CODING_AGENT_DIR;
   } else {
@@ -84,6 +91,35 @@ test("runner rejects empty tasks, unknown model, absent auth and out-of-scope mo
   );
   expect(calls).toBe(0);
 });
+test("ordinary child launch uses the parent Pi package instead of the repository dependency", async () => {
+  const dir = await root();
+  const parentPackage = path.join(dir, "parent Pi 1.0.4");
+  process.env.PI_PACKAGE_DIR = parentPackage;
+  let launchScript = "";
+  const pi: RunnerAPI = {
+    getThinkingLevel: () => "off",
+    exec: async (_cmd, args) => {
+      if (args.includes("send-keys") && args.includes("-l")) {
+        const launchPath = args.at(-1)?.match(/\/bin\/sh '([^']+)'/)?.[1];
+        if (!launchPath) {
+          throw new Error("Missing launcher");
+        }
+        launchScript = await readFile(launchPath, "utf8");
+        throw new Error("Launch inspected");
+      }
+      return { code: 0, stdout: "", stderr: "", killed: false };
+    },
+  };
+  await rejects(
+    runSubagent(pi, context(dir), { task: "task" }),
+    /Launch inspected/,
+  );
+  expect(launchScript).toContain(
+    `'${path.join(parentPackage, "dist", "bundle", "cli.js")}'`,
+  );
+  expect(launchScript).toContain(`'${process.execPath}'`);
+});
+
 test("startup failure closes owned tmux and retains owner-only failure evidence", async () => {
   const dir = await root();
   const calls: string[][] = [];

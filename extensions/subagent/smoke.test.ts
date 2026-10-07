@@ -18,6 +18,8 @@ import {
 import {
   createAgentSession,
   DefaultResourceLoader,
+  getPackageDir,
+  VERSION,
   type ExtensionAPI,
   type ExtensionContext,
   ModelRuntime,
@@ -43,9 +45,10 @@ test("isolated offline actual tmux/Pi child boundary: fresh task, role system, v
     `import { fauxProvider, fauxAssistantMessage, fauxToolCall } from ${JSON.stringify(import.meta.resolve("@earendil-works/pi-ai"))};
 import { readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
+import { VERSION, getPackageDir } from '@earendil-works/pi-coding-agent';
 export default function(pi) {
  const config = JSON.parse(readFileSync(process.env.SUPA_PI_SUBAGENT_CONFIG, 'utf8'));
- pi.on('session_start', () => writeFileSync(path.join(path.dirname(process.env.SUPA_PI_SUBAGENT_CONFIG), 'child-pid.json'), JSON.stringify({pid: process.pid}), {mode:0o600}));
+ pi.on('session_start', () => writeFileSync(path.join(path.dirname(process.env.SUPA_PI_SUBAGENT_CONFIG), 'child-pid.json'), JSON.stringify({pid: process.pid, version: VERSION, packageDir: getPackageDir()}), {mode:0o600}));
  const fake = fauxProvider();
  fake.setResponses([
  async context => {
@@ -271,6 +274,23 @@ process.exit(result.status ?? 1);
       expect(result.agent).toEqual(agent);
       expect(result.sessionFile).toBeDefined();
       expect((await stat(result.resultPath)).mode % 512).toBe(0o600);
+      if (agent === undefined) {
+        const childRuntime = JSON.parse(
+          await readFile(
+            path.join(path.dirname(result.resultPath), "child-pid.json"),
+            "utf8",
+          ),
+        );
+        expect(childRuntime.version).toBe(VERSION);
+        expect(childRuntime.packageDir).toBe(getPackageDir());
+        const launcher = await readFile(
+          path.join(path.dirname(result.resultPath), "launch.sh"),
+          "utf8",
+        );
+        expect(launcher).toContain(
+          path.join(getPackageDir(), "dist", "bundle", "cli.js"),
+        );
+      }
       if (!result.sessionFile) {
         throw new Error("Missing child session");
       }

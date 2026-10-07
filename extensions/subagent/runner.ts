@@ -19,6 +19,7 @@ import { fileURLToPath } from "node:url";
 // Apache-2.0 adaptation of mitsuhiko/agent-stuff, d265b8e. Modified for SupaPi: reusable bounded runner, trusted roles and validated evidence.
 import {
   getAgentDir,
+  getPackageDir,
   truncateHead,
   type ExtensionAPI,
   type ExtensionContext,
@@ -83,13 +84,6 @@ export function shellQuote(value: string): string {
   return `'${value.replace(/'/g, `'"'"'`)}'`;
 }
 const bootstrap = fileURLToPath(new URL("./child.ts", import.meta.url));
-const piCli = path.join(
-  path.dirname(
-    fileURLToPath(import.meta.resolve("@earendil-works/pi-coding-agent")),
-  ),
-  "bundle",
-  "cli.js",
-);
 async function ownerDirectory(directory: string): Promise<void> {
   await mkdir(directory, { recursive: true, mode: 0o700 });
   if ((await lstat(directory)).isSymbolicLink()) {
@@ -306,7 +300,7 @@ export async function runSubagent(
           ? ["bun", fileURLToPath(new URL("./host-entry.ts", import.meta.url))]
           : [
               process.execPath,
-              piCli,
+              path.join(getPackageDir(), "dist", "bundle", "cli.js"),
               "--provider",
               selection.provider,
               "--model",
