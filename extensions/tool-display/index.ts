@@ -13,6 +13,7 @@ import {
 import type { Component } from "@earendil-works/pi-tui";
 
 import { keepRendererBackground } from "./background";
+import { registerCodemodeSubagentPreviews } from "./codemode-subagents";
 import { registerToolDisplayCommands } from "./commands";
 import { companionGroup } from "./companion";
 import { loadToolDisplayConfig } from "./config";
@@ -78,6 +79,7 @@ export default function toolDisplayExtension(pi: ExtensionAPI): void {
   let writeTool = createWriteTool(cwd);
   let skillFilePaths = new Set<string>();
   let editOverridden = false;
+  const subagentPreviews = registerCodemodeSubagentPreviews(pi);
 
   pi.registerToolRenderer((toolName, next) => {
     const drawing = config;
@@ -179,14 +181,18 @@ export default function toolDisplayExtension(pi: ExtensionAPI): void {
       }
       return {
         renderShell: "self",
-        renderCall: (args, theme, context) =>
-          renderCompanionToolCall(
+        renderCall: (args, theme, context) => {
+          const call = renderCompanionToolCall(
             toolName,
             args,
             theme,
             context,
             config.output.codemode,
-          ),
+          );
+          return toolName === "codemode"
+            ? subagentPreviews.wrap(call, context, theme)
+            : call;
+        },
         renderResult: (result, options, theme, context) =>
           renderCompanionToolResult(
             toolName,
@@ -230,6 +236,7 @@ export default function toolDisplayExtension(pi: ExtensionAPI): void {
 
   function reloadSession(nextCwd: string): void {
     cleanupToolDisplayTimers();
+    subagentPreviews.clear();
     cwd = nextCwd;
     config = loadToolDisplayConfig(cwd);
     readTool = createReadTool(cwd);
@@ -252,6 +259,7 @@ export default function toolDisplayExtension(pi: ExtensionAPI): void {
   ]);
   pi.on("session_shutdown", () => {
     cleanupToolDisplayTimers();
+    subagentPreviews.clear();
   });
 
   pi.on("before_agent_start", async (event) => {

@@ -129,6 +129,152 @@ function harness(initialConfig?: object) {
 
 const owned = ["read", "grep", "find", "ls", "edit", "write", "bash"];
 
+test("codemode redraws live nested subagent previews without parent result updates", () => {
+  const h = harness();
+  const emit = (type: string, event: object) => {
+    for (const handler of h.handlers.get(type) ?? []) {
+      handler({ type, ...event }, { cwd: h.cwd });
+    }
+  };
+  const args = { code: "await tools.subagent({ task: 'Inspect' });" };
+  let redraws = 0;
+  const context = {
+    args,
+    toolCallId: "parent",
+    state: {},
+    invalidate() {
+      redraws += 1;
+    },
+    argsComplete: true,
+  };
+  const call = h
+    .resolve("codemode")
+    ?.renderCall?.(args, plainTheme as never, context as never);
+  const rows = () =>
+    stripVTControlCharacters(call?.render(100).join("\n") ?? "");
+  emit("tool_execution_start", {
+    toolCallId: "parent",
+    toolName: "codemode",
+    args,
+  });
+  emit("tool_execution_update", {
+    toolCallId: "parent/1",
+    parentToolCallId: "parent",
+    toolName: "subagent",
+    partialResult: {
+      details: {
+        runId: "run-one",
+        status: "running",
+        attachCommand: "pi --attach-subagent run-one",
+        text: "first preview",
+      },
+    },
+  });
+  expect(rows()).toContain("first preview");
+  expect(rows()).toContain("pi --attach-subagent run-one");
+  expect(redraws).toBeGreaterThan(0);
+  emit("tool_execution_update", {
+    toolCallId: "parent/1",
+    parentToolCallId: "parent",
+    toolName: "subagent",
+    partialResult: {
+      details: { runId: "run-one", status: "running", text: "second preview" },
+    },
+  });
+  expect(rows()).toContain("second preview");
+  expect(rows()).not.toContain("first preview");
+  emit("tool_execution_end", {
+    toolCallId: "parent/1",
+    parentToolCallId: "parent",
+    toolName: "subagent",
+  });
+  expect(rows()).not.toContain("second preview");
+});
+
+test("nested previews isolate parents and children, ignore bad events, and clear on lifecycle changes", () => {
+  const h = harness();
+  const emit = (type: string, event: object) => {
+    for (const handler of h.handlers.get(type) ?? []) {
+      handler({ type, ...event }, { cwd: h.cwd });
+    }
+  };
+  const create = (toolCallId: string) => {
+    const args = { code: "await tools.subagent({ task: 'Inspect' });" };
+    emit("tool_execution_start", { toolCallId, toolName: "codemode", args });
+    const component = h.resolve("codemode")?.renderCall?.(
+      args,
+      plainTheme as never,
+      {
+        toolCallId,
+        args,
+        state: {},
+        invalidate() {},
+      } as never,
+    );
+    return () =>
+      stripVTControlCharacters(component?.render(100).join("\n") ?? "");
+  };
+  const update = (
+    parentToolCallId: string | undefined,
+    toolCallId: string,
+    text: string,
+    toolName = "subagent",
+  ) =>
+    emit("tool_execution_update", {
+      parentToolCallId,
+      toolCallId,
+      toolName,
+      partialResult: { details: { status: "queued", runId: toolCallId, text } },
+    });
+  const a = create("a");
+  const b = create("b");
+  update("a", "a/1", "FIRST_CHILD");
+  update("a", "a/2", "SECOND_CHILD");
+  update("b", "b/1", "OTHER_PARENT");
+  update(undefined, "direct", "DIRECT_CALL");
+  update("unknown", "unknown/1", "UNKNOWN_PARENT");
+  update("a", "a/3", "NOT_SUBAGENT", "read");
+  emit("tool_execution_update", {
+    parentToolCallId: "a",
+    toolCallId: "a/4",
+    toolName: "subagent",
+    partialResult: { details: { status: "running", text: "MALFORMED" } },
+  });
+  expect(a()).toContain("FIRST_CHILD");
+  expect(a()).toContain("SECOND_CHILD");
+  expect(a()).not.toMatch(
+    /OTHER_PARENT|DIRECT_CALL|UNKNOWN_PARENT|NOT_SUBAGENT|MALFORMED/u,
+  );
+  expect(b()).toContain("OTHER_PARENT");
+  expect(b()).not.toContain("FIRST_CHILD");
+  emit("tool_execution_end", {
+    parentToolCallId: "a",
+    toolCallId: "a/1",
+    toolName: "subagent",
+    isError: true,
+  });
+  expect(a()).not.toContain("FIRST_CHILD");
+  expect(a()).toContain("SECOND_CHILD");
+  emit("tool_execution_end", {
+    toolCallId: "a",
+    toolName: "codemode",
+    isError: true,
+  });
+  expect(a()).not.toContain("SECOND_CHILD");
+  expect(b()).toContain("OTHER_PARENT");
+  for (const type of ["session_switch", "session_start", "session_shutdown"]) {
+    const parentId = `lifecycle-${type}`;
+    const rows = create(parentId);
+    update(parentId, `${parentId}/1`, "LIVE_PREVIEW");
+    expect(rows()).toContain("LIVE_PREVIEW");
+    emit(type, {});
+    expect(rows()).not.toContain("LIVE_PREVIEW");
+    update(parentId, `${parentId}/1`, "LATE_UPDATE");
+    expect(rows()).not.toContain("LATE_UPDATE");
+  }
+  expect(b()).not.toContain("OTHER_PARENT");
+});
+
 function renderFixture(
   renderers: ToolRenderers,
   args: Record<string, unknown>,
