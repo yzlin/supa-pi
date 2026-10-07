@@ -2,7 +2,7 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
 import { rejects } from "node:assert/strict";
 import { randomUUID } from "node:crypto";
-import { mkdtemp, readFile, stat } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
@@ -118,6 +118,40 @@ test("ordinary child launch uses the parent Pi package instead of the repository
     `'${path.join(parentPackage, "dist", "bundle", "cli.js")}'`,
   );
   expect(launchScript).toContain(`'${process.execPath}'`);
+});
+
+test("strict-skill child launch passes the parent Pi package to its SDK host", async () => {
+  const dir = await root();
+  const agentDir = await root();
+  process.env.PI_CODING_AGENT_DIR = agentDir;
+  const parentPackage = path.join(dir, "parent Pi runtime");
+  process.env.PI_PACKAGE_DIR = parentPackage;
+  await mkdir(path.join(agentDir, "agents"));
+  await writeFile(
+    path.join(agentDir, "agents", "strict.md"),
+    "---\nname: strict\nskills: false\n---\nStrict role",
+  );
+  let launchScript = "";
+  const pi: RunnerAPI = {
+    getThinkingLevel: () => "off",
+    exec: async (_cmd, args) => {
+      if (args.includes("send-keys") && args.includes("-l")) {
+        const launchPath = args.at(-1)?.match(/\/bin\/sh '([^']+)'/)?.[1];
+        if (!launchPath) {
+          throw new Error("Missing launcher");
+        }
+        launchScript = await readFile(launchPath, "utf8");
+        throw new Error("Launch inspected");
+      }
+      return { code: 0, stdout: "", stderr: "", killed: false };
+    },
+  };
+  await rejects(
+    runSubagent(pi, context(dir), { task: "task", agent: "strict" }),
+    /Launch inspected/,
+  );
+  expect(launchScript).toContain("host-entry.ts'");
+  expect(launchScript).toContain(`'${parentPackage}'`);
 });
 
 test("startup failure closes owned tmux and retains owner-only failure evidence", async () => {

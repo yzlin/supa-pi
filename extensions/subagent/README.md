@@ -123,12 +123,16 @@ whole-session cancellation is for the parent owner.
 
 Requires tmux, Pi 1.0.1+, and the complete repo checkout. Generic/ordinary children
 use the parent runtime's Pi CLI, located through Pi's public `getPackageDir()`
-API, not the checkout's independently pinned development dependency. Updating
-the parent Pi installation therefore updates ordinary CLI children too. Roles
-that explicitly disable or select skills use an interactive public-SDK Pi host
-from the checkout's Pi dependency, requiring `bun` on PATH: its resource-loader
-`skillsOverride` keeps the catalog disabled/selected even if extensions try to
-add resource paths. This host supplies public codemode/MCP/tool-search built-ins
+API, not the checkout's independently pinned development dependency. Roles
+that explicitly disable or select skills use an interactive public-SDK Pi host,
+requiring `bun` on PATH. The runner passes the parent package directory to this
+host; it loads that package's SDK and redirects checkout SDK imports before
+loading child modules, including the transitive frontmatter parser. Missing or
+unloadable parent SDKs fail startup without falling back to checkout Pi.
+Updating the parent Pi installation therefore updates both child launch paths;
+reload or restart existing parent sessions after changing the runner. The host's
+resource-loader `skillsOverride` keeps the catalog disabled/selected even if
+extensions try to add resource paths. This host supplies public codemode/MCP/tool-search built-ins
 when permitted; it does not activate native llama.cpp management. Explicit
 extension lists disable implicit extension discovery. `extensions: false`
 loads only the internal reporter/policy. Missing resources or providers fail,
@@ -196,14 +200,20 @@ bun run check
 ```
 
 The smoke uses temporary `PI_CODING_AGENT_DIR`, `PI_OFFLINE=1`, and a native faux
-provider, with no auth/network calls. It crosses actual tmux/Pi CLI and public-SDK
+provider, with no auth/network calls. Its mock parent clears/restores the inherited
+child marker; a subprocess regression verifies the full smoke from a reviewer
+worker environment. It crosses actual tmux/Pi CLI and public-SDK
 child boundaries, proves fresh task/role separation and final correction,
-checks ordinary children use the parent Pi package/version, checks private
+checks both launch paths use the parent Pi package/version, checks private
 evidence/finished cleanup, detects a ready child exiting without a report, and
 kills an actually started child on abort. It invokes the native attachment
 CLI against launched children through a tmux wrapper that forwards live-target
 checks but replaces interactive attachment, proving CLI dispatch without a TTY
 block. Separate native CLI fixtures cover parsing, unsafe/malformed/ambiguous
 metadata, stale/dead targets, inherited streams, tmux environment, and exit codes.
-It does not activate live setup/settings, test paid models, or establish semantic
-correctness of worker reports.
+A separate isolated host-entry regression uses a distinct parent SDK package
+with instrumented factories, TUI, and frontmatter exports. It verifies parent
+SDK binding, disabled/selected skill filters despite resource repopulation,
+allowed tools, and fail-closed startup with missing parent packages.
+These tests do not activate live setup/settings, test paid models, or establish
+semantic correctness of worker reports.

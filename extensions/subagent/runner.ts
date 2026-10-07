@@ -297,7 +297,11 @@ export async function runSubagent(
       const attachCommand = `pi --attach-subagent ${runId}`;
       const invocation =
         config.agent?.skills === false || Array.isArray(config.agent?.skills)
-          ? ["bun", fileURLToPath(new URL("./host-entry.ts", import.meta.url))]
+          ? [
+              "bun",
+              fileURLToPath(new URL("./host-entry.ts", import.meta.url)),
+              getPackageDir(),
+            ]
           : [
               process.execPath,
               path.join(getPackageDir(), "dist", "bundle", "cli.js"),

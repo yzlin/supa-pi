@@ -144,8 +144,11 @@ process.exit(result.status ?? 1);
     );
   const oldDir = process.env.PI_CODING_AGENT_DIR;
   const oldOffline = process.env.PI_OFFLINE;
+  const oldSubagentConfig = process.env.SUPA_PI_SUBAGENT_CONFIG;
   process.env.PI_CODING_AGENT_DIR = agentDir;
   process.env.PI_OFFLINE = "1";
+  // This fixture is a parent even when the test runner was launched by a reviewer child.
+  delete process.env.SUPA_PI_SUBAGENT_CONFIG;
   const provider = fauxProvider();
   provider.setResponses([
     fauxAssistantMessage(fauxToolCall("native-delegate", {}), {
@@ -274,23 +277,23 @@ process.exit(result.status ?? 1);
       expect(result.agent).toEqual(agent);
       expect(result.sessionFile).toBeDefined();
       expect((await stat(result.resultPath)).mode % 512).toBe(0o600);
-      if (agent === undefined) {
-        const childRuntime = JSON.parse(
-          await readFile(
-            path.join(path.dirname(result.resultPath), "child-pid.json"),
-            "utf8",
-          ),
-        );
-        expect(childRuntime.version).toBe(VERSION);
-        expect(childRuntime.packageDir).toBe(getPackageDir());
-        const launcher = await readFile(
-          path.join(path.dirname(result.resultPath), "launch.sh"),
+      const childRuntime = JSON.parse(
+        await readFile(
+          path.join(path.dirname(result.resultPath), "child-pid.json"),
           "utf8",
-        );
-        expect(launcher).toContain(
-          path.join(getPackageDir(), "dist", "bundle", "cli.js"),
-        );
-      }
+        ),
+      );
+      expect(childRuntime.version).toBe(VERSION);
+      expect(childRuntime.packageDir).toBe(getPackageDir());
+      const launcher = await readFile(
+        path.join(path.dirname(result.resultPath), "launch.sh"),
+        "utf8",
+      );
+      expect(launcher).toContain(
+        agent === undefined
+          ? path.join(getPackageDir(), "dist", "bundle", "cli.js")
+          : `'${getPackageDir()}'`,
+      );
       if (!result.sessionFile) {
         throw new Error("Missing child session");
       }
@@ -418,6 +421,11 @@ process.exit(result.status ?? 1);
     expect(existsSync(path.dirname(cancelledSocket))).toBe(false);
   } finally {
     session.dispose();
+    if (oldSubagentConfig === undefined) {
+      delete process.env.SUPA_PI_SUBAGENT_CONFIG;
+    } else {
+      process.env.SUPA_PI_SUBAGENT_CONFIG = oldSubagentConfig;
+    }
     if (oldDir === undefined) {
       delete process.env.PI_CODING_AGENT_DIR;
     } else {
