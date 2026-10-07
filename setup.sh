@@ -5,7 +5,6 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PI_AGENT_DIR="$HOME/.pi/agent"
 PI_PACKAGES=(
   "npm:@yzlin/pieditor@2.0.0"
-  "npm:@tintinweb/pi-subagents"
   "npm:pi-mcp-adapter"
   "npm:pi-rewind"
   "npm:pi-web-access"
@@ -13,7 +12,6 @@ PI_PACKAGES=(
   "npm:glimpseui"
   "npm:pi-anycopy"
   "npm:pi-token-burden"
-  "npm:@tintinweb/pi-tasks"
 )
 
 print_package_json_lines() {

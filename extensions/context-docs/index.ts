@@ -129,7 +129,7 @@ interface NaturalLanguageMatch {
 }
 
 const CONTEXT_DOCS_REMINDER =
-  "Context-docs: keep durable docs scoped; CONTEXT.md domain/product only; AGENTS.md agent conventions; ADRs tradeoff decisions; CONTEXT-MAP real boundaries; no pi-tasks.";
+  "Context-docs: keep durable docs scoped; CONTEXT.md domain/product only; AGENTS.md agent conventions; ADRs tradeoff decisions; CONTEXT-MAP real boundaries; no execution ledger, assignments, or goal state.";
 const NATURAL_LANGUAGE_ARGS = "-- __context_docs_instruction__";
 
 function splitCompletionTokens(argumentPrefix: string): {

@@ -179,16 +179,28 @@ describe("code-improvement commands", () => {
       buildImproveCodebaseArchitectureCommandMessage("src/domain");
 
     expect(message).toContain(
-      'The first substantive action must be an `Agent` call with `subagent_type: "explorer"`.',
+      'The first substantive action must be a blocking `subagent({agent: "explorer", task})` call.',
     );
     expect(message).toContain(
-      'Immediately use the `Agent` tool with `subagent_type: "explorer"` to inspect the requested scope.',
+      'Immediately use blocking `subagent({agent: "explorer", task})` to inspect the requested scope.',
     );
     expect(message).toContain(
       "Use direct tool reads only after the explorer-first step, to verify specific findings.",
     );
     expect(message).toContain(
       "architecture friction, shallow Modules, coupling across Seams, testing pain, domain vocabulary, and relevant ADR constraints",
+    );
+    expect(message).toContain(
+      "Wait for the explorer report before main-session verification and synthesis.",
+    );
+    expect(message).toContain(
+      "Children are fresh and do not inherit the parent conversation.",
+    );
+    expect(message).toContain(
+      "If delegation is unavailable, report the blocker and stop",
+    );
+    expect(message).not.toMatch(
+      /`Agent`|subagent_type|max_turns|TaskCreate|TaskUpdate/,
     );
   });
 
@@ -215,6 +227,10 @@ describe("code-improvement commands", () => {
     expect(message).toContain(
       "Each interface-design agent must use the strict architecture terms",
     );
+    expect(message).toContain("3+ blocking generic `subagent({task})` calls");
+    expect(message).toContain(
+      "Await all reports before main-session synthesis.",
+    );
 
     for (const term of terms) {
       expect(message).toContain(`**${term}**`);
@@ -239,6 +255,22 @@ describe("code-improvement commands", () => {
     expect(message).toContain(
       "**Files** — files, Modules, and exact locations involved.",
     );
+  });
+
+  it("keeps the retained simplify reference aligned with blocking canonical delegation and strict file boundaries", () => {
+    const prompt = readRepoFile(
+      "extensions",
+      "code-improvement",
+      "SIMPLIFY.md",
+    );
+    expect(prompt).toContain('subagent({agent: "code-simplifier", task})');
+    expect(prompt).toContain("Use the `simplify` skill behavior as canonical.");
+    expect(prompt).toContain("treat that list as the hard edit boundary");
+    expect(prompt).toContain("you may edit only editable files");
+    expect(prompt).toContain(
+      "stop and report the missing file path instead of widening scope",
+    );
+    expect(prompt).not.toMatch(/`Agent`|subagent_type|max_turns/);
   });
 
   it("keeps bare no-UI /simplify legacy recent-session fallback", async () => {

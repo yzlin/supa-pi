@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from "bun:test";
 import { execFileSync } from "node:child_process";
+import { randomUUID } from "node:crypto";
 import { promises as fs } from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -17,7 +18,7 @@ import {
   writeReviewConfigField,
 } from "./config";
 import reviewExtension from "./index";
-import type { PublicReviewWorkflowInput } from "./public-workflow";
+import type { SubagentParams } from "./test-fixtures";
 import {
   DEFAULT_REVIEWER_PANEL,
   DEFAULT_SYNTHESIZER_MODEL,
@@ -143,8 +144,9 @@ function createRuntime(
     string,
     (event: unknown, ctx: unknown) => unknown
   >();
-  const preparedScripts: string[] = [];
+  const childCalls: SubagentParams[] = [];
   let commandContext: unknown;
+  let running: Promise<unknown> | undefined;
   const appendedEntries: Array<{ type: string; data: unknown }> = [];
   const sentMessages: Array<{
     message: Record<string, unknown>;
@@ -160,7 +162,9 @@ function createRuntime(
   >();
   return {
     commands,
-    preparedScripts,
+    tools,
+    eventHandlers,
+    childCalls,
     appendedEntries,
     sentMessages,
     sentUserMessages,
@@ -178,9 +182,39 @@ function createRuntime(
       ) {
         commands.set(name, {
           ...definition,
-          handler(args, ctx) {
-            commandContext = ctx;
-            return definition.handler(args, ctx);
+          async handler(args, ctx) {
+            commandContext = {
+              ...(ctx as object),
+              executeTool: async (_name: string, params: SubagentParams) => {
+                childCalls.push(params);
+                const [provider, ...model] = params.model!.split("/");
+                return {
+                  isError: false,
+                  result: {
+                    content: [],
+                    details: {},
+                    structuredContent: {
+                      runId: randomUUID(),
+                      agent: params.agent,
+                      provider,
+                      model: model.join("/"),
+                      thinking: params.thinking,
+                      output: "",
+                      resultPath: "/private/result.json",
+                      structuredOutput: {
+                        reviewer: params.agent,
+                        verdict: "correct",
+                        findings: [],
+                        humanReviewerCallouts: [],
+                        notes: [],
+                      },
+                    },
+                  },
+                };
+              },
+            };
+            await definition.handler(args, ctx);
+            await running;
           },
         });
       },
@@ -204,21 +238,26 @@ function createRuntime(
       },
       sendUserMessage(content: string, options?: unknown) {
         sentUserMessages.push({ content, options });
-        const encoded = content.split(
-          "\nPrepared script (JSON string, inert data):\n",
-        )[1];
-        if (encoded) {
-          const input = { script: JSON.parse(encoded) as string };
-          const blocked = eventHandlers.get("tool_call")?.(
-            {
-              toolName: "SubagentWorkflow",
-              toolCallId: `call-${preparedScripts.length}`,
-              input,
-            },
+        const runId = content.match(
+          /review_run\(\{runId: "([a-f0-9-]+)"\}\)/u,
+        )?.[1];
+        if (runId) {
+          const tool = tools.get("review_run") as {
+            execute: (
+              id: string,
+              params: { runId: string },
+              signal: undefined,
+              update: undefined,
+              ctx: unknown,
+            ) => Promise<unknown>;
+          };
+          running = tool.execute(
+            "run",
+            { runId },
+            undefined,
+            undefined,
             commandContext,
           );
-          expect(blocked).toBeUndefined();
-          preparedScripts.push(input.script);
         }
       },
     },
@@ -890,7 +929,7 @@ describe.serial("/review command settings and disclosure", () => {
         ({ message }) =>
           message.includes("initial calls: 1 reviewer call") &&
           message.includes(
-            "Possible structured-repair retries: up to 1 reviewer retry, plus up to 2 downstream retries when those stages run",
+            "Possible end-of-run structured corrections: up to 1 reviewer correction, plus up to 2 downstream corrections when those stages run",
           ) &&
           message.includes(
             `Synthesizer: ${DEFAULT_SYNTHESIZER_MODEL}=medium`,
@@ -1213,34 +1252,17 @@ describe.serial("/review command settings and disclosure", () => {
   });
 });
 
-function preparedPlans(runtime: ReturnType<typeof createRuntime>) {
-  return runtime.preparedScripts.map((source) => {
-    const line = source
-      .split("\n")
-      .find((value) => value.startsWith("const reviewInput = "))!;
-    const plan = JSON.parse(
-      line.slice("const reviewInput = ".length, -1),
-    ) as PublicReviewWorkflowInput;
-    expect(source).toContain('effort: "medium"');
-    return plan;
-  });
-}
-
 function preparedCalls(runtime: ReturnType<typeof createRuntime>) {
-  return preparedPlans(runtime).flatMap((plan) =>
-    plan.reviewers.flatMap((type) =>
-      plan.reviewerPanel.map(({ model, thinkingLevel }) => ({
-        type,
-        model,
-        thinking: thinkingLevel,
-        prompt: plan.invocationPacket,
-      })),
-    ),
-  );
+  return runtime.childCalls.map((call) => ({
+    type: call.agent,
+    model: call.model,
+    thinking: call.thinking,
+    prompt: call.task,
+  }));
 }
 
 for (const failure of ["scope", "auth"]) {
-  it(`preflights ${failure} before native handoff`, async () => {
+  it(`preflights ${failure} before blocking handoff`, async () => {
     const runtime = changedFilesRuntime();
     const { ctx, notifications } = createCtx();
     if (failure === "scope") {
@@ -1265,9 +1287,9 @@ for (const failure of ["scope", "auth"]) {
   });
 }
 
-it("locks explicit role/model/default downstream configuration into prepared source", async () => {
+it("locks explicit role/model/default downstream configuration into owned calls", async () => {
   const runtime = changedFilesRuntime();
-  const { ctx } = createCtx();
+  const { ctx, notifications } = createCtx();
   reviewExtension(runtime.pi as never);
   await runtime.commands
     .get("review")
@@ -1275,26 +1297,42 @@ it("locks explicit role/model/default downstream configuration into prepared sou
       "uncommitted --reviewers code-reviewer,security-reviewer --reviewer-models test/alpha=high,test/beta=xhigh --synthesizer-model test/explicit-synth --verifier-model test/explicit-verify",
       ctx,
     );
-  expect(preparedPlans(runtime)[0]).toMatchObject({
-    reviewers: ["code-reviewer", "security-reviewer"],
-    reviewerPanel: [
-      { model: "test/alpha", thinkingLevel: "high" },
-      { model: "test/beta", thinkingLevel: "xhigh" },
-    ],
-    synthesizerModel: "test/explicit-synth",
-    verifierModel: "test/explicit-verify",
-  });
+  expect(
+    preparedCalls(runtime).map(({ type, model, thinking }) => ({
+      type,
+      model,
+      thinking,
+    })),
+  ).toEqual([
+    { type: "code-reviewer", model: "test/alpha", thinking: "high" },
+    { type: "code-reviewer", model: "test/beta", thinking: "xhigh" },
+    { type: "security-reviewer", model: "test/alpha", thinking: "high" },
+    { type: "security-reviewer", model: "test/beta", thinking: "xhigh" },
+  ]);
+  expect(notifications.at(-1)?.message).toContain(
+    "Synthesizer: test/explicit-synth=medium. Verifier: test/explicit-verify=medium.",
+  );
   expect(preparedCalls(runtime)).toHaveLength(4);
   await runtime.commands.get("review")?.handler("cancel", ctx);
   await runtime.commands
     .get("review")
     ?.handler("uncommitted --reviewers code-reviewer", ctx);
-  expect(preparedPlans(runtime).at(-1)).toMatchObject({
-    reviewerPanel: DEFAULT_REVIEWER_PANEL,
-    synthesizerModel: DEFAULT_SYNTHESIZER_MODEL,
-    verifierModel: DEFAULT_VERIFIER_MODEL,
+  expect(preparedCalls(runtime).at(-1)).toMatchObject({
+    model: DEFAULT_REVIEWER_PANEL[0]?.model,
+    thinking: DEFAULT_REVIEWER_PANEL[0]?.thinkingLevel,
   });
+  expect(notifications.at(-1)?.message).toContain(
+    `Synthesizer: ${DEFAULT_SYNTHESIZER_MODEL}=medium. Verifier: ${DEFAULT_VERIFIER_MODEL}=medium.`,
+  );
   expect(runtime.appendedEntries.at(-1)?.data).not.toHaveProperty(
     "reviewerPanel",
   );
+});
+
+it("registers closed blocking review_run instead of native workflow dispatch hooks", () => {
+  const runtime = createRuntime();
+  reviewExtension(runtime.pi as never);
+  expect(runtime.tools.has("review_run")).toBe(true);
+  expect(runtime.eventHandlers.has("tool_call")).toBe(false);
+  expect(runtime.eventHandlers.has("tool_result")).toBe(false);
 });

@@ -231,7 +231,6 @@ describe("renderer resolver", () => {
           search: { enabled: false },
           bash: { enabled: false },
           fallback: { enabled: false },
-          tasks: { enabled: false },
           mcp: { enabled: false },
           codemode: { enabled: false },
           web: { enabled: false },
@@ -585,7 +584,7 @@ describe("companion renderer ownership", () => {
   });
 
   test("each group gate passes next() through unchanged, independent of fallback", () => {
-    for (const group of ["tasks", "mcp", "codemode", "web"]) {
+    for (const group of ["mcp", "codemode", "web"]) {
       const h = harness({ output: { [group]: { enabled: false } } });
       const upstream: ToolRenderers = { renderShell: "default" };
       for (const fixture of companionFixtures.filter(
@@ -604,7 +603,7 @@ describe("companion renderer ownership", () => {
     }
   });
 
-  test("the MCP prefix is the only prefix rule; Agent and workflows remain package-owned", () => {
+  test("the MCP prefix is the only prefix rule; subagent remains runtime-owned", () => {
     const h = harness();
     const upstream: ToolRenderers = {
       renderCall: () => new Text("package", 0, 0),
@@ -614,8 +613,7 @@ describe("companion renderer ownership", () => {
       "mcpScript",
       "xmcp__a",
       "TaskSomething",
-      "Agent",
-      "SubagentWorkflow",
+      "subagent",
       "renamed_web_search",
       "web_search_extra",
     ]) {
@@ -748,14 +746,11 @@ describe("companion presentation groups", () => {
         )
         ?.render(180);
       const color = {
-        tasks: "warning",
         mcp: "accent",
         codemode: "thinkingXhigh",
         web: "accent",
       }[fixture.group];
-      const icon = { tasks: "📋", mcp: "🔌", codemode: "🧩", web: "🌐" }[
-        fixture.group
-      ];
+      const icon = { mcp: "🔌", codemode: "🧩", web: "🌐" }[fixture.group];
       expect(tokens).toContainEqual([color, fixture.name]);
       expect(tokens).toContainEqual([color, icon]);
       expect(visibleWidth(icon)).toBe(2);
@@ -1028,4 +1023,79 @@ describe("tool block background", () => {
     expect(second).toBe(first);
     first?.invalidate();
   });
+});
+
+test("retired task tools and subagent preserve supplied renderers and fill missing historical renderers only", () => {
+  const h = harness();
+  const upstream: ToolRenderers = {
+    renderShell: "default",
+    renderCall: () => new Text("supplied call", 0, 0),
+    renderResult: () => new Text("supplied result", 0, 0),
+  };
+  for (const name of [
+    "TaskCreate",
+    "TaskList",
+    "TaskGet",
+    "TaskUpdate",
+    "TaskOutput",
+    "TaskStop",
+    "TaskExecute",
+    "subagent",
+  ]) {
+    let nextCalls = 0;
+    const renderer = h.resolve(name, () => {
+      nextCalls += 1;
+      return upstream;
+    });
+    expect(nextCalls).toBe(1);
+    expect(renderer?.renderShell).toBe("default");
+    const context = {
+      args: { subject: "historic", description: "data" },
+      state: {},
+      invalidate() {},
+    };
+    expect(
+      renderer
+        ?.renderCall?.(context.args, plainTheme as never, context as never)
+        ?.render(100)
+        .join("\n")
+        .trimEnd(),
+    ).toBe("supplied call");
+    expect(
+      renderer
+        ?.renderResult?.(
+          { content: [{ type: "text", text: "historic output" }] },
+          { expanded: false },
+          plainTheme as never,
+          context as never,
+        )
+        ?.render(100)
+        .join("\n")
+        .trimEnd(),
+    ).toBe("supplied result");
+    const fallback = h.resolve(name, () => undefined);
+    expect(
+      fallback
+        ?.renderCall?.(context.args, plainTheme as never, context as never)
+        ?.render(100)
+        .join("\n"),
+    ).toContain("🔧");
+    expect(
+      fallback
+        ?.renderResult?.(
+          { content: [{ type: "text", text: "historic output" }] },
+          { expanded: false },
+          plainTheme as never,
+          context as never,
+        )
+        ?.render(100)
+        .join("\n"),
+    ).toContain("historic output");
+    expect(
+      harness({ output: { fallback: { enabled: false } } }).resolve(
+        name,
+        () => upstream,
+      ),
+    ).toBe(upstream);
+  }
 });

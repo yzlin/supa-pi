@@ -21,7 +21,10 @@ function createMockCtx() {
 function createMockPiRuntime() {
   const commands = new Map<
     string,
-    { handler: (args: string, ctx: unknown) => Promise<void> | void }
+    {
+      description: string;
+      handler: (args: string, ctx: unknown) => Promise<void> | void;
+    }
   >();
   const sentUserMessages: Array<{ content: string; options?: unknown }> = [];
 
@@ -32,6 +35,7 @@ function createMockPiRuntime() {
       registerCommand(
         name: string,
         definition: {
+          description: string;
           handler: (args: string, ctx: unknown) => Promise<void> | void;
         },
       ) {
@@ -45,15 +49,29 @@ function createMockPiRuntime() {
 }
 
 describe("research command", () => {
-  it("builds a pi-tasks orchestration message for the researcher agent", () => {
+  it("builds a blocking delegation message for the researcher agent", () => {
     const message = buildResearchCommandMessage(
       "compare Bun and Node for CLI tooling",
     );
 
-    expect(message).toContain("Run the requested research through pi-tasks");
-    expect(message).toContain('agentType: "researcher"');
+    expect(message).toContain('subagent({agent: "researcher", task})');
+    expect(message).toContain("exactly one blocking subagent call");
+    expect(message).not.toMatch(
+      /TaskCreate|TaskExecute|TaskOutput|agentType|pi-tasks/,
+    );
     expect(message).toContain(
       "Research request: compare Bun and Node for CLI tooling",
+    );
+  });
+
+  it("describes blocking researcher delegation", () => {
+    const runtime = createMockPiRuntime();
+    researchExtension(runtime.pi as never);
+    expect(runtime.commands.get("research")?.description).toContain(
+      "blocking subagent",
+    );
+    expect(runtime.commands.get("research")?.description).not.toContain(
+      "pi-tasks",
     );
   });
 

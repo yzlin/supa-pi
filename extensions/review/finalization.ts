@@ -1,5 +1,6 @@
 import { Buffer } from "node:buffer";
 
+import type { ReviewPipelineInput } from "./pipeline-contracts";
 import {
   applyPortableDeterministicReportFields,
   buildPortableCandidateFindings,
@@ -10,7 +11,6 @@ import {
   validatePortableReviewer,
   validatePortableVerifier,
 } from "./portable-core";
-import type { PublicReviewWorkflowInput } from "./public-workflow";
 import type {
   ReviewCandidateFindingContract,
   ReviewerJsonContract,
@@ -25,7 +25,6 @@ const MAX_RAW_BYTES = 1_048_576;
 const MAX_STRING_LENGTH = 16_384;
 const MAX_ARRAY_LENGTH = 256;
 const MAX_DEPTH = 16;
-const JOURNAL_KEY_PATTERN = /^[a-f0-9]{32}$/u;
 
 function invalidRaw(): never {
   throw new Error("Invalid raw review result.");
@@ -93,7 +92,7 @@ function parseRaw(rawJson: string): Record<string, unknown> {
 }
 
 function validateRuns(
-  prepared: PublicReviewWorkflowInput,
+  prepared: ReviewPipelineInput,
   raw: Record<string, unknown>,
 ): ReviewRunOutcome[] {
   const expected = prepared.reviewers.flatMap((reviewer) =>
@@ -131,109 +130,19 @@ function validateRuns(
     return {
       ...job,
       status: "failed",
-      error: "Invalid structured output after native schema retry.",
+      error: "Invalid structured output after child reporting backstop.",
     };
   });
-}
-
-function parseJournalJson(text: string): unknown {
-  try {
-    return JSON.parse(text);
-  } catch {
-    // Syntax errors may quote provider output; never propagate that payload.
-    throw new Error("Invalid review journal JSON.");
-  }
-}
-
-/** Decode the public, version-sensitive agent-call journal, never notification previews. */
-export function deriveJournalReviewResult(
-  prepared: PublicReviewWorkflowInput,
-  journal: string,
-): Omit<ReviewWorkflowResult, "report"> {
-  if (Buffer.byteLength(journal) > MAX_RAW_BYTES || !journal.endsWith("\n")) {
-    throw new Error("Unsupported or incomplete review journal capture.");
-  }
-  const lines = journal.slice(0, -1).split("\n");
-  const jobs = prepared.reviewers.flatMap((reviewer) =>
-    prepared.reviewerPanel.map((entry) => ({ reviewer, ...entry })),
-  );
-  if (lines.length < jobs.length || lines.length > jobs.length + 2) {
-    throw new Error("Unexpected agent calls in review journal.");
-  }
-  const keys = new Set<string>();
-  // Native calls append on completion, not dispatch. Unique indices bounded by
-  // record count guarantee dense coverage; sort only after validating every row.
-  const indices = new Set<number>();
-  const calls = lines
-    .map((line) => {
-      const entry = record(parseJournalJson(line));
-      closed(entry, ["index", "key", "ok", "text"]);
-      if (
-        typeof entry.index !== "number" ||
-        !Number.isInteger(entry.index) ||
-        entry.index < 0 ||
-        entry.index >= lines.length ||
-        indices.has(entry.index) ||
-        typeof entry.key !== "string" ||
-        !JOURNAL_KEY_PATTERN.test(entry.key) ||
-        keys.has(entry.key) ||
-        typeof entry.ok !== "boolean" ||
-        (entry.ok
-          ? typeof entry.text !== "string"
-          : Object.hasOwn(entry, "text"))
-      ) {
-        throw new Error("Unsupported or invalid review journal record/index.");
-      }
-      keys.add(entry.key);
-      indices.add(entry.index);
-      return entry.ok
-        ? {
-            index: entry.index,
-            ok: true,
-            output: parseJournalJson(entry.text as string),
-          }
-        : { index: entry.index, ok: false };
-    })
-    .sort((a, b) => a.index - b.index);
-  const raw = {
-    reviewerRuns: jobs.map((job, index) => ({
-      ...job,
-      status: calls[index].ok ? "succeeded" : "failed",
-      ...(calls[index].ok ? { output: calls[index].output } : {}),
-    })),
-  };
-  // Bound nested output before shared semantic validation.
-  const runs = validateRuns(prepared, parseRaw(JSON.stringify(raw)));
-  const candidates = buildPortableCandidateFindings(runs);
-  if (lines.length !== jobs.length + (candidates.length ? 2 : 0)) {
-    throw new Error("Incomplete or unexpected downstream review calls.");
-  }
-  const downstream = calls.slice(jobs.length);
-  if (downstream.some((call) => !call.ok)) {
-    throw new Error("Downstream review agent failed.");
-  }
-  return derivePreparedReviewResult(
-    prepared,
-    JSON.stringify({
-      ...raw,
-      ...(candidates.length
-        ? {
-            synthesizerOutput: downstream[0].output,
-            verifierOutput: downstream[1].output,
-          }
-        : {}),
-    }),
-  );
 }
 
 /**
  * Data validation only, not publication authorization. The caller must supply an
  * immutable locally prepared plan, authenticate the complete raw payload against
- * the accepted native workflow, and check session/cwd, cancellation and freshness.
+ * the completed owned pipeline, and check session/cwd, cancellation and freshness.
  * Never use a notification preview or assistant-authored derived fields here.
  */
 export function derivePreparedReviewResult(
-  prepared: PublicReviewWorkflowInput,
+  prepared: ReviewPipelineInput,
   rawJson: string,
 ): Omit<ReviewWorkflowResult, "report"> {
   const raw = parseRaw(rawJson);

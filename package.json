@@ -47,6 +47,7 @@
       "./extensions/caveman",
       "./extensions/core-prompt",
       "./extensions/rules",
+      "./extensions/subagent",
       "./extensions/execute",
       "./extensions/goal",
       "./extensions/research",

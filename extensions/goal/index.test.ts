@@ -192,6 +192,17 @@ describe("goal extension", () => {
     expect(harness.messages[0]?.message).toContain(
       "You are executing goal task task-1: Task 1",
     );
+    const prompt = harness.messages[0]?.message ?? "";
+    expect(prompt).toContain('subagent({agent: "executor", task:');
+    expect(prompt).toContain("blocking");
+    expect(prompt).toContain("structuredOutput");
+    expect(prompt).toContain(
+      "Missing/error/invalid reports leave the task unresolved",
+    );
+    expect(prompt).toContain("Independently inspect changes");
+    expect(prompt).toContain("Only goal_checkpoint owns goal state");
+    expect(prompt).toContain("Do not call execute_checkpoint");
+    expect(prompt).not.toContain("repo task execution mechanism");
     expect(harness.notifications).toContainEqual({
       message: "Queued /goal continuation as follow-up",
       level: "info",

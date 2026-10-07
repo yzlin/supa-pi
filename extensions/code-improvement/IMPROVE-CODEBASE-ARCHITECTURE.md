@@ -11,8 +11,8 @@ This command prompt is composed with these required support docs:
 ## HARD RULES
 
 - Read-only by default. Do not edit files, implement code, create branches, commit, or run destructive commands.
-- MUST NOT create, modify, schedule, or manage pi-tasks.
-- The first substantive action must be an `Agent` call with `subagent_type: "explorer"`.
+- MUST NOT create or modify execution-ledger assignments or goal state. This command does not authorize /execute.
+- The first substantive action must be a blocking `subagent({agent: "explorer", task})` call.
 - Use the optional scope instruction when present. If absent, survey the repository broadly, then narrow based on explorer findings.
 - Report missing `CONTEXT.md`, `CONTEXT-MAP.md`, or `docs/adr/` / ADR docs as missing context. Do not block on missing docs.
 - Use the architecture terms in this document exactly: **Module**, **Interface**, **Implementation**, **Depth**, **Seam**, **Adapter**, **Leverage**, **Locality**.
@@ -25,7 +25,7 @@ This command prompt is composed with these required support docs:
 
 ### 1. Load durable context
 
-Before code exploration, look for:
+Include these context paths in the explorer task and require inspection before code exploration:
 
 - `CONTEXT.md`
 - `CONTEXT-MAP.md`
@@ -36,9 +36,11 @@ If any are missing, include a short "Missing context" note in the final report. 
 
 ### 2. Explorer first
 
-Immediately use the `Agent` tool with `subagent_type: "explorer"` to inspect the requested scope. The explorer brief must ask for architecture friction, shallow Modules, coupling across Seams, testing pain, domain vocabulary, and relevant ADR constraints.
+Immediately use blocking `subagent({agent: "explorer", task})` to inspect the requested scope. The explorer brief must ask for architecture friction, shallow Modules, coupling across Seams, testing pain, domain vocabulary, and relevant ADR constraints.
 
-Use direct tool reads only after the explorer-first step, to verify specific findings.
+Pass a self-contained task with the scope, read-only/no-implementation constraints, evidence requirements, and relevant context paths. Children are fresh and do not inherit the parent conversation. Ask the explorer to inspect durable context before code exploration and report missing context, not to write artifacts.
+
+Wait for the explorer report before main-session verification and synthesis. Use direct tool reads only after the explorer-first step, to verify specific findings. If delegation is unavailable, report the blocker and stop; do not substitute another role or silently perform the exploration yourself.
 
 ### 3. Candidate selection
 

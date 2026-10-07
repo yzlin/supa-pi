@@ -1,6 +1,10 @@
 import { describe, expect, test } from "bun:test";
 
-import { companionCallSummary, companionResultSummary } from "./companion";
+import {
+  companionCallSummary,
+  companionGroup,
+  companionResultSummary,
+} from "./companion";
 
 // Additional installed success/mode shapes: pi-mcp-adapter 5.0.0 gateway,
 // pi-web-access 0.30.0 index.ts search/content response details.
@@ -82,11 +86,6 @@ describe("guarded companion shapes", () => {
 
   test("mismatched consumed fields degrade rather than stringifying objects", () => {
     for (const [name, args] of [
-      ["TaskCreate", { subject: [], description: "test" }],
-      ["TaskUpdate", { taskId: "1", status: {} }],
-      ["TaskOutput", { task_id: "1", block: "yes", timeout: 5 }],
-      ["TaskStop", { task_id: 1 }],
-      ["TaskExecute", { task_ids: [1] }],
       ["mcp", { tool: "lookup", args: [] }],
       ["mcp", { connect: true }],
       ["codemode", { code: ["first"] }],
@@ -180,4 +179,31 @@ test("installed MCP non-call successes remain compact rather than degrading", ()
       "Authenticated",
     ),
   ).toBe("Authenticated");
+});
+
+test("retired task shapes are not companion adapters", () => {
+  for (const name of [
+    "TaskCreate",
+    "TaskList",
+    "TaskGet",
+    "TaskUpdate",
+    "TaskOutput",
+    "TaskStop",
+    "TaskExecute",
+  ]) {
+    expect(companionGroup(name)).toBeUndefined();
+    expect(
+      companionCallSummary(name, {
+        subject: "old",
+        description: "old",
+        taskId: "1",
+      }),
+    ).toBeUndefined();
+    expect(
+      companionResultSummary(name, {}, undefined, "Historic output"),
+    ).toBeUndefined();
+    expect(
+      companionResultSummary(name, {}, { error: "old" }, "Historic output"),
+    ).toBeUndefined();
+  }
 });

@@ -1,6 +1,6 @@
 ---
 name: context-docs
-description: "Use for durable project context workflows: /context-setup, /context-note, /adr, /context-review, CONTEXT.md, CONTEXT-MAP.md, ADRs, context extraction, or turning session knowledge into persistent docs. Do not use for pi-task management."
+description: "Use for durable project context workflows: /context-setup, /context-note, /adr, /context-review, CONTEXT.md, CONTEXT-MAP.md, ADRs, context extraction, or turning session knowledge into persistent docs. Do not use for execution-ledger or goal-checkpoint management."
 ---
 
 # Context Docs

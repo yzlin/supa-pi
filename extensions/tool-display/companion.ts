@@ -1,16 +1,7 @@
 // Drawing-only adapters for the installed companion shapes. Unknown shapes
 // return undefined so the caller uses the existing Fallback renderer.
-export type CompanionGroup = "tasks" | "mcp" | "codemode" | "web";
+export type CompanionGroup = "mcp" | "codemode" | "web";
 
-const TASK_NAMES = new Set([
-  "TaskCreate",
-  "TaskList",
-  "TaskGet",
-  "TaskUpdate",
-  "TaskOutput",
-  "TaskStop",
-  "TaskExecute",
-]);
 const WEB_NAMES = new Set([
   "web_search",
   "source_check",
@@ -19,9 +10,6 @@ const WEB_NAMES = new Set([
 ]);
 
 export function companionGroup(name: string): CompanionGroup | undefined {
-  if (TASK_NAMES.has(name)) {
-    return "tasks";
-  }
   if (name === "mcp" || name.startsWith("mcp__")) {
     return "mcp";
   }
@@ -76,42 +64,6 @@ export function companionCallSummary(
     return undefined;
   }
   switch (name) {
-    case "TaskCreate":
-      return typeof args.subject === "string" &&
-        typeof args.description === "string"
-        ? args.subject
-        : undefined;
-    case "TaskList":
-      return emptyArgs(args) ? "all tasks" : undefined;
-    case "TaskGet":
-      return typeof args.taskId === "string" ? `#${args.taskId}` : undefined;
-    case "TaskUpdate":
-      return typeof args.taskId === "string" &&
-        optionalString(args.status) &&
-        optionalString(args.subject)
-        ? `#${args.taskId}${args.status ? ` · ${args.status}` : ""}${args.subject ? ` · ${args.subject}` : ""}`
-        : undefined;
-    case "TaskOutput":
-      return typeof args.task_id === "string" &&
-        typeof args.block === "boolean" &&
-        count(args.timeout)
-        ? `#${args.task_id}`
-        : undefined;
-    case "TaskStop":
-      if (!optionalString(args.task_id) || !optionalString(args.shell_id)) {
-        return undefined;
-      }
-      if (typeof args.task_id === "string") {
-        return `#${args.task_id}`;
-      }
-      if (typeof args.shell_id === "string") {
-        return `shell ${args.shell_id}`;
-      }
-      return emptyArgs(args) ? "all tasks" : undefined;
-    case "TaskExecute":
-      return strings(args.task_ids)
-        ? `${args.task_ids.length} tasks`
-        : undefined;
     case "codemode":
       return typeof args.code === "string" ? args.code : undefined;
     case "web_search":
@@ -205,10 +157,7 @@ export function companionResultSummary(
   const firstLine =
     text.split(/\r?\n|\r/u).find((line) => line.trim()) ?? "done";
   const group = companionGroup(name);
-  if (group === "tasks") {
-    return details === undefined ? firstLine : undefined;
-  }
-  if (!record(details)) {
+  if (!group || !record(details)) {
     return undefined;
   }
   if (group === "codemode") {

@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from "bun:test";
 import { execFileSync } from "node:child_process";
+import { randomUUID } from "node:crypto";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -8,7 +9,7 @@ import { SessionManager } from "@earendil-works/pi-coding-agent";
 import { Markdown } from "@earendil-works/pi-tui";
 
 import reviewExtension from "./index";
-import type { PublicReviewWorkflowInput } from "./public-workflow";
+import type { SubagentParams } from "./test-fixtures";
 import {
   REVIEW_REPORT_MESSAGE_TYPE,
   renderReviewReport,
@@ -178,6 +179,7 @@ function createMockCtx(
       },
       sessionManager: {
         getSessionId: () => "regression-session",
+        getLeafId: () => null,
         getBranch() {
           return branchEntries.map((entry) => {
             if (entry.type !== "custom_message") {
@@ -263,7 +265,20 @@ function createMockPiRuntime(
     }
   >();
   const sentUserMessages: Array<{ content: string; options?: unknown }> = [];
-  const preparedScripts: string[] = [];
+  const childCalls: SubagentParams[] = [];
+  const tools = new Map<
+    string,
+    {
+      execute: (
+        id: string,
+        params: { runId: string },
+        signal: undefined,
+        update: undefined,
+        ctx: unknown,
+      ) => Promise<unknown>;
+    }
+  >();
+  let running: Promise<unknown> | undefined;
   let commandContext: unknown;
   const sentMessages: Array<{
     message: { customType?: string; content?: string; details?: unknown };
@@ -288,15 +303,24 @@ function createMockPiRuntime(
   }> = [];
   return {
     commands,
-    preparedScripts,
+    childCalls,
     sentUserMessages,
     sentMessages,
     messageRenderers,
     eventHandlers,
     execCalls,
     pi: {
-      registerTool() {
-        /* Finalization integration lives in lifecycle.test.ts. */
+      registerTool(definition: {
+        name: string;
+        execute: (
+          id: string,
+          params: { runId: string },
+          signal: undefined,
+          update: undefined,
+          ctx: unknown,
+        ) => Promise<unknown>;
+      }) {
+        tools.set(definition.name, definition);
       },
       async exec(
         command: string,
@@ -321,9 +345,39 @@ function createMockPiRuntime(
       ) {
         commands.set(name, {
           ...definition,
-          handler(args, ctx) {
-            commandContext = ctx;
-            return definition.handler(args, ctx);
+          async handler(args, ctx) {
+            commandContext = {
+              ...(ctx as object),
+              executeTool: async (_name: string, params: SubagentParams) => {
+                childCalls.push(params);
+                const [provider, ...model] = params.model!.split("/");
+                return {
+                  isError: false,
+                  result: {
+                    content: [],
+                    details: {},
+                    structuredContent: {
+                      runId: randomUUID(),
+                      agent: params.agent,
+                      provider,
+                      model: model.join("/"),
+                      thinking: params.thinking,
+                      output: "",
+                      resultPath: "/private/result.json",
+                      structuredOutput: {
+                        reviewer: params.agent,
+                        verdict: "correct",
+                        findings: [],
+                        humanReviewerCallouts: [],
+                        notes: [],
+                      },
+                    },
+                  },
+                };
+              },
+            };
+            await definition.handler(args, ctx);
+            await running;
           },
         });
       },
@@ -353,21 +407,13 @@ function createMockPiRuntime(
       },
       sendUserMessage(content: string, options?: unknown) {
         sentUserMessages.push({ content, options });
-        const encoded = content.split(
-          "\nPrepared script (JSON string, inert data):\n",
-        )[1];
-        if (encoded) {
-          const input = { script: JSON.parse(encoded) as string };
-          const blocked = eventHandlers.get("tool_call")?.(
-            {
-              toolName: "SubagentWorkflow",
-              toolCallId: `call-${preparedScripts.length}`,
-              input,
-            },
-            commandContext,
-          );
-          expect(blocked).toBeUndefined();
-          preparedScripts.push(input.script);
+        const runId = content.match(
+          /review_run\(\{runId: "([a-f0-9-]+)"\}\)/u,
+        )?.[1];
+        if (runId) {
+          running = tools
+            .get("review_run")!
+            .execute("run", { runId }, undefined, undefined, commandContext);
         }
       },
     },
@@ -1617,16 +1663,8 @@ describe("review follow-up helpers", () => {
 });
 
 function preparedCalls(runtime: ReturnType<typeof createMockPiRuntime>) {
-  return runtime.preparedScripts.flatMap((source) => {
-    const line = source
-      .split("\n")
-      .find((value) => value.startsWith("const reviewInput = "))!;
-    const plan = JSON.parse(
-      line.slice("const reviewInput = ".length, -1),
-    ) as PublicReviewWorkflowInput;
-    return plan.reviewers.map((type) => ({
-      type,
-      prompt: plan.invocationPacket,
-    }));
-  });
+  return runtime.childCalls.map((call) => ({
+    type: call.agent,
+    prompt: call.task,
+  }));
 }

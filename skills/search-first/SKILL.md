@@ -88,13 +88,12 @@ If an existing capability meets the actual safety, correctness, accessibility, a
 
 ### Full Mode (agent)
 
-For non-trivial functionality, run the cheap capability check and relevant local skill/MCP checks first. If no existing capability meets the actual requirements, use Full Mode. The main session owns research dispatch. Give the researcher a concrete question, project context, the completed local-check findings, and constraints, then use its comparison in the main session:
+For non-trivial functionality, run the cheap capability check and relevant local skill/MCP checks first. If no existing capability meets the actual requirements, use Full Mode. The main session owns research dispatch. Give the researcher a concrete question, project context, the completed local-check findings, and constraints, then use its comparison in the main session. This is a blocking call to a fresh task-only child; include all required context and any explicit artifact path. By default the researcher returns a brief without writing a file:
 
 ```
-Agent({
-  subagent_type: "researcher",
-  description: "Research existing solutions",
-  prompt: `
+subagent({
+  agent: "researcher",
+  task: `
     Research existing tools for: [CONCRETE QUESTION]
     Language/framework: [LANG]
     Project context: [RELEVANT CONTEXT]

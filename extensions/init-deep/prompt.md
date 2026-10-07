@@ -5,8 +5,9 @@ Rules:
 - Keep all reads, writes, edits, and deletes scoped to that target root.
 - Inspect before writing. Ground claims in files you actually read.
 - Prefer `find`, `grep`, `ls`, `read`, and focused `bash` over speculative reasoning.
-- Use `TaskCreate` / `TaskUpdate` for multi-step tracking.
-- Complete each phase task when that phase finishes; do not emit the final answer while any init-deep task is pending or in_progress.
+- Track discovery, scoring, generation, and review in an ordinary working plan.
+- Finish or explicitly report blocked phases before the final answer.
+- /init-deep does not authorize /execute or execution-ledger assignments. Do not modify goal state.
 - Use telegraphic style inside generated `AGENTS.md` files.
 - Do not add generic advice that applies to every repo.
 - Child `AGENTS.md` files must not repeat parent guidance.
@@ -18,7 +19,7 @@ Rules:
 
 ### 1. Discovery
 
-Create tasks for:
+Track these phases in the working plan:
 - discovery
 - scoring
 - generation
@@ -34,7 +35,7 @@ During discovery, inspect the target with the strongest low-cost signals first:
 
 Use broad exploration only when needed:
 - for countable scoring signals (files and child directories per directory up to max depth, existing `AGENTS.md`, local config files), prefer one `codemode` script when available that runs the `find`/`ls`/`bash` calls and returns a compact per-directory table instead of raw listings
-- if the target spans multiple unfamiliar modules, launch explorer agents in parallel
+- if the target spans multiple unfamiliar modules, use blocking `subagent({agent: "explorer", task})` calls with disjoint read-only scopes; pass the resolved target, depth, mode, evidence constraints, and explicit instructions not to mutate files. Children are fresh and do not inherit parent conversation. Await all reports before scoring or main-owned generation; do not assign output files unless explicitly requested. If delegation is unavailable, report it explicitly and continue with focused local inspection when practical, or report the blocked phase
 - if direct file inspection is enough, stay local
 
 Collect evidence for:

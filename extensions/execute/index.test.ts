@@ -33,6 +33,7 @@ function createMockCtx(
     ctx: {
       isIdle: () => true,
       sessionManager: {
+        getSessionId: () => "session",
         getBranch() {
           return branchEntries;
         },
@@ -53,14 +54,20 @@ function createMockPiRuntime() {
   >();
   const tools = new Map<string, unknown>();
   const hooks = new Map<string, unknown>();
+  const entries: Array<{ type: string; customType: string; data: unknown }> =
+    [];
   const sentUserMessages: Array<{ content: string; options?: unknown }> = [];
 
   return {
+    entries,
     commands,
     tools,
     hooks,
     sentUserMessages,
     pi: {
+      appendEntry(customType: string, data: unknown) {
+        entries.push({ type: "custom", customType, data });
+      },
       registerCommand(
         name: string,
         definition: {
@@ -82,6 +89,18 @@ function createMockPiRuntime() {
   };
 }
 
+function invocationSuffix(
+  runtime: ReturnType<typeof createMockPiRuntime>,
+): string {
+  const suffix = runtime.sentUserMessages[0]?.content.match(
+    /\n\nExecution checkpoint invocationId: [a-f0-9-]{36}$/,
+  )?.[0];
+  if (!suffix) {
+    throw new Error("Expected session-scoped invocation token");
+  }
+  return suffix;
+}
+
 async function runExecuteCommand(
   runtime: ReturnType<typeof createMockPiRuntime>,
   args: string,
@@ -97,6 +116,52 @@ async function runExecuteCommand(
 }
 
 describe("execute command", () => {
+  it("preserves image-bearing parent input while synthesizing requirements instead of forwarding history", async () => {
+    const runtime = createMockPiRuntime();
+    const imageMessage = {
+      role: "user",
+      content: [
+        { type: "image" },
+        { type: "text", text: "Implement the pictured UI" },
+      ],
+    };
+    const branch = [
+      {
+        type: "message",
+        message: { role: "assistant", content: EXECUTION_BRIEF },
+      },
+      { type: "message", message: imageMessage },
+    ];
+    const before = structuredClone(branch);
+    const { ctx } = createMockCtx(branch);
+    executeExtension(runtime.pi as never);
+    await runExecuteCommand(runtime, "", ctx);
+    expect(runtime.sentUserMessages[0]?.content).toBe(
+      `${EXECUTE_SYNTHESIS_MESSAGE}${invocationSuffix(runtime)}`,
+    );
+    expect(runtime.sentUserMessages[0]?.content).toContain("attached images");
+    expect(branch).toEqual(before);
+    expect(runtime.hooks.has("input")).toBe(false);
+  });
+
+  it("ignores incomplete briefs and non-text content", async () => {
+    for (const content of [
+      EXECUTION_BRIEF.replace("## Verification", "## Not Verification"),
+      [{ type: "image" }],
+      [{ type: "text" }],
+    ]) {
+      const runtime = createMockPiRuntime();
+      const { ctx } = createMockCtx([
+        { type: "message", message: { role: "assistant", content } },
+      ]);
+      executeExtension(runtime.pi as never);
+      await runExecuteCommand(runtime, "", ctx);
+      expect(runtime.sentUserMessages[0]?.content).toBe(
+        `${EXECUTE_SYNTHESIS_MESSAGE}${invocationSuffix(runtime)}`,
+      );
+    }
+  });
+
   it("sends an explicit plan packet immediately when idle", async () => {
     const runtime = createMockPiRuntime();
     const { ctx, notifications } = createMockCtx();
@@ -106,12 +171,12 @@ describe("execute command", () => {
 
     expect(runtime.sentUserMessages).toEqual([
       {
-        content: `${EXECUTE_INVOCATION_PREAMBLE}\n\n<plan>\nimplement @plan.md\n</plan>`,
+        content: `${EXECUTE_INVOCATION_PREAMBLE}\n\n<plan>\nimplement @plan.md\n</plan>${invocationSuffix(runtime)}`,
         options: undefined,
       },
     ]);
     expect(runtime.sentUserMessages[0]?.content).toContain(
-      "This explicit `/execute` invocation authorizes the main session to call `SubagentWorkflow`",
+      "This explicit `/execute` invocation authorizes blocking `subagent` calls",
     );
     expect(notifications).toEqual([]);
   });
@@ -128,7 +193,7 @@ describe("execute command", () => {
 
     expect(runtime.sentUserMessages).toEqual([
       {
-        content: `${EXECUTE_INVOCATION_PREAMBLE}\n\n<plan>\nimplement @plan.md\n</plan>`,
+        content: `${EXECUTE_INVOCATION_PREAMBLE}\n\n<plan>\nimplement @plan.md\n</plan>${invocationSuffix(runtime)}`,
         options: { deliverAs: "followUp" },
       },
     ]);
@@ -154,7 +219,7 @@ describe("execute command", () => {
 
     expect(runtime.sentUserMessages).toEqual([
       {
-        content: `${EXECUTE_INVOCATION_PREAMBLE}\n\n<plan>\n${EXECUTION_BRIEF}\n</plan>`,
+        content: `${EXECUTE_INVOCATION_PREAMBLE}\n\n<plan>\n${EXECUTION_BRIEF}\n</plan>${invocationSuffix(runtime)}`,
         options: undefined,
       },
     ]);
@@ -177,7 +242,7 @@ describe("execute command", () => {
     await runExecuteCommand(runtime, "   ", ctx);
 
     expect(runtime.sentUserMessages[0]?.content).toBe(
-      EXECUTE_SYNTHESIS_MESSAGE,
+      `${EXECUTE_SYNTHESIS_MESSAGE}${invocationSuffix(runtime)}`,
     );
   });
 
@@ -189,18 +254,19 @@ describe("execute command", () => {
     await runExecuteCommand(runtime, "   ", ctx);
 
     expect(runtime.sentUserMessages[0]?.content).toBe(
-      EXECUTE_SYNTHESIS_MESSAGE,
+      `${EXECUTE_SYNTHESIS_MESSAGE}${invocationSuffix(runtime)}`,
     );
   });
 
-  it("registers no retired execute tools or lifecycle hooks", () => {
+  it("registers only the narrow checkpoint and branch lifecycle hooks", () => {
     const runtime = createMockPiRuntime();
 
     executeExtension(runtime.pi as never);
 
     expect([...runtime.commands.keys()]).toEqual(["execute"]);
-    expect(runtime.tools.size).toBe(0);
-    expect(runtime.hooks.size).toBe(0);
+    expect([...runtime.tools.keys()]).toEqual(["execute_checkpoint"]);
+    expect(runtime.hooks.has("session_start")).toBe(true);
+    expect(runtime.hooks.has("session_tree")).toBe(true);
   });
 });
 
@@ -211,23 +277,16 @@ describe("execute documentation contract", () => {
       "utf8",
     );
 
-    expect(skill).toContain("SubagentWorkflow");
-    expect(skill).toContain("@tintinweb/pi-tasks");
+    expect(skill).toContain("subagent({");
+    expect(skill).toContain("execute_checkpoint");
     expect(skill).toContain("StructuredOutput");
     expect(skill).toContain("conservative danger preflight");
     expect(skill).toContain("explicit user approval");
     expect(skill).toContain(
       "main session still performs independent verification",
     );
-    expect(skill).toContain("Upstream workflow journals");
-    expect(skill).toContain(
-      "explicit `/execute` invocation is the user's opt-in to this workflow",
+    expect(skill).not.toMatch(
+      /SubagentWorkflow|TaskCreate|TaskUpdate|@tintinweb/,
     );
-    expect(skill).toContain("parent/main-session stop does not cancel");
-    expect(skill).toContain("`null` or missing result");
-    expect(skill).toContain("has no `blocked` task status");
-    expect(skill).not.toContain("execute_tasks");
-    expect(skill).not.toContain("execute_checkpoint");
-    expect(skill).not.toContain("tddShape");
   });
 });

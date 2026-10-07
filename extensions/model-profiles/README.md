@@ -78,14 +78,14 @@ The Extension reconciles `~/.pi/agent/agents/` per file:
 - Orphaned generated files and stale repo links whose targets no longer exist are removed. Other user files and still-valid unrelated links remain.
 - A directory-level symlink to repo `agents/` is left intact unless an actual override is needed; then it is converted to a real directory of per-file links/overrides. Foreign directory-level symlinks are refused.
 
-Rendering never writes through links into repo `agents/`; repository agent files remain unchanged. `setup.sh` is unchanged.
+Rendering never writes through links into repo `agents/`; repository agent files remain unchanged.
 
-Render triggers are `session_start`, a profile switch, and `tool_call` for `Agent` or `SubagentWorkflow`. Refresh re-reads config and repo agents and compares desired content/links with live files: fresh renders are idempotent and perform no writes. Refresh errors notify; a pre-spawn refresh failure also blocks the `Agent`/`SubagentWorkflow` call while generated overrides exist (or live state is unreadable), since they may carry a stale model. With no generated overrides, refresh failure does not block the call.
+Render triggers are `session_start`, a profile switch, and `tool_call` for `subagent`. Refresh re-reads config and repo agents and compares desired content/links with live files: fresh renders are idempotent and perform no writes. Refresh errors notify; a pre-spawn refresh failure also blocks the `subagent` call while generated overrides exist (or live state is unreadable), since they may carry a stale model. With no generated overrides, refresh failure does not block the call.
 
 A switch re-reads config after its awaits and writes back only `active`, so profiles saved by another session meanwhile survive. This is a narrow re-read, not cross-process locking.
 
 ## Boundaries and verification
 
-- `/review` is unaffected: its workflow passes explicit `agent({model, effort})`, which pi-subagents **0.19.0** resolves before agent frontmatter. This is source-read evidence (`extensions/review/public-workflow.ts` and upstream worker/runner sources), not E2E verification.
+- Profiles render global agent files only. Trusted parent-workspace `.pi/agents` definitions shadow global files and do not receive generated profile overrides. Explicit `subagent` provider/model/thinking choices win over the selected role, then parent defaults; see [subagent discovery and settings](../subagent/README.md#discovery-and-settings). `/review` now passes explicit stage choices through this runner and uses closed blocking `review_run({runId})`/`review_finalize({runId})` with owned run binding, semantic validation, and freshness checks. Independent whole-repository tests and `bun run check` verify the source cutover; actual offline tmux/Pi children verify the reviewer, synthesizer, verifier, and once-only publication boundary. These deterministic fixtures do not prove paid-model quality or live deployment. See its [README](../review/README.md) for evidence and limits; live configuration/setup is unmigrated, and paid-model quality is not validated.
 - Disabling the Extension while a non-default profile is active leaves generated files in place. Run `/profile default` **before disabling** to restore owned repo links.
 - Focused tests cover config, resolution/rendering, ownership, switching, validation, lifecycle refresh, and global settings persistence. Live `/profile` use and E2E subagent spawning remain unverified.

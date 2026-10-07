@@ -8,6 +8,7 @@ import {
   EXECUTE_INVOCATION_PREAMBLE,
   EXECUTE_SYNTHESIS_MESSAGE,
 } from "./constants";
+import { registerExecutionLedger } from "./runtime";
 
 interface MessageLike {
   role?: string;
@@ -93,15 +94,17 @@ function getLastExecutionBriefFromSession(
 }
 
 export default function executeExtension(pi: ExtensionAPI): void {
+  const authorize = registerExecutionLedger(pi);
   pi.registerCommand(EXECUTE_COMMAND_NAME, {
     description:
-      "Execute a plan with native SubagentWorkflow and pi-tasks: /execute [plan]",
+      "Execute a plan with blocking subagents and main verification: /execute [plan]",
     handler(args, ctx) {
       const explicitPlan = (args ?? "").trim();
       const plan = explicitPlan || getLastExecutionBriefFromSession(ctx);
-      const message = plan
+      const packet = plan
         ? buildPlanInvocationMessage(plan)
         : EXECUTE_SYNTHESIS_MESSAGE;
+      const message = `${packet}\n\nExecution checkpoint invocationId: ${authorize(ctx)}`;
 
       if (ctx.isIdle()) {
         pi.sendUserMessage(message);

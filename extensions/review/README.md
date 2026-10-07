@@ -4,11 +4,18 @@ Read when changing `/review`, `/review-summary`, `/review-fix`, reviewer orchest
 
 ## Runtime overview
 
-`/review` keeps target selection, model configuration/trust, and preflight local, then prepares the full public `SubagentWorkflow` script in memory and gives the main session a compact, run-bound marker. The main session submits only `{script: <unchanged prepared marker>}`. The public Pi `tool_call` hook validates the marker, session/cwd, source hash, and one-shot dispatch, then replaces that argument with the exact prepared inline source before native execution. The model does not read or regenerate the full program, avoiding a large output-generation delay. No `scriptPath`, name, args, resume, alternate orchestration, or model overrides are authorized; a marker without its pending extension state cannot start a workflow.
+`/review` keeps target selection, model configuration/trust, and preflight local. It prepares a cloned role/model/target plan in extension memory and sends only a closed handoff:
 
-One native run performs the reviewer role × model matrix → shared-code coverage/semantic validation → lossless synthesizer → shared-code cluster validation → independent verifier and validation. Empty candidate sets skip both downstream agents. `public-workflow.ts` embeds self-contained `portable-core.js` validation also used by local finalization; no private upstream imports or fork SDK remain.
+```text
+review_run({runId})
+review_finalize({runId})
+```
 
-Reviewer and verifier tool configurations are retained. The report-only synthesizer is configured with `tools: none` and `extensions: false`, with native `StructuredOutput` injected for its schema. This is upstream agent configuration, **not override-proof enforcement** against project-local agent definitions. It is instructed not to inspect code or decide truth/priority.
+`review_run` blocks until the deterministic `pipeline.ts` completes. It calls `ctx.executeTool("subagent", {agent, task, model, thinking, schema}, {signal, onUpdate})`, preserving native profile refresh hooks and the shared four-per-parent scheduler. No scripts, model overrides, results, paths, workflow interpreter, or notification are accepted from the parent model. Native `AgentToolCallOutcome.isError` is checked before reading `outcome.result.structuredContent`; prose is never a structured result fallback.
+
+The pipeline runs the reviewer role × model matrix → shared-code coverage/semantic validation → lossless synthesizer → shared-code cluster validation → independent verifier and validation. Empty candidate sets skip both downstream agents. `pipeline-contracts.ts` owns prepared types/validation; `pipeline-prompts.ts` supplies ordinary typed schema/prompt functions; `portable-core.js` retains the existing semantic helpers. There is no generated JavaScript or journal replay.
+
+Each child is fresh and task-only, sharing the checkout. Reviewers and verifier retain their role tool controls. The report-only synthesizer is configured with `tools: none` and `extensions: false`, with internal `StructuredOutput` still available. The selected trusted project role can shadow a global definition, so this is not override-proof role isolation or an OS sandbox. Explicit review model and thinking choices take precedence over role/parent choices.
 
 The default matrix keeps reviewers and verification on GPT-6 Astra while routing synthesis to GPT-6 Luna; every stage uses medium thinking:
 
@@ -18,7 +25,7 @@ The default matrix keeps reviewers and verification on GPT-6 Astra while routing
 | synthesizer | `openai-codex/gpt-6-luna` | fixed `medium` |
 | verifier | `openai-codex/gpt-6-astra` | fixed `medium` |
 
-The panel accepts 1–4 distinct model IDs. Supported reviewer thinking levels are `minimal`, `low`, `medium`, `high`, and `xhigh`, passed through unchanged. Saved config schemas still accept legacy `off`, but command preflight and script preparation reject it with instructions to choose a supported level; entries are never silently changed. Duplicate IDs normalize to one run, using the first entry, so one model cannot gain multiple support votes. Inside one workflow, reviewer jobs run in awaited native `parallel` batches of at most four. This intentional batch barrier caps concurrency at four and preserves role/model dispatch indices and output order. Synthesizer and verifier calls run afterward, not concurrently with the reviewer matrix.
+The panel accepts 1–4 distinct model IDs. Supported reviewer thinking levels are `minimal`, `low`, `medium`, `high`, and `xhigh`, passed through unchanged. Saved config schemas still accept legacy `off`, but command preflight and plan preparation reject it with instructions to choose a supported level; entries are never silently changed. Duplicate IDs normalize to one run, using the first entry, so one model cannot gain multiple support votes. Inside one review, reviewer jobs run in awaited `Promise.allSettled` batches of at most four. This intentional batch barrier caps concurrency at four and preserves role/model dispatch indices and output order. Synthesizer and verifier calls run afterward, not concurrently with the reviewer matrix.
 
 ## Configuration and disclosure
 
@@ -56,7 +63,7 @@ Direct syntax:
 
 `--reviewer-models` also accepts `--reviewer-models=<pairs>`. Every model uses `provider/model`. Reviewer, synthesizer, and verifier model IDs may overlap. Registry presence, configured authentication, and current session model scope are checked without OAuth refreshes, commands, or other external side effects before calls. When `ctx.scopedModels` is non-empty, every reviewer, synthesizer, and verifier model must be in that scope; an empty scope keeps all available models usable. Unavailable, out-of-scope, unauthenticated, or malformed models stop the workflow without a paid call.
 
-Before execution, `/review` separately discloses initial calls and possible structured-repair retries, along with role and panel dimensions, reviewer models and thinking, synthesizer and verifier providers/models, fixed downstream effort, and scope. Initial reviewer calls equal roles × panel models. Each reviewer run may add one native schema retry; semantic failures do not trigger local repairs. A finding-bearing run adds one initial synthesizer call and one initial verifier call; each downstream stage may add one native schema retry, not a semantic repair. Provider billing, retention, and data handling follow the configured providers. Review packets, relevant repository content read by agents, and previous invalid structured output may be sent to those providers.
+Before execution, `/review` separately discloses initial calls and possible end-of-run structured corrections, along with role and panel dimensions, reviewer models and thinking, synthesizer and verifier providers/models, fixed downstream effort, and scope. Initial reviewer calls equal roles × panel models. Each reviewer child may receive one end-of-run correction when a valid structured report is missing; semantic failures do not trigger local repairs. A finding-bearing run adds one initial synthesizer call and one initial verifier call; each child may receive one end-of-run correction if it finishes without a valid structured report, not a semantic repair. Provider billing, retention, and data handling follow the configured providers. Review packets, relevant repository content read by agents, and previous invalid structured output may be sent to those providers.
 
 ## Targets and reviewer roles
 
@@ -73,15 +80,15 @@ Diff targets fail fast when invalid or empty. Their packet includes changed path
 
 ## Failure, degraded, empty, and cancellation semantics
 
-Each reviewer run undergoes shared semantic validation after native schema handling. No local repair is attempted. Failures are recorded as stable categories (`Agent run failed.` or `Invalid structured output after native schema retry.`), never raw provider/agent exceptions. The matrix continues only if every selected reviewer role has at least one successful model run; otherwise review stops before synthesis. A report is **degraded** when at least one role×model run failed despite every role retaining a success.
+Each reviewer run undergoes shared semantic validation after child schema handling. No local repair is attempted. Failures are recorded as stable categories (`Agent run failed.` or `Invalid structured output after child reporting backstop.`), never raw provider/agent exceptions. The matrix continues only if every selected reviewer role has at least one successful model run; otherwise review stops before synthesis. A report is **degraded** when at least one role×model run failed despite every role retaining a success.
 
 When all successful reviewers return no findings, `/review` skips synthesizer and verifier entirely and renders “Code looks good,” human callouts, and the full coverage matrix. Both clean and finding reports include panel size, degraded state, and every used role×model success/failure; unselected roles are `not used`.
 
-`/review cancel`, parent abort, or session/cwd change invalidates local publication, including during preflight/finalization. Preflight Git commands are abortable, but parent cancellation does not guarantee native worker termination. Stop workers through `/agents` → `Workflows`. Interrupted reviews require a fresh `/review`; there is no automatic resume or redispatch.
+`/review cancel`, parent/tool abort, user bash, non-extension input, or session/cwd/tree change invalidates local publication, including during preflight/finalization. Each review has its own AbortController: cancellation stops that review's queued and running children, not unrelated parent delegation. Preflight Git commands are abortable. Cancellation cannot undo edits or guarantee termination of independently detached processes. Interrupted reviews require a fresh `/review`; there is no automatic resume or redispatch.
 
 ## Structured contracts
 
-All JSON-producing workflow agents receive native `StructuredOutput` via closed schemas (`additionalProperties: false`) with explicit primitive types on every enum and singleton reviewer enums rather than const-only properties. Assistant prose or text JSON is not accepted as a workflow result. Direct agent invocation permits JSON text fallback only when no schema tool is available.
+All JSON-producing review children receive internal `StructuredOutput` via closed schemas (`additionalProperties: false`) with explicit primitive types on every enum and singleton reviewer enums rather than const-only properties. Assistant prose or text JSON is not accepted as a workflow result. Direct agent invocation permits JSON text fallback only when no schema tool is available.
 
 Reviewer submission:
 
@@ -92,9 +99,9 @@ Reviewer submission:
 
 The orchestrator assigns candidate IDs and immutable reviewer role, model ID, and thinking provenance. Models never author provenance.
 
-Synthesizer submission contains only `clusters`; each cluster contains `memberIds`, `title`, `why`, and `change`. It is instructed not to inspect the repository or decide truth, priority, or confidence. It merges only the same root cause with materially the same fix. Similar impact with a different fix remains separate. Every candidate ID must occur exactly once: unknown, repeated, or omitted IDs invalidate the entire submission. Native schema retries use medium effort; semantic loss or invalid IDs fail review without a local repair. Locations and reported priorities are derived from member IDs, including multiple distinct locations.
+Synthesizer submission contains only `clusters`; each cluster contains `memberIds`, `title`, `why`, and `change`. It is instructed not to inspect the repository or decide truth, priority, or confidence. It merges only the same root cause with materially the same fix. Similar impact with a different fix remains separate. Every candidate ID must occur exactly once: unknown, repeated, or omitted IDs invalidate the entire submission. Synthesis uses medium effort. Missing structured reports get only the child reporting backstop; semantic loss or invalid IDs fail review without a local repair. Locations and reported priorities are derived from member IDs, including multiple distinct locations.
 
-Verifier submission contains only `reviewScope`, `verdict`, and findings with `memberIds`, final `priority`, rewritten `title`/`why`/`change`, `confidence`, evidence `reason`, and `consensusEffect`. The verifier must inspect changed code and every cited location. Votes alone are never evidence and silence is neutral. It may split an over-merged cluster or merge under-merged clusters by regrouping original member IDs. Omitted IDs are rejected. Unknown or repeated IDs fail review without a local repair; only native schema retries use medium effort.
+Verifier submission contains only `reviewScope`, `verdict`, and findings with `memberIds`, final `priority`, rewritten `title`/`why`/`change`, `confidence`, evidence `reason`, and `consensusEffect`. The verifier must inspect changed code and every cited location. Votes alone are never evidence and silence is neutral. It may split an over-merged cluster or merge under-merged clusters by regrouping original member IDs. Omitted IDs are rejected candidates, not missing run captures. Unknown or repeated IDs fail review without a local repair; only the child reporting backstop is allowed, at medium effort.
 
 Confidence is `high`, `medium`, or `low`. Distinct-model positive support may raise confidence by at most one level only after independently plausible code evidence; then `consensusEffect` is `raised-one-level`, otherwise `none`. The verifier may correct priority and wording. Low-confidence findings remain in structured details but are filtered from rendered findings.
 
@@ -112,15 +119,26 @@ The denominator is per finding, not the configured panel blindly; failed runs an
 
 Rendered reports contain `Review Scope`, `Verdict`, `Findings`, `Human Reviewer Callouts (Non-Blocking)`, and `Reviewer Coverage`. Findings show locations, support/denominator, model→role provenance, verifier confidence/evidence, `consensusEffect`, impact, and fix. Model-sourced text, paths, allowlisted failure details, and callouts have control and Unicode format characters (including bidi overrides/isolates) stripped, whitespace collapsed, and Markdown escaped to prevent forged report structure.
 
-## Native lifecycle and local finalization
+## Blocking lifecycle and local finalization
 
-Native `/agents` → `Workflows` owns progress and worker stop controls; there is no extension-local worker widget. A second `/review` is rejected while a review is pending. Interactive text-only prompts are kept in the editor; image-bearing or other non-extension input and user bash invalidate the review before proceeding. Extension-origin input remains available for the native handoff. Session shutdown/start/tree changes invalidate publication. Headless calls use the same prepared handoff, not a foreground local worker runner.
+Live pane progress and copyable tmux attachment commands stream through `review_run` into the parent; finished child sessions are closed. There is no Workflows UI or background run. Owner-only child task/result/session evidence is saved by the subagent runner, but publication uses the controller's complete private captures rather than model-provided artifact paths.
 
-After the native completed notification, call `review_finalize({runId})`. Its closed schema accepts only the prepared 36-character run ID, never model results or file paths. `lifecycle.ts` binds the exact observed public `SubagentWorkflow` marker call, its in-memory expansion to the authorized source, and matching result (`details.taskId`, one `Script: /.../<taskId>.workflow.js` line) to the prepared session/cwd, target fingerprint, model plan, and source hash. Readiness requires a native `CustomMessageEntry` (`type: custom_message`, `customType: subagent-notification`, matching `details.id`, `status: completed`) on the current branch, not assistant-authored completion text.
+A second `/review` is rejected while pending. Interactive text-only prompts stay in the editor; image-bearing or other non-extension input and user bash cancel the review before proceeding. Extension-origin input remains available for the handoff. Session shutdown/start/switch/fork/tree boundaries invalidate publication. Headless calls use the same two blocking tools.
 
-Finalization reads the complete saved source and sibling `.workflow.jsonl` journal from that returned script path, never the 4k notification previews. Each artifact is bounded to 1 MiB, must be a stable regular UTF-8 file without arbitrary symlink components (the canonical macOS `/tmp` ↔ `/private/tmp` alias is the only exception), and the saved source must match exactly. `finalization.ts` requires complete newline-terminated records with unique dense indices and unique keys, sorts by dispatch index (not completion order), accepts textless failed records, checks expected call counts, and revalidates all structured results. Shared code rederives candidate IDs, coverage, provenance, support, verdict, and ordering; workflow-derived/model-authored report fields are not publication authority.
+`lifecycle.ts` binds the prepared UUID to the exact cloned plan and target, session/cwd, current branch ancestry, and target fingerprint. Execution is one-shot. Every successful child capture must have a unique UUID and matching role, provider/model, and thinking metadata, with a real structured payload. Invalid metadata/missing capture fails closed; only reviewer agent or semantic failures may degrade under the per-role coverage rule. Run/tool/parent cancellation aborts owned children and prevents readiness. Completion is local state, never assistant prose or a notification.
 
-Target freshness is checked before and after artifact validation. Unknown, replayed, concurrent, cancelled, session-switched, or stale runs cannot publish; at most one report is persisted. Missing or incompatible captures fail closed and require a fresh invocation. This public artifact contract is version-sensitive (inspected upstream `@tintinweb/pi-subagents` 0.19.0), not a private API adapter or a guarantee for future versions. Successful finalization returns `Review report published.` and preserves the `review-report` message/details contract used by companion commands.
+`review_finalize` accepts only `{runId}`. Readiness requires completed owned execution; it cannot accept raw outputs, file paths, or derived report fields. `finalization.ts` retains `derivePreparedReviewResult`: bounded closed raw outputs are revalidated, then deterministic candidate IDs, coverage, provenance, support, verdict, and ordering are derived again. Target freshness is checked before and after execution and before and after finalization. Unknown IDs, replays, concurrent execution/finalization, missing or failed required roles, cancellation, session/cwd/branch changes, and stale targets cannot publish. At most one report is persisted. Successful finalization returns `Review report published.` and preserves the `review-report` message/details contract used by companion commands.
+
+Validation:
+
+```sh
+bun test extensions/review
+bun test --coverage extensions/review
+bun run format extensions/review skills/review-orchestration/SKILL.md
+bun run check
+```
+
+Tests use native-shaped mocked outcomes plus offline public-SDK nested tool dispatch; semantic regression, configuration/trust, freshness, summary/fix, and rendering contracts remain covered. Paid review quality and live setup are not established by these tests.
 
 ## `/review-summary` and `/review-fix`
 

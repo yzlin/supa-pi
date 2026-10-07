@@ -25,20 +25,20 @@ Documented extensions in this repo include:
 - **`extensions/prompt-commands`** — active raw-input transformer for the queueable `/grill-me`, `/research-brief`, `/show-me`, and `/wayfinder` prompt entrypoints; canonical behavior remains in their delegated skills or prompt instructions
 - **`extensions/ask`** — active Ask Extension providing the `ask` structured clarification tool and `/ask-stats` session command, with bounded schema, single/multi-question TUI flows, preview notes, validation, and locally documented rpiv divergences in `docs/context/ask.md`; no legacy tool or command aliases are registered
 - **`extensions/context-docs`** — deterministic `/context-setup`, `/context-note`, `/adr`, and `/context-review` workflows for durable project context docs; canonical workflow behavior lives in `skills/context-docs/SKILL.md`
-- **[`extensions/skill-router`](extensions/skill-router/README.md)** — registered-first, default-off paid JEV skill selection with bounded conversation transfer, separate authentication and explicit consent, and native fallback
+- **[`extensions/skill-router`](extensions/skill-router/README.md)** — registered-first, default-off paid JEV skill selection with bounded conversation transfer, Pi-managed authentication and explicit consent, and native fallback
 - **`extensions/docs-list`** — `docs_list` tool for discovering project markdown docs before coding; backed by the same implementation as the `docs-list` CLI
 - **`extensions/code-improvement`** — scoped `/simplify` code-simplifier delegation with strict target grammar, `--extra` guidance, `--yes` consent bypass for large/PR scopes, hard file allowlists, and `/improve-codebase-architecture` read-only architecture review workflow
-- **`extensions/review`** — current-session `/review` prepares one public native workflow and locally validates publication via `review_finalize`, with `/review-summary` and `/review-fix` follow-ups (see `extensions/review/README.md`); adapted in part from `@earendil-works/pi-review`
+- **`extensions/review`** — current-session review with `/review-summary` and `/review-fix` follow-ups; closed blocking `review_run({runId})` then `review_finalize({runId})` pipeline with deterministic stage validation and freshness checks (see `extensions/review/README.md` for evidence and limits); adapted in part from `@earendil-works/pi-review`
 - **`extensions/tool-display`** — compact tool renderers and the `read` override that returns exact loaded skill files in full, ignores pagination for those skill reads, and marks results so RTK does not compact them
 
 The configured extension set also includes workflow and utility modules such as:
 
 - `core-prompt` — main-agent orchestration and output guidance, including compact text diagrams when clarification is easier to scan visually
 - `rules`
+- `subagent` — repo-owned blocking tmux/Pi child runner; see [its boundary](extensions/subagent/README.md)
 - `execute`
 - `research`
 - `code-improvement`
-- `review.ts`
 - `session-query`
 - `handoff`
 - `context`
@@ -69,9 +69,9 @@ See `package.json` for the full registration list.
 
 `skills/e2e-testing/SKILL.md` is the canonical main-session Playwright E2E workflow, including test guardrails, artifact handling, and reporting; no dedicated E2E agent is shipped.
 
-Behavior changes and bug fixes use the canonical `skills/tdd-workflow/SKILL.md`, which also owns exact-command build reproduction, cascade/root-cause isolation, no-suppression, generated-source, and diagnostics-verification safeguards. Direct main-session work may use a concrete alternative to RED only for a reversible, low-impact change when it explains why RED is unavailable; meaningful regression and failure-path coverage plus required checks remain mandatory, and the exception does not cover security, payment, data-integrity, or irreversible work. During `/execute`, the managed TDD evidence contract remains unchanged; the generic executor receives the skill only through trusted `tdd: true` injection, and there is no separate TDD agent. Phased work validates each intermediate phase, while the final requested outcome must be usable.
+Behavior changes and bug fixes use the canonical `skills/tdd-workflow/SKILL.md`, which also owns exact-command build reproduction, cascade/root-cause isolation, no-suppression, generated-source, and diagnostics-verification safeguards. Direct main-session work may use a concrete alternative to RED only for a reversible, low-impact change when it explains why RED is unavailable; meaningful regression and failure-path coverage plus required checks remain mandatory, and the exception does not cover security, payment, data-integrity, or irreversible work. During `/execute`, main supplies worker-accessible TDD guidance in the self-contained task; there is no trajectory-enforcement hook or separate TDD agent. Phased work validates each intermediate phase, while the final requested outcome must be usable.
 
-`/execute` is a command-only entrypoint: an explicit invocation authorizes native `SubagentWorkflow` for that plan. It does not register retired execution tools or hooks. A stopped background workflow is controlled through `/agents` → `Workflows`; it is not automatically resumed or redispatched, and null worker results remain unresolved task records with blocker metadata.
+`/execute` authorizes blocking executor `subagent` calls and the execution-owned `execute_checkpoint` ledger in native session entries. Main owns assignment scopes, dependencies, at most two mutation repairs per lineage, and independent verification. Missing/invalid reports stay unresolved; a child `done` is only a claim. Abort/parent shutdown cancels owned active and queued children; interruption requires explicit authorization and current-state reconciliation, never automatic continuation, legacy-state import, or child-conversation resume. See [execute](extensions/execute/README.md).
 
 `/diagnose` is diagnosis-only by default. An explicit diagnosis-and-fix request authorizes only a bounded local remedy after `Diagnosis: Proven`, with the disclosed scope and test plan; causal proof, targeted revalidation, and probe cleanup remain required.
 
@@ -158,20 +158,28 @@ cd ~/dev/yzlin/supa-pi
 
 The locked checkout dependencies are installed before local-path registration because Pi does not install dependencies for local sources. Registration still happens before prompt links are reconciled, so extension command replacements are deployed before retired prompt entrypoints are removed during upgrades. Setup fails immediately if dependency installation fails.
 
-Fresh setup uses Pi's official fullscreen TUI by default. Existing `settings.json` files are left untouched; existing users can select fullscreen via `/settings` or start Pi with `--tui-mode fullscreen`. Both regular and fullscreen modes are supported.
+Fresh setup uses Pi's official fullscreen TUI by default. Setup skips settings initialization when `settings.json` exists and preserves existing TUI-mode preferences; package installation can still update the packages list. Existing users can select fullscreen via `/settings` or start Pi with `--tui-mode fullscreen`. Both regular and fullscreen modes are supported.
 
 After setup, restart Pi to pick up the changes.
 
-### Existing subagents registration migration
+### Existing delegation/task registration migration
 
-If an older live config still registers the fork runtime, run `pi remove npm:@yzlin/pi-subagents` when that registration is present, rerun `./setup.sh`, and restart Pi. Verify `pi list` contains only the upstream `npm:@tintinweb/pi-subagents` subagents runtime. The unused fork SDK dependency has been removed: execute and review use public tools from the setup/global upstream companion, without adding a repository npm dependency on that runtime. Setup does not detect or reject duplicate subagents runtimes; verify registration manually. This is manual migration guidance, not a claim that live settings were changed.
+Before rerunning setup or restarting Pi, manually remove **both** old registrations when present. These commands remove global registrations:
+
+```bash
+pi remove npm:@tintinweb/pi-subagents
+pi remove npm:@tintinweb/pi-tasks
+```
+
+For project-local registrations, run `pi remove -l <exact-registered-source>` from each affected project root instead. Also remove `npm:@yzlin/pi-subagents` if the earlier fork remains registered, using the flag for its registration scope. Check `pi list` in each affected project and recheck global/project package registrations for duplicate old runtimes; setup does not uninstall or detect them. Then rerun `./setup.sh` and restart Pi with only the checkout's `./extensions/subagent` delegation runtime. No live settings/removal/setup action was performed by this repository migration. Old task/workflow records are not imported.
+
+The new runner requires tmux, Pi 1.0.1+, and the full checkout (plus Bun for strict-skill children). It runs fresh task-only children in the shared checkout with four blocking slots per parent, trusted parent `.pi/agents` over global agents, and call > role > parent settings. Parallel writes require disjoint scopes. Tool controls are not an OS sandbox. Owner-only task/result/native-session evidence is saved under Pi's agent directory; finished tmux sessions are cleaned up. See [subagent](extensions/subagent/README.md) for cancellation, reporting, and isolated offline smoke boundaries. Independent whole-repository tests and `bun run check` verify the source cutover. Actual offline tmux/Pi children verify execution report binding and the reviewer/synthesizer/verifier publication boundary; an isolated SDK process loads the complete manifest. These deterministic fixtures do not prove paid-model quality or live deployment. Live setup/configuration is unmigrated; paid-model quality is not validated.
 
 ## Companion packages installed by setup
 
 The setup script installs or reconciles these Pi packages. It no longer installs `pi-skill-palette`; uninstall that global package yourself if it is still present from an older setup.
 
 - `npm:@yzlin/pieditor@2.0.0` — exact required compositor-free release
-- `@tintinweb/pi-subagents`
 - `pi-mcp-adapter`
 - `pi-rewind`
 - `pi-web-access`
@@ -179,7 +187,6 @@ The setup script installs or reconciles these Pi packages. It no longer installs
 - `glimpseui`
 - `pi-anycopy`
 - `pi-token-burden`
-- `@tintinweb/pi-tasks`
 
 ## Development notes
 
@@ -196,11 +203,11 @@ The setup script installs or reconciles these Pi packages. It no longer installs
   - `bun run check:write`
 - This repo uses Bun (`bun.lock` present)
 - Peer dependencies include:
-  - `@earendil-works/pi-coding-agent` (`>=0.86.1`)
-  - `@earendil-works/pi-ai` (`>=0.86.1`)
-  - `@earendil-works/pi-tui` (`>=0.86.1`)
+  - `@earendil-works/pi-coding-agent` (`>=1.0.1`)
+  - `@earendil-works/pi-ai` (`>=1.0.1`)
+  - `@earendil-works/pi-tui` (`>=1.0.1`)
   - `typebox` (`^1.1.34`)
-- Pi version policy: consumers must provide Pi `0.86.1` or newer. Local development pins `@earendil-works/pi-agent-core`, `@earendil-works/pi-ai`, `@earendil-works/pi-coding-agent`, and `@earendil-works/pi-tui` together at exactly `0.86.1`; upgrade that set together and regenerate `bun.lock`.
+- Pi version policy: consumers must provide Pi `1.0.1` or newer. Local development pins `@earendil-works/pi-agent-core`, `@earendil-works/pi-ai`, `@earendil-works/pi-coding-agent`, and `@earendil-works/pi-tui` together at exactly `1.0.1`; upgrade that set together and regenerate `bun.lock`.
 
 ## When to use this repo
 
@@ -217,3 +224,5 @@ Use this repo if you want a Pi setup with:
 MIT. See [`LICENSE.md`](./LICENSE.md).
 
 Copied or adapted upstream materials keep source and license notes near their usage.
+
+The repo-owned [subagent runtime](extensions/subagent/README.md) adapts Armin Ronacher's Apache-2.0 [`mitsuhiko/agent-stuff` subagent extension](https://github.com/mitsuhiko/agent-stuff/blob/d265b8ef32f896d3ef3bc6a45bd7b8e0d02150e0/extensions/subagent.ts) at `d265b8ef32f896d3ef3bc6a45bd7b8e0d02150e0`. Its full [upstream license](extensions/subagent/LICENSE.upstream) and [attribution/modification notice](extensions/subagent/NOTICE) are retained; the root MIT license is unchanged.

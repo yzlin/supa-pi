@@ -382,9 +382,7 @@ describe("companion ToolExecutionComponent smoke", () => {
       );
       for (const width of [36, 120]) {
         const rows = contentRows(component, width);
-        const icon = { tasks: "📋", mcp: "🔌", codemode: "🧩", web: "🌐" }[
-          fixture.group
-        ];
+        const icon = { mcp: "🔌", codemode: "🧩", web: "🌐" }[fixture.group];
         expect(rows[0]).toContain(icon);
         if (fixture.name === "codemode") {
           expect(rows.length).toBeGreaterThan(2);

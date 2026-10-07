@@ -1,11 +1,14 @@
 # Simplify
 
-Immediately use the `Agent` tool to delegate this task to the `code-simplifier` subagent.
+Use the `simplify` skill behavior as canonical. This retained reference is not a separate command prompt.
+
+Immediately delegate this task with blocking `subagent({agent: "code-simplifier", task})`.
 
 Requirements:
 - Do not simplify the code yourself in the main session.
-- Your first substantive action must be an `Agent` call with `subagent_type: "code-simplifier"`.
-- Do not set `max_turns` on the `code-simplifier` Agent call; let the simplifier finish, validate, and report.
+- Your first substantive action must be a blocking `subagent({agent: "code-simplifier", task})` call.
+- Pass a self-contained task with the scope, editable files, stale-check results, constraints, extra guidance, and validation requirements. Children are fresh and do not inherit the parent conversation. Await the report; let the simplifier finish, validate, and report.
+- If delegation is unavailable, report the blocker and stop; do not replace the role or silently simplify in the main session.
 - If the prompt includes `Editable files`, treat that list as the hard edit boundary.
 - For scoped simplify, you may read files outside editable files for context, but you may edit only editable files.
 - Do not edit ignored lockfiles or unsupported changed files.

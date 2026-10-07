@@ -19,7 +19,7 @@ export function buildResearchCommandMessage(args: string): string {
 export default function researchExtension(pi: ExtensionAPI): void {
   pi.registerCommand("research", {
     description:
-      "Run research through pi-tasks with the researcher agent: /research <topic>",
+      "Run research through a blocking subagent with the researcher role: /research <topic>",
     handler: (args, ctx) => {
       const topic = (args ?? "").trim();
       if (!topic) {

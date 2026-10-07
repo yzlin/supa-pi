@@ -54,7 +54,8 @@ The command supplies directory and flag completions. `--max-depth` suggests valu
 - The resolved target is authoritative; the model must not reinterpret it.
 - All reads and mutations stay inside that target.
 - Child `AGENTS.md` files contain only subtree-specific guidance and must not repeat parent guidance.
-- The model uses `TaskCreate` and `TaskUpdate` for the multi-phase workflow.
+- The main agent tracks discovery, scoring, generation, and review in an ordinary working plan, finishing or explicitly reporting blocked phases before its final answer. `/init-deep` does not authorize `/execute`, execution-ledger assignments, or goal-state changes.
+- Optional unfamiliar-module exploration uses blocking `subagent({agent: "explorer", task})` calls with self-contained, disjoint read-only scopes. The main agent awaits reports and owns scoring, file generation, and review. If delegation is unavailable, it reports that explicitly and uses focused local inspection when practical, otherwise reports a blocked phase.
 - The extension parses, validates, normalizes, and routes. It does not generate files itself.
 
 ## Files

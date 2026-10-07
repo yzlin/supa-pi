@@ -6,47 +6,36 @@ read_when:
 status: active
 ---
 
-# `/execute` extension
+# `/execute`
 
-`/execute` sends an execution packet to the main Pi session. An explicit `/execute` invocation is the user's opt-in and authorizes the main session to call native `SubagentWorkflow` for that accepted plan. The main session owns the plan, safety decisions, `pi-tasks` state, workflow invocation, and final verification.
+`/execute` sends a plan packet to the main Pi session and grants session-scoped checkpoint authorization. Main owns approval, assignments, blocking `subagent` calls, and independent verification. There is no background workflow, general task runtime, or task dashboard.
 
-## Command behavior
+## Command modes
 
-- `/execute <plan>` sends the trimmed plan immediately inside `<plan>...</plan>`.
-- Bare `/execute` reuses the most recent assistant-authored message containing `# Execution Brief`, unless a later user message makes it stale.
-- If no usable brief exists, bare `/execute` asks the assistant to synthesize one and continue in the same run when safe and unambiguous.
-- When the session is busy, the same packet is queued as a follow-up and the user is notified.
+- `/execute <plan>` preserves the trimmed explicit plan inside `<plan>...</plan>`, including file references for main to resolve.
+- Bare `/execute` reuses the latest assistant-authored `# Execution Brief` only if no later user message makes it stale. Required sections: `Execution Scope`, `Plan`, `Done Criteria`, `Verification`, `Out of Scope` (level-two headings).
+- Without a usable brief, main synthesizes a safe, unambiguous one from current context and continues in the same invocation, or asks for exact missing answers.
+- Busy invocations queue the same packet as a follow-up and notify the user. Each packet carries its own `invocationId`; queuing does not replace active ledger state before that packet is consumed.
+- The command leaves attached images in parent context. Main resolves image-derived requirements into worker task text; children do not inherit parent conversation/images.
 
-The command does not register an execution tool, read `.pi/execute`, maintain custom checkpoints, or run a private orchestration runtime.
+## Native-session ledger
 
-## Execution Brief contract
+[`skills/execute/SKILL.md`](../../skills/execute/SKILL.md) specifies the exact `execute_checkpoint` API and blocking delegation example. Exported schemas/types are in `schema.ts`; pure ledger transitions, validation, branch restoration, call binding and report recording are in `ledger.ts`; Pi hooks and tool registration are in `runtime.ts`.
 
-A reusable brief contains these exact headings:
+The registered `CheckpointParametersSchema` has an object root for provider compatibility, with `invocationId` and `action` required. Action-specific fields are optional in that declaration; the local `CheckpointSchema` union still requires each action's fields and rejects fields from other actions before any ledger mutation.
 
-```markdown
-# Execution Brief
-## Execution Scope
-## Plan
-## Done Criteria
-## Verification
-## Out of Scope
-```
+The checkpoint accepts only `inspect`, `accept`, `start`, `verify`, `block`, `repair`, `stop`, with the explicit packet's `invocationId`. It stores one canonical plan and approval/preflight decision, stable assignment IDs and dependencies, literal workspace-relative write scopes, pending/running/blocked/completed outcomes, child claims, main evidence, run/call/attempt identity, and repair lineage. Unknown fields, invalid graphs, duplicate identities, cycles, invalid patches and malformed persisted state fail closed. Marked execution dispatch rejects alternate `cwd`: omit it or use the session workspace's exact path. At most four assignments are running; declared overlapping scopes cannot start together. Dependencies follow the latest repair and cannot start before main-verified completion. Scopes are declarations, not an OS sandbox or symlink-containment proof.
 
-## Native orchestration
+`start` returns an exact task prefix and fresh attempt ID. Main calls `subagent({agent: 'executor', task: dispatchPrefix + completeTask, schema: WorkerReportSchema})`. Hooks bind that observed direct/nested call, then record only its object-valued `structuredContent.structuredOutput` and `runId`. There is no report-submission checkpoint, and prose is not fallback evidence. Missing/error/invalid results block the assignment. Stale calls/results cannot resolve a different session, invocation or attempt; duplicate results/run IDs cannot be replayed. This is logical runtime correlation, not cryptographic provenance or code correctness proof.
 
-The canonical procedure is [`skills/execute/SKILL.md`](../../skills/execute/SKILL.md). It preserves:
+A valid child `done` report stays running, not completed. Only main's `verify` with a bound done claim and non-empty independent evidence completes it. Blocked/needs-followup reports require exact blockers. Repairs inherit original scope, dependencies and lineage; a new assignment ID cannot reset the maximum of two mutation repairs. Read-only re-verification does not consume repair budget. An unfinished accepted plan cannot be replaced to erase that budget. A later explicit command may accept a new plan only after all effective assignments complete; use a separate session for a different plan while terminal blockers remain.
 
-- explicit plans and Execution Brief synthesis;
-- concise plan presentation and ambiguity questions;
-- conservative danger preflight and explicit approval before consequential work;
-- main-session ownership of upstream `@tintinweb/pi-tasks` tasks and dependencies;
-- upstream `@tintinweb/pi-subagents` `SubagentWorkflow` scripts for bounded worker dispatch;
-- native `StructuredOutput` schemas for worker report shape only;
-- same-session upstream workflow-journal resume with live task and workspace verification; a parent/main-session stop does not cancel a background workflow, and after a user stop `/agents` → `Workflows` is the user-controlled stop surface with no automatic resume or dispatch;
-- `null` or missing worker results remain attached to their originating unresolved task with blocker metadata rather than being dropped; `pi-tasks` has no `blocked` status, so terminal blockers retain `pending` or `in_progress` task status;
-- main-session inspection, tests, and diagnostics as completion authority; and
-- bounded, metadata-tracked repair for safe local failures.
+Snapshots use `pi.appendEntry('execute-ledger-v1', ledger)`. `session_start` and `session_tree` reconstruct only `getBranch()`, never all session entries. These boundaries clear live authorization/bindings and never dispatch work. Foreign-session or corrupt ledger data blocks checkpoints. New explicit authorization marks interrupted running assignments blocked; main must inspect current workspace and tests before fresh children or read-only verification. There is no automatic cross-session recovery, old-state import, child conversation resume, or `.pi/execute` file access. `/goal` checkpoints are unrelated and unchanged.
 
-Workers use the `executor` agent definition. Behavior changes and bug fixes receive `skills/tdd-workflow/SKILL.md` as guidance, but TDD trajectory capture and evidence enforcement are not part of the runtime. Independent writes may run together only when their scopes are disjoint; dependent work waits for verified prerequisites.
+## Safety, lifecycle and completion
 
-There is no compatibility path for the retired custom execution tools or for legacy `.pi/execute` state. Existing files are left untouched and are not imported or migrated.
+Main records whole-plan conservative danger preflight and explicit user approval for consequential actions, respects trust, and scopes work to the session workspace. Stored approval text is a decision record, not independent consent enforcement. Workers receive the canonical plan, exact write scope, references, done criteria, and canonical TDD guidance for behavior changes/fixes. Detached executors cannot manage the ledger.
+
+Calls block, with at most four children per parent. Runner cancellation kills owned queued/active children on tool abort or parent shutdown, preserves saved owner-only evidence, and cleans finished tmux sessions. It does not undo edits or terminate independently detached processes. Checkpoint `stop` revokes ledger/marked-dispatch authorization and aborts the parent operation to cancel active runner calls. Abort/error settlement and shutdown revoke authorization. No automatic continuation follows a stop/reload/tree boundary; a new explicit command and current-state reconciliation are required.
+
+Internal `StructuredOutput` validates report shape, with one runner end-of-run correction if absent; this is not a mutation-repair attempt. It does not prove model adherence or correctness. Main independently inspects files, runs current targeted tests and diagnostics/checks, records actual evidence, and reports unresolved IDs, exact blockers and non-blocking follow-ups. These deterministic boundaries have mocked integration/unit coverage; real child lifecycle validation belongs to the subagent runner, not these ledger tests.

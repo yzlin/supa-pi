@@ -275,18 +275,20 @@ describe("tool-display commands", () => {
         readFileSync(getProjectToolDisplayConfigPath(cwd), "utf8"),
       );
 
+      expect(config.output).not.toHaveProperty("tasks");
       expect(config.tools.read.enabled).toBe(false);
       expect(config.tools.search.enabled).toBe(false);
       expect(config.output.bash.rtkHints).toBe(true);
       expect(config.output.bash.enabled).toBe(false);
-      for (const group of ["tasks", "mcp", "codemode", "web"]) {
+      for (const group of ["mcp", "codemode", "web"]) {
         expect(config.output[group].enabled).toBe(false);
       }
       await command.handler(
         "show",
         createContext(cwd, (message) => messages.push(message)),
       );
-      for (const group of ["tasks", "mcp", "web"]) {
+      expect(messages.at(-1)).not.toContain("output.tasks");
+      for (const group of ["mcp", "web"]) {
         expect(messages.at(-1)).toContain(
           `output.${group}: enabled=off, compact, collapsed=on, previewLines=20`,
         );
@@ -301,7 +303,7 @@ describe("tool-display commands", () => {
       const compact = JSON.parse(
         readFileSync(getProjectToolDisplayConfigPath(cwd), "utf8"),
       );
-      for (const group of ["tasks", "mcp", "codemode", "web"]) {
+      for (const group of ["mcp", "codemode", "web"]) {
         expect(compact.output[group].enabled).toBe(true);
       }
     } finally {

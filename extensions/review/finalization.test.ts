@@ -1,12 +1,9 @@
 import { describe, expect, it } from "bun:test";
 
-import {
-  deriveJournalReviewResult,
-  derivePreparedReviewResult,
-} from "./finalization";
-import type { PublicReviewWorkflowInput } from "./public-workflow";
+import { derivePreparedReviewResult } from "./finalization";
+import type { ReviewPipelineInput } from "./pipeline-contracts";
 
-const prepared: PublicReviewWorkflowInput = {
+const prepared: ReviewPipelineInput = {
   scopeHint: "src snapshot",
   invocationPacket: "Review src",
   reviewers: ["code-reviewer"],
@@ -210,106 +207,5 @@ describe("prepared review raw result derivation", () => {
       nested = { nested };
     }
     expect(() => derive({ ...raw([]), extra: nested })).toThrow();
-  });
-});
-
-function journalRecords(findings = [finding]) {
-  const value = raw(findings);
-  const outputs: unknown[] = value.reviewerRuns.map((run) => run.output);
-  if (findings.length) {
-    outputs.push(value.synthesizerOutput, value.verifierOutput);
-  }
-  return outputs.map((output, index) => ({
-    index,
-    key: index.toString(16).padStart(32, "0"),
-    ok: true,
-    text: JSON.stringify(output),
-  }));
-}
-function deriveJournal(records: unknown[], plan = prepared) {
-  return deriveJournalReviewResult(
-    plan,
-    `${records.map((entry) => JSON.stringify(entry)).join("\n")}\n`,
-  );
-}
-
-describe("native completion-order journal contracts", () => {
-  it("reconstructs reviewer provenance and downstream results by call index", () => {
-    const records = journalRecords();
-    expect(deriveJournal(records.toReversed())).toEqual(deriveJournal(records));
-    expect(
-      deriveJournal(records.toReversed()).candidates.map(({ model }) => model),
-    ).toEqual(["test/alpha", "test/beta"]);
-  });
-  it("accepts failed/skip records without text, with success for the same role", () => {
-    const records = journalRecords([]);
-    const failure = { index: 0, key: records[0].key, ok: false };
-    const result = deriveJournal([records[1], failure]);
-    expect(result.coverage.degraded).toBe(true);
-    expect(result.coverage.runs[0].error).toBe("Agent run failed.");
-    expect(result.coverage.runs[1].model).toBe("test/beta");
-    expect(() =>
-      deriveJournal(
-        records.map(({ index, key }) => ({ index, key, ok: false })),
-      ),
-    ).toThrow("No successful model run");
-  });
-  it("requires success for every role, not just any successful model", () => {
-    const records = journalRecords([]);
-    expect(() =>
-      deriveJournal(
-        [records[0], { index: 1, key: records[1].key, ok: false }],
-        {
-          ...prepared,
-          reviewers: ["code-reviewer", "security-reviewer"],
-          reviewerPanel: [prepared.reviewerPanel[0]],
-        },
-      ),
-    ).toThrow("No successful model run");
-  });
-  for (const index of [-1, 0, 0.5, 2, "1", null]) {
-    it(`rejects duplicate, missing, noninteger or out-of-range index ${index}`, () => {
-      const records = journalRecords([]);
-      expect(() =>
-        deriveJournal([records[0], { ...records[1], index }]),
-      ).toThrow();
-    });
-  }
-  it("rejects missing records, duplicate keys, successful records without JSON text and private error fields", () => {
-    const records = journalRecords([]);
-    for (const invalid of [
-      [records[0]],
-      [records[0], { ...records[1], key: records[0].key }],
-      [records[0], { index: 1, key: records[1].key, ok: true }],
-      [records[0], { ...records[1], text: "PRIVATE provider token" }],
-      [
-        records[0],
-        {
-          index: 1,
-          key: records[1].key,
-          ok: false,
-          error: "PRIVATE provider token",
-        },
-      ],
-    ]) {
-      expect(() => deriveJournal(invalid)).toThrow();
-      try {
-        deriveJournal(invalid);
-      } catch (error) {
-        expect(String(error)).not.toContain("PRIVATE");
-      }
-    }
-  });
-  it("stops when downstream calls fail without text", () => {
-    const records = journalRecords();
-    const { index, key } = records[2];
-    expect(() =>
-      deriveJournal([
-        records[0],
-        records[1],
-        { index, key, ok: false },
-        records[3],
-      ]),
-    ).toThrow("Downstream review agent failed");
   });
 });

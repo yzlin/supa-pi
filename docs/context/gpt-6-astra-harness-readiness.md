@@ -20,13 +20,17 @@ At that approval, all 13 retained definitions under `agents/` defaulted to `open
 
 `/review` has separate runtime defaults that override direct agent frontmatter; see [model routing](model-routing.md) and [review configuration](../../extensions/review/README.md#configuration-and-disclosure). With separate approval, the then-existing global `~/.pi/agent/review.json` reviewer panel was changed from Sol/high to Astra/medium. This is a historical approval record, not a claim about its current live value.
 
-This is a user-selected operating configuration, not a benchmark-backed superiority claim. That model-default change did not alter agent bodies, tools, isolation, or other metadata. Later review instructions use native `StructuredOutput`; synthesizer `tools: none`/`extensions: false` is upstream configuration, not override-proof enforcement. Main-session E2E work now loads `skills/e2e-testing/SKILL.md`; no dedicated E2E agent is part of current routing. Dead-code cleanup and duplicate/dependency consolidation now use `agents/code-simplifier.md`; no dedicated refactor-cleaner agent is part of current routing. Build and type fixes use the retained TDD/rules guidance, and documentation/codemap work uses `skills/context-docs/SKILL.md`; no dedicated build-error-resolver or doc-updater agent is part of current routing. The `architect` and `planner` agents were later retired; the main session owns planning and design decisions. At that approval, the main-session and first-run setup defaults remained Sol/high; no active session was reloaded and no comparison was launched. Current agent frontmatter supersedes the historical table; see [model routing](model-routing.md) for repository defaults. An already-loaded review extension retains its old downstream policy until reloaded; saved review config and explicit invocation overrides may differ from built-in defaults. Historical results below are not rescored, and further paid calibration remains paused pending separate approval.
+This is a user-selected operating configuration, not a benchmark-backed superiority claim. That model-default change did not alter agent bodies, tools, isolation, or other metadata. At the intermediate upstream-runtime stage, review instructions used native `StructuredOutput`; synthesizer `tools: none`/`extensions: false` was upstream configuration, not override-proof enforcement. Current runner controls are documented in [subagent](../../extensions/subagent/README.md). Main-session E2E work now loads `skills/e2e-testing/SKILL.md`; no dedicated E2E agent is part of current routing. Dead-code cleanup and duplicate/dependency consolidation now use `agents/code-simplifier.md`; no dedicated refactor-cleaner agent is part of current routing. Build and type fixes use the retained TDD/rules guidance, and documentation/codemap work uses `skills/context-docs/SKILL.md`; no dedicated build-error-resolver or doc-updater agent is part of current routing. The `architect` and `planner` agents were later retired; the main session owns planning and design decisions. At that approval, the main-session and first-run setup defaults remained Sol/high; no active session was reloaded and no comparison was launched. Current agent frontmatter supersedes the historical table; see [model routing](model-routing.md) for repository defaults. An already-loaded review extension retains its old downstream policy until reloaded; saved review config and explicit invocation overrides may differ from built-in defaults. Historical results below are not rescored, and further paid calibration remains paused pending separate approval.
 
 The prior offline verification checked all 17 model/thinking pairs before the later E2E-agent, refactor-cleaner, build-error-resolver, and doc-updater consolidations; that historical result remains unchanged. The review workflow regressions passed 122 tests with 571 assertions, covering default dispatch, downstream repair effort, disclosures, and explicit overrides. The effective saved-plus-built-in review configuration resolved to Astra with a medium-thinking panel. Changed TypeScript files had no LSP errors; the review test file retained 15 await-related hints. `bun run check` passed with the existing one warning and 17 informational findings. These checks validate configuration and routing, not comparative model quality.
 
-## Current execute boundary
+## Historical upstream execute boundary
 
 `/execute` is now a command-only native workflow entrypoint. An explicit invocation authorizes the main session to call upstream `SubagentWorkflow`; stopping the parent does not cancel a background workflow, and user cancellation is handled through `/agents` → `Workflows` without automatic resume or redispatch. Null or missing worker results leave their originating tasks unresolved; terminal blockers stay `pending` or `in_progress` with blocker metadata because `pi-tasks` has no `blocked` status. The review extension now also uses public upstream tools and the unused fork SDK dependency is removed. It prepares one exact INLINE workflow after local trust/preflight; `review_finalize({runId})` alone publishes after binding native completion, reading the complete bounded journal rather than previews, shared-code validation/derivation, and freshness checks before/after. Cancellation invalidates publication; native Workflows UI stops workers, with no automatic resume. Missing/incompatible captures fail closed. The artifact contract is version-sensitive (inspected upstream 0.19.0), with no private imports. See `extensions/review/README.md`; this is not a claim of live activation or full live E2E.
+
+## Current repo-only migration boundary
+
+The upstream boundary above is historical, not an active instruction. `/execute` now uses blocking repo-owned subagents and an execution-owned native-session ledger, with main verification and two scoped mutation repairs per lineage; no old-state import or automatic child continuation. Goal checkpoints remain independent. See [execute](../../extensions/execute/README.md) and [subagent](../../extensions/subagent/README.md). Review now uses closed blocking deterministic `review_run({runId})` then `review_finalize({runId})` with owned run binding, semantic validation, and freshness checks. Independent whole-repository tests and `bun run check` verify the source cutover; actual offline tmux/Pi children verify the reviewer, synthesizer, verifier, and once-only publication boundary. These deterministic fixtures do not prove paid-model quality or live deployment. [Review](../../extensions/review/README.md) owns current evidence. Live setup/configuration is unmigrated; this does not regrade historical model evidence or validate paid-model quality. Manually remove both old companion registrations before setup/restart, as described in [deployment](extension-registration.md#deployment-model).
 
 ## Known compatibility evidence
 
@@ -86,7 +90,7 @@ The batch attempted 12 trajectories, completed 11, used 103 model turns, and rec
 
 Fresh synthetic counterexamples, not rescored live traces, exposed three validator defects: tooling-unavailable wording bypassed numeric proof, explicit uncovered behavior could return `verified`, and a statement that no threshold was specified could become `fabricated_coverage`. At that revision, the bounded corrections required numeric claims to parse and match retained successful measurements even in mixed entries, prevented explicit coverage gaps from being strict proof, and distinguished threshold absence from a numeric assertion.
 
-The eval then used strict `validateTddEvidence`; production used adaptive `assessTddEvidence`. Honest nonnumeric gaps with otherwise authentic safe evidence required independent verification, while fabricated numeric claims remained hard failures. Absence alone supplied no coverage proof. Grounded named `covers` and `covered` claims shared the same proof gate, while negated cover forms required independent verification. No production-prompt tuning accompanied those fixes. Both validators were later retired; the [current execute contract](../../extensions/execute/README.md#native-orchestration) uses TDD as worker guidance and main-session independent verification, not runtime trajectory enforcement. Historical artifacts and grades stay frozen, and no further live probe or rollout is authorized.
+The eval then used strict `validateTddEvidence`; production used adaptive `assessTddEvidence`. Honest nonnumeric gaps with otherwise authentic safe evidence required independent verification, while fabricated numeric claims remained hard failures. Absence alone supplied no coverage proof. Grounded named `covers` and `covered` claims shared the same proof gate, while negated cover forms required independent verification. No production-prompt tuning accompanied those fixes. Both validators were later retired; the [current execute contract](../../extensions/execute/README.md#safety-lifecycle-and-completion) uses TDD as worker guidance and main-session independent verification, not runtime trajectory enforcement. Historical artifacts and grades stay frozen, and no further live probe or rollout is authorized.
 
 ## Post-fix executor probe (diagnostic only)
 
@@ -166,7 +170,9 @@ SUPA_PI_EVAL_FORBID_LIVE=1 bun run eval:prompts -- \
 
 Representative smoke: retain only `readiness-action-fix`, `readiness-evaluation-only`, `readiness-independent-delegation`, and `readiness-local-lookup` from that command.
 
-### Executor and TDD, medium
+### Executor and TDD, medium (retired recipe)
+
+**Historical only:** the four cases below have been removed. This command now fails case selection and must not be used as an approval-ready preview. The [current corpus](../../evals/prompt-optimization/corpus.json) has `executor-fix`, but it does not replace the retired TDD and unavailable-verification coverage.
 
 ```bash
 SUPA_PI_EVAL_FORBID_LIVE=1 bun run eval:prompts -- \
@@ -182,19 +188,21 @@ SUPA_PI_EVAL_FORBID_LIVE=1 bun run eval:prompts -- \
   --case readiness-verification-unavailable
 ```
 
-Representative smoke: retain `tdd-fix` and `readiness-verification-unavailable`.
+Historical smoke subset: `tdd-fix` and `readiness-verification-unavailable`; neither is currently available.
 
 The corpus is synthetic and sandboxed. The low-level core suite omits the interactive extension stack; `Agent` and `bash` behavior is simulated, and arbitrary shell execution is blocked. Show Me applicability cases load the evaluated skill only. Readiness ambiguity is observed through final text because the eval's mock `ask` implementation is specific to deterministic Diagnose cases. A live trajectory passing the offline deterministic scorer is evidence about these fixtures, not proof of production behavior. Preserve TDD ordering and approval gates, and distinguish a completed live trajectory from an offline preview or an unavailable-verification report.
 
 ## Fresh visible-session probes
 
-After a frozen model-comparison cohort is reviewed, run matched full-stack probes only with explicit approval. Never launch mutable work in the tracked canonical fixture. Prepare a new disposable copy for every arm and repetition from the repository root:
+After a frozen model-comparison cohort is reviewed, run matched full-stack probes only with explicit approval. Never launch mutable work in the tracked canonical fixture. Prepare a new disposable copy for every arm and repetition from the repository root. Run this block in Bash with fail-fast enabled as shown; a failed guard stops that shell. Do not launch probes unless preparation succeeds.
 
 ```bash
+set -euo pipefail
 REPO_ROOT="$(git rev-parse --show-toplevel)"
 CANONICAL="$REPO_ROOT/evals/prompt-optimization/fixtures/sample-project"
+FIXTURE_STATUS="$(git -C "$REPO_ROOT" status --porcelain -- evals/prompt-optimization/fixtures/sample-project)"
+test -z "$FIXTURE_STATUS"
 PROBE_ROOT="$(mktemp -d "${TMPDIR:-/tmp}/supa-pi-astra-probes.XXXXXX")"
-test -z "$(git -C "$REPO_ROOT" status --porcelain -- evals/prompt-optimization/fixtures/sample-project)"
 for repetition in 1 2 3; do
   for arm in sol astra; do
     cp -R "$CANONICAL" "$PROBE_ROOT/probe-r${repetition}-${arm}"
@@ -249,7 +257,7 @@ This completion subtracts duplicated or misplaced local instructions; it does no
 
 Offline harness maintenance after the recorded probes makes diagnostics failures explicit (unavailable when no LSP server can answer, incomplete when only some answer) and makes the canonical sample fixture's default command discover `tests/math.case.ts`. That intentionally broken fixture now yields one failure and one pass when copied for future runs. These local fixes do not alter frozen artifact identities or historical results, trigger a live rerun, change prompts or schemas, reload the live Pi config, or authorize model/default/route changes.
 
-- `package.json` pins the four Pi development packages to `0.86.1`; [model routing](model-routing.md) points to current repository first-run defaults without describing existing live settings.
+- `package.json` pins the four Pi development packages to `1.0.1`; [model routing](model-routing.md) points to current repository first-run defaults without describing existing live settings.
 - `evals/prompt-optimization/cli.ts` implements exact model comparison, effective-effort guards, dry-run early return, live-forbid guard, turn bounds, and runtime/artifact ordering.
 - `evals/prompt-optimization/corpus.json` defines the named readiness and TDD cohorts; `runner.ts` supplies the isolated fixture and simulated tool boundaries.
 - [`evals/prompt-optimization/README.md`](../../evals/prompt-optimization/README.md) is the operational CLI and telemetry reference.

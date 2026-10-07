@@ -11,8 +11,11 @@ describe("search-first skill contract", () => {
     const skill = readSkill("search-first");
 
     expect(skill).toContain("The main session owns research dispatch");
-    expect(skill).toContain('Agent({\n  subagent_type: "researcher",');
-    expect(skill).toContain('description: "Research existing solutions"');
+    expect(skill).toContain('subagent({\n  agent: "researcher",');
+    expect(skill).toContain("task: `");
+    expect(skill).toContain("fresh task-only child");
+    expect(skill).not.toContain("subagent_type");
+    expect(skill).not.toContain("Agent({");
     expect(skill).toContain("Give the researcher a concrete question");
     expect(skill).toContain(
       "Return: Structured comparison with recommendation",

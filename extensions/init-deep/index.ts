@@ -288,8 +288,9 @@ export function buildInitDeepMessage(input: InitDeepCommandInput): string {
     "- The max depth above is a hard limit.",
     "- If create-new is true, read existing AGENTS.md files in scope first, then remove them with `trash` before regenerating.",
     "- If dry run is true, inspect and propose changes only. Do not write, edit, or delete files.",
-    "- Use TaskCreate and TaskUpdate for phase tracking.",
-    "- Complete each phase task when that phase finishes; do not emit the final answer while any init-deep task is pending or in_progress.",
+    "- Track discovery, scoring, generation, and review in an ordinary working plan.",
+    "- Finish or explicitly report blocked phases before the final answer.",
+    "- /init-deep does not authorize /execute or execution-ledger assignments. Do not modify goal state.",
     "",
     PROMPT,
   ].join("\n");

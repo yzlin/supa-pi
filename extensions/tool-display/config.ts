@@ -94,7 +94,6 @@ export interface ToolDisplayConfig {
     search: ToolDisplayOutputConfig;
     bash: ToolDisplayBashOutputConfig;
     fallback: ToolDisplayOutputConfig;
-    tasks: ToolDisplayOutputConfig;
     mcp: ToolDisplayOutputConfig;
     codemode: ToolDisplayCodemodeOutputConfig;
     web: ToolDisplayOutputConfig;
@@ -126,7 +125,6 @@ export interface ToolDisplayConfigLayer {
     search?: Partial<ToolDisplayOutputConfig>;
     bash?: Partial<ToolDisplayBashOutputConfig>;
     fallback?: Partial<ToolDisplayOutputConfig>;
-    tasks?: Partial<ToolDisplayOutputConfig>;
     mcp?: Partial<ToolDisplayOutputConfig>;
     codemode?: Partial<ToolDisplayCodemodeOutputConfig>;
     web?: Partial<ToolDisplayOutputConfig>;
@@ -209,12 +207,6 @@ export const DEFAULT_TOOL_DISPLAY_CONFIG: ToolDisplayConfig = {
       rtkHints: true,
     },
     fallback: {
-      enabled: true,
-      mode: "compact",
-      collapsed: true,
-      previewLines: 20,
-    },
-    tasks: {
       enabled: true,
       mode: "compact",
       collapsed: true,
@@ -593,7 +585,6 @@ export function normalizeToolDisplayConfig(
     search: outputSearch,
     bash: outputBash,
     fallback: normalizePreviewConfig(output.fallback),
-    tasks: normalizePreviewConfig(output.tasks),
     mcp: normalizePreviewConfig(output.mcp),
     codemode: normalizeCodemodeOutputConfig(output.codemode),
     web: normalizePreviewConfig(output.web),
@@ -755,11 +746,6 @@ export function loadToolDisplayConfigFromLayers(
         ...DEFAULT_TOOL_DISPLAY_CONFIG.output.fallback,
         ...normalizedGlobalConfig?.output?.fallback,
         ...normalizedProjectConfig?.output?.fallback,
-      },
-      tasks: {
-        ...DEFAULT_TOOL_DISPLAY_CONFIG.output.tasks,
-        ...normalizedGlobalConfig?.output?.tasks,
-        ...normalizedProjectConfig?.output?.tasks,
       },
       mcp: {
         ...DEFAULT_TOOL_DISPLAY_CONFIG.output.mcp,
@@ -945,7 +931,6 @@ export function getToolDisplayPresetConfig(
         search: { ...compact.output.search, enabled: false },
         bash: { ...compact.output.bash, enabled: false },
         fallback: { ...compact.output.fallback, enabled: false },
-        tasks: { ...compact.output.tasks, enabled: false },
         mcp: { ...compact.output.mcp, enabled: false },
         codemode: { ...compact.output.codemode, enabled: false },
         web: { ...compact.output.web, enabled: false },
@@ -975,12 +960,6 @@ export function getToolDisplayPresetConfig(
         previewLines: 80,
       },
       fallback: {
-        enabled: true,
-        mode: "expanded",
-        collapsed: false,
-        previewLines: 80,
-      },
-      tasks: {
         enabled: true,
         mode: "expanded",
         collapsed: false,

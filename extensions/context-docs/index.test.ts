@@ -507,7 +507,9 @@ describe("context-docs runtime reminder", () => {
       expect(injected?.systemPrompt).toContain(
         "CONTEXT.md domain/product only",
       );
-      expect(injected?.systemPrompt).toContain("no pi-tasks");
+      expect(injected?.systemPrompt).toContain(
+        "no execution ledger, assignments, or goal state",
+      );
     } finally {
       fs.rmSync(tempRoot, { force: true, recursive: true });
     }
@@ -727,11 +729,11 @@ describe("context-docs prompt", () => {
     return buildContextDocsMessage(parsed.value);
   }
 
-  it("includes pi-task guardrail in normalized handoff", () => {
+  it("includes execution-state guardrail in normalized handoff", () => {
     const message = buildPromptMessage("context-setup", "-- Refresh docs");
 
     expect(message).toContain(
-      "Do not create, modify, schedule, or manage pi-tasks.",
+      "Do not create or modify execution-ledger assignments or goal state. This command does not authorize /execute.",
     );
   });
 
@@ -757,7 +759,7 @@ describe("context-docs prompt", () => {
     const envelopeRules = [
       "Treat the resolved command input as authoritative.",
       "Keep all work inside the resolved target root.",
-      "Do not create, modify, schedule, or manage pi-tasks.",
+      "Do not create or modify execution-ledger assignments or goal state. This command does not authorize /execute.",
       "Never put secrets, credentials, tokens, private keys, or raw sensitive data in durable docs.",
       "Preserve existing structure and conventions; make the smallest safe edits.",
       "Use the canonical `context-docs` skill for all shared and command-specific workflow behavior.",

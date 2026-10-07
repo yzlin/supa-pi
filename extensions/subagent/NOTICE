@@ -1,0 +1,16 @@
+SupaPi tmux subagent runner
+
+Adapted from extensions/subagent.ts in mitsuhiko/agent-stuff (Armin Ronacher):
+https://github.com/mitsuhiko/agent-stuff/blob/d265b8ef32f896d3ef3bc6a45bd7b8e0d02150e0/extensions/subagent.ts
+Pinned upstream commit: d265b8ef32f896d3ef3bc6a45bd7b8e0d02150e0
+Upstream license: Apache License 2.0, retained verbatim in LICENSE.upstream.
+
+SupaPi modifications: shared four-slot scheduling, strict trusted role discovery,
+call/role/parent settings precedence, owner-only run evidence, private tmux servers,
+owned lifecycle cleanup/cancellation, schema/run-bound reporting and validation,
+strict public-SDK resource controls, thin native tool registration, and offline tests.
+Human CLI attachment follows the upstream --attach-subagent wrapper design:
+https://github.com/mitsuhiko/agent-stuff/blob/main/extensions/subagent.ts
+SupaPi uses validated owner-only per-run attach metadata, not the upstream shared
+socket or legacy targets; preserves terminal streams and tmux exit codes.
+The repository's root MIT license is unchanged.

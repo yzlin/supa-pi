@@ -1362,13 +1362,9 @@ export function renderCompanionToolCall(
     return new CodemodeCallComponent(summary, theme, context.state);
   }
   let icon = "🌐";
-  let color = "accent";
+  const color = "accent";
   if (group === "mcp") {
     icon = "🔌";
-  }
-  if (group === "tasks") {
-    icon = "📋";
-    color = "warning";
   }
   const target = singleLine(summary);
   return new HeaderComponent(

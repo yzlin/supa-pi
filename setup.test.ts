@@ -13,9 +13,7 @@ import {
   writeFile,
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
-
-import { DefaultResourceLoader } from "@earendil-works/pi-coding-agent";
+import { join } from "node:path";
 
 const repositoryDir = import.meta.dir;
 const temporaryDirectories: string[] = [];
@@ -73,37 +71,30 @@ describe("setup local package deployment", () => {
     expect(result.stdout).not.toContain("Linking prompts...");
   });
 
-  test("bootstraps a fresh checkout before every manifest extension is loaded", async () => {
+  test("bootstraps a fresh checkout from another cwd before local registration", async () => {
     const temporaryDirectory = await mkdtemp(join(tmpdir(), "supa-pi-setup-"));
     temporaryDirectories.push(temporaryDirectory);
-
     const checkout = join(temporaryDirectory, "checkout");
     const home = join(temporaryDirectory, "home");
     const bin = join(temporaryDirectory, "bin");
-    await mkdir(checkout, { recursive: true });
-    await mkdir(bin, { recursive: true });
-
-    for (const path of [
-      "extensions",
-      "skills",
-      "agents",
-      "rules",
-      "prompts",
-      "package.json",
-      "bun.lock",
-      "AGENTS.global.md",
-      "keybindings.json",
-      "setup.sh",
-    ]) {
+    const callLog = join(temporaryDirectory, "calls.log");
+    await mkdir(checkout);
+    await mkdir(bin);
+    for (const path of ["setup.sh", "agents", "rules", "prompts"]) {
       await cp(join(repositoryDir, path), join(checkout, path), {
         recursive: true,
       });
     }
-
+    await writeBunStub(
+      bin,
+      'printf \'bun:%s:%s\\n\' "$PWD" "$*" >> "$CALL_LOG"\n',
+    );
     const piStub = join(bin, "pi");
-    await writeFile(piStub, "#!/usr/bin/env bash\nexit 0\n");
+    await writeFile(
+      piStub,
+      '#!/usr/bin/env bash\nprintf \'pi:%s\\n\' "$*" >> "$CALL_LOG"\n',
+    );
     await chmod(piStub, 0o755);
-
     const result = spawnSync("bash", [join(checkout, "setup.sh")], {
       cwd: temporaryDirectory,
       encoding: "utf8",
@@ -111,42 +102,31 @@ describe("setup local package deployment", () => {
         ...process.env,
         HOME: home,
         PATH: `${bin}:${process.env.PATH ?? ""}`,
+        CALL_LOG: callLog,
       },
     });
-
     expect(result.status, result.error?.message ?? result.stderr).toBe(0);
-
-    const agentDir = join(home, ".pi", "agent");
-    const settingsPath = join(agentDir, "settings.json");
-    const settings = JSON.parse(await readFile(settingsPath, "utf8"));
-    settings.packages = [checkout];
-    await writeFile(settingsPath, `${JSON.stringify(settings, null, 2)}\n`);
-
-    const loader = new DefaultResourceLoader({
-      cwd: join(temporaryDirectory, "project"),
-      agentDir,
-      noContextFiles: true,
-      noPromptTemplates: true,
-      noSkills: true,
-      noThemes: true,
-    });
-    await loader.reload();
-
-    const manifest = JSON.parse(
-      await readFile(join(checkout, "package.json"), "utf8"),
-    );
-    const expectedPaths = manifest.pi.extensions.map((path: string) =>
-      path.endsWith(".ts") || path.endsWith(".js")
-        ? resolve(checkout, path)
-        : resolve(checkout, path, "index.ts"),
-    );
-    const loaded = loader.getExtensions();
-
-    expect(loaded.errors).toEqual([]);
+    const calls = (await readFile(callLog, "utf8")).trim().split("\n");
+    expect(calls.slice(-2)).toEqual([
+      `bun:${checkout}:install --frozen-lockfile --production`,
+      `pi:install ${checkout}`,
+    ]);
     expect(
-      loaded.extensions.map((extension) => extension.resolvedPath),
-    ).toEqual(expectedPaths);
-  }, 30_000);
+      await readlink(join(home, ".pi", "agent", "agents", "executor.md")),
+    ).toBe(join(checkout, "agents", "executor.md"));
+  });
+
+  test("registers the repo-owned subagent without changing skill-router precedence", async () => {
+    const manifest = JSON.parse(
+      await readFile(join(repositoryDir, "package.json"), "utf8"),
+    );
+    expect(manifest.pi.extensions[0]).toBe("./extensions/skill-router");
+    expect(
+      manifest.pi.extensions.filter(
+        (path: string) => path === "./extensions/subagent",
+      ),
+    ).toHaveLength(1);
+  });
 
   test("fresh installs deploy the command package before prompt reconciliation", async () => {
     const temporaryDirectory = await mkdtemp(join(tmpdir(), "supa-pi-setup-"));
@@ -186,6 +166,32 @@ describe("setup local package deployment", () => {
     expect((await readFile(callLog, "utf8")).split("\n")).toContain(
       `install ${repositoryDir}`,
     );
+    const calls = (await readFile(callLog, "utf8")).trim().split("\n");
+    const packages = JSON.parse(
+      await readFile(join(home, ".pi", "agent", "settings.json"), "utf8"),
+    ).packages;
+    for (const retired of [
+      "npm:@tintinweb/pi-subagents",
+      "npm:@tintinweb/pi-tasks",
+    ]) {
+      expect(packages).not.toContain(retired);
+      expect(calls).not.toContain(`install ${retired}`);
+    }
+    expect(calls.every((call) => call.startsWith("install "))).toBe(true);
+    expect(packages).toEqual([
+      "npm:@yzlin/pieditor@2.0.0",
+      "npm:pi-mcp-adapter",
+      "npm:pi-rewind",
+      "npm:pi-web-access",
+      "npm:@plannotator/pi-extension",
+      "npm:glimpseui",
+      "npm:pi-anycopy",
+      "npm:pi-token-burden",
+    ]);
+    expect(calls).toEqual([
+      ...packages.map((source: string) => `install ${source}`),
+      `install ${repositoryDir}`,
+    ]);
     expect(
       result.stdout.indexOf(
         "Installing locked supa-pi runtime dependencies...",
@@ -218,7 +224,8 @@ describe("setup local package deployment", () => {
     await mkdir(bin, { recursive: true });
     await writeBunStub(bin);
     const settingsPath = join(home, ".pi", "agent", "settings.json");
-    const existingSettings = '{ "defaultModel": "user-selected-model" }\n';
+    const existingSettings =
+      '{ "defaultModel": "user-selected-model", "packages": ["npm:@tintinweb/pi-subagents", "npm:@tintinweb/pi-tasks"] }\n';
     await writeFile(settingsPath, existingSettings);
 
     for (const command of ["grill-me", "research-brief", "show-me"]) {
@@ -259,6 +266,10 @@ fi
     expect((await readFile(callLog, "utf8")).split("\n")).toContain(
       `install ${repositoryDir}`,
     );
+    const calls = (await readFile(callLog, "utf8")).trim().split("\n");
+    expect(calls.every((call) => call.startsWith("install "))).toBe(true);
+    expect(calls).not.toContain("install npm:@tintinweb/pi-subagents");
+    expect(calls).not.toContain("install npm:@tintinweb/pi-tasks");
     expect(await readFile(settingsPath, "utf8")).toBe(existingSettings);
     for (const command of ["grill-me", "research-brief", "show-me"]) {
       const promptPath = join(promptsDirectory, `${command}.md`);

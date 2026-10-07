@@ -99,7 +99,7 @@ function buildShowMessage(ctx: ExtensionCommandContext): string {
     `output.search: enabled=${formatBoolean(config.output.search.enabled)}, ${config.output.search.mode}, collapsed=${formatBoolean(config.output.search.collapsed)}, previewLines=${config.output.search.previewLines}`,
     `output.bash: enabled=${formatBoolean(config.output.bash.enabled)}, ${config.output.bash.mode}, collapsed=${formatBoolean(config.output.bash.collapsed)}, previewLines=${config.output.bash.previewLines}, rtkHints=${formatBoolean(config.output.bash.rtkHints)}`,
     `output.fallback: enabled=${formatBoolean(config.output.fallback.enabled)}, ${config.output.fallback.mode}, collapsed=${formatBoolean(config.output.fallback.collapsed)}, previewLines=${config.output.fallback.previewLines}`,
-    ...(["tasks", "mcp", "web"] as const).map((group) => {
+    ...(["mcp", "web"] as const).map((group) => {
       const output = config.output[group];
       return `output.${group}: enabled=${formatBoolean(output.enabled)}, ${output.mode}, collapsed=${formatBoolean(output.collapsed)}, previewLines=${output.previewLines}`;
     }),

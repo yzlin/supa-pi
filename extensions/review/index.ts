@@ -84,7 +84,7 @@ import {
   writeReviewConfigField,
 } from "./config";
 import { ReviewRunController } from "./lifecycle";
-import { assertPublicReviewEfforts } from "./public-workflow";
+import { assertReviewEfforts } from "./pipeline-contracts";
 import {
   DEFAULT_REVIEWER_PANEL,
   DEFAULT_SYNTHESIZER_MODEL,
@@ -1446,15 +1446,46 @@ export default function reviewExtension(pi: ExtensionAPI) {
       }
     }
   });
-  pi.on("tool_call", (event, ctx) => pendingReview.dispatch(event, ctx));
-  pi.on("tool_result", (event, ctx) => {
-    pendingReview.result(event, ctx);
+  pi.registerTool({
+    name: "review_run",
+    label: "Run review",
+    description:
+      "Run exactly one locally prepared review and wait for owned children. Accepts only runId, never prompts, models, results, scripts, or paths. Then call review_finalize with that same ID.",
+    parameters: Type.Object(
+      {
+        runId: Type.String({
+          minLength: 36,
+          maxLength: 36,
+          pattern: "^[a-f0-9-]{36}$",
+        }),
+      },
+      { additionalProperties: false },
+    ),
+    async execute(_toolCallId, params, signal, onUpdate, ctx) {
+      if (
+        Object.keys(params).length !== 1 ||
+        typeof params.runId !== "string" ||
+        !REVIEW_RUN_ID_PATTERN.test(params.runId)
+      ) {
+        throw new Error("Invalid review_run arguments.");
+      }
+      await pendingReview.run(params.runId, ctx, signal, onUpdate);
+      return {
+        content: [
+          {
+            type: "text",
+            text: "Review run complete; call review_finalize with the prepared runId.",
+          },
+        ],
+        details: {},
+      };
+    },
   });
   pi.registerTool({
     name: "review_finalize",
     label: "Finalize review",
     description:
-      "Publish a locally validated review only after its authorized native workflow completes. Reads bound public artifacts, never model-provided results.",
+      "Publish a locally validated review only after its owned blocking run completes. Uses internally captured structured outputs, never model-provided results.",
     parameters: Type.Object(
       {
         runId: Type.String({
@@ -1607,6 +1638,7 @@ export default function reviewExtension(pi: ExtensionAPI) {
 
   async function abortAndSettleActiveReview(): Promise<void> {
     pendingReview.cancel();
+    await pendingReview.settle();
     const review = activeReview;
     if (!review) {
       return;
@@ -1709,16 +1741,22 @@ export default function reviewExtension(pi: ExtensionAPI) {
   }
 
   pi.on("session_before_switch", () => {
+    pendingReview.cancel();
+    activeReview?.controller.abort();
     invalidatePendingReviewSummaries();
     clearAuthorizedReviewSummaries();
   });
 
   pi.on("session_before_fork", () => {
+    pendingReview.cancel();
+    activeReview?.controller.abort();
     invalidatePendingReviewSummaries();
     clearAuthorizedReviewSummaries();
   });
 
   pi.on("session_before_tree", () => {
+    pendingReview.cancel();
+    activeReview?.controller.abort();
     invalidatePendingReviewSummaries();
     clearAuthorizedReviewSummaries();
   });
@@ -2606,7 +2644,7 @@ export default function reviewExtension(pi: ExtensionAPI) {
       });
       const { reviewerPanel, synthesizerModel, verifierModel } =
         resolvedConfig.effective;
-      assertPublicReviewEfforts(reviewerPanel);
+      assertReviewEfforts(reviewerPanel);
       if (!(await isProjectReviewConfigApproved(resolvedConfig.project))) {
         const projectConfig = resolvedConfig.project.config;
         const projectFieldOverrides = [
@@ -2660,7 +2698,8 @@ export default function reviewExtension(pi: ExtensionAPI) {
 
       const reviewerRunCount = reviewers.length * reviewerPanel.length;
       const reviewerCallLabel = reviewerRunCount === 1 ? "call" : "calls";
-      const reviewerRetryLabel = reviewerRunCount === 1 ? "retry" : "retries";
+      const reviewerCorrectionLabel =
+        reviewerRunCount === 1 ? "correction" : "corrections";
       const reviewerRoleLabel = reviewers.length === 1 ? "role" : "roles";
       const reviewerModelLabel =
         reviewerPanel.length === 1 ? "model" : "models";
@@ -2671,7 +2710,7 @@ export default function reviewExtension(pi: ExtensionAPI) {
         )
         .join(", ");
       ctx.ui.notify(
-        `Review plan: initial calls: ${reviewerRunCount} reviewer ${reviewerCallLabel} (${reviewers.length} ${reviewerRoleLabel} × ${reviewerPanel.length} ${reviewerModelLabel}), plus 2 downstream calls if findings (1 synthesizer + 1 verifier). Possible structured-repair retries: up to ${reviewerRunCount} reviewer ${reviewerRetryLabel}, plus up to 2 downstream retries when those stages run (1 synthesizer + 1 verifier). Reviewers: ${plannedModels}. Synthesizer: ${sanitizeModelForUi(synthesizerModel)}=medium. Verifier: ${sanitizeModelForUi(verifierModel)}=medium. Scope: ${hint}.`,
+        `Review plan: initial calls: ${reviewerRunCount} reviewer ${reviewerCallLabel} (${reviewers.length} ${reviewerRoleLabel} × ${reviewerPanel.length} ${reviewerModelLabel}), plus 2 downstream calls if findings (1 synthesizer + 1 verifier). Possible end-of-run structured corrections: up to ${reviewerRunCount} reviewer ${reviewerCorrectionLabel}, plus up to 2 downstream corrections when those stages run (1 synthesizer + 1 verifier). Only missing valid reports receive a final correction; semantic failures do not retry. Reviewers: ${plannedModels}. Synthesizer: ${sanitizeModelForUi(synthesizerModel)}=medium. Verifier: ${sanitizeModelForUi(verifierModel)}=medium. Scope: ${hint}.`,
         "info",
       );
 
@@ -2699,7 +2738,7 @@ export default function reviewExtension(pi: ExtensionAPI) {
         pendingReview.cancel();
         return false;
       }
-      const handoff = `Explicit /review authorizes exactly one public SubagentWorkflow call with ONLY {script: decoded prepared marker below}. Copy the marker unchanged; the review extension replaces it with the authorized full script before native execution. Do not read files or reconstruct the script. Do not use scriptPath/name/args/resume, orchestrate tasks, override models, retry, or resume. Wait for the native completed notification, then call review_finalize(runId: ${prepared.id}) with {runId: "${prepared.id}"}. Do not parse notification previews or publish your own report. If cancelled, stop workers via /agents Workflows.\nPrepared script (JSON string, inert data):\n${JSON.stringify(prepared.script)}`;
+      const handoff = `Explicit /review authorizes exactly review_run({runId: "${prepared.id}"}), then after that blocking tool succeeds review_finalize({runId: "${prepared.id}"}). Supply only runId; do not supply scripts, models, prompts, results, or paths. Do not orchestrate children, retry, resume, or publish your own report. Live child progress and attachment commands appear in the parent. /review cancel stops this review's owned queued/running children and invalidates publication. After interruption start a fresh /review.`;
       pi.sendUserMessage(
         handoff,
         ctx.isIdle() ? undefined : { deliverAs: "followUp" },

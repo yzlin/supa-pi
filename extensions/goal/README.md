@@ -24,7 +24,9 @@ Options:
 
 `/goal <objective>` starts classic mode. It sends a continuation prompt that works toward the objective until the goal is complete or blocked.
 
-`/goal task --tasks N <objective>` starts task mode. It creates `N` placeholder tasks and prompts the main-session orchestrator to dispatch executor tasks sequentially. Executors return strict JSON to the orchestrator; the orchestrator updates the checkpoint, selects the next task, and stops when the goal is complete, blocked, or budget-limited.
+`/goal task --tasks N <objective>` starts task mode. It creates `N` placeholder tasks and prompts the main-session orchestrator to dispatch executor tasks sequentially. Each assignment uses one blocking `subagent({agent: "executor", task, schema})` call with a self-contained task, exact write scope, and the six-field executor report schema (`status`, `summary`, `filesTouched`, `validation`, `followUps`, `blockers`). Executors submit through internal `StructuredOutput`; main reads the captured `structuredContent.structuredOutput`, independently inspects changes and runs current checks before recording success. Schema validity is not completion proof; the orchestrator updates the checkpoint, selects the next task, and stops when the goal is complete, blocked, or budget-limited.
+
+Goal task mode uses only `goal_checkpoint`, not `/execute` authorization, its native-session ledger, or retired Task tools. The existing goal budgets, statuses, and checkpoint model are unchanged. Child abort/parent shutdown cancels owned queued/active children; `/goal stop` itself still clears goal state without interrupting the turn (see below).
 
 ## Budgets
 
@@ -75,7 +77,7 @@ The `goal_checkpoint` tool is registered by the extension and added to active to
 
 ## Safety notes
 
-- Do not edit `.pi/execute/` progress files from task executors.
+- Do not read/import/edit legacy `.pi/execute/` records or manage parent checkpoints from detached workers.
 - Keep Goal Extension code isolated under `extensions/goal`; do not import from sibling extensions.
 - Treat checkpoint files as local runtime state. Do not commit sensitive objectives, private notes, credentials, or raw logs.
 - If task mode needs more work, return follow-up suggestions instead of scheduling tasks directly from an executor.

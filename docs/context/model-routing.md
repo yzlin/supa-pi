@@ -14,8 +14,8 @@ These are repository defaults, not the effective settings of a running Pi sessio
 | Direct executor agent | `openai-codex/gpt-6.1-sol`, `high` | [`agents/executor.md`](../../agents/executor.md) |
 | Direct explorer agent | `openai-codex/gpt-6.1-sol`, `low` | [`agents/explorer.md`](../../agents/explorer.md) |
 | Direct review-synthesizer agent | `openai-codex/gpt-6-luna`, `low` | [`agents/review-synthesizer.md`](../../agents/review-synthesizer.md) |
-| `/review` built-in reviewer panel / verifier | `openai-codex/gpt-6-astra`, `medium` | [`workflow.ts`](../../extensions/review/workflow.ts), [`public-workflow.ts`](../../extensions/review/public-workflow.ts) |
-| `/review` built-in synthesizer | `openai-codex/gpt-6-luna`, `medium` | [`workflow.ts`](../../extensions/review/workflow.ts), [`public-workflow.ts`](../../extensions/review/public-workflow.ts) |
+| `/review` built-in reviewer panel / verifier | `openai-codex/gpt-6-astra`, `medium` | [`workflow.ts`](../../extensions/review/workflow.ts), [`pipeline-contracts.ts`](../../extensions/review/pipeline-contracts.ts), [`pipeline.ts`](../../extensions/review/pipeline.ts) |
+| `/review` built-in synthesizer | `openai-codex/gpt-6-luna`, `medium` | [`workflow.ts`](../../extensions/review/workflow.ts), [`pipeline-contracts.ts`](../../extensions/review/pipeline-contracts.ts), [`pipeline.ts`](../../extensions/review/pipeline.ts) |
 | Prompt-eval CLI | `openai-codex/gpt-6-sol`, `high` | [`cli.ts`](../../evals/prompt-optimization/cli.ts) |
 
 Other direct agent defaults live in their [`agents/` frontmatter](../../agents/). `/review` layers invocation flags, project config, global config, then built-in defaults **per field**; see [review configuration](../../extensions/review/README.md#configuration-and-disclosure).

@@ -1,5 +1,11 @@
 import { afterEach, describe, expect, it } from "bun:test";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import {
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -315,6 +321,7 @@ describe("tool-display config", () => {
       getProjectToolDisplayConfigPath(cwd),
       JSON.stringify({
         unrelated: true,
+        output: { tasks: { enabled: true } },
         tools: { search: { enabled: true } },
         diff: { viewMode: "unified" },
       }),
@@ -331,6 +338,15 @@ describe("tool-display config", () => {
     );
 
     expect(result).toMatchObject({ ok: true });
+    expect(loadToolDisplayConfig(cwd, homeDir).output).not.toHaveProperty(
+      "tasks",
+    );
+    expect(
+      JSON.parse(readFileSync(getProjectToolDisplayConfigPath(cwd), "utf8")),
+    ).toMatchObject({
+      unrelated: true,
+      output: { tasks: { enabled: true } },
+    });
     expect(loadToolDisplayConfig(cwd, homeDir).tools).toMatchObject({
       read: { enabled: false, fullRead: { enabled: true } },
       search: { enabled: true },
@@ -345,7 +361,7 @@ describe("tool-display config", () => {
 
 describe("companion output gates", () => {
   it("normalizes and merges every companion group and enables/disables presets", () => {
-    for (const group of ["tasks", "mcp", "web"] as const) {
+    for (const group of ["mcp", "web"] as const) {
       const config = loadToolDisplayConfigFromLayers(
         {
           output: {
@@ -378,4 +394,21 @@ describe("companion output gates", () => {
       }
     }
   });
+});
+
+it("retired output.tasks is an ignored unknown field, never a rendered config gate", () => {
+  expect(
+    normalizeToolDisplayConfig({ output: { tasks: { enabled: true } } }),
+  ).toEqual({});
+  for (const preset of ["compact", "verbose", "off"] as const) {
+    expect(getToolDisplayPresetConfig(preset).output).not.toHaveProperty(
+      "tasks",
+    );
+  }
+  expect(
+    loadToolDisplayConfigFromLayers(
+      { output: { tasks: { enabled: false } } },
+      undefined,
+    ).output,
+  ).not.toHaveProperty("tasks");
 });

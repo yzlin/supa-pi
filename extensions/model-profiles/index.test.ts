@@ -352,34 +352,90 @@ test("spawn refresh failure blocks only while generated overrides exist", async 
   writeFileSync(configPath, "invalid json");
   const h = harness();
   expect(
-    await h.handlers.get("tool_call")!({ toolName: "Agent" }, h.ctx),
+    await h.handlers.get("tool_call")!({ toolName: "subagent" }, h.ctx),
   ).toBeUndefined();
   config({ active: "work", profiles: { work } });
   await h.handlers.get("session_start")!({}, h.ctx);
   writeFileSync(configPath, "invalid json");
   expect(
-    await h.handlers.get("tool_call")!({ toolName: "Agent" }, h.ctx),
+    await h.handlers.get("tool_call")!({ toolName: "subagent" }, h.ctx),
   ).toMatchObject({ block: true, reason: expect.stringContaining(configPath) });
 });
 
-test("session start renders but never switches main; spawn hooks refresh idempotently", async () => {
+test("direct and nested subagent calls refresh global overrides without applying project profiles or main choices", async () => {
   config({ active: "work", profiles: { work } });
+  const projectAgents = join(root, ".pi", "agents");
+  mkdirSync(projectAgents, { recursive: true });
+  const projectAgent = join(projectAgents, "worker.md");
+  const projectContent =
+    "---\nname: worker\nmodel: p/base\nthinking: low\n---\nProject body\n";
+  writeFileSync(projectAgent, projectContent);
+  const projectConfig = join(root, ".pi", "model-profiles.json");
+  const projectProfile = JSON.stringify({
+    active: "project",
+    profiles: { project: { agents: { worker: { thinking: "max" } } } },
+  });
+  writeFileSync(projectConfig, projectProfile);
   const h = harness();
   await h.handlers.get("session_start")!({}, h.ctx);
   expect(h.changes).toEqual([]);
   expect(h.statuses.at(-1)).toBe("profile: work");
-  const before = readFileSync(join(agentDir, "agents", "file.md"), "utf8");
-  await h.handlers.get("tool_call")!({ toolName: "Agent" }, h.ctx);
-  expect(readFileSync(join(agentDir, "agents", "file.md"), "utf8")).toBe(
-    before,
-  );
+  const liveAgent = join(agentDir, "agents", "file.md");
+  const before = readFileSync(liveAgent, "utf8");
+  await h.handlers.get("tool_call")!({ toolName: "subagent" }, h.ctx);
+  expect(readFileSync(liveAgent, "utf8")).toBe(before);
+  config({
+    active: "work",
+    profiles: {
+      work: {
+        ...work,
+        agents: { worker: { model: "p/new", thinking: "max" } },
+      },
+    },
+  });
+  expect(
+    await h.handlers.get("tool_call")!(
+      { toolName: "subagent", parentToolCallId: "review-call" },
+      h.ctx,
+    ),
+  ).toBeUndefined();
+  expect(readFileSync(liveAgent, "utf8")).toContain("thinking: max");
+  expect(h.changes).toEqual([]);
+  expect(readFileSync(projectAgent, "utf8")).toBe(projectContent);
+  expect(readFileSync(projectConfig, "utf8")).toBe(projectProfile);
   writeFileSync(configPath, "invalid json");
   expect(
-    await h.handlers.get("tool_call")!({ toolName: "SubagentWorkflow" }, h.ctx),
+    await h.handlers.get("tool_call")!(
+      { toolName: "subagent", parentToolCallId: "review-call" },
+      h.ctx,
+    ),
   ).toMatchObject({ block: true });
   expect(h.notifications.at(-1)).toContain(configPath);
+});
+
+test("retired tool names and unrelated calls neither refresh nor block stale generated overrides", async () => {
+  config({ active: "work", profiles: { work } });
+  const h = harness();
+  await h.handlers.get("session_start")!({}, h.ctx);
+  const liveAgent = join(agentDir, "agents", "file.md");
+  const before = readFileSync(liveAgent, "utf8");
+  config({ active: "default", profiles: { work } });
+  for (const toolName of ["Agent", "SubagentWorkflow", "bash"]) {
+    expect(
+      await h.handlers.get("tool_call")!({ toolName }, h.ctx),
+    ).toBeUndefined();
+    expect(readFileSync(liveAgent, "utf8")).toBe(before);
+  }
+  writeFileSync(configPath, "invalid json");
   const count = h.notifications.length;
-  await h.handlers.get("tool_call")!({ toolName: "bash" }, h.ctx);
+  for (const toolName of ["Agent", "SubagentWorkflow", "bash"]) {
+    expect(
+      await h.handlers.get("tool_call")!(
+        { toolName, parentToolCallId: "review-call" },
+        h.ctx,
+      ),
+    ).toBeUndefined();
+  }
   expect(h.notifications).toHaveLength(count);
 });
 
@@ -405,6 +461,10 @@ test("bare selector marks active; headless bare/status prints; completions expos
 test("missing config is a no-op; malformed and invalid configs fail closed", async () => {
   const h = harness();
   await h.handlers.get("session_start")!({}, h.ctx);
+  await h.handlers.get("tool_call")!(
+    { toolName: "subagent", parentToolCallId: "review-call" },
+    h.ctx,
+  );
   expect(readdirSync(agentDir)).toEqual([]);
   for (const invalid of [
     "{",

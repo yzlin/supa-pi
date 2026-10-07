@@ -130,10 +130,19 @@ describe("init-deep prompt builder", () => {
     );
     expect(message).toContain("dry run: true");
     expect(message).toContain(
-      "Use TaskCreate and TaskUpdate for phase tracking.",
+      "Track discovery, scoring, generation, and review in an ordinary working plan.",
     );
     expect(message).toContain(
-      "do not emit the final answer while any init-deep task is pending or in_progress.",
+      "Finish or explicitly report blocked phases before the final answer.",
+    );
+    expect(message).toContain(
+      "/init-deep does not authorize /execute or execution-ledger assignments.",
+    );
+    expect(message).toContain(
+      'blocking `subagent({agent: "explorer", task})` calls',
+    );
+    expect(message).not.toMatch(
+      /TaskCreate|TaskUpdate|TaskExecute|TaskOutput|pi-tasks/,
     );
   });
 });

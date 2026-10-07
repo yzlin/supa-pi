@@ -260,7 +260,7 @@ export function registerModelProfiles(
     }
   }
   pi.on("tool_call", (event, ctx) => {
-    if (event.toolName === "Agent" || event.toolName === "SubagentWorkflow") {
+    if (event.toolName === "subagent") {
       const run = queue.then(() => refreshForSpawn(ctx));
       queue = run.then(
         () => undefined,

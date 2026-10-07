@@ -9,8 +9,8 @@ Simplify code without changing behavior.
 
 ## Contract
 
-- Delegate to `code-simplifier`. Do not select reviewers.
-- Do not set `max_turns` on the `code-simplifier` Agent call.
+- Delegate to `code-simplifier` with a blocking `subagent({agent: "code-simplifier", task: <complete scope and instructions>})` call. Do not select reviewers.
+- Pass a self-contained task: children do not inherit parent conversation. Include editable files, stale-check results, constraints, and validation requirements.
 - Preserve behavior and public command syntax.
 - Make code clearer, smaller, and easier to maintain.
 - Keep changes within the provided editable file list.
