@@ -17,6 +17,7 @@ This repo is a curated `~/.pi/agent` setup with local extensions, custom agents,
 
 Documented extensions in this repo include:
 
+- **[`extensions/slack-user`](extensions/slack-user/README.md)** — read Slack thread permalinks, save a token through masked `/slack-user init`, check identity with `/slack-user`, and post only after interactive confirmation; adapted from ferologics/pi-extensions (MIT declared in upstream npm metadata)
 - **`extensions/lsp`** — unified `lsp` tool for diagnostics, definitions, references, hover, symbols, call hierarchy, and code actions
 - **`extensions/rtk`** — output compaction and `/rtk stats` dashboard; owns `bash` execution, rewrite, and stats
 - **`extensions/caveman`** — standalone `/caveman` mode with per-session persistence and generic extension status

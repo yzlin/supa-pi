@@ -69,6 +69,7 @@
       "./extensions/lsp",
       "./extensions/skills",
       "./extensions/obsidian",
+      "./extensions/slack-user",
       "./extensions/notify.ts",
       "./extensions/no-sleep.ts",
       "./extensions/whimsical",
