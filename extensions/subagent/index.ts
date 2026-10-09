@@ -5,6 +5,7 @@ import { Type } from "typebox";
 
 import { THINKING_LEVELS } from "./agents";
 import { ATTACH_FLAG, attachFromCli } from "./attach";
+import { renderSubagentCall, renderSubagentResult } from "./render";
 import {
   cancelSessionSubagents,
   runSubagent,
@@ -63,7 +64,10 @@ export default function subagentExtension(pi: ExtensionAPI): void {
   pi.on("session_shutdown", async (_event, ctx) => {
     await cancelSessionSubagents(ctx.sessionManager.getSessionId());
   });
-  pi.registerTool<typeof parameters, SubagentResult | SubagentUpdate>({
+  pi.registerTool<
+    typeof parameters,
+    (SubagentResult & { durationMs: number }) | SubagentUpdate
+  >({
     name: "subagent",
     label: "Subagent",
     description:
@@ -72,7 +76,13 @@ export default function subagentExtension(pi: ExtensionAPI): void {
     parameters,
     outputSchema,
     executionMode: "parallel",
+    renderShell: "self",
+    renderCall: (args, theme, context) =>
+      renderSubagentCall(args, theme, context),
+    renderResult: (result, options, theme, context) =>
+      renderSubagentResult(result, options, theme, context),
     async execute(_id, params, signal, onUpdate, ctx) {
+      const startedAt = Date.now();
       const result = await runSubagent(pi, ctx, params, {
         signal,
         onUpdate: (update) =>
@@ -106,7 +116,7 @@ export default function subagentExtension(pi: ExtensionAPI): void {
             text: `Subagent completed: ${result.runId}\nModel: ${result.provider}/${result.model} (${result.thinking})\nEvidence: ${result.resultPath}${result.sessionFile ? `\nChild session: ${result.sessionFile}` : ""}\n\n${result.output || (result.structuredOutput === undefined ? "(no text output)" : "Validated StructuredOutput saved in evidence.")}`,
           },
         ],
-        details: result,
+        details: { ...result, durationMs: Date.now() - startedAt },
         structuredContent,
       };
     },

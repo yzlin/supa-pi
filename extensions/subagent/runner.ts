@@ -80,6 +80,16 @@ export type RunnerContext = Pick<
     "find" | "hasConfiguredAuth"
   >;
 };
+/** Last pane lines above the child's bottom editor box, which only repeats chrome. */
+export function paneActivity(capture: string): string {
+  const lines = capture.replace(/\r/g, "").trimEnd().split("\n");
+  const top = lines.findLastIndex((line) => line.startsWith("╭"));
+  const activity =
+    top >= 0 && lines.slice(top + 1).some((line) => line.startsWith("╰"))
+      ? lines.slice(0, top)
+      : lines;
+  return activity.join("\n").trimEnd().split("\n").slice(-18).join("\n").trim();
+}
 export function shellQuote(value: string): string {
   return `'${value.replace(/'/g, `'"'"'`)}'`;
 }
@@ -431,12 +441,7 @@ export async function runSubagent(
             "-t",
             target,
           );
-          pane = capture.stdout
-            .replace(/\r/g, "")
-            .split("\n")
-            .slice(-18)
-            .join("\n")
-            .trim();
+          pane = paneActivity(capture.stdout);
           options.onUpdate?.({
             runId,
             status: "running",

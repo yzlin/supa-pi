@@ -191,6 +191,55 @@ test("codemode redraws live nested subagent previews without parent result updat
   expect(rows()).not.toContain("second preview");
 });
 
+test("nested previews show one row per child and focus the latest active child", () => {
+  const h = harness();
+  const emit = (type: string, event: object) => {
+    for (const handler of h.handlers.get(type) ?? []) {
+      handler({ type, ...event }, { cwd: h.cwd });
+    }
+  };
+  const args = { code: "await Promise.all([tools.subagent({ task: 'A' })]);" };
+  emit("tool_execution_start", {
+    toolCallId: "p",
+    toolName: "codemode",
+    args,
+  });
+  const call = h
+    .resolve("codemode")
+    ?.renderCall?.(
+      args,
+      plainTheme as never,
+      { toolCallId: "p", args, state: {}, invalidate() {} } as never,
+    );
+  const rows = () =>
+    stripVTControlCharacters(call?.render(100).join("\n") ?? "");
+  const update = (id: string, agent: string, text: string) =>
+    emit("tool_execution_update", {
+      parentToolCallId: "p",
+      toolCallId: id,
+      toolName: "subagent",
+      args: { agent, task: "t" },
+      partialResult: {
+        details: {
+          runId: id,
+          status: "running",
+          text,
+          attachCommand: `pi --attach-subagent ${id}`,
+        },
+      },
+    });
+  update("p/1", "reviewer", "r1\nr2\nr3\nr4");
+  update("p/2", "tester", "t1\nt2");
+  expect(rows()).toMatch(/• reviewer \d+s +r4/u);
+  expect(rows()).not.toContain("r3");
+  expect(rows()).toMatch(/• tester +\d+s +│ t1\s+┊\s+│ t2/u);
+  expect(rows()).toContain("attach: pi --attach-subagent p/2");
+  expect(rows()).not.toContain("attach: pi --attach-subagent p/1");
+  update("p/1", "reviewer", "r1\nr2\nr3\nr4\nr5");
+  expect(rows()).toContain("attach: pi --attach-subagent p/1");
+  expect(rows()).toMatch(/• tester +\d+s +t2/u);
+});
+
 test("nested previews isolate parents and children, ignore bad events, and clear on lifecycle changes", () => {
   const h = harness();
   const emit = (type: string, event: object) => {

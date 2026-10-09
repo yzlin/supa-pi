@@ -89,7 +89,11 @@ test("native codemode events redraw real TUI subagent previews before child comp
                 },
               });
               await sleep(0);
-              expect(rendered()).toContain(`subagent ${status}: fixture-run`);
+              expect(rendered()).toMatch(
+                status === "queued"
+                  ? /◷ subagent queued +waiting for slot/u
+                  : /• subagent \d+s +│ x+/u,
+              );
               expect(rendered()).toContain("pi --attach-subagent fixture-run");
               expect(rendered()).not.toContain("SGVsbG8=");
               expect(rendered()).not.toContain("\u0007");
@@ -160,7 +164,7 @@ test("native codemode events redraw real TUI subagent previews before child comp
   });
   try {
     await session.prompt("Run the fixture.");
-    expect(rendered()).not.toContain("subagent running: fixture-run");
+    expect(rendered()).not.toMatch(/• subagent \d+s/u);
     expect(rendered()).not.toContain("pi --attach-subagent fixture-run");
     const result = session.messages.findLast(
       (message) => message.role === "toolResult",

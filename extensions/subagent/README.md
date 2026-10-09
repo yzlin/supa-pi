@@ -39,9 +39,18 @@ The tool has `outputSchema` and returns native `structuredContent`:
 
 Text is capped using Pi's 50 KB / 2,000-line limits. The complete text and report
 remain in `resultPath`; `sessionFile` holds the full fresh native child session.
-Failed calls throw an error with an evidence-directory path. Live updates show
-pane text and a copyable `pi --attach-subagent <run-id>` command. Finished,
+Failed calls throw an error with an evidence-directory path. Live updates send
+the last 18 pane lines above the child's bottom editor box (`╭…╰`; dropped as
+chrome) and a copyable `pi --attach-subagent <run-id>` command. Finished,
 failed, and aborted tmux sessions/private sockets are closed, not resumable.
+
+The tool supplies its own renderer (`render.ts`, self shell). Row 1 shows
+status, role, model, thinking, and `queued`/`running <elapsed>`/`done in`/
+`failed after`; row 2 shows the task. While running, the body shows the last
+3 non-empty pane lines and the attach command. When done, it shows the first
+5 report lines; `Ctrl+O` shows the full report plus run id, provider/model,
+evidence path, and child session. Final `details.durationMs` keeps resumed
+durations. Nested codemode calls are drawn by tool-display instead.
 
 ## Human attachment
 
