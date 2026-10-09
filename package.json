@@ -72,6 +72,7 @@
       "./extensions/slack-user",
       "./extensions/notify.ts",
       "./extensions/no-sleep.ts",
+      "./extensions/trust-github-repos",
       "./extensions/whimsical",
       "./extensions/fast",
       "./extensions/model-profiles",

@@ -24,6 +24,7 @@
 - `docs/context/gpt-6-astra-harness-readiness.md` — read before interpreting historical Astra approvals and comparisons, or planning an approval-gated Astra eval or full-stack probe.
 - `docs/context/harness-contract-audit.md` — read before changing research-artifact ownership, search-first delegation, or instruction ownership across prompts, agents, skills, and rules; preserves historical audit evidence and deferred live-calibration gates.
 - `extensions/review/README.md` — read before changing `/review`, `/review-summary`, `/review-fix`, reviewer-agent orchestration, or review prompt contracts.
+- `extensions/trust-github-repos/README.md` — read before changing GitHub-owner auto-trust, `/trust-github-repos`, its global owners config, fail-closed behavior, or stored-trust boundaries.
 
 ## Major extension docs
 
