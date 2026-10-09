@@ -71,6 +71,7 @@
       "./extensions/obsidian",
       "./extensions/slack-user",
       "./extensions/notify.ts",
+      "./extensions/view-image.ts",
       "./extensions/no-sleep.ts",
       "./extensions/trust-github-repos",
       "./extensions/whimsical",
