@@ -73,10 +73,11 @@ interface ChangedPath {
 
 interface FileFingerprint {
   readonly digest?: string;
-  readonly kind: "file" | "missing";
+  readonly kind: "file" | "missing" | "symlink";
   readonly mode?: number;
   readonly path: string;
   readonly size?: number;
+  readonly target?: string;
 }
 
 interface CaptureState {
@@ -97,8 +98,10 @@ interface CaptureState {
  * excluded because they are not reviewer-visible source and mutate as review
  * commands run; reviewed configuration and source paths remain included.
  * Branch and PR paths use the merge-base-to-worktree diff (not untracked files).
- * Symlinks fail with `unsafe-path`; other non-regular files fail with
- * `special-file` before opening.
+ * Symlinks are captured by their link text and never followed; dangling links,
+ * links whose target resolves outside the root, and target paths reached
+ * through a symlinked ancestor fail with `unsafe-path`. Other non-regular
+ * files fail with `special-file` before opening.
  * Call this again at finalization rather than reusing a preflight path list.
  */
 export async function captureReviewTargetFreshness(
@@ -747,7 +750,16 @@ async function capturePath(
     );
   }
 
-  await assertExistingPathSafe(state.root, fullPath, stats, signal);
+  if (depth === 0) {
+    await assertNoSymlinkAncestor(state.root, fullPath, signal);
+  }
+  if (stats.isSymbolicLink()) {
+    state.entries.push(
+      await readSymlink(state, fullPath, relativePath, signal),
+    );
+    return;
+  }
+  await assertExistingPathSafe(state.root, fullPath, signal);
   if (stats.isDirectory()) {
     await captureDirectory(state, fullPath, relativePath, signal, depth);
     return;
@@ -810,19 +822,90 @@ async function captureDirectory(
   }
 }
 
+async function assertNoSymlinkAncestor(
+  root: string,
+  fullPath: string,
+  signal?: AbortSignal,
+): Promise<void> {
+  let ancestor = path.dirname(fullPath);
+  while (ancestor !== root && isContained(root, ancestor)) {
+    throwIfCancelled(signal);
+    let stats: FileStats;
+    try {
+      stats = await fs.lstat(ancestor);
+    } catch {
+      throw new ReviewFreshnessError(
+        "read-error",
+        "could not verify target path ancestors",
+      );
+    }
+    if (stats.isSymbolicLink()) {
+      throw new ReviewFreshnessError(
+        "unsafe-path",
+        "target path traverses a symbolic link",
+      );
+    }
+    ancestor = path.dirname(ancestor);
+  }
+}
+
+async function readSymlink(
+  state: CaptureState,
+  fullPath: string,
+  relativePath: string,
+  signal?: AbortSignal,
+): Promise<FileFingerprint> {
+  throwIfCancelled(signal);
+  reserveFile(state);
+  let target: string;
+  try {
+    target = await fs.readlink(fullPath);
+  } catch {
+    throw new ReviewFreshnessError(
+      "read-error",
+      `could not read symbolic link ${relativePath}`,
+    );
+  }
+  // Only the kernel's resolution is trusted; a missing target cannot be proven
+  // contained, so dangling links fail closed.
+  let real: string;
+  try {
+    real = await fs.realpath(fullPath);
+  } catch (error) {
+    if (isErrorCode(error, "ENOENT")) {
+      throw new ReviewFreshnessError(
+        "unsafe-path",
+        `symbolic link ${relativePath} has a missing target`,
+      );
+    }
+    throw new ReviewFreshnessError(
+      "read-error",
+      `could not resolve symbolic link ${relativePath}`,
+    );
+  }
+  if (!isContained(state.root, real)) {
+    throw new ReviewFreshnessError(
+      "unsafe-path",
+      `symbolic link ${relativePath} resolves outside the capture root`,
+    );
+  }
+  const byteCount = TEXT_ENCODER.encode(target).byteLength;
+  if (byteCount > state.limits.maxBytes - state.byteCount) {
+    throw new ReviewFreshnessError(
+      "byte-limit",
+      `symbolic link ${relativePath} exceeds the bounded byte limit`,
+    );
+  }
+  state.byteCount += byteCount;
+  return { kind: "symlink", path: relativePath, target };
+}
+
 async function assertExistingPathSafe(
   root: string,
   fullPath: string,
-  stats: FileStats,
   signal?: AbortSignal,
 ): Promise<void> {
   throwIfCancelled(signal);
-  if (stats.isSymbolicLink()) {
-    throw new ReviewFreshnessError(
-      "unsafe-path",
-      "symbolic links are not captured",
-    );
-  }
   try {
     if (!isContained(root, await fs.realpath(fullPath))) {
       throw new ReviewFreshnessError(

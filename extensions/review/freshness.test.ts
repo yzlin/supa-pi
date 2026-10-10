@@ -334,6 +334,138 @@ describe("captureReviewTargetFreshness", () => {
     );
   });
 
+  it("captures contained symlinks by link text without following them", async () => {
+    const cwd = await makeRepository();
+    await fs.mkdir(path.join(cwd, ".agents", "skills", "one"), {
+      recursive: true,
+    });
+    await fs.mkdir(path.join(cwd, ".agents", "skills", "two"));
+    await fs.writeFile(path.join(cwd, ".agents", "skills", "one", "x"), "1");
+    await fs.writeFile(path.join(cwd, ".agents", "skills", "two", "x"), "2");
+    await commitAll(cwd, "base");
+    await fs.mkdir(path.join(cwd, ".claude", "skills"), { recursive: true });
+    const link = path.join(cwd, ".claude", "skills", "skill");
+    await fs.symlink("../../.agents/skills/one", link);
+    const target = { type: "uncommitted" } as const;
+
+    const before = await captureReviewTargetFreshness(cwd, target);
+    expect(before.fileCount).toBe(1);
+    expect((await captureReviewTargetFreshness(cwd, target)).digest).toBe(
+      before.digest,
+    );
+    await fs.unlink(link);
+    await fs.symlink("../../.agents/skills/two", link);
+    expect((await captureReviewTargetFreshness(cwd, target)).digest).not.toBe(
+      before.digest,
+    );
+
+    await fs.unlink(link);
+    await fs.symlink("../../../outside", link);
+    await expectFreshnessError(
+      captureReviewTargetFreshness(cwd, target),
+      "unsafe-path",
+    );
+  });
+
+  it("rejects dangling symlinks whether or not they look contained", async () => {
+    const cwd = await makeRepository();
+    const outside = await fs.mkdtemp(
+      path.join(os.tmpdir(), "review-freshness-outside-"),
+    );
+    temporaryDirectories.push(outside);
+    await fs.mkdir(path.join(outside, "nested"));
+    await fs.mkdir(path.join(cwd, "contained"));
+    await fs.symlink(path.join(outside, "nested"), path.join(cwd, "escape"));
+    await fs.symlink(path.join(outside, "missing"), path.join(cwd, "alias"));
+    await fs.symlink("missing-inside", path.join(cwd, "inner"));
+    const links = {
+      chainContained: "inner",
+      chainEscaping: "alias",
+      containedAncestor: "contained/missing",
+      escapingAncestor: "escape/missing",
+      escapingDotDot: "escape/../missing",
+    };
+    for (const [name, target] of Object.entries(links)) {
+      await fs.symlink(target, path.join(cwd, name));
+      await expectFreshnessError(
+        captureReviewTargetFreshness(cwd, { type: "folder", paths: [name] }),
+        "unsafe-path",
+      );
+    }
+  });
+
+  it("accepts contained symlink chains to existing targets", async () => {
+    const cwd = await makeRepository();
+    await fs.mkdir(path.join(cwd, "contained"));
+    await fs.symlink("contained", path.join(cwd, "alias"));
+    await fs.symlink("alias", path.join(cwd, "link"));
+
+    const snapshot = await captureReviewTargetFreshness(cwd, {
+      type: "folder",
+      paths: ["link"],
+    });
+    expect(snapshot.fileCount).toBe(1);
+  });
+
+  it("fails closed on self-referencing and looping symlink chains", async () => {
+    const cwd = await makeRepository();
+    await fs.symlink("self", path.join(cwd, "self"));
+    await fs.symlink("alias", path.join(cwd, "link"));
+    await fs.symlink("link", path.join(cwd, "alias"));
+
+    for (const link of ["self", "link"]) {
+      await expectFreshnessError(
+        captureReviewTargetFreshness(cwd, {
+          type: "folder",
+          paths: [link],
+        }),
+        "read-error",
+      );
+    }
+  });
+
+  it("applies the byte budget to UTF-8 symlink text", async () => {
+    const cwd = await makeRepository();
+    await fs.writeFile(path.join(cwd, "é"), "");
+    await fs.symlink("é", path.join(cwd, "link"));
+    const target = { type: "folder", paths: ["link"] } as const;
+
+    for (const maxBytes of [0, 1]) {
+      await expectFreshnessError(
+        captureReviewTargetFreshness(cwd, target, { maxBytes }),
+        "byte-limit",
+      );
+    }
+    const snapshot = await captureReviewTargetFreshness(cwd, target, {
+      maxBytes: 2,
+    });
+    expect(snapshot.fileCount).toBe(1);
+  });
+
+  it("applies the cumulative byte budget to symlink text", async () => {
+    const cwd = await makeRepository();
+    await fs.writeFile(path.join(cwd, "file"), "");
+    await fs.symlink("file", path.join(cwd, "one"));
+    await fs.symlink("file", path.join(cwd, "two"));
+
+    for (const link of ["one", "two"]) {
+      const snapshot = await captureReviewTargetFreshness(
+        cwd,
+        { type: "folder", paths: [link] },
+        { maxBytes: 4 },
+      );
+      expect(snapshot.fileCount).toBe(1);
+    }
+    await expectFreshnessError(
+      captureReviewTargetFreshness(
+        cwd,
+        { type: "folder", paths: ["one", "two"] },
+        { maxBytes: 7 },
+      ),
+      "byte-limit",
+    );
+  });
+
   it("fails closed on cancellation and finite limits", async () => {
     const cwd = await makeRepository();
     await fs.writeFile(path.join(cwd, "one.txt"), "one\n");
