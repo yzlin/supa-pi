@@ -37,7 +37,7 @@ import {
 } from "./protocol";
 import type { JsonValue } from "./protocol";
 import { checkAbort, withSessionSlot } from "./scheduler";
-import { selectSettings } from "./settings";
+import { providerExtensions, selectSettings } from "./settings";
 export interface SubagentParams {
   task: string;
   agent?: string;
@@ -191,6 +191,9 @@ function resourceArgs(config: ChildConfig): string[] {
   ) {
     args.push("--no-extensions");
   }
+  for (const resource of config.providerExtensions ?? []) {
+    args.push("--extension", resource);
+  }
   if (Array.isArray(config.agent?.extensions)) {
     for (const resource of config.agent.extensions) {
       args.push(
@@ -257,6 +260,11 @@ export async function runSubagent(
       }
       const trusted =
         ctx.isProjectTrusted() && within(await realpath(ctx.cwd), cwd);
+      // Restricted children skip discovery, so keep the extensions that register the selected provider.
+      const keptExtensions =
+        agent?.extensions === false || Array.isArray(agent?.extensions)
+          ? await providerExtensions(getAgentDir(), selection.provider)
+          : [];
       const config: ChildConfig = {
         version: 1,
         runId,
@@ -265,6 +273,9 @@ export async function runSubagent(
         ...selection,
         trusted,
         agent,
+        ...(keptExtensions.length
+          ? { providerExtensions: keptExtensions }
+          : {}),
         schema: params.schema,
         schemaHash: schemaHash(params.schema),
       };

@@ -98,7 +98,10 @@ export async function createChildHost(
         resourceLoaderOptions: {
           noExtensions:
             role?.extensions === false || Array.isArray(role?.extensions),
-          additionalExtensionPaths: resources(role?.extensions),
+          additionalExtensionPaths: [
+            ...(config.providerExtensions ?? []),
+            ...resources(role?.extensions),
+          ],
           noSkills: role?.skills === false || Array.isArray(role?.skills),
           additionalSkillPaths: [...approvedSkills],
           skillsOverride: (base) => ({

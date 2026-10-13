@@ -1,7 +1,12 @@
 // SupaPi additions: offline tests for the Apache-2.0 subagent adaptation; see extensions/subagent/NOTICE and LICENSE.upstream.
 import { expect, test } from "bun:test";
+import { rejects } from "node:assert/strict";
+import { mkdtemp, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import path from "node:path";
 
 import {
+  readChildConfig,
   schemaHash,
   validateResult,
   validateSchema,
@@ -39,6 +44,24 @@ const report = {
   structuredOutput: { ok: true },
   finishedAt: 1,
 };
+test("child config keeps absolute provider extensions and rejects relative ones", async () => {
+  const file = path.join(
+    await mkdtemp(path.join(tmpdir(), "supa-subagent-protocol-")),
+    "config.json",
+  );
+  await writeFile(
+    file,
+    JSON.stringify({ ...config, providerExtensions: ["/abs/bridge"] }),
+  );
+  expect((await readChildConfig(file)).providerExtensions).toEqual([
+    "/abs/bridge",
+  ]);
+  await writeFile(
+    file,
+    JSON.stringify({ ...config, providerExtensions: ["bridge"] }),
+  );
+  await rejects(readChildConfig(file), /provider extensions/);
+});
 test("malformed and mismatched evidence rejected; parent independently revalidates structure", () => {
   expect(validateResult(report, config).structuredOutput).toEqual({ ok: true });
   for (const changed of [

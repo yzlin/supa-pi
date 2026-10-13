@@ -1,6 +1,7 @@
 // Apache-2.0 adaptation of mitsuhiko/agent-stuff, d265b8e. Modified for SupaPi: run/schema-bound validated evidence.
 import { createHash, randomUUID } from "node:crypto";
 import { chmod, readFile, rename, writeFile } from "node:fs/promises";
+import path from "node:path";
 
 import { Type, type Static, type TSchema } from "typebox";
 import { Check, Errors } from "typebox/value";
@@ -192,6 +193,8 @@ export interface ChildConfig {
   thinking: Thinking;
   trusted: boolean;
   agent?: AgentDefinition;
+  /** Absolute extension paths that register `provider`, kept when the role restricts extensions. */
+  providerExtensions?: string[];
   schema?: Record<string, unknown>;
   schemaHash?: string;
 }
@@ -271,6 +274,15 @@ export async function readChildConfig(file: string): Promise<ChildConfig> {
   ) {
     throw new Error("Invalid child role");
   }
+  if (
+    value.providerExtensions !== undefined &&
+    (!Array.isArray(value.providerExtensions) ||
+      value.providerExtensions.some(
+        (item) => typeof item !== "string" || !path.isAbsolute(item),
+      ))
+  ) {
+    throw new Error("Invalid child provider extensions");
+  }
   const agent =
     isRecord(value.agent) &&
     typeof value.agent.file === "string" &&
@@ -293,6 +305,9 @@ export async function readChildConfig(file: string): Promise<ChildConfig> {
     model: value.model,
     thinking: value.thinking,
     trusted: value.trusted,
+    providerExtensions: Array.isArray(value.providerExtensions)
+      ? value.providerExtensions.map(String)
+      : undefined,
     schema: isRecord(value.schema) ? value.schema : undefined,
     schemaHash:
       typeof value.schemaHash === "string" ? value.schemaHash : undefined,

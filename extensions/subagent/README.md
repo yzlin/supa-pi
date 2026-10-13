@@ -119,6 +119,18 @@ whole-session cancellation is for the parent owner.
   selected model must exist, have configured auth, and be within parent model
   scope. Parent-only provider registrations are not serialized: permitted
   child resources must independently supply the selected provider/model.
+  Roles with `extensions: false` or an extension list skip discovery, so an
+  Extension-provided provider (for example `claude-bridge`) needs an explicit
+  entry in global-only `getAgentDir()/subagent.json`:
+
+  ```json
+  { "providerExtensions": { "claude-bridge": ["../../dev/yzlin/pi-claude-bridge"] } }
+  ```
+
+  Paths resolve against the agent directory, like `settings.json` packages.
+  Only the selected provider's entry is added to a restricted child. Project
+  files cannot add entries. Malformed files fail before launch. Without an
+  entry, the child exits with `Unknown provider`.
 - The role body is system instruction text. Only the task is fresh user input;
   no parent conversation or saved child conversation is imported. Normal
   workspace guidance remains. Only descendants of a trusted parent inherit
@@ -144,7 +156,7 @@ resource-loader `skillsOverride` keeps the catalog disabled/selected even if
 extensions try to add resource paths. This host supplies public codemode/MCP/tool-search built-ins
 when permitted; it does not activate native llama.cpp management. Explicit
 extension lists disable implicit extension discovery. `extensions: false`
-loads only the internal reporter/policy. Missing resources or providers fail,
+loads only the internal reporter/policy plus any mapped provider extensions. Missing resources or providers fail,
 never widen resources or change model to compensate.
 
 Each run owns a clean-config tmux server on a short socket path in a freshly

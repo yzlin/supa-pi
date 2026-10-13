@@ -1,5 +1,13 @@
 // Apache-2.0 adaptation of mitsuhiko/agent-stuff, d265b8e. Modified for SupaPi: explicit > role > parent settings and launch preflight.
-import { isThinking, type AgentDefinition, type Thinking } from "./agents";
+import { readFile } from "node:fs/promises";
+import path from "node:path";
+
+import {
+  isRecord,
+  isThinking,
+  type AgentDefinition,
+  type Thinking,
+} from "./agents";
 import type { RunnerAPI, RunnerContext, SubagentParams } from "./runner";
 export function selectSettings(
   pi: RunnerAPI,
@@ -61,4 +69,40 @@ export function selectSettings(
     throw new Error(`Model outside parent scope: ${provider}/${model}`);
   }
   return { provider, model, thinking };
+}
+/** Extensions that register `provider`, from global-only `<agentDir>/subagent.json`; paths resolve against agentDir. */
+export async function providerExtensions(
+  agentDir: string,
+  provider: string,
+): Promise<string[]> {
+  const file = path.join(agentDir, "subagent.json");
+  let raw: unknown;
+  try {
+    raw = JSON.parse(await readFile(file, "utf8"));
+  } catch (error) {
+    if (isRecord(error) && error.code === "ENOENT") {
+      return [];
+    }
+    throw new Error(`Invalid ${file}: ${String(error)}`, { cause: error });
+  }
+  const map = isRecord(raw) ? raw.providerExtensions : undefined;
+  if (map === undefined) {
+    return [];
+  }
+  if (
+    !isRecord(map) ||
+    Object.values(map).some(
+      (item) =>
+        !Array.isArray(item) ||
+        item.some((entry) => typeof entry !== "string" || !entry.trim()),
+    )
+  ) {
+    throw new Error(
+      `Invalid ${file}: providerExtensions must map providers to path lists`,
+    );
+  }
+  const paths = map[provider];
+  return Array.isArray(paths)
+    ? paths.map((entry: string) => path.resolve(agentDir, entry))
+    : [];
 }

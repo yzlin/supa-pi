@@ -154,6 +154,102 @@ test("strict-skill child launch passes the parent Pi package to its SDK host", a
   expect(launchScript).toContain(`'${parentPackage}'`);
 });
 
+async function inspectLaunch(
+  dir: string,
+  agent?: string,
+): Promise<{ launchScript: string; config: ChildConfig }> {
+  let launchScript = "";
+  let configPath = "";
+  const pi: RunnerAPI = {
+    getThinkingLevel: () => "off",
+    exec: async (_cmd, args) => {
+      if (args.includes("send-keys") && args.includes("-l")) {
+        const launchPath = args.at(-1)?.match(/\/bin\/sh '([^']+)'/)?.[1];
+        if (!launchPath) {
+          throw new Error("Missing launcher");
+        }
+        launchScript = await readFile(launchPath, "utf8");
+        configPath = path.join(path.dirname(launchPath), "config.json");
+        throw new Error("Launch inspected");
+      }
+      return { code: 0, stdout: "", stderr: "", killed: false };
+    },
+  };
+  await rejects(
+    runSubagent(pi, context(dir), { task: "task", agent }),
+    /Launch inspected/,
+  );
+  return {
+    launchScript,
+    config: JSON.parse(await readFile(configPath, "utf8")) as ChildConfig,
+  };
+}
+
+test("extension-isolated roles keep only the configured extensions of their selected provider", async () => {
+  const dir = await root();
+  const agentDir = await root();
+  process.env.PI_CODING_AGENT_DIR = agentDir;
+  await mkdir(path.join(agentDir, "agents"));
+  await writeFile(
+    path.join(agentDir, "agents", "isolated.md"),
+    "---\nname: isolated\nextensions: false\n---\nIsolated role",
+  );
+  await writeFile(
+    path.join(agentDir, "agents", "open.md"),
+    "---\nname: open\n---\nOpen role",
+  );
+  await writeFile(
+    path.join(agentDir, "subagent.json"),
+    JSON.stringify({
+      providerExtensions: {
+        [model.provider]: ["../bridge", "/abs/bridge.ts"],
+        other: ["/abs/other.ts"],
+      },
+    }),
+  );
+  const bridge = path.resolve(agentDir, "../bridge");
+  const isolated = await inspectLaunch(dir, "isolated");
+  expect(isolated.config.providerExtensions).toEqual([
+    bridge,
+    "/abs/bridge.ts",
+  ]);
+  expect(isolated.launchScript).toContain(
+    `'--no-extensions' '--extension' '${bridge}' '--extension' '/abs/bridge.ts'`,
+  );
+  expect(isolated.launchScript).not.toContain("/abs/other.ts");
+  const open = await inspectLaunch(dir, "open");
+  expect(open.config.providerExtensions).toBeUndefined();
+  expect(open.launchScript).not.toContain("bridge");
+});
+
+test("malformed provider extension settings fail before launch", async () => {
+  const dir = await root();
+  const agentDir = await root();
+  process.env.PI_CODING_AGENT_DIR = agentDir;
+  await mkdir(path.join(agentDir, "agents"));
+  await writeFile(
+    path.join(agentDir, "agents", "isolated.md"),
+    "---\nname: isolated\nextensions: false\n---\nIsolated role",
+  );
+  await writeFile(
+    path.join(agentDir, "subagent.json"),
+    JSON.stringify({ providerExtensions: { [model.provider]: "bridge" } }),
+  );
+  let calls = 0;
+  const pi: RunnerAPI = {
+    getThinkingLevel: () => "off",
+    exec: async () => {
+      calls++;
+      return { code: 0, stdout: "", stderr: "", killed: false };
+    },
+  };
+  await rejects(
+    runSubagent(pi, context(dir), { task: "task", agent: "isolated" }),
+    /subagent\.json/,
+  );
+  expect(calls).toBe(0);
+});
+
 test("startup failure closes owned tmux and retains owner-only failure evidence", async () => {
   const dir = await root();
   const calls: string[][] = [];
