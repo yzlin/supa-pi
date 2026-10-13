@@ -6,6 +6,7 @@ import {
   CheckpointSchema,
   type ExecutionLedger,
   LedgerSchema,
+  type SpecResume,
   type WorkerReport,
   WorkerReportSchema,
 } from "./schema";
@@ -23,6 +24,7 @@ export function emptyLedger(
     invocationId,
     plan: null,
     approval: null,
+    specPath: null,
     assignments: [],
   };
 }
@@ -158,6 +160,12 @@ export function validateLedger(input: unknown): ExecutionLedger {
     ) {
       throw new Error("Invalid repair lineage");
     }
+    if (item.repairCount + (item.priorRepairs ?? 0) > MAX_REPAIRS) {
+      throw new Error("Mutation repair budget exceeds lineage limit");
+    }
+    if ((item.priorRepairs ?? 0) !== (root.priorRepairs ?? 0)) {
+      throw new Error("Repair changed prior repairs");
+    }
     if (
       root.repairCount !== 0 ||
       JSON.stringify(root.scope) !== JSON.stringify(item.scope) ||
@@ -200,6 +208,18 @@ export function validateLedger(input: unknown): ExecutionLedger {
       throw new Error("Invalid pending assignment");
     }
     if (
+      item.status === "reverify" &&
+      (item.resumed !== true ||
+        item.attemptId ||
+        item.toolCallId ||
+        item.runId ||
+        item.report ||
+        item.evidence.length ||
+        item.blockers.length)
+    ) {
+      throw new Error("Invalid reverify assignment");
+    }
+    if (
       item.status === "running" &&
       (!item.attemptId || item.blockers.length)
     ) {
@@ -217,8 +237,7 @@ export function validateLedger(input: unknown): ExecutionLedger {
     }
     if (
       item.status === "completed" &&
-      (!item.report ||
-        item.report.status !== "done" ||
+      ((item.report ? item.report.status !== "done" : item.resumed !== true) ||
         !item.evidence.length ||
         item.blockers.length)
     ) {
@@ -289,6 +308,7 @@ export function transitionLedger(
   state: ExecutionLedger,
   input: unknown,
   attemptId = "attempt",
+  resume?: SpecResume,
 ): ExecutionLedger {
   validateLedger(state);
   if (!Value.Check(CheckpointSchema, input)) {
@@ -312,11 +332,40 @@ export function transitionLedger(
         "One plan is already accepted; unfinished lineage cannot be reset",
       );
     }
+    if (resume && !input.specPath) {
+      throw new Error("Resuming requires specPath");
+    }
+    if (resume && input.reviseSpec !== true) {
+      const acceptedIds = new Set(input.assignments.map((item) => item.id));
+      if (
+        [...resume.verified, ...Object.keys(resume.priorRepairs)].some(
+          (id) => !acceptedIds.has(id),
+        )
+      ) {
+        throw new Error(
+          "Resumed spec lineage missing from accepted plan; revise the spec explicitly",
+        );
+      }
+    }
     return validateLedger({
       ...state,
       plan: input.plan,
       approval: input.approval,
-      assignments: input.assignments.map(makeAssignment),
+      specPath: input.specPath ?? null,
+      assignments: input.assignments.map((assignment) => {
+        const item = makeAssignment(assignment);
+        if (resume) {
+          item.priorRepairs = resume.priorRepairs[item.id] ?? 0;
+          if (resume.verified.includes(item.id)) {
+            item.status = "reverify";
+            item.resumed = true;
+          } else if (Object.hasOwn(resume.blocked, item.id)) {
+            item.status = "blocked";
+            item.blockers = [...resume.blocked[item.id]];
+          }
+        }
+        return item;
+      }),
     });
   }
   if (!state.plan) {
@@ -329,6 +378,12 @@ export function transitionLedger(
   if (input.action === "start") {
     if (item.status !== "pending") {
       throw new Error("Only pending assignments can start");
+    }
+    // A root carrying spent repairs was never budgeted for a new mutation.
+    if (item.repairCount === 0 && (item.priorRepairs ?? 0) > 0) {
+      throw new Error(
+        "Resumed lineage has spent repairs; use repair before dispatch",
+      );
     }
     if (
       item.dependencies.some(
@@ -359,17 +414,26 @@ export function transitionLedger(
     });
   }
   if (input.action === "verify") {
-    if (item.attemptId !== input.attemptId) {
-      throw new Error("Stale verification attempt");
-    }
-    if (
-      !item.report ||
-      item.report.status !== "done" ||
-      !["running", "blocked"].includes(item.status)
-    ) {
-      throw new Error(
-        "Verification requires a bound done claim, not completion fabricated from prose",
-      );
+    if (item.status === "reverify") {
+      if (input.attemptId !== undefined) {
+        throw new Error("Reverification must not include an attemptId");
+      }
+    } else {
+      if (input.attemptId === undefined) {
+        throw new Error("Verification requires the running attemptId");
+      }
+      if (item.attemptId !== input.attemptId) {
+        throw new Error("Stale verification attempt");
+      }
+      if (
+        !item.report ||
+        item.report.status !== "done" ||
+        !["running", "blocked"].includes(item.status)
+      ) {
+        throw new Error(
+          "Verification requires a bound done claim, not completion fabricated from prose",
+        );
+      }
     }
     if (input.passed !== (input.blockers.length === 0)) {
       throw new Error("Verification outcome and blockers disagree");
@@ -394,7 +458,7 @@ export function transitionLedger(
   if (item.status !== "blocked") {
     throw new Error("Only blocked assignments can receive scoped repairs");
   }
-  if (item.repairCount >= MAX_REPAIRS) {
+  if (item.repairCount + (item.priorRepairs ?? 0) >= MAX_REPAIRS) {
     throw new Error(
       "Mutation repair budget exhausted (two per original lineage)",
     );
@@ -408,6 +472,9 @@ export function transitionLedger(
     }),
     lineageId: item.lineageId,
     repairCount: item.repairCount + 1,
+    ...(item.priorRepairs === undefined
+      ? {}
+      : { priorRepairs: item.priorRepairs }),
   };
   return validateLedger({
     ...state,

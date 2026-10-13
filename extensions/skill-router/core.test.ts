@@ -47,6 +47,19 @@ test("policy excludes hard gates but allows unknown names", () => {
   }
 });
 
+test("policy never auto-routes to-spec", () => {
+  const root = "/tmp/x";
+  const result = prepareRoute({
+    skills: [skill(root, "to-spec"), skill(root, "new-import")],
+    currentRequest: "turn this conversation into a spec",
+    recentText: "",
+  });
+  expect(result.ok).toBe(true);
+  if (result.ok) {
+    expect(result.candidates.map((x) => x.skill.name)).toEqual(["new-import"]);
+  }
+});
+
 test("input bounds and visible recent truncation", () => {
   const root = "/tmp/x";
   const s = skill(root, "a");

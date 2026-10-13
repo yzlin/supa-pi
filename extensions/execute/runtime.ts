@@ -1,4 +1,6 @@
 import { randomUUID } from "node:crypto";
+import { existsSync, readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { isDeepStrictEqual } from "node:util";
 
 import type {
@@ -23,8 +25,20 @@ import {
   CheckpointParametersSchema,
   CheckpointSchema,
   type ExecutionLedger,
+  type SpecResume,
   WorkerReportSchema,
 } from "./schema";
+import {
+  appendSpecEvents,
+  deleteSnapshotRefs,
+  deriveSpecResume,
+  hashSpec,
+  parseSpecPath,
+  readSpecLog,
+  snapshotWorkspace,
+  type SpecLogEvent,
+  specEventsFromTransition,
+} from "./spec-log";
 
 interface BoundCall {
   sessionId: string;
@@ -59,26 +73,78 @@ export function registerExecutionLedger(
   const authorizations = new Map<string, string>();
   const calls = new Map<string, BoundCall>();
   let stopWatchingAbort: (() => void) | undefined;
+  let workspace: string | undefined;
 
   function clearAbortWatcher(): void {
     stopWatchingAbort?.();
     stopWatchingAbort = undefined;
   }
 
-  function persist(next: ExecutionLedger): void {
+  function persist(
+    next: ExecutionLedger,
+    ctx?: ExtensionContext,
+    strict = false,
+    extraEvents: SpecLogEvent[] = [],
+  ): void {
+    workspace = ctx?.cwd ?? workspace;
+    try {
+      if (next.specPath) {
+        if (!workspace) {
+          throw new Error("Spec logging requires a workspace");
+        }
+        const { slug, logPath } = parseSpecPath(next.specPath);
+        const absLogPath = resolve(workspace, logPath);
+        const logged = readSpecLog(absLogPath);
+        let verifiedCount = logged.filter(
+          (event) => event.event === "verified",
+        ).length;
+        const events = [
+          ...extraEvents.filter((event) => event.event !== "stopped"),
+          ...specEventsFromTransition(ledger, next, new Date().toISOString()),
+          ...extraEvents.filter((event) => event.event === "stopped"),
+        ];
+        for (const event of events) {
+          if (event.event === "verified") {
+            Object.assign(
+              event,
+              snapshotWorkspace(workspace, slug, ++verifiedCount),
+            );
+          }
+        }
+        appendSpecEvents(absLogPath, events);
+        if (events.some((event) => event.event === "done")) {
+          // Cleanup follows the durable done event; failing here would make a
+          // retry duplicate logged events.
+          try {
+            deleteSnapshotRefs(workspace, slug);
+          } catch (error) {
+            ctx?.ui.notify(
+              `Spec snapshot cleanup failed: ${errorMessage(error)}`,
+              "warning",
+            );
+          }
+        }
+      }
+    } catch (error) {
+      if (strict) {
+        throw error;
+      }
+      ctx?.ui.notify(`Spec log failed: ${errorMessage(error)}`, "error");
+    }
     pi.appendEntry(LEDGER_ENTRY_TYPE, structuredClone(next));
     ledger = next;
   }
 
-  function revoke(reason: string): void {
+  function revoke(reason: string, ctx?: ExtensionContext): void {
     authorizations.clear();
     calls.clear();
     if (ledger) {
-      persist(interruptLedger(ledger, reason));
+      persist(interruptLedger(ledger, reason), ctx);
     }
   }
 
   function reload(ctx: ExtensionContext): void {
+    workspace = ctx.cwd;
     clearAbortWatcher();
     authorizations.clear();
     calls.clear();
@@ -108,6 +174,7 @@ export function registerExecutionLedger(
     );
   });
   pi.on("agent_start", (_event, ctx) => {
+    workspace = ctx.cwd;
     clearAbortWatcher();
     // Native abort skips agent_before_settle, and ctx.signal is gone by
     // agent_settled. Observe the public run signal while it is still owned.
@@ -118,6 +185,7 @@ export function registerExecutionLedger(
     const onAbort = () => {
       revoke(
         "Parent interrupted; explicit /execute and current-state reconciliation required",
+        ctx,
       );
     };
     signal.addEventListener("abort", onAbort, { once: true });
@@ -130,10 +198,11 @@ export function registerExecutionLedger(
   pi.on("agent_settled", () => {
     clearAbortWatcher();
   });
-  pi.on("agent_before_settle", (event) => {
+  pi.on("agent_before_settle", (event, ctx) => {
     if (event.outcome === "aborted" || event.outcome === "error") {
       revoke(
         "Parent interrupted; explicit /execute and current-state reconciliation required",
+        ctx,
       );
     }
   });
@@ -146,6 +215,7 @@ export function registerExecutionLedger(
     parameters: CheckpointParametersSchema,
     outputSchema: CheckpointOutputSchema,
     async execute(_toolCallId, params, signal, _onUpdate, ctx) {
+      workspace = ctx.cwd;
       if (loadError) {
         throw new Error(loadError);
       }
@@ -192,8 +262,70 @@ export function registerExecutionLedger(
               invocationId: params.invocationId,
             };
       }
-      const next = transitionLedger(current, params, randomUUID());
-      persist(next);
+      let resume: SpecResume | undefined;
+      const extraEvents: SpecLogEvent[] = [];
+      const ts = new Date().toISOString();
+      if (params.action === "accept") {
+        if (params.reviseSpec !== undefined && !params.specPath) {
+          throw new Error("reviseSpec requires specPath");
+        }
+        if (params.specPath) {
+          const { specPath, logPath } = parseSpecPath(params.specPath);
+          const absSpecPath = resolve(ctx.cwd, specPath);
+          if (!existsSync(absSpecPath)) {
+            throw new Error(`Spec not found: ${specPath}`);
+          }
+          const currentHash = hashSpec(readFileSync(absSpecPath, "utf8"));
+          const events = readSpecLog(resolve(ctx.cwd, logPath));
+          const { hash: loggedHash, resume: derived } =
+            deriveSpecResume(events);
+          const changed = loggedHash !== null && loggedHash !== currentHash;
+          if (changed && params.reviseSpec !== true) {
+            throw new Error(
+              "Spec changed since it was accepted; ask the user to revise (accept again with reviseSpec: true) or restore the Spec",
+            );
+          }
+          if (params.reviseSpec === true && !changed) {
+            throw new Error("reviseSpec is only valid when the Spec changed");
+          }
+          if (changed && loggedHash) {
+            extraEvents.push({
+              event: "revised",
+              ts,
+              hash: currentHash,
+              previousHash: loggedHash,
+            });
+          }
+          extraEvents.push({
+            event: "accepted",
+            ts,
+            hash: currentHash,
+            invocationId: params.invocationId,
+            assignments: params.assignments.map(({ id, dependencies }) => ({
+              id,
+              dependencies: [...dependencies],
+            })),
+          });
+          resume = events.length ? (derived ?? undefined) : undefined;
+        }
+      }
+      const next = transitionLedger(current, params, randomUUID(), resume);
+      if (params.action === "stop" && next.specPath) {
+        extraEvents.push({
+          event: "stopped",
+          ts,
+          reason:
+            "Execution stopped; explicit /execute and current-state reconciliation required",
+        });
+      }
+      // Log failures must not block reading the ledger or stopping the run;
+      // non-strict persist still notifies the named log error.
+      persist(
+        next,
+        ctx,
+        params.action !== "stop" && params.action !== "inspect",
+        extraEvents,
+      );
       // A queued command authorizes only its own packet when consumed, not the active run.
       if (
         previousInvocationId &&
@@ -210,7 +342,7 @@ export function registerExecutionLedger(
         dispatchPrefix: assignment ? dispatchPrefix(next, assignment) : null,
       };
       if (params.action === "stop") {
-        revoke("Execution stopped; explicit /execute required");
+        revoke("Execution stopped; explicit /execute required", ctx);
         ctx.abort();
       }
       return {
@@ -264,7 +396,7 @@ export function registerExecutionLedger(
           "Execution requires executor and the exact worker report schema",
         );
       }
-      persist(bindCall(ledger, item.id, item.attemptId, event.toolCallId));
+      persist(bindCall(ledger, item.id, item.attemptId, event.toolCallId), ctx);
       calls.set(event.toolCallId, {
         sessionId: ledger.sessionId,
         invocationId: ledger.invocationId,
@@ -322,6 +454,7 @@ export function registerExecutionLedger(
         assignmentId: binding.assignmentId,
         blockers: [reason],
       }),
+      ctx,
     );
     ctx.ui.notify(reason, "warning");
   });
@@ -350,6 +483,7 @@ export function registerExecutionLedger(
           envelope.runId,
           envelope.report,
         ),
+        ctx,
       );
     } catch (error) {
       const reason = errorMessage(error);
@@ -360,12 +494,14 @@ export function registerExecutionLedger(
           assignmentId: binding.assignmentId,
           blockers: [reason],
         }),
+        ctx,
       );
       ctx.ui.notify(reason, "warning");
     }
   });
 
   return (ctx) => {
+    workspace = ctx.cwd;
     const sessionId = ctx.sessionManager.getSessionId();
     if (ledger && ledger.sessionId !== sessionId) {
       reload(ctx);

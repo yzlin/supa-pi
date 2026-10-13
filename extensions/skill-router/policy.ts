@@ -5,4 +5,5 @@ export const EXPLICIT_ONLY_SKILLS: ReadonlySet<string> = new Set([
   "review-orchestration",
   "review-fix",
   "simplify",
+  "to-spec",
 ]);

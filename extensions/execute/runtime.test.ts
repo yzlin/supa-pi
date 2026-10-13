@@ -1,4 +1,14 @@
-import { describe, expect, it } from "bun:test";
+import { afterEach, describe, expect, it } from "bun:test";
+import { execFileSync } from "node:child_process";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  writeFileSync,
+} from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
 import type { Tool as ProviderTool } from "@earendil-works/pi-ai";
 import { convertResponsesTools } from "@earendil-works/pi-ai/api/openai-responses-shared";
@@ -13,6 +23,12 @@ import {
   type WorkerReport,
   WorkerReportSchema,
 } from "./schema";
+import {
+  appendSpecEvents,
+  hashSpec,
+  INTERRUPTED_BLOCKER,
+  readSpecLog,
+} from "./spec-log";
 
 type Handler = (event: unknown, ctx: unknown) => unknown;
 interface Tool extends Pick<
@@ -36,7 +52,7 @@ const report: WorkerReport = {
   blockers: [],
 };
 
-function harness(branch: unknown[] = []) {
+function harness(branch: unknown[] = [], cwd = "/workspace") {
   const hooks = new Map<string, Handler>();
   const tools = new Map<string, Tool>();
   const commands = new Map<
@@ -48,7 +64,7 @@ function harness(branch: unknown[] = []) {
   let sessionId = "session";
   let abortCount = 0;
   const ctx = {
-    cwd: "/workspace",
+    cwd,
     abort: () => {
       abortCount++;
     },
@@ -125,7 +141,10 @@ function harness(branch: unknown[] = []) {
   async function emit(name: string, event: unknown = {}) {
     return await hooks.get(name)?.(event, ctx);
   }
-  async function accept(invocationId: string) {
+  async function accept(
+    invocationId: string,
+    extra: Record<string, unknown> = {},
+  ) {
     return checkpoint(invocationId, {
       action: "accept",
       plan: "Canonical plan",
@@ -133,6 +152,7 @@ function harness(branch: unknown[] = []) {
       assignments: [
         { id: "a", task: "Implement A", scope: ["src/a.ts"], dependencies: [] },
       ],
+      ...extra,
     });
   }
   async function dispatch(invocationId: string, callId = "child-call") {
@@ -185,6 +205,615 @@ function harness(branch: unknown[] = []) {
     },
   };
 }
+
+const temporaryWorkspaces: string[] = [];
+afterEach(() => {
+  for (const directory of temporaryWorkspaces.splice(0)) {
+    execFileSync("trash", [directory]);
+  }
+});
+
+function specHarness(git = false) {
+  const cwd = mkdtempSync(join(tmpdir(), "execute-spec-"));
+  temporaryWorkspaces.push(cwd);
+  mkdirSync(join(cwd, ".pi/specs"), { recursive: true });
+  const specPath = ".pi/specs/test.md";
+  const logPath = join(cwd, ".pi/specs/test.log.jsonl");
+  const content = "# Execution Brief\nCanonical plan";
+  writeFileSync(join(cwd, specPath), content);
+  if (git) {
+    execFileSync("git", ["-C", cwd, "init", "-q"]);
+    writeFileSync(join(cwd, ".gitignore"), ".pi/specs/\n");
+    execFileSync("git", ["-C", cwd, "add", ".gitignore"]);
+    execFileSync("git", [
+      "-C",
+      cwd,
+      "-c",
+      "user.name=Test",
+      "-c",
+      "user.email=test@localhost",
+      "commit",
+      "-qm",
+      "Initial",
+    ]);
+    writeFileSync(join(cwd, "untracked.txt"), "Snapshot me");
+  }
+  return { ...harness([], cwd), specPath, logPath, content };
+}
+
+async function verifyA(h: ReturnType<typeof specHarness>, token: string) {
+  const { started } = await h.dispatch(token);
+  await h.childResult();
+  return h.checkpoint(token, {
+    action: "verify",
+    assignmentId: "a",
+    attemptId: started.ledger.assignments[0]?.attemptId,
+    passed: true,
+    evidence: ["Main test exit 0"],
+    blockers: [],
+  });
+}
+
+function seedVerified(h: ReturnType<typeof specHarness>) {
+  appendSpecEvents(h.logPath, [
+    {
+      event: "accepted",
+      ts: new Date().toISOString(),
+      hash: hashSpec(h.content),
+      invocationId: "old",
+      assignments: [{ id: "a", dependencies: [] }],
+    },
+    {
+      event: "verified",
+      ts: new Date().toISOString(),
+      assignment: "fix-a",
+      lineageId: "a",
+      repairCount: 1,
+      priorRepairs: 0,
+      resumed: false,
+      evidence: ["Old verification"],
+      head: null,
+      snapshot: null,
+    },
+  ]);
+}
+
+describe("Spec runtime", () => {
+  it("logs acceptance, start, verification snapshots and done cleanup", async () => {
+    const h = specHarness(true);
+    const token = await h.invoke();
+    await h.accept(token, {
+      specPath: h.specPath,
+      assignments: [
+        { id: "a", task: "A", scope: ["src/a.ts"], dependencies: [] },
+        { id: "b", task: "B", scope: ["src/b.ts"], dependencies: ["a"] },
+      ],
+    });
+    expect(readSpecLog(h.logPath)).toEqual([
+      {
+        event: "accepted",
+        ts: expect.any(String),
+        hash: hashSpec(h.content),
+        invocationId: token,
+        assignments: [
+          { id: "a", dependencies: [] },
+          { id: "b", dependencies: ["a"] },
+        ],
+      },
+    ]);
+    await verifyA(h, token);
+    const events = readSpecLog(h.logPath);
+    expect(events.map((event) => event.event)).toEqual([
+      "accepted",
+      "started",
+      "verified",
+    ]);
+    expect(events[2]).toMatchObject({
+      head: expect.any(String),
+      snapshot: "refs/pi-specs/test/1",
+    });
+    expect(
+      execFileSync(
+        "git",
+        ["-C", h.ctx.cwd, "show", "refs/pi-specs/test/1:untracked.txt"],
+        { encoding: "utf8" },
+      ),
+    ).toBe("Snapshot me");
+    const started = await h.checkpoint(token, {
+      action: "start",
+      assignmentId: "b",
+    });
+    await h.emit("tool_call", {
+      toolName: "subagent",
+      toolCallId: "b-call",
+      input: {
+        agent: "executor",
+        task: `${started.dispatchPrefix}B`,
+        schema: JSON.parse(JSON.stringify(WorkerReportSchema)),
+      },
+    });
+    await h.childResult("b-call", { runId: "b-run", structuredOutput: report });
+    await h.checkpoint(token, {
+      action: "verify",
+      assignmentId: "b",
+      attemptId: started.ledger.assignments[1]?.attemptId,
+      passed: true,
+      evidence: ["Main B checked"],
+      blockers: [],
+    });
+    expect(readSpecLog(h.logPath).map((event) => event.event)).toEqual([
+      "accepted",
+      "started",
+      "verified",
+      "started",
+      "verified",
+      "done",
+    ]);
+    expect(readSpecLog(h.logPath)[4]).toMatchObject({
+      snapshot: "refs/pi-specs/test/2",
+    });
+    expect(
+      execFileSync(
+        "git",
+        [
+          "-C",
+          h.ctx.cwd,
+          "for-each-ref",
+          "--format=%(refname)",
+          "refs/pi-specs/test/",
+        ],
+        { encoding: "utf8" },
+      ),
+    ).toBe("");
+  });
+
+  it("fails closed on corrupt logs, missing files and invalid paths", async () => {
+    for (const [mode, path, error] of [
+      ["corrupt", ".pi/specs/test.md", "Corrupt Spec log"],
+      ["missing", ".pi/specs/missing.md", "Spec not found"],
+      ["invalid", "../test.md", "Invalid Spec path"],
+    ]) {
+      const h = specHarness();
+      const token = await h.invoke();
+      if (mode === "corrupt") {
+        writeFileSync(h.logPath, "not json\n");
+      }
+      expect(h.accept(token, { specPath: path })).rejects.toThrow(error);
+      expect(h.branch).toEqual([]);
+    }
+  });
+
+  it("rejects changed hashes and only permits explicit revisions of changed Specs", async () => {
+    const h = specHarness();
+    seedVerified(h);
+    const token = await h.invoke();
+    expect(
+      h.accept(token, { specPath: h.specPath, reviseSpec: true }),
+    ).rejects.toThrow("reviseSpec is only valid when the Spec changed");
+    expect(h.accept(token, { reviseSpec: true })).rejects.toThrow(
+      "reviseSpec requires specPath",
+    );
+    writeFileSync(join(h.ctx.cwd, h.specPath), "Changed Spec");
+    expect(h.accept(token, { specPath: h.specPath })).rejects.toThrow(
+      "Spec changed since it was accepted",
+    );
+    expect(h.branch).toEqual([]);
+    await h.accept(token, { specPath: h.specPath, reviseSpec: true });
+    const events = readSpecLog(h.logPath);
+    expect(events.slice(-2).map((event) => event.event)).toEqual([
+      "revised",
+      "accepted",
+    ]);
+    expect(events.at(-2)).toMatchObject({
+      hash: hashSpec("Changed Spec"),
+      previousHash: hashSpec(h.content),
+    });
+  });
+
+  it("derives fresh-ledger reverify and repair budget only from the log", async () => {
+    const h = specHarness();
+    seedVerified(h);
+    const token = await h.invoke();
+    const accepted = await h.accept(token, { specPath: h.specPath });
+    expect(accepted.ledger.assignments[0]).toMatchObject({
+      status: "reverify",
+      priorRepairs: 1,
+      resumed: true,
+    });
+    await h.checkpoint(token, {
+      action: "verify",
+      assignmentId: "a",
+      passed: false,
+      evidence: ["Fresh test failed"],
+      blockers: ["Fix needed"],
+    });
+    await h.checkpoint(token, {
+      action: "repair",
+      assignmentId: "a",
+      newAssignmentId: "fix",
+      task: "Fix",
+    });
+    await h.checkpoint(token, {
+      action: "block",
+      assignmentId: "fix",
+      blockers: ["Still broken"],
+    });
+    expect(
+      h.checkpoint(token, {
+        action: "repair",
+        assignmentId: "fix",
+        newAssignmentId: "fix2",
+        task: "Fix again",
+      }),
+    ).rejects.toThrow("budget exhausted");
+    expect(readSpecLog(h.logPath).map((event) => event.event)).toEqual([
+      "accepted",
+      "verified",
+      "accepted",
+      "blocked",
+      "repaired",
+      "blocked",
+    ]);
+  });
+
+  it("restores interrupted and exhausted lineages as blocked across sessions", async () => {
+    const h = specHarness();
+    const first = await h.invoke();
+    await h.accept(first, { specPath: h.specPath });
+    await h.dispatch(first);
+    // A fresh session resumes after the running child was interrupted.
+    const resuming = harness([], h.ctx.cwd);
+    const token = await resuming.invoke();
+    const resumed = await resuming.accept(token, { specPath: h.specPath });
+    expect(resumed.ledger.assignments[0]).toMatchObject({
+      status: "blocked",
+      blockers: [INTERRUPTED_BLOCKER],
+      priorRepairs: 0,
+    });
+    expect(
+      resuming.checkpoint(token, { action: "start", assignmentId: "a" }),
+    ).rejects.toThrow("Only pending assignments can start");
+    const repaired = await resuming.checkpoint(token, {
+      action: "repair",
+      assignmentId: "a",
+      newAssignmentId: "fix",
+      task: "Fix",
+    });
+    expect(repaired.ledger.assignments.at(-1)).toMatchObject({
+      repairCount: 1,
+      priorRepairs: 0,
+    });
+    await resuming.checkpoint(token, {
+      action: "block",
+      assignmentId: "fix",
+      blockers: ["Still broken"],
+    });
+    await resuming.checkpoint(token, {
+      action: "repair",
+      assignmentId: "fix",
+      newAssignmentId: "fix2",
+      task: "Fix again",
+    });
+    await resuming.checkpoint(token, {
+      action: "block",
+      assignmentId: "fix2",
+      blockers: ["Still broken"],
+    });
+    expect(readSpecLog(h.logPath).slice(-6)).toMatchObject([
+      { event: "accepted" },
+      { event: "blocked", assignment: "a", blockers: [INTERRUPTED_BLOCKER] },
+      { event: "repaired", assignment: "fix" },
+      { event: "blocked", assignment: "fix" },
+      { event: "repaired", assignment: "fix2" },
+      { event: "blocked", assignment: "fix2", repairCount: 2 },
+    ]);
+    // Every later re-run keeps the exhausted lineage blocked.
+    for (let run = 0; run < 2; run++) {
+      const again = harness([], h.ctx.cwd);
+      const next = await again.invoke();
+      const exhausted = await again.accept(next, { specPath: h.specPath });
+      expect(exhausted.ledger.assignments[0]).toMatchObject({
+        status: "blocked",
+        blockers: ["Still broken"],
+        priorRepairs: 2,
+      });
+      expect(
+        again.checkpoint(next, { action: "start", assignmentId: "a" }),
+      ).rejects.toThrow("Only pending assignments can start");
+      expect(
+        again.checkpoint(next, {
+          action: "repair",
+          assignmentId: "a",
+          newAssignmentId: "fix3",
+          task: "Fix once more",
+        }),
+      ).rejects.toThrow("budget exhausted");
+    }
+    expect(
+      readSpecLog(h.logPath).filter((event) => event.event === "started"),
+    ).toHaveLength(1);
+  });
+
+  it("resumes an unchanged Spec after a revision dropped a verified lineage", async () => {
+    const h = specHarness();
+    const b = { id: "b", task: "B", scope: ["src/b.ts"], dependencies: [] };
+    const first = await h.invoke();
+    await h.accept(first, {
+      specPath: h.specPath,
+      assignments: [
+        { id: "a", task: "A", scope: ["src/a.ts"], dependencies: [] },
+        b,
+      ],
+    });
+    await verifyA(h, first);
+    writeFileSync(join(h.ctx.cwd, h.specPath), "Revised Spec without A");
+    // Fresh sessions start with empty ledgers, as a later /execute would.
+    const revising = harness([], h.ctx.cwd);
+    await revising.accept(await revising.invoke(), {
+      specPath: h.specPath,
+      reviseSpec: true,
+      assignments: [b],
+    });
+    const resuming = harness([], h.ctx.cwd);
+    const resumed = await resuming.accept(await resuming.invoke(), {
+      specPath: h.specPath,
+      assignments: [b],
+    });
+    expect(
+      resumed.ledger.assignments.map(({ id, status }) => ({ id, status })),
+    ).toEqual([{ id: "b", status: "pending" }]);
+  });
+
+  it("logs resumed verification with null snapshots outside git", async () => {
+    const h = specHarness();
+    seedVerified(h);
+    const token = await h.invoke();
+    await h.accept(token, { specPath: h.specPath });
+    await h.checkpoint(token, {
+      action: "verify",
+      assignmentId: "a",
+      passed: true,
+      evidence: ["Fresh read-only check"],
+      blockers: [],
+    });
+    expect(readSpecLog(h.logPath).at(-2)).toMatchObject({
+      event: "verified",
+      resumed: true,
+      head: null,
+      snapshot: null,
+    });
+    expect(readSpecLog(h.logPath).at(-1)?.event).toBe("done");
+  });
+
+  it("logs stop and every hook interruption without duplicate start events", async () => {
+    for (const mode of [
+      "stop",
+      "shutdown",
+      "error",
+      "signal",
+      "result",
+      "end",
+      "blocked-report",
+    ]) {
+      const h = specHarness();
+      const token = await h.invoke();
+      await h.accept(token, { specPath: h.specPath });
+      await h.dispatch(token);
+      if (mode === "stop") {
+        await h.checkpoint(token, { action: "stop" });
+      }
+      if (mode === "shutdown") {
+        // Native shutdown supplies no context.
+        await h.hooks.get("session_shutdown")?.({}, undefined);
+      }
+      if (mode === "error") {
+        await h.emit("agent_before_settle", { outcome: "error" });
+      }
+      if (mode === "signal") {
+        const controller = new AbortController();
+        await h.hooks.get("agent_start")?.(
+          {},
+          { ...h.ctx, signal: controller.signal },
+        );
+        controller.abort();
+      }
+      if (mode === "result") {
+        await h.childResult("child-call", null);
+      }
+      if (mode === "end") {
+        await h.emit("tool_execution_end", {
+          toolName: "subagent",
+          toolCallId: "child-call",
+          isError: true,
+        });
+      }
+      if (mode === "blocked-report") {
+        await h.childResult("child-call", {
+          runId: "run",
+          structuredOutput: {
+            ...report,
+            status: "blocked",
+            blockers: ["Missing prerequisite"],
+          },
+        });
+      }
+      expect(readSpecLog(h.logPath).map((event) => event.event)).toEqual([
+        "accepted",
+        "started",
+        "blocked",
+        ...(mode === "stop" ? ["stopped"] : []),
+      ]);
+    }
+  });
+
+  it("keeps checkpoint ledger unchanged on log failure; hook failures notify and persist", async () => {
+    const h = specHarness();
+    const token = await h.invoke();
+    await h.accept(token, { specPath: h.specPath });
+    writeFileSync(h.logPath, "corrupt\n");
+    const before = structuredClone(h.branch);
+    expect(
+      h.checkpoint(token, { action: "start", assignmentId: "a" }),
+    ).rejects.toThrow("Corrupt Spec log");
+    expect(h.branch).toEqual(before);
+    writeFileSync(h.logPath, "");
+    appendSpecEvents(h.logPath, [
+      {
+        event: "accepted",
+        ts: new Date().toISOString(),
+        hash: hashSpec(h.content),
+        invocationId: token,
+        assignments: [{ id: "a", dependencies: [] }],
+      },
+    ]);
+    await h.dispatch(token);
+    writeFileSync(h.logPath, "corrupt\n");
+    await h.childResult("child-call", null);
+    expect(
+      h.notifications.some((note) => note.includes("Corrupt Spec log")),
+    ).toBe(true);
+    expect(h.branch.at(-1)).toMatchObject({
+      data: { assignments: [{ status: "blocked" }] },
+    });
+    // Inspection still returns the ledger and names the log failure.
+    const notified = h.notifications.length;
+    const inspected = await h.checkpoint(token, { action: "inspect" });
+    expect(inspected.ledger.assignments[0]?.status).toBe("blocked");
+    expect(
+      h.notifications
+        .slice(notified)
+        .some((note) => note.includes("Spec log failed: Corrupt Spec log")),
+    ).toBe(true);
+  });
+
+  it("stops, revokes and aborts once despite a corrupt or headless Spec log", async () => {
+    for (const mode of ["invalid", "headless"]) {
+      const h = specHarness();
+      const token = await h.invoke();
+      await h.accept(token, { specPath: h.specPath });
+      await h.dispatch(token);
+      const corrupt =
+        mode === "invalid"
+          ? "corrupt\n"
+          : `${JSON.stringify({ event: "stopped", ts: new Date().toISOString(), reason: "Orphan" })}\n`;
+      writeFileSync(h.logPath, corrupt);
+      await h.checkpoint(token, { action: "stop" });
+      expect(h.getAbortCount()).toBe(1);
+      expect(h.branch.at(-1)).toMatchObject({
+        data: { assignments: [{ status: "blocked" }] },
+      });
+      expect(
+        h.notifications.some((note) =>
+          note.includes("Spec log failed: Corrupt Spec log"),
+        ),
+      ).toBe(true);
+      expect(readFileSync(h.logPath, "utf8")).toBe(corrupt);
+      expect(h.checkpoint(token, { action: "inspect" })).rejects.toThrow(
+        "Unauthorized",
+      );
+    }
+  });
+
+  it("persists hook changes despite log errors, including binding, reports and shutdown", async () => {
+    for (const mode of ["bind", "report", "end", "abort", "shutdown"]) {
+      const h = specHarness();
+      const token = await h.invoke();
+      await h.accept(token, { specPath: h.specPath });
+      const started = await h.checkpoint(token, {
+        action: "start",
+        assignmentId: "a",
+      });
+      const input = {
+        agent: "executor",
+        task: `${started.dispatchPrefix}Task`,
+        schema: JSON.parse(JSON.stringify(WorkerReportSchema)),
+      };
+      if (mode !== "bind") {
+        await h.emit("tool_call", {
+          toolName: "subagent",
+          toolCallId: "child-call",
+          input,
+        });
+      }
+      writeFileSync(h.logPath, "corrupt\n");
+      if (mode === "bind") {
+        expect(
+          await h.emit("tool_call", {
+            toolName: "subagent",
+            toolCallId: "child-call",
+            input,
+          }),
+        ).toBeUndefined();
+        expect(h.branch.at(-1)).toMatchObject({
+          data: { assignments: [{ toolCallId: "child-call" }] },
+        });
+      } else if (mode === "report") {
+        await h.childResult();
+        expect(h.branch.at(-1)).toMatchObject({
+          data: { assignments: [{ status: "running", report }] },
+        });
+      } else {
+        if (mode === "end") {
+          await h.emit("tool_execution_end", {
+            toolName: "subagent",
+            toolCallId: "child-call",
+            isError: true,
+          });
+        } else if (mode === "abort") {
+          await h.emit("agent_before_settle", { outcome: "aborted" });
+        } else {
+          await h.hooks.get("session_shutdown")?.({}, undefined);
+        }
+        expect(h.branch.at(-1)).toMatchObject({
+          data: { assignments: [{ status: "blocked" }] },
+        });
+      }
+      if (mode !== "shutdown") {
+        expect(
+          h.notifications.some((note) =>
+            note.includes("Spec log failed: Corrupt Spec log"),
+          ),
+        ).toBe(true);
+      }
+    }
+  });
+
+  it("warns on Snapshot ref cleanup failure after done without failing verify", async () => {
+    const h = specHarness(true);
+    // A held ref lock makes `git update-ref -d` fail during done cleanup.
+    execFileSync("git", [
+      "-C",
+      h.ctx.cwd,
+      "update-ref",
+      "refs/pi-specs/test/stale",
+      "HEAD",
+    ]);
+    writeFileSync(join(h.ctx.cwd, ".git/refs/pi-specs/test/stale.lock"), "");
+    const token = await h.invoke();
+    await h.accept(token, { specPath: h.specPath });
+    await verifyA(h, token);
+    expect(h.branch.at(-1)).toMatchObject({
+      data: { assignments: [{ status: "completed" }] },
+    });
+    expect(
+      h.notifications.some((note) =>
+        note.startsWith("Spec snapshot cleanup failed: Command failed: git -C"),
+      ),
+    ).toBe(true);
+    const events = readSpecLog(h.logPath).map((event) => event.event);
+    expect(events.filter((event) => event === "verified")).toHaveLength(1);
+    expect(events.filter((event) => event === "done")).toHaveLength(1);
+  });
+
+  it("does not write logs for ordinary ledgers", async () => {
+    const h = specHarness();
+    const token = await h.invoke();
+    await h.accept(token);
+    await verifyA(h, token);
+    await h.checkpoint(token, { action: "stop" });
+    expect(existsSync(h.logPath)).toBe(false);
+  });
+});
 
 describe("execute native-session integration", () => {
   it("registers an object-root schema for the installed OpenAI converter before /execute", () => {

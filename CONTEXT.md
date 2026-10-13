@@ -253,6 +253,24 @@ Approved through `/grill-me` on 2026-10-06, then implemented through an explicit
 
 The runtime and its upstream notices belong to `extensions/subagent/`. Other extensions use the native `subagent` tool boundary, not sibling-extension imports; review tests own their local tool-call fixture types. See `CONTEXT-MAP.md` and the subagent/execute/review READMEs. No ADR is created: the replacement has real tradeoffs but remains reversible, with no irreversible data migration.
 
+## Spec workflow: implemented product direction
+
+Approved by `/grill-me` and implemented via `/execute` on 2026-10-12. It lets a plan that was locked in one session run through `/execute` in a fresh session when context is near its limit. Deterministic tests verify command, log, snapshot, and resume contracts; they do not prove live model adherence.
+
+- **Spec** — an Execution Brief persisted as `.pi/specs/<slug>.md` by `/to-spec`, immutable after write. _Avoid_: plan file, PRD.
+- **Spec log** — the append-only `.pi/specs/<slug>.log.jsonl` event record of one Spec's execution progress, written only by the execute Extension. _Avoid_: spec status field, task list.
+- **Snapshot ref** — a git ref `refs/pi-specs/<slug>/<n>` pointing at a working-tree snapshot taken at one verified Spec log event. _Avoid_: stash, checkpoint.
+- Format: the five required Execution Brief headings plus `User Stories` and optional `Testing Seams`. User Stories are required when user- or caller-visible behavior changes; otherwise one `N/A — internal: <reason>` line. Each story maps to at least one Done Criterion (`US-n`); each Done Criterion cites a story or `technical`. Matt Pocock's `to-spec` informs no-interview synthesis and seams; its issue-tracker publishing, extensive story lists, and no-file-path rule are rejected.
+- `/to-spec [slug]`: synthesizes from current context without interview; asks one seam question only when Verification would otherwise be a guess. An existing never-accepted slug needs overwrite confirmation; an accepted or done slug is refused. `/to-spec status [slug]` renders Spec log status deterministically as a displayed custom message without an LLM turn; empty storage displays `No specs in .pi/specs/. Run /to-spec after locking a plan.`
+- Ownership: the execute Extension owns `/to-spec`, the Spec log schema/writer/reader, and Snapshot refs, because sibling Extensions cannot share the log format by import. `/to-spec` is registered by the execute Extension, not prompt-commands.
+- Storage: `.pi/specs/` stays local and git-ignored. Done Specs remain; status is the last Spec log event (`accepted`, `started`, `verified`, `blocked`, `repaired`, `revised`, `stopped`, `done`).
+- Logging: `accept` takes optional `specPath` (exact `.pi/specs/<slug>.md`); log events track acceptance, assignment starts, verification, blockers, repairs, revisions, explicit stops, and completion, not every native ledger snapshot. The `accepted` event stores the Spec content hash; the fixed event fields are documented in `extensions/execute/README.md`.
+- Log failures: checkpoint log read/write or Snapshot ref cleanup failures fail the checkpoint before native ledger persistence. Lifecycle/tool hooks retain native ledger state and notify when context is available; logging failures must not prevent report binding or interruption handling.
+- Snapshot refs: each verified event records `HEAD` and a temporary-index tree snapshot that includes untracked, non-ignored files without touching the user's index or working tree. Non-git workspaces record `snapshot: null`. Snapshot refs are deleted on `done`.
+- Resume: a later explicit `/execute @.pi/specs/<slug>.md` derives prior state from the Spec log, not from agent input. Logged-verified assignments enter as `reverify` and need fresh read-only main evidence through `verify` without `attemptId` before dependents start; failure blocks for scoped repair. Lineage repair counts carry over in `priorRepairs`; logged-verified or repair-counted lineage IDs cannot be omitted or renamed without revision. A corrupt Spec log fails closed. A hash mismatch stops for the user's choice: re-accept with `reviseSpec: true` to record `revised` and re-plan unfinished work, or restore the Spec. Never set `reviseSpec` without that choice. This is explicit resume, not automatic cross-session recovery; legacy `.pi/execute` stays unread.
+- `/grill-me` suggests `/to-spec` after lock; its allowed writes are unchanged.
+- Not an ADR: local files, refs, and code paths are reversible.
+
 ## Open questions
 
 - Extension isolation (resolved 2026-10-04): no approved exception; RTK's tool-display dependency is removed under "Tool rendering: implemented product direction".

@@ -174,6 +174,22 @@ describe("context-docs composition contract", () => {
 });
 
 describe("grill-me wrapper contract", () => {
+  it("suggests to-spec after lock writes without expanding allowed writes", () => {
+    const skill = readRepositoryFile("skills", "grill-me", "SKILL.md");
+    const handoff =
+      "After `Lock plan, stop here` writes complete, suggest `/to-spec` as the next step to persist an Execution Brief for a fresh `/execute` session. Never write the Spec itself.";
+
+    expect(skill).toContain(handoff);
+    expect(skill.indexOf(handoff)).toBeGreaterThan(
+      skill.indexOf("immediately write any qualifying drafted content"),
+    );
+    expect(
+      skill.split("## Allowed Writes\n")[1]?.split("\nThis narrow")[0]?.trim(),
+    ).toBe(
+      "Write only:\n\n- `CONTEXT.md`\n- `CONTEXT-MAP.md`\n- qualifying ADRs",
+    );
+  });
+
   it("is explicit, discoverable, and composes the canonical skills", () => {
     const skill = readRepositoryFile("skills", "grill-me", "SKILL.md");
 

@@ -54,7 +54,7 @@ it("executor preserves a detached report-only boundary and model route", () => {
     join(process.cwd(), "agents", "executor.md"),
     "utf8",
   );
-  expect(role).toContain("model: openai-codex/gpt-6.1-sol");
+  expect(role).toContain("model: claude-bridge/claude-opus-5-5");
   expect(role).toContain("thinking: high");
   expect(role).toContain("extensions: false");
   expect(role).toContain("skills: false");

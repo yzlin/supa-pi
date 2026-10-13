@@ -47,10 +47,14 @@ const AssignmentSchema = Type.Object(
     supersededBy: Type.Union([id, Type.Null()]),
     status: Type.Union([
       Type.Literal("pending"),
+      Type.Literal("reverify"),
       Type.Literal("running"),
       Type.Literal("blocked"),
       Type.Literal("completed"),
     ]),
+    // Optional so persisted v1 session ledger entries from before Spec support still validate.
+    resumed: Type.Optional(Type.Boolean()),
+    priorRepairs: Type.Optional(Type.Integer({ minimum: 0, maximum: 2 })),
     attemptId: nullableText,
     toolCallId: nullableText,
     runId: nullableText,
@@ -68,12 +72,22 @@ export const LedgerSchema = Type.Object(
     invocationId: id,
     plan: nullableText,
     approval: nullableText,
+    // Optional so persisted v1 session ledger entries from before Spec support still validate.
+    specPath: Type.Optional(nullableText),
     assignments: Type.Array(AssignmentSchema, { maxItems: 300 }),
   },
   objectOptions,
 );
 export type ExecutionLedger = Static<typeof LedgerSchema>;
 export type Assignment = ExecutionLedger["assignments"][number];
+
+// Derived by runtime from the Spec log, never supplied by the agent.
+export interface SpecResume {
+  verified: string[];
+  // Unverified lineages with logged progress, keyed to their restored blockers.
+  blocked: Record<string, string[]>;
+  priorRepairs: Record<string, number>;
+}
 
 const common = { invocationId: id };
 export const CheckpointSchema = Type.Union([
@@ -84,6 +98,8 @@ export const CheckpointSchema = Type.Union([
       action: Type.Literal("accept"),
       plan: text,
       approval: text,
+      specPath: Type.Optional(text),
+      reviseSpec: Type.Optional(Type.Boolean()),
       assignments: Type.Array(AssignmentInputSchema, {
         minItems: 1,
         maxItems: 100,
@@ -100,7 +116,7 @@ export const CheckpointSchema = Type.Union([
       ...common,
       action: Type.Literal("verify"),
       assignmentId: id,
-      attemptId: text,
+      attemptId: Type.Optional(text),
       passed: Type.Boolean(),
       evidence: Type.Array(text, { minItems: 1, maxItems: 100 }),
       blockers: texts,
@@ -145,6 +161,8 @@ export const CheckpointParametersSchema = Type.Object(
     ]),
     plan: Type.Optional(text),
     approval: Type.Optional(text),
+    specPath: Type.Optional(text),
+    reviseSpec: Type.Optional(Type.Boolean()),
     assignments: Type.Optional(
       Type.Array(AssignmentInputSchema, { minItems: 1, maxItems: 100 }),
     ),

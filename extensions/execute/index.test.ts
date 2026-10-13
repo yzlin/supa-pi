@@ -1,5 +1,7 @@
-import { describe, expect, it } from "bun:test";
-import { readFileSync } from "node:fs";
+import { afterEach, describe, expect, it } from "bun:test";
+import { execFileSync } from "node:child_process";
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import {
@@ -7,6 +9,7 @@ import {
   EXECUTE_SYNTHESIS_MESSAGE,
 } from "./constants";
 import executeExtension from "./index";
+import { renderSpecStatus } from "./spec-log";
 
 const EXECUTION_BRIEF = [
   "# Execution Brief",
@@ -57,6 +60,11 @@ function createMockPiRuntime() {
   const entries: Array<{ type: string; customType: string; data: unknown }> =
     [];
   const sentUserMessages: Array<{ content: string; options?: unknown }> = [];
+  const displayedMessages: Array<{
+    customType: string;
+    content: string;
+    display: boolean;
+  }> = [];
 
   return {
     entries,
@@ -64,7 +72,15 @@ function createMockPiRuntime() {
     tools,
     hooks,
     sentUserMessages,
+    displayedMessages,
     pi: {
+      sendMessage(message: {
+        customType: string;
+        content: string;
+        display: boolean;
+      }) {
+        displayedMessages.push(message);
+      },
       appendEntry(customType: string, data: unknown) {
         entries.push({ type: "custom", customType, data });
       },
@@ -263,10 +279,120 @@ describe("execute command", () => {
 
     executeExtension(runtime.pi as never);
 
-    expect([...runtime.commands.keys()]).toEqual(["execute"]);
+    expect([...runtime.commands.keys()]).toEqual(["execute", "to-spec"]);
     expect([...runtime.tools.keys()]).toEqual(["execute_checkpoint"]);
     expect(runtime.hooks.has("session_start")).toBe(true);
     expect(runtime.hooks.has("session_tree")).toBe(true);
+  });
+});
+
+const temporaryWorkspaces: string[] = [];
+afterEach(() => {
+  for (const directory of temporaryWorkspaces.splice(0)) {
+    execFileSync("trash", [directory]);
+  }
+});
+
+function specCommandHarness() {
+  const cwd = mkdtempSync(join(tmpdir(), "to-spec-command-"));
+  temporaryWorkspaces.push(cwd);
+  mkdirSync(join(cwd, ".pi/specs"), { recursive: true });
+  const runtime = createMockPiRuntime();
+  const { ctx, notifications } = createMockCtx();
+  executeExtension(runtime.pi as never);
+  const handler = runtime.commands.get("to-spec")?.handler;
+  if (!handler) {
+    throw new Error("Missing to-spec command");
+  }
+  return { runtime, ctx: { ...ctx, cwd }, notifications, handler };
+}
+
+describe("to-spec command", () => {
+  it("renders multiline status without a model turn", async () => {
+    const h = specCommandHarness();
+    writeFileSync(join(h.ctx.cwd, ".pi/specs/goal.md"), "Brief");
+    for (const args of ["status", "status goal"]) {
+      await h.handler(args, h.ctx);
+      expect(h.runtime.displayedMessages.at(-1)).toEqual({
+        customType: "spec-status",
+        content: renderSpecStatus(
+          h.ctx.cwd,
+          args === "status" ? undefined : "goal",
+        ),
+        display: true,
+      });
+    }
+    expect(h.runtime.sentUserMessages).toEqual([]);
+    expect(h.runtime.entries).toEqual([]);
+  });
+
+  it("sends canonical packets with derived or explicit slugs and instructions", async () => {
+    for (const [args, content] of [
+      [
+        "",
+        "Use the `to-spec` skill as canonical for this explicit command.\n\nSlug: derive one from the goal",
+      ],
+      [
+        "goal",
+        "Use the `to-spec` skill as canonical for this explicit command.\n\nSlug: goal",
+      ],
+      [
+        "goal Keep tests\non boundary",
+        "Use the `to-spec` skill as canonical for this explicit command.\n\nSlug: goal\n\nKeep tests\non boundary",
+      ],
+    ]) {
+      const h = specCommandHarness();
+      await h.handler(args, h.ctx);
+      expect(h.runtime.sentUserMessages).toEqual([
+        { content, options: undefined },
+      ]);
+      expect(h.notifications).toEqual([]);
+      expect(h.runtime.entries).toEqual([]);
+    }
+  });
+
+  it("queues packets while busy", async () => {
+    const h = specCommandHarness();
+    await h.handler("goal", { ...h.ctx, isIdle: () => false });
+    expect(h.runtime.sentUserMessages[0]?.options).toEqual({
+      deliverAs: "followUp",
+    });
+    expect(h.notifications).toEqual([
+      { message: "Queued /to-spec as a follow-up", level: "info" },
+    ]);
+  });
+
+  it("refuses any existing log, even empty or corrupt", async () => {
+    for (const content of ["", "corrupt\n"]) {
+      const h = specCommandHarness();
+      writeFileSync(join(h.ctx.cwd, ".pi/specs/goal.log.jsonl"), content);
+      await h.handler("goal", h.ctx);
+      expect(h.runtime.sentUserMessages).toEqual([]);
+      expect(h.notifications).toEqual([
+        {
+          message: "Spec goal was already accepted; choose a new slug",
+          level: "error",
+        },
+      ]);
+    }
+  });
+
+  it("includes the overwrite-confirmation note for an unaccepted Spec", async () => {
+    const h = specCommandHarness();
+    writeFileSync(join(h.ctx.cwd, ".pi/specs/goal.md"), "Brief");
+    await h.handler("goal Extra instructions", h.ctx);
+    expect(h.runtime.sentUserMessages[0]?.content).toBe(
+      "Use the `to-spec` skill as canonical for this explicit command.\n\nSlug: goal\n\nExisting unaccepted Spec: .pi/specs/goal.md — confirm overwrite with the user before writing.\n\nExtra instructions",
+    );
+  });
+
+  it("refuses invalid and oversized slugs without sending", async () => {
+    const h = specCommandHarness();
+    for (const slug of ["Upper", "../goal", "-goal", "a_b", "a".repeat(49)]) {
+      await h.handler(slug, h.ctx);
+      expect(h.notifications.at(-1)).toMatchObject({ level: "error" });
+    }
+    expect(h.runtime.sentUserMessages).toEqual([]);
   });
 });
 

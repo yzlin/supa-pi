@@ -18,6 +18,7 @@ For an explicit `/grill-me <plan>` invocation:
 - If multiple contexts could apply and the target is ambiguous, ask exactly one target-selection question before grilling.
 - Draft durable content during the interview, but do not write any file before the user chooses the final `Lock plan, stop here` option.
 - If the user chooses `Keep grilling`, continue the interview. After the user chooses `Lock plan, stop here`, immediately write any qualifying drafted content.
+- After `Lock plan, stop here` writes complete, suggest `/to-spec` as the next step to persist an Execution Brief for a fresh `/execute` session. Never write the Spec itself.
 
 ## Allowed Writes
 

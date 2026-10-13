@@ -5,12 +5,14 @@ import { SessionManager } from "@earendil-works/pi-coding-agent";
 import {
   bindCall,
   emptyLedger,
+  isLedgerComplete,
   LEDGER_ENTRY_TYPE,
   recordReport,
   restoreLedger,
   transitionLedger,
+  validateLedger,
 } from "./ledger";
-import type { ExecutionLedger } from "./schema";
+import type { ExecutionLedger, SpecResume } from "./schema";
 
 const invocationId = "invocation";
 const roots = [
@@ -29,8 +31,9 @@ function step(
   state: ExecutionLedger,
   input: Record<string, unknown>,
   attemptId = "attempt-a",
+  resume?: SpecResume,
 ) {
-  return transitionLedger(state, { invocationId, ...input }, attemptId);
+  return transitionLedger(state, { invocationId, ...input }, attemptId, resume);
 }
 function accepted(assignments = roots) {
   return step(emptyLedger("session", invocationId), {
@@ -72,6 +75,422 @@ function verified(
     blockers: passed ? [] : ["Current test failure"],
   });
 }
+
+const specPath = ".pi/specs/example.md";
+function resumed(
+  resume: SpecResume = { verified: ["a"], blocked: {}, priorRepairs: { a: 1 } },
+  assignments = roots,
+  reviseSpec = false,
+) {
+  return step(
+    emptyLedger("session", invocationId),
+    {
+      action: "accept",
+      plan: "Canonical brief",
+      approval: "Safe local changes",
+      assignments,
+      specPath,
+      reviseSpec,
+    },
+    "attempt-a",
+    resume,
+  );
+}
+function reverify(state = resumed(), assignmentId = "a", passed = true) {
+  return step(state, {
+    action: "verify",
+    assignmentId,
+    passed,
+    evidence: ["Main read current code; bun test: exit 0"],
+    blockers: passed ? [] : ["Current workspace differs"],
+  });
+}
+
+describe("Spec resume ledger", () => {
+  it("stores a Spec path only when supplied and keeps ordinary assignments unchanged", () => {
+    expect(emptyLedger("session", invocationId).specPath).toBeNull();
+    expect(accepted().specPath).toBeNull();
+    const state = step(emptyLedger("session", invocationId), {
+      action: "accept",
+      plan: "Canonical brief",
+      approval: "Safe",
+      assignments: roots,
+      specPath,
+    });
+    expect(state.specPath).toBe(specPath);
+    expect(state.assignments).toEqual(accepted().assignments);
+    expect(state.assignments[0]?.priorRepairs).toBeUndefined();
+    expect(state.assignments[0]?.resumed).toBeUndefined();
+  });
+
+  it("derives reverify and prior repair budgets from runtime resume metadata", () => {
+    const state = resumed();
+    expect(state.assignments[0]).toMatchObject({
+      status: "reverify",
+      resumed: true,
+      priorRepairs: 1,
+      repairCount: 0,
+      attemptId: null,
+      toolCallId: null,
+      runId: null,
+      report: null,
+      evidence: [],
+      blockers: [],
+    });
+    expect(state.assignments[1]).toMatchObject({
+      status: "pending",
+      priorRepairs: 0,
+    });
+    expect(state.assignments[1]?.resumed).toBeUndefined();
+    expect(isLedgerComplete(state)).toBe(false);
+    expect(() =>
+      step(
+        emptyLedger("session", invocationId),
+        {
+          action: "accept",
+          plan: "Canonical brief",
+          approval: "Safe",
+          assignments: roots,
+        },
+        "attempt-a",
+        { verified: ["a"], blocked: {}, priorRepairs: {} },
+      ),
+    ).toThrow("specPath");
+  });
+
+  it("prevents rename resets for verified and repaired lineages unless explicitly revised", () => {
+    for (const resume of [
+      { verified: ["missing"], blocked: {}, priorRepairs: {} },
+      { verified: [], blocked: {}, priorRepairs: { missing: 2 } },
+      { verified: [], blocked: {}, priorRepairs: { missing: 0 } },
+    ]) {
+      expect(() => resumed(resume)).toThrow(
+        "Resumed spec lineage missing from accepted plan; revise the spec explicitly",
+      );
+      expect(resumed(resume, roots, true).assignments[0]?.status).toBe(
+        "pending",
+      );
+    }
+    expect(
+      resumed(
+        { verified: ["a"], blocked: {}, priorRepairs: { a: 2 } },
+        roots,
+        true,
+      ).assignments[0],
+    ).toMatchObject({ status: "reverify", priorRepairs: 2 });
+  });
+
+  it("reverifies without a worker claim or attempt, without charging repairs", () => {
+    const state = resumed(
+      { verified: ["a"], blocked: {}, priorRepairs: { a: 2 } },
+      [roots[0]],
+    );
+    const complete = reverify(state);
+    expect(complete.assignments[0]).toMatchObject({
+      status: "completed",
+      resumed: true,
+      report: null,
+      attemptId: null,
+      evidence: ["Main read current code; bun test: exit 0"],
+      blockers: [],
+      repairCount: 0,
+      priorRepairs: 2,
+    });
+    expect(validateLedger(complete)).toEqual(complete);
+    expect(isLedgerComplete(complete)).toBe(true);
+    expect(state.assignments[0]?.evidence).toEqual([]);
+    const failed = reverify(state, "a", false);
+    expect(failed.assignments[0]).toMatchObject({
+      status: "blocked",
+      report: null,
+      blockers: ["Current workspace differs"],
+      evidence: ["Main read current code; bun test: exit 0"],
+    });
+    expect(isLedgerComplete(failed)).toBe(false);
+  });
+
+  it("rejects attempt-bound reverify and requires an attempt for normal verification", () => {
+    expect(() => verified(resumed())).toThrow(
+      "Reverification must not include an attemptId",
+    );
+    expect(() => reverify(reported())).toThrow(
+      "Verification requires the running attemptId",
+    );
+    for (const passed of [true, false]) {
+      expect(() =>
+        step(resumed(), {
+          action: "verify",
+          assignmentId: "a",
+          passed,
+          evidence: ["Main inspected"],
+          blockers: passed ? ["Contradiction"] : [],
+        }),
+      ).toThrow("outcome and blockers disagree");
+    }
+  });
+
+  it("keeps reverify read-only and gates dependents on fresh main evidence", () => {
+    const state = resumed();
+    expect(() => step(state, { action: "start", assignmentId: "a" })).toThrow(
+      "Only pending assignments can start",
+    );
+    expect(() => step(state, { action: "start", assignmentId: "b" })).toThrow(
+      "main-verified",
+    );
+    expect(
+      step(reverify(state), { action: "start", assignmentId: "b" }, "attempt-b")
+        .assignments[1]?.status,
+    ).toBe("running");
+    const both = resumed({
+      verified: ["a", "b"],
+      blocked: {},
+      priorRepairs: {},
+    });
+    expect(() => reverify(both, "b")).toThrow(
+      "Dependencies must remain main-verified",
+    );
+    expect(reverify(reverify(both), "b").assignments[1]?.status).toBe(
+      "completed",
+    );
+    expect(
+      step(state, {
+        action: "block",
+        assignmentId: "a",
+        blockers: ["Missing current evidence"],
+      }).assignments[0]?.status,
+    ).toBe("blocked");
+  });
+
+  it("charges carried repair budgets and creates fresh mutation successors", () => {
+    const exhausted = reverify(
+      resumed({ verified: ["a"], blocked: {}, priorRepairs: { a: 2 } }),
+      "a",
+      false,
+    );
+    const repair = {
+      action: "repair",
+      assignmentId: "a",
+      newAssignmentId: "fix",
+      task: "Scoped repair",
+    };
+    expect(() => step(exhausted, repair)).toThrow("budget exhausted");
+    const state = step(reverify(resumed(), "a", false), repair);
+    expect(state.assignments.at(-1)).toMatchObject({
+      lineageId: "a",
+      repairCount: 1,
+      priorRepairs: 1,
+      status: "pending",
+    });
+    expect(state.assignments.at(-1)?.resumed).toBeUndefined();
+    expect(() => reverify(state, "fix")).toThrow(
+      "Verification requires the running attemptId",
+    );
+    const failed = verified(
+      reported(state, "fix", "attempt-fix", "run-fix"),
+      "fix",
+      "attempt-fix",
+      false,
+    );
+    expect(() =>
+      step(failed, {
+        ...repair,
+        assignmentId: "fix",
+        newAssignmentId: "fix-2",
+      }),
+    ).toThrow("budget exhausted");
+    expect(() =>
+      validateLedger({
+        ...state,
+        assignments: state.assignments.map((item) => ({
+          ...item,
+          priorRepairs: 2,
+        })),
+      }),
+    ).toThrow("budget");
+    expect(() =>
+      validateLedger({
+        ...state,
+        assignments: state.assignments.map((item) =>
+          item.id === "fix" ? { ...item, priorRepairs: 0 } : item,
+        ),
+      }),
+    ).toThrow("prior repairs");
+    expect(() =>
+      resumed({ verified: [], blocked: {}, priorRepairs: { a: 3 } }),
+    ).toThrow();
+    expect(() =>
+      resumed({ verified: [], blocked: {}, priorRepairs: { a: -1 } }),
+    ).toThrow();
+  });
+
+  it("restores an exhausted blocked lineage as blocked without new mutations", () => {
+    const state = resumed(
+      {
+        verified: [],
+        blocked: { a: ["Logged test failure"] },
+        priorRepairs: { a: 2 },
+      },
+      [roots[0]],
+    );
+    expect(state.assignments[0]).toMatchObject({
+      status: "blocked",
+      blockers: ["Logged test failure"],
+      repairCount: 0,
+      priorRepairs: 2,
+      attemptId: null,
+      report: null,
+    });
+    expect(validateLedger(state)).toEqual(state);
+    expect(() => step(state, { action: "start", assignmentId: "a" })).toThrow(
+      "Only pending assignments can start",
+    );
+    expect(() =>
+      step(state, {
+        action: "repair",
+        assignmentId: "a",
+        newAssignmentId: "fix",
+        task: "Scoped repair",
+      }),
+    ).toThrow("budget exhausted");
+  });
+
+  it("restores an interrupted lineage as blocked and charges its repairs", () => {
+    const interrupted = "Interrupted in a prior session; repair required";
+    const state = resumed(
+      { verified: [], blocked: { a: [interrupted] }, priorRepairs: {} },
+      [roots[0]],
+    );
+    expect(state.assignments[0]).toMatchObject({
+      status: "blocked",
+      blockers: [interrupted],
+      priorRepairs: 0,
+    });
+    expect(() => step(state, { action: "start", assignmentId: "a" })).toThrow(
+      "Only pending assignments can start",
+    );
+    expect(() =>
+      step(state, {
+        action: "verify",
+        assignmentId: "a",
+        passed: true,
+        evidence: ["Main inspected"],
+        blockers: [],
+      }),
+    ).toThrow("Verification requires the running attemptId");
+    const repair = { action: "repair", task: "Scoped repair" };
+    const first = step(state, {
+      ...repair,
+      assignmentId: "a",
+      newAssignmentId: "fix",
+    });
+    expect(first.assignments.at(-1)).toMatchObject({
+      lineageId: "a",
+      repairCount: 1,
+      priorRepairs: 0,
+      status: "pending",
+    });
+    const failed = verified(
+      reported(first, "fix", "attempt-fix", "run-fix"),
+      "fix",
+      "attempt-fix",
+      false,
+    );
+    const second = step(failed, {
+      ...repair,
+      assignmentId: "fix",
+      newAssignmentId: "fix-2",
+    });
+    const exhausted = verified(
+      reported(second, "fix-2", "attempt-fix-2", "run-fix-2"),
+      "fix-2",
+      "attempt-fix-2",
+      false,
+    );
+    expect(() =>
+      step(exhausted, {
+        ...repair,
+        assignmentId: "fix-2",
+        newAssignmentId: "fix-3",
+      }),
+    ).toThrow("budget exhausted");
+  });
+
+  it("keeps lineages without logged progress pending and startable", () => {
+    const state = resumed({ verified: [], blocked: {}, priorRepairs: {} }, [
+      roots[0],
+    ]);
+    expect(state.assignments[0]).toMatchObject({
+      status: "pending",
+      priorRepairs: 0,
+      blockers: [],
+    });
+    expect(
+      step(state, { action: "start", assignmentId: "a" }).assignments[0]
+        ?.status,
+    ).toBe("running");
+  });
+
+  it("rejects starting a lineage root that carries spent repair budget", () => {
+    for (const priorRepairs of [1, 2]) {
+      const state = resumed(
+        { verified: [], blocked: {}, priorRepairs: { a: priorRepairs } },
+        [roots[0]],
+      );
+      expect(() => step(state, { action: "start", assignmentId: "a" })).toThrow(
+        "Resumed lineage has spent repairs; use repair before dispatch",
+      );
+    }
+  });
+
+  it("validates clean reverify state and preserves ordinary completion rules", () => {
+    const state = resumed();
+    for (const patch of [
+      { resumed: false },
+      { resumed: undefined },
+      { attemptId: "attempt" },
+      { toolCallId: "call" },
+      { runId: "run" },
+      { report },
+      { evidence: ["Stale evidence"] },
+      { blockers: ["Stale blocker"] },
+    ]) {
+      expect(() =>
+        validateLedger({
+          ...state,
+          assignments: state.assignments.map((item) =>
+            item.id === "a" ? { ...item, ...patch } : item,
+          ),
+        }),
+      ).toThrow();
+    }
+    const complete = reverify(state);
+    for (const patch of [
+      { resumed: false },
+      { evidence: [] },
+      { blockers: ["Unresolved"] },
+    ]) {
+      expect(() =>
+        validateLedger({
+          ...complete,
+          assignments: complete.assignments.map((item) =>
+            item.id === "a" ? { ...item, ...patch } : item,
+          ),
+        }),
+      ).toThrow("Completion requires");
+    }
+  });
+
+  it("accepts persisted v1 ledgers without the new optional fields", () => {
+    const { specPath: _specPath, ...legacy } = verified();
+    expect(validateLedger(legacy)).toEqual(legacy);
+    expect(
+      restoreLedger(
+        [{ type: "custom", customType: LEDGER_ENTRY_TYPE, data: legacy }],
+        "session",
+      ),
+    ).toEqual(legacy);
+  });
+});
 
 describe("execution ledger", () => {
   it("reconstructs the selected branch of an actual native Pi SessionManager", () => {

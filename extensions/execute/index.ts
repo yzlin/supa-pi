@@ -1,3 +1,6 @@
+import { existsSync } from "node:fs";
+import { join } from "node:path";
+
 import type {
   ExtensionAPI,
   ExtensionCommandContext,
@@ -7,8 +10,20 @@ import {
   EXECUTE_COMMAND_NAME,
   EXECUTE_INVOCATION_PREAMBLE,
   EXECUTE_SYNTHESIS_MESSAGE,
+  SPEC_STATUS_MESSAGE_TYPE,
+  TO_SPEC_ACCEPTED_NOTE,
+  TO_SPEC_COMMAND_DESCRIPTION,
+  TO_SPEC_COMMAND_NAME,
+  TO_SPEC_DERIVE_SLUG,
+  TO_SPEC_EXISTING_LABEL,
+  TO_SPEC_INVALID_SLUG,
+  TO_SPEC_INVOCATION_PREAMBLE,
+  TO_SPEC_OVERWRITE_NOTE,
+  TO_SPEC_QUEUED_MESSAGE,
+  TO_SPEC_SLUG_LABEL,
 } from "./constants";
 import { registerExecutionLedger } from "./runtime";
+import { renderSpecStatus, SPECS_DIR, validSlug } from "./spec-log";
 
 interface MessageLike {
   role?: string;
@@ -113,6 +128,50 @@ export default function executeExtension(pi: ExtensionAPI): void {
 
       pi.sendUserMessage(message, { deliverAs: "followUp" });
       ctx.ui.notify("Queued /execute as a follow-up", "info");
+      return Promise.resolve();
+    },
+  });
+  pi.registerCommand(TO_SPEC_COMMAND_NAME, {
+    description: TO_SPEC_COMMAND_DESCRIPTION,
+    handler(args, ctx) {
+      const input = (args ?? "").trim();
+      const [slug] = input.split(/\s+/);
+      const instructions = input.slice(slug.length).trim();
+      if (slug === "status") {
+        pi.sendMessage({
+          customType: SPEC_STATUS_MESSAGE_TYPE,
+          content: renderSpecStatus(ctx.cwd, instructions || undefined),
+          display: true,
+        });
+        return Promise.resolve();
+      }
+      if (slug && !validSlug(slug)) {
+        ctx.ui.notify(TO_SPEC_INVALID_SLUG, "error");
+        return Promise.resolve();
+      }
+      if (slug && existsSync(join(ctx.cwd, SPECS_DIR, `${slug}.log.jsonl`))) {
+        ctx.ui.notify(`Spec ${slug} ${TO_SPEC_ACCEPTED_NOTE}`, "error");
+        return Promise.resolve();
+      }
+      const packet = [
+        TO_SPEC_INVOCATION_PREAMBLE,
+        `${TO_SPEC_SLUG_LABEL}${slug || TO_SPEC_DERIVE_SLUG}`,
+      ];
+      if (slug && existsSync(join(ctx.cwd, SPECS_DIR, `${slug}.md`))) {
+        packet.push(
+          `${TO_SPEC_EXISTING_LABEL}${SPECS_DIR}/${slug}.md${TO_SPEC_OVERWRITE_NOTE}`,
+        );
+      }
+      if (instructions) {
+        packet.push(instructions);
+      }
+      const message = packet.join("\n\n");
+      if (ctx.isIdle()) {
+        pi.sendUserMessage(message);
+        return Promise.resolve();
+      }
+      pi.sendUserMessage(message, { deliverAs: "followUp" });
+      ctx.ui.notify(TO_SPEC_QUEUED_MESSAGE, "info");
       return Promise.resolve();
     },
   });
