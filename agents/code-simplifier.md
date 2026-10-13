@@ -1,7 +1,7 @@
 ---
 name: code-simplifier
 description: Simplifies and refines code for clarity, consistency, and maintainability while preserving all functionality. Focuses on recently modified code unless instructed otherwise.
-model: openai-codex/gpt-6-astra
+model: claude-bridge/claude-opus-5-5
 thinking: low
 caveman: true
 ---

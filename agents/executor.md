@@ -5,7 +5,7 @@ tools: read,grep,find,ls,bash,edit,write
 extensions: false
 skills: false
 disallowed_tools: execute_checkpoint, goal_checkpoint, subagent
-model: openai-codex/gpt-6.1-sol
+model: claude-bridge/claude-opus-5-5
 thinking: high
 caveman: true
 ---
