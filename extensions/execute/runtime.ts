@@ -21,6 +21,11 @@ import {
   transitionLedger,
 } from "./ledger";
 import {
+  type CheckpointArgs,
+  renderCheckpointCall,
+  renderCheckpointResult,
+} from "./render";
+import {
   CheckpointOutputSchema,
   CheckpointParametersSchema,
   CheckpointSchema,
@@ -214,6 +219,14 @@ export function registerExecutionLedger(
       "Main-session execution ledger only. Requires the invocationId from explicit /execute. accept one canonical plan; start returns an exact subagent task prefix; inspect; verify with independent main evidence; block; repair (max two per lineage); stop. Child claims never complete assignments.",
     parameters: CheckpointParametersSchema,
     outputSchema: CheckpointOutputSchema,
+    renderShell: "self",
+    renderCall: (args, theme, context) =>
+      renderCheckpointCall(args as CheckpointArgs, theme, context),
+    renderResult: (result, options, theme, context) =>
+      renderCheckpointResult(result, options, theme, {
+        ...context,
+        args: context.args as CheckpointArgs,
+      }),
     async execute(_toolCallId, params, signal, _onUpdate, ctx) {
       workspace = ctx.cwd;
       if (loadError) {
