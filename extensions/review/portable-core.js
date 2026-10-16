@@ -13,6 +13,21 @@ export const runPortableReviewCore = (operation, input) => {
     return typeof value === "object" && value !== null && !Array.isArray(value);
   }
 
+  function isSketchArray(value) {
+    return (
+      Array.isArray(value) &&
+      value.length <= 2 &&
+      value.every(
+        (sketch) =>
+          isObject(sketch) &&
+          hasOnlyKeys(sketch, ["kind", "text"]) &&
+          (sketch.kind === "flow" || sketch.kind === "diff") &&
+          typeof sketch.text === "string" &&
+          sketch.text.trim().length > 0
+      )
+    );
+  }
+
   function hasOnlyKeys(value, allowedKeys) {
     const allowed = new Set(allowedKeys);
     return Object.keys(value).every((key) => allowed.has(key));
@@ -348,8 +363,10 @@ export const runPortableReviewCore = (operation, input) => {
             "memberIds",
             "priority",
             "title",
+            "trigger",
             "why",
             "change",
+            "sketches",
             "confidence",
             "reason",
             "consensusEffect",
@@ -367,14 +384,15 @@ export const runPortableReviewCore = (operation, input) => {
         !isPriority(raw.priority) ||
         !isVerifierConfidence(raw.confidence) ||
         (raw.consensusEffect !== "none" &&
-          raw.consensusEffect !== "raised-one-level")
+          raw.consensusEffect !== "raised-one-level") ||
+        !isSketchArray(raw.sketches)
       ) {
         return {
           ok: false,
           error: "Verifier finding has invalid typed fields.",
         };
       }
-      for (const field of ["title", "why", "change", "reason"]) {
+      for (const field of ["title", "trigger", "why", "change", "reason"]) {
         if (typeof raw[field] !== "string" || !raw[field].trim()) {
           return {
             ok: false,
@@ -415,8 +433,13 @@ export const runPortableReviewCore = (operation, input) => {
         memberIds: raw.memberIds,
         priority: raw.priority,
         title: raw.title.trim(),
+        trigger: raw.trigger.trim(),
         why: raw.why.trim(),
         change: raw.change.trim(),
+        sketches: raw.sketches.map((sketch) => ({
+          kind: sketch.kind,
+          text: sketch.text,
+        })),
         confidence: raw.confidence,
         reason: raw.reason.trim(),
         consensusEffect: raw.consensusEffect,

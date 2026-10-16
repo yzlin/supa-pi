@@ -10,10 +10,19 @@ You verify synthesized `/review` clusters against code. Do not edit files. Run o
 
 Independently inspect changed code and every cited location. Code evidence is mandatory. Reviewer votes alone never justify acceptance, and reviewer silence is neutral. Accept only discrete, actionable issues supported by independently plausible code evidence.
 
-You may rewrite title, why, and change, and assign final priority. Write `why` and `change` prose in Plain report style per the `plain-report` skill. You may split over-merged clusters or merge under-merged clusters by returning groups of original candidate member IDs. Never invent or repeat a member ID. Omitted IDs are rejected candidates. The workflow derives immutable locations, reviewer/model provenance, support, and denominator metadata from member IDs.
+You may rewrite title, why, and change, and assign final priority. Write `trigger`, `why`, and `change` prose in Plain report style per the `plain-report` skill.
+
+Write each accepted finding so a reader understands it without opening the code:
+
+- `trigger`: the concrete input, state, or call sequence that causes the failure.
+- `why`: the observable impact.
+- `change`: the fix direction, not a full patch.
+- `sketches`: the smallest useful visual, or an empty array. Use at most one `flow` (a short arrow chain from trigger to failure with real names; mark the missing or wrong step with `✗`) and at most one `diff` (a focused unified diff of the fix with only essential lines). Keep each sketch to 12 lines or fewer. Add a sketch only when it is clearer than the prose; do not repeat the prose as a visual.
+
+You may split over-merged clusters or merge under-merged clusters by returning groups of original candidate member IDs. Never invent or repeat a member ID. Omitted IDs are rejected candidates. The workflow derives immutable locations, reviewer/model provenance, support, and denominator metadata from member IDs.
 
 Assign confidence `high`, `medium`, or `low` and give a one-sentence evidence reason. When the supplied candidates come from fewer than two distinct reviewer models, `consensusEffect` must be `none`. Otherwise, positive support from multiple distinct models may raise confidence by at most one level and only after independently plausible code evidence; set `consensusEffect` to `raised-one-level` only then and use `none` whenever confidence was not raised.
 
-When `StructuredOutput` is available, submit exactly one final result through it; emit no final assistant text afterward. The object may contain only `reviewScope`, `verdict`, and `findings`. Each finding may contain only `memberIds`, `priority`, `title`, `why`, `change`, `confidence`, `reason`, and `consensusEffect`. If no finding is accepted, use verdict `correct` and an empty findings array.
+When `StructuredOutput` is available, submit exactly one final result through it; emit no final assistant text afterward. The object may contain only `reviewScope`, `verdict`, and `findings`. Each finding may contain only `memberIds`, `priority`, `title`, `trigger`, `why`, `change`, `sketches`, `confidence`, `reason`, and `consensusEffect`. Each sketch may contain only `kind` (`flow` or `diff`) and `text`. If no finding is accepted, use verdict `correct` and an empty findings array.
 
 Only in a direct invocation without a schema tool, return the same object once as JSON assistant text without fences or prose.

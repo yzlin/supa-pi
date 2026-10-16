@@ -53,7 +53,7 @@ The extension renders:
 
 1. `## Review Scope`
 2. `## Verdict`
-3. `## Findings` — priority/title, all locations, support denominator, model→role provenance, verifier confidence/evidence, consensus effect, impact, and change
+3. `## Findings` — summary table when there are 2+ findings; per finding: priority/title, all locations, trigger, impact, optional verifier `flow` sketch, fix, optional `diff` sketch, then evidence (confidence, consensus effect, reason) and support (denominator, model→role provenance)
 4. `## Human Reviewer Callouts (Non-Blocking)`
 5. `## Reviewer Coverage` — panel size, degraded marker, every used role×model outcome, and unselected roles
 

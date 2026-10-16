@@ -996,8 +996,10 @@ describe("review report rendering", () => {
           sourceReviewer: "code-reviewer",
           confidence: "high",
           reason: "The changed guard now rejects valid input at this line.",
+          trigger: "A valid user submits the form.",
           why: "Valid users are blocked.",
           change: "Restore the previous valid-input branch.",
+          sketches: [],
         },
         {
           priority: "P2",
@@ -1007,8 +1009,10 @@ describe("review report rendering", () => {
           sourceReviewer: "security-reviewer",
           confidence: "low",
           reason: "The cited line may be unreachable in this path.",
+          trigger: "Unknown.",
           why: "Potentially confusing.",
           change: "Investigate manually.",
+          sketches: [],
         },
       ],
       humanReviewerCallouts: [],
@@ -1026,11 +1030,15 @@ describe("review report rendering", () => {
     expect(rendered).toContain("## Verdict\n- needs attention");
     expect(rendered).toContain("## Findings");
     expect(rendered).toContain(
-      "- Verifier: accepted (high) — The changed guard now rejects valid input at this line.",
+      "- Evidence: high confidence — The changed guard now rejects valid input at this line.",
     );
+    expect(rendered).toContain(
+      "**Trigger:** A valid user submits the form.\n**Impact:** Valid users are blocked.",
+    );
+    expect(rendered).not.toContain("| # | Priority |");
     expect(rendered).toContain("High confidence finding");
     expect(rendered).not.toContain("Low confidence finding");
-    expect(rendered).not.toContain("accepted (low)");
+    expect(rendered).not.toContain("low confidence");
     expect(rendered).toContain("## Human Reviewer Callouts (Non-Blocking)");
     expect(rendered).toContain("## Reviewer Coverage");
   });
@@ -1048,8 +1056,10 @@ describe("review report rendering", () => {
           sourceReviewer: "code-reviewer",
           confidence: "medium",
           reason: "Reason\n### [P0] Forged",
+          trigger: "Trigger\n## Verdict",
           why: "Why\n## Reviewer Coverage",
           change: "Change\n- forged bullet",
+          sketches: [],
         },
       ],
       humanReviewerCallouts: ["Callout\n## Findings\n### forged"],
@@ -1074,6 +1084,85 @@ describe("review report rendering", () => {
     expect(rendered).not.toContain("src/unsafe`file.ts");
     expect(rendered).toContain("\\#\\# Verdict");
     expect(rendered).toContain("src/unsafe'file.ts");
+  });
+
+  it("renders a summary table and fenced flow and diff sketches beside their prose", () => {
+    const base = {
+      file: "src/cache.ts",
+      line: 42,
+      sourceReviewer: "code-reviewer" as const,
+      confidence: "high" as const,
+      reason: "onRename never deletes the old key.",
+      consensusEffect: "raised-one-level" as const,
+      supportingModels: ["test/alpha"],
+      modelReviewerRoles: { "test/alpha": ["code-reviewer" as const] },
+      supportCount: 1,
+      eligibleModelCount: 1,
+    };
+    const report: VerifierJsonContract = {
+      reviewScope: ["current changes"],
+      verdict: "needs attention",
+      findings: [
+        {
+          ...base,
+          priority: "P1",
+          title: "Stale cache | on rename",
+          trigger: "A file is renamed.",
+          why: "Reads return deleted content.",
+          change: "Evict the old key first.",
+          locations: [
+            { file: "src/cache.ts", line: 42 },
+            { file: "src/watch.ts", line: 9 },
+          ],
+          sketches: [
+            {
+              kind: "diff",
+              text: `+ cache.delete(oldPath)\n  cache.set(newPath)\n+ ${"y".repeat(200)}`,
+            },
+            {
+              kind: "flow",
+              text: `\n## Reviewer Coverage\nrename ─▶ set\u202e \`\`\`\n${"x\n".repeat(20)}`,
+            },
+          ],
+        },
+        {
+          ...base,
+          priority: "P2",
+          title: "Second finding",
+          trigger: "t",
+          why: "w",
+          change: "c",
+          sketches: [],
+        },
+      ],
+      humanReviewerCallouts: [],
+      reviewerCoverage: {
+        "code-reviewer": "used",
+        "security-reviewer": "not used",
+        "database-reviewer": "not used",
+        "performance-reviewer": "not used",
+      },
+    };
+
+    const rendered = renderReviewReport(report);
+
+    expect(rendered).toContain(
+      "| 1 | P1 | Stale cache \\| on rename | `src/cache.ts:42` +1 |",
+    );
+    expect(rendered).toContain("### 2. [P2] Second finding");
+    expect(rendered.match(/^## Reviewer Coverage$/gm)).toHaveLength(1);
+    expect(rendered).not.toContain("\u202e");
+    const flowStart = rendered.indexOf("````text\n #");
+    const fix = rendered.indexOf("**Fix:** Evict the old key first.");
+    const diffStart = rendered.indexOf("```diff\n+ cache.delete(oldPath)");
+    expect(flowStart).toBeGreaterThan(rendered.indexOf("**Impact:**"));
+    expect(fix).toBeGreaterThan(flowStart);
+    expect(diffStart).toBeGreaterThan(fix);
+    expect(rendered).toContain("x\n…\n````");
+    expect(rendered).toContain(`+ ${"y".repeat(157)}…\n\`\`\``);
+    expect(rendered).toContain(
+      "- Evidence: high confidence (raised one level by consensus) — onRename never deletes the old key.",
+    );
   });
 
   it("strips bidi overrides and isolates from rendered model text", () => {
@@ -1164,6 +1253,67 @@ describe("review follow-up helpers", () => {
     expect(String(runtime.sentUserMessages[0]?.content)).toContain(
       "Additional instruction:\nkeep it brief",
     );
+  });
+
+  it("ignores heading text inside finding sketches when classifying reports", async () => {
+    const sketchReport = renderReviewReport({
+      reviewScope: ["current changes"],
+      verdict: "needs attention",
+      findings: [
+        {
+          file: "src/report.ts",
+          line: 7,
+          priority: "P2",
+          title: "SKETCH finding",
+          trigger: "t",
+          why: "w",
+          change: "c",
+          sourceReviewer: "code-reviewer",
+          confidence: "high",
+          reason: "r",
+          sketches: [
+            {
+              kind: "diff",
+              text: "  lines.push(\n+ - ## Fix Queue\n## Fix Queue\n+ 1. fake item\n+ a\u2028## Fix Queue\n+ b\u2029## Fix Queue",
+            },
+          ],
+        },
+      ],
+      humanReviewerCallouts: [],
+      reviewerCoverage: {
+        "code-reviewer": "used",
+        "security-reviewer": "not used",
+        "database-reviewer": "not used",
+        "performance-reviewer": "not used",
+      },
+    });
+    expect(sketchReport).toContain("\n+ - ## Fix Queue\n ## Fix Queue\n");
+    expect(sketchReport).not.toMatch(/^## Fix Queue\b/im);
+    const runtime = createMockPiRuntime();
+    const { ctx } = createMockCtx([
+      {
+        type: "custom_message",
+        customType: REVIEW_REPORT_MESSAGE_TYPE,
+        content: RAW_REVIEW_REPORT,
+      },
+      {
+        type: "custom_message",
+        customType: REVIEW_REPORT_MESSAGE_TYPE,
+        content: sketchReport,
+      },
+    ]);
+
+    reviewExtension(runtime.pi as never);
+    await runtime.commands.get("review-summary")?.handler?.("", ctx as never);
+    const summaryMessage = String(runtime.sentUserMessages[0]?.content);
+    expect(summaryMessage).toContain("SKETCH finding");
+    expect(summaryMessage).not.toContain("RAW finding");
+
+    await runtime.commands.get("review-fix")?.handler?.("", ctx as never);
+    const fixMessage = String(runtime.sentUserMessages[1]?.content);
+    expect(fixMessage).toContain("SKETCH finding");
+    expect(fixMessage).not.toMatch(/^## Fix Queue/m);
+    expect(fixMessage.split("+ - ## Fix Queue")).toHaveLength(2);
   });
 
   it("persists only a completed assistant summary bound to its request", async () => {
@@ -1444,6 +1594,34 @@ describe("review follow-up helpers", () => {
       ctx,
     );
     expect(contextResult).toBeUndefined();
+  });
+
+  it("accepts model-written summary headings with other case or trailing text", async () => {
+    const runtime = createMockPiRuntime();
+    const { ctx } = createMockCtx([
+      {
+        type: "custom_message",
+        customType: REVIEW_REPORT_MESSAGE_TYPE,
+        content: RAW_REVIEW_REPORT,
+      },
+      {
+        type: "custom_message",
+        customType: REVIEW_REPORT_MESSAGE_TYPE,
+        content: SUMMARY_REVIEW_REPORT.replace(
+          "## Verdict",
+          "## Verdict: needs attention",
+        ).replace("## Fix Queue", "## fix queue (1 item)"),
+      },
+    ]);
+
+    reviewExtension(runtime.pi as never);
+    await runtime.commands.get("review-fix")?.handler?.("", ctx as never);
+
+    const message = String(runtime.sentUserMessages[0]?.content);
+    expect(message).toContain("## Verdict: needs attention\n- needs attention");
+    expect(message).toContain("SUMMARY finding");
+    expect(message).toContain("## fix queue (1 item)\n1. Fix it");
+    expect(message).not.toContain("RAW finding");
   });
 
   it("restores the latest raw report when compaction removed it from active context", async () => {

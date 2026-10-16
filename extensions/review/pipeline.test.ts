@@ -8,6 +8,7 @@ import type { ExtensionToolContext } from "@earendil-works/pi-coding-agent";
 import { derivePreparedReviewResult } from "./finalization";
 import { runReviewPipeline } from "./pipeline";
 import { prepareReviewPlan } from "./pipeline-contracts";
+import { validatePortableVerifier } from "./portable-core";
 import type { SubagentParams } from "./test-fixtures";
 import {
   clusters,
@@ -383,4 +384,39 @@ it("bounds complete structured payloads before semantic processing", async () =>
     args,
   ) => outcome(args as SubagentParams, { notes: ["x".repeat(1_048_577)] });
   expect(runReviewPipeline({ executeTool }, plan, options())).rejects.toThrow();
+});
+
+it("verifier sketches accept flow and diff only and fail closed otherwise", () => {
+  const candidates = [{ candidateId: "candidate-0001", model: "test/alpha" }];
+  const withSketches = (sketches: unknown) => {
+    const output = verifier(["candidate-0001"]);
+    return { ...output, findings: [{ ...output.findings[0], sketches }] };
+  };
+  expect(
+    validatePortableVerifier(
+      withSketches([
+        { kind: "flow", text: "a ─▶ b" },
+        { kind: "diff", text: "+ fix" },
+      ]),
+      candidates,
+    ).ok,
+  ).toBe(true);
+  for (const sketches of [
+    [{ kind: "excerpt", text: "code" }],
+    [{ kind: "flow", text: "  " }],
+    [{ kind: "flow", text: "a", extra: true }],
+    [
+      { kind: "flow", text: "a" },
+      { kind: "diff", text: "b" },
+      { kind: "flow", text: "c" },
+    ],
+    undefined,
+  ]) {
+    expect(
+      validatePortableVerifier(withSketches(sketches), candidates),
+    ).toEqual({
+      ok: false,
+      error: "Verifier finding has invalid typed fields.",
+    });
+  }
 });

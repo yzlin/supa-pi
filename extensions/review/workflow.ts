@@ -61,7 +61,14 @@ export interface SynthesizedClusterContract {
   reportedPriorities: ReviewPriority[];
   locations: ReviewLocation[];
 }
+export type ReviewSketchKind = "flow" | "diff";
+export interface ReviewSketch {
+  kind: ReviewSketchKind;
+  text: string;
+}
 interface VerifierFindingContract extends ReviewFindingContract {
+  trigger: string;
+  sketches: ReviewSketch[];
   sourceReviewer: ReviewerAgent;
   confidence: VerifierConfidence;
   reason: string;
@@ -81,8 +88,10 @@ export interface VerifierSubmissionJsonContract {
     memberIds: string[];
     priority: ReviewPriority;
     title: string;
+    trigger: string;
     why: string;
     change: string;
+    sketches: ReviewSketch[];
     confidence: VerifierConfidence;
     reason: string;
     consensusEffect: "none" | "raised-one-level";
@@ -131,6 +140,8 @@ export interface ReviewWorkflowResult {
 const MODEL_MARKDOWN_ESCAPE_RE = /([\\`#])/g;
 const MODEL_CONTROL_RE = /[\p{Cc}\p{Cf}]+/gu;
 const WHITESPACE_RE = /\s+/g;
+const MAX_SKETCH_LINES = 12;
+const MAX_SKETCH_LINE_LENGTH = 160;
 
 export function renderReviewReport(
   report: VerifierJsonContract,
@@ -155,16 +166,38 @@ export function renderReviewReport(
   if (renderedFindings.length === 0) {
     lines.push("- Code looks good.");
   } else {
-    for (const finding of renderedFindings) {
+    const locationsOf = (finding: VerifierFindingContract) =>
+      (finding.locations ?? [{ file: finding.file, line: finding.line }]).map(
+        (location) =>
+          `\`${sanitizeInlineCode(location.file)}:${location.line}\``,
+      );
+    if (renderedFindings.length > 1) {
+      lines.push("| # | Priority | Finding | Location |", "|---|---|---|---|");
+      for (const [index, finding] of renderedFindings.entries()) {
+        const locations = locationsOf(finding);
+        const more = locations.length > 1 ? ` +${locations.length - 1}` : "";
+        lines.push(
+          `| ${index + 1} | ${finding.priority} | ${sanitizeTableCell(finding.title)} | ${locations[0].replace(/\|/g, "\\|")}${more} |`,
+        );
+      }
+      lines.push("");
+    }
+    for (const [index, finding] of renderedFindings.entries()) {
+      const flow = finding.sketches.filter((sketch) => sketch.kind === "flow");
+      const diff = finding.sketches.filter((sketch) => sketch.kind === "diff");
       lines.push(
-        `### [${finding.priority}] ${sanitizeMarkdownText(finding.title)}`,
-        `- Locations: ${(finding.locations ?? [{ file: finding.file, line: finding.line }]).map((location) => `\`${sanitizeInlineCode(location.file)}:${location.line}\``).join(", ")}`,
-        `- Support: ${finding.supportCount ?? finding.supportingModels?.length ?? 1}/${finding.eligibleModelCount ?? finding.eligibleModels?.length ?? 1} eligible successful models (configured panel: ${coverage?.configuredPanelSize ?? "unknown"})`,
-        `- Supporting models: ${(finding.supportingModels ?? []).map((model) => `\`${sanitizeInlineCode(model)}\` → ${(finding.modelReviewerRoles?.[model] ?? []).join(", ")}`).join("; ") || "(provenance unavailable)"}`,
-        `- Verifier: accepted (${finding.confidence}) — ${sanitizeMarkdownText(finding.reason)}`,
-        `- Consensus effect: ${finding.consensusEffect ?? "none"}`,
-        `- Why it matters: ${sanitizeMarkdownText(finding.why)}`,
-        `- What should change: ${sanitizeMarkdownText(finding.change)}`,
+        `### ${index + 1}. [${finding.priority}] ${sanitizeMarkdownText(finding.title)}`,
+        locationsOf(finding).join(", "),
+        "",
+        `**Trigger:** ${sanitizeMarkdownText(finding.trigger)}`,
+        `**Impact:** ${sanitizeMarkdownText(finding.why)}`,
+        "",
+        ...flow.flatMap((sketch) => [...renderSketch(sketch), ""]),
+        `**Fix:** ${sanitizeMarkdownText(finding.change)}`,
+        "",
+        ...diff.flatMap((sketch) => [...renderSketch(sketch), ""]),
+        `- Evidence: ${finding.confidence} confidence${finding.consensusEffect === "raised-one-level" ? " (raised one level by consensus)" : ""} — ${sanitizeMarkdownText(finding.reason)}`,
+        `- Support: ${finding.supportCount ?? finding.supportingModels?.length ?? 1}/${finding.eligibleModelCount ?? finding.eligibleModels?.length ?? 1} eligible successful models (configured panel: ${coverage?.configuredPanelSize ?? "unknown"}) — ${(finding.supportingModels ?? []).map((model) => `\`${sanitizeInlineCode(model)}\` → ${(finding.modelReviewerRoles?.[model] ?? []).join(", ")}`).join("; ") || "(provenance unavailable)"}`,
         "",
       );
     }
@@ -224,6 +257,49 @@ export function renderReviewReport(
 
 function sanitizeMarkdownText(value: string): string {
   return collapseModelText(value).replace(MODEL_MARKDOWN_ESCAPE_RE, "\\$1");
+}
+function sanitizeTableCell(value: string): string {
+  return sanitizeMarkdownText(value).replace(/\|/g, "\\|");
+}
+// Sketches keep line breaks, so they need their own guard: no control or
+// format characters, a fence longer than any backtick run inside, and no
+// line that starts with `#` (report consumers detect sections only from lines
+// that start with `## `). U+2028/U+2029 count as line breaks because `^` in
+// multiline regexes matches after them.
+function renderSketch(sketch: ReviewSketch): string[] {
+  const sketchLines = sketch.text
+    .replace(/\t/g, "  ")
+    .split(/\r\n|[\r\n\u2028\u2029]/)
+    .map((line) => {
+      const clean = line.replace(MODEL_CONTROL_RE, "").trimEnd();
+      const clipped =
+        clean.length > MAX_SKETCH_LINE_LENGTH
+          ? `${clean.slice(0, MAX_SKETCH_LINE_LENGTH - 1)}…`
+          : clean;
+      return clipped.replace(/^#/, " #");
+    });
+  while (sketchLines.length && !sketchLines[0].trim()) {
+    sketchLines.shift();
+  }
+  while (sketchLines.length && !sketchLines.at(-1)?.trim()) {
+    sketchLines.pop();
+  }
+  if (sketchLines.length > MAX_SKETCH_LINES) {
+    sketchLines.length = MAX_SKETCH_LINES;
+    sketchLines.push("…");
+  }
+  const longestBacktickRun = Math.max(
+    0,
+    ...sketchLines.map((line) =>
+      Math.max(0, ...(line.match(/`+/g) ?? []).map((run) => run.length)),
+    ),
+  );
+  const fence = "`".repeat(Math.max(3, longestBacktickRun + 1));
+  return [
+    `${fence}${sketch.kind === "diff" ? "diff" : "text"}`,
+    ...sketchLines,
+    fence,
+  ];
 }
 function sanitizeInlineCode(value: string): string {
   return collapseModelText(value).replace(/`/g, "'");

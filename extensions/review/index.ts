@@ -994,13 +994,14 @@ function looksLikeReviewReport(text: string): boolean {
 }
 
 function isReviewSummaryReport(text: string): boolean {
-  return (
-    looksLikeReviewReport(text) && normalizedIncludes(text, "## Fix Queue")
-  );
+  return looksLikeReviewReport(text) && headingLine("Fix Queue").test(text);
 }
 
-function normalizedIncludes(text: string, needle: string): boolean {
-  return text.toLowerCase().includes(needle.toLowerCase());
+// Only a line that starts with `## <heading>` counts, so heading text quoted
+// inside a finding sketch cannot fake a section. Summaries are model-written,
+// so case and trailing text such as `: needs attention` may vary.
+function headingLine(heading: string): RegExp {
+  return new RegExp(`^## ${heading}\\b`, "mi");
 }
 
 function extractReviewReport(entry: SessionEntry): string {
@@ -1046,7 +1047,7 @@ function hashText(text: string): string {
 function extractReviewFixContext(reviewReport: string): string {
   return ["Verdict", "Findings", "Fix Queue"]
     .map((heading) => {
-      const start = reviewReport.indexOf(`## ${heading}`);
+      const start = reviewReport.search(headingLine(heading));
       if (start < 0) {
         return "";
       }
