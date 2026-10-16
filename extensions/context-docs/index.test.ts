@@ -484,30 +484,36 @@ describe("context-docs runtime reminder", () => {
       const harness = createHarness();
       const handler = harness.handlers.get("before_agent_start");
 
-      const skipped = handler?.(
-        {
-          type: "before_agent_start",
-          prompt: "what is 2+2?",
-          systemPrompt: "base",
-        },
-        { ...harness.ctx, cwd: tempRoot },
-      );
+      const skippedEvent = {
+        type: "before_agent_start",
+        prompt: "what is 2+2?",
+        systemPrompt: "base",
+        systemPromptOptions: { sections: {} as Record<string, string> },
+      };
+      const skipped = handler?.(skippedEvent, {
+        ...harness.ctx,
+        cwd: tempRoot,
+      });
 
-      const injected = handler?.(
-        {
-          type: "before_agent_start",
-          prompt: "/context-note -- Keep docs scoped",
-          systemPrompt: "base",
-        },
-        { ...harness.ctx, cwd: tempRoot },
-      ) as { systemPrompt?: string } | undefined;
+      const injectedEvent = {
+        type: "before_agent_start",
+        prompt: "/context-note -- Keep docs scoped",
+        systemPrompt: "base",
+        systemPromptOptions: { sections: {} as Record<string, string> },
+      };
+      const injected = handler?.(injectedEvent, {
+        ...harness.ctx,
+        cwd: tempRoot,
+      });
 
       expect(skipped).toBeUndefined();
-      expect(injected?.systemPrompt).toContain("Context-docs:");
-      expect(injected?.systemPrompt).toContain(
-        "CONTEXT.md domain/product only",
-      );
-      expect(injected?.systemPrompt).toContain(
+      expect(skippedEvent.systemPromptOptions.sections).toEqual({});
+      // Whole-prompt replacements are dropped by claude-bridge; use a section.
+      expect(injected).toBeUndefined();
+      const reminder = injectedEvent.systemPromptOptions.sections.context_docs;
+      expect(reminder).toContain("Context-docs:");
+      expect(reminder).toContain("CONTEXT.md domain/product only");
+      expect(reminder).toContain(
         "no execution ledger, assignments, or goal state",
       );
     } finally {

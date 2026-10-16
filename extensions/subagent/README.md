@@ -131,7 +131,9 @@ whole-session cancellation is for the parent owner.
   Only the selected provider's entry is added to a restricted child. Project
   files cannot add entries. Malformed files fail before launch. Without an
   entry, the child exits with `Unknown provider`.
-- The role body is system instruction text. Only the task is fresh user input;
+- The role body is system instruction text, added as the `subagent_role`
+  system-prompt section (not a forced prompt, which `pi-claude-bridge` drops).
+  Only the task is fresh user input;
   no parent conversation or saved child conversation is imported. Normal
   workspace guidance remains. Only descendants of a trusted parent inherit
   its workspace approval; other child workspaces receive no new approval.

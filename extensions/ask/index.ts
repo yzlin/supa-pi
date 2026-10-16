@@ -720,16 +720,12 @@ export default function ask(pi: ExtensionAPI): void {
       return;
     }
 
-    return {
-      systemPrompt: `${event.systemPrompt}
-
-QUESTION-ASKING RULES:
-- If you need clarification from the user and interactive UI is available, prefer the ask tool over asking plain-text questions.
+    // A section, not a returned systemPrompt: providers such as claude-bridge
+    // forward sections but drop whole-prompt replacements.
+    event.systemPromptOptions.sections.question_asking_rules = `- If you need clarification from the user and interactive UI is available, prefer the ask tool over asking plain-text questions.
 - Use ask for preferences, confirmations, missing requirements, and tradeoff choices that materially affect the work.
 - Ask at most 1-3 focused questions at a time.
-- Do not use ask in background, subagent, or non-interactive contexts.
-`,
-    };
+- Do not use ask in background, subagent, or non-interactive contexts.`;
   });
 
   pi.on("agent_end", (event, ctx) => {

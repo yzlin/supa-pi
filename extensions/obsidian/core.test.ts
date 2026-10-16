@@ -54,7 +54,7 @@ function writeConfig(config: unknown) {
   writeFileSync(process.env.PI_OBSIDIAN_CONFIG_PATH, JSON.stringify(config));
 }
 
-type HookName = "before_agent_start" | "before_provider_request" | "tool_call";
+type HookName = "before_agent_start" | "tool_call";
 type HookHandler = (event: unknown, context: ExtensionContext) => unknown;
 type RegisteredCommand = NonNullable<
   Parameters<ExtensionAPI["registerCommand"]>[1]
@@ -102,11 +102,14 @@ function createExtensionHarness() {
 
   return {
     entries,
-    beforeAgentStart(cwd: string, systemPrompt = "base prompt") {
-      return hooks.get("before_agent_start")?.({ systemPrompt }, makeCtx(cwd));
-    },
-    beforeProviderRequest(payload: unknown, cwd: string) {
-      return hooks.get("before_provider_request")?.({ payload }, makeCtx(cwd));
+    /** Runs before_agent_start; returns the handler result and resulting sections. */
+    beforeAgentStart(cwd: string) {
+      const sections: Record<string, string> = {};
+      const result = hooks.get("before_agent_start")?.(
+        { systemPrompt: "base prompt", systemPromptOptions: { sections } },
+        makeCtx(cwd),
+      );
+      return { result, sections };
     },
     toolCall(event: Partial<ToolCallEvent>, cwd: string) {
       return hooks.get("tool_call")?.(event, makeCtx(cwd));
@@ -281,13 +284,12 @@ describe("obsidian context", () => {
 
     const harness = createExtensionHarness();
 
-    expect(harness.beforeAgentStart(child)).toBeUndefined();
-    expect(harness.beforeAgentStart(child)).toBeUndefined();
-    expect(
-      harness.beforeProviderRequest({ system: "base provider prompt" }, child),
-    ).toEqual({
-      system: expect.stringContaining(`## ${realpathSync(childClaude)}`),
-    });
+    expect(harness.beforeAgentStart(child).result).toBeUndefined();
+    const { result, sections } = harness.beforeAgentStart(child);
+    expect(result).toBeUndefined();
+    expect(sections.obsidian_context).toContain(
+      `## ${realpathSync(childClaude)}`,
+    );
     expect(harness.entries).toEqual([
       {
         customType: OBSIDIAN_CONTEXT_ENTRY,
@@ -321,7 +323,10 @@ describe("obsidian vault resolution", () => {
 
     const harness = createExtensionHarness();
 
-    expect(harness.beforeAgentStart(outside)).toBeUndefined();
+    expect(harness.beforeAgentStart(outside)).toEqual({
+      result: undefined,
+      sections: {},
+    });
     expect(
       harness.toolCall(
         { toolName: "read", input: { path: join(root, "note.md") } },
@@ -348,22 +353,32 @@ describe("obsidian vault resolution", () => {
 });
 
 describe("obsidian extension behavior", () => {
-  it("injects initial context into provider payloads once", () => {
+  it("adds initial context as a system-prompt section once", () => {
     useTempConfig("append-prompt");
     const root = makeVault("append-prompt");
     writeFileSync(join(root, "CLAUDE.md"), "root rules");
     writeConfig({ enabled: true, vaults: [{ path: root }] });
 
     const harness = createExtensionHarness();
+    const { result, sections } = harness.beforeAgentStart(root);
 
-    expect(harness.beforeAgentStart(root, "base prompt")).toBeUndefined();
-    const result = harness.beforeProviderRequest(
-      { system: "base provider prompt" },
-      root,
-    ) as { system: string };
+    // Payload patches never run on claude-bridge; sections reach every provider.
+    expect(result).toBeUndefined();
+    expect(sections.obsidian_context).toStartWith(
+      "Obsidian vault context loaded from context files.",
+    );
+    expect(sections.obsidian_context.match(/root rules/g)).toHaveLength(1);
+  });
 
-    expect(result.system).toStartWith("base provider prompt\n\n");
-    expect(result.system.match(/root rules/g)).toHaveLength(1);
+  it("adds no section outside a vault or without context files", () => {
+    useTempConfig("no-section");
+    const root = makeVault("no-section");
+    writeConfig({ enabled: true, vaults: [{ path: root }] });
+
+    const harness = createExtensionHarness();
+
+    expect(harness.beforeAgentStart(root).sections).toEqual({});
+    expect(harness.beforeAgentStart(tmpdir()).sections).toEqual({});
   });
 
   it("does not double-load a directory when a higher-priority file appears mid-session", () => {
@@ -389,14 +404,12 @@ describe("obsidian extension behavior", () => {
         data: { paths: [realpathSync(claude)] },
       },
     ]);
-    expect(
-      harness.beforeProviderRequest({ system: "base provider prompt" }, root),
-    ).toEqual({
-      system: expect.stringContaining("claude rules"),
-    });
+    const { sections } = harness.beforeAgentStart(root);
+    expect(sections.obsidian_context).toContain("claude rules");
+    expect(sections.obsidian_context).not.toContain("agents rules");
   });
 
-  it("injects context loaded by a guarded tool call into provider retry payloads", () => {
+  it("includes context loaded by a guarded tool call in the next run's section", () => {
     useTempConfig("provider-retry");
     const root = makeVault("provider-retry");
     const child = join(root, "child");
@@ -410,43 +423,9 @@ describe("obsidian extension behavior", () => {
       root,
     );
 
-    expect(
-      harness.beforeProviderRequest({ system: "base provider prompt" }, root),
-    ).toEqual({
-      system: expect.stringContaining("base provider prompt\n\nObsidian"),
-    });
-    expect(
-      harness.beforeProviderRequest(
-        { messages: [{ role: "system", content: "base message prompt" }] },
-        root,
-      ),
-    ).toEqual({
-      messages: [
-        {
-          role: "system",
-          content: expect.stringContaining("retry rules"),
-        },
-      ],
-    });
-    expect(
-      harness.beforeProviderRequest(
-        {
-          system: [
-            { type: "text", text: "oauth identity" },
-            { type: "text", text: "base provider prompt" },
-          ],
-        },
-        root,
-      ),
-    ).toEqual({
-      system: [
-        { type: "text", text: "oauth identity" },
-        {
-          type: "text",
-          text: expect.stringContaining("retry rules"),
-        },
-      ],
-    });
+    expect(harness.beforeAgentStart(root).sections.obsidian_context).toContain(
+      "retry rules",
+    );
   });
 
   it("does not persist oversized context loaded by a guarded tool call", () => {
@@ -485,12 +464,15 @@ describe("obsidian extension behavior", () => {
     const harness = createExtensionHarness();
     const event = { toolName: "read", input: { path: join(child, "note.md") } };
 
+    // Sections change only at run start, so mid-run context rides in the reason.
     expect(harness.toolCall(event, root)).toEqual({
       block: true,
       reason: `Obsidian loaded missing context for ${join(
         child,
         "note.md",
-      )}. Retry the same structured tool call now.`,
+      )}. Follow these instructions in parent-to-child order, then retry the same structured tool call.\n\n## ${realpathSync(
+        agents,
+      )}\n\nchild rules`,
     });
     expect(harness.toolCall(event, root)).toBeUndefined();
     expect(harness.entries).toEqual([

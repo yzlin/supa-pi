@@ -108,11 +108,16 @@ async function generateContextSummary(
   const response = await modelRegistry.complete(
     model,
     { systemPrompt: CONTEXT_SUMMARY_SYSTEM_PROMPT, messages: [userMessage] },
-    { signal },
+    // One-off call: claude-bridge accepts a custom system prompt only for
+    // uncached, tool-less, single-message calls.
+    { signal, cacheRetention: "none" },
   );
 
   if (response.stopReason === "aborted") {
     return null;
+  }
+  if (response.stopReason === "error") {
+    throw new Error(response.errorMessage ?? "handoff summary request failed");
   }
 
   return response.content

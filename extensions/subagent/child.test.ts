@@ -104,6 +104,14 @@ test("tools:none retains report tool; invalid reports give feedback; one missing
           context.messages.filter((message) => message.role === "system"),
         ),
       ).toContain("ROLE_SYSTEM_ONLY");
+      // A section, not a forced prompt: claude-bridge drops forced prompts.
+      expect(
+        context.messages.some(
+          (message) =>
+            message.role === "system" &&
+            message.sections?.subagent_role?.includes("ROLE_SYSTEM_ONLY"),
+        ),
+      ).toBe(true);
       expect(
         JSON.stringify(
           context.messages.filter((message) => message.role === "user"),

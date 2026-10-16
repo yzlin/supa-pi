@@ -379,17 +379,13 @@ export function registerCavemanMode(pi: ExtensionAPI): void {
     refreshRuntimeState(ctx);
   });
 
+  // A section, not a returned systemPrompt: providers such as claude-bridge
+  // forward sections but drop whole-prompt replacements. Sections are rebuilt
+  // every run, so an inactive mode needs no stripping.
   pi.on("before_agent_start", (event: BeforeAgentStartEvent) => {
-    const systemPrompt = applyCavemanPrompt(
-      event.systemPrompt,
-      cavemanModeEnabled,
-    );
-
-    if (systemPrompt === event.systemPrompt) {
-      return;
+    if (cavemanModeEnabled) {
+      event.systemPromptOptions.sections.caveman_mode = CAVEMAN_MODE_PROMPT;
     }
-
-    return { systemPrompt };
   });
 
   pi.registerCommand("caveman", {

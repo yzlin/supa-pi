@@ -70,124 +70,21 @@ function addMissingContext(
   return missing;
 }
 
-function appendObsidianPrompt(
-  systemPrompt: string,
-  contextPrompt: string,
-): string {
-  return `${systemPrompt}\n\n${contextPrompt}`;
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return value !== null && typeof value === "object";
-}
-
-function isTextSystemBlock(
-  block: unknown,
-): block is Record<string, unknown> & { text: string; type: "text" } {
-  return (
-    isRecord(block) && block.type === "text" && typeof block.text === "string"
-  );
-}
-
-function isSystemMessage(
-  message: unknown,
-): message is Record<string, unknown> & { content: string; role: "system" } {
-  return (
-    isRecord(message) &&
-    message.role === "system" &&
-    typeof message.content === "string"
-  );
-}
-
-function appendToAnthropicSystemBlock(
-  block: unknown,
-  contextPrompt: string,
-): unknown {
-  if (!isTextSystemBlock(block)) {
-    return block;
-  }
-
-  return {
-    ...block,
-    text: appendObsidianPrompt(block.text, contextPrompt),
-  };
-}
-
-function appendToProviderPayload(
-  payload: unknown,
-  contextPrompt: string,
-): unknown | undefined {
-  if (!isRecord(payload)) {
-    return;
-  }
-
-  if (typeof payload.system === "string") {
-    return {
-      ...payload,
-      system: appendObsidianPrompt(payload.system, contextPrompt),
-    };
-  }
-  if (Array.isArray(payload.system)) {
-    const lastTextIndex = payload.system.findLastIndex(isTextSystemBlock);
-    if (lastTextIndex >= 0) {
-      return {
-        ...payload,
-        system: payload.system.map((item, index) =>
-          index === lastTextIndex
-            ? appendToAnthropicSystemBlock(item, contextPrompt)
-            : item,
-        ),
-      };
-    }
-  }
-  if (typeof payload.systemPrompt === "string") {
-    return {
-      ...payload,
-      systemPrompt: appendObsidianPrompt(payload.systemPrompt, contextPrompt),
-    };
-  }
-  if (Array.isArray(payload.messages)) {
-    const messages = payload.messages;
-    const first = messages[0];
-    if (isSystemMessage(first)) {
-      return {
-        ...payload,
-        messages: [
-          {
-            ...first,
-            content: appendObsidianPrompt(first.content, contextPrompt),
-          },
-          ...messages.slice(1),
-        ],
-      };
-    }
-  }
-
-  return;
-}
-
 export default function obsidianExtension(pi: ExtensionAPI): void {
-  pi.on("before_agent_start", (_event, ctx) => {
+  // A section, not a provider payload patch: claude-bridge never runs
+  // before_provider_request, and payload shapes differ per provider.
+  pi.on("before_agent_start", (event, ctx) => {
     const { active, state } = getRuntime(ctx);
     if (!active) {
       return;
     }
 
     addMissingContext(pi, active, state, ctx.cwd);
-  });
-
-  pi.on("before_provider_request", (event, ctx) => {
-    const { active, state } = getRuntime(ctx);
-    if (!active) {
-      return;
-    }
-
     const paths = activeContextPaths(active, state);
-    if (paths.length === 0) {
-      return;
+    if (paths.length > 0) {
+      event.systemPromptOptions.sections.obsidian_context =
+        buildObsidianPrompt(paths);
     }
-
-    return appendToProviderPayload(event.payload, buildObsidianPrompt(paths));
   });
 
   pi.on("tool_call", (event, ctx) => {
@@ -213,9 +110,11 @@ export default function obsidianExtension(pi: ExtensionAPI): void {
         return;
       }
 
+      // Sections change only at run start, so deliver mid-run context in the
+      // block reason; the next run's section includes it.
       return {
         block: true,
-        reason: `Obsidian loaded missing context for ${targetPath}. Retry the same structured tool call now.`,
+        reason: `Obsidian loaded missing context for ${targetPath}. Follow these instructions in parent-to-child order, then retry the same structured tool call.\n\n${loadContextFiles(missing)}`,
       };
     } catch (error) {
       return {

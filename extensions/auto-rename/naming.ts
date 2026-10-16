@@ -192,6 +192,9 @@ export async function generateSessionTitle(
       ],
     };
     const completion = ctx.modelRegistry.complete(ctx.model, request, {
+      // One-off call: claude-bridge accepts a custom system prompt only for
+      // uncached, tool-less, single-message calls.
+      cacheRetention: "none",
       maxTokens: MAX_TITLE_TOKENS,
       timeoutMs: config.timeoutMs,
       maxRetries: 0,

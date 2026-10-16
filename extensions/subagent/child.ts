@@ -178,8 +178,11 @@ export function registerChildBootstrap(
       ]
         .filter(Boolean)
         .join("\n\n");
-      // Preserve normal workspace guidance, including extensions that already installed an opaque prompt.
-      event.systemPromptOptions.forceSystemPrompt = `${event.systemPrompt}\n\n${instructions}`;
+      // A section, not forceSystemPrompt: providers such as claude-bridge forward
+      // sections but drop forced prompts. Normal workspace guidance stays intact.
+      if (instructions) {
+        event.systemPromptOptions.sections.subagent_role = instructions;
+      }
     });
   pi.on("input", (event) => {
     if (config.agent?.skills === false && /^\s*\/skill:/.test(event.text)) {

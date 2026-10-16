@@ -155,16 +155,22 @@ describe("ask public runtime boundary", () => {
     ).toEqual([expect.stringContaining("ask ")]);
 
     const beforeAgentStart = handlers.get("before_agent_start");
-    const guidance = await beforeAgentStart?.(
-      { systemPrompt: "Base prompt" },
-      { hasUI: true },
-    );
+    const startEvent = {
+      systemPrompt: "Base prompt",
+      systemPromptOptions: { sections: {} as Record<string, string> },
+    };
+    const guidance = await beforeAgentStart?.(startEvent, { hasUI: true });
+    // Whole-prompt replacements are dropped by claude-bridge; use a section.
+    expect(guidance).toBeUndefined();
     const askFacingCopy = [
       tools[0]?.description,
       tools[0]?.promptSnippet,
       ...(tools[0]?.promptGuidelines ?? []),
-      guidance?.systemPrompt,
+      startEvent.systemPromptOptions.sections.question_asking_rules,
     ].join("\n");
+    expect(
+      startEvent.systemPromptOptions.sections.question_asking_rules,
+    ).toContain("prefer the ask tool");
     expect(askFacingCopy.toLowerCase()).toContain("ask");
     expect(askFacingCopy.toLowerCase()).not.toContain("questionnaire");
 
@@ -2159,6 +2165,36 @@ describe("createAskEnvelope", () => {
       value: ["docs", "code"],
       multi: true,
     });
+  });
+
+  it("tells the model to reply visibly to free text before re-asking", () => {
+    const result = createAskEnvelope({
+      questions: [
+        {
+          id: "format",
+          label: "Format",
+          prompt: "Which format?",
+          options: [
+            { value: "json", label: "JSON" },
+            { value: "yaml", label: "YAML" },
+          ],
+        },
+      ],
+      answers: [
+        {
+          kind: "custom",
+          id: "format",
+          value: "elaborate more on this",
+          label: "elaborate more on this",
+          wasCustom: true,
+        },
+      ],
+      cancelled: false,
+    });
+
+    expect(result.content[0]?.text).toBe(
+      "User has answered your questions:\nFormat: user wrote: elaborate more on this\n\nFree-text replies (Format) may be questions or requests for clarification rather than answers. Reply to them in visible text to the user first; do not re-ask those questions before the user has seen your reply.",
+    );
   });
 });
 

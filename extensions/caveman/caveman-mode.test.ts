@@ -445,19 +445,16 @@ describe("caveman mode", () => {
   it("appends caveman prompt only while active", () => {
     const { handlers } = setupHarness();
     const beforeAgentStart = getHandler(handlers, "before_agent_start");
-    const inactiveResult = beforeAgentStart({
+    const startEvent = () => ({
       type: "before_agent_start",
       prompt: "hi",
       systemPrompt: "base",
+      systemPromptOptions: { sections: {} as Record<string, string> },
     });
-    const inactiveWithExistingPromptResult = beforeAgentStart({
-      type: "before_agent_start",
-      prompt: "hi",
-      systemPrompt: `base\n\n${CAVEMAN_MODE_PROMPT}`,
-    });
+    const inactiveEvent = startEvent();
 
-    expect(inactiveResult).toBeUndefined();
-    expect(inactiveWithExistingPromptResult).toEqual({ systemPrompt: "base" });
+    expect(beforeAgentStart(inactiveEvent)).toBeUndefined();
+    expect(inactiveEvent.systemPromptOptions.sections).toEqual({});
 
     const { ctx } = createContext([
       {
@@ -468,13 +465,13 @@ describe("caveman mode", () => {
     ]);
 
     getHandler(handlers, "session_start")({ type: "session_start" }, ctx);
-    const activeResult = beforeAgentStart({
-      type: "before_agent_start",
-      prompt: "hi",
-      systemPrompt: "base",
-    }) as { systemPrompt?: string } | undefined;
+    const activeEvent = startEvent();
 
-    expect(activeResult?.systemPrompt).toBe(`base\n\n${CAVEMAN_MODE_PROMPT}`);
+    // Whole-prompt replacements are dropped by claude-bridge; use a section.
+    expect(beforeAgentStart(activeEvent)).toBeUndefined();
+    expect(activeEvent.systemPromptOptions.sections.caveman_mode).toBe(
+      CAVEMAN_MODE_PROMPT,
+    );
   });
 
   it("clears status when no valid session state exists", () => {

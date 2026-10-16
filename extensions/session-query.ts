@@ -178,7 +178,9 @@ export default function (pi: ExtensionAPI) {
         const response = await ctx.modelRegistry.complete(
           queryModel,
           { systemPrompt: QUERY_SYSTEM_PROMPT, messages: [userMessage] },
-          { signal },
+          // One-off call: claude-bridge accepts a custom system prompt only for
+          // uncached, tool-less, single-message calls.
+          { signal, cacheRetention: "none" },
         );
 
         if (response.stopReason === "aborted") {
@@ -186,6 +188,11 @@ export default function (pi: ExtensionAPI) {
             content: [{ type: "text" as const, text: "Query was cancelled." }],
             details: { cancelled: true },
           };
+        }
+        if (response.stopReason === "error") {
+          return errorResult(
+            `Error querying session: ${response.errorMessage ?? "model request failed"}`,
+          );
         }
 
         const answer = response.content

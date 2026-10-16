@@ -54,6 +54,8 @@ Reserved values and labels are injected by the extension and cannot be supplied 
 
 Successful results are returned through `createAskEnvelope` as both text content and structured `details`.
 
+When any answer is free text, the text content names those questions, says the replies may be questions or requests for clarification, and tells the model to reply in visible text before it re-asks them. Without this, Claude Opus 5.5 often answered replies such as "elaborate more on this" only in hidden reasoning and re-asked at once. A conditional "if it is a question" wording did not fix this in live tests. Results without free-text answers keep the plain `continue` line.
+
 `details` contains:
 
 - `questions`: normalized questions, including default labels.

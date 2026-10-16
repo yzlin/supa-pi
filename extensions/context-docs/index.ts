@@ -511,9 +511,9 @@ export default function contextDocsExtension(pi: ExtensionAPI): void {
       return;
     }
 
-    return {
-      systemPrompt: `${event.systemPrompt}\n\n${CONTEXT_DOCS_REMINDER}`,
-    };
+    // A section, not a returned systemPrompt: providers such as claude-bridge
+    // forward sections but drop whole-prompt replacements.
+    event.systemPromptOptions.sections.context_docs = CONTEXT_DOCS_REMINDER;
   });
 }
 

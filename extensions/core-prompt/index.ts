@@ -9,10 +9,10 @@ export default function corePromptExtension(pi: ExtensionAPI) {
       path.dirname(new URL(import.meta.url).pathname),
       "prompt.md",
     );
-    const prompt = fs.readFileSync(promptPath, "utf8").trim();
-
-    return {
-      systemPrompt: `${event.systemPrompt}\n\n${prompt}`,
-    };
+    // A section, not a returned systemPrompt: providers such as claude-bridge
+    // forward sections but drop whole-prompt replacements.
+    event.systemPromptOptions.sections.supapi_core = fs
+      .readFileSync(promptPath, "utf8")
+      .trim();
   });
 }

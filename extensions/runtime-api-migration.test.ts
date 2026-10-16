@@ -541,6 +541,7 @@ describe("Pi 0.84 runtime APIs", () => {
 
       const signal = new AbortController().signal;
       const completionCalls: unknown[][] = [];
+      let failNext = false;
       const ctx = {
         model,
         modelRegistry: {
@@ -549,6 +550,14 @@ describe("Pi 0.84 runtime APIs", () => {
           },
           complete(...args: unknown[]) {
             completionCalls.push(args);
+            if (failNext) {
+              return Promise.resolve({
+                role: "assistant",
+                content: [],
+                stopReason: "error",
+                errorMessage: "prompt-capture: no capture",
+              });
+            }
             return assistantResponse("Use the public runtime API.");
           },
         },
@@ -567,8 +576,25 @@ describe("Pi 0.84 runtime APIs", () => {
 
       expect(completionCalls).toHaveLength(1);
       expect(completionCalls[0]?.[0]).toBe(model);
-      expect(completionCalls[0]?.[2]).toEqual({ signal });
+      // claude-bridge accepts a custom system prompt only for uncached calls.
+      expect(completionCalls[0]?.[2]).toEqual({
+        signal,
+        cacheRetention: "none",
+      });
       expect(result.content[0]?.text).toContain("Use the public runtime API.");
+
+      // A failed model request is reported, not returned as an empty answer.
+      failNext = true;
+      const failed = await tool.execute(
+        "call-2",
+        { sessionPath, question: "What was decided?" },
+        signal,
+        undefined,
+        ctx,
+      );
+      expect(failed.content[0]?.text).toContain(
+        "Error querying session: prompt-capture: no capture",
+      );
     } finally {
       openSpy?.mockRestore();
       rmSync(cwd, { recursive: true, force: true });

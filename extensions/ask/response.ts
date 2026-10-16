@@ -34,7 +34,19 @@ export function createAskEnvelope(result: AskResult): {
   }
 
   const summary = createAnswerSummary(result.questions, result.answers);
-  const text = `User has answered your questions:\n${summary}\n\nYou can now continue with the user's answers in mind.`;
+  // Free text can be a meta-question ("elaborate more"). A conditional nudge was
+  // not enough: models answered only in hidden reasoning and re-asked at once.
+  const customLabels = result.answers
+    .filter((answer) => answer.kind === "custom")
+    .map(
+      (answer) =>
+        result.questions.find((question) => question.id === answer.id)?.label ||
+        answer.id,
+    );
+  const closing = customLabels.length
+    ? `Free-text replies (${customLabels.join(", ")}) may be questions or requests for clarification rather than answers. Reply to them in visible text to the user first; do not re-ask those questions before the user has seen your reply.`
+    : "You can now continue with the user's answers in mind.";
+  const text = `User has answered your questions:\n${summary}\n\n${closing}`;
   return {
     content: [{ type: "text", text }],
     details: {
