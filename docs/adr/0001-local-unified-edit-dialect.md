@@ -8,6 +8,9 @@ read_when:
 
 - Status: Proposed; deterministic implementation complete, live reliability gate pending
 - Date: 2026-07-14
+- Deciders: unknown
+- Supersedes: none
+- Superseded by: none
 
 ## Context
 

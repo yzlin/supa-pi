@@ -11,6 +11,7 @@
 ## Architecture decisions
 
 - `docs/adr/` — proposed, accepted, superseded, deprecated, or rejected tradeoff decisions.
+- `docs/adr/0001-local-unified-edit-dialect.md` — read before changing the tool-display edit schema, unified-edit dialect, edit mutation safety, compatibility policy, or the live reliability gate (status: proposed).
 - `docs/adr/0002-use-pi-fullscreen.md` — read before changing Pi version support, setup TUI defaults, fullscreen/regular compatibility, or pieditor viewport ownership.
 
 ## Context notes
@@ -23,13 +24,13 @@
 - `docs/context/gpt-5.6-harness-optimization.md` — read before interpreting historical GPT-5.6 reasoning, service-tier, prompt, caching, tool-surface, or eval evidence.
 - `docs/context/gpt-6-astra-harness-readiness.md` — read before interpreting historical Astra approvals and comparisons, or planning an approval-gated Astra eval or full-stack probe.
 - `docs/context/harness-contract-audit.md` — read before changing research-artifact ownership, search-first delegation, or instruction ownership across prompts, agents, skills, and rules; preserves historical audit evidence and deferred live-calibration gates.
+- `docs/context/upstream-companion-history.md` — read before interpreting historical `@tintinweb/pi-subagents`/`@tintinweb/pi-tasks` execution or public-workflow review decisions; not active instructions.
 - `extensions/review/README.md` — read before changing `/review`, `/review-summary`, `/review-fix`, reviewer-agent orchestration, or review prompt contracts.
 - `extensions/trust-github-repos/README.md` — read before changing GitHub-owner auto-trust, `/trust-github-repos`, its global owners config, fail-closed behavior, or stored-trust boundaries.
 
 ## Major extension docs
 
 - `extensions/subagent/README.md` — read before changing blocking delegation, trusted parent agent discovery, role controls/settings precedence, task-only children, reporting/evidence, cancellation, or tmux/Pi lifecycle boundaries.
-
 - `extensions/model-profiles/README.md` — read before changing `/profile`, `model-profiles.json`, Generated agent overrides, or live `~/.pi/agent/agents` file ownership.
 - `extensions/skill-router/README.md` — read before changing skill-router registration/order, effective-catalog policy, TypeSafe authentication or paid consent, privacy/limits, lifecycle fallback, or rollout claims.
 - `extensions/auto-rename/README.md` — read before changing automatic session naming, `/auto-rename`, its global configuration, title safety/privacy boundaries, or session/tree concurrency protections.
@@ -56,6 +57,7 @@
 - `extensions/obsidian/README.md` — read before changing Obsidian vault activation, dynamic context-file discovery or precedence, guarded path behavior, context injection, or `/obsidian` status output.
 - `@yzlin/pieditor` — external npm-installed Pi package for editor UX behavior; `setup.sh` requires the compositor-free 2.0.0 release via `npm:@yzlin/pieditor@2.0.0`. Pi 0.84+ owns regular/fullscreen viewport composition; read `docs/adr/0002-use-pi-fullscreen.md` before adding editor-surface coordination.
 - `extensions/tool-display/README.md` — read before changing tool renderer ownership, config, skill-file `read` override behavior, tool-display metadata, or RTK full-skill-read compaction exemptions. Also read `CONTEXT.md` "Tool rendering: implemented product direction" before changing tool rendering, `registerToolRenderer` use, the RTK/tool-display boundary, or drawing for companion and core tools (`mcp`/`mcp__*`, `codemode`, web tools), retired-task fallback, or non-owned subagent rendering.
+- `extensions/whimsical/README.md` — read before changing `/whimsical`, working-message sets, or custom set loading from `~/.pi/agent/whimsical/`.
 - `extensions/rtk/README.md` — read before changing output compaction, `bash` ownership, or `/rtk` behavior.
 - `extensions/smart-docs/README.md` — deprecated, disabled Extension; read before re-registering or removing `/smart-docs`.
 

@@ -18,4 +18,5 @@ Current notes:
 - `gpt-5.6-harness-optimization.md` — historical GPT-5.6 routing, prompt, cache, tool-surface, and eval evidence.
 - `gpt-6-astra-harness-readiness.md` — historical Astra compatibility evidence and approvals, bounded comparison cohorts, and approval-gated probe recipes.
 - `harness-contract-audit.md` — instruction-ownership decisions, historical harness audit evidence, and deferred live-calibration gates.
+- `upstream-companion-history.md` — historical upstream-companion execution and public-workflow review contracts; not active instructions.
 - `ask.md` — Ask Extension behavior, including the public `ask` tool and `/ask-stats` command, and local rpiv divergences.
