@@ -270,6 +270,15 @@ describe("code-improvement commands", () => {
     expect(prompt).toContain(
       "stop and report the missing file path instead of widening scope",
     );
+    expect(prompt).toContain(
+      "main audits, reverts, and reruns per the Audit section of `skills/simplify/SKILL.md`",
+    );
+    expect(prompt).toContain("record the baseline snapshot");
+    expect(prompt).toContain(
+      "resolve those files into the `Editable files` list passed to the subagent",
+    );
+    expect(prompt).not.toContain("Your first substantive action must be");
+    expect(prompt).not.toContain("inspect the touched files, then report");
     expect(prompt).not.toMatch(/`Agent`|subagent_type|max_turns/);
   });
 

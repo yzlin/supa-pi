@@ -14,6 +14,8 @@ Read when changing `/simplify`, `/improve-codebase-architecture`, or code-improv
 
 Within the assigned `Editable files`, the simplifier may replace an in-scope custom mechanism with an existing repository, standard-library, native-platform, or already-installed dependency capability when actual safety, correctness, accessibility, edge-case, and public-contract requirements remain supported. It must stop and report rather than widen scope when another file or new package research is needed.
 
+The simplifier applies a comment keep list (license headers, non-obvious behavior forced by external constraints, public API doc comments, issue/RFC links for constraints code cannot express) and audits lint/type suppressions in scope. When a safe in-scope fix is not possible, it reports a reshape flag (symbol, problem, suggested refactor) instead of rewording the comment. Before delegating, main records a baseline (git status, copies of editable files, hashes of changed paths outside them). After the report, main rejects behavior changes, scope escapes, keep-list deletions, and false flags; it never reverts paths outside editable files, uses no git revert commands, and reruns a rejected report once before reporting it open. `skills/simplify/SKILL.md` owns the exact Audit steps.
+
 Scoped grammar is strict:
 
 ```text

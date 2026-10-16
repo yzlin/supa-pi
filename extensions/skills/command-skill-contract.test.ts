@@ -62,6 +62,49 @@ describe("skill-backed command contracts", () => {
     expect(skill).toContain(
       "Do not edit ignored lockfiles or unsupported changed files",
     );
+    expect(skill).toContain("rerun once with the failure named");
+    expect(skill).toContain(
+      "Before delegating, record a baseline without modifying the working tree: run `git status --porcelain --untracked-files=all`",
+    );
+    expect(skill).toContain(
+      "run `git status --porcelain --untracked-files=all` for detection only, then copy every editable file to a temp directory outside the repo",
+    );
+    expect(skill).toContain(
+      "record `git hash-object <path>` for each path that status lists outside editable files",
+    );
+    expect(skill).not.toContain(
+      "copy every editable file plus every path that status lists as changed or untracked",
+    );
+    expect(skill).toContain(
+      "If the run has no `Editable files` list, first resolve the recent-session files named by the focus instruction, write that list down, and pass it to the subagent as `Editable files`",
+    );
+    expect(skill).toContain(
+      "That list is the edit boundary for the baseline and the Audit",
+    );
+    expect(skill).toContain("scoped and recent-session runs");
+    expect(skill).toContain(
+      "rerun the same status, rehash those paths, and diff editable files against their saved copies",
+    );
+    expect(skill).toContain(
+      "Any path outside editable files whose status line changed or whose hash differs from the baseline is a scope escape: reject the report and list those paths for the user",
+    );
+    expect(skill).toContain(
+      "never revert, restore, or trash paths outside editable files",
+    );
+    expect(skill).toContain(
+      "license headers; non-obvious behavior forced by an external dependency, platform, vendor, or protocol; doc comments that define a public API contract; issue or RFC links for constraints code cannot express.",
+    );
+    expect(skill).not.toContain("workarounds forced by");
+    expect(skill).toContain(
+      "Revert a rejected report only inside editable files: restore each saved copy and move editable paths noted as not existing to Trash with `trash`",
+    );
+    expect(skill).not.toContain("`git restore -- <path>` is allowed");
+    expect(skill).not.toContain("holds no user work");
+    expect(skill).toContain("from the restored baseline");
+    expect(skill).toContain(
+      "Never use `git checkout`, `git restore`, `git reset`, or `git stash` push/pop/apply to revert /simplify results",
+    );
+    expect(skill).not.toContain("Never revert with `git checkout`");
   });
 });
 
