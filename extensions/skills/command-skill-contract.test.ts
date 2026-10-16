@@ -33,6 +33,22 @@ describe("skill-backed command contracts", () => {
     expect(skill).toContain(
       "Return the existing executor JSON schema unchanged",
     );
+    expect(skill).toContain(
+      "report the typecheck as executor-reported, not independently verified",
+    );
+    expect(skill).toContain("List executor-reported checks separately");
+    expect(skill).toContain(
+      "Record each check in `validation` as the exact command plus pass/fail",
+    );
+    expect(skill).toContain(
+      "Run the project typecheck after your final edit when touched code is typed; rerun it if you edit again after it passes.",
+    );
+    expect(skill).toContain(
+      "record a baseline with `git status --porcelain --untracked-files=all`",
+    );
+    expect(skill).toContain(
+      "files changed since the baseline are missing from the executor's `filesTouched`",
+    );
   });
 
   it("keeps /simplify static edit-boundary rules in simplify skill", () => {
