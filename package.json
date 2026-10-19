@@ -77,7 +77,8 @@
       "./extensions/whimsical",
       "./extensions/fast",
       "./extensions/model-profiles",
-      "./extensions/uv.ts"
+      "./extensions/uv.ts",
+      "./extensions/agents-local"
     ]
   },
   "readme": "README.md"

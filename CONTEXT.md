@@ -253,6 +253,19 @@ Approved by `/grill-me` and implemented via `/execute` on 2026-10-12. It lets a 
 - `/grill-me` suggests `/to-spec` after lock; its allowed writes are unchanged.
 - Not an ADR: local files, refs, and code paths are reversible.
 
+## Local context overlay: implemented product direction
+
+Approved by `/grill-me` on 2026-10-19 and implemented via `/execute` in `extensions/agents-local`. A real `createAgentSession` seam test proves Pi renders `contextFiles` mutations. Live `pi-claude-bridge` delivery is unverified.
+
+- **Local context file** — a personal, uncommitted `AGENTS.local.md` that adds to the native context file in the same directory. _Avoid_: private AGENTS, override file.
+- Semantics: additive only. It never replaces or removes a native file; `AGENTS.override.md` keeps its native meaning. Only the exact, case-sensitive name `AGENTS.local.md` counts.
+- Discovery: the same places as native context files, `~/.pi/agent` plus every directory from `/` down to cwd. A Local context file loads even when its directory has no native file. Duplicate realpaths are skipped. Native nested-worktree shadowing is not copied, so the main repo's Local context file still applies inside nested worktrees.
+- Placement: `before_agent_start` inserts each file into `systemPromptOptions.contextFiles` right after its sibling native file. If there is no sibling, it goes where the native file would be in the parent-to-child order. It renders inside the native `project_context` block. The mutation is test-verified.
+- Timing: scan once at session start or `/reload` and keep the result, the same as native context files. Edits need `/reload`.
+- Opt-out: skip when `process.argv` contains `--no-context-files` or `-nc`. SDK or RPC sessions with `noContextFiles: true` are not detected (known gap; Pi does not expose the flag to Extensions).
+- Out of scope: size limits, commands, and git checks. The docs tell users to add `AGENTS.local.md` to their global gitignore.
+- Not an ADR: the change is a reversible Extension with no persisted state.
+
 ## Open questions
 
 - Extension isolation (resolved 2026-10-04): no approved exception; RTK's tool-display dependency is removed under "Tool rendering: implemented product direction".
