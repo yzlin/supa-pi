@@ -250,8 +250,18 @@ Approved by `/grill-me` and implemented via `/execute` on 2026-10-12. It lets a 
 - Log failures: checkpoint log read/write or Snapshot ref cleanup failures fail the checkpoint before native ledger persistence. Lifecycle/tool hooks retain native ledger state and notify when context is available; logging failures must not prevent report binding or interruption handling.
 - Snapshot refs: each verified event records `HEAD` and a temporary-index tree snapshot that includes untracked, non-ignored files without touching the user's index or working tree. Non-git workspaces record `snapshot: null`. Snapshot refs are deleted on `done`.
 - Resume: a later explicit `/execute @.pi/specs/<slug>.md` derives prior state from the Spec log, not from agent input. Logged-verified assignments enter as `reverify` and need fresh read-only main evidence through `verify` without `attemptId` before dependents start; failure blocks for scoped repair. Lineage repair counts carry over in `priorRepairs`; logged-verified or repair-counted lineage IDs cannot be omitted or renamed without revision. A corrupt Spec log fails closed. A hash mismatch stops for the user's choice: re-accept with `reviseSpec: true` to record `revised` and re-plan unfinished work, or restore the Spec. Never set `reviseSpec` without that choice. This is explicit resume, not automatic cross-session recovery; legacy `.pi/execute` stays unread.
-- `/grill-me` suggests `/to-spec` after lock; its allowed writes are unchanged.
+- `/grill-me` suggests bare `/execute` after lock (drafts and runs a Spec), with `/to-spec` for persist-only use; its allowed writes are unchanged.
 - Not an ADR: local files, refs, and code paths are reversible.
+
+### Bare `/execute` auto-Spec: implemented
+
+Approved by `/grill-me` and implemented via `/execute` on 2026-10-20. Deterministic tests verify resolution and marker contracts; live model adherence is unverified. Goal: every bare `/execute` run gets a Spec for durable resume, without a manual `/to-spec` step.
+
+- **Spec-drafted marker** — a branch-scoped execute Extension entry `execute-spec-drafted-v1` `{slug}`, appended when a successful write/edit tool result targets `.pi/specs/<slug>.md` (from `/to-spec` or from `/execute` itself). _Avoid_: draft flag, spec status.
+- Scope: only bare `/execute`. `/execute @.pi/specs/<slug>.md` and `/execute <inline plan>` are unchanged.
+- Resolution order for bare `/execute`: (1) an accepted, not-done Spec in the branch ledger (`specPath`) resumes; (2) an unfinished accepted ledger plan without a Spec continues as today, without a Spec; (3) the latest marker whose Spec file exists and has no Spec log executes, unless user messages follow the marker — then ask "use this Spec / draft a new Spec" with UI, or draft a new Spec without UI; (4) otherwise draft a Spec via `to-spec` rules, then execute it with `specPath` in the same run under one invocationId, with no review pause. An unreadable ledger keeps pre-Spec behavior. Cancelling the stale-choice prompt sends nothing.
+- The latest assistant Execution Brief, when present, becomes source material for the drafted Spec rather than a separate in-session-only path. The `to-spec` "do not start execution" rule gets an exception only for this combined packet; standalone `/to-spec` is unchanged.
+- Verification target: unit tests for each resolution branch (resume, non-Spec ledger plan, fresh draft, stale with UI, stale without UI, missing file, marker on another branch) plus `bun run check`. Live model adherence remains unverified. No ADR: reversible, no data migration.
 
 ## Local context overlay: implemented product direction
 

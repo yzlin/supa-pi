@@ -174,10 +174,10 @@ describe("context-docs composition contract", () => {
 });
 
 describe("grill-me wrapper contract", () => {
-  it("suggests to-spec after lock writes without expanding allowed writes", () => {
+  it("suggests bare execute after lock writes without expanding allowed writes", () => {
     const skill = readRepositoryFile("skills", "grill-me", "SKILL.md");
     const handoff =
-      "After `Lock plan, stop here` writes complete, suggest `/to-spec` as the next step to persist an Execution Brief for a fresh `/execute` session. Never write the Spec itself.";
+      "After `Lock plan, stop here` writes complete, suggest bare `/execute` as the next step: it drafts a Spec and runs it. Suggest `/to-spec` only to persist the Spec for a fresh `/execute` session. Never write the Spec itself.";
 
     expect(skill).toContain(handoff);
     expect(skill.indexOf(handoff)).toBeGreaterThan(

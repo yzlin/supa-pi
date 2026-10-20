@@ -1,6 +1,6 @@
 ---
 name: to-spec
-description: Explicit /to-spec wrapper. Use only when the user invokes /to-spec; persists the current conversation's locked plan as a Spec for a fresh /execute session.
+description: Explicit /to-spec wrapper. Use when the user invokes /to-spec or when an /execute draft-then-execute packet requests it; persists the current conversation's locked plan as a Spec for /execute.
 ---
 
 # `/to-spec`
@@ -78,6 +78,8 @@ Never write or edit the Spec log or Snapshot refs. The execute Extension alone w
 ## Finish
 
 Print the path and the next step: run `/execute @.pi/specs/<slug>.md` (a fresh session is fine). `/to-spec status <slug>` shows progress. Suggest the commands; do not start execution automatically.
+
+Exception: when invoked as the first step of an `/execute` draft-then-execute packet, do not stop after writing; print the path, then continue directly into the `execute` skill on that Spec, passing `specPath` on `accept`. Standalone `/to-spec` never starts execution.
 
 Advise running `/to-spec` before compaction when context is near its limit.
 

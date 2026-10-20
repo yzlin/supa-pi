@@ -32,13 +32,15 @@ describe("to-spec resource and instruction contract (not model adherence)", () =
       filePath: join(skillDir, "SKILL.md"),
       disableModelInvocation: false,
     });
+    expect(loaded.skills[0]?.description).toContain(
+      "/execute draft-then-execute packet",
+    );
     expect(formatSkillsForPrompt(loaded.skills)).toContain("to-spec");
     expect(readSkill()).not.toContain("disable-model-invocation");
     expectInstructions([
       "Explicit /to-spec wrapper",
-      "Use only when the user invokes /to-spec",
-      "current conversation's locked plan",
-      "fresh /execute session",
+      "Use when the user invokes /to-spec or when an /execute draft-then-execute packet requests it",
+      "persists the current conversation's locked plan as a Spec for /execute.",
       "execute Extension's `/to-spec` packet",
       "optional slug",
       "unaccepted Spec already exists",
@@ -123,6 +125,15 @@ describe("to-spec resource and instruction contract (not model adherence)", () =
       "a fresh session is fine",
       "`/to-spec status <slug>` shows progress",
       "before compaction when context is near its limit",
+    ]);
+  });
+
+  it("starts execution only from the /execute draft-then-execute packet", () => {
+    expectInstructions([
+      "Suggest the commands; do not start execution automatically",
+      "Exception: when invoked as the first step of an `/execute` draft-then-execute packet",
+      "continue directly into the `execute` skill on that Spec, passing `specPath` on `accept`",
+      "Standalone `/to-spec` never starts execution",
     ]);
   });
 

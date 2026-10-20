@@ -14,8 +14,13 @@ status: active
 ## Command modes
 
 - `/execute <plan>` preserves the trimmed explicit plan inside `<plan>...</plan>`, including file references for main to resolve.
-- Bare `/execute` reuses the latest assistant-authored `# Execution Brief` only if no later user message makes it stale. Required sections: `Execution Scope`, `Plan`, `Done Criteria`, `Verification`, `Out of Scope` (level-two headings).
-- Without a usable brief, main synthesizes a safe, unambiguous one from current context and continues in the same invocation, or asks for exact missing answers.
+- Bare `/execute` resolves on the current branch, first match wins:
+  1. An unfinished ledger plan with `specPath` sends a plan packet `@<specPath>` (resume).
+  2. An unfinished ledger plan without a Spec keeps pre-Spec behavior: reuse a fresh Execution Brief, else synthesize. An unreadable ledger also keeps pre-Spec behavior.
+  3. The latest Spec-drafted marker whose `.pi/specs/<slug>.md` exists and has no `.log.jsonl` sends a plan packet `@.pi/specs/<slug>.md`. If user messages follow the marker, `ui.select` offers `Use .pi/specs/<slug>.md` or `Draft a new Spec`; cancel notifies `/execute cancelled` and sends nothing. Without UI it drafts a new Spec.
+  4. Otherwise it sends a draft-then-execute packet: main follows the [`to-spec` skill](../../skills/to-spec/SKILL.md) to write a Spec, then executes it with `specPath` on `accept` in the same invocation, without a review pause. A fresh Execution Brief is wrapped in `<execution-brief>` as source material.
+- A fresh Execution Brief is the latest assistant-authored `# Execution Brief` with no later user message. Required sections: `Execution Scope`, `Plan`, `Done Criteria`, `Verification`, `Out of Scope` (level-two headings). Without one, synthesis builds a safe, unambiguous brief from current context and continues in the same invocation, or asks for exact missing answers.
+- Spec-drafted marker: `pi.appendEntry('execute-spec-drafted-v1', {slug})` after a successful `write`/`edit` tool result whose input path resolves to `<cwd>/.pi/specs/<slug>.md`. Edit tools without an input path record nothing.
 - Busy invocations queue the same packet as a follow-up and notify the user. Each packet carries its own `invocationId`; queuing does not replace active ledger state before that packet is consumed.
 - The command leaves attached images in parent context. Main resolves image-derived requirements into worker task text; children do not inherit parent conversation/images.
 

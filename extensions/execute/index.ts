@@ -7,9 +7,15 @@ import type {
 } from "@earendil-works/pi-coding-agent";
 
 import {
+  EXECUTE_CANCELLED_MESSAGE,
   EXECUTE_COMMAND_NAME,
+  EXECUTE_DRAFT_MESSAGE,
+  EXECUTE_DRAFT_NEW_SPEC_LABEL,
+  EXECUTE_DRAFT_SOURCE_LABEL,
   EXECUTE_INVOCATION_PREAMBLE,
+  EXECUTE_STALE_SPEC_TITLE,
   EXECUTE_SYNTHESIS_MESSAGE,
+  EXECUTE_USE_SPEC_LABEL,
   SPEC_STATUS_MESSAGE_TYPE,
   TO_SPEC_ACCEPTED_NOTE,
   TO_SPEC_COMMAND_DESCRIPTION,
@@ -22,7 +28,10 @@ import {
   TO_SPEC_QUEUED_MESSAGE,
   TO_SPEC_SLUG_LABEL,
 } from "./constants";
+import { isLedgerComplete, restoreLedger } from "./ledger";
 import { registerExecutionLedger } from "./runtime";
+import type { ExecutionLedger } from "./schema";
+import { latestDraftedSpec } from "./spec-draft";
 import { renderSpecStatus, SPECS_DIR, validSlug } from "./spec-log";
 
 interface MessageLike {
@@ -79,6 +88,58 @@ function isExecutionBrief(text: string): boolean {
   );
 }
 
+function legacyBarePacket(ctx: ExtensionCommandContext): string {
+  const brief = getLastExecutionBriefFromSession(ctx);
+  return brief ? buildPlanInvocationMessage(brief) : EXECUTE_SYNTHESIS_MESSAGE;
+}
+
+function draftPacket(ctx: ExtensionCommandContext): string {
+  const brief = getLastExecutionBriefFromSession(ctx);
+  return brief
+    ? `${EXECUTE_DRAFT_MESSAGE}\n${EXECUTE_DRAFT_SOURCE_LABEL}\n\n<execution-brief>\n${brief}\n</execution-brief>`
+    : EXECUTE_DRAFT_MESSAGE;
+}
+
+// Bare /execute always runs a Spec except for an unfinished non-Spec plan.
+async function resolveBarePacket(
+  ctx: ExtensionCommandContext,
+): Promise<string | null> {
+  const branch = ctx.sessionManager.getBranch();
+  let ledger: ExecutionLedger | null;
+  try {
+    ledger = restoreLedger(branch, ctx.sessionManager.getSessionId());
+  } catch {
+    // The runtime reports the unreadable ledger; keep the pre-Spec packet.
+    return legacyBarePacket(ctx);
+  }
+  if (ledger?.plan && !isLedgerComplete(ledger)) {
+    return ledger.specPath
+      ? buildPlanInvocationMessage(`@${ledger.specPath}`)
+      : legacyBarePacket(ctx);
+  }
+  const drafted = latestDraftedSpec(branch, ctx.cwd);
+  if (!drafted) {
+    return draftPacket(ctx);
+  }
+  const specPath = `${SPECS_DIR}/${drafted.slug}.md`;
+  const useSpec = buildPlanInvocationMessage(`@${specPath}`);
+  if (!drafted.laterUserMessage) {
+    return useSpec;
+  }
+  if (!ctx.hasUI) {
+    return draftPacket(ctx);
+  }
+  const useLabel = `${EXECUTE_USE_SPEC_LABEL}${specPath}`;
+  const choice = await ctx.ui.select(EXECUTE_STALE_SPEC_TITLE, [
+    useLabel,
+    EXECUTE_DRAFT_NEW_SPEC_LABEL,
+  ]);
+  if (choice === useLabel) {
+    return useSpec;
+  }
+  return choice === EXECUTE_DRAFT_NEW_SPEC_LABEL ? draftPacket(ctx) : null;
+}
+
 function getLastExecutionBriefFromSession(
   ctx: ExtensionCommandContext,
 ): string {
@@ -113,22 +174,24 @@ export default function executeExtension(pi: ExtensionAPI): void {
   pi.registerCommand(EXECUTE_COMMAND_NAME, {
     description:
       "Execute a plan with blocking subagents and main verification: /execute [plan]",
-    handler(args, ctx) {
+    async handler(args, ctx) {
       const explicitPlan = (args ?? "").trim();
-      const plan = explicitPlan || getLastExecutionBriefFromSession(ctx);
-      const packet = plan
-        ? buildPlanInvocationMessage(plan)
-        : EXECUTE_SYNTHESIS_MESSAGE;
+      const packet = explicitPlan
+        ? buildPlanInvocationMessage(explicitPlan)
+        : await resolveBarePacket(ctx);
+      if (!packet) {
+        ctx.ui.notify(EXECUTE_CANCELLED_MESSAGE, "info");
+        return;
+      }
       const message = `${packet}\n\nExecution checkpoint invocationId: ${authorize(ctx)}`;
 
       if (ctx.isIdle()) {
         pi.sendUserMessage(message);
-        return Promise.resolve();
+        return;
       }
 
       pi.sendUserMessage(message, { deliverAs: "followUp" });
       ctx.ui.notify("Queued /execute as a follow-up", "info");
-      return Promise.resolve();
     },
   });
   pi.registerCommand(TO_SPEC_COMMAND_NAME, {

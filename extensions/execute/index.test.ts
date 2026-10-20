@@ -5,10 +5,14 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import {
+  EXECUTE_DRAFT_MESSAGE,
+  EXECUTE_DRAFT_SOURCE_LABEL,
   EXECUTE_INVOCATION_PREAMBLE,
   EXECUTE_SYNTHESIS_MESSAGE,
+  SPEC_DRAFTED_ENTRY_TYPE,
 } from "./constants";
 import executeExtension from "./index";
+import { emptyLedger, LEDGER_ENTRY_TYPE, transitionLedger } from "./ledger";
 import { renderSpecStatus } from "./spec-log";
 
 const EXECUTION_BRIEF = [
@@ -21,29 +25,39 @@ const EXECUTION_BRIEF = [
 ].join("\n\n");
 
 function createMockCtx(
-  branchEntries: Array<{
-    type: string;
-    message?: {
-      role: string;
-      content: string | Array<{ type?: string; text?: string }>;
-    };
-  }> = [],
+  branchEntries: unknown[] = [],
+  {
+    cwd = "/workspace",
+    hasUI = false,
+    choice,
+  }: { cwd?: string; hasUI?: boolean; choice?: string } = {},
 ) {
   const notifications: Array<{ message: string; level: string }> = [];
+  const selections: Array<{ title: string; options: string[] }> = [];
 
   return {
     notifications,
+    selections,
     ctx: {
+      cwd,
+      hasUI,
       isIdle: () => true,
       sessionManager: {
         getSessionId: () => "session",
         getBranch() {
           return branchEntries;
         },
+        getEntries() {
+          throw new Error("Must not read all entries");
+        },
       },
       ui: {
         notify(message: string, level: string) {
           notifications.push({ message, level });
+        },
+        select(title: string, options: string[]) {
+          selections.push({ title, options });
+          return Promise.resolve(choice);
         },
       },
     },
@@ -132,7 +146,7 @@ async function runExecuteCommand(
 }
 
 describe("execute command", () => {
-  it("preserves image-bearing parent input while synthesizing requirements instead of forwarding history", async () => {
+  it("preserves image-bearing parent input while drafting requirements instead of forwarding history", async () => {
     const runtime = createMockPiRuntime();
     const imageMessage = {
       role: "user",
@@ -153,7 +167,7 @@ describe("execute command", () => {
     executeExtension(runtime.pi as never);
     await runExecuteCommand(runtime, "", ctx);
     expect(runtime.sentUserMessages[0]?.content).toBe(
-      `${EXECUTE_SYNTHESIS_MESSAGE}${invocationSuffix(runtime)}`,
+      `${EXECUTE_DRAFT_MESSAGE}${invocationSuffix(runtime)}`,
     );
     expect(runtime.sentUserMessages[0]?.content).toContain("attached images");
     expect(branch).toEqual(before);
@@ -173,7 +187,7 @@ describe("execute command", () => {
       executeExtension(runtime.pi as never);
       await runExecuteCommand(runtime, "", ctx);
       expect(runtime.sentUserMessages[0]?.content).toBe(
-        `${EXECUTE_SYNTHESIS_MESSAGE}${invocationSuffix(runtime)}`,
+        `${EXECUTE_DRAFT_MESSAGE}${invocationSuffix(runtime)}`,
       );
     }
   });
@@ -218,7 +232,7 @@ describe("execute command", () => {
     ]);
   });
 
-  it("reuses the latest fresh assistant Execution Brief", async () => {
+  it("drafts a Spec from the latest fresh assistant Execution Brief", async () => {
     const runtime = createMockPiRuntime();
     const { ctx } = createMockCtx([
       {
@@ -235,13 +249,13 @@ describe("execute command", () => {
 
     expect(runtime.sentUserMessages).toEqual([
       {
-        content: `${EXECUTE_INVOCATION_PREAMBLE}\n\n<plan>\n${EXECUTION_BRIEF}\n</plan>${invocationSuffix(runtime)}`,
+        content: `${EXECUTE_DRAFT_MESSAGE}\n${EXECUTE_DRAFT_SOURCE_LABEL}\n\n<execution-brief>\n${EXECUTION_BRIEF}\n</execution-brief>${invocationSuffix(runtime)}`,
         options: undefined,
       },
     ]);
   });
 
-  it("synthesizes when a later user message makes the brief stale", async () => {
+  it("drafts without the brief when a later user message makes it stale", async () => {
     const runtime = createMockPiRuntime();
     const { ctx } = createMockCtx([
       {
@@ -258,11 +272,11 @@ describe("execute command", () => {
     await runExecuteCommand(runtime, "   ", ctx);
 
     expect(runtime.sentUserMessages[0]?.content).toBe(
-      `${EXECUTE_SYNTHESIS_MESSAGE}${invocationSuffix(runtime)}`,
+      `${EXECUTE_DRAFT_MESSAGE}${invocationSuffix(runtime)}`,
     );
   });
 
-  it("synthesizes when no usable brief exists", async () => {
+  it("drafts a Spec when no usable brief exists", async () => {
     const runtime = createMockPiRuntime();
     const { ctx } = createMockCtx();
 
@@ -270,7 +284,10 @@ describe("execute command", () => {
     await runExecuteCommand(runtime, "   ", ctx);
 
     expect(runtime.sentUserMessages[0]?.content).toBe(
-      `${EXECUTE_SYNTHESIS_MESSAGE}${invocationSuffix(runtime)}`,
+      `${EXECUTE_DRAFT_MESSAGE}${invocationSuffix(runtime)}`,
+    );
+    expect(runtime.sentUserMessages[0]?.content).toContain(
+      "follow the `to-spec` skill",
     );
   });
 
@@ -393,6 +410,192 @@ describe("to-spec command", () => {
       expect(h.notifications.at(-1)).toMatchObject({ level: "error" });
     }
     expect(h.runtime.sentUserMessages).toEqual([]);
+  });
+});
+
+const brief = {
+  type: "message",
+  message: { role: "assistant", content: EXECUTION_BRIEF },
+};
+const userMessage = {
+  type: "message",
+  message: { role: "user", content: "Also cover settings" },
+};
+function marker(slug = "goal") {
+  return {
+    type: "custom",
+    customType: SPEC_DRAFTED_ENTRY_TYPE,
+    data: { slug },
+  };
+}
+function ledgerEntry(specPath?: string, complete = false) {
+  const accepted = transitionLedger(
+    emptyLedger("session", "old-invocation"),
+    {
+      invocationId: "old-invocation",
+      action: "accept",
+      plan: "Canonical plan",
+      approval: "Safe",
+      ...(specPath ? { specPath } : {}),
+      assignments: [
+        { id: "a", task: "Implement A", scope: ["src/a.ts"], dependencies: [] },
+      ],
+    },
+    "attempt",
+    complete ? { verified: ["a"], blocked: {}, priorRepairs: {} } : undefined,
+  );
+  const data = complete
+    ? transitionLedger(accepted, {
+        invocationId: "old-invocation",
+        action: "verify",
+        assignmentId: "a",
+        passed: true,
+        evidence: ["bun test: exit 0"],
+        blockers: [],
+      })
+    : accepted;
+  return { type: "custom", customType: LEDGER_ENTRY_TYPE, data };
+}
+
+async function runBareExecute(
+  branch: unknown[],
+  {
+    hasUI = false,
+    choice,
+    files = ["goal.md"],
+  }: { hasUI?: boolean; choice?: string; files?: string[] } = {},
+) {
+  const cwd = mkdtempSync(join(tmpdir(), "execute-command-"));
+  temporaryWorkspaces.push(cwd);
+  mkdirSync(join(cwd, ".pi/specs"), { recursive: true });
+  for (const file of files) {
+    writeFileSync(join(cwd, ".pi/specs", file), "# Execution Brief\n");
+  }
+  const runtime = createMockPiRuntime();
+  const mock = createMockCtx(branch, { cwd, hasUI, choice });
+  executeExtension(runtime.pi as never);
+  await runExecuteCommand(runtime, "", mock.ctx);
+  const content = runtime.sentUserMessages[0]?.content;
+  return {
+    ...mock,
+    runtime,
+    content,
+    planPacket: (plan: string) =>
+      `${EXECUTE_INVOCATION_PREAMBLE}\n\n<plan>\n${plan}\n</plan>${invocationSuffix(runtime)}`,
+    draftPacket: () => `${EXECUTE_DRAFT_MESSAGE}${invocationSuffix(runtime)}`,
+  };
+}
+
+describe("bare execute Spec resolution", () => {
+  it("runs a drafted Spec when no user message followed its marker", async () => {
+    const result = await runBareExecute([userMessage, marker(), brief]);
+    expect(result.content).toBe(result.planPacket("@.pi/specs/goal.md"));
+    expect(result.selections).toEqual([]);
+  });
+
+  it("asks with UI when user messages followed the marker", async () => {
+    const branch = [marker(), userMessage];
+    const use = await runBareExecute(branch, {
+      hasUI: true,
+      choice: "Use .pi/specs/goal.md",
+    });
+    expect(use.selections).toEqual([
+      {
+        title:
+          "Messages followed the drafted Spec. Run it or draft a new Spec?",
+        options: ["Use .pi/specs/goal.md", "Draft a new Spec"],
+      },
+    ]);
+    expect(use.content).toBe(use.planPacket("@.pi/specs/goal.md"));
+
+    const draft = await runBareExecute(branch, {
+      hasUI: true,
+      choice: "Draft a new Spec",
+    });
+    expect(draft.content).toBe(draft.draftPacket());
+
+    const cancelled = await runBareExecute(branch, { hasUI: true });
+    expect(cancelled.runtime.sentUserMessages).toEqual([]);
+    expect(cancelled.notifications).toEqual([
+      { message: "/execute cancelled", level: "info" },
+    ]);
+  });
+
+  it("drafts a new Spec without UI when user messages followed the marker", async () => {
+    const result = await runBareExecute([marker(), userMessage]);
+    expect(result.selections).toEqual([]);
+    expect(result.content).toBe(result.draftPacket());
+  });
+
+  it("ignores markers whose Spec is missing or already accepted", async () => {
+    for (const files of [[], ["goal.md", "goal.log.jsonl"]]) {
+      const result = await runBareExecute([marker()], { files });
+      expect(result.content).toBe(result.draftPacket());
+    }
+  });
+
+  it("uses the latest usable marker and skips later unusable ones", async () => {
+    const result = await runBareExecute([marker(), marker("gone")]);
+    expect(result.content).toBe(result.planPacket("@.pi/specs/goal.md"));
+  });
+
+  it("ignores markers outside the current branch", async () => {
+    const result = await runBareExecute([brief]);
+    expect(result.content).toBe(
+      `${EXECUTE_DRAFT_MESSAGE}\n${EXECUTE_DRAFT_SOURCE_LABEL}\n\n<execution-brief>\n${EXECUTION_BRIEF}\n</execution-brief>${invocationSuffix(result.runtime)}`,
+    );
+  });
+
+  it("resumes an unfinished branch ledger Spec before markers", async () => {
+    const result = await runBareExecute([
+      marker(),
+      ledgerEntry(".pi/specs/other.md"),
+      userMessage,
+    ]);
+    expect(result.content).toBe(result.planPacket("@.pi/specs/other.md"));
+  });
+
+  it("keeps brief reuse or synthesis for an unfinished non-Spec ledger plan", async () => {
+    const reused = await runBareExecute([marker(), ledgerEntry(), brief]);
+    expect(reused.content).toBe(reused.planPacket(EXECUTION_BRIEF));
+
+    const synthesized = await runBareExecute([
+      marker(),
+      ledgerEntry(),
+      brief,
+      userMessage,
+    ]);
+    expect(synthesized.content).toBe(
+      `${EXECUTE_SYNTHESIS_MESSAGE}${invocationSuffix(synthesized.runtime)}`,
+    );
+  });
+
+  it("falls back to today's behavior when the branch ledger is unreadable", async () => {
+    const result = await runBareExecute([
+      marker(),
+      { type: "custom", customType: LEDGER_ENTRY_TYPE },
+    ]);
+    expect(result.content).toBe(
+      `${EXECUTE_SYNTHESIS_MESSAGE}${invocationSuffix(result.runtime)}`,
+    );
+  });
+
+  it("does not resume a completed Spec ledger", async () => {
+    const result = await runBareExecute([
+      ledgerEntry(".pi/specs/other.md", true),
+      marker(),
+    ]);
+    expect(result.content).toBe(result.planPacket("@.pi/specs/goal.md"));
+  });
+
+  it("keeps explicit-argument packets unchanged with a marker", async () => {
+    const runtime = createMockPiRuntime();
+    const { ctx } = createMockCtx([marker()]);
+    executeExtension(runtime.pi as never);
+    await runExecuteCommand(runtime, "@.pi/specs/other.md", ctx);
+    expect(runtime.sentUserMessages[0]?.content).toBe(
+      `${EXECUTE_INVOCATION_PREAMBLE}\n\n<plan>\n@.pi/specs/other.md\n</plan>${invocationSuffix(runtime)}`,
+    );
   });
 });
 

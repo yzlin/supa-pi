@@ -5,6 +5,18 @@ export const EXECUTE_SYNTHESIS_MODE =
   "Synthesize a new Execution Brief from current session context, then execute it with blocking subagent calls if it is safe and unambiguous. Preserve attached images in main context; resolve their relevant task requirements before delegation because children receive only the task, not parent conversation or images.";
 export const EXECUTE_SYNTHESIS_MESSAGE = `${EXECUTE_INVOCATION_PREAMBLE}
 - Mode: ${EXECUTE_SYNTHESIS_MODE}`;
+export const EXECUTE_DRAFT_MODE =
+  "Draft a Spec, then execute it. First follow the `to-spec` skill to write `.pi/specs/<slug>.md` from current session context: derive the slug, apply its collision rules, and ask at most its one optional seam question. Then, without pausing for review, follow the `execute` skill on that Spec and pass its `specPath` on `accept`. Preserve attached images in main context; resolve their relevant task requirements before delegation because children receive only the task, not parent conversation or images.";
+export const EXECUTE_DRAFT_MESSAGE = `${EXECUTE_INVOCATION_PREAMBLE}
+- Mode: ${EXECUTE_DRAFT_MODE}`;
+export const EXECUTE_DRAFT_SOURCE_LABEL =
+  "- Source: use this latest fresh assistant Execution Brief as the Spec source material.";
+export const SPEC_DRAFTED_ENTRY_TYPE = "execute-spec-drafted-v1";
+export const EXECUTE_STALE_SPEC_TITLE =
+  "Messages followed the drafted Spec. Run it or draft a new Spec?";
+export const EXECUTE_USE_SPEC_LABEL = "Use ";
+export const EXECUTE_DRAFT_NEW_SPEC_LABEL = "Draft a new Spec";
+export const EXECUTE_CANCELLED_MESSAGE = "/execute cancelled";
 
 export const TO_SPEC_COMMAND_NAME = "to-spec";
 export const TO_SPEC_COMMAND_DESCRIPTION =

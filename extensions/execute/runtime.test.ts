@@ -14,6 +14,7 @@ import type { Tool as ProviderTool } from "@earendil-works/pi-ai";
 import { convertResponsesTools } from "@earendil-works/pi-ai/api/openai-responses-shared";
 import { Value } from "typebox/value";
 
+import { SPEC_DRAFTED_ENTRY_TYPE } from "./constants";
 import executeExtension from "./index";
 import { LEDGER_ENTRY_TYPE } from "./ledger";
 import {
@@ -1205,5 +1206,63 @@ describe("execute native-session integration", () => {
     expect((await h.accept(next)).ledger.assignments[0]?.status).toBe(
       "pending",
     );
+  });
+});
+
+describe("Spec-drafted marker", () => {
+  function markers(branch: unknown[]) {
+    return branch.filter(
+      (entry) =>
+        (entry as { customType?: string }).customType ===
+        SPEC_DRAFTED_ENTRY_TYPE,
+    );
+  }
+
+  it("records successful write and edit results targeting a Spec", async () => {
+    const h = harness();
+    for (const [toolName, path] of [
+      ["write", ".pi/specs/goal.md"],
+      ["edit", "@.pi/specs/goal-2.md"],
+      ["write", "/workspace/.pi/specs/goal-3.md"],
+      ["edit", "./src/../.pi/specs/goal-4.md"],
+    ]) {
+      await h.emit("tool_result", {
+        toolName,
+        toolCallId: "call",
+        input: { path },
+        isError: false,
+      });
+    }
+    expect(markers(h.branch)).toEqual(
+      ["goal", "goal-2", "goal-3", "goal-4"].map((slug) => ({
+        type: "custom",
+        customType: SPEC_DRAFTED_ENTRY_TYPE,
+        data: { slug },
+      })),
+    );
+  });
+
+  it("ignores failed results, other tools, invalid slugs, logs and outside paths", async () => {
+    const h = harness();
+    for (const [toolName, path, isError] of [
+      ["write", ".pi/specs/goal.md", true],
+      ["read", ".pi/specs/goal.md", false],
+      ["write", ".pi/specs/Bad_Slug.md", false],
+      ["write", `.pi/specs/${"a".repeat(49)}.md`, false],
+      ["write", ".pi/specs/goal.log.jsonl", false],
+      ["write", ".pi/specs/nested/goal.md", false],
+      ["edit", "other/.pi/specs/goal.md", false],
+      ["edit", "/elsewhere/.pi/specs/goal.md", false],
+      ["edit", "../.pi/specs/goal.md", false],
+      ["write", undefined, false],
+    ] as const) {
+      await h.emit("tool_result", {
+        toolName,
+        toolCallId: "call",
+        input: { path },
+        isError,
+      });
+    }
+    expect(markers(h.branch)).toEqual([]);
   });
 });

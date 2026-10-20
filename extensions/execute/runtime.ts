@@ -9,6 +9,7 @@ import type {
 } from "@earendil-works/pi-coding-agent";
 import { Value } from "typebox/value";
 
+import { SPEC_DRAFTED_ENTRY_TYPE } from "./constants";
 import {
   bindCall,
   dispatchPrefix,
@@ -33,6 +34,7 @@ import {
   type SpecResume,
   WorkerReportSchema,
 } from "./schema";
+import { draftedSpecSlug } from "./spec-draft";
 import {
   appendSpecEvents,
   deleteSnapshotRefs,
@@ -473,6 +475,15 @@ export function registerExecutionLedger(
   });
 
   pi.on("tool_result", (event, ctx) => {
+    if (
+      (event.toolName === "write" || event.toolName === "edit") &&
+      !event.isError
+    ) {
+      const slug = draftedSpecSlug(ctx.cwd, event.input.path);
+      if (slug) {
+        pi.appendEntry(SPEC_DRAFTED_ENTRY_TYPE, { slug });
+      }
+    }
     if (event.toolName !== "subagent") {
       return;
     }
