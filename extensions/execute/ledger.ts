@@ -69,16 +69,41 @@ function checkScope(scope: string): void {
   }
 }
 
+// Normalized cwd: workspace-relative inside the workspace, absolute outside.
+function checkCwd(cwd: string): void {
+  const parts =
+    cwd === "/" ? [] : (cwd.startsWith("/") ? cwd.slice(1) : cwd).split("/");
+  if (
+    hasControlCharacters(cwd) ||
+    parts.some((part) => !part || part === "." || part === "..")
+  ) {
+    throw new Error("Assignment cwd must be a normalized directory path");
+  }
+}
+
+function scopePaths(item: Assignment): string[] {
+  const { cwd } = item;
+  if (!cwd) {
+    return item.scope;
+  }
+  const base = cwd === "/" ? "" : cwd;
+  return item.scope.map((scope) => (scope === "." ? cwd : `${base}/${scope}`));
+}
+
+function containsPath(parent: string, child: string): boolean {
+  if (parent === ".") {
+    return !child.startsWith("/");
+  }
+  return (
+    child === parent ||
+    child.startsWith(parent.endsWith("/") ? parent : `${parent}/`)
+  );
+}
+
 function scopesOverlap(a: Assignment, b: Assignment): boolean {
-  return a.scope.some((left) =>
-    b.scope.some(
-      (right) =>
-        left === "." ||
-        right === "." ||
-        left === right ||
-        left.startsWith(`${right}/`) ||
-        right.startsWith(`${left}/`),
-    ),
+  const right = scopePaths(b);
+  return scopePaths(a).some((left) =>
+    right.some((path) => containsPath(left, path) || containsPath(path, left)),
   );
 }
 
@@ -147,6 +172,9 @@ export function validateLedger(input: unknown): ExecutionLedger {
     for (const scope of item.scope) {
       checkScope(scope);
     }
+    if (item.cwd !== undefined) {
+      checkCwd(item.cwd);
+    }
     const root = requireAssignment(input, item.lineageId);
     const predecessor = input.assignments.find(
       (parent) => parent.supersededBy === item.id,
@@ -168,6 +196,7 @@ export function validateLedger(input: unknown): ExecutionLedger {
     }
     if (
       root.repairCount !== 0 ||
+      root.cwd !== item.cwd ||
       JSON.stringify(root.scope) !== JSON.stringify(item.scope) ||
       JSON.stringify(root.dependencies) !== JSON.stringify(item.dependencies)
     ) {
@@ -469,6 +498,7 @@ export function transitionLedger(
       task: input.task,
       scope: item.scope,
       dependencies: item.dependencies,
+      ...(item.cwd === undefined ? {} : { cwd: item.cwd }),
     }),
     lineageId: item.lineageId,
     repairCount: item.repairCount + 1,

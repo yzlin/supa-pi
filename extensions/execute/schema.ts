@@ -34,6 +34,8 @@ export const AssignmentInputSchema = Type.Object(
     task: text,
     scope: Type.Array(text, { minItems: 1, maxItems: 100 }),
     dependencies: Type.Array(id, { maxItems: 100 }),
+    // Worker directory; scopes are relative to it. Normalized at accept.
+    cwd: Type.Optional(text),
   },
   objectOptions,
 );

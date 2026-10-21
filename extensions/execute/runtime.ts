@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
-import { existsSync, readFileSync } from "node:fs";
-import { resolve } from "node:path";
+import { existsSync, readFileSync, realpathSync, statSync } from "node:fs";
+import { isAbsolute, relative, resolve, sep } from "node:path";
 import { isDeepStrictEqual } from "node:util";
 
 import type {
@@ -56,6 +56,36 @@ interface BoundCall {
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : "Execution checkpoint failed";
+}
+
+function isOutside(path: string): boolean {
+  return path === ".." || path.startsWith(`..${sep}`) || isAbsolute(path);
+}
+
+// Mirrors subagent cwd resolution. Returns undefined for the workspace itself,
+// a workspace-relative path inside it, or an absolute real path outside it.
+function resolveCwd(workspace: string, cwd: string): string | undefined {
+  let root: string;
+  let target: string;
+  try {
+    root = realpathSync(workspace);
+    target = realpathSync(resolve(workspace, cwd));
+  } catch {
+    throw new Error(`Execution cwd does not exist: ${cwd}`);
+  }
+  if (!statSync(target).isDirectory()) {
+    throw new Error(`Execution cwd is not a directory: ${cwd}`);
+  }
+  const path = relative(root, target);
+  if (!path) {
+    return undefined;
+  }
+  // Absolute and workspace-relative scopes are never compared, so an outside
+  // cwd that contains the workspace would hide overlaps.
+  if (!isOutside(relative(target, root))) {
+    throw new Error(`Execution cwd must not contain the workspace: ${cwd}`);
+  }
+  return isOutside(path) ? target : path;
 }
 
 function readEnvelope(input: unknown): { runId: string; report: unknown } {
@@ -324,7 +354,20 @@ export function registerExecutionLedger(
           resume = events.length ? (derived ?? undefined) : undefined;
         }
       }
-      const next = transitionLedger(current, params, randomUUID(), resume);
+      const input =
+        params.action === "accept"
+          ? {
+              ...params,
+              assignments: params.assignments.map(({ cwd, ...assignment }) => {
+                const resolved =
+                  cwd === undefined ? undefined : resolveCwd(ctx.cwd, cwd);
+                return resolved === undefined
+                  ? assignment
+                  : { ...assignment, cwd: resolved };
+              }),
+            }
+          : params;
+      const next = transitionLedger(current, input, randomUUID(), resume);
       if (params.action === "stop" && next.specPath) {
         extraEvents.push({
           event: "stopped",
@@ -368,7 +411,7 @@ export function registerExecutionLedger(
     },
   });
 
-  pi.on("tool_call", (event, ctx) => {
+  pi.on("tool_call", async (event, ctx) => {
     if (
       event.toolName !== "subagent" ||
       typeof event.input.task !== "string" ||
@@ -376,7 +419,8 @@ export function registerExecutionLedger(
     ) {
       return;
     }
-    try {
+    const task = event.input.task;
+    const validate = () => {
       if (loadError) {
         throw new Error(loadError);
       }
@@ -387,13 +431,7 @@ export function registerExecutionLedger(
       ) {
         throw new Error("Unauthorized execution dispatch");
       }
-      if (event.input.cwd !== undefined && event.input.cwd !== ctx.cwd) {
-        throw new Error(
-          "Execution dispatch must use the session's target workspace; omit cwd or use its exact path",
-        );
-      }
       const currentLedger = ledger;
-      const task = event.input.task;
       const item = currentLedger.assignments.find((assignment) =>
         task.startsWith(dispatchPrefix(currentLedger, assignment)),
       );
@@ -411,10 +449,49 @@ export function registerExecutionLedger(
           "Execution requires executor and the exact worker report schema",
         );
       }
-      persist(bindCall(ledger, item.id, item.attemptId, event.toolCallId), ctx);
+      return { current: currentLedger, item };
+    };
+    try {
+      const { item: requestedItem } = validate();
+      const requested: unknown = event.input.cwd;
+      if (requested !== undefined && typeof requested !== "string") {
+        throw new Error("Execution dispatch cwd must be a string");
+      }
+      const actual =
+        typeof requested === "string"
+          ? resolveCwd(ctx.cwd, requested)
+          : undefined;
+      if (actual !== requestedItem.cwd) {
+        throw new Error(
+          `Execution dispatch cwd must match assignment ${requestedItem.id}'s accepted cwd (${requestedItem.cwd ?? "session workspace"})`,
+        );
+      }
+      if (requestedItem.cwd && isAbsolute(requestedItem.cwd)) {
+        if (!ctx.hasUI) {
+          throw new Error(
+            "Execution dispatch outside the session workspace requires interactive approval",
+          );
+        }
+        const approved = await ctx.ui.confirm(
+          "Run execution worker outside the workspace?",
+          `Assignment ${requestedItem.id} would run in:\n${requestedItem.cwd}\n\nSession workspace:\n${ctx.cwd}`,
+          { signal: ctx.signal },
+        );
+        if (!approved) {
+          throw new Error(
+            "User declined execution dispatch outside the session workspace",
+          );
+        }
+      }
+      // The ledger may change while the prompt is open; validate again.
+      const { current, item } = validate();
+      persist(
+        bindCall(current, item.id, item.attemptId, event.toolCallId),
+        ctx,
+      );
       calls.set(event.toolCallId, {
-        sessionId: ledger.sessionId,
-        invocationId: ledger.invocationId,
+        sessionId: current.sessionId,
+        invocationId: current.invocationId,
         assignmentId: item.id,
         attemptId: item.attemptId,
       });

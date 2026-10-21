@@ -5,6 +5,7 @@ import {
   mkdirSync,
   mkdtempSync,
   readFileSync,
+  realpathSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
@@ -1007,7 +1008,6 @@ describe("execute native-session integration", () => {
     };
     for (const invalid of [
       { ...input, agent: "generic" },
-      { ...input, cwd: "/other-checkout" },
       { ...input, schema: {} },
       { ...input, task: "Execution binding: stale/a/attempt\nTask" },
     ]) {
@@ -1040,6 +1040,224 @@ describe("execute native-session integration", () => {
       (await h.checkpoint(token, { action: "inspect" })).ledger.assignments[0]
         ?.report,
     ).toEqual(report);
+  });
+
+  describe("assignment cwd", () => {
+    function cwdHarness() {
+      const root = mkdtempSync(join(tmpdir(), "execute-cwd-"));
+      temporaryWorkspaces.push(root);
+      const cwd = join(root, "workspace");
+      mkdirSync(join(cwd, "packages/x"), { recursive: true });
+      mkdirSync(join(root, "sibling/lib"), { recursive: true });
+      const h = harness([], cwd);
+      const prompts: string[] = [];
+      const state = { answer: false };
+      Object.assign(h.ctx.ui, {
+        confirm: async (_title: string, message: string) => {
+          prompts.push(message);
+          return state.answer;
+        },
+      });
+      const sibling = realpathSync(join(root, "sibling"));
+      return { h, root, cwd, prompts, state, sibling };
+    }
+    const assignment = (
+      id: string,
+      scope: string[],
+      cwd?: string,
+    ): Record<string, unknown> => ({
+      id,
+      task: `Implement ${id}`,
+      scope,
+      dependencies: [],
+      ...(cwd === undefined ? {} : { cwd }),
+    });
+    const call = (
+      h: ReturnType<typeof harness>,
+      dispatchPrefix: string | null,
+      cwd?: unknown,
+      toolCallId = "child-call",
+    ) =>
+      h.emit("tool_call", {
+        toolName: "subagent",
+        toolCallId,
+        input: {
+          agent: "executor",
+          task: `${dispatchPrefix}Task`,
+          schema: JSON.parse(JSON.stringify(WorkerReportSchema)),
+          ...(cwd === undefined ? {} : { cwd }),
+        },
+      });
+
+    it("normalizes accepted cwd and rejects missing directories", async () => {
+      const { h, root, sibling } = cwdHarness();
+      const token = await h.invoke();
+      expect(
+        h.accept(token, {
+          assignments: [assignment("a", ["src"], "missing")],
+        }),
+      ).rejects.toThrow("does not exist");
+      // Parent cwd scopes would bypass overlap checks against workspace scopes.
+      for (const parent of ["..", root, "/"]) {
+        expect(
+          h.accept(token, {
+            assignments: [assignment("a", ["workspace/src"], parent)],
+          }),
+        ).rejects.toThrow("must not contain the workspace");
+      }
+      const accepted = await h.accept(token, {
+        assignments: [
+          assignment("a", ["src"], "packages/x/"),
+          assignment("b", ["src"], join(root, "sibling")),
+          assignment("c", ["src"], "."),
+        ],
+      });
+      expect(accepted.ledger.assignments.map((item) => item.cwd)).toEqual([
+        "packages/x",
+        sibling,
+        undefined,
+      ]);
+    });
+
+    it("detects overlaps through cwd and allows disjoint directories", async () => {
+      const { h, root } = cwdHarness();
+      const token = await h.invoke();
+      await h.accept(token, {
+        assignments: [
+          assignment("a", ["src"], "packages/x"),
+          assignment("b", ["packages/x/src"]),
+          assignment("c", ["lib/a"], join(root, "sibling")),
+          assignment("d", ["a"], join(root, "sibling/lib")),
+          assignment("e", ["src"], join(root, "sibling")),
+        ],
+      });
+      const start = (assignmentId: string) =>
+        h.checkpoint(token, { action: "start", assignmentId });
+      await start("a");
+      expect(start("b")).rejects.toThrow("Active write scopes overlap");
+      await start("c");
+      expect(start("d")).rejects.toThrow("Active write scopes overlap");
+      await start("e");
+    });
+
+    it("binds dispatch to the accepted cwd and keeps it across repairs", async () => {
+      const { h } = cwdHarness();
+      const token = await h.invoke();
+      await h.accept(token, {
+        assignments: [assignment("a", ["src"], "packages/x")],
+      });
+      const started = await h.checkpoint(token, {
+        action: "start",
+        assignmentId: "a",
+      });
+      for (const wrong of [undefined, ".", "packages", 42]) {
+        expect(await call(h, started.dispatchPrefix, wrong)).toMatchObject({
+          block: true,
+        });
+      }
+      expect(
+        await call(h, started.dispatchPrefix, "packages/x"),
+      ).toBeUndefined();
+      // A missing report blocks the assignment.
+      await h.childResult("child-call", null);
+      const repaired = await h.checkpoint(token, {
+        action: "repair",
+        assignmentId: "a",
+        newAssignmentId: "a2",
+        task: "Retry A",
+      });
+      expect(repaired.ledger.assignments[1]?.cwd).toBe("packages/x");
+    });
+
+    it("requires user approval for an outside cwd", async () => {
+      const { h, root, prompts, state, sibling } = cwdHarness();
+      const token = await h.invoke();
+      await h.accept(token, {
+        assignments: [assignment("a", ["src"], join(root, "sibling"))],
+      });
+      const started = await h.checkpoint(token, {
+        action: "start",
+        assignmentId: "a",
+      });
+      const outside = join(root, "sibling");
+      // No UI: outside dispatch cannot be approved.
+      expect(await call(h, started.dispatchPrefix, outside)).toMatchObject({
+        block: true,
+        reason: expect.stringContaining("requires interactive approval"),
+      });
+      Object.assign(h.ctx, { hasUI: true });
+      expect(await call(h, started.dispatchPrefix)).toMatchObject({
+        block: true,
+        reason: expect.stringContaining("must match"),
+      });
+      expect(prompts).toEqual([]);
+      expect(await call(h, started.dispatchPrefix, outside)).toMatchObject({
+        block: true,
+        reason: expect.stringContaining("declined"),
+      });
+      state.answer = true;
+      expect(await call(h, started.dispatchPrefix, outside)).toBeUndefined();
+      expect(prompts).toHaveLength(2);
+      expect(prompts[1]).toContain(sibling);
+      await h.childResult("child-call");
+      expect(
+        (await h.checkpoint(token, { action: "inspect" })).ledger.assignments[0]
+          ?.report,
+      ).toEqual(report);
+    });
+
+    it("revalidates after approval when the ledger changes during the prompt", async () => {
+      for (const change of ["stop", "block"] as const) {
+        const { h, root } = cwdHarness();
+        Object.assign(h.ctx, { hasUI: true });
+        const token = await h.invoke();
+        await h.accept(token, {
+          assignments: [assignment("a", ["src"], join(root, "sibling"))],
+        });
+        const started = await h.checkpoint(token, {
+          action: "start",
+          assignmentId: "a",
+        });
+        Object.assign(h.ctx.ui, {
+          confirm: async () => {
+            await h.checkpoint(
+              token,
+              change === "stop"
+                ? { action: "stop" }
+                : { action: "block", assignmentId: "a", blockers: ["Halt"] },
+            );
+            return true;
+          },
+        });
+        expect(
+          await call(h, started.dispatchPrefix, join(root, "sibling")),
+        ).toMatchObject({ block: true });
+        const last = h.branch.at(-1) as {
+          data: { assignments: Array<{ status: string; toolCallId: unknown }> };
+        };
+        expect(last.data.assignments[0]).toMatchObject({
+          status: "blocked",
+          toolCallId: null,
+        });
+      }
+    });
+
+    it("does not prompt for a cwd inside the workspace", async () => {
+      const { h, prompts } = cwdHarness();
+      Object.assign(h.ctx, { hasUI: true });
+      const token = await h.invoke();
+      await h.accept(token, {
+        assignments: [assignment("a", ["src"], "packages/x")],
+      });
+      const started = await h.checkpoint(token, {
+        action: "start",
+        assignmentId: "a",
+      });
+      expect(
+        await call(h, started.dispatchPrefix, "packages/x"),
+      ).toBeUndefined();
+      expect(prompts).toEqual([]);
+    });
   });
 
   it("blocks missing, prose, invalid and failed reports rather than losing originating work", async () => {
