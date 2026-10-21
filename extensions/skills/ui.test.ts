@@ -150,6 +150,9 @@ class TestTerminal implements Terminal {
   setProgress(): void {
     // Test ignores terminal progress changes.
   }
+  setProgramStatus(): void {
+    // Test ignores terminal program status changes.
+  }
 }
 
 const transcript: Component = {

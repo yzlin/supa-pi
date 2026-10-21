@@ -3,6 +3,7 @@ import { afterEach, beforeEach, expect, test } from "bun:test";
 import { rejects } from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { mkdir, mkdtemp, readFile, stat, writeFile } from "node:fs/promises";
+import { createConnection } from "node:net";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
@@ -309,6 +310,7 @@ test("completed report bound to run and schema; full evidence private; finished 
           schema: undefined,
           trusted: undefined,
           cwd: undefined,
+          dialogSocket: undefined,
           status: "completed",
           output: "complete output",
           structuredOutput: { ok: true },
@@ -446,6 +448,48 @@ test("abort from live update stops before querying the killed server and cleans 
   );
 });
 
+test("abort waits for the child pane process to exit and force-kills it after the grace period", async () => {
+  const { spawn } = await import("node:child_process");
+  // Stands in for a child Pi that survives tmux teardown (fake tmux sends no signal).
+  const child = spawn("sleep", ["60"], { stdio: "ignore" });
+  const exited = new Promise<NodeJS.Signals | null>((resolve) =>
+    child.once("exit", (_code, signal) => resolve(signal)),
+  );
+  const controller = new AbortController();
+  const pi: RunnerAPI = {
+    getThinkingLevel: () => "off",
+    exec: async (_cmd, args) => ({
+      code: args.includes("display-message") ? 1 : 0,
+      stdout: args.includes("list-panes") ? `${child.pid}\n` : "live",
+      stderr: "",
+      killed: false,
+    }),
+  };
+  try {
+    await rejects(
+      runSubagent(
+        pi,
+        context(await root()),
+        { task: "task" },
+        {
+          signal: controller.signal,
+          onUpdate: (update) => {
+            if (update.status === "running") {
+              controller.abort();
+            }
+          },
+        },
+      ),
+      /aborted/,
+    );
+    // The runner settles only after the child process is gone.
+    expect(child.exitCode !== null || child.signalCode !== null).toBe(true);
+    expect(await exited).toBe("SIGKILL");
+  } finally {
+    child.kill("SIGKILL");
+  }
+}, 10_000);
+
 test("parent refuses unsafe result evidence permissions", async () => {
   const { chmod } = await import("node:fs/promises");
   const dir = await root();
@@ -485,4 +529,117 @@ test("parent refuses unsafe result evidence permissions", async () => {
     },
   };
   await rejects(runSubagent(pi, context(dir), { task: "task" }), /owner-only/);
+});
+
+/** Launch fixture: sends one child dialog over the configured relay, then reports completion. */
+async function relayRun(ctx: RunnerContext, signal?: AbortSignal) {
+  const seen: {
+    socket?: string;
+    socketMode?: number;
+    answer?: unknown;
+    config?: ChildConfig;
+  } = {};
+  const pi: RunnerAPI = {
+    getThinkingLevel: () => "off",
+    exec: async (_cmd, args) => {
+      if (args.includes("send-keys") && args.includes("-l")) {
+        const launcher = args.at(-1)?.match(/\/bin\/sh '([^']+)'/)?.[1];
+        if (!launcher) {
+          throw new Error("Missing launch");
+        }
+        const configPath = (await readFile(launcher, "utf8")).match(
+          /SUPA_PI_SUBAGENT_CONFIG='([^']+)'/,
+        )?.[1];
+        if (!configPath) {
+          throw new Error("Missing config");
+        }
+        const config: ChildConfig = JSON.parse(
+          await readFile(configPath, "utf8"),
+        );
+        seen.config = config;
+        seen.socket = args[args.indexOf("-S") + 1];
+        if (!config.dialogSocket) {
+          throw new Error("Missing dialog socket");
+        }
+        seen.socketMode = (await stat(config.dialogSocket)).mode % 512;
+        const child = createConnection(config.dialogSocket);
+        child.setEncoding("utf8");
+        child.write(
+          `${JSON.stringify({ type: "dialog", id: "q", kind: "confirm", title: "Go?", message: "now" })}\n`,
+        );
+        seen.answer = JSON.parse(
+          await new Promise<string>((resolve) =>
+            child.once("data", (line: string) => resolve(line)),
+          ),
+        );
+        child.destroy();
+        const sessionFile = path.join(
+          path.dirname(configPath),
+          "session",
+          "child.jsonl",
+        );
+        await atomicJson(sessionFile, {
+          type: "session",
+          id: config.runId,
+          cwd: config.cwd,
+        });
+        await atomicJson(path.join(path.dirname(configPath), "result.json"), {
+          version: 1,
+          runId: config.runId,
+          parentSessionId: config.parentSessionId,
+          provider: config.provider,
+          model: config.model,
+          thinking: config.thinking,
+          status: "completed",
+          output: "done",
+          sessionFile,
+          finishedAt: Date.now(),
+        });
+      }
+      return { code: 0, stdout: "", stderr: "", killed: false };
+    },
+  };
+  const result = await runSubagent(pi, ctx, { task: "task" }, { signal });
+  return { result, seen };
+}
+
+test("runner relays child dialogs to the labeled parent UI over an owner-only socket removed at completion", async () => {
+  const dir = await root();
+  const titles: string[] = [];
+  const { result, seen } = await relayRun({
+    ...context(dir),
+    hasUI: true,
+    ui: {
+      confirm: async (title) => {
+        titles.push(title);
+        return true;
+      },
+      select: async () => undefined,
+      input: async () => undefined,
+    },
+  });
+  expect(result.output).toBe("done");
+  if (!seen.socket || !seen.config) {
+    throw new Error("Missing launch");
+  }
+  expect(seen.config.dialogSocket).toBe(
+    path.join(path.dirname(seen.socket), "d"),
+  );
+  expect(seen.socketMode).toBe(0o600);
+  expect(titles).toEqual([`Subagent generic ${result.runId}: Go?`]);
+  expect(seen.answer).toEqual({ type: "answer", id: "q", value: true });
+  await rejects(stat(path.dirname(seen.socket)), /ENOENT/);
+});
+
+test("runner without parent UI denies relayed child dialogs", async () => {
+  for (const ui of [{ hasUI: false }, {}]) {
+    const dir = await root();
+    const { seen } = await relayRun({ ...context(dir), ...ui });
+    expect(seen.answer).toEqual({
+      type: "answer",
+      id: "q",
+      value: false,
+      unavailable: true,
+    });
+  }
 });

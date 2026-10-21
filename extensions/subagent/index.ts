@@ -5,6 +5,7 @@ import { Type } from "typebox";
 
 import { THINKING_LEVELS } from "./agents";
 import { ATTACH_FLAG, attachFromCli } from "./attach";
+import { queueDialogs } from "./dialog-queue";
 import { renderSubagentCall, renderSubagentResult } from "./render";
 import {
   cancelSessionSubagents,
@@ -61,6 +62,12 @@ export default function subagentExtension(pi: ExtensionAPI): void {
   });
   // CLI values are unavailable during factory loading; exit before parent TUI startup.
   attachFromCli();
+  // ctx.ui is one object shared by every extension and replaced per bind; wrap each new one.
+  pi.on("session_start", (_event, ctx) => {
+    if (ctx.hasUI) {
+      queueDialogs(ctx.ui);
+    }
+  });
   pi.on("session_shutdown", async (_event, ctx) => {
     await cancelSessionSubagents(ctx.sessionManager.getSessionId());
   });

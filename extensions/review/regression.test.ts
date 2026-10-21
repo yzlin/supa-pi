@@ -1375,6 +1375,68 @@ describe("review follow-up helpers", () => {
     );
   });
 
+  it("ignores custom-message runs and still binds the later summary request", async () => {
+    const runtime = createMockPiRuntime();
+    const { ctx } = createMockCtx([
+      {
+        type: "custom_message",
+        customType: REVIEW_REPORT_MESSAGE_TYPE,
+        content: RAW_REVIEW_REPORT,
+      },
+    ]);
+
+    reviewExtension(runtime.pi as never);
+    await runtime.commands.get("review-summary")?.handler?.("", ctx as never);
+    const prompt = String(runtime.sentUserMessages[0]?.content);
+
+    const beforeAgentStart = runtime.eventHandlers.get("before_agent_start");
+    expect(beforeAgentStart).toBeDefined();
+    expect(() =>
+      beforeAgentStart?.(
+        {
+          messageType: "custom",
+          message: {
+            role: "custom",
+            customType: "other-extension",
+            content: prompt,
+            display: false,
+            timestamp: 0,
+          },
+        },
+        ctx,
+      ),
+    ).not.toThrow();
+    await runtime.eventHandlers.get("message_end")?.(
+      {
+        message: {
+          role: "assistant",
+          content: [{ type: "text", text: SUMMARY_REVIEW_REPORT }],
+          responseId: "custom-run-response",
+          stopReason: "stop",
+        },
+      },
+      ctx,
+    );
+    expect(runtime.appendedEntries).toEqual([]);
+
+    await beforeAgentStart?.({ messageType: "user", prompt }, ctx);
+    await runtime.eventHandlers.get("message_end")?.(
+      {
+        message: {
+          role: "assistant",
+          content: [{ type: "text", text: SUMMARY_REVIEW_REPORT }],
+          responseId: "summary-response-2",
+          stopReason: "stop",
+        },
+      },
+      ctx,
+    );
+    expect(runtime.appendedEntries).toHaveLength(1);
+    expect(runtime.appendedEntries[0]).toMatchObject({
+      data: { summaryAuthorization: { responseId: "summary-response-2" } },
+    });
+  });
+
   it("ignores a fabricated assistant report without the real summary request", async () => {
     const runtime = createMockPiRuntime();
     const { ctx } = createMockCtx([

@@ -582,6 +582,11 @@ export default function ask(pi: ExtensionAPI): void {
         };
       });
 
+      // Hosts that cannot show custom UI (e.g. subagent children) resolve
+      // undefined; report it as the normal cancellation.
+      if (!result) {
+        return createAskEnvelope({ questions, answers: [], cancelled: true });
+      }
       return createAskEnvelope({ ...result, questions });
     },
 

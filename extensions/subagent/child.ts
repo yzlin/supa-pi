@@ -8,6 +8,7 @@ import type {
 import { Type } from "typebox";
 
 import { within } from "./agents";
+import { relayDialogs } from "./dialog-relay";
 import {
   atomicJson,
   protectFile,
@@ -124,6 +125,10 @@ export function registerChildBootstrap(
   pi.on("session_start", async (_event, ctx) => {
     if (ctx.sessionManager.getSessionId() !== config.runId) {
       throw new Error("Child session identity mismatch");
+    }
+    // Without UI, ctx.ui is Pi's shared no-op context: it already denies and must not be mutated.
+    if (ctx.hasUI) {
+      relayDialogs(ctx.ui, config.dialogSocket);
     }
     for (const tool of pi.getAllTools()) {
       if (

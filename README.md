@@ -208,7 +208,7 @@ The setup script installs or reconciles these Pi packages. It no longer installs
   - `@earendil-works/pi-ai` (`>=1.0.1`)
   - `@earendil-works/pi-tui` (`>=1.0.1`)
   - `typebox` (`^1.1.34`)
-- Pi version policy: consumers must provide Pi `1.0.1` or newer. Local development pins `@earendil-works/pi-agent-core`, `@earendil-works/pi-ai`, `@earendil-works/pi-coding-agent`, and `@earendil-works/pi-tui` together at exactly `1.0.1`; upgrade that set together and regenerate `bun.lock`.
+- Pi version policy: consumers must provide Pi `1.0.1` or newer. Local development pins `@earendil-works/pi-agent-core`, `@earendil-works/pi-ai`, `@earendil-works/pi-coding-agent`, and `@earendil-works/pi-tui` together at exactly `1.3.0` (matching the live runtime); upgrade that set together and regenerate `bun.lock`.
 
 ## When to use this repo
 

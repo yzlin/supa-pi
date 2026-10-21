@@ -1051,15 +1051,33 @@ describe("execute native-session integration", () => {
       mkdirSync(join(root, "sibling/lib"), { recursive: true });
       const h = harness([], cwd);
       const prompts: string[] = [];
+      const signals: unknown[] = [];
       const state = { answer: false };
       Object.assign(h.ctx.ui, {
-        confirm: async (_title: string, message: string) => {
+        confirm: async (
+          _title: string,
+          message: string,
+          options?: { signal?: AbortSignal },
+        ) => {
           prompts.push(message);
-          return state.answer;
+          signals.push(options?.signal);
+          return !options?.signal?.aborted && state.answer;
         },
       });
       const sibling = realpathSync(join(root, "sibling"));
-      return { h, root, cwd, prompts, state, sibling };
+      return { h, root, cwd, prompts, signals, state, sibling };
+    }
+    // Approve outside cwds at accept, as the accepting invocation would.
+    function approvedHarness() {
+      const harnessed = cwdHarness();
+      Object.assign(harnessed.h.ctx, { hasUI: true });
+      harnessed.state.answer = true;
+      return harnessed;
+    }
+    // Reload drops in-memory approval; a new invocation continues the ledger.
+    async function continueInvocation(h: ReturnType<typeof harness>) {
+      await h.emit("session_start");
+      return h.invoke();
     }
     const assignment = (
       id: string,
@@ -1090,7 +1108,7 @@ describe("execute native-session integration", () => {
       });
 
     it("normalizes accepted cwd and rejects missing directories", async () => {
-      const { h, root, sibling } = cwdHarness();
+      const { h, root, sibling } = approvedHarness();
       const token = await h.invoke();
       expect(
         h.accept(token, {
@@ -1120,7 +1138,7 @@ describe("execute native-session integration", () => {
     });
 
     it("detects overlaps through cwd and allows disjoint directories", async () => {
-      const { h, root } = cwdHarness();
+      const { h, root } = approvedHarness();
       const token = await h.invoke();
       await h.accept(token, {
         assignments: [
@@ -1169,17 +1187,178 @@ describe("execute native-session integration", () => {
       expect(repaired.ledger.assignments[1]?.cwd).toBe("packages/x");
     });
 
-    it("requires user approval for an outside cwd", async () => {
-      const { h, root, prompts, state, sibling } = cwdHarness();
+    it("asks once at accept for every distinct outside cwd", async () => {
+      const { h, root, cwd, prompts, signals, sibling } = approvedHarness();
+      const signal = new AbortController().signal;
+      Object.assign(h.ctx, { signal });
       const token = await h.invoke();
       await h.accept(token, {
+        assignments: [
+          assignment("a", ["x"], join(root, "sibling")),
+          assignment("b", ["y"], `${join(root, "sibling")}/`),
+          assignment("c", ["z"], join(root, "sibling/lib")),
+          assignment("d", ["src"], "packages/x"),
+          assignment("e", ["lib"]),
+        ],
+      });
+      expect(prompts).toHaveLength(1);
+      expect(signals).toEqual([signal]);
+      const lines = prompts[0]?.split("\n") ?? [];
+      expect(lines.filter((line) => line === sibling)).toHaveLength(1);
+      expect(lines).toContain(join(sibling, "lib"));
+      expect(lines).toContain(cwd);
+      expect(prompts[0]).not.toContain("packages/x");
+    });
+
+    it("rejects accept without approval and persists nothing", async () => {
+      for (const mode of ["no-ui", "decline", "abort"] as const) {
+        const { h, root, cwd, prompts, state } = cwdHarness();
+        mkdirSync(join(cwd, ".pi/specs"), { recursive: true });
+        writeFileSync(join(cwd, ".pi/specs/test.md"), "# Execution Brief");
+        if (mode !== "no-ui") {
+          Object.assign(h.ctx, { hasUI: true });
+        }
+        if (mode === "abort") {
+          const controller = new AbortController();
+          controller.abort();
+          Object.assign(h.ctx, { signal: controller.signal });
+          state.answer = true;
+        }
+        const token = await h.invoke();
+        const rejected = await h
+          .accept(token, {
+            specPath: ".pi/specs/test.md",
+            assignments: [assignment("a", ["src"], join(root, "sibling"))],
+          })
+          .then(
+            () => "accepted",
+            (error: unknown) =>
+              error instanceof Error ? error.message : "non-error rejection",
+          );
+        expect(rejected).toContain(
+          mode === "no-ui" ? "requires interactive approval" : "not approved",
+        );
+        expect(prompts).toHaveLength(mode === "no-ui" ? 0 : 1);
+        expect(h.branch).toEqual([]);
+        expect(existsSync(join(cwd, ".pi/specs/test.log.jsonl"))).toBe(false);
+        expect(
+          (await h.checkpoint(token, { action: "inspect" })).ledger.plan,
+        ).toBeNull();
+      }
+    });
+
+    it("rejects accept when authorization is revoked during the prompt", async () => {
+      const { h, root } = approvedHarness();
+      const token = await h.invoke();
+      Object.assign(h.ctx.ui, {
+        confirm: async () => {
+          await h.emit("session_start");
+          return true;
+        },
+      });
+      const rejected = await h
+        .accept(token, {
+          assignments: [assignment("a", ["src"], join(root, "sibling"))],
+        })
+        .then(
+          () => "accepted",
+          (error: unknown) =>
+            error instanceof Error ? error.message : "non-error rejection",
+        );
+      expect(rejected).toContain("Unauthorized");
+      expect(h.branch).toEqual([]);
+    });
+
+    it("opens no dialog for parallel dispatches approved at accept", async () => {
+      const { h, root, prompts } = approvedHarness();
+      const token = await h.invoke();
+      const cwds = {
+        a: join(root, "sibling"),
+        b: join(root, "sibling"),
+        c: join(root, "sibling/lib"),
+      };
+      await h.accept(token, {
+        assignments: Object.entries(cwds).map(([id, cwd]) =>
+          assignment(id, [id], cwd),
+        ),
+      });
+      expect(prompts).toHaveLength(1);
+      const results = await Promise.all(
+        Object.entries(cwds).map(async ([assignmentId, cwd]) => {
+          const started = await h.checkpoint(token, {
+            action: "start",
+            assignmentId,
+          });
+          return call(h, started.dispatchPrefix, cwd, `call-${assignmentId}`);
+        }),
+      );
+      expect(results).toEqual([undefined, undefined, undefined]);
+      expect(prompts).toHaveLength(1);
+    });
+
+    it("confirms once per cwd for a continuing invocation, sharing concurrent prompts", async () => {
+      const { h, root, prompts, sibling } = approvedHarness();
+      const cwds = {
+        a: join(root, "sibling"),
+        b: join(root, "sibling"),
+        c: join(root, "sibling/lib"),
+        d: join(root, "sibling"),
+      };
+      await h.accept(await h.invoke(), {
+        assignments: Object.entries(cwds).map(([id, cwd]) =>
+          assignment(id, [id], cwd),
+        ),
+      });
+      const token = await continueInvocation(h);
+      const answers: Array<(value: boolean) => void> = [];
+      Object.assign(h.ctx.ui, {
+        confirm: (_title: string, message: string) => {
+          prompts.push(message);
+          return new Promise<boolean>((resolve) => answers.push(resolve));
+        },
+      });
+      const prefixes: Record<string, string | null> = {};
+      for (const assignmentId of Object.keys(cwds)) {
+        prefixes[assignmentId] = (
+          await h.checkpoint(token, { action: "start", assignmentId })
+        ).dispatchPrefix;
+      }
+      const dispatch = (assignmentId: "a" | "b" | "c" | "d") =>
+        call(
+          h,
+          prefixes[assignmentId] ?? null,
+          cwds[assignmentId],
+          `call-${assignmentId}`,
+        );
+      const pending = Promise.all([
+        dispatch("a"),
+        dispatch("b"),
+        dispatch("c"),
+      ]);
+      await Bun.sleep(0);
+      expect(prompts.slice(1)).toHaveLength(2);
+      expect(prompts[1]).toContain(sibling);
+      expect(prompts[2]).toContain(join(sibling, "lib"));
+      for (const answer of answers) {
+        answer(true);
+      }
+      expect(await pending).toEqual([undefined, undefined, undefined]);
+      expect(await dispatch("d")).toBeUndefined();
+      expect(prompts).toHaveLength(3);
+    });
+
+    it("blocks fallback dispatch without UI or when declined", async () => {
+      const { h, root, prompts, state, sibling } = approvedHarness();
+      await h.accept(await h.invoke(), {
         assignments: [assignment("a", ["src"], join(root, "sibling"))],
       });
+      const token = await continueInvocation(h);
       const started = await h.checkpoint(token, {
         action: "start",
         assignmentId: "a",
       });
       const outside = join(root, "sibling");
+      Object.assign(h.ctx, { hasUI: false });
       // No UI: outside dispatch cannot be approved.
       expect(await call(h, started.dispatchPrefix, outside)).toMatchObject({
         block: true,
@@ -1190,15 +1369,16 @@ describe("execute native-session integration", () => {
         block: true,
         reason: expect.stringContaining("must match"),
       });
-      expect(prompts).toEqual([]);
+      expect(prompts).toHaveLength(1);
+      state.answer = false;
       expect(await call(h, started.dispatchPrefix, outside)).toMatchObject({
         block: true,
         reason: expect.stringContaining("declined"),
       });
       state.answer = true;
       expect(await call(h, started.dispatchPrefix, outside)).toBeUndefined();
-      expect(prompts).toHaveLength(2);
-      expect(prompts[1]).toContain(sibling);
+      expect(prompts).toHaveLength(3);
+      expect(prompts[2]).toContain(sibling);
       await h.childResult("child-call");
       expect(
         (await h.checkpoint(token, { action: "inspect" })).ledger.assignments[0]
@@ -1208,12 +1388,11 @@ describe("execute native-session integration", () => {
 
     it("revalidates after approval when the ledger changes during the prompt", async () => {
       for (const change of ["stop", "block"] as const) {
-        const { h, root } = cwdHarness();
-        Object.assign(h.ctx, { hasUI: true });
-        const token = await h.invoke();
-        await h.accept(token, {
+        const { h, root } = approvedHarness();
+        await h.accept(await h.invoke(), {
           assignments: [assignment("a", ["src"], join(root, "sibling"))],
         });
+        const token = await continueInvocation(h);
         const started = await h.checkpoint(token, {
           action: "start",
           assignmentId: "a",
@@ -1244,11 +1423,15 @@ describe("execute native-session integration", () => {
 
     it("does not prompt for a cwd inside the workspace", async () => {
       const { h, prompts } = cwdHarness();
-      Object.assign(h.ctx, { hasUI: true });
       const token = await h.invoke();
+      // Without UI too: in-workspace plans need no approval.
       await h.accept(token, {
-        assignments: [assignment("a", ["src"], "packages/x")],
+        assignments: [
+          assignment("a", ["src"], "packages/x"),
+          assignment("b", ["lib"]),
+        ],
       });
+      Object.assign(h.ctx, { hasUI: true });
       const started = await h.checkpoint(token, {
         action: "start",
         assignmentId: "a",

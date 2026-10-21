@@ -28,6 +28,11 @@ import {
 import { isRecord, loadAgent, resolveAgentResources, within } from "./agents";
 import type { Thinking } from "./agents";
 import {
+  startDialogRelay,
+  type DialogRelay,
+  type ParentUI,
+} from "./dialog-relay";
+import {
   atomicJson,
   schemaHash,
   validateResult,
@@ -79,6 +84,9 @@ export type RunnerContext = Pick<
     ExtensionContext["modelRegistry"],
     "find" | "hasConfiguredAuth"
   >;
+  /** Parent surface for relayed child dialogs; absent or without UI, they are denied. */
+  hasUI?: boolean;
+  ui?: ParentUI;
 };
 /** Last pane lines above the child's bottom editor box, which only repeats chrome. */
 export function paneActivity(capture: string): string {
@@ -110,6 +118,35 @@ async function removeSocket(socket: string, directory: string): Promise<void> {
     }
   }
   await rmdir(directory);
+}
+const EXIT_GRACE_MS = 2000;
+function processAlive(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    // ESRCH: gone. EPERM: the pid now belongs to another user, so not our child.
+    return false;
+  }
+}
+async function waitGone(pid: number): Promise<boolean> {
+  const deadline = Date.now() + EXIT_GRACE_MS;
+  while (processAlive(pid) && Date.now() < deadline) {
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
+  return !processAlive(pid);
+}
+// tmux teardown sends SIGHUP without awaiting exit; settle only once the child is gone.
+async function awaitExit(pid: number): Promise<void> {
+  if (await waitGone(pid)) {
+    return;
+  }
+  try {
+    process.kill(pid, "SIGKILL");
+  } catch {
+    return;
+  }
+  await waitGone(pid);
 }
 async function delay(signal: AbortSignal): Promise<void> {
   checkAbort(signal);
@@ -293,11 +330,10 @@ export async function runSubagent(
       const resultPath = path.join(runDirectory, "result.json");
       const configPath = path.join(runDirectory, "config.json");
       const taskPath = path.join(runDirectory, "task.md");
-      await atomicJson(configPath, config);
-      await writeFile(taskPath, params.task, { mode: 0o600 });
       const socketDirectory = await mkdtemp(path.join(tmpdir(), "pi-sa-"));
       await chmod(socketDirectory, 0o700);
       const socket = path.join(socketDirectory, "s");
+      config.dialogSocket = path.join(socketDirectory, "d");
       const session = `pi-subagent-${runId}`;
       const target = `${session}:0.0`;
       const tmux = async (...args: string[]) =>
@@ -346,9 +382,10 @@ export async function runSubagent(
             ];
       const launchScript = `umask 077; exec env SUPA_PI_SUBAGENT_CONFIG=${shellQuote(configPath)} ${invocation.map(shellQuote).join(" ")}`;
       const launchPath = path.join(runDirectory, "launch.sh");
-      await writeFile(launchPath, `${launchScript}\n`, { mode: 0o600 });
       const command = `exec /bin/sh ${shellQuote(launchPath)}`;
       let created = false;
+      let childPid: number | undefined;
+      let relay: DialogRelay | undefined;
       let pane = "";
       const startedAt = Date.now();
       let reported: ChildResult | undefined;
@@ -363,6 +400,16 @@ export async function runSubagent(
       signal.addEventListener("abort", abort, { once: true });
       try {
         checkAbort(signal);
+        // Inside try: the finally removes the socket directory if a write fails.
+        await atomicJson(configPath, config);
+        await writeFile(taskPath, params.task, { mode: 0o600 });
+        await writeFile(launchPath, `${launchScript}\n`, { mode: 0o600 });
+        relay = await startDialogRelay(config.dialogSocket, {
+          label: `Subagent ${agent?.name ?? "generic"} ${runId}: `,
+          // Read per dialog: ctx.ui is replaced on rebind, and a stale ctx throws (denied).
+          parentUI: () => (ctx.hasUI ? ctx.ui : undefined),
+          signal,
+        });
         await requireTmux(
           "new-session",
           "-d",
@@ -377,6 +424,16 @@ export async function runSubagent(
         );
         created = true;
         checkAbort(signal);
+        // The launcher execs, so the pane process becomes the child Pi; list-panes avoids display-message probes.
+        const panes = await tmux(
+          "list-panes",
+          "-t",
+          target,
+          "-F",
+          "#{pane_pid}",
+        );
+        const pid = Number.parseInt(panes.stdout.trim(), 10);
+        childPid = panes.code === 0 && pid > 0 ? pid : undefined;
         await requireTmux(
           "set-window-option",
           "-t",
@@ -514,6 +571,10 @@ export async function runSubagent(
         if (created) {
           await tmux("kill-server");
         }
+        if (childPid !== undefined) {
+          await awaitExit(childPid);
+        }
+        await relay?.close();
         await removeSocket(socket, socketDirectory);
       }
     },

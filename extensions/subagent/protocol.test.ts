@@ -62,6 +62,23 @@ test("child config keeps absolute provider extensions and rejects relative ones"
   );
   await rejects(readChildConfig(file), /provider extensions/);
 });
+test("child config keeps an absolute dialog relay socket, stays optional, rejects others", async () => {
+  const file = path.join(
+    await mkdtemp(path.join(tmpdir(), "supa-subagent-protocol-")),
+    "config.json",
+  );
+  await writeFile(file, JSON.stringify(config));
+  expect((await readChildConfig(file)).dialogSocket).toBeUndefined();
+  await writeFile(
+    file,
+    JSON.stringify({ ...config, dialogSocket: "/tmp/pi-sa-x/d" }),
+  );
+  expect((await readChildConfig(file)).dialogSocket).toBe("/tmp/pi-sa-x/d");
+  for (const dialogSocket of ["d", 3]) {
+    await writeFile(file, JSON.stringify({ ...config, dialogSocket }));
+    await rejects(readChildConfig(file), /dialog relay socket/);
+  }
+});
 test("malformed and mismatched evidence rejected; parent independently revalidates structure", () => {
   expect(validateResult(report, config).structuredOutput).toEqual({ ok: true });
   for (const changed of [

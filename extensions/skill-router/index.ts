@@ -187,6 +187,11 @@ export function createSkillRouterExtension(
     });
 
     pi.on("before_agent_start", async (event, ctx) => {
+      // Pi 1.2+ also fires this for extension-triggered custom-message runs (e.g. post-compaction
+      // continuations). They carry no user prompt to route and must keep the current selection.
+      if (event.messageType === "custom") {
+        return;
+      }
       // Consume first: empty catalogs and earlier forced-prompt handlers must
       // not leave stale raw input for a later request.
       const current = currentInput;

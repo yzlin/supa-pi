@@ -334,7 +334,8 @@ async function performHandoff(
     return loader;
   });
 
-  if (result === null) {
+  // Hosts that cannot show custom UI (e.g. subagent children) resolve undefined.
+  if (result == null) {
     return "Handoff cancelled.";
   }
 

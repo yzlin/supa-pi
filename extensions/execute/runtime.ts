@@ -108,6 +108,9 @@ export function registerExecutionLedger(
   let ledger: ExecutionLedger | null = null;
   let loadError: string | null = null;
   const authorizations = new Map<string, string>();
+  // Outside-workspace cwds the user approved, per invocation.
+  const approvedCwds = new Map<string, Set<string>>();
+  const pendingApprovals = new Map<string, Promise<boolean>>();
   const calls = new Map<string, BoundCall>();
   let stopWatchingAbort: (() => void) | undefined;
   let workspace: string | undefined;
@@ -172,8 +175,59 @@ export function registerExecutionLedger(
     ledger = next;
   }
 
+  function approveCwds(invocationId: string, cwds: string[]): void {
+    const approved = approvedCwds.get(invocationId) ?? new Set<string>();
+    for (const cwd of cwds) {
+      approved.add(cwd);
+    }
+    approvedCwds.set(invocationId, approved);
+  }
+
+  // Fallback for an invocation that did not approve the cwd at accept, such as
+  // one continuing an unfinished ledger: ask once per cwd. Concurrent
+  // dispatches share one prompt, since Pi orphans a displaced dialog.
+  async function confirmOutsideCwd(
+    invocationId: string,
+    cwd: string,
+    ctx: ExtensionContext,
+  ): Promise<void> {
+    if (approvedCwds.get(invocationId)?.has(cwd)) {
+      return;
+    }
+    if (!ctx.hasUI) {
+      throw new Error(
+        "Execution dispatch outside the session workspace requires interactive approval",
+      );
+    }
+    const key = JSON.stringify([invocationId, cwd]);
+    let pending = pendingApprovals.get(key);
+    if (!pending) {
+      pending = ctx.ui
+        .confirm(
+          "Run execution workers outside the workspace?",
+          `Execution workers would run in:\n${cwd}\n\nSession workspace:\n${ctx.cwd}`,
+          { signal: ctx.signal },
+        )
+        .finally(() => {
+          pendingApprovals.delete(key);
+        });
+      pendingApprovals.set(key, pending);
+    }
+    if (!(await pending)) {
+      throw new Error(
+        "User declined execution dispatch outside the session workspace",
+      );
+    }
+    if (
+      authorizations.get(invocationId) === ctx.sessionManager.getSessionId()
+    ) {
+      approveCwds(invocationId, [cwd]);
+    }
+  }
+
   function revoke(reason: string, ctx?: ExtensionContext): void {
     authorizations.clear();
+    approvedCwds.clear();
     calls.clear();
     if (ledger) {
       persist(interruptLedger(ledger, reason), ctx);
@@ -184,6 +238,7 @@ export function registerExecutionLedger(
     workspace = ctx.cwd;
     clearAbortWatcher();
     authorizations.clear();
+    approvedCwds.clear();
     calls.clear();
     ledger = null;
     loadError = null;
@@ -294,6 +349,7 @@ export function registerExecutionLedger(
           "Cannot release or repair an active child's write scope; await completion or abort the parent",
         );
       }
+      const previousLedger = ledger;
       const previousInvocationId = ledger?.invocationId;
       let current = ledger ?? emptyLedger(sessionId, params.invocationId);
       if (current.invocationId !== params.invocationId) {
@@ -368,6 +424,44 @@ export function registerExecutionLedger(
             }
           : params;
       const next = transitionLedger(current, input, randomUUID(), resume);
+      const outsideCwds =
+        params.action === "accept"
+          ? [
+              ...new Set(
+                next.assignments.flatMap(({ cwd }) =>
+                  cwd && isAbsolute(cwd) ? [cwd] : [],
+                ),
+              ),
+            ]
+          : [];
+      if (outsideCwds.length > 0) {
+        if (!ctx.hasUI) {
+          throw new Error(
+            "Accepting assignments outside the session workspace requires interactive approval",
+          );
+        }
+        const approved = await ctx.ui.confirm(
+          "Run execution workers outside the workspace?",
+          `Accepted assignments would run in:\n${outsideCwds.join("\n")}\n\nSession workspace:\n${ctx.cwd}`,
+          { signal: ctx.signal },
+        );
+        if (!approved) {
+          throw new Error(
+            "Execution plan not approved: user declined or cancelled running assignments outside the session workspace",
+          );
+        }
+        // Authorization or the ledger may change while the prompt is open.
+        if (authorizations.get(params.invocationId) !== sessionId) {
+          throw new Error(
+            "Unauthorized checkpoint: explicitly invoke /execute in this session after stop or reload",
+          );
+        }
+        if (ledger !== previousLedger) {
+          throw new Error(
+            "Execution ledger changed during approval; accept again",
+          );
+        }
+      }
       if (params.action === "stop" && next.specPath) {
         extraEvents.push({
           event: "stopped",
@@ -384,12 +478,16 @@ export function registerExecutionLedger(
         params.action !== "stop" && params.action !== "inspect",
         extraEvents,
       );
+      if (outsideCwds.length > 0) {
+        approveCwds(params.invocationId, outsideCwds);
+      }
       // A queued command authorizes only its own packet when consumed, not the active run.
       if (
         previousInvocationId &&
         previousInvocationId !== params.invocationId
       ) {
         authorizations.delete(previousInvocationId);
+        approvedCwds.delete(previousInvocationId);
       }
       const assignment =
         params.action === "start"
@@ -452,7 +550,7 @@ export function registerExecutionLedger(
       return { current: currentLedger, item };
     };
     try {
-      const { item: requestedItem } = validate();
+      const { current: requestedLedger, item: requestedItem } = validate();
       const requested: unknown = event.input.cwd;
       if (requested !== undefined && typeof requested !== "string") {
         throw new Error("Execution dispatch cwd must be a string");
@@ -467,21 +565,11 @@ export function registerExecutionLedger(
         );
       }
       if (requestedItem.cwd && isAbsolute(requestedItem.cwd)) {
-        if (!ctx.hasUI) {
-          throw new Error(
-            "Execution dispatch outside the session workspace requires interactive approval",
-          );
-        }
-        const approved = await ctx.ui.confirm(
-          "Run execution worker outside the workspace?",
-          `Assignment ${requestedItem.id} would run in:\n${requestedItem.cwd}\n\nSession workspace:\n${ctx.cwd}`,
-          { signal: ctx.signal },
+        await confirmOutsideCwd(
+          requestedLedger.invocationId,
+          requestedItem.cwd,
+          ctx,
         );
-        if (!approved) {
-          throw new Error(
-            "User declined execution dispatch outside the session workspace",
-          );
-        }
       }
       // The ledger may change while the prompt is open; validate again.
       const { current, item } = validate();

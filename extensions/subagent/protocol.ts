@@ -195,6 +195,8 @@ export interface ChildConfig {
   agent?: AgentDefinition;
   /** Absolute extension paths that register `provider`, kept when the role restricts extensions. */
   providerExtensions?: string[];
+  /** Parent dialog relay Unix socket; absent means child dialogs deny at once. */
+  dialogSocket?: string;
   schema?: Record<string, unknown>;
   schemaHash?: string;
 }
@@ -283,6 +285,13 @@ export async function readChildConfig(file: string): Promise<ChildConfig> {
   ) {
     throw new Error("Invalid child provider extensions");
   }
+  if (
+    value.dialogSocket !== undefined &&
+    (typeof value.dialogSocket !== "string" ||
+      !path.isAbsolute(value.dialogSocket))
+  ) {
+    throw new Error("Invalid child dialog relay socket");
+  }
   const agent =
     isRecord(value.agent) &&
     typeof value.agent.file === "string" &&
@@ -308,6 +317,8 @@ export async function readChildConfig(file: string): Promise<ChildConfig> {
     providerExtensions: Array.isArray(value.providerExtensions)
       ? value.providerExtensions.map(String)
       : undefined,
+    dialogSocket:
+      typeof value.dialogSocket === "string" ? value.dialogSocket : undefined,
     schema: isRecord(value.schema) ? value.schema : undefined,
     schemaHash:
       typeof value.schemaHash === "string" ? value.schemaHash : undefined,

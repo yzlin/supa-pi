@@ -507,7 +507,8 @@ export default function contextDocsExtension(pi: ExtensionAPI): void {
   });
 
   pi.on("before_agent_start", (event, ctx) => {
-    if (!shouldInjectContextDocsReminder(event.prompt ?? "", ctx.cwd)) {
+    const prompt = event.messageType === "custom" ? "" : event.prompt;
+    if (!shouldInjectContextDocsReminder(prompt, ctx.cwd)) {
       return;
     }
 

@@ -73,6 +73,66 @@ Missing/invalid values, ambiguous/unsafe metadata, and finished or stale childre
 fail clearly. `--` ends flag parsing. This is human CLI only: no new agent tool,
 resume API, shared server, global registry, or legacy attachment ID is provided.
 
+## Dialogs
+
+**Parent FIFO.** Pi 1.3.0 shows one extension dialog at a time; opening a second
+replaces the first and never settles it. At every parent `session_start` with UI,
+this extension wraps `confirm`/`select`/`input`/`editor`/`custom` on the shared
+`ctx.ui` in place (once per object). Calls wait their turn; the next opens after
+the previous settles. A queued call whose `opts.signal` aborts resolves
+`false`/`undefined` without showing. Return values are unchanged. `custom` with
+`overlay: true` skips the queue: Pi draws overlays above the dialog slot, so
+they neither displace nor get displaced, and long-lived viewers (lsp, rtk stats,
+context) do not hold up later dialogs.
+
+**Child relay.** The child bootstrap wraps its own `ctx.ui` at `session_start`
+(UI sessions only). `confirm`, `select`, and `input` show in the child pane
+*and* in the parent TUI. The first answer wins; the other copy is cancelled
+(local abort signal, or a `cancel` message to the parent). `editor` and `custom`
+resolve `undefined` without showing. A caller's `opts.signal` abort cancels both
+copies and denies. Deny is `false` for `confirm` and `undefined` otherwise.
+The child denies at once, with a `ctx.ui.notify` warning, when no relay is
+configured, connecting fails, the relay disconnects, or the parent has no UI or
+is aborting. It never waits on a dialog nobody can answer. A request the parent
+would reject as malformed (a `select` with no options, more than 100 options, or
+an option over 500 characters) is not relayed; it shows only in the child pane.
+
+The parent shows relayed dialogs through its FIFO-wrapped `ctx.ui`, titled
+`Subagent <role|generic> <run-id>: <title>`. Child title, message, options, and
+placeholder are untrusted plain text: length-bounded, with control, escape, and
+bidi-override characters replaced by spaces. Each request gets an abort signal
+that fires on child cancel, socket close, run end, or tool abort.
+
+Transport: per-run Unix socket `$TMPDIR/pi-sa-<random>/d` (mode 0600, inside the
+run's mode-0700 directory beside the tmux socket), passed as
+`config.json -> dialogSocket`. The parent listens before launch, and closes the
+listener and removes the socket on completion, failure, or abort. Messages are
+newline-delimited JSON with request ids:
+
+```text
+child  -> parent  {"type":"dialog","id","kind":"confirm","title","message"}
+                  {"type":"dialog","id","kind":"select","title","options"}
+                  {"type":"dialog","id","kind":"input","title","placeholder"?}
+                  {"type":"cancel","id"}
+parent -> child   {"type":"answer","id","value","unavailable"?: true,"reason"?: "malformed"}
+```
+
+Every inbound message is validated; lines are capped at 128 KiB (longer
+streams are closed). Malformed or unsupported requests get the deny value with
+`reason: "malformed"` and never throw; the child's notice then says the parent
+rejected the dialog as malformed.
+
+Pi-internals risks (relied on, not guaranteed by Pi's API):
+
+- `ctx.ui` is one mutable object shared by every extension; both wrappers
+  patch it in place, and a Pi change to that sharing would bypass them.
+- Displaced-dialog orphaning is modeled only by test fakes plus a pinned SDK
+  sharing check, not by driving the interactive TUI.
+- A dialog opened from inside an open inline (non-overlay) `custom` waits
+  forever behind the FIFO. Both need the one dialog slot, so without the queue
+  Pi would orphan the `custom` instead. Use `overlay: true` for components that
+  open dialogs. No repo code does this today.
+
 ## Extension-local runner
 
 The runner, role discovery, settings, protocol, and scheduler live beside this
@@ -87,7 +147,10 @@ const result = await runSubagent(pi, ctx, params, {signal, onUpdate});
 `onUpdate` receives `{runId, status: "queued" | "running", text, attachCommand?}`.
 `signal` is combined with the native context's current signal. A tool abort stops
 that owned job, including its queued launch; parent shutdown cancels all jobs
-owned by that parent session and awaits their cleanup. Direct API users must wire
+owned by that parent session and awaits their cleanup. Teardown (completion,
+failure, or abort) settles only after the child Pi process exits: the runner
+reads the tmux pane pid, waits up to 2 s after `kill-server`, then sends
+SIGKILL and waits up to 2 s more. Direct API users must wire
 `cancelSessionSubagents(sessionId)` into their own shutdown owner. Completed
 cancellation permits fresh calls after a parent reload.
 
@@ -193,6 +256,7 @@ getAgentDir()/subagents/
       startup-error.json        # startup failure, when emitted
       failure.json              # parent-observed failure/abort, when present
 $TMPDIR/pi-sa-<random>/s          # one private live tmux socket per run
+$TMPDIR/pi-sa-<random>/d          # its private dialog relay socket
 ```
 
 Evidence directories are 0700 and files are 0600. Attachment checks ownership,
@@ -228,7 +292,9 @@ child marker; a subprocess regression verifies the full smoke from a reviewer
 worker environment. It crosses actual tmux/Pi CLI and public-SDK
 child boundaries, proves fresh task/role separation and final correction,
 checks both launch paths use the parent Pi package/version, checks private
-evidence/finished cleanup, detects a ready child exiting without a report, and
+evidence/finished cleanup, relays a child `ctx.ui.confirm` (denied `false` by a
+print-mode parent without UI; answered `true` after rebinding the real parent
+session with a fake UI context, labeled, 0600 socket removed), detects a ready child exiting without a report, and
 kills an actually started child on abort. It invokes the native attachment
 CLI against launched children through a tmux wrapper that forwards live-target
 checks but replaces interactive attachment, proving CLI dispatch without a TTY

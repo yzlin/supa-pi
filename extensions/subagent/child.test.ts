@@ -1,7 +1,7 @@
 // SupaPi additions: offline tests for the Apache-2.0 subagent adaptation; see extensions/subagent/NOTICE and LICENSE.upstream.
 import { expect, test } from "bun:test";
 import { randomUUID } from "node:crypto";
-import { mkdtemp, readFile } from "node:fs/promises";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
@@ -15,6 +15,7 @@ import {
   createAgentSession,
   DefaultResourceLoader,
   type ExtensionAPI,
+  type ExtensionContext,
   ModelRuntime,
   SessionManager,
   SettingsManager,
@@ -23,12 +24,14 @@ import { Type } from "typebox";
 
 import { parseAgent } from "./agents";
 import { registerChildBootstrap } from "./child";
+import { startDialogRelay } from "./dialog-relay";
 import { schemaHash, type ChildConfig, validateResult } from "./protocol";
 
 async function fixture(
   responses: Parameters<ReturnType<typeof fauxProvider>["setResponses"]>[0],
   tools = "none",
   extra?: (pi: ExtensionAPI) => void,
+  configExtra: Partial<ChildConfig> = {},
 ) {
   const root = await mkdtemp(path.join(tmpdir(), "supa-subagent-bootstrap-"));
   const provider = fauxProvider();
@@ -56,6 +59,7 @@ async function fixture(
     ),
     schema,
     schemaHash: schemaHash(schema),
+    ...configExtra,
   };
   const resultPath = path.join(root, "result.json");
   const runtime = await ModelRuntime.create({
@@ -279,5 +283,74 @@ test("inherited delegation tools are neither declared nor listed as callable to 
     expect(checked).toBe(true);
   } finally {
     f.session.dispose();
+  }
+});
+
+test("session_start relays the child's own dialogs; no-UI sessions stay unwrapped", async () => {
+  const socketDirectory = await mkdtemp(path.join(tmpdir(), "pi-sa-"));
+  const dialogSocket = path.join(socketDirectory, "d");
+  const parentTitles: string[] = [];
+  const relay = await startDialogRelay(dialogSocket, {
+    label: "Subagent worker r: ",
+    parentUI: () => ({
+      confirm: async (title) => {
+        parentTitles.push(title);
+        return true;
+      },
+      select: async () => undefined,
+      input: async () => undefined,
+    }),
+  });
+  let ctx: ExtensionContext | undefined;
+  const f = await fixture(
+    [],
+    "none",
+    (pi) =>
+      pi.on("session_start", (_event, current) => {
+        ctx = current;
+      }),
+    { dialogSocket },
+  );
+  try {
+    if (!ctx) {
+      throw new Error("Missing child context");
+    }
+    // Print mode: Pi's shared no-UI context is left alone; nothing reaches the parent.
+    expect(ctx.hasUI).toBe(false);
+    expect(await ctx.ui.confirm("Hidden?", "m")).toBe(false);
+    expect(parentTitles).toEqual([]);
+    let localSignal: AbortSignal | undefined;
+    let editorShown = false;
+    const notices: string[] = [];
+    await f.session.bindExtensions({
+      uiContext: {
+        ...ctx.ui,
+        confirm: (_title, _message, opts) =>
+          new Promise<boolean>((resolve) => {
+            localSignal = opts?.signal;
+            opts?.signal?.addEventListener("abort", () => resolve(false), {
+              once: true,
+            });
+          }),
+        editor: async () => {
+          editorShown = true;
+          return "shown";
+        },
+        notify: (message) => {
+          notices.push(message);
+        },
+      },
+    });
+    expect(ctx.hasUI).toBe(true);
+    expect(await ctx.ui.confirm("Go?", "now")).toBe(true);
+    expect(parentTitles).toEqual(["Subagent worker r: Go?"]);
+    expect(localSignal?.aborted).toBe(true);
+    expect(await ctx.ui.editor("E")).toBeUndefined();
+    expect(editorShown).toBe(false);
+    expect(notices).toEqual([]);
+  } finally {
+    f.session.dispose();
+    await relay.close();
+    await rm(socketDirectory, { recursive: true });
   }
 });

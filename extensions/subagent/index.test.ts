@@ -16,10 +16,12 @@ import {
   ModelRuntime,
   SessionManager,
   SettingsManager,
+  type ExtensionUIContext,
 } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
 import { Check } from "typebox/value";
 
+import { theme } from "../../node_modules/@earendil-works/pi-coding-agent/dist/modes/interactive/theme/theme.js";
 import { isRecord, THINKING_LEVELS } from "./agents";
 import subagentExtension from "./index";
 
@@ -146,6 +148,158 @@ test("native output schema and parallel contract; programmatic calls traverse pa
     await session.bindExtensions({ mode: "print" });
     await session.prompt("delegate");
     expect(observed).toBe(true);
+  } finally {
+    session.dispose();
+  }
+});
+
+// Pi-internals guard: every extension's ctx.ui getter returns one mutable runner.uiContext; the parent FIFO wraps it in place.
+function fakeUIContext(opened: string[]) {
+  const pending: Array<(value: string | undefined) => void> = [];
+  const ui: ExtensionUIContext = {
+    select: async () => undefined,
+    // Displace-and-orphan: each open replaces the visible dialog; only the newest can be answered.
+    confirm: (title) =>
+      new Promise<string | undefined>((resolve) => {
+        opened.push(title);
+        pending.splice(0, pending.length, resolve);
+      }).then((value) => value === "Yes"),
+    input: async () => undefined,
+    notify: () => undefined,
+    onTerminalInput: () => () => undefined,
+    setStatus: () => undefined,
+    setWorkingMessage: () => undefined,
+    setWorkingVisible: () => undefined,
+    setWorkingIndicator: () => undefined,
+    setHiddenThinkingLabel: () => undefined,
+    setWidget: () => undefined,
+    setFooter: () => undefined,
+    setHeader: () => undefined,
+    setTitle: () => undefined,
+    custom: async () => {
+      throw new Error("unused");
+    },
+    pasteToEditor: () => undefined,
+    setEditorText: () => undefined,
+    getEditorText: () => "",
+    editor: async () => undefined,
+    addAutocompleteProvider: () => undefined,
+    setEditorComponent: () => undefined,
+    getEditorComponent: () => undefined,
+    theme,
+    getAllThemes: () => [],
+    getTheme: () => undefined,
+    setTheme: () => ({ success: false }),
+    getToolsExpanded: () => false,
+    setToolsExpanded: () => undefined,
+  };
+  return {
+    ui,
+    answer(value: string) {
+      const resolve = pending.pop();
+      if (!resolve) {
+        throw new Error("No visible dialog");
+      }
+      resolve(value);
+    },
+  };
+}
+
+// Identity only; reading the property directly trips unbound-method.
+function confirmOf(ui: ExtensionUIContext): unknown {
+  return Object.getOwnPropertyDescriptor(ui, "confirm")?.value;
+}
+
+async function bindSession(uiContext?: ExtensionUIContext) {
+  const root = await mkdtemp(path.join(tmpdir(), "supa-subagent-ui-"));
+  const provider = fauxProvider();
+  const modelRuntime = await ModelRuntime.create({
+    credentials: new InMemoryCredentialStore(),
+    modelsPath: null,
+    modelsStorePath: path.join(root, "models-store.json"),
+    allowModelNetwork: false,
+  });
+  modelRuntime.registerNativeProvider(provider.provider);
+  const settingsManager = SettingsManager.inMemory({
+    compaction: { enabled: false },
+  });
+  const seen: Array<{ ui: ExtensionUIContext; hasUI: boolean }> = [];
+  let confirmBeforeWrap: unknown;
+  const loader = new DefaultResourceLoader({
+    cwd: root,
+    agentDir: root,
+    settingsManager,
+    noExtensions: true,
+    noSkills: true,
+    noContextFiles: true,
+    extensionFactories: [
+      (pi) => {
+        pi.on("session_start", (_event, ctx) => {
+          confirmBeforeWrap = confirmOf(ctx.ui);
+          seen.push({ ui: ctx.ui, hasUI: ctx.hasUI });
+        });
+      },
+      subagentExtension,
+      (pi) => {
+        pi.on("session_start", (_event, ctx) => {
+          seen.push({ ui: ctx.ui, hasUI: ctx.hasUI });
+        });
+      },
+    ],
+  });
+  await loader.reload();
+  const { session } = await createAgentSession({
+    cwd: root,
+    agentDir: root,
+    model: provider.getModel(),
+    modelRuntime,
+    settingsManager,
+    resourceLoader: loader,
+    sessionManager: SessionManager.inMemory(root),
+  });
+  await session.bindExtensions(
+    uiContext ? { uiContext, mode: "tui" } : { mode: "print" },
+  );
+  return { session, seen, confirmBeforeWrap };
+}
+
+test("parent session_start queues dialogs on the ctx.ui object shared by all extensions", async () => {
+  const opened: string[] = [];
+  const fake = fakeUIContext(opened);
+  const { session, seen, confirmBeforeWrap } = await bindSession(fake.ui);
+  try {
+    const [first, last] = seen;
+    if (!first || !last) {
+      throw new Error("session_start not observed");
+    }
+    expect(first.hasUI).toBe(true);
+    // Shared mutable object: the later extension sees the subagent wrap made after the earlier one ran.
+    expect(last.ui).toBe(first.ui);
+    expect(confirmOf(first.ui)).not.toBe(confirmBeforeWrap);
+    const a = last.ui.confirm("first", "m");
+    const b = first.ui.confirm("second", "m");
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(opened).toEqual(["first"]);
+    fake.answer("Yes");
+    expect(await a).toBe(true);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(opened).toEqual(["first", "second"]);
+    fake.answer("No");
+    expect(await b).toBe(false);
+  } finally {
+    session.dispose();
+  }
+});
+
+test("parent without UI leaves ctx.ui unwrapped", async () => {
+  const { session, seen, confirmBeforeWrap } = await bindSession();
+  try {
+    expect(seen[0]?.hasUI).toBe(false);
+    const last = seen[1];
+    if (!last) {
+      throw new Error("session_start not observed");
+    }
+    expect(confirmOf(last.ui)).toBe(confirmBeforeWrap);
   } finally {
     session.dispose();
   }

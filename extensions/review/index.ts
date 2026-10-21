@@ -1367,6 +1367,10 @@ export default function reviewExtension(pi: ExtensionAPI) {
   }
 
   pi.on("before_agent_start", (event, ctx) => {
+    // Summary requests are user messages; custom-message runs have no prompt to bind.
+    if (event.messageType === "custom") {
+      return;
+    }
     bindSummaryRequest(event.prompt, ctx);
   });
 

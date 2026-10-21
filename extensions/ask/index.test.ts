@@ -296,6 +296,40 @@ describe("ask custom UI execution", () => {
     });
   });
 
+  it("treats an undefined custom UI result as the normal cancellation", async () => {
+    const cancelled = await executeAskWithCustom((renderFactory) => {
+      let submitted: unknown;
+      const component = (
+        renderFactory as (
+          tui: { requestRender(): void },
+          theme: typeof PLAIN_THEME,
+          keybindings: unknown,
+          done: (value: unknown) => void,
+        ) => { handleInput(data: string): void }
+      )(
+        {
+          requestRender() {
+            // Cancellation does not need a render.
+          },
+        },
+        PLAIN_THEME,
+        {},
+        (value) => {
+          submitted = value;
+        },
+      );
+      component.handleInput("\u001b");
+      return submitted;
+    });
+    const unshown = await executeAskWithCustom(() => undefined);
+
+    expect(unshown).toEqual(cancelled);
+    expect(unshown).toMatchObject({
+      content: [{ type: "text", text: "User cancelled the ask" }],
+      details: { cancelled: true, answers: [] },
+    });
+  });
+
   it("propagates errors thrown by the custom UI", async () => {
     expect(
       executeAskWithCustom(() => {

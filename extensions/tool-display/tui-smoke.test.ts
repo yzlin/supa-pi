@@ -394,7 +394,10 @@ describe("companion ToolExecutionComponent smoke", () => {
           rows.every((line) => line.includes(theme.getBgAnsi("toolPendingBg"))),
         ).toBe(true);
       }
-      component.updateResult({ content: [], details: fixture.details }, true);
+      component.updateResult(
+        { content: [], details: fixture.details, isError: false },
+        true,
+      );
       if (fixture.name === "codemode") {
         expect(
           contentRows(component, 120)[0] &&
@@ -407,6 +410,7 @@ describe("companion ToolExecutionComponent smoke", () => {
         {
           content: [{ type: "text", text: fixture.text }],
           details: fixture.details,
+          isError: false,
         },
         false,
       );
@@ -484,7 +488,10 @@ test("codemode TUI shares a single live summary and expands fixed previews with 
     ui as never,
     process.cwd(),
   );
-  component.updateResult({ content: [], details: { calls } }, true);
+  component.updateResult(
+    { content: [], details: { calls }, isError: false },
+    true,
+  );
   let rows = contentRows(component, 120).map(stripVTControlCharacters);
   expect(rows[0]).toContain("codemode 10 tool calls → running");
   expect(rows.join("\n")).toContain("2 more lines");

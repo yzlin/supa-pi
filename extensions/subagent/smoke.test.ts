@@ -3,7 +3,7 @@ import { expect, test } from "bun:test";
 import { rejects } from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { createHash, randomUUID } from "node:crypto";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, statSync } from "node:fs";
 import { mkdir, mkdtemp, readFile, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -49,6 +49,9 @@ import { VERSION, getPackageDir } from '@earendil-works/pi-coding-agent';
 export default function(pi) {
  const config = JSON.parse(readFileSync(process.env.SUPA_PI_SUBAGENT_CONFIG, 'utf8'));
  pi.on('session_start', () => writeFileSync(path.join(path.dirname(process.env.SUPA_PI_SUBAGENT_CONFIG), 'child-pid.json'), JSON.stringify({pid: process.pid, version: VERSION, packageDir: getPackageDir()}), {mode:0o600}));
+ pi.registerTool({ name: 'smoke_confirm', label: 'Smoke confirm', description: 'Child dialog', parameters: { type: 'object', properties: {} }, async execute(_id, _params, _signal, _update, ctx) {
+  return { content: [{ type: 'text', text: 'SMOKE_CONFIRM=' + (await ctx.ui.confirm('Smoke dialog', 'Allow?')) }], details: {} };
+ }});
  const fake = fauxProvider();
  fake.setResponses([
  async context => {
@@ -59,10 +62,14 @@ export default function(pi) {
   if (config.agent && tools.join(',') !== 'StructuredOutput') throw new Error('tools:none not enforced');
   if (users.includes('EXIT_WITHOUT_REPORT')) return new Promise(() => setTimeout(() => process.exit(7), 1500));
   if (users.includes('CANCEL_WAIT')) return new Promise(resolve => setTimeout(() => resolve(fauxAssistantMessage('too late')), 60000));
+  if (users.includes('DIALOG_CONFIRM')) return fauxAssistantMessage(fauxToolCall('smoke_confirm', {}), { stopReason: 'toolUse' });
   await new Promise(resolve => setTimeout(resolve, 1500));
   return fauxAssistantMessage('missing final report');
  },
- fauxAssistantMessage(fauxToolCall('StructuredOutput', { ok: true }), { stopReason: 'toolUse' }),
+ context => {
+  const dialog = JSON.stringify(context.messages).match(/SMOKE_CONFIRM=(true|false)/);
+  return dialog ? fauxAssistantMessage(dialog[0]) : fauxAssistantMessage(fauxToolCall('StructuredOutput', { ok: true }), { stopReason: 'toolUse' });
+ },
  fauxAssistantMessage('offline complete')
  ]);
  pi.registerProvider(fake.provider);
@@ -255,9 +262,10 @@ process.exit(result.status ?? 1);
             expect(update.attachCommand).toBe(
               `pi --attach-subagent ${update.runId}`,
             );
-            const target = resolveAttachTarget(update.runId);
-            sockets.add(target.socket);
+            // Only the first update is guaranteed live: the runner reads result.json before capture-pane + onUpdate.
             if (!attached) {
+              const target = resolveAttachTarget(update.runId);
+              sockets.add(target.socket);
               const attachment = invokeAttach(update.runId);
               expect(attachment.status, attachment.stderr).toBe(23);
               expect(JSON.parse(readFileSync(attachLog, "utf8"))).toEqual([
@@ -317,8 +325,6 @@ process.exit(result.status ?? 1);
       expect(finished.status).toBe(1);
       expect(finished.stderr).toContain("finished");
     }
-    await session.prompt("Run the native delegate boundary.");
-    expect(nativeSucceeded).toBe(true);
     const parentEvidence = path.join(
       agentDir,
       "subagents",
@@ -327,6 +333,63 @@ process.exit(result.status ?? 1);
         .digest("hex")
         .slice(0, 24),
     );
+    // Child ctx.ui.confirm over the real relay: print-bound parent (no UI) denies, then a UI-bound parent answers.
+    const parentDialogs: string[] = [];
+    for (const answer of [false, true]) {
+      if (answer) {
+        // Highest real seam for a parent TUI: Pi's own bindExtensions with a UI context (FIFO-wrapped at session_start).
+        await session.bindExtensions({
+          uiContext: {
+            ...captured.ctx.ui,
+            confirm: async (title, message) => {
+              parentDialogs.push(`${title}|${message}`);
+              return true;
+            },
+          },
+        });
+      }
+      expect(captured.ctx.hasUI).toBe(answer);
+      let relaySocket: string | undefined;
+      let relayMode: number | undefined;
+      const dialog = await runSubagent(
+        captured.pi,
+        captured.ctx,
+        { task: "CHILD_TASK_ONLY DIALOG_CONFIRM", thinking: "off" },
+        {
+          signal: AbortSignal.timeout(20_000),
+          onUpdate: (update) => {
+            // The relay listens until runSubagent settles, but the child may already be finished here.
+            if (update.attachCommand && !relaySocket) {
+              const config: unknown = JSON.parse(
+                readFileSync(
+                  path.join(parentEvidence, update.runId, "config.json"),
+                  "utf8",
+                ),
+              );
+              if (
+                !isRecord(config) ||
+                typeof config.dialogSocket !== "string"
+              ) {
+                throw new Error("Missing dialogSocket config");
+              }
+              relaySocket = config.dialogSocket;
+              relayMode = statSync(relaySocket).mode % 512;
+            }
+          },
+        },
+      );
+      expect(dialog.output).toBe(`SMOKE_CONFIRM=${answer}`);
+      expect(parentDialogs).toEqual(
+        answer ? [`Subagent generic ${dialog.runId}: Smoke dialog|Allow?`] : [],
+      );
+      expect(relayMode).toBe(0o600);
+      if (!relaySocket) {
+        throw new Error("Missing relay socket");
+      }
+      expect(existsSync(path.dirname(relaySocket))).toBe(false);
+    }
+    await session.prompt("Run the native delegate boundary.");
+    expect(nativeSucceeded).toBe(true);
     const exitUpdates: SubagentUpdate[] = [];
     let exitSocket: string | undefined;
     const exitSignal = AbortSignal.timeout(8000);
@@ -414,6 +477,7 @@ process.exit(result.status ?? 1);
       throw new Error("Child did not start before cancellation");
     }
     const pid = childPid;
+    // The runner settles only after the child process has exited.
     expect(() => process.kill(pid, 0)).toThrow();
     if (!cancelledSocket) {
       throw new Error("Missing cancelled socket");
@@ -437,4 +501,4 @@ process.exit(result.status ?? 1);
       process.env.PI_OFFLINE = oldOffline;
     }
   }
-}, 60_000);
+}, 90_000);

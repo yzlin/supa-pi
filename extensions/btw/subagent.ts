@@ -23,6 +23,15 @@ import { convertToLlm } from "@earendil-works/pi-coding-agent";
 
 export const MINIBOX_LINES = 10;
 
+const REASONING_LEVELS = [
+  "minimal",
+  "low",
+  "medium",
+  "high",
+  "xhigh",
+  "max",
+] as const satisfies readonly NonNullable<AgentLoopConfig["reasoning"]>[];
+
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
@@ -307,7 +316,7 @@ export async function runSubagent(
     model,
     convertToLlm: (msgs: AgentMessage[]) => convertToLlm(msgs),
     getApiKey: apiKeyResolver,
-    reasoning: thinkingLevel === "off" ? undefined : (thinkingLevel as unknown),
+    reasoning: REASONING_LEVELS.find((level) => level === thinkingLevel),
   };
 
   try {

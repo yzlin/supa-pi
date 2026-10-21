@@ -17,6 +17,8 @@ export function withReasonedBash(tool: ToolDefinition<BashSchema>) {
     renderShell: _renderShell,
     renderCall: _renderCall,
     renderResult: _renderResult,
+    // Typed for the base schema without `reasoning`; bash defines none today.
+    prepareArguments: _prepareArguments,
     ...executionTool
   } = tool;
   const parameters = Type.Object({
