@@ -438,6 +438,12 @@ describe("diagnose command", () => {
       "If `ask` is unavailable on the approval-gated path, do not infer approval or edit the fix; report the blocked gate and print both exact choices `Approve scoped fix` and `Stop and clean probes` verbatim.",
     );
     expect(skill).toContain("requires a new proposal and the same gate again");
+    expect(skill).toContain(
+      "Disclose in visible assistant text before any fix edit or `ask` call; reasoning or thinking is not visible to the user.",
+    );
+    expect(skill).toContain(
+      "Never send the gate `ask` in a turn without this visible disclosure",
+    );
     expect(skill).not.toContain(
       "Do not edit the fix before the user selects `Approve scoped fix`.",
     );

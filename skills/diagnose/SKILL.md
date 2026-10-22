@@ -118,6 +118,8 @@ Only after `Diagnosis: Proven`, prepare and disclose a scoped proposal that name
 3. the honest regression-test seam, or why none exists;
 4. targeted verification, including the original causal signal and relevant control.
 
+Disclose in visible assistant text before any fix edit or `ask` call; reasoning or thinking is not visible to the user. That text must include the Proven diagnosis (exact anchor, causal chain with file/line references, decisive evidence and controls) and all four proposal items. Never send the gate `ask` in a turn without this visible disclosure, and never let the `ask` prompt refer to a proposal "above" that was not emitted. Keep the `ask` prompt self-contained: one-line root cause and one-line remedy.
+
 An explicit diagnosis-and-fix request authorizes a bounded local remedy only after `Diagnosis: Proven`. Before fixing, disclose the concrete scoped remedy and test plan. Do not ask for approval again when that request already authorizes the bounded local remedy. This authorization does not cover risky or destructive actions, external mutations or side effects, inaccessible credentials or state, deployed changes, product-behavior changes outside that local remedy, or instrumentation outside scope. A materially out-of-scope remedy requires a new proposal and the same approval gate.
 
 Plain `/diagnose`, a diagnosis-only request, general autonomy, or probe authorization alone do not authorize a fix. For every other activation with a Proven diagnosis, use the public `ask` tool for one mandatory single-select question with exactly these two supplied options (do not use `multiSelect` and do not add another option):
