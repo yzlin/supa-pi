@@ -91,7 +91,7 @@ Route domain and product language to `CONTEXT.md`; agent conventions to a manage
 
 ## ADR
 
-Create or update an ADR under `docs/adr/` unless the target has another ADR convention. Use a stable lowercase hyphenated filename; without a numbering convention, prefer `docs/adr/YYYY-MM-DD-short-title.md`.
+Create or update an ADR under `docs/adr/` unless the target has another ADR convention. List `docs/adr/` first and follow its existing filename pattern; otherwise use `docs/adr/NNNN-short-title.md` with the next zero-padded number (start at `0001`) and a lowercase hyphenated title.
 
 Use `summary` and `read_when` frontmatter so `docs_list` can route the ADR, followed by the full ADR format:
 
