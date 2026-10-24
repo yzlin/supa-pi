@@ -1,7 +1,7 @@
 ---
 description: Losslessly clusters multi-model reviewer findings without inspecting the repository.
 tools: none
-model: claude-bridge/claude-sonnet-5-5
+model: claude-code/claude-sonnet-5-5
 thinking: low
 extensions: false
 caveman: false

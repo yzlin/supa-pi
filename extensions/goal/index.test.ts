@@ -6,6 +6,7 @@ import { join } from "node:path";
 import type {
   ExtensionAPI,
   ExtensionCommandContext,
+  ExtensionToolContext,
 } from "@earendil-works/pi-coding-agent";
 
 import goalExtension from "./index";
@@ -83,7 +84,9 @@ async function createHarness(
 
   const cwd =
     options.cwd ?? mkdtempSync(join(tmpdir(), "goal-extension-test-"));
-  const makeCtx = (idle: boolean): ExtensionCommandContext =>
+  const makeCtx = (
+    idle: boolean,
+  ): ExtensionCommandContext & ExtensionToolContext =>
     ({
       cwd,
       hasUI: true,
@@ -102,7 +105,7 @@ async function createHarness(
           notifications.push({ message, level });
         },
       },
-    }) as unknown as ExtensionCommandContext;
+    }) as unknown as ExtensionCommandContext & ExtensionToolContext;
 
   goalExtension(api);
   const command = commands.get("goal");
@@ -306,6 +309,47 @@ describe("goal extension", () => {
       blockerState: { blocked: true, reason: "Need input", taskId: "task-1" },
     });
     expect(result?.content[0]).toMatchObject({ type: "text" });
+  });
+
+  it("goal_checkpoint schema has no null variants", async () => {
+    // pi-claude-code strips null from unions, so a schema that needs JSON null
+    // to clear a field cannot be satisfied by the model.
+    const harness = await createHarness();
+    expect(JSON.stringify(getTool(harness).parameters)).not.toContain('"null"');
+  });
+
+  it("goal_checkpoint clears milestone and blocker reason with empty strings", async () => {
+    const harness = await createHarness();
+    const tool = getTool(harness);
+    await harness.command.handler("task --tasks 1 ship", harness.ctx(true));
+
+    const set = await tool.execute?.(
+      "call-set",
+      {
+        currentMilestone: "task-1",
+        blockerState: { blocked: true, reason: "Need input", taskId: "task-1" },
+      },
+      new AbortController().signal,
+      () => undefined,
+      harness.ctx(true),
+    );
+    expect(set?.isError).toBeUndefined();
+
+    const cleared = await tool.execute?.(
+      "call-clear",
+      {
+        currentMilestone: "",
+        blockerState: { blocked: false, reason: "" },
+      },
+      new AbortController().signal,
+      () => undefined,
+      harness.ctx(true),
+    );
+    expect(cleared?.isError).toBeUndefined();
+    expect(cleared?.details).toMatchObject({
+      currentMilestone: null,
+      blockerState: { blocked: false, reason: null },
+    });
   });
 
   it("adds task budget on resume after budget limit", async () => {

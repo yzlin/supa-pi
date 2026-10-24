@@ -48,19 +48,32 @@ interface CallResult {
 
 const REPO = join(import.meta.dir, "..", "..");
 const TOOL_DISPLAY = join(REPO, "extensions", "tool-display", "index.ts");
-const BRIDGE = join(
-  homedir(),
-  "dev",
-  "yzlin",
-  "pi-claude-bridge",
-  "src",
-  "index.ts",
-);
+const PROVIDER_EXTENSIONS: Record<string, string> = {
+  "claude-bridge": join(
+    homedir(),
+    "dev",
+    "yzlin",
+    "pi-claude-bridge",
+    "src",
+    "index.ts",
+  ),
+  "claude-code": join(
+    homedir(),
+    ".pi",
+    "agent",
+    "git",
+    "github.com",
+    "yzlin",
+    "pi-claude-code",
+    "src",
+    "index.ts",
+  ),
+};
 const TIMEOUT_MS = 300_000;
 
 const { values } = parseArgs({
   options: {
-    model: { type: "string", default: "claude-bridge/claude-sonnet-5-5" },
+    model: { type: "string", default: "claude-code/claude-sonnet-5-5" },
     cases: { type: "string" },
     concurrency: { type: "string", default: "4" },
   },
@@ -109,7 +122,8 @@ async function runCall(
   );
 
   const prompt = `${editCase.prompt}\n\nFiles are in the current directory. Make the change with the available tools, then stop.`;
-  const extensions = model.startsWith("claude-bridge/") ? ["-e", BRIDGE] : [];
+  const providerExtension = PROVIDER_EXTENSIONS[model.split("/")[0] ?? ""];
+  const extensions = providerExtension ? ["-e", providerExtension] : [];
   const started = performance.now();
   const proc = Bun.spawn(
     [

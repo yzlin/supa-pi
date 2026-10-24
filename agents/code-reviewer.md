@@ -1,7 +1,7 @@
 ---
 description: General code review specialist. Reviews changed code for correctness, maintainability, performance, and operational risk. Produces structured findings only.
 tools: read, grep, find, ls, bash
-model: claude-bridge/claude-opus-5-5
+model: claude-code/claude-opus-5-5
 thinking: high
 caveman: false
 ---

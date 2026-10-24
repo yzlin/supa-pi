@@ -183,11 +183,11 @@ whole-session cancellation is for the parent owner.
   scope. Parent-only provider registrations are not serialized: permitted
   child resources must independently supply the selected provider/model.
   Roles with `extensions: false` or an extension list skip discovery, so an
-  Extension-provided provider (for example `claude-bridge`) needs an explicit
+  Extension-provided provider (for example `claude-code`) needs an explicit
   entry in global-only `getAgentDir()/subagent.json`:
 
   ```json
-  { "providerExtensions": { "claude-bridge": ["../../dev/yzlin/pi-claude-bridge"] } }
+  { "providerExtensions": { "claude-code": ["git/github.com/yzlin/pi-claude-code"] } }
   ```
 
   Paths resolve against the agent directory, like `settings.json` packages.
@@ -195,7 +195,7 @@ whole-session cancellation is for the parent owner.
   files cannot add entries. Malformed files fail before launch. Without an
   entry, the child exits with `Unknown provider`.
 - The role body is system instruction text, added as the `subagent_role`
-  system-prompt section (not a forced prompt, which `pi-claude-bridge` drops).
+  system-prompt section (not a forced prompt, so it composes with other sections).
   Only the task is fresh user input;
   no parent conversation or saved child conversation is imported. Normal
   workspace guidance remains. Only descendants of a trusted parent inherit

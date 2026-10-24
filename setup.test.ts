@@ -187,6 +187,7 @@ describe("setup local package deployment", () => {
       "npm:glimpseui",
       "npm:pi-anycopy",
       "npm:pi-token-burden",
+      "https://github.com/yzlin/pi-claude-code",
     ]);
     expect(calls).toEqual([
       ...packages.map((source: string) => `install ${source}`),
@@ -205,9 +206,18 @@ describe("setup local package deployment", () => {
         await readFile(join(home, ".pi", "agent", "settings.json"), "utf8"),
       ),
     ).toMatchObject({
-      defaultProvider: "openai-codex",
-      defaultModel: "gpt-6.1-sol",
+      defaultProvider: "claude-code",
+      defaultModel: "claude-opus-5-5",
       defaultThinkingLevel: "high",
+    });
+    expect(
+      JSON.parse(
+        await readFile(join(home, ".pi", "agent", "subagent.json"), "utf8"),
+      ),
+    ).toEqual({
+      providerExtensions: {
+        "claude-code": ["git/github.com/yzlin/pi-claude-code"],
+      },
     });
   });
 
@@ -227,6 +237,10 @@ describe("setup local package deployment", () => {
     const existingSettings =
       '{ "defaultModel": "user-selected-model", "packages": ["npm:@tintinweb/pi-subagents", "npm:@tintinweb/pi-tasks"] }\n';
     await writeFile(settingsPath, existingSettings);
+    const subagentSettingsPath = join(home, ".pi", "agent", "subagent.json");
+    const existingSubagentSettings =
+      '{ "providerExtensions": { "other": ["user/path"] } }\n';
+    await writeFile(subagentSettingsPath, existingSubagentSettings);
 
     for (const command of ["grill-me", "research-brief", "show-me"]) {
       await symlink(
@@ -271,6 +285,9 @@ fi
     expect(calls).not.toContain("install npm:@tintinweb/pi-subagents");
     expect(calls).not.toContain("install npm:@tintinweb/pi-tasks");
     expect(await readFile(settingsPath, "utf8")).toBe(existingSettings);
+    expect(await readFile(subagentSettingsPath, "utf8")).toBe(
+      existingSubagentSettings,
+    );
     for (const command of ["grill-me", "research-brief", "show-me"]) {
       const promptPath = join(promptsDirectory, `${command}.md`);
       expect((await lstat(promptPath)).isSymbolicLink()).toBe(true);

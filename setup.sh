@@ -12,6 +12,7 @@ PI_PACKAGES=(
   "npm:glimpseui"
   "npm:pi-anycopy"
   "npm:pi-token-burden"
+  "https://github.com/yzlin/pi-claude-code"
 )
 
 print_package_json_lines() {
@@ -152,8 +153,8 @@ if [ ! -f "$PI_AGENT_DIR/settings.json" ]; then
   {
     cat <<EOF
 {
-  "defaultProvider": "openai-codex",
-  "defaultModel": "gpt-6.1-sol",
+  "defaultProvider": "claude-code",
+  "defaultModel": "claude-opus-5-5",
   "defaultThinkingLevel": "high",
   "packages": [
 EOF
@@ -182,6 +183,23 @@ else
     echo "  \"$package\""
   done
 
+  echo ""
+fi
+
+# Create subagent.json if it doesn't exist
+if [ ! -f "$PI_AGENT_DIR/subagent.json" ]; then
+  echo "Creating subagent.json..."
+  cat >"$PI_AGENT_DIR/subagent.json" <<'EOF'
+{
+  "providerExtensions": {
+    "claude-code": ["git/github.com/yzlin/pi-claude-code"]
+  }
+}
+EOF
+else
+  echo "subagent.json already exists — skipping creation"
+  echo "Make sure your providerExtensions includes:"
+  echo '  "claude-code": ["git/github.com/yzlin/pi-claude-code"]'
   echo ""
 fi
 

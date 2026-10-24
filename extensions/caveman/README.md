@@ -74,6 +74,6 @@ Prompt behavior:
 
 ### Runtime behavior
 
-When active, caveman adds its instruction as the `caveman_mode` system-prompt section before agent start (a returned whole prompt would be dropped by `pi-claude-bridge`) and publishes generic extension status key `caveman` with value `🪨 caveman`. Status UIs can display the active mode through Pi's generic extension status channel. `pieditor` also has a dedicated `caveman` status-bar segment that reads the same status key when this extension is loaded.
+When active, caveman adds its instruction as the `caveman_mode` system-prompt section before agent start (a section composes with other prompt writers; a returned whole prompt would replace them) and publishes generic extension status key `caveman` with value `🪨 caveman`. Status UIs can display the active mode through Pi's generic extension status channel. `pieditor` also has a dedicated `caveman` status-bar segment that reads the same status key when this extension is loaded.
 
 Child processes can override config/session state with `--caveman` or `--no-caveman`.

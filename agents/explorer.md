@@ -1,7 +1,7 @@
 ---
 description: "Fast codebase exploration agent (read-only)"
 tools: read, bash, grep, find, ls
-model: claude-bridge/claude-sonnet-5-5
+model: claude-code/claude-sonnet-5-5
 thinking: low
 caveman: true
 ---

@@ -1,7 +1,7 @@
 ---
 description: Independently verifies synthesized multi-model review findings against changed code.
 tools: read, bash
-model: claude-bridge/claude-opus-5-5
+model: claude-code/claude-opus-5-5
 thinking: low
 caveman: false
 ---

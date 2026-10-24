@@ -1,7 +1,7 @@
 ---
 description: Performance review specialist. Reviews changed code for concrete performance regressions, scalability risks, unbounded work, and missing measurement. Produces structured findings only.
 tools: read, grep, find, ls, bash
-model: claude-bridge/claude-opus-5-5
+model: claude-code/claude-opus-5-5
 thinking: medium
 caveman: false
 ---

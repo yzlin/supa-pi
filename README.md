@@ -151,7 +151,7 @@ cd ~/dev/yzlin/supa-pi
 
 `setup.sh` will:
 
-1. create `~/.pi/agent` and `~/.pi/agent/settings.json` if missing
+1. create `~/.pi/agent`, `~/.pi/agent/settings.json`, and `~/.pi/agent/subagent.json` (a `claude-code` providerExtensions entry) if missing
 2. install companion Pi packages
 3. install this checkout's locked production dependencies with Bun
 4. register this checkout as a Pi local-path package
@@ -160,6 +160,8 @@ cd ~/dev/yzlin/supa-pi
 The locked checkout dependencies are installed before local-path registration because Pi does not install dependencies for local sources. Registration still happens before prompt links are reconciled, so extension command replacements are deployed before retired prompt entrypoints are removed during upgrades. Setup fails immediately if dependency installation fails.
 
 Fresh setup uses Pi's official fullscreen TUI by default. Setup skips settings initialization when `settings.json` exists and preserves existing TUI-mode preferences; package installation can still update the packages list. Existing users can select fullscreen via `/settings` or start Pi with `--tui-mode fullscreen`. Both regular and fullscreen modes are supported.
+
+A fresh install defaults to `claude-code/claude-opus-5-5` through the `pi-claude-code` package, which needs a Claude subscription and the `claude` CLI.
 
 After setup, restart Pi to pick up the changes.
 
@@ -188,6 +190,7 @@ The setup script installs or reconciles these Pi packages. It no longer installs
 - `glimpseui`
 - `pi-anycopy`
 - `pi-token-burden`
+- `https://github.com/yzlin/pi-claude-code` — Claude subscription provider (`claude-code`; Ethan's fork of `earendil-works/pi-claude-code`)
 
 ## Development notes
 

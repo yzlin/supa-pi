@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 import {
   existsSync,
   mkdirSync,
@@ -7,12 +7,22 @@ import {
   rmSync,
   writeFileSync,
 } from "node:fs";
+import * as os from "node:os";
 import { join } from "node:path";
 
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 
-import rtkExtension from "./rtk";
-import toolDisplayExtension from "./tool-display";
+// tool-display reads ~/.pi/agent/tool-display.json, and Bun's homedir() ignores
+// runtime HOME changes; point it at a temp dir so live config stays out of tests.
+const originalHomeDir = os.homedir();
+let currentHomeDir = originalHomeDir;
+await mock.module("node:os", () => ({
+  ...os,
+  homedir: () => currentHomeDir,
+}));
+
+const { default: rtkExtension } = await import("./rtk");
+const { default: toolDisplayExtension } = await import("./tool-display");
 
 const packageJson = JSON.parse(
   readFileSync(join(import.meta.dir, "..", "package.json"), "utf8"),
@@ -75,7 +85,12 @@ function createExtensionHarness() {
   return { api, commands, eventHandlers, handlers, tools, resolvers };
 }
 
+beforeEach(() => {
+  currentHomeDir = tempDir();
+});
+
 afterEach(() => {
+  currentHomeDir = originalHomeDir;
   for (const dir of tempDirs.splice(0)) {
     rmSync(dir, { force: true, recursive: true });
   }

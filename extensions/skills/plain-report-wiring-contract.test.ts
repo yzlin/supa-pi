@@ -11,7 +11,6 @@ const reviewAgents = [
   "agents/security-reviewer.md",
   "agents/performance-reviewer.md",
   "agents/database-reviewer.md",
-  "agents/review-verifier.md",
   "agents/review-synthesizer.md",
 ];
 
@@ -65,4 +64,10 @@ describe("Plain report wiring contracts", () => {
       );
     });
   }
+
+  it("agents/review-verifier.md applies Plain report to trigger/why/change prose", () => {
+    expect(readRepositoryFile("agents/review-verifier.md")).toContain(
+      "Write `trigger`, `why`, and `change` prose in Plain report style per the `plain-report` skill.",
+    );
+  });
 });

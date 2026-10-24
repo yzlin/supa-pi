@@ -42,4 +42,4 @@ Known gap: SDK or RPC sessions created with `noContextFiles: true` are not detec
 
 In `before_agent_start`, the extension mutates `event.systemPromptOptions.contextFiles` in place. It does not use `sections`, `systemPrompt`, or `forceSystemPrompt`, so entries render through Pi's native context-file path. A real `createAgentSession` test verifies Pi renders the mutation.
 
-Live `pi-claude-bridge` delivery is inferred from code (the bridge reads the same options object) but not verified live.
+Live `pi-claude-code` delivery is verified (2026-10-24): a fresh `pi -p` run on `claude-code/claude-sonnet-5-5` quoted a marker from a temporary `AGENTS.local.md`.

@@ -5,7 +5,7 @@ tools: read,grep,find,ls,bash,edit,write
 extensions: false
 skills: false
 disallowed_tools: execute_checkpoint, goal_checkpoint, subagent
-model: claude-bridge/claude-opus-5-5
+model: claude-code/claude-opus-5-5
 thinking: high
 caveman: true
 ---

@@ -7,7 +7,7 @@ read_when:
 
 # Upstream-companion history
 
-**Historical:** moved from `CONTEXT.md`. These sections are not active instructions. `CONTEXT.md` "Subagent replacement: repository implemented; live activation pending" supersedes them. For current behavior, read `extensions/subagent/README.md`, `extensions/execute/README.md`, and `extensions/review/README.md`.
+**Historical:** moved from `CONTEXT.md`. These sections are not active instructions. `CONTEXT.md` "Subagent replacement: implemented and live" supersedes them. For current behavior, read `extensions/subagent/README.md`, `extensions/execute/README.md`, and `extensions/review/README.md`.
 
 ## Upstream-native execution
 

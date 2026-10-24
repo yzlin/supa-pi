@@ -518,6 +518,11 @@ function validateCheckpointUpdate(
   return { ok: true, value: undefined };
 }
 
+function emptyToNull(value: string): string | null {
+  const trimmed = value.trim();
+  return trimmed.length === 0 ? null : trimmed;
+}
+
 function registerGoalCheckpointTool(pi: ExtensionAPI): void {
   pi.registerTool({
     name: GOAL_TOOL_NAME,
@@ -526,7 +531,11 @@ function registerGoalCheckpointTool(pi: ExtensionAPI): void {
       "Persist /goal runtime checkpoint updates. Active only while a goal is active.",
     parameters: Type.Object({
       status: Type.Optional(Type.String()),
-      currentMilestone: Type.Optional(Type.Union([Type.String(), Type.Null()])),
+      // Empty string clears. No null variants: pi-claude-code strips null
+      // from unions, so the model could not send it.
+      currentMilestone: Type.Optional(
+        Type.String({ description: "Task id, or empty string to clear." }),
+      ),
       coarsePlan: Type.Optional(Type.Array(Type.String())),
       candidateFollowups: Type.Optional(Type.Array(Type.String())),
       attemptsUsed: Type.Optional(Type.Number()),
@@ -537,7 +546,9 @@ function registerGoalCheckpointTool(pi: ExtensionAPI): void {
       blockerState: Type.Optional(
         Type.Object({
           blocked: Type.Boolean(),
-          reason: Type.Union([Type.String(), Type.Null()]),
+          reason: Type.String({
+            description: "Blocker reason, or empty string when not blocked.",
+          }),
           taskId: Type.Optional(Type.String()),
         }),
       ),
@@ -567,7 +578,7 @@ function registerGoalCheckpointTool(pi: ExtensionAPI): void {
         ...(nextStatus ? { status: nextStatus } : {}),
         ...(params.currentMilestone === undefined
           ? {}
-          : { currentMilestone: params.currentMilestone }),
+          : { currentMilestone: emptyToNull(params.currentMilestone) }),
         ...(params.coarsePlan ? { coarsePlan: params.coarsePlan } : {}),
         ...(params.candidateFollowups
           ? { candidateFollowups: params.candidateFollowups }
@@ -588,7 +599,14 @@ function registerGoalCheckpointTool(pi: ExtensionAPI): void {
                 params.executorSummaries as GoalExecutorSummary[],
             }
           : {}),
-        ...(params.blockerState ? { blockerState: params.blockerState } : {}),
+        ...(params.blockerState
+          ? {
+              blockerState: {
+                ...params.blockerState,
+                reason: emptyToNull(params.blockerState.reason),
+              },
+            }
+          : {}),
         updatedAt: now(),
       };
       const validated = validateCheckpointUpdate(active.value, checkpoint);

@@ -1,7 +1,7 @@
 ---
 description: Security review specialist. Reviews changed code for vulnerabilities, unsafe trust boundaries, auth/permission regressions, and sensitive data handling. Produces structured findings only.
 tools: read, grep, find, ls, bash
-model: claude-bridge/claude-opus-5-5
+model: claude-code/claude-opus-5-5
 thinking: high
 caveman: false
 ---

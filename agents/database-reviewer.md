@@ -1,7 +1,7 @@
 ---
 description: Database review specialist. Reviews changed database code for schema correctness, query performance, RLS/security, migration risk, and transaction safety. Produces structured findings only.
 tools: read, grep, find, ls, bash
-model: claude-bridge/claude-opus-5-5
+model: claude-code/claude-opus-5-5
 thinking: high
 caveman: false
 ---

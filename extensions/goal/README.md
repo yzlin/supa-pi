@@ -73,7 +73,7 @@ Each checkpoint records:
 - coarse plan, milestones, tasks, and executor summaries
 - evidence ledger, candidate follow-ups, blocker state, and dirty git baseline
 
-The `goal_checkpoint` tool is registered by the extension and added to active tools only while a goal is active or resumed. Use it when goal state changes. It persists status patches, milestone changes, coarse plans, candidate follow-ups, and blocker state.
+The `goal_checkpoint` tool is registered by the extension and added to active tools only while a goal is active or resumed. Use it when goal state changes. It persists status patches, milestone changes, coarse plans, candidate follow-ups, and blocker state. `currentMilestone` and `blockerState.reason` take plain strings; pass an empty string to clear one (stored as `null`). The schema has no `null` variants because `pi-claude-code` strips them.
 
 ## Safety notes
 
