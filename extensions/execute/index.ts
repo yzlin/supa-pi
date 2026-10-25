@@ -18,6 +18,7 @@ import {
   EXECUTE_USE_SPEC_LABEL,
   SPEC_STATUS_MESSAGE_TYPE,
   TO_SPEC_ACCEPTED_NOTE,
+  TO_SPEC_CLASSIFIER_USAGE,
   TO_SPEC_COMMAND_DESCRIPTION,
   TO_SPEC_COMMAND_NAME,
   TO_SPEC_DERIVE_SLUG,
@@ -31,8 +32,13 @@ import {
 import { isLedgerComplete, restoreLedger } from "./ledger";
 import { registerExecutionLedger } from "./runtime";
 import type { ExecutionLedger } from "./schema";
-import { latestDraftedSpec } from "./spec-draft";
+import { latestDraftedSpec, specLogAccepted } from "./spec-draft";
 import { renderSpecStatus, SPECS_DIR, validSlug } from "./spec-log";
+import {
+  SpecReviewConfigStore,
+  selectSpecReviewModel,
+  type SpecReviewModel,
+} from "./spec-review";
 
 interface MessageLike {
   role?: string;
@@ -169,6 +175,82 @@ function getLastExecutionBriefFromSession(
   return "";
 }
 
+async function selectModelOrError(
+  ctx: ExtensionCommandContext,
+): Promise<{ model?: SpecReviewModel; error?: string }> {
+  try {
+    return { model: await selectSpecReviewModel(ctx.modelRegistry) };
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : String(error) };
+  }
+}
+
+// Consent is global and owner-only; headless sessions only consume it.
+async function specReviewClassifierCommand(
+  action: string,
+  ctx: ExtensionCommandContext,
+): Promise<void> {
+  const store = new SpecReviewConfigStore();
+  if (action === "disable") {
+    await store.save(false);
+    ctx.ui.notify("Spec review classifier disabled globally.", "info");
+    return;
+  }
+  const { model, error: registryError } = await selectModelOrError(ctx);
+  const name = model ? `${model.provider}/${model.id}` : "none";
+  if (!action) {
+    let state: string;
+    try {
+      state = (await store.load()) ? "enabled" : "disabled";
+    } catch (error) {
+      state = `disabled (${error instanceof Error ? error.message : String(error)})`;
+    }
+    const modelText = registryError
+      ? `${name} (registry error: ${registryError})`
+      : name;
+    ctx.ui.notify(
+      `Spec review classifier ${state}; model=${modelText}`,
+      "info",
+    );
+    return;
+  }
+  if (action !== "enable") {
+    ctx.ui.notify(TO_SPEC_CLASSIFIER_USAGE, "error");
+    return;
+  }
+  if (registryError) {
+    ctx.ui.notify(
+      `Spec review classifier registry failed: ${registryError}; Spec review classifier stays disabled.`,
+      "error",
+    );
+    return;
+  }
+  if (!model) {
+    ctx.ui.notify(
+      "No credentialed Jev classifier is available; Spec review classifier stays disabled.",
+      "error",
+    );
+    return;
+  }
+  if (!ctx.hasUI) {
+    ctx.ui.notify(
+      "Enabling the Spec review classifier requires an interactive session.",
+      "error",
+    );
+    return;
+  }
+  const confirmed = await ctx.ui.confirm(
+    "Enable the Spec review classifier globally?",
+    `Before Spec-backed /execute accepts an unaccepted Spec, its full text will leave this machine for a paid classifier judgment through ${name}. Enable for this and future sessions?`,
+  );
+  if (!confirmed) {
+    ctx.ui.notify("Spec review classifier remains disabled.", "info");
+    return;
+  }
+  await store.save(true);
+  ctx.ui.notify("Spec review classifier enabled globally.", "info");
+}
+
 export default function executeExtension(pi: ExtensionAPI): void {
   const authorize = registerExecutionLedger(pi);
   pi.registerCommand(EXECUTE_COMMAND_NAME, {
@@ -200,6 +282,9 @@ export default function executeExtension(pi: ExtensionAPI): void {
       const input = (args ?? "").trim();
       const [slug] = input.split(/\s+/);
       const instructions = input.slice(slug.length).trim();
+      if (slug === "classifier") {
+        return specReviewClassifierCommand(instructions, ctx);
+      }
       if (slug === "status") {
         pi.sendMessage({
           customType: SPEC_STATUS_MESSAGE_TYPE,
@@ -212,7 +297,8 @@ export default function executeExtension(pi: ExtensionAPI): void {
         ctx.ui.notify(TO_SPEC_INVALID_SLUG, "error");
         return Promise.resolve();
       }
-      if (slug && existsSync(join(ctx.cwd, SPECS_DIR, `${slug}.log.jsonl`))) {
+      // Only an accepted event accepts; a corrupt log fails closed as accepted.
+      if (slug && specLogAccepted(ctx.cwd, slug)) {
         ctx.ui.notify(`Spec ${slug} ${TO_SPEC_ACCEPTED_NOTE}`, "error");
         return Promise.resolve();
       }

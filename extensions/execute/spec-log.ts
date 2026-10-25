@@ -16,7 +16,8 @@ import { dirname, join, resolve } from "node:path";
 import { type Static, Type } from "typebox";
 import { Value } from "typebox/value";
 
-import { isLedgerComplete } from "./ledger";
+import { TO_SPEC_RESERVED_WORDS } from "./constants";
+import { isLedgerComplete, MAX_REPAIRS } from "./ledger";
 import type { ExecutionLedger, SpecResume } from "./schema";
 
 export const SPECS_DIR = ".pi/specs";
@@ -35,6 +36,9 @@ const lineage = {
   priorRepairs: Type.Integer({ minimum: 0 }),
 };
 const options = { additionalProperties: false };
+// Done Criterion fields are optional only so pre-gate done logs still parse
+// (persisted-state reason). Remove when no pre-gate log remains under .pi/specs/.
+const criteria = Type.Optional(texts);
 export const SpecLogEventSchema = Type.Union([
   Type.Object(
     {
@@ -42,8 +46,9 @@ export const SpecLogEventSchema = Type.Union([
       event: Type.Literal("accepted"),
       hash,
       invocationId: text,
+      criteria,
       assignments: Type.Array(
-        Type.Object({ id: text, dependencies: texts }, options),
+        Type.Object({ id: text, dependencies: texts, criteria }, options),
       ),
     },
     options,
@@ -69,6 +74,9 @@ export const SpecLogEventSchema = Type.Union([
       event: Type.Literal("verified"),
       resumed: Type.Boolean(),
       evidence: texts,
+      criteria: Type.Optional(
+        Type.Array(Type.Object({ id: text, evidence: text }, options)),
+      ),
       head: Type.Union([text, Type.Null()]),
       snapshot: Type.Union([text, Type.Null()]),
       snapshotError: Type.Optional(text),
@@ -88,11 +96,55 @@ export const SpecLogEventSchema = Type.Union([
     options,
   ),
   Type.Object({ ...common, event: Type.Literal("done") }, options),
+  Type.Object(
+    {
+      ...common,
+      event: Type.Literal("reviewed"),
+      hash,
+      round: Type.Integer({ minimum: 1 }),
+      trigger: Type.Union([
+        Type.Object(
+          {
+            source: Type.Literal("classifier"),
+            probability: Type.Number({ minimum: 0, maximum: 1 }),
+            model: Type.String({ pattern: "^[^/\\s]+/\\S+$" }),
+          },
+          options,
+        ),
+        Type.Object(
+          {
+            source: Type.Literal("fallback"),
+            dcCount: Type.Integer({ minimum: 0 }),
+            reason: text,
+          },
+          options,
+        ),
+      ]),
+      decision: Type.Union([
+        Type.Literal("accept"),
+        Type.Literal("revise"),
+        Type.Literal("stop"),
+      ]),
+      // id is `<reviewer slot>:<question id>`; question ids are report-scoped.
+      answers: Type.Array(
+        Type.Object(
+          { id: text, focus: text, question: text, answer: text },
+          options,
+        ),
+      ),
+      findings: Type.Integer({ minimum: 0 }),
+    },
+    options,
+  ),
 ]);
 export type SpecLogEvent = Static<typeof SpecLogEventSchema>;
 
 export function validSlug(slug: string): boolean {
-  return slug.length <= 48 && SPEC_SLUG_PATTERN.test(slug);
+  return (
+    slug.length <= 48 &&
+    SPEC_SLUG_PATTERN.test(slug) &&
+    !TO_SPEC_RESERVED_WORDS.includes(slug)
+  );
 }
 
 export function parseSpecPath(specPath: string): {
@@ -110,6 +162,37 @@ export function parseSpecPath(specPath: string): {
 
 export function hashSpec(content: string): string {
   return createHash("sha256").update(content).digest("hex");
+}
+
+// Each top-level line in `## Done Criteria` is a row `- DC-n: <criterion>`;
+// indented lines continue the previous row.
+export function parseDoneCriteria(content: string): string[] {
+  const lines = content.split(/\r?\n/u);
+  const start = lines.findIndex((line) => /^## Done Criteria\s*$/u.test(line));
+  if (start === -1) {
+    throw new Error("Spec has no ## Done Criteria section");
+  }
+  const ids: string[] = [];
+  for (const line of lines.slice(start + 1)) {
+    if (/^#{1,2} /u.test(line)) {
+      break;
+    }
+    if (!line.trim() || /^\s/u.test(line)) {
+      continue;
+    }
+    const id = /^- (DC-[1-9][0-9]*): \S/u.exec(line)?.[1];
+    if (!id) {
+      throw new Error(`Done Criteria row lacks a DC-n: label: ${line}`);
+    }
+    if (ids.includes(id)) {
+      throw new Error(`Repeated Done Criterion label: ${id}`);
+    }
+    ids.push(id);
+  }
+  if (!ids.length) {
+    throw new Error("Spec ## Done Criteria section has no rows");
+  }
+  return ids;
 }
 
 export function readSpecLog(absLogPath: string): SpecLogEvent[] {
@@ -133,7 +216,9 @@ export function readSpecLog(absLogPath: string): SpecLogEvent[] {
       const event: unknown = JSON.parse(line);
       if (
         !Value.Check(SpecLogEventSchema, event) ||
-        (events.length === 0 && event.event !== "accepted")
+        (!isSpecAccepted(events) &&
+          event.event !== "accepted" &&
+          event.event !== "reviewed")
       ) {
         throw new Error("Invalid event");
       }
@@ -143,6 +228,34 @@ export function readSpecLog(absLogPath: string): SpecLogEvent[] {
     }
   }
   return events;
+}
+
+// Reviewed events may precede acceptance; only an accepted event accepts.
+export function isSpecAccepted(events: SpecLogEvent[]): boolean {
+  return events.some((event) => event.event === "accepted");
+}
+
+export function reviewState(
+  events: SpecLogEvent[],
+  currentHash: string,
+): {
+  approved: boolean;
+  latestDecision:
+    | Extract<SpecLogEvent, { event: "reviewed" }>["decision"]
+    | null;
+  reviewedHashes: number;
+} {
+  const reviewed = events.flatMap((event) =>
+    event.event === "reviewed" ? [event] : [],
+  );
+  // Latest by log order; a later stop/revise overrides an earlier accept.
+  const latestDecision =
+    reviewed.findLast((event) => event.hash === currentHash)?.decision ?? null;
+  return {
+    approved: latestDecision === "accept",
+    latestDecision,
+    reviewedHashes: new Set(reviewed.map((event) => event.hash)).size,
+  };
 }
 
 export function appendSpecEvents(
@@ -220,7 +333,7 @@ export function deriveSpecResume(events: SpecLogEvent[]): {
   );
   return {
     hash: currentHash,
-    resume: events.length
+    resume: isSpecAccepted(events)
       ? {
           verified: lineages
             .filter(([, status]) => status.state === "verified")
@@ -247,6 +360,62 @@ export function deriveSpecResume(events: SpecLogEvent[]): {
       : null,
     done: events.at(-1)?.event === "done",
   };
+}
+
+export type CriterionState = "passed" | "pending" | "unmet";
+
+// Derives each Done Criterion's state from the latest accepted plan. Only
+// verification after that acceptance counts; earlier evidence is history.
+export function deriveCriteriaStates(
+  events: SpecLogEvent[],
+): { id: string; state: CriterionState }[] {
+  let start = -1;
+  for (let index = 0; index < events.length; index++) {
+    if (events[index]?.event === "accepted") {
+      start = index;
+    }
+  }
+  const accepted = events[start];
+  if (accepted?.event !== "accepted" || !accepted.criteria) {
+    return [];
+  }
+  const proved = new Map<string, Set<string>>();
+  const terminal = new Set<string>();
+  let stopped = false;
+  for (const event of events.slice(start + 1)) {
+    if (event.event === "stopped") {
+      stopped = true;
+    } else if ("lineageId" in event) {
+      proved.set(
+        event.lineageId,
+        new Set(
+          event.event === "verified"
+            ? (event.criteria ?? []).map((item) => item.id)
+            : [],
+        ),
+      );
+      if (
+        event.event === "blocked" &&
+        event.repairCount + event.priorRepairs >= MAX_REPAIRS
+      ) {
+        terminal.add(event.lineageId);
+      } else {
+        terminal.delete(event.lineageId);
+      }
+    }
+  }
+  return accepted.criteria.map((id) => {
+    const open = accepted.assignments
+      .filter((item) => item.criteria?.includes(id))
+      .filter((item) => !proved.get(item.id)?.has(id));
+    let state: CriterionState = "pending";
+    if (!open.length) {
+      state = "passed";
+    } else if (stopped || open.every((item) => terminal.has(item.id))) {
+      state = "unmet";
+    }
+    return { id, state };
+  });
 }
 
 export function specEventsFromTransition(
@@ -305,6 +474,9 @@ export function specEventsFromTransition(
         event: "verified",
         resumed: item.resumed ?? false,
         evidence: [...item.evidence],
+        ...(item.criteriaEvidence
+          ? { criteria: structuredClone(item.criteriaEvidence) }
+          : {}),
         head: null,
         snapshot: null,
       });
@@ -417,6 +589,13 @@ export function deleteSnapshotRefs(cwd: string, slug: string): void {
   }
 }
 
+function specStatus(events: SpecLogEvent[]): string {
+  const last = events.at(-1)?.event ?? "ready";
+  return last === "reviewed" && !isSpecAccepted(events)
+    ? "reviewed (not accepted)"
+    : last;
+}
+
 export function renderSpecStatus(cwd: string, slug?: string): string {
   if (slug === undefined) {
     const directory = join(cwd, SPECS_DIR);
@@ -433,9 +612,9 @@ export function renderSpecStatus(cwd: string, slug?: string): string {
       .map((name) => {
         let status: string;
         try {
-          status =
-            readSpecLog(join(directory, `${name}.log.jsonl`)).at(-1)?.event ??
-            "ready";
+          status = specStatus(
+            readSpecLog(join(directory, `${name}.log.jsonl`)),
+          );
         } catch {
           status = "corrupt";
         }
@@ -444,7 +623,7 @@ export function renderSpecStatus(cwd: string, slug?: string): string {
       .join("\n");
   }
   if (!validSlug(slug)) {
-    return `Invalid Spec slug: ${slug}. Use 1–48 lowercase letters, digits or hyphens, starting with a letter or digit.`;
+    return `Invalid Spec slug: ${slug}. Use 1–48 lowercase letters, digits or hyphens, starting with a letter or digit; status and classifier are reserved.`;
   }
   const { specPath, logPath } = parseSpecPath(`${SPECS_DIR}/${slug}.md`);
   if (!existsSync(join(cwd, specPath))) {
@@ -463,14 +642,18 @@ export function renderSpecStatus(cwd: string, slug?: string): string {
       ([id, status]) =>
         `${id} | ${status.assignment} | ${status.state} | ${status.repairs}`,
     );
+  const criteriaRows = deriveCriteriaStates(events).map(
+    ({ id, state }) => `${id} | ${state}`,
+  );
   return [
     specPath,
-    `Status: ${events.at(-1)?.event ?? "ready"}`,
+    `Status: ${specStatus(events)}`,
     `Hash: ${current.hash ?? "none"}`,
     `Events: ${events.length}`,
     `Last event: ${events.at(-1)?.ts ?? "none"}`,
     "",
     "lineage | latest assignment | state | repairs used",
     ...rows,
+    ...(criteriaRows.length ? ["", "criterion | state", ...criteriaRows] : []),
   ].join("\n");
 }

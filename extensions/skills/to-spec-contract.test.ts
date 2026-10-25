@@ -100,12 +100,32 @@ describe("to-spec resource and instruction contract (not model adherence)", () =
     ]);
   });
 
+  it("labels each Done Criteria row with a unique DC-n ID", () => {
+    const template = readSkill().split("```markdown\n")[1]?.split("```")[0];
+    expect(template).toContain(
+      "- DC-1: <observable acceptance criterion> (US-1)",
+    );
+    expect(template).toContain(
+      "- DC-2: <necessary technical criterion> (technical)",
+    );
+    expectInstructions([
+      "Each Done Criterion row is `- DC-n: <criterion> (US-n)` or `- DC-n: <criterion> (technical)`",
+      "each unique",
+      "indent continuation lines",
+      "`/execute` rejects a Spec with an unlabeled row, a repeated label, or no rows",
+      "each assignment declares the `DC-n` IDs it proves",
+    ]);
+  });
+
   it("validates slug and refuses logged collisions while confirming unaccepted replacements", () => {
     expectInstructions([
       "given slug or derive a short kebab-case slug from the goal",
       "^[a-z0-9][a-z0-9-]*$",
       "at most 48 characters",
-      "If `.pi/specs/<slug>.log.jsonl` exists, refuse and suggest a new slug",
+      "`status` and `classifier` are reserved subcommand words, never slugs",
+      "If `.pi/specs/<slug>.log.jsonl` has an `accepted` event, or cannot be read and parsed, refuse and suggest a new slug",
+      "A log that is empty or has only `reviewed` events means the Spec was never accepted",
+      "Extension itself refuses slugs whose Spec log has an `accepted` event or is corrupt",
       "If only `.pi/specs/<slug>.md` exists, ask with `ask` before overwriting",
       "Without confirmation, do not overwrite",
       "Recheck collisions before writing",
@@ -124,6 +144,8 @@ describe("to-spec resource and instruction contract (not model adherence)", () =
       "`/execute @.pi/specs/<slug>.md`",
       "a fresh session is fine",
       "`/to-spec status <slug>` shows progress",
+      "`/to-spec classifier [enable|disable]` shows or changes consent for the Spec review classifier",
+      "standalone `/to-spec` never reviews",
       "before compaction when context is near its limit",
     ]);
   });

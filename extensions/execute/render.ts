@@ -27,6 +27,7 @@ export interface CheckpointArgs {
   blockers?: string[];
   newAssignmentId?: string;
   task?: string;
+  focus?: string[];
 }
 interface CardState {
   checkpoint?: { settled?: boolean; error?: boolean; status?: string };
@@ -126,6 +127,10 @@ function statusText(
       return `${arrow}${theme.fg("dim", `repair ${singleLine(args.newAssignmentId)}`)}${tail}`;
     case "stop":
       return `${arrow}${theme.fg("dim", "stopped")}${tail}`;
+    case "review":
+      return `${arrow}${theme.fg("dim", dispatchPrefix ? "review · prefix issued" : "review · round limit")}`;
+    case "resolve_review":
+      return `${arrow}${theme.fg("dim", "review resolved")}`;
     case "inspect":
     case undefined:
       return `${arrow}${theme.fg("dim", "ledger")}${tail}`;
@@ -249,6 +254,9 @@ function detailLines(args: CheckpointArgs, ledger: ExecutionLedger): string[] {
       return label("blockers", join(args.blockers));
     case "repair":
       return label("task", args.task);
+    case "review":
+      return label("focus", join(args.focus));
+    case "resolve_review":
     case "inspect":
     case "stop":
     case undefined:

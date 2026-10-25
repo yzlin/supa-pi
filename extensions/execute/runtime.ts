@@ -27,11 +27,14 @@ import {
   renderCheckpointResult,
 } from "./render";
 import {
+  type Checkpoint,
   CheckpointOutputSchema,
   CheckpointParametersSchema,
   CheckpointSchema,
   type ExecutionLedger,
   type SpecResume,
+  type SpecReviewReport,
+  SpecReviewReportSchema,
   WorkerReportSchema,
 } from "./schema";
 import { draftedSpecSlug } from "./spec-draft";
@@ -40,12 +43,19 @@ import {
   deleteSnapshotRefs,
   deriveSpecResume,
   hashSpec,
+  parseDoneCriteria,
   parseSpecPath,
   readSpecLog,
+  reviewState,
   snapshotWorkspace,
   type SpecLogEvent,
   specEventsFromTransition,
 } from "./spec-log";
+import {
+  decideSpecReview,
+  type SpecReviewDecision,
+  type SpecReviewTrigger,
+} from "./spec-review";
 
 interface BoundCall {
   sessionId: string;
@@ -53,6 +63,39 @@ interface BoundCall {
   assignmentId: string;
   attemptId: string;
 }
+
+const REVIEW_PREFIX = "Spec review binding:";
+const REVIEW_FOCUS_LABEL = "Focus: ";
+// Each focus may be dispatched once more after a failed or invalid report.
+const REVIEW_ATTEMPTS = 2;
+const REVIEW_SPEC_SHOWN = "spec-review";
+const UNAUTHORIZED =
+  "Unauthorized checkpoint: explicitly invoke /execute in this session after stop or reload";
+
+interface ReviewSlot {
+  status: "pending" | "bound" | "done" | "failed";
+  attempts: number;
+  report?: SpecReviewReport;
+}
+// One in-memory Spec review round for an invocation and Spec hash.
+interface ReviewRound {
+  sessionId: string;
+  invocationId: string;
+  specPath: string;
+  hash: string;
+  round: number;
+  trigger: SpecReviewTrigger;
+  // Loop limit reached: no reviewers, only the accept-as-is or stop gate.
+  limit: boolean;
+  prefix: string;
+  focus: string[];
+  slots: ReviewSlot[];
+  resolving: boolean;
+}
+type ReviewCheckpoint = Extract<
+  Checkpoint,
+  { action: "review" | "resolve_review" }
+>;
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : "Execution checkpoint failed";
@@ -112,6 +155,13 @@ export function registerExecutionLedger(
   const approvedCwds = new Map<string, Set<string>>();
   const pendingApprovals = new Map<string, Promise<boolean>>();
   const calls = new Map<string, BoundCall>();
+  // Spec review trigger results per invocation and Spec hash.
+  const reviewDecisions = new Map<string, SpecReviewDecision>();
+  const reviewKey = (invocationId: string, specHash: string) =>
+    JSON.stringify([invocationId, specHash]);
+  // Live review rounds by reviewKey, and bound reviewer calls by tool call.
+  const reviewRounds = new Map<string, ReviewRound>();
+  const reviewCalls = new Map<string, { round: ReviewRound; slot: number }>();
   let stopWatchingAbort: (() => void) | undefined;
   let workspace: string | undefined;
 
@@ -225,10 +275,293 @@ export function registerExecutionLedger(
     }
   }
 
+  function clearReviews(): void {
+    reviewRounds.clear();
+    reviewCalls.clear();
+  }
+
+  function liveRound(round: ReviewRound, sessionId: string): boolean {
+    return (
+      reviewRounds.get(reviewKey(round.invocationId, round.hash)) === round &&
+      round.sessionId === sessionId &&
+      authorizations.get(round.invocationId) === sessionId
+    );
+  }
+
+  function readSpec(path: string, cwd: string) {
+    const { specPath, logPath } = parseSpecPath(path);
+    const absSpecPath = resolve(cwd, specPath);
+    if (!existsSync(absSpecPath)) {
+      throw new Error(`Spec not found: ${specPath}`);
+    }
+    const content = readFileSync(absSpecPath, "utf8");
+    return {
+      specPath,
+      content,
+      hash: hashSpec(content),
+      absLogPath: resolve(cwd, logPath),
+    };
+  }
+
+  // Returns the cached or freshly classified review trigger for this hash.
+  // `classified` tells callers to re-check state that may have changed.
+  async function reviewTrigger(
+    invocationId: string,
+    sessionId: string,
+    content: string,
+    hash: string,
+    ctx: ExtensionContext,
+    signal: AbortSignal | undefined,
+  ): Promise<{ decision: SpecReviewDecision; classified: boolean }> {
+    const key = reviewKey(invocationId, hash);
+    const cached = reviewDecisions.get(key);
+    if (cached) {
+      return { decision: cached, classified: false };
+    }
+    const decision = await decideSpecReview({
+      content,
+      registry: ctx.modelRegistry,
+      notify: (message) => ctx.ui.notify(message, "warning"),
+      signal,
+    });
+    if (signal?.aborted) {
+      throw new Error("Execution checkpoint cancelled");
+    }
+    reviewDecisions.set(key, decision);
+    // Authorization may change while classifying.
+    if (authorizations.get(invocationId) !== sessionId) {
+      throw new Error(UNAUTHORIZED);
+    }
+    return { decision, classified: true };
+  }
+
+  async function reviewCheckpoint(
+    params: ReviewCheckpoint,
+    ctx: ExtensionContext,
+    signal: AbortSignal | undefined,
+    sessionId: string,
+  ) {
+    if (!ctx.hasUI) {
+      throw new Error("Spec review needs an interactive session");
+    }
+    const spec = readSpec(params.specPath, ctx.cwd);
+    const key = reviewKey(params.invocationId, spec.hash);
+    const output = (
+      dispatch: string | null,
+      review: Record<string, unknown>,
+    ) => {
+      const result = {
+        ledger: structuredClone(
+          ledger ?? emptyLedger(sessionId, params.invocationId),
+        ),
+        dispatchPrefix: dispatch,
+        review,
+      };
+      return {
+        content: [{ type: "text" as const, text: JSON.stringify(result) }],
+        structuredContent: result,
+        details: {},
+      };
+    };
+    if (params.action === "review") {
+      const events = readSpecLog(spec.absLogPath);
+      if (
+        events.some(
+          (event) => event.event === "accepted" && event.hash === spec.hash,
+        )
+      ) {
+        throw new Error(
+          "Spec already accepted for its current hash; review applies only before accept",
+        );
+      }
+      if (
+        events.some(
+          (event) => event.event === "reviewed" && event.hash === spec.hash,
+        )
+      ) {
+        throw new Error(
+          "Spec already reviewed for its current hash; revise the Spec or accept it",
+        );
+      }
+      if (reviewRounds.has(key)) {
+        throw new Error(
+          "Spec review round already started for this Spec hash; dispatch its reviewers or call resolve_review",
+        );
+      }
+      const { decision, classified } = await reviewTrigger(
+        params.invocationId,
+        sessionId,
+        spec.content,
+        spec.hash,
+        ctx,
+        signal,
+      );
+      if (classified && reviewRounds.has(key)) {
+        throw new Error("Spec review round already started");
+      }
+      if (!decision.required) {
+        throw new Error(
+          "Spec review is not required for this Spec hash; accept it directly",
+        );
+      }
+      const { reviewedHashes } = reviewState(events, spec.hash);
+      const limit = reviewedHashes >= 2;
+      const { slug } = parseSpecPath(spec.specPath);
+      const round: ReviewRound = {
+        sessionId,
+        invocationId: params.invocationId,
+        specPath: spec.specPath,
+        hash: spec.hash,
+        round: reviewedHashes + 1,
+        trigger: decision.trigger,
+        limit,
+        prefix: `${REVIEW_PREFIX} ${params.invocationId}/${slug}/${randomUUID()}\n`,
+        focus: [...params.focus],
+        slots: params.focus.map(() => ({ status: "pending", attempts: 0 })),
+        resolving: false,
+      };
+      reviewRounds.set(key, round);
+      return output(limit ? null : round.prefix, {
+        round: round.round,
+        limit,
+        note: limit
+          ? "Spec review round limit reached (two reviewed hashes); no reviewers run. Call resolve_review so the user can accept as is or stop."
+          : `Dispatch exactly two subagent calls: agent spec-reviewer, the exact SpecReviewReportSchema, no cwd, the task starting with dispatchPrefix and one "${REVIEW_FOCUS_LABEL}<statement>" line per focus. Then call resolve_review.`,
+      });
+    }
+    const round = reviewRounds.get(key);
+    if (!round) {
+      throw new Error(
+        "No live Spec review round for the current Spec hash; call review first",
+      );
+    }
+    if (round.resolving) {
+      throw new Error("Spec review resolution already in progress");
+    }
+    const missing = round.focus.filter(
+      (_focus, index) => round.slots[index]?.status !== "done",
+    );
+    if (!round.limit && missing.length) {
+      throw new Error(
+        `Spec review reports missing for focus: ${missing.join("; ")}`,
+      );
+    }
+    const reports = round.limit
+      ? []
+      : round.slots.flatMap((slot, index) =>
+          slot.report ? [{ slot: index, report: slot.report }] : [],
+        );
+    const findings = reports.flatMap(({ report }) => report.findings);
+    const questions = reports.flatMap(({ slot, report }) =>
+      report.questions.map((question) => ({ slot, question })),
+    );
+    const answers: Array<{
+      id: string;
+      focus: string;
+      question: string;
+      answer: string;
+    }> = [];
+    let choice: string | undefined;
+    round.resolving = true;
+    try {
+      const summary = findings.map(
+        (finding) =>
+          `- [${finding.severity}] ${finding.target}: ${finding.why} → ${finding.change}`,
+      );
+      if (!round.limit) {
+        pi.sendMessage(
+          {
+            customType: REVIEW_SPEC_SHOWN,
+            content: `Spec review of ${round.specPath} (round ${round.round}): ${findings.length} findings\n${summary.join("\n")}`,
+            display: true,
+          },
+          { triggerTurn: false },
+        );
+      }
+      for (const { slot, question } of questions) {
+        const answer = await ctx.ui.select(
+          question.question,
+          question.options,
+          {
+            signal,
+          },
+        );
+        if (answer === undefined) {
+          throw new Error("Spec review cancelled; nothing recorded");
+        }
+        const focus = round.focus[slot];
+        if (focus === undefined) {
+          throw new Error(`Spec review focus missing for slot ${slot}`);
+        }
+        answers.push({
+          id: `${slot}:${question.id}`,
+          focus,
+          question: question.question,
+          answer,
+        });
+      }
+      choice = await ctx.ui.select(
+        round.limit
+          ? `Spec review round limit reached for ${round.specPath}. Accept as is or stop?`
+          : `Spec review of ${round.specPath}: ${findings.length} findings\n${summary.join("\n")}\nAccept as reviewed or revise?`,
+        round.limit
+          ? ["Accept as is", "Stop"]
+          : ["Accept as reviewed", "Revise"],
+        { signal },
+      );
+      if (choice === undefined) {
+        throw new Error("Spec review cancelled; nothing recorded");
+      }
+    } finally {
+      round.resolving = false;
+    }
+    // Authorization or the Spec may change while the prompts are open.
+    if (!liveRound(round, ctx.sessionManager.getSessionId())) {
+      throw new Error(UNAUTHORIZED);
+    }
+    if (readSpec(round.specPath, ctx.cwd).hash !== round.hash) {
+      throw new Error("Spec changed during review; nothing recorded");
+    }
+    let decision: "accept" | "revise" | "stop" = "accept";
+    if (choice === "Revise") {
+      decision = "revise";
+    } else if (choice === "Stop") {
+      decision = "stop";
+    }
+    appendSpecEvents(spec.absLogPath, [
+      {
+        event: "reviewed",
+        ts: new Date().toISOString(),
+        hash: round.hash,
+        round: round.round,
+        trigger: round.trigger,
+        decision,
+        answers,
+        findings: findings.length,
+      },
+    ]);
+    reviewRounds.delete(key);
+    const notes = {
+      accept: "User accepted the Spec; call accept now.",
+      revise:
+        "User chose to revise; revise the Spec with the user, then accept again.",
+      stop: "User stopped; do not accept this Spec.",
+    };
+    return output(null, {
+      round: round.round,
+      limit: round.limit,
+      note: notes[decision],
+      decision,
+      answers,
+      findings,
+    });
+  }
+
   function revoke(reason: string, ctx?: ExtensionContext): void {
     authorizations.clear();
     approvedCwds.clear();
     calls.clear();
+    clearReviews();
     if (ledger) {
       persist(interruptLedger(ledger, reason), ctx);
     }
@@ -240,6 +573,7 @@ export function registerExecutionLedger(
     authorizations.clear();
     approvedCwds.clear();
     calls.clear();
+    clearReviews();
     ledger = null;
     loadError = null;
     try {
@@ -327,12 +661,13 @@ export function registerExecutionLedger(
         throw new Error("Invalid execute_checkpoint input");
       }
       if (authorizations.get(params.invocationId) !== sessionId) {
-        throw new Error(
-          "Unauthorized checkpoint: explicitly invoke /execute in this session after stop or reload",
-        );
+        throw new Error(UNAUTHORIZED);
       }
       if (ledger && ledger.sessionId !== sessionId) {
         throw new Error("Stale execution session");
+      }
+      if (params.action === "review" || params.action === "resolve_review") {
+        return reviewCheckpoint(params, ctx, signal ?? undefined, sessionId);
       }
       if (ledger?.invocationId !== params.invocationId && calls.size > 0) {
         throw new Error(
@@ -364,6 +699,15 @@ export function registerExecutionLedger(
             };
       }
       let resume: SpecResume | undefined;
+      let specCriteria: string[] | undefined;
+      let reviewGate:
+        | {
+            specPath: string;
+            content: string;
+            hash: string;
+            events: SpecLogEvent[];
+          }
+        | undefined;
       const extraEvents: SpecLogEvent[] = [];
       const ts = new Date().toISOString();
       if (params.action === "accept") {
@@ -371,13 +715,14 @@ export function registerExecutionLedger(
           throw new Error("reviseSpec requires specPath");
         }
         if (params.specPath) {
-          const { specPath, logPath } = parseSpecPath(params.specPath);
-          const absSpecPath = resolve(ctx.cwd, specPath);
-          if (!existsSync(absSpecPath)) {
-            throw new Error(`Spec not found: ${specPath}`);
-          }
-          const currentHash = hashSpec(readFileSync(absSpecPath, "utf8"));
-          const events = readSpecLog(resolve(ctx.cwd, logPath));
+          const {
+            specPath,
+            content,
+            hash: currentHash,
+            absLogPath,
+          } = readSpec(params.specPath, ctx.cwd);
+          specCriteria = parseDoneCriteria(content);
+          const events = readSpecLog(absLogPath);
           const { hash: loggedHash, resume: derived } =
             deriveSpecResume(events);
           const changed = loggedHash !== null && loggedHash !== currentHash;
@@ -402,12 +747,25 @@ export function registerExecutionLedger(
             ts,
             hash: currentHash,
             invocationId: params.invocationId,
-            assignments: params.assignments.map(({ id, dependencies }) => ({
-              id,
-              dependencies: [...dependencies],
-            })),
+            criteria: [...specCriteria],
+            assignments: params.assignments.map(
+              ({ id, dependencies, criteria }) => ({
+                id,
+                dependencies: [...dependencies],
+                ...(criteria ? { criteria: [...criteria] } : {}),
+              }),
+            ),
           });
-          resume = events.length ? (derived ?? undefined) : undefined;
+          resume = derived ?? undefined;
+          // Re-accepting an already-accepted hash skips the review trigger.
+          if (
+            !events.some(
+              (event) =>
+                event.event === "accepted" && event.hash === currentHash,
+            )
+          ) {
+            reviewGate = { specPath, content, hash: currentHash, events };
+          }
         }
       }
       const input =
@@ -423,7 +781,46 @@ export function registerExecutionLedger(
               }),
             }
           : params;
-      const next = transitionLedger(current, input, randomUUID(), resume);
+      const next = transitionLedger(
+        current,
+        input,
+        randomUUID(),
+        resume,
+        specCriteria,
+      );
+      if (reviewGate) {
+        const { approved, latestDecision } = reviewState(
+          reviewGate.events,
+          reviewGate.hash,
+        );
+        // A recorded stop/revise is durable; it outranks a fresh trigger.
+        if (latestDecision === "stop" || latestDecision === "revise") {
+          throw new Error(
+            `Spec review recorded "${latestDecision}" for this Spec hash; revise the Spec (a new hash) before accept`,
+          );
+        }
+        const { decision, classified } = await reviewTrigger(
+          params.invocationId,
+          sessionId,
+          reviewGate.content,
+          reviewGate.hash,
+          ctx,
+          signal ?? undefined,
+        );
+        // The ledger may change while classifying.
+        if (classified && ledger !== previousLedger) {
+          throw new Error(
+            "Execution ledger changed during Spec review trigger; accept again",
+          );
+        }
+        if (decision.required && !approved) {
+          throw new Error(
+            ctx.hasUI
+              ? `Spec review required before accept: call execute_checkpoint review for ${reviewGate.specPath}`
+              : "Spec review required; it needs an interactive session",
+          );
+        }
+      }
       const outsideCwds =
         params.action === "accept"
           ? [
@@ -452,9 +849,7 @@ export function registerExecutionLedger(
         }
         // Authorization or the ledger may change while the prompt is open.
         if (authorizations.get(params.invocationId) !== sessionId) {
-          throw new Error(
-            "Unauthorized checkpoint: explicitly invoke /execute in this session after stop or reload",
-          );
+          throw new Error(UNAUTHORIZED);
         }
         if (ledger !== previousLedger) {
           throw new Error(
@@ -509,7 +904,126 @@ export function registerExecutionLedger(
     },
   });
 
+  function bindReviewer(
+    toolCallId: string,
+    input: Record<string, unknown>,
+    task: string,
+    sessionId: string,
+  ): void {
+    if (loadError) {
+      throw new Error(loadError);
+    }
+    const round = [...reviewRounds.values()].find(
+      (candidate) => !candidate.limit && task.startsWith(candidate.prefix),
+    );
+    if (!round || !liveRound(round, sessionId) || round.resolving) {
+      throw new Error("Unknown or stale Spec review prefix");
+    }
+    if (input.agent !== "spec-reviewer") {
+      throw new Error("Spec review requires agent spec-reviewer");
+    }
+    if (
+      !isDeepStrictEqual(
+        input.schema,
+        JSON.parse(JSON.stringify(SpecReviewReportSchema)),
+      )
+    ) {
+      throw new Error("Spec review requires the exact SpecReviewReportSchema");
+    }
+    if (input.cwd !== undefined) {
+      throw new Error("Spec review runs in the session workspace; omit cwd");
+    }
+    const declared = task
+      .slice(round.prefix.length)
+      .split(/\r?\n/u)
+      .filter((line) => line.startsWith(REVIEW_FOCUS_LABEL))
+      .map((line) => line.slice(REVIEW_FOCUS_LABEL.length).trim());
+    if (declared.length !== 1) {
+      throw new Error(
+        `Spec review task must contain exactly one "${REVIEW_FOCUS_LABEL}<statement>" line`,
+      );
+    }
+    const index = round.focus.indexOf(declared[0] ?? "");
+    const slot = round.slots[index];
+    if (!slot) {
+      throw new Error("Unknown Spec review focus; use a declared statement");
+    }
+    if (round.slots.filter((item) => item.status === "bound").length >= 2) {
+      throw new Error("Spec review allows only two reviewer calls at a time");
+    }
+    if (slot.status === "bound" || slot.status === "done") {
+      throw new Error("Spec review focus already bound or reported");
+    }
+    if (slot.attempts >= REVIEW_ATTEMPTS) {
+      throw new Error(
+        "Spec review focus failed twice; no retry left. Revise the Spec or ask the user",
+      );
+    }
+    slot.status = "bound";
+    slot.attempts++;
+    reviewCalls.set(toolCallId, { round, slot: index });
+  }
+
+  // Records a reviewer's run-bound report, or marks its focus failed.
+  function settleReviewer(
+    toolCallId: string,
+    ctx: ExtensionContext,
+    result?: { isError: boolean; structuredContent?: unknown },
+  ): void {
+    const binding = reviewCalls.get(toolCallId);
+    if (!binding) {
+      return;
+    }
+    reviewCalls.delete(toolCallId);
+    const slot = binding.round.slots[binding.slot];
+    if (
+      !slot ||
+      slot.status !== "bound" ||
+      !liveRound(binding.round, ctx.sessionManager.getSessionId())
+    ) {
+      ctx.ui.notify("Stale Spec review result ignored", "warning");
+      return;
+    }
+    try {
+      if (!result) {
+        throw new Error("Spec reviewer ended without an observed report");
+      }
+      if (result.isError) {
+        throw new Error("Spec reviewer call failed");
+      }
+      const { report } = readEnvelope(result.structuredContent);
+      if (!Value.Check(SpecReviewReportSchema, report)) {
+        throw new Error("Spec reviewer report does not match its schema");
+      }
+      slot.status = "done";
+      slot.report = structuredClone(report);
+    } catch (error) {
+      slot.status = "failed";
+      ctx.ui.notify(
+        `${errorMessage(error)}; focus "${binding.round.focus[binding.slot]}" ${slot.attempts < REVIEW_ATTEMPTS ? "may be dispatched once more" : "has no retry left"}`,
+        "warning",
+      );
+    }
+  }
+
   pi.on("tool_call", async (event, ctx) => {
+    if (
+      event.toolName === "subagent" &&
+      typeof event.input.task === "string" &&
+      event.input.task.startsWith(REVIEW_PREFIX)
+    ) {
+      try {
+        bindReviewer(
+          event.toolCallId,
+          event.input,
+          event.input.task,
+          ctx.sessionManager.getSessionId(),
+        );
+      } catch (error) {
+        return { block: true, reason: errorMessage(error) };
+      }
+      return;
+    }
     if (
       event.toolName !== "subagent" ||
       typeof event.input.task !== "string" ||
@@ -617,6 +1131,7 @@ export function registerExecutionLedger(
     if (event.toolName !== "subagent") {
       return;
     }
+    settleReviewer(event.toolCallId, ctx);
     // Later tool_call interceptors may block after we bind. Such calls skip
     // tool_result, but native direct AND nested execution always emit this end.
     // Consume only remaining bindings, never an already-recorded worker report.
@@ -652,6 +1167,7 @@ export function registerExecutionLedger(
     if (event.toolName !== "subagent") {
       return;
     }
+    settleReviewer(event.toolCallId, ctx, event);
     const binding = consumeCall(event.toolCallId, ctx);
     if (!binding || !ledger) {
       return;

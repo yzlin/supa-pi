@@ -156,11 +156,65 @@ export function validateReport(input: unknown): WorkerReport {
   return input;
 }
 
+function sameCriteria(
+  criteria: readonly string[],
+  evidence: readonly { id: string }[] | undefined,
+): boolean {
+  const ids = (evidence ?? []).map((entry) => entry.id);
+  return (
+    ids.length === criteria.length &&
+    new Set(ids).size === ids.length &&
+    ids.every((id) => criteria.includes(id))
+  );
+}
+
+function validateCriteria(input: ExecutionLedger): void {
+  const { specCriteria } = input;
+  if (specCriteria === undefined) {
+    if (
+      input.assignments.some(
+        (item) =>
+          item.criteria !== undefined || item.criteriaEvidence !== undefined,
+      )
+    ) {
+      throw new Error("Assignment criteria require a Spec with Done Criteria");
+    }
+    return;
+  }
+  if (!input.specPath) {
+    throw new Error("Done Criteria require a Spec-backed plan");
+  }
+  if (new Set(specCriteria).size !== specCriteria.length) {
+    throw new Error("Repeated Done Criterion labels");
+  }
+  for (const item of input.assignments) {
+    if (!item.criteria) {
+      throw new Error(`Spec-backed assignment requires criteria: ${item.id}`);
+    }
+    if (new Set(item.criteria).size !== item.criteria.length) {
+      throw new Error(`Duplicate assignment criteria: ${item.id}`);
+    }
+    const unknown = item.criteria.find((id) => !specCriteria.includes(id));
+    if (unknown) {
+      throw new Error(`Unknown Done Criterion: ${unknown}`);
+    }
+  }
+  const uncovered = specCriteria.find(
+    (id) => !input.assignments.some((item) => item.criteria?.includes(id)),
+  );
+  if (uncovered) {
+    throw new Error(
+      `Done Criterion not declared by any assignment: ${uncovered}`,
+    );
+  }
+}
+
 export function validateLedger(input: unknown): ExecutionLedger {
   if (!Value.Check(LedgerSchema, input)) {
     throw new Error("Invalid persisted execution ledger");
   }
   validateGraph(input.assignments);
+  validateCriteria(input);
   if (
     (input.plan === null) !== (input.approval === null) ||
     (input.plan === null && input.assignments.length > 0) ||
@@ -198,7 +252,8 @@ export function validateLedger(input: unknown): ExecutionLedger {
       root.repairCount !== 0 ||
       root.cwd !== item.cwd ||
       JSON.stringify(root.scope) !== JSON.stringify(item.scope) ||
-      JSON.stringify(root.dependencies) !== JSON.stringify(item.dependencies)
+      JSON.stringify(root.dependencies) !== JSON.stringify(item.dependencies) ||
+      JSON.stringify(root.criteria) !== JSON.stringify(item.criteria)
     ) {
       throw new Error("Repair changed scope or dependencies");
     }
@@ -232,6 +287,7 @@ export function validateLedger(input: unknown): ExecutionLedger {
         item.runId ||
         item.report ||
         item.evidence.length ||
+        item.criteriaEvidence?.length ||
         item.blockers.length)
     ) {
       throw new Error("Invalid pending assignment");
@@ -244,6 +300,7 @@ export function validateLedger(input: unknown): ExecutionLedger {
         item.runId ||
         item.report ||
         item.evidence.length ||
+        item.criteriaEvidence?.length ||
         item.blockers.length)
     ) {
       throw new Error("Invalid reverify assignment");
@@ -272,6 +329,15 @@ export function validateLedger(input: unknown): ExecutionLedger {
     ) {
       throw new Error(
         "Completion requires main verification evidence and a done claim",
+      );
+    }
+    if (
+      item.status === "completed" &&
+      item.criteria &&
+      !sameCriteria(item.criteria, item.criteriaEvidence)
+    ) {
+      throw new Error(
+        "Completion requires evidence for each declared criterion",
       );
     }
     if (
@@ -338,6 +404,8 @@ export function transitionLedger(
   input: unknown,
   attemptId = "attempt",
   resume?: SpecResume,
+  // Parsed from the Spec by runtime at accept, never supplied by the agent.
+  specCriteria?: string[],
 ): ExecutionLedger {
   validateLedger(state);
   if (!Value.Check(CheckpointSchema, input)) {
@@ -355,6 +423,9 @@ export function transitionLedger(
       "Execution stopped; explicit /execute and current-state reconciliation required",
     );
   }
+  if (input.action === "review" || input.action === "resolve_review") {
+    throw new Error("Spec review actions never change the ledger");
+  }
   if (input.action === "accept") {
     if (state.plan !== null) {
       throw new Error(
@@ -363,6 +434,9 @@ export function transitionLedger(
     }
     if (resume && !input.specPath) {
       throw new Error("Resuming requires specPath");
+    }
+    if (input.specPath && !specCriteria) {
+      throw new Error("Spec-backed accept requires parsed Done Criteria");
     }
     if (resume && input.reviseSpec !== true) {
       const acceptedIds = new Set(input.assignments.map((item) => item.id));
@@ -381,6 +455,9 @@ export function transitionLedger(
       plan: input.plan,
       approval: input.approval,
       specPath: input.specPath ?? null,
+      ...(input.specPath && specCriteria
+        ? { specCriteria: [...specCriteria] }
+        : {}),
       assignments: input.assignments.map((assignment) => {
         const item = makeAssignment(assignment);
         if (resume) {
@@ -467,6 +544,20 @@ export function transitionLedger(
     if (input.passed !== (input.blockers.length === 0)) {
       throw new Error("Verification outcome and blockers disagree");
     }
+    if (input.criteria && !item.criteria) {
+      throw new Error(
+        "Verification criteria require Spec-backed assignment criteria",
+      );
+    }
+    if (
+      input.passed &&
+      item.criteria &&
+      !sameCriteria(item.criteria, input.criteria)
+    ) {
+      throw new Error(
+        "Passing verification requires evidence for each declared criterion",
+      );
+    }
     if (
       input.passed &&
       item.dependencies.some(
@@ -481,6 +572,9 @@ export function transitionLedger(
       // Each native snapshot retains history; the current assignment records
       // only the latest independent verification, within the schema's bound.
       evidence: [...input.evidence],
+      ...(item.criteria
+        ? { criteriaEvidence: structuredClone(input.criteria ?? []) }
+        : {}),
       blockers: [...input.blockers],
     });
   }
@@ -499,6 +593,7 @@ export function transitionLedger(
       scope: item.scope,
       dependencies: item.dependencies,
       ...(item.cwd === undefined ? {} : { cwd: item.cwd }),
+      ...(item.criteria === undefined ? {} : { criteria: item.criteria }),
     }),
     lineageId: item.lineageId,
     repairCount: item.repairCount + 1,

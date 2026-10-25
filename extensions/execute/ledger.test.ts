@@ -77,14 +77,17 @@ function verified(
 }
 
 const specPath = ".pi/specs/example.md";
+const specRoots = roots.map((item) => ({ ...item, criteria: ["DC-1"] }));
+const proof = [{ id: "DC-1", evidence: "Main read current code" }];
 function resumed(
   resume: SpecResume = { verified: ["a"], blocked: {}, priorRepairs: { a: 1 } },
-  assignments = roots,
+  assignments = specRoots,
   reviseSpec = false,
 ) {
-  return step(
+  return transitionLedger(
     emptyLedger("session", invocationId),
     {
+      invocationId,
       action: "accept",
       plan: "Canonical brief",
       approval: "Safe local changes",
@@ -94,6 +97,7 @@ function resumed(
     },
     "attempt-a",
     resume,
+    ["DC-1"],
   );
 }
 function reverify(state = resumed(), assignmentId = "a", passed = true) {
@@ -103,22 +107,209 @@ function reverify(state = resumed(), assignmentId = "a", passed = true) {
     passed,
     evidence: ["Main read current code; bun test: exit 0"],
     blockers: passed ? [] : ["Current workspace differs"],
+    ...(passed ? { criteria: proof } : {}),
   });
 }
+function specAccepted(
+  assignments: unknown[] = [
+    { ...roots[0], criteria: ["DC-1"] },
+    { ...roots[1], criteria: ["DC-1", "DC-2"] },
+  ],
+  specCriteria = ["DC-1", "DC-2"],
+) {
+  return transitionLedger(
+    emptyLedger("session", invocationId),
+    {
+      invocationId,
+      action: "accept",
+      plan: "Canonical brief",
+      approval: "Safe",
+      specPath,
+      assignments,
+    },
+    "attempt-a",
+    undefined,
+    specCriteria,
+  );
+}
+function proveA(state: ExecutionLedger, criteria?: unknown, passed = true) {
+  return step(reported(state), {
+    action: "verify",
+    assignmentId: "a",
+    attemptId: "attempt-a",
+    passed,
+    evidence: ["Main inspected diff"],
+    blockers: passed ? [] : ["Current test failure"],
+    ...(criteria === undefined ? {} : { criteria }),
+  });
+}
+
+describe("Done Criterion gate", () => {
+  it("stores Spec Done Criteria and assignment criteria at accept", () => {
+    const state = specAccepted();
+    expect(state.specCriteria).toEqual(["DC-1", "DC-2"]);
+    expect(state.assignments.map((item) => item.criteria)).toEqual([
+      ["DC-1"],
+      ["DC-1", "DC-2"],
+    ]);
+    expect(accepted().specCriteria).toBeUndefined();
+    expect(accepted().assignments[0]?.criteria).toBeUndefined();
+  });
+
+  it("rejects missing, unknown, duplicate and uncovered criteria at Spec-backed accept", () => {
+    expect(() => specAccepted(roots)).toThrow(
+      "Spec-backed assignment requires criteria",
+    );
+    expect(() =>
+      specAccepted([{ ...roots[0], criteria: [] }, specRoots[1]]),
+    ).toThrow("Invalid execute_checkpoint input");
+    expect(() =>
+      specAccepted([{ ...roots[0], criteria: ["DC-9"] }, specRoots[1]]),
+    ).toThrow("Unknown Done Criterion: DC-9");
+    expect(() =>
+      specAccepted([{ ...roots[0], criteria: ["DC-1", "DC-1"] }, specRoots[1]]),
+    ).toThrow("Duplicate assignment criteria");
+    expect(() => specAccepted(specRoots)).toThrow(
+      "Done Criterion not declared by any assignment: DC-2",
+    );
+    expect(() =>
+      transitionLedger(emptyLedger("session", invocationId), {
+        invocationId,
+        action: "accept",
+        plan: "Canonical brief",
+        approval: "Safe",
+        specPath,
+        assignments: specRoots,
+      }),
+    ).toThrow("Spec-backed accept requires parsed Done Criteria");
+  });
+
+  it("rejects criteria on inline-plan accept", () => {
+    expect(() => accepted(specRoots)).toThrow(
+      "Assignment criteria require a Spec with Done Criteria",
+    );
+  });
+
+  it("requires exactly one evidence entry per declared criterion on passing verify", () => {
+    const state = specAccepted();
+    expect(() => proveA(state)).toThrow(
+      "Passing verification requires evidence for each declared criterion",
+    );
+    for (const criteria of [
+      [{ id: "DC-2", evidence: "Wrong" }],
+      [
+        { id: "DC-1", evidence: "One" },
+        { id: "DC-1", evidence: "Two" },
+      ],
+      [
+        { id: "DC-1", evidence: "One" },
+        { id: "DC-2", evidence: "Extra" },
+      ],
+    ]) {
+      expect(() => proveA(state, criteria)).toThrow(
+        "Passing verification requires evidence for each declared criterion",
+      );
+    }
+    expect(() => proveA(state, [{ id: "DC-1", evidence: "" }])).toThrow(
+      "Invalid execute_checkpoint input",
+    );
+    const passed = proveA(state, [{ id: "DC-1", evidence: "DC-1 test" }]);
+    expect(passed.assignments[0]).toMatchObject({
+      status: "completed",
+      criteriaEvidence: [{ id: "DC-1", evidence: "DC-1 test" }],
+    });
+    const failed = proveA(state, undefined, false);
+    expect(failed.assignments[0]).toMatchObject({
+      status: "blocked",
+      criteriaEvidence: [],
+    });
+  });
+
+  it("rejects criteria evidence on inline-plan verify", () => {
+    expect(() =>
+      proveA(accepted(), [{ id: "DC-1", evidence: "Inline" }]),
+    ).toThrow("Verification criteria require Spec-backed assignment criteria");
+  });
+
+  it("completes only when every declaring assignment proved its criteria", () => {
+    const state = proveA(specAccepted(), [{ id: "DC-1", evidence: "A" }]);
+    expect(isLedgerComplete(state)).toBe(false);
+    const complete = step(
+      reported(state, "b", "attempt-b", "run-b"),
+      {
+        action: "verify",
+        assignmentId: "b",
+        attemptId: "attempt-b",
+        passed: true,
+        evidence: ["Main inspected B"],
+        blockers: [],
+        criteria: [
+          { id: "DC-2", evidence: "B proves DC-2" },
+          { id: "DC-1", evidence: "B proves DC-1" },
+        ],
+      },
+      "attempt-b",
+    );
+    expect(isLedgerComplete(complete)).toBe(true);
+    for (const criteriaEvidence of [undefined, [], [proof[0]]]) {
+      expect(() =>
+        validateLedger({
+          ...complete,
+          assignments: complete.assignments.map((item) =>
+            item.id === "b" ? { ...item, criteriaEvidence } : item,
+          ),
+        }),
+      ).toThrow("Completion requires evidence for each declared criterion");
+    }
+  });
+
+  it("inherits criteria on repair and rejects changed repair criteria", () => {
+    const failed = proveA(specAccepted(), undefined, false);
+    const repaired = step(failed, {
+      action: "repair",
+      assignmentId: "a",
+      newAssignmentId: "fix",
+      task: "Fix A",
+    });
+    expect(repaired.assignments.at(-1)?.criteria).toEqual(["DC-1"]);
+    expect(() =>
+      validateLedger({
+        ...repaired,
+        assignments: repaired.assignments.map((item) =>
+          item.id === "fix" ? { ...item, criteria: ["DC-2"] } : item,
+        ),
+      }),
+    ).toThrow("Repair changed scope or dependencies");
+  });
+
+  it("requires structured criteria again on resumed reverify", () => {
+    const state = resumed();
+    expect(() =>
+      step(state, {
+        action: "verify",
+        assignmentId: "a",
+        passed: true,
+        evidence: ["Main read current code"],
+        blockers: [],
+      }),
+    ).toThrow(
+      "Passing verification requires evidence for each declared criterion",
+    );
+    expect(reverify(state).assignments[0]?.criteriaEvidence).toEqual(proof);
+  });
+});
 
 describe("Spec resume ledger", () => {
   it("stores a Spec path only when supplied and keeps ordinary assignments unchanged", () => {
     expect(emptyLedger("session", invocationId).specPath).toBeNull();
     expect(accepted().specPath).toBeNull();
-    const state = step(emptyLedger("session", invocationId), {
-      action: "accept",
-      plan: "Canonical brief",
-      approval: "Safe",
-      assignments: roots,
-      specPath,
-    });
+    const state = specAccepted(specRoots, ["DC-1"]);
     expect(state.specPath).toBe(specPath);
-    expect(state.assignments).toEqual(accepted().assignments);
+    expect(
+      state.assignments.map(
+        ({ criteria: _criteria, criteriaEvidence: _evidence, ...item }) => item,
+      ),
+    ).toEqual(accepted().assignments);
     expect(state.assignments[0]?.priorRepairs).toBeUndefined();
     expect(state.assignments[0]?.resumed).toBeUndefined();
   });
@@ -167,14 +358,14 @@ describe("Spec resume ledger", () => {
       expect(() => resumed(resume)).toThrow(
         "Resumed spec lineage missing from accepted plan; revise the spec explicitly",
       );
-      expect(resumed(resume, roots, true).assignments[0]?.status).toBe(
+      expect(resumed(resume, specRoots, true).assignments[0]?.status).toBe(
         "pending",
       );
     }
     expect(
       resumed(
         { verified: ["a"], blocked: {}, priorRepairs: { a: 2 } },
-        roots,
+        specRoots,
         true,
       ).assignments[0],
     ).toMatchObject({ status: "reverify", priorRepairs: 2 });
@@ -183,7 +374,7 @@ describe("Spec resume ledger", () => {
   it("reverifies without a worker claim or attempt, without charging repairs", () => {
     const state = resumed(
       { verified: ["a"], blocked: {}, priorRepairs: { a: 2 } },
-      [roots[0]],
+      [specRoots[0]],
     );
     const complete = reverify(state);
     expect(complete.assignments[0]).toMatchObject({
@@ -330,7 +521,7 @@ describe("Spec resume ledger", () => {
         blocked: { a: ["Logged test failure"] },
         priorRepairs: { a: 2 },
       },
-      [roots[0]],
+      [specRoots[0]],
     );
     expect(state.assignments[0]).toMatchObject({
       status: "blocked",
@@ -358,7 +549,7 @@ describe("Spec resume ledger", () => {
     const interrupted = "Interrupted in a prior session; repair required";
     const state = resumed(
       { verified: [], blocked: { a: [interrupted] }, priorRepairs: {} },
-      [roots[0]],
+      [specRoots[0]],
     );
     expect(state.assignments[0]).toMatchObject({
       status: "blocked",
@@ -417,7 +608,7 @@ describe("Spec resume ledger", () => {
 
   it("keeps lineages without logged progress pending and startable", () => {
     const state = resumed({ verified: [], blocked: {}, priorRepairs: {} }, [
-      roots[0],
+      specRoots[0],
     ]);
     expect(state.assignments[0]).toMatchObject({
       status: "pending",
@@ -434,7 +625,7 @@ describe("Spec resume ledger", () => {
     for (const priorRepairs of [1, 2]) {
       const state = resumed(
         { verified: [], blocked: {}, priorRepairs: { a: priorRepairs } },
-        [roots[0]],
+        [specRoots[0]],
       );
       expect(() => step(state, { action: "start", assignmentId: "a" })).toThrow(
         "Resumed lineage has spent repairs; use repair before dispatch",

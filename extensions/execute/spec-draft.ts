@@ -2,7 +2,7 @@ import { existsSync } from "node:fs";
 import { join, resolve, sep } from "node:path";
 
 import { SPEC_DRAFTED_ENTRY_TYPE } from "./constants";
-import { SPECS_DIR, validSlug } from "./spec-log";
+import { isSpecAccepted, readSpecLog, SPECS_DIR, validSlug } from "./spec-log";
 
 export interface DraftedSpec {
   slug: string;
@@ -20,6 +20,17 @@ export function draftedSpecSlug(cwd: string, path: unknown): string | null {
   }
   const slug = absPath.slice(prefix.length, -3);
   return validSlug(slug) ? slug : null;
+}
+
+// A corrupt log fails closed as accepted, since acceptance cannot be ruled out.
+export function specLogAccepted(cwd: string, slug: string): boolean {
+  try {
+    return isSpecAccepted(
+      readSpecLog(join(cwd, SPECS_DIR, `${slug}.log.jsonl`)),
+    );
+  } catch {
+    return true;
+  }
 }
 
 function isUserMessage(entry: unknown): boolean {
@@ -67,7 +78,7 @@ export function latestDraftedSpec(
     if (
       slug &&
       existsSync(join(cwd, SPECS_DIR, `${slug}.md`)) &&
-      !existsSync(join(cwd, SPECS_DIR, `${slug}.log.jsonl`))
+      !specLogAccepted(cwd, slug)
     ) {
       return {
         slug,

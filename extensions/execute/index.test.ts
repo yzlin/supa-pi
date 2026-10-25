@@ -1,6 +1,13 @@
 import { afterEach, describe, expect, it } from "bun:test";
 import { execFileSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import {
+  chmodSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -13,7 +20,25 @@ import {
 } from "./constants";
 import executeExtension from "./index";
 import { emptyLedger, LEDGER_ENTRY_TYPE, transitionLedger } from "./ledger";
-import { renderSpecStatus } from "./spec-log";
+import { renderSpecStatus, validSlug } from "./spec-log";
+
+const reviewedEvent = {
+  event: "reviewed",
+  ts: "2026-10-25T12:00:00.000Z",
+  hash: "a".repeat(64),
+  round: 1,
+  trigger: { source: "fallback", dcCount: 9, reason: "no consent" },
+  decision: "accept",
+  answers: [],
+  findings: 0,
+};
+const acceptedEvent = {
+  event: "accepted",
+  ts: "2026-10-25T12:00:00.000Z",
+  hash: "a".repeat(64),
+  invocationId: "invocation",
+  assignments: [{ id: "a", dependencies: [] }],
+};
 
 const EXECUTION_BRIEF = [
   "# Execution Brief",
@@ -379,8 +404,8 @@ describe("to-spec command", () => {
     ]);
   });
 
-  it("refuses any existing log, even empty or corrupt", async () => {
-    for (const content of ["", "corrupt\n"]) {
+  it("refuses a corrupt log, failing closed as accepted", async () => {
+    for (const content of ["corrupt\n"]) {
       const h = specCommandHarness();
       writeFileSync(join(h.ctx.cwd, ".pi/specs/goal.log.jsonl"), content);
       await h.handler("goal", h.ctx);
@@ -401,6 +426,167 @@ describe("to-spec command", () => {
     expect(h.runtime.sentUserMessages[0]?.content).toBe(
       "Use the `to-spec` skill as canonical for this explicit command.\n\nSlug: goal\n\nExisting unaccepted Spec: .pi/specs/goal.md — confirm overwrite with the user before writing.\n\nExtra instructions",
     );
+  });
+
+  it("treats a reviewed-only log as unaccepted and refuses once accepted", async () => {
+    const h = specCommandHarness();
+    writeFileSync(join(h.ctx.cwd, ".pi/specs/goal.md"), "Brief");
+    const logPath = join(h.ctx.cwd, ".pi/specs/goal.log.jsonl");
+    writeFileSync(logPath, `${JSON.stringify(reviewedEvent)}\n`);
+    await h.handler("goal", h.ctx);
+    expect(h.notifications).toEqual([]);
+    expect(h.runtime.sentUserMessages[0]?.content).toContain(
+      "Existing unaccepted Spec: .pi/specs/goal.md",
+    );
+    writeFileSync(
+      logPath,
+      `${JSON.stringify(reviewedEvent)}\n${JSON.stringify(acceptedEvent)}\n`,
+    );
+    await h.handler("goal", h.ctx);
+    expect(h.runtime.sentUserMessages).toHaveLength(1);
+    expect(h.notifications).toEqual([
+      {
+        message: "Spec goal was already accepted; choose a new slug",
+        level: "error",
+      },
+    ]);
+  });
+
+  it("rejects reserved subcommand words as slugs", () => {
+    expect(validSlug("status")).toBe(false);
+    expect(validSlug("classifier")).toBe(false);
+    expect(validSlug("classifiers")).toBe(true);
+  });
+});
+
+describe("to-spec classifier consent", () => {
+  const previousAgentDir = process.env.PI_CODING_AGENT_DIR;
+  afterEach(() => {
+    if (previousAgentDir === undefined) {
+      delete process.env.PI_CODING_AGENT_DIR;
+    } else {
+      process.env.PI_CODING_AGENT_DIR = previousAgentDir;
+    }
+  });
+  function consentHarness({
+    hasUI = true,
+    confirm = true,
+    models = [{ provider: "typesafe", id: "jev-latest" }] as unknown[],
+    registryError = undefined as Error | undefined,
+  } = {}) {
+    const h = specCommandHarness();
+    const agentDir = mkdtempSync(join(tmpdir(), "to-spec-agent-"));
+    temporaryWorkspaces.push(agentDir);
+    process.env.PI_CODING_AGENT_DIR = agentDir;
+    const confirms: string[][] = [];
+    const ctx = {
+      ...h.ctx,
+      hasUI,
+      modelRegistry: {
+        getAvailableOfType: () =>
+          registryError
+            ? Promise.reject(registryError)
+            : Promise.resolve(models),
+        classify: () => Promise.reject(new Error("Must not classify")),
+      },
+      ui: {
+        ...h.ctx.ui,
+        confirm: (title: string, message: string) => {
+          confirms.push([title, message]);
+          return Promise.resolve(confirm);
+        },
+      },
+    };
+    const configPath = join(agentDir, "spec-review/config.json");
+    return { ...h, ctx, confirms, configPath };
+  }
+
+  it("shows status, enables only after UI confirmation naming the model, and disables", async () => {
+    const h = consentHarness();
+    await h.handler("classifier", h.ctx);
+    expect(h.notifications.at(-1)).toEqual({
+      message: "Spec review classifier disabled; model=typesafe/jev-latest",
+      level: "info",
+    });
+    await h.handler("classifier enable", h.ctx);
+    expect(h.confirms).toHaveLength(1);
+    expect(h.confirms[0]?.[1]).toContain("typesafe/jev-latest");
+    expect(h.confirms[0]?.[1]).toContain("full text will leave this machine");
+    expect(JSON.parse(readFileSync(h.configPath, "utf8"))).toEqual({
+      enabled: true,
+    });
+    await h.handler("classifier", h.ctx);
+    expect(h.notifications.at(-1)?.message).toBe(
+      "Spec review classifier enabled; model=typesafe/jev-latest",
+    );
+    await h.handler("classifier disable", h.ctx);
+    expect(JSON.parse(readFileSync(h.configPath, "utf8"))).toEqual({
+      enabled: false,
+    });
+    await h.handler("classifier bogus", h.ctx);
+    expect(h.notifications.at(-1)).toEqual({
+      message: "Usage: /to-spec classifier [enable|disable]",
+      level: "error",
+    });
+    expect(h.runtime.sentUserMessages).toEqual([]);
+  });
+
+  it("refuses enable when declined, without UI or without a model", async () => {
+    for (const options of [
+      { confirm: false },
+      { hasUI: false },
+      { models: [{ provider: "x", id: "gpt" }] },
+    ]) {
+      const h = consentHarness(options);
+      await h.handler("classifier enable", h.ctx);
+      expect(existsSync(h.configPath)).toBe(false);
+      expect(h.confirms).toHaveLength(options.confirm === false ? 1 : 0);
+    }
+    const none = consentHarness({ models: [] });
+    await none.handler("classifier", none.ctx);
+    expect(none.notifications.at(-1)?.message).toBe(
+      "Spec review classifier disabled; model=none",
+    );
+    await none.handler("classifier enable", none.ctx);
+    expect(none.notifications.at(-1)).toEqual({
+      message:
+        "No credentialed Jev classifier is available; Spec review classifier stays disabled.",
+      level: "error",
+    });
+  });
+
+  it("reports registry failures instead of a missing model", async () => {
+    const h = consentHarness({ registryError: new Error("auth expired") });
+    await h.handler("classifier", h.ctx);
+    expect(h.notifications.at(-1)).toEqual({
+      message:
+        "Spec review classifier disabled; model=none (registry error: auth expired)",
+      level: "info",
+    });
+    await h.handler("classifier enable", h.ctx);
+    expect(h.notifications.at(-1)).toEqual({
+      message:
+        "Spec review classifier registry failed: auth expired; Spec review classifier stays disabled.",
+      level: "error",
+    });
+    expect(h.confirms).toHaveLength(0);
+    expect(existsSync(h.configPath)).toBe(false);
+  });
+
+  it("reports invalid or unsafe config as disabled", async () => {
+    for (const [content, mode] of [
+      ["{bad", 0o600],
+      [JSON.stringify({ enabled: true }), 0o644],
+    ] as const) {
+      const h = consentHarness();
+      mkdirSync(join(h.configPath, ".."), { mode: 0o700 });
+      writeFileSync(h.configPath, content, { mode });
+      chmodSync(h.configPath, mode);
+      await h.handler("classifier", h.ctx);
+      expect(h.notifications.at(-1)?.message).toStartWith(
+        "Spec review classifier disabled (",
+      );
+    }
   });
 
   it("refuses invalid and oversized slugs without sending", async () => {
@@ -438,11 +624,18 @@ function ledgerEntry(specPath?: string, complete = false) {
       approval: "Safe",
       ...(specPath ? { specPath } : {}),
       assignments: [
-        { id: "a", task: "Implement A", scope: ["src/a.ts"], dependencies: [] },
+        {
+          id: "a",
+          task: "Implement A",
+          scope: ["src/a.ts"],
+          dependencies: [],
+          ...(specPath ? { criteria: ["DC-1"] } : {}),
+        },
       ],
     },
     "attempt",
     complete ? { verified: ["a"], blocked: {}, priorRepairs: {} } : undefined,
+    specPath ? ["DC-1"] : undefined,
   );
   const data = complete
     ? transitionLedger(accepted, {
@@ -452,6 +645,7 @@ function ledgerEntry(specPath?: string, complete = false) {
         passed: true,
         evidence: ["bun test: exit 0"],
         blockers: [],
+        criteria: [{ id: "DC-1", evidence: "bun test: exit 0" }],
       })
     : accepted;
   return { type: "custom", customType: LEDGER_ENTRY_TYPE, data };
@@ -463,13 +657,25 @@ async function runBareExecute(
     hasUI = false,
     choice,
     files = ["goal.md"],
-  }: { hasUI?: boolean; choice?: string; files?: string[] } = {},
+    logs = {},
+  }: {
+    hasUI?: boolean;
+    choice?: string;
+    files?: string[];
+    logs?: Record<string, unknown[]>;
+  } = {},
 ) {
   const cwd = mkdtempSync(join(tmpdir(), "execute-command-"));
   temporaryWorkspaces.push(cwd);
   mkdirSync(join(cwd, ".pi/specs"), { recursive: true });
   for (const file of files) {
     writeFileSync(join(cwd, ".pi/specs", file), "# Execution Brief\n");
+  }
+  for (const [slug, events] of Object.entries(logs)) {
+    writeFileSync(
+      join(cwd, ".pi/specs", `${slug}.log.jsonl`),
+      events.map((event) => `${JSON.stringify(event)}\n`).join(""),
+    );
   }
   const runtime = createMockPiRuntime();
   const mock = createMockCtx(branch, { cwd, hasUI, choice });
@@ -532,6 +738,19 @@ describe("bare execute Spec resolution", () => {
       const result = await runBareExecute([marker()], { files });
       expect(result.content).toBe(result.draftPacket());
     }
+  });
+
+  it("runs a drafted Spec whose log has only reviewed events", async () => {
+    const result = await runBareExecute([marker()], {
+      files: ["goal.md"],
+      logs: { goal: [reviewedEvent] },
+    });
+    expect(result.content).toBe(result.planPacket("@.pi/specs/goal.md"));
+    const accepted = await runBareExecute([marker()], {
+      files: ["goal.md"],
+      logs: { goal: [reviewedEvent, acceptedEvent] },
+    });
+    expect(accepted.content).toBe(accepted.draftPacket());
   });
 
   it("uses the latest usable marker and skips later unusable ones", async () => {

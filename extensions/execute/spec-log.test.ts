@@ -24,12 +24,15 @@ import type { ExecutionLedger, SpecResume } from "./schema";
 import {
   appendSpecEvents,
   deleteSnapshotRefs,
+  deriveCriteriaStates,
   deriveSpecResume,
   hashSpec,
   INTERRUPTED_BLOCKER,
+  parseDoneCriteria,
   parseSpecPath,
   readSpecLog,
   renderSpecStatus,
+  reviewState,
   snapshotWorkspace,
   SPECS_DIR,
   SPEC_SLUG_PATTERN,
@@ -82,6 +85,23 @@ const repaired: SpecLogEvent = {
   priorRepairs: 1,
 };
 const done: SpecLogEvent = { event: "done", ts };
+const reviewed: SpecLogEvent = {
+  event: "reviewed",
+  ts,
+  hash,
+  round: 1,
+  trigger: { source: "fallback", dcCount: 9, reason: "no consent" },
+  decision: "revise",
+  answers: [
+    {
+      id: "0:q1",
+      focus: "Plan risks",
+      question: "Split DC-3?",
+      answer: "Option A",
+    },
+  ],
+  findings: 2,
+};
 const dirs: string[] = [];
 function temporary() {
   const dir = mkdtempSync(join(tmpdir(), "pi-spec-log-test-"));
@@ -122,8 +142,10 @@ function step(
     { invocationId: state.invocationId, ...input },
     "attempt-a",
     resume,
+    input.specPath ? ["DC-1"] : undefined,
   );
 }
+const proof = [{ id: "DC-1", evidence: "DC-1 test passed" }];
 function ledger(path: string | null = specPath, resume?: SpecResume) {
   return step(
     emptyLedger("session", "invocation"),
@@ -133,7 +155,13 @@ function ledger(path: string | null = specPath, resume?: SpecResume) {
       approval: "Safe local changes",
       ...(path === null ? {} : { specPath: path }),
       assignments: [
-        { id: "a", task: "Implement A", scope: ["src/a"], dependencies: [] },
+        {
+          id: "a",
+          task: "Implement A",
+          scope: ["src/a"],
+          dependencies: [],
+          ...(path === null ? {} : { criteria: ["DC-1"] }),
+        },
       ],
     },
     resume,
@@ -156,6 +184,7 @@ function complete(state: ExecutionLedger, id = "a") {
     passed: true,
     evidence: ["Main inspected; bun test: passed"],
     blockers: [],
+    ...(state.specPath ? { criteria: proof } : {}),
   });
 }
 
@@ -226,6 +255,16 @@ describe("Spec event log", () => {
       repaired,
       { event: "stopped", ts, reason: "User stopped" },
       done,
+      reviewed,
+      {
+        ...reviewed,
+        decision: "accept",
+        trigger: {
+          source: "classifier",
+          probability: 0.5,
+          model: "typesafe/jev-latest",
+        },
+      },
     ];
     for (const event of events) {
       expect(Value.Check(SpecLogEventSchema, event)).toBe(true);
@@ -245,6 +284,66 @@ describe("Spec event log", () => {
     expect(
       Value.Check(SpecLogEventSchema, { ...verified, repairCount: -1 }),
     ).toBe(false);
+    for (const invalid of [
+      { round: 0 },
+      { findings: -1 },
+      { decision: "maybe" },
+      { answers: [{ id: "0:q1" }] },
+      { answers: [{ id: "0:q1", answer: "Option A" }] },
+      { trigger: { source: "classifier", probability: 2, model: "x/y" } },
+      { trigger: { source: "classifier", probability: 0.5, model: "jev" } },
+      { trigger: { source: "fallback", dcCount: 1.5, reason: "x" } },
+      { trigger: { source: "other" } },
+    ]) {
+      expect(Value.Check(SpecLogEventSchema, { ...reviewed, ...invalid })).toBe(
+        false,
+      );
+    }
+  });
+  it("allows reviewed events before the first accepted event", () => {
+    const path = join(temporary(), "example.log.jsonl");
+    appendSpecEvents(path, [reviewed, accepted, done]);
+    expect(readSpecLog(path)).toEqual([reviewed, accepted, done]);
+    writeFileSync(
+      path,
+      `${JSON.stringify(reviewed)}\n${JSON.stringify(done)}\n`,
+    );
+    expect(() => readSpecLog(path)).toThrow(`Corrupt Spec log ${path}:2`);
+  });
+  it("derives review approval for the current hash and counts reviewed hashes", () => {
+    const other = "b".repeat(64);
+    expect(reviewState([], hash)).toEqual({
+      approved: false,
+      latestDecision: null,
+      reviewedHashes: 0,
+    });
+    expect(reviewState([reviewed], hash)).toEqual({
+      approved: false,
+      latestDecision: reviewed.decision,
+      reviewedHashes: 1,
+    });
+    const events: SpecLogEvent[] = [
+      reviewed,
+      { ...reviewed, hash: other, decision: "accept" },
+      { ...reviewed, hash: other, round: 2, decision: "stop" },
+    ];
+    expect(reviewState(events, hash)).toEqual({
+      approved: false,
+      latestDecision: reviewed.decision,
+      reviewedHashes: 2,
+    });
+    // Latest reviewed decision for the hash, by log order, decides approval.
+    expect(reviewState(events, other)).toEqual({
+      approved: false,
+      latestDecision: "stop",
+      reviewedHashes: 2,
+    });
+    expect(
+      reviewState(
+        [...events, { ...reviewed, hash: other, decision: "accept" }],
+        other,
+      ),
+    ).toEqual({ approved: true, latestDecision: "accept", reviewedHashes: 2 });
   });
   it("reads missing logs, round trips events, and appends without rewriting", () => {
     const path = join(temporary(), ".pi/specs/example.log.jsonl");
@@ -293,6 +392,114 @@ describe("Spec event log", () => {
   });
 });
 
+describe("Spec Done Criteria", () => {
+  const spec = (rows: string) =>
+    `# Execution Brief\n\n## Plan\n- not a DC\n\n## Done Criteria\n${rows}\n## Verification\n- check\n`;
+  it("parses unique DC-n labels from the Done Criteria section only", () => {
+    expect(
+      parseDoneCriteria(
+        spec(
+          "- DC-1: First (US-1)\n  continued\n\n- DC-2: Second (technical)\n",
+        ),
+      ),
+    ).toEqual(["DC-1", "DC-2"]);
+  });
+  it("rejects unlabeled rows, repeated labels, empty and missing sections", () => {
+    expect(() => parseDoneCriteria(spec("- DC-1: A\n- Unlabeled\n"))).toThrow(
+      "Done Criteria row lacks a DC-n: label",
+    );
+    expect(() => parseDoneCriteria(spec("- DC-0: Zero\n"))).toThrow(
+      "lacks a DC-n: label",
+    );
+    expect(() => parseDoneCriteria(spec("- DC-1: A\n- DC-1: B\n"))).toThrow(
+      "Repeated Done Criterion label: DC-1",
+    );
+    expect(() => parseDoneCriteria(spec("\n"))).toThrow("has no rows");
+    expect(() => parseDoneCriteria("# Execution Brief\n## Plan\n")).toThrow(
+      "no ## Done Criteria section",
+    );
+  });
+  it("parses pre-gate done logs without Done Criterion fields", () => {
+    const path = join(temporary(), "legacy.log.jsonl");
+    const legacy = [
+      {
+        event: "accepted",
+        ts,
+        hash,
+        invocationId: "old",
+        assignments: [{ id: "a", dependencies: [] }],
+      },
+      {
+        ts,
+        assignment: "a",
+        lineageId: "a",
+        repairCount: 0,
+        priorRepairs: 0,
+        event: "verified",
+        resumed: false,
+        evidence: ["Old"],
+        head: null,
+        snapshot: null,
+      },
+      { event: "done", ts },
+    ];
+    writeFileSync(
+      path,
+      legacy.map((event) => JSON.stringify(event)).join("\n"),
+    );
+    expect(readSpecLog(path)).toEqual(legacy as SpecLogEvent[]);
+    expect(deriveCriteriaStates(readSpecLog(path))).toEqual([]);
+  });
+  it("derives passed, pending and unmet criteria from the latest acceptance", () => {
+    const gated: SpecLogEvent = {
+      ...accepted,
+      criteria: ["DC-1", "DC-2", "DC-3"],
+      assignments: [
+        { id: "a", dependencies: [], criteria: ["DC-1", "DC-2"] },
+        { id: "b", dependencies: ["a"], criteria: ["DC-2", "DC-3"] },
+      ],
+    };
+    const proved: SpecLogEvent = {
+      ...verified,
+      criteria: [
+        { id: "DC-1", evidence: "one" },
+        { id: "DC-2", evidence: "two" },
+      ],
+    };
+    const states = (events: SpecLogEvent[]) =>
+      deriveCriteriaStates(events).map(({ state }) => state);
+    expect(states([gated])).toEqual(["pending", "pending", "pending"]);
+    expect(states([gated, proved])).toEqual(["passed", "pending", "pending"]);
+    // b's repair budget is exhausted: DC-2 and DC-3 can never pass, so unmet.
+    expect(states([gated, proved, blocked])).toEqual([
+      "passed",
+      "pending",
+      "pending",
+    ]);
+    const exhausted: SpecLogEvent = { ...blocked, repairCount: 1 };
+    expect(states([gated, proved, exhausted])).toEqual([
+      "passed",
+      "unmet",
+      "unmet",
+    ]);
+    expect(
+      states([gated, proved, { event: "stopped", ts, reason: "Stop" }]),
+    ).toEqual(["passed", "unmet", "unmet"]);
+    // Logged evidence before a later acceptance is history only.
+    expect(states([gated, proved, gated])).toEqual([
+      "pending",
+      "pending",
+      "pending",
+    ]);
+    // Later progress in a verified lineage reopens its criteria.
+    expect(states([gated, proved, repaired])).toEqual([
+      "pending",
+      "pending",
+      "pending",
+    ]);
+  });
+});
+
 describe("Spec resume", () => {
   it("derives verified lineages, cumulative repair budgets, current hash and done", () => {
     expect(deriveSpecResume([])).toEqual({
@@ -301,6 +508,17 @@ describe("Spec resume", () => {
       done: false,
     });
     expect(deriveSpecResume([accepted])).toEqual({
+      hash,
+      resume: { verified: [], blocked: {}, priorRepairs: {} },
+      done: false,
+    });
+    // Review alone is not acceptance; review after acceptance changes nothing.
+    expect(deriveSpecResume([reviewed, reviewed])).toEqual({
+      hash: null,
+      resume: null,
+      done: false,
+    });
+    expect(deriveSpecResume([reviewed, accepted, reviewed])).toEqual({
       hash,
       resume: { verified: [], blocked: {}, priorRepairs: {} },
       done: false,
@@ -449,6 +667,7 @@ describe("Spec ledger transition events", () => {
         priorRepairs: 0,
         resumed: false,
         evidence: ["Main inspected; bun test: passed"],
+        criteria: proof,
         head: null,
         snapshot: null,
       },
@@ -510,7 +729,11 @@ describe("Spec ledger transition events", () => {
     const running = step(fixed, { action: "start", assignmentId: "a-fix" });
     const completed = complete(running, "a-fix");
     expect(specEventsFromTransition(running, completed, ts)).toEqual([
-      { ...verified, evidence: ["Main inspected; bun test: passed"] },
+      {
+        ...verified,
+        evidence: ["Main inspected; bun test: passed"],
+        criteria: proof,
+      },
       done,
     ]);
     expect(specEventsFromTransition(fixed, fixed, ts)).toEqual([]);
@@ -522,8 +745,20 @@ describe("Spec ledger transition events", () => {
       approval: "Safe local changes",
       specPath,
       assignments: [
-        { id: "a", task: "Implement A", scope: ["src/a"], dependencies: [] },
-        { id: "b", task: "Implement B", scope: ["src/b"], dependencies: ["a"] },
+        {
+          id: "a",
+          task: "Implement A",
+          scope: ["src/a"],
+          dependencies: [],
+          criteria: ["DC-1"],
+        },
+        {
+          id: "b",
+          task: "Implement B",
+          scope: ["src/b"],
+          dependencies: ["a"],
+          criteria: ["DC-1"],
+        },
       ],
     });
     const completed = complete(
@@ -576,6 +811,7 @@ describe("Spec ledger transition events", () => {
       passed: true,
       evidence: ["Fresh test"],
       blockers: [],
+      criteria: proof,
     });
     expect(specEventsFromTransition(oldComplete, completed, ts)).toEqual([]);
     expect(
@@ -595,6 +831,7 @@ describe("Spec ledger transition events", () => {
         priorRepairs: 2,
         resumed: true,
         evidence: ["Fresh test"],
+        criteria: proof,
         head: null,
         snapshot: null,
       },
@@ -739,15 +976,21 @@ describe("Spec status", () => {
     const cwd = temporary();
     const dir = join(cwd, SPECS_DIR);
     mkdirSync(dir, { recursive: true });
-    for (const slug of ["z-ready", "a-done", "b-bad"]) {
+    for (const slug of ["z-ready", "a-done", "b-bad", "c-reviewed"]) {
       writeFileSync(join(dir, `${slug}.md`), "Brief");
     }
     mkdirSync(join(dir, "not-a-file.md"));
     appendSpecEvents(join(dir, "a-done.log.jsonl"), [accepted, done]);
     writeFileSync(join(dir, "b-bad.log.jsonl"), "invalid");
+    appendSpecEvents(join(dir, "c-reviewed.log.jsonl"), [reviewed]);
     expect(renderSpecStatus(cwd)).toBe(
-      "a-done  done\nb-bad  corrupt\nz-ready  ready",
+      "a-done  done\nb-bad  corrupt\nc-reviewed  reviewed (not accepted)\nz-ready  ready",
     );
+    expect(renderSpecStatus(cwd, "c-reviewed")).toContain(
+      "Status: reviewed (not accepted)\nHash: none",
+    );
+    appendSpecEvents(join(dir, "c-reviewed.log.jsonl"), [accepted]);
+    expect(renderSpecStatus(cwd)).toContain("c-reviewed  accepted\n");
     expect(renderSpecStatus(cwd, "b-bad")).toContain("Status: corrupt");
     expect(renderSpecStatus(cwd, "z-ready")).toContain("Status: ready");
   });
@@ -778,6 +1021,33 @@ describe("Spec status", () => {
         "a | a-fix | verified | 2",
         "b | b | blocked | 1",
         "c | c | pending | 0",
+      ].join("\n"),
+    );
+  });
+  it("renders each Done Criterion state and never shows unmet as passed", () => {
+    const cwd = temporary();
+    mkdirSync(join(cwd, SPECS_DIR), { recursive: true });
+    writeFileSync(join(cwd, specPath), "Brief");
+    appendSpecEvents(join(cwd, ".pi/specs/example.log.jsonl"), [
+      {
+        ...accepted,
+        criteria: ["DC-1", "DC-2", "DC-3"],
+        assignments: [
+          { id: "a", dependencies: [], criteria: ["DC-1"] },
+          { id: "b", dependencies: ["a"], criteria: ["DC-2"] },
+          { id: "c", dependencies: [], criteria: ["DC-3"] },
+        ],
+      },
+      { ...verified, criteria: [{ id: "DC-1", evidence: "one" }] },
+      { ...blocked, repairCount: 1 },
+    ]);
+    expect(renderSpecStatus(cwd, "example")).toEndWith(
+      [
+        "",
+        "criterion | state",
+        "DC-1 | passed",
+        "DC-2 | unmet",
+        "DC-3 | pending",
       ].join("\n"),
     );
   });
