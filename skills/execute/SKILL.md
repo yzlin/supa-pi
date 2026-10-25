@@ -75,7 +75,7 @@ On Spec-backed `accept` of a Spec hash with no `accepted` event, the Extension d
 3. If `review.limit` is true, skip to step 5. No reviewers run.
 4. Dispatch two `subagent` calls together. Each uses `agent: "spec-reviewer"`, `schema: SPEC_REVIEW_SCHEMA` below, and no `cwd`. Each task is `dispatchPrefix` unchanged, then one `Focus: <own statement>` line, then the other reviewer's focus without the `Focus:` label, and the Spec path. If one report fails, dispatch that focus once more.
 5. Call `execute_checkpoint({invocationId, action: "resolve_review", specPath})`.
-6. On `review.decision` `accept`, call `accept` again. On `revise`, revise the Spec with the user under the `to-spec` rules, using the returned findings and answers; then accept again. On `stop`, stop and do not accept. The runtime enforces this: after a recorded `stop` or `revise`, `accept` of the same Spec hash fails until the Spec is revised to a new hash.
+6. On `review.decision` `accept`, call `accept` again. On `revise`, revise the Spec with the user under the `to-spec` rules, using the returned findings and answers; show the revised Spec or a diff in an assistant message, never inside an `ask` prompt, and keep any `ask` prompt to one short line naming the path; then accept again. On `stop`, stop and do not accept. The runtime enforces this: after a recorded `stop` or `revise`, `accept` of the same Spec hash fails until the Spec is revised to a new hash.
 
 Use this exact schema, matching exported `SpecReviewReportSchema`; the Extension blocks any other schema:
 

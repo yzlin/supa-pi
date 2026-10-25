@@ -68,7 +68,7 @@ Use the given slug or derive a short kebab-case slug from the goal. It must matc
 
 - If `.pi/specs/<slug>.log.jsonl` has an `accepted` event, or cannot be read and parsed, refuse and suggest a new slug. Never overwrite an accepted or done Spec, even if the packet calls it unaccepted.
 - A log that is empty or has only `reviewed` events means the Spec was never accepted. Treat it like a Spec without a log.
-- If only `.pi/specs/<slug>.md` exists, ask with `ask` before overwriting. Without confirmation, do not overwrite.
+- If only `.pi/specs/<slug>.md` exists, ask with `ask` before overwriting. Without confirmation, do not overwrite. Show the replacement content or diff in an assistant message first; keep the `ask` prompt to one short line naming the path.
 - Otherwise write the new Spec.
 
 Recheck collisions before writing, including after confirmation. If existence cannot be determined safely, stop and report the blocker. A Spec is immutable after write except for a confirmed replacement of a never-accepted Spec under the collision rule above.

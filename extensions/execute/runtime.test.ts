@@ -1371,11 +1371,14 @@ describe("Spec runtime", () => {
           ["Accept as reviewed", "Revise"],
         ]);
         expect(h.prompts[0]?.title).toBe("Split DC-3?");
+        expect(h.prompts[2]?.title).toBe(
+          `Spec review of ${h.specPath}: ${reports[0].findings.length + reports[1].findings.length} findings (shown above). Accept as reviewed or revise?`,
+        );
         for (const finding of [
           ...reports[0].findings,
           ...reports[1].findings,
         ]) {
-          expect(h.prompts[2]?.title).toContain(finding.why);
+          expect(JSON.stringify(h.sent)).toContain(finding.why);
           expect(JSON.stringify(h.sent)).toContain(finding.change);
         }
         expect(h.sent).toEqual([

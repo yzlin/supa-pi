@@ -464,11 +464,11 @@ export function registerExecutionLedger(
     let choice: string | undefined;
     round.resolving = true;
     try {
-      const summary = findings.map(
-        (finding) =>
-          `- [${finding.severity}] ${finding.target}: ${finding.why} → ${finding.change}`,
-      );
       if (!round.limit) {
+        const summary = findings.map(
+          (finding) =>
+            `- [${finding.severity}] ${finding.target}: ${finding.why} → ${finding.change}`,
+        );
         pi.sendMessage(
           {
             customType: REVIEW_SPEC_SHOWN,
@@ -503,7 +503,7 @@ export function registerExecutionLedger(
       choice = await ctx.ui.select(
         round.limit
           ? `Spec review round limit reached for ${round.specPath}. Accept as is or stop?`
-          : `Spec review of ${round.specPath}: ${findings.length} findings\n${summary.join("\n")}\nAccept as reviewed or revise?`,
+          : `Spec review of ${round.specPath}: ${findings.length} findings (shown above). Accept as reviewed or revise?`,
         round.limit
           ? ["Accept as is", "Stop"]
           : ["Accept as reviewed", "Revise"],
@@ -544,7 +544,7 @@ export function registerExecutionLedger(
     const notes = {
       accept: "User accepted the Spec; call accept now.",
       revise:
-        "User chose to revise; revise the Spec with the user, then accept again.",
+        "User chose to revise; show the revised Spec or diff in a message, keep any ask prompt to one short line, then accept again.",
       stop: "User stopped; do not accept this Spec.",
     };
     return output(null, {
