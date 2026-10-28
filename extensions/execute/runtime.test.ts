@@ -1219,6 +1219,25 @@ describe("Spec runtime", () => {
       ];
       const reviewSchema = () =>
         JSON.parse(JSON.stringify(SpecReviewReportSchema)) as unknown;
+      const reviewedEvent = (
+        hash: string,
+        round: number,
+        content?: string,
+      ) => ({
+        event: "reviewed" as const,
+        ts: new Date().toISOString(),
+        hash,
+        round,
+        trigger: {
+          source: "fallback" as const,
+          dcCount: 8,
+          reason: "no consent",
+        },
+        decision: "revise" as const,
+        answers: [],
+        findings: 2,
+        ...(content === undefined ? {} : { content }),
+      });
       function roundHarness(options: Parameters<typeof reviewHarness>[0] = {}) {
         const h = reviewHarness({ content: spec("Plan", many), ...options });
         const prompts: Array<{ title: string; options: string[] }> = [];
@@ -1366,13 +1385,13 @@ describe("Spec runtime", () => {
         h.answers.push("Split", "Runtime", "Accept as reviewed");
         const resolved = await h.resolveReview(token);
         expect(h.prompts.map(({ options }) => options)).toEqual([
-          ["Keep", "Split"],
-          ["Unit", "Runtime", "End-to-end"],
+          ["Keep", "Split", "Type something."],
+          ["Unit", "Runtime", "End-to-end", "Type something."],
           ["Accept as reviewed", "Revise"],
         ]);
         expect(h.prompts[0]?.title).toBe("Split DC-3?");
         expect(h.prompts[2]?.title).toBe(
-          `Spec review of ${h.specPath}: ${reports[0].findings.length + reports[1].findings.length} findings (shown above). Accept as reviewed or revise?`,
+          `Spec review of ${h.specPath}: ${reports[0].findings.length + reports[1].findings.length} findings. Accept as reviewed or revise?`,
         );
         for (const finding of [
           ...reports[0].findings,
@@ -1417,6 +1436,7 @@ describe("Spec runtime", () => {
             decision: "accept",
             answers,
             findings: 3,
+            content: h.content,
           },
         ]);
         expect(h.resolveReview(token)).rejects.toThrow(
@@ -1615,6 +1635,202 @@ describe("Spec runtime", () => {
             await h.acceptSpec(token, allCriteria);
           }
         }
+      });
+
+      it("shows the revision diff since the last reviewed copy before the limit gate", async () => {
+        const h = roundHarness();
+        const previous = spec("Old plan", many);
+        appendSpecEvents(h.logPath, [
+          reviewedEvent("b".repeat(64), 1),
+          reviewedEvent(hashSpec(previous), 2, previous),
+        ]);
+        const token = await h.invoke();
+        await h.review(token);
+        h.answers.push("Accept as is");
+        await h.resolveReview(token);
+        expect(h.sent).toEqual([
+          expect.objectContaining({ customType: "spec-review", display: true }),
+        ]);
+        const shown = JSON.stringify(h.sent);
+        expect(shown).toContain("Spec revision since review round 2");
+        expect(shown).toContain("-Old plan");
+        expect(shown).toContain("+Plan");
+        expect(h.prompts[0]?.title).toBe(
+          `Spec review round limit reached for ${h.specPath}. Accept as is or stop?`,
+        );
+        expect(readSpecLog(h.logPath).at(-1)).toMatchObject({
+          round: 3,
+          content: h.content,
+        });
+      });
+
+      it("fences the revision diff so Spec code fences in hunk context cannot close it", async () => {
+        const block = "```ts\nconst x = 1;\n```";
+        const h = roundHarness({ content: spec(`${block}\nNew plan`, many) });
+        const previous = spec(`${block}\nOld plan`, many);
+        appendSpecEvents(h.logPath, [
+          reviewedEvent("b".repeat(64), 1),
+          reviewedEvent(hashSpec(previous), 2, previous),
+        ]);
+        const token = await h.invoke();
+        await h.review(token);
+        h.answers.push("Accept as is");
+        await h.resolveReview(token);
+        const text = (h.sent[0] as { content: string }).content;
+        expect(text).toContain("-Old plan");
+        expect(text).toContain(" ```");
+        const lines = text.split("\n");
+        const opening = lines.findIndex((line) => /^`{3,}diff$/.test(line));
+        const fence = lines[opening]?.slice(0, -"diff".length) ?? "";
+        expect(fence.length).toBeGreaterThanOrEqual(4);
+        expect(lines.at(-1)).toBe(fence);
+        const closer = new RegExp(`^ {0,3}\`{${fence.length},}\\s*$`);
+        expect(
+          lines.slice(opening + 1, -1).filter((line) => closer.test(line)),
+        ).toEqual([]);
+      });
+
+      function tuiDriver(h: ReturnType<typeof roundHarness>) {
+        // Drives the TUI dialog: renders it, then feeds the next `scripts` keys.
+        const screens: string[] = [];
+        const scripts: string[][] = [];
+        const theme = {
+          bold: (s: string) => s,
+          fg: (_t: string, s: string) => s,
+        };
+        Object.assign(h.ctx, { mode: "tui" });
+        Object.assign(h.ctx.ui, {
+          custom: (
+            factory: (
+              tui: unknown,
+              theme: unknown,
+              kb: unknown,
+              done: (value: unknown) => void,
+            ) => {
+              render(width: number): string[];
+              handleInput(data: string): void;
+            },
+          ) =>
+            new Promise((resolve) => {
+              const tui = {
+                requestRender: () => undefined,
+                terminal: { rows: 60 },
+              };
+              const component = factory(tui, theme, undefined, resolve);
+              screens.push(component.render(100).join("\n"));
+              for (const key of scripts.shift() ?? ["\u001b"]) {
+                component.handleInput(key);
+              }
+              screens.push(component.render(100).join("\n"));
+            }),
+          input: () => {
+            throw new Error("TUI path must not use ui.input");
+          },
+        });
+        return { screens, scripts };
+      }
+
+      it("TUI review prompts show the review text and accept a typed answer", async () => {
+        const h = roundHarness();
+        const { screens, scripts } = tuiDriver(h);
+        const { token } = await reviewedRound(h);
+        // q1: move to "Type something.", open the field, type, submit.
+        scripts.push([
+          "\u001b[B",
+          "\u001b[B",
+          "\r",
+          ..."Merge DC-3".split(""),
+          "\r",
+        ]);
+        scripts.push(["\u001b[B", "\r"]);
+        scripts.push(["\r"]);
+        const resolved = await h.resolveReview(token);
+        expect(h.prompts).toEqual([]);
+        const first = screens[0] ?? "";
+        expect(first).toContain("Plan step 2 races step 3");
+        expect(first).toContain("DC-2 is not testable");
+        expect(first).toContain("Split DC-3?");
+        expect(first).toContain("Type something.");
+        const gate = screens[4] ?? "";
+        expect(gate).toContain("Accept as reviewed");
+        expect(gate).toContain("Plan step 2 races step 3");
+        expect(gate).not.toContain("Type something.");
+        expect(resolved).toMatchObject({
+          review: {
+            decision: "accept",
+            answers: [
+              { id: "0:q1", answer: "Merge DC-3" },
+              { id: "1:q2", answer: "Runtime" },
+            ],
+          },
+        });
+      });
+
+      it("TUI limit gate shows the revision diff before any answer", async () => {
+        const h = roundHarness();
+        const { screens, scripts } = tuiDriver(h);
+        const previous = spec("Old plan", many);
+        appendSpecEvents(h.logPath, [
+          reviewedEvent("b".repeat(64), 1),
+          reviewedEvent(hashSpec(previous), 2, previous),
+        ]);
+        const token = await h.invoke();
+        await h.review(token);
+        scripts.push(["\u001b[B", "\r"]);
+        const resolved = await h.resolveReview(token);
+        const gate = screens[0] ?? "";
+        expect(gate).toContain("Spec revision since review round 2");
+        expect(gate).toContain("-Old plan");
+        expect(gate).toContain("+Plan");
+        expect(gate).toContain("Accept as is");
+        expect(gate).not.toContain("Type something.");
+        expect(resolved).toMatchObject({ review: { decision: "stop" } });
+      });
+
+      it("TUI cancel records nothing", async () => {
+        const h = roundHarness();
+        tuiDriver(h);
+        const { token } = await reviewedRound(h);
+        expect(h.resolveReview(token)).rejects.toThrow("Spec review cancelled");
+        expect(readSpecLog(h.logPath)).toEqual([]);
+      });
+
+      it("without TUI a typed reviewer answer goes through ui.input", async () => {
+        const h = roundHarness();
+        const inputs: string[] = [];
+        Object.assign(h.ctx.ui, {
+          input: (title: string) => {
+            inputs.push(title);
+            return Promise.resolve("  Merge DC-3 ");
+          },
+        });
+        const { token } = await reviewedRound(h);
+        h.answers.push("Type something.", "Runtime", "Accept as reviewed");
+        const resolved = await h.resolveReview(token);
+        expect(inputs).toEqual(["Split DC-3?"]);
+        expect(resolved).toMatchObject({
+          review: {
+            answers: [
+              { id: "0:q1", answer: "Merge DC-3" },
+              { id: "1:q2", answer: "Runtime" },
+            ],
+          },
+        });
+      });
+
+      it("says so when the last reviewed copy predates stored content", async () => {
+        const h = roundHarness();
+        appendSpecEvents(h.logPath, [
+          reviewedEvent("b".repeat(64), 1),
+          reviewedEvent("c".repeat(64), 2),
+        ]);
+        const token = await h.invoke();
+        await h.review(token);
+        h.answers.push("Stop");
+        await h.resolveReview(token);
+        expect(JSON.stringify(h.sent)).toContain(
+          "changed since review round 2; no reviewed copy is stored",
+        );
       });
     });
   });

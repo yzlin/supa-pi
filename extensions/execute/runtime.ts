@@ -7,6 +7,7 @@ import type {
   ExtensionAPI,
   ExtensionContext,
 } from "@earendil-works/pi-coding-agent";
+import { createTwoFilesPatch } from "diff";
 import { Value } from "typebox/value";
 
 import { SPEC_DRAFTED_ENTRY_TYPE } from "./constants";
@@ -26,6 +27,7 @@ import {
   renderCheckpointCall,
   renderCheckpointResult,
 } from "./render";
+import { askReview } from "./review-dialog";
 import {
   type Checkpoint,
   CheckpointOutputSchema,
@@ -96,6 +98,39 @@ type ReviewCheckpoint = Extract<
   Checkpoint,
   { action: "review" | "resolve_review" }
 >;
+
+function revisionText(
+  events: SpecLogEvent[],
+  round: Pick<ReviewRound, "specPath" | "hash" | "round">,
+  content: string,
+): string | undefined {
+  const previous = events.findLast(
+    (event) => event.event === "reviewed" && event.hash !== round.hash,
+  );
+  if (previous?.event !== "reviewed") {
+    return undefined;
+  }
+  if (previous.content === undefined) {
+    return `Spec ${round.specPath} changed since review round ${previous.round}; no reviewed copy is stored, so no diff is shown. Read the Spec before choosing.`;
+  }
+  const patch = createTwoFilesPatch(
+    `${round.specPath} (round ${previous.round})`,
+    `${round.specPath} (round ${round.round})`,
+    previous.content,
+    content,
+    undefined,
+    undefined,
+    { context: 3 },
+  );
+  // Context lines indent Spec fences by one space, which still closes a
+  // three-backtick fence, so the outer fence outruns every backtick run.
+  const longest = Math.max(
+    0,
+    ...(patch.match(/`+/g) ?? []).map((run) => run.length),
+  );
+  const fence = "`".repeat(Math.max(3, longest + 1));
+  return `Spec revision since review round ${previous.round}:\n${fence}diff\n${patch}${fence}`;
+}
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : "Execution checkpoint failed";
@@ -464,27 +499,36 @@ export function registerExecutionLedger(
     let choice: string | undefined;
     round.resolving = true;
     try {
+      const revision = revisionText(
+        readSpecLog(spec.absLogPath),
+        round,
+        spec.content,
+      );
+      const sections = [revision];
       if (!round.limit) {
         const summary = findings.map(
           (finding) =>
             `- [${finding.severity}] ${finding.target}: ${finding.why} → ${finding.change}`,
         );
+        sections.push(
+          `Spec review of ${round.specPath} (round ${round.round}): ${findings.length} findings\n${summary.join("\n")}`,
+        );
+      }
+      const shown = sections.filter(Boolean).join("\n\n");
+      // Transcript record. Pi appends it only after this tool call ends, so
+      // the prompts below carry the same text as their preview.
+      if (shown) {
         pi.sendMessage(
-          {
-            customType: REVIEW_SPEC_SHOWN,
-            content: `Spec review of ${round.specPath} (round ${round.round}): ${findings.length} findings\n${summary.join("\n")}`,
-            display: true,
-          },
+          { customType: REVIEW_SPEC_SHOWN, content: shown, display: true },
           { triggerTurn: false },
         );
       }
       for (const { slot, question } of questions) {
-        const answer = await ctx.ui.select(
-          question.question,
-          question.options,
-          {
-            signal,
-          },
+        const answer = await askReview(
+          ctx,
+          shown,
+          { title: question.question, options: question.options, custom: true },
+          signal,
         );
         if (answer === undefined) {
           throw new Error("Spec review cancelled; nothing recorded");
@@ -500,14 +544,18 @@ export function registerExecutionLedger(
           answer,
         });
       }
-      choice = await ctx.ui.select(
-        round.limit
-          ? `Spec review round limit reached for ${round.specPath}. Accept as is or stop?`
-          : `Spec review of ${round.specPath}: ${findings.length} findings (shown above). Accept as reviewed or revise?`,
-        round.limit
-          ? ["Accept as is", "Stop"]
-          : ["Accept as reviewed", "Revise"],
-        { signal },
+      choice = await askReview(
+        ctx,
+        shown,
+        {
+          title: round.limit
+            ? `Spec review round limit reached for ${round.specPath}. Accept as is or stop?`
+            : `Spec review of ${round.specPath}: ${findings.length} findings. Accept as reviewed or revise?`,
+          options: round.limit
+            ? ["Accept as is", "Stop"]
+            : ["Accept as reviewed", "Revise"],
+        },
+        signal,
       );
       if (choice === undefined) {
         throw new Error("Spec review cancelled; nothing recorded");
@@ -538,6 +586,7 @@ export function registerExecutionLedger(
         decision,
         answers,
         findings: findings.length,
+        content: spec.content,
       },
     ]);
     reviewRounds.delete(key);

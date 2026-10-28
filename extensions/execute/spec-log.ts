@@ -133,6 +133,10 @@ export const SpecLogEventSchema = Type.Union([
         ),
       ),
       findings: Type.Integer({ minimum: 0 }),
+      // Reviewed Spec text, so a later round can show the revision diff.
+      // Optional only so pre-diff logs still parse (persisted-state reason).
+      // Remove the Optional when no pre-diff log remains under .pi/specs/.
+      content: Type.Optional(Type.String()),
     },
     options,
   ),
