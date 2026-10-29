@@ -174,30 +174,31 @@ describe("code-improvement commands", () => {
     expect(message).toContain("read-only plan, no code changes");
   });
 
-  it("requires explorer-first architecture review", () => {
+  it("delegates architecture exploration only for broad scope", () => {
     const message =
       buildImproveCodebaseArchitectureCommandMessage("src/domain");
 
     expect(message).toContain(
-      'The first substantive action must be a blocking `subagent({agent: "explorer", task})` call.',
+      'Delegate exploration to blocking `subagent({agent: "explorer", task})` calls only when the scope is broad: no scope instruction, or a scope that spans multiple unfamiliar Modules.',
     );
     expect(message).toContain(
-      'Immediately use blocking `subagent({agent: "explorer", task})` to inspect the requested scope.',
+      "For a narrow scope that direct reads can cover, explore in the main session.",
     );
     expect(message).toContain(
-      "Use direct tool reads only after the explorer-first step, to verify specific findings.",
+      "**Narrow scope:** inspect durable context, then read the scoped files directly in the main session.",
     );
+    expect(message).not.toContain("The first substantive action must be");
     expect(message).toContain(
       "architecture friction, shallow Modules, coupling across Seams, testing pain, domain vocabulary, and relevant ADR constraints",
     );
     expect(message).toContain(
-      "Wait for the explorer report before main-session verification and synthesis.",
+      "Wait for every explorer report before main-session verification and synthesis",
     );
     expect(message).toContain(
       "Children are fresh and do not inherit the parent conversation.",
     );
     expect(message).toContain(
-      "If delegation is unavailable, report the blocker and stop",
+      "If delegation is unavailable for a broad scope, report the blocker and stop",
     );
     expect(message).not.toMatch(
       /`Agent`|subagent_type|max_turns|TaskCreate|TaskUpdate/,
