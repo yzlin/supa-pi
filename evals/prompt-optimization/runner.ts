@@ -407,25 +407,6 @@ const agentToolSchema = Type.Object({
   subagent_type: Type.Optional(Type.String()),
 });
 
-const agentTool: AgentTool<typeof agentToolSchema> = {
-  name: "Agent",
-  label: "Agent",
-  description:
-    "Delegate one bounded analysis task to a deterministic eval worker.",
-  parameters: agentToolSchema,
-  execute(_toolCallId, params) {
-    return Promise.resolve({
-      content: [
-        {
-          type: "text" as const,
-          text: `Worker result for ${params.subagent_type ?? "general"}: src/math.ts returns subtraction instead of addition; verify with bun test tests/math.case.ts.`,
-        },
-      ],
-      details: {},
-    });
-  },
-};
-
 const webSearchTool: AgentTool = {
   name: "web_search",
   label: "Web search",
@@ -443,6 +424,31 @@ const webSearchTool: AgentTool = {
     });
   },
 };
+
+function createAgentTool(
+  response: EvalCase["agentResponse"],
+): AgentTool<typeof agentToolSchema> {
+  return {
+    name: "Agent",
+    label: "Agent",
+    description:
+      "Delegate one bounded analysis task to a deterministic eval worker.",
+    parameters: agentToolSchema,
+    execute(_toolCallId, params) {
+      return Promise.resolve({
+        content: [
+          {
+            type: "text" as const,
+            text:
+              response ??
+              `Worker result for ${params.subagent_type ?? "general"}: src/math.ts returns subtraction instead of addition; verify with bun test tests/math.case.ts.`,
+          },
+        ],
+        details: {},
+      });
+    },
+  };
+}
 
 const askSchema = Type.Object({
   questions: Type.Array(
@@ -589,9 +595,11 @@ function createTools(workspace: string, evalCase: EvalCase): AgentTool[] {
   const builtIns = [...builtInsByName.values()].filter((tool) =>
     names.includes(tool.name as EvalCase["tools"][number]),
   );
-  const extras = [agentTool, webSearchTool, fetchContentTool].filter((tool) =>
-    names.includes(tool.name as EvalCase["tools"][number]),
-  );
+  const extras = [
+    createAgentTool(evalCase.agentResponse),
+    webSearchTool,
+    fetchContentTool,
+  ].filter((tool) => names.includes(tool.name as EvalCase["tools"][number]));
   const askTools = evalCase.askResponse
     ? [createAskTool(evalCase.askResponse)]
     : [];

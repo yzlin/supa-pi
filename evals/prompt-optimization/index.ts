@@ -23,6 +23,12 @@ export const CORE_EVAL_BASE_PROMPT = `You are an expert coding assistant operati
 
 Work inside the provided workspace. Inspect before editing. Make the smallest complete change. Preserve safety and type correctness. Verify changed behavior. Lead with the result and retain concrete evidence.`;
 export type CheckDomain = (typeof CHECK_DOMAINS)[number];
+const CORE_PROMPT_PATH = "extensions/core-prompt/prompt.md";
+// Command prompts reach the main session on top of the core prompt; only the
+// command file varies between arms.
+const COMMAND_PROMPT_PATHS = new Set([
+  "extensions/code-improvement/IMPROVE-CODEBASE-ARCHITECTURE.md",
+]);
 const REPOSITORY_ROOT = fileURLToPath(new URL("../..", import.meta.url));
 
 const CASE_ID_PATTERN = /^[a-z0-9][a-z0-9_-]*$/;
@@ -166,6 +172,8 @@ export interface EvalCase {
   task: string;
   tools: ToolName[];
   askResponse?: AskResponse;
+  /** Fixed text returned by the stub `Agent` tool; requires `Agent` in tools. */
+  agentResponse?: string;
   checks: EvalCheck[];
 }
 
@@ -545,6 +553,7 @@ export function parseCorpus(value: unknown): EvalCorpus {
       caseValue.promptPath !== "skills/e2e-testing/SKILL.md" &&
       caseValue.promptPath !== "skills/context-docs/SKILL.md" &&
       caseValue.promptPath !== "AGENTS.global.md" &&
+      !COMMAND_PROMPT_PATHS.has(caseValue.promptPath) &&
       !caseValue.promptPath.startsWith("agents/")
     ) {
       throw new Error(`${label}.promptPath must target a SupaPi prompt`);
@@ -597,6 +606,18 @@ export function parseCorpus(value: unknown): EvalCorpus {
         `${label} must configure askResponse exactly when ask is enabled`,
       );
     }
+    if (
+      caseValue.agentResponse !== undefined &&
+      !(
+        typeof caseValue.agentResponse === "string" &&
+        caseValue.agentResponse.trim().length > 0 &&
+        (caseValue.tools as unknown[]).includes("Agent")
+      )
+    ) {
+      throw new Error(
+        `${label}.agentResponse must be non-empty text with Agent enabled`,
+      );
+    }
 
     return {
       id: caseValue.id,
@@ -606,6 +627,9 @@ export function parseCorpus(value: unknown): EvalCorpus {
       task: caseValue.task,
       tools: caseValue.tools as ToolName[],
       askResponse: caseValue.askResponse as AskResponse | undefined,
+      ...(caseValue.agentResponse === undefined
+        ? {}
+        : { agentResponse: caseValue.agentResponse as string }),
       checks: caseValue.checks.map((check, checkIndex) =>
         parseCheck(check, `${label}.checks[${checkIndex}]`),
       ),
@@ -771,6 +795,16 @@ export async function loadPromptPair(
 export function composePrompt(promptPath: string, content: string): string {
   if (promptPath === "extensions/core-prompt/prompt.md") {
     return `${CORE_EVAL_BASE_PROMPT}\n\n${content}`;
+  }
+  if (COMMAND_PROMPT_PATHS.has(promptPath)) {
+    const core = readStableContainedFile(REPOSITORY_ROOT, CORE_PROMPT_PATH)
+      .toString("utf8")
+      .trim();
+    return [
+      CORE_EVAL_BASE_PROMPT,
+      core,
+      `# Active command prompt\n\n${content.trim()}`,
+    ].join("\n\n");
   }
   if (promptPath === "AGENTS.global.md") {
     // Global AGENTS is the only varied layer. Core prompt and the preloaded

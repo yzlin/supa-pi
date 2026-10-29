@@ -16,6 +16,9 @@ bun run eval:prompts
 # Compare exact models
 bun run eval:prompts -- --model openai-codex/gpt-5.6-sol --candidate-model openai-codex/gpt-6-astra --thinking high --repetitions 3
 
+# Use a model from an extension-registered provider (for example Claude Code)
+bun run eval:prompts -- --extension ../pi-claude-code --model claude-code/claude-opus-5-5 --case architecture-narrow-scope --repetitions 2
+
 # Compare service tiers
 bun run eval:prompts -- --compare-service-tier --thinking high --case core-orchestration --repetitions 4
 ```
@@ -38,6 +41,10 @@ The committed corpus covers explanation, focused fixes, multi-file implementatio
 `AGENTS.global.md` cases compose a layered prompt: the eval base, the varied global AGENTS text, the working-tree core prompt, and the working-tree `plain-report` skill body, preloaded. Only the global AGENTS layer differs between arms.
 
 A case may set `history`: user and assistant text turns, alternating and ending with assistant. The runner inserts them before the task and attributes assistant turns to the evaluated model.
+
+Command-prompt cases (`extensions/code-improvement/IMPROVE-CODEBASE-ARCHITECTURE.md`) compose the eval base, the working-tree core prompt, and the varied command prompt. Only the command prompt differs between arms.
+
+Cases that enable the stub `Agent` tool may set `agentResponse`: the fixed worker report that tool returns. Without it, the tool returns the default math-defect report. Paired broad/narrow cases then score whether the prompt delegates only when scope justifies it.
 
 Checks score independent `task`, `tests`, `evidence`, and `quality` domains. The `plainReport` check scores the final output with `evals/plain-report/lint.ts`; it passes at the 80% clean-sentence target with no `telegraph` warning. Supported checks include output and file assertions, tool-call ordering/counts, approval gates, and workspace immutability. Efficiency metrics are reported separately, and no LLM judge is used.
 

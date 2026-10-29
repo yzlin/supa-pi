@@ -419,6 +419,69 @@ describe("runVariant", () => {
     expect(result.metrics).toMatchObject({ turns: 2, toolCalls: 1 });
   });
 
+  it("returns the case-configured Agent worker response", async () => {
+    const model = modelRegistry.find("openai", "gpt-4o");
+    if (!model) {
+      throw new Error("test model is unavailable");
+    }
+    let providerCall = 0;
+    const result = await runVariant({
+      evalCase: {
+        id: "agent-response-run",
+        workload: "codebase exploration",
+        promptPath: "extensions/core-prompt/prompt.md",
+        task: "Survey the repository.",
+        tools: ["Agent"],
+        agentResponse: "Explorer report: src/search.ts sorts items per query.",
+        checks: [
+          { type: "toolCalled", name: "Agent", domain: "task", weight: 1 },
+        ],
+      },
+      variant: "candidate",
+      repetition: 1,
+      promptContent: "Delegate broad surveys.",
+      promptSha256: "candidate-hash",
+      fixturePath,
+      model,
+      thinking: "low",
+      timeoutMs: 5000,
+      maxTurns: 3,
+      getApiKey: () => Promise.resolve("test-key"),
+      streamFn: (selectedModel) => {
+        providerCall += 1;
+        if (providerCall === 1) {
+          return createMessageStream(
+            createMessage(
+              selectedModel,
+              [
+                {
+                  type: "toolCall",
+                  id: "agent-1",
+                  name: "Agent",
+                  arguments: { prompt: "Survey src/." },
+                },
+              ],
+              "toolUse",
+            ),
+          );
+        }
+        return createMessageStream(
+          createMessage(selectedModel, [
+            { type: "text", text: "src/search.ts re-sorts per query." },
+          ]),
+        );
+      },
+    });
+
+    expect(result.toolCalls).toEqual([
+      expect.objectContaining({
+        name: "Agent",
+        isError: false,
+        resultText: "Explorer report: src/search.ts sorts items per query.",
+      }),
+    ]);
+  });
+
   it("records an expected red bash result for exact reproduction scoring", async () => {
     const model = modelRegistry.find("openai", "gpt-4o");
     if (!model) {

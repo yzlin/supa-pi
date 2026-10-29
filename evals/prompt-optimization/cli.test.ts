@@ -193,6 +193,17 @@ describe("parseCliOptions", () => {
     });
   });
 
+  it("collects repeated provider extension paths", () => {
+    expect(
+      parseCliOptions(["--extension", "../a", "--extension", "../b"])
+        .extensionPaths,
+    ).toEqual(["../a", "../b"]);
+    expect(parseCliOptions([]).extensionPaths).toEqual([]);
+    expect(() => parseCliOptions(["--extension"])).toThrow(
+      "--extension requires a path",
+    );
+  });
+
   it("parses an exact model comparison", () => {
     const options = parseCliOptions([
       "--model",

@@ -8,6 +8,7 @@ import { fileURLToPath } from "node:url";
 import type { ThinkingLevel } from "@earendil-works/pi-agent-core";
 import {
   ModelRegistry,
+  discoverAndLoadExtensions,
   ModelRuntime,
   resolveCliModel,
 } from "@earendil-works/pi-coding-agent";
@@ -37,6 +38,7 @@ const DEFAULT_MAX_TURNS = 20;
 
 interface CliOptions {
   caseIds: string[];
+  extensionPaths: string[];
   dryRun: boolean;
   help: boolean;
   model: string;
@@ -105,6 +107,32 @@ interface EvalSummary {
   cases: Record<string, AggregateDelta>;
 }
 
+async function registerExtensionProviders(
+  modelRuntime: ModelRuntime,
+  extensionPaths: string[],
+  cwd: string,
+): Promise<void> {
+  if (extensionPaths.length === 0) {
+    return;
+  }
+  // Discovery also loads project and global extension dirs. Only their
+  // providers are registered, which matters only on a provider-id collision.
+  const loaded = await discoverAndLoadExtensions(extensionPaths, cwd);
+  if (loaded.errors.length > 0) {
+    throw new Error(
+      `extension load failed: ${loaded.errors.map(({ path, error }) => `${path}: ${error}`).join("; ")}`,
+    );
+  }
+  const { runtime } = loaded;
+  for (const { name, config } of runtime.pendingProviderRegistrations) {
+    modelRuntime.registerProvider(name, config);
+  }
+  for (const { provider } of runtime.pendingNativeProviderRegistrations) {
+    modelRuntime.registerNativeProvider(provider);
+  }
+  await modelRuntime.refresh({ allowNetwork: true });
+}
+
 function parsePositiveInteger(value: string | undefined, flag: string): number {
   const number = Number(value);
   if (!Number.isInteger(number) || number <= 0) {
@@ -116,6 +144,7 @@ function parsePositiveInteger(value: string | undefined, flag: string): number {
 export function parseCliOptions(args: string[]): CliOptions {
   const options: CliOptions = {
     caseIds: [],
+    extensionPaths: [],
     dryRun: false,
     help: false,
     model: DEFAULT_MODEL,
@@ -192,6 +221,13 @@ export function parseCliOptions(args: string[]): CliOptions {
         break;
       case "--help":
         options.help = true;
+        break;
+      case "--extension":
+        if (!value) {
+          throw new Error("--extension requires a path");
+        }
+        options.extensionPaths.push(value);
+        index += 1;
         break;
       default:
         throw new Error(`unknown option: ${flag}`);
@@ -831,7 +867,7 @@ export async function main(): Promise<void> {
   const options = parseCliOptions(process.argv.slice(2));
   if (options.help) {
     process.stdout.write(
-      "Usage: bun run eval:prompts -- [options]\n\nOptions:\n  --case <id> (repeatable)\n  --model <provider/model> (baseline in model comparison)\n  --candidate-model <provider/model> (compare exact models)\n  --thinking <level>\n  --candidate-thinking <level>\n  --compare-service-tier\n  --repetitions <count>\n  --timeout-ms <milliseconds>\n  --max-turns <count>\n  --dry-run (offline approval preview; no model calls or artifacts)\n",
+      "Usage: bun run eval:prompts -- [options]\n\nOptions:\n  --case <id> (repeatable)\n  --model <provider/model> (baseline in model comparison)\n  --candidate-model <provider/model> (compare exact models)\n  --extension <path> (repeatable; load a Pi extension that registers a model provider)\n  --thinking <level>\n  --candidate-thinking <level>\n  --compare-service-tier\n  --repetitions <count>\n  --timeout-ms <milliseconds>\n  --max-turns <count>\n  --dry-run (offline approval preview; no model calls or artifacts)\n",
     );
     return;
   }
@@ -930,6 +966,11 @@ export async function main(): Promise<void> {
   }
 
   const modelRuntime = await ModelRuntime.create();
+  await registerExtensionProviders(
+    modelRuntime,
+    options.extensionPaths,
+    repositoryRoot,
+  );
   const modelRegistry = new ModelRegistry(modelRuntime);
   type EvalModel = NonNullable<ReturnType<typeof resolveCliModel>["model"]>;
   let baselineModel: EvalModel;
@@ -1004,6 +1045,14 @@ export async function main(): Promise<void> {
         timeoutMs: options.timeoutMs,
         maxTurns: options.maxTurns,
         getApiKey: (provider) => modelRegistry.getApiKeyForProvider(provider),
+        // Extension providers live only in this runtime, not pi-ai's global
+        // API registry that the agent loop streams through by default.
+        ...(options.extensionPaths.length > 0
+          ? {
+              streamFn: (model, context, streamOptions) =>
+                modelRuntime.streamSimple(model, context, streamOptions),
+            }
+          : {}),
       }),
     );
   }

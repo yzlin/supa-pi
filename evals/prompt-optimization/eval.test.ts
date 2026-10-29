@@ -200,6 +200,33 @@ describe("parseCorpus", () => {
     }
   });
 
+  it("accepts agentResponse only with the Agent tool", () => {
+    const evalCase = {
+      id: "agent-response",
+      workload: "codebase exploration",
+      promptPath:
+        "extensions/code-improvement/IMPROVE-CODEBASE-ARCHITECTURE.md",
+      task: "Review.",
+      tools: ["read", "Agent"],
+      agentResponse: "Explorer report.",
+      checks: [
+        { type: "toolCalled", name: "Agent", domain: "task", weight: 1 },
+      ],
+    };
+
+    expect(
+      parseCorpus({ version: 1, cases: [evalCase] }).cases[0]?.agentResponse,
+    ).toBe("Explorer report.");
+    for (const invalid of [
+      { ...evalCase, tools: ["read"] },
+      { ...evalCase, agentResponse: " " },
+    ]) {
+      expect(() => parseCorpus({ version: 1, cases: [invalid] })).toThrow(
+        "agentResponse must be non-empty text with Agent enabled",
+      );
+    }
+  });
+
   it("rejects unlisted skill prompts", () => {
     expect(() =>
       parseCorpus({
@@ -391,6 +418,7 @@ describe("committed corpus", () => {
       "skills/e2e-testing/SKILL.md",
       "skills/context-docs/SKILL.md",
       "AGENTS.global.md",
+      "extensions/code-improvement/IMPROVE-CODEBASE-ARCHITECTURE.md",
     );
     expect(coveredPaths).toEqual(new Set(expectedPaths));
   });
@@ -2374,6 +2402,23 @@ describe("composePrompt", () => {
     );
     expect(prompt).toContain("# Loaded skill: plain-report\n\n# Plain Report");
     expect(prompt).not.toContain("name: plain-report");
+  });
+
+  it("layers command prompts on the working-tree core prompt", () => {
+    const prompt = composePrompt(
+      "extensions/code-improvement/IMPROVE-CODEBASE-ARCHITECTURE.md",
+      "# Command\nExplore when broad.",
+    );
+    const core = readFileSync(
+      join(moduleDirectory, "../../extensions/core-prompt/prompt.md"),
+      "utf8",
+    ).trim();
+
+    expect(prompt).toStartWith(CORE_EVAL_BASE_PROMPT);
+    expect(prompt).toContain(core);
+    expect(prompt).toEndWith(
+      "# Active command prompt\n\n# Command\nExplore when broad.",
+    );
   });
 
   it("strips diagnose skill frontmatter while retaining its body", () => {

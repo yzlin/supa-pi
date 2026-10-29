@@ -126,6 +126,83 @@
       ]
     },
     {
+      "id": "architecture-narrow-scope",
+      "workload": "codebase exploration",
+      "promptPath": "extensions/code-improvement/IMPROVE-CODEBASE-ARCHITECTURE.md",
+      "task": "Scope instruction: src/format.ts",
+      "tools": ["read", "grep", "find", "ls", "Agent"],
+      "agentResponse": "Explorer report: src/format.ts formatName uses three single-use intermediate variables; unusedLegacyFormatter has no callers.",
+      "checks": [
+        {
+          "type": "toolNotCalled",
+          "name": "Agent",
+          "domain": "task",
+          "weight": 3
+        },
+        {
+          "type": "toolCallMatches",
+          "name": "read",
+          "args": { "path": "src/format.ts" },
+          "resultPattern": "unusedLegacyFormatter",
+          "isError": false,
+          "domain": "evidence",
+          "weight": 2
+        },
+        {
+          "type": "outputIncludes",
+          "value": "src/format.ts",
+          "domain": "evidence",
+          "weight": 1
+        },
+        {
+          "type": "outputMatches",
+          "pattern": "unusedLegacyFormatter|nonEmptyValues|joinedValues|intermediate",
+          "flags": "i",
+          "domain": "quality",
+          "weight": 1
+        },
+        {
+          "type": "workspaceUnchanged",
+          "domain": "tests",
+          "weight": 3
+        }
+      ]
+    },
+    {
+      "id": "architecture-broad-scope",
+      "workload": "codebase exploration",
+      "promptPath": "extensions/code-improvement/IMPROVE-CODEBASE-ARCHITECTURE.md",
+      "task": "Scope instruction: No explicit scope provided. Start broad, then narrow based on explorer findings.",
+      "tools": ["read", "grep", "find", "ls", "Agent"],
+      "agentResponse": "Explorer report: CONTEXT.md, CONTEXT-MAP.md, and docs/adr/ are missing. src/search.ts rankMatches re-sorts and mutates items inside the per-query loop. src/auth.ts canAccessAdminPanel lets debug bypass the README admin-role rule. src/format.ts has a dead unusedLegacyFormatter.",
+      "checks": [
+        {
+          "type": "toolCalled",
+          "name": "Agent",
+          "domain": "task",
+          "weight": 3
+        },
+        {
+          "type": "outputIncludes",
+          "value": "src/search.ts",
+          "domain": "evidence",
+          "weight": 1
+        },
+        {
+          "type": "outputMatches",
+          "pattern": "missing context|CONTEXT\\.md",
+          "flags": "i",
+          "domain": "quality",
+          "weight": 1
+        },
+        {
+          "type": "workspaceUnchanged",
+          "domain": "tests",
+          "weight": 3
+        }
+      ]
+    },
+    {
       "id": "readiness-action-fix",
       "workload": "focused bug fix",
       "promptPath": "extensions/core-prompt/prompt.md",
