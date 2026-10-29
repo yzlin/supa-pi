@@ -200,10 +200,23 @@ function harness(branch: unknown[] = [], cwd = "/workspace") {
       isError,
     });
   }
+  // Pi appends a custom message sent during a tool call only at turn end.
+  let flushed = 0;
+  function endTurn() {
+    for (const message of sent.slice(flushed)) {
+      const { customType, content } = message as {
+        customType: string;
+        content: unknown;
+      };
+      branch.push({ type: "custom_message", customType, content });
+    }
+    flushed = sent.length;
+  }
   return {
     getAbortCount: () => abortCount,
     tools,
     ctx,
+    endTurn,
     hooks,
     branch,
     messages,
@@ -1254,11 +1267,20 @@ describe("Spec runtime", () => {
             specPath: h.specPath,
             focus,
           });
-        const resolveReview = (token: string) =>
+        const resolveStep = (token: string) =>
           h.checkpoint(token, {
             action: "resolve_review",
             specPath: h.specPath,
           });
+        // Present, let Pi append the message at turn end, then ask.
+        const resolveReview = async (token: string) => {
+          const first = await resolveStep(token);
+          if (!first.review?.presented) {
+            return first;
+          }
+          h.endTurn();
+          return resolveStep(token);
+        };
         const reviewer = (
           prefix: string,
           callId: string,
@@ -1275,7 +1297,15 @@ describe("Spec runtime", () => {
               ...input,
             },
           });
-        return { ...h, prompts, answers, review, resolveReview, reviewer };
+        return {
+          ...h,
+          prompts,
+          answers,
+          review,
+          resolveStep,
+          resolveReview,
+          reviewer,
+        };
       }
       async function reviewedRound(
         h: ReturnType<typeof roundHarness>,
@@ -1691,13 +1721,16 @@ describe("Spec runtime", () => {
       });
 
       function tuiDriver(h: ReturnType<typeof roundHarness>) {
-        // Drives the TUI dialog: renders it, then feeds the next `scripts` keys.
-        const screens: string[] = [];
+        // Drives the shared ask dialog: renders it, then feeds the next
+        // `scripts` keys. Each screen is captured after every key.
+        const screens: string[][] = [];
         const scripts: string[][] = [];
         const theme = {
           bold: (s: string) => s,
           fg: (_t: string, s: string) => s,
+          bg: (_t: string, s: string) => s,
         };
+        let customCalls = 0;
         Object.assign(h.ctx, { mode: "tui" });
         Object.assign(h.ctx.ui, {
           custom: (
@@ -1712,48 +1745,90 @@ describe("Spec runtime", () => {
             },
           ) =>
             new Promise((resolve) => {
+              customCalls++;
               const tui = {
                 requestRender: () => undefined,
                 terminal: { rows: 60 },
               };
-              const component = factory(tui, theme, undefined, resolve);
-              screens.push(component.render(100).join("\n"));
+              let settled = false;
+              const component = factory(tui, theme, undefined, (value) => {
+                settled = true;
+                resolve(value);
+              });
+              const shots = [component.render(100).join("\n")];
               for (const key of scripts.shift() ?? ["\u001b"]) {
+                if (settled) {
+                  break;
+                }
                 component.handleInput(key);
+                shots.push(component.render(100).join("\n"));
               }
-              screens.push(component.render(100).join("\n"));
+              screens.push(shots);
             }),
+          select: () => {
+            throw new Error("TUI path must not use ui.select");
+          },
           input: () => {
             throw new Error("TUI path must not use ui.input");
           },
         });
-        return { screens, scripts };
+        return { screens, scripts, customCalls: () => customCalls };
       }
 
-      it("TUI review prompts show the review text and accept a typed answer", async () => {
+      it("presents the review text in one call and asks only in the next", async () => {
         const h = roundHarness();
-        const { screens, scripts } = tuiDriver(h);
+        const { customCalls } = tuiDriver(h);
         const { token } = await reviewedRound(h);
-        // q1: move to "Type something.", open the field, type, submit.
+        const first = await h.resolveStep(token);
+        expect(first.review).toMatchObject({ presented: true, round: 1 });
+        expect(customCalls()).toBe(0);
+        expect(h.sent).toEqual([
+          expect.objectContaining({ customType: "spec-review", display: true }),
+        ]);
+        expect(readSpecLog(h.logPath)).toEqual([]);
+        // Before Pi appends the message, asking is refused.
+        expect(h.resolveStep(token)).rejects.toThrow("not in the transcript");
+        expect(customCalls()).toBe(0);
+        h.endTurn();
+        expect(h.resolveStep(token)).rejects.toThrow("Spec review cancelled");
+        await Bun.sleep(0);
+        expect(customCalls()).toBe(1);
+        // Still one message: a retry after cancel does not resend it.
+        expect(h.sent).toHaveLength(1);
+      });
+
+      it("TUI asks every question and the gate in the shared ask dialog and accepts a typed answer", async () => {
+        const h = roundHarness();
+        const { screens, scripts, customCalls } = tuiDriver(h);
+        const { token } = await reviewedRound(h);
+        // Q1: move to "Type something.", open the field, type, submit.
+        // Q2: pick "Runtime". Decision: pick "Accept as reviewed".
+        // Then confirm on the ask Submit tab.
         scripts.push([
           "\u001b[B",
           "\u001b[B",
           "\r",
           ..."Merge DC-3".split(""),
           "\r",
+          "\u001b[B",
+          "\r",
+          "\r",
+          "\r",
         ]);
-        scripts.push(["\u001b[B", "\r"]);
-        scripts.push(["\r"]);
         const resolved = await h.resolveReview(token);
+        expect(customCalls()).toBe(1);
         expect(h.prompts).toEqual([]);
-        const first = screens[0] ?? "";
-        expect(first).toContain("Plan step 2 races step 3");
-        expect(first).toContain("DC-2 is not testable");
+        const shots = screens[0] ?? [];
+        const first = shots[0] ?? "";
+        // The ask tab bar names every question, then the Submit tab.
+        expect(first).toContain("Q1");
+        expect(first).toContain("Decision");
         expect(first).toContain("Split DC-3?");
         expect(first).toContain("Type something.");
-        const gate = screens[4] ?? "";
-        expect(gate).toContain("Accept as reviewed");
-        expect(gate).toContain("Plan step 2 races step 3");
+        // The review text lives in the transcript, not in the dialog.
+        expect(first).not.toContain("Plan step 2 races step 3");
+        const gate = shots.find((shot) => shot.includes("Accept as reviewed"));
+        expect(gate).toBeDefined();
         expect(gate).not.toContain("Type something.");
         expect(resolved).toMatchObject({
           review: {
@@ -1766,7 +1841,7 @@ describe("Spec runtime", () => {
         });
       });
 
-      it("TUI limit gate shows the revision diff before any answer", async () => {
+      it("TUI limit gate is a single ask question after the revision diff message", async () => {
         const h = roundHarness();
         const { screens, scripts } = tuiDriver(h);
         const previous = spec("Old plan", many);
@@ -1778,10 +1853,10 @@ describe("Spec runtime", () => {
         await h.review(token);
         scripts.push(["\u001b[B", "\r"]);
         const resolved = await h.resolveReview(token);
-        const gate = screens[0] ?? "";
-        expect(gate).toContain("Spec revision since review round 2");
-        expect(gate).toContain("-Old plan");
-        expect(gate).toContain("+Plan");
+        const shown = JSON.stringify(h.branch);
+        expect(shown).toContain("Spec revision since review round 2");
+        expect(shown).toContain("-Old plan");
+        const gate = screens[0]?.[0] ?? "";
         expect(gate).toContain("Accept as is");
         expect(gate).not.toContain("Type something.");
         expect(resolved).toMatchObject({ review: { decision: "stop" } });
@@ -1792,6 +1867,7 @@ describe("Spec runtime", () => {
         tuiDriver(h);
         const { token } = await reviewedRound(h);
         expect(h.resolveReview(token)).rejects.toThrow("Spec review cancelled");
+        await Bun.sleep(0);
         expect(readSpecLog(h.logPath)).toEqual([]);
       });
 

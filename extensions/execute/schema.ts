@@ -269,6 +269,8 @@ export const CheckpointOutputSchema = Type.Object(
           round: Type.Integer({ minimum: 1 }),
           limit: Type.Boolean(),
           note: Type.Optional(text),
+          // resolve_review sent the review text; call it again to ask.
+          presented: Type.Optional(Type.Literal(true)),
           decision: Type.Optional(
             Type.Union([
               Type.Literal("accept"),

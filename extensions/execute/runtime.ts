@@ -93,6 +93,9 @@ interface ReviewRound {
   focus: string[];
   slots: ReviewSlot[];
   resolving: boolean;
+  // The review text was sent as a spec-review message. Pi appends it only
+  // after the sending tool call ends, so the prompts need a second call.
+  presented: boolean;
 }
 type ReviewCheckpoint = Extract<
   Checkpoint,
@@ -454,14 +457,15 @@ export function registerExecutionLedger(
         focus: [...params.focus],
         slots: params.focus.map(() => ({ status: "pending", attempts: 0 })),
         resolving: false,
+        presented: false,
       };
       reviewRounds.set(key, round);
       return output(limit ? null : round.prefix, {
         round: round.round,
         limit,
         note: limit
-          ? "Spec review round limit reached (two reviewed hashes); no reviewers run. Call resolve_review so the user can accept as is or stop."
-          : `Dispatch exactly two subagent calls: agent spec-reviewer, the exact SpecReviewReportSchema, no cwd, the task starting with dispatchPrefix and one "${REVIEW_FOCUS_LABEL}<statement>" line per focus. Then call resolve_review.`,
+          ? "Spec review round limit reached (two reviewed hashes); no reviewers run. Call resolve_review, then call it again alone if it returns presented, so the user can accept as is or stop."
+          : `Dispatch exactly two subagent calls: agent spec-reviewer, the exact SpecReviewReportSchema, no cwd, the task starting with dispatchPrefix and one "${REVIEW_FOCUS_LABEL}<statement>" line per focus. Then call resolve_review; when it returns presented, call it again alone to ask the user.`,
       });
     }
     const round = reviewRounds.get(key);
@@ -496,57 +500,61 @@ export function registerExecutionLedger(
       question: string;
       answer: string;
     }> = [];
+    const revision = revisionText(
+      readSpecLog(spec.absLogPath),
+      round,
+      spec.content,
+    );
+    const sections = [revision];
+    if (!round.limit) {
+      const summary = findings.map(
+        (finding) =>
+          `- [${finding.severity}] ${finding.target}: ${finding.why} → ${finding.change}`,
+      );
+      sections.push(
+        `Spec review of ${round.specPath} (round ${round.round}): ${findings.length} findings\n${summary.join("\n")}`,
+      );
+    }
+    const shown = sections.filter(Boolean).join("\n\n");
+    if (shown && !round.presented) {
+      // Pi holds a custom message sent during a tool call until the turn
+      // ends, so this call only presents; the next call asks.
+      pi.sendMessage(
+        { customType: REVIEW_SPEC_SHOWN, content: shown, display: true },
+        { triggerTurn: false },
+      );
+      round.presented = true;
+      return output(null, {
+        round: round.round,
+        limit: round.limit,
+        presented: true,
+        note: "Review text sent to the transcript; Pi shows it after this call. Call resolve_review again, alone in a later tool call, to ask the user.",
+      });
+    }
+    if (
+      shown &&
+      !ctx.sessionManager
+        .getBranch()
+        .some(
+          (entry) =>
+            entry.type === "custom_message" &&
+            entry.customType === REVIEW_SPEC_SHOWN &&
+            entry.content === shown,
+        )
+    ) {
+      throw new Error(
+        "Spec review text is not in the transcript yet; call resolve_review again alone in a later tool call",
+      );
+    }
     let choice: string | undefined;
     round.resolving = true;
     try {
-      const revision = revisionText(
-        readSpecLog(spec.absLogPath),
-        round,
-        spec.content,
-      );
-      const sections = [revision];
-      if (!round.limit) {
-        const summary = findings.map(
-          (finding) =>
-            `- [${finding.severity}] ${finding.target}: ${finding.why} → ${finding.change}`,
-        );
-        sections.push(
-          `Spec review of ${round.specPath} (round ${round.round}): ${findings.length} findings\n${summary.join("\n")}`,
-        );
-      }
-      const shown = sections.filter(Boolean).join("\n\n");
-      // Transcript record. Pi appends it only after this tool call ends, so
-      // the prompts below carry the same text as their preview.
-      if (shown) {
-        pi.sendMessage(
-          { customType: REVIEW_SPEC_SHOWN, content: shown, display: true },
-          { triggerTurn: false },
-        );
-      }
-      for (const { slot, question } of questions) {
-        const answer = await askReview(
-          ctx,
-          shown,
-          { title: question.question, options: question.options, custom: true },
-          signal,
-        );
-        if (answer === undefined) {
-          throw new Error("Spec review cancelled; nothing recorded");
-        }
-        const focus = round.focus[slot];
-        if (focus === undefined) {
-          throw new Error(`Spec review focus missing for slot ${slot}`);
-        }
-        answers.push({
-          id: `${slot}:${question.id}`,
-          focus,
-          question: question.question,
-          answer,
-        });
-      }
-      choice = await askReview(
-        ctx,
-        shown,
+      const prompts = [
+        ...questions.map(({ question }) => ({
+          title: question.question,
+          options: question.options,
+          custom: true,
+        })),
         {
           title: round.limit
             ? `Spec review round limit reached for ${round.specPath}. Accept as is or stop?`
@@ -555,11 +563,25 @@ export function registerExecutionLedger(
             ? ["Accept as is", "Stop"]
             : ["Accept as reviewed", "Revise"],
         },
-        signal,
-      );
-      if (choice === undefined) {
+      ];
+      const picked = await askReview(ctx, prompts, signal);
+      if (picked === undefined) {
         throw new Error("Spec review cancelled; nothing recorded");
       }
+      for (const [index, { slot, question }] of questions.entries()) {
+        const focus = round.focus[slot];
+        const answer = picked[index];
+        if (focus === undefined || answer === undefined) {
+          throw new Error(`Spec review answer missing for slot ${slot}`);
+        }
+        answers.push({
+          id: `${slot}:${question.id}`,
+          focus,
+          question: question.question,
+          answer,
+        });
+      }
+      choice = picked.at(-1);
     } finally {
       round.resolving = false;
     }

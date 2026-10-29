@@ -18,7 +18,7 @@ Do not use it from background or non-interactive contexts. The tool returns an e
 
 - The public tool name is `ask`.
 - The public session statistics command is `/ask-stats`.
-- The implementation lives under `extensions/ask` and uses direct `Ask*` symbols.
+- The tool lives under `extensions/ask` and uses direct `Ask*` symbols. The picker UI (state, keys, render, text, types, and `showAskDialog`) lives in `extensions/shared/ask-ui`, so `/execute` Spec review uses the same dialog.
 - The tool and command do not register legacy aliases.
 - Persisted custom entry identifiers remain `questionnaire-*` for compatibility.
 - `/ask-stats` continues to read historical miss records and their `autoRedirected` and `redirectedAlready` fields.
@@ -82,7 +82,7 @@ Expanded cards hide unchosen options and internal ids and values. Expanded field
 
 ## Custom UI composition
 
-The Ask Extension opens its TUI directly through `ctx.ui.custom` after validation passes. Pi owns regular and fullscreen rendering composition, so the extension does not wrap or replace the rendering surface. Validation errors return the cancelled error envelope without opening the custom UI.
+The Ask Extension opens its TUI through `showAskDialog` (`extensions/shared/ask-ui/dialog.ts`), which calls `ctx.ui.custom`, after validation passes. An aborted tool signal cancels the open dialog. Pi owns regular and fullscreen rendering composition, so the extension does not wrap or replace the rendering surface. Validation errors return the cancelled error envelope without opening the custom UI. Internal callers may set `custom: false` on a question to drop the `Type something.` row; the `ask` tool schema does not accept that field, and the tool strips it.
 
 ## Keyboard behavior
 

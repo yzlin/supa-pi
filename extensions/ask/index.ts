@@ -7,23 +7,14 @@
 
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import {
-  Editor,
-  type EditorTheme,
   Text,
   truncateToWidth,
   wrapTextWithAnsi,
 } from "@earendil-works/pi-tui";
 import { Type } from "typebox";
 
-import { routeAskKey } from "./keys";
-import { renderAskRuntime } from "./render";
-import { createAskEnvelope } from "./response";
-import {
-  createAskRuntimeState,
-  isAllAnswered,
-  reduceAskRuntime,
-} from "./state";
-import { stripTerminalControls } from "./text";
+import { showAskDialog } from "../shared/ask-ui/dialog";
+import { stripTerminalControls } from "../shared/ask-ui/text";
 import {
   ASK_RESERVED_LABELS,
   ASK_RESERVED_VALUES,
@@ -31,15 +22,12 @@ import {
   type AskResult,
   type AskValidationErrorDetails,
   type AskValidationIssue,
-  CUSTOM_OPTION_LABEL,
-  CUSTOM_OPTION_VALUE,
-  NEXT_OPTION_LABEL,
-  NEXT_OPTION_VALUE,
   type Question,
   type QuestionInput,
-  type QuestionOption,
-  type RenderOption,
-} from "./types";
+} from "../shared/ask-ui/types";
+import { createAskEnvelope } from "./response";
+
+export { getRenderOptions } from "../shared/ask-ui/dialog";
 
 const CLARIFICATION_TRIGGER_REGEX =
   /\b(could you|can you|would you|do you want|would you prefer|do you prefer|which|what should|should i|any preference|please clarify|confirm)\b/i;
@@ -54,7 +42,7 @@ export type {
   QuestionInput,
   QuestionOption,
   RenderOption,
-} from "./types";
+} from "../shared/ask-ui/types";
 export {
   ASK_RESERVED_LABELS,
   ASK_RESERVED_VALUES,
@@ -62,7 +50,7 @@ export {
   CUSTOM_OPTION_VALUE,
   NEXT_OPTION_LABEL,
   NEXT_OPTION_VALUE,
-} from "./types";
+} from "../shared/ask-ui/types";
 
 interface AssistantTextBlock {
   type: string;
@@ -112,7 +100,7 @@ function getLegacyAskMissLogs(
     .map((entry) => entry.data as LegacyAskMissLog);
 }
 
-export { wrapAskText } from "./text";
+export { wrapAskText } from "../shared/ask-ui/text";
 
 // Schema
 const QuestionOptionSchema = Type.Object({
@@ -256,8 +244,10 @@ export function validateAskParams(
 export { createAskEnvelope } from "./response";
 
 function normalizeQuestion(question: QuestionInput, index: number): Question {
+  // `custom` is internal to shared callers; ask always offers free text.
+  const { custom: _custom, ...rest } = question;
   return {
-    ...question,
+    ...rest,
     label: question.label || `Q${index + 1}`,
   };
 }
@@ -305,31 +295,6 @@ function indentDetail(text: string, prefix: string): string {
     .split("\n")
     .map((line) => `${prefix}${line}`)
     .join("\n");
-}
-
-export function getRenderOptions(question: {
-  multiSelect?: boolean;
-  options: QuestionOption[];
-}): RenderOption[] {
-  if (question.multiSelect === true) {
-    return [
-      ...question.options,
-      {
-        value: NEXT_OPTION_VALUE,
-        label: NEXT_OPTION_LABEL,
-        isNext: true,
-      },
-    ];
-  }
-
-  return [
-    ...question.options,
-    {
-      value: CUSTOM_OPTION_VALUE,
-      label: CUSTOM_OPTION_LABEL,
-      isOther: true,
-    },
-  ];
 }
 
 export default function ask(pi: ExtensionAPI): void {
@@ -417,7 +382,7 @@ export default function ask(pi: ExtensionAPI): void {
     ],
     parameters: AskParams,
 
-    async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
+    async execute(_toolCallId, params, signal, _onUpdate, ctx) {
       if (!ctx.hasUI) {
         return errorResult(
           "Error: UI not available (running in non-interactive mode)",
@@ -433,154 +398,7 @@ export default function ask(pi: ExtensionAPI): void {
       }
 
       const questions = validation.questions.map(normalizeQuestion);
-      const result = await ctx.ui.custom<AskResult>((tui, theme, _kb, done) => {
-        let state = createAskRuntimeState();
-        let cachedLines: string[] | undefined;
-
-        const editorTheme: EditorTheme = {
-          borderColor: (s) => theme.fg("accent", s),
-          selectList: {
-            selectedPrefix: (t) => theme.fg("accent", t),
-            selectedText: (t) => theme.fg("accent", t),
-            description: (t) => theme.fg("muted", t),
-            scrollInfo: (t) => theme.fg("dim", t),
-            noMatch: (t) => theme.fg("warning", t),
-          },
-        };
-        const editor = new Editor(tui, editorTheme);
-
-        function refresh() {
-          cachedLines = undefined;
-          tui.requestRender();
-        }
-
-        function submit(cancelled: boolean) {
-          done({
-            questions,
-            answers: Array.from(state.answers.values()),
-            cancelled,
-          });
-        }
-
-        function currentQuestion(): Question | undefined {
-          return questions[state.currentTab];
-        }
-
-        function questionHasPreview(question: Question | undefined): boolean {
-          return (
-            question?.options.some((option) => option.preview !== undefined) ===
-            true
-          );
-        }
-
-        function canUsePreview(): boolean {
-          const question = currentQuestion();
-          return questionHasPreview(question);
-        }
-
-        function canUsePreviewNotes(): boolean {
-          const question = currentQuestion();
-          return (
-            question !== undefined &&
-            question.multiSelect !== true &&
-            questionHasPreview(question)
-          );
-        }
-
-        function currentOptions(): RenderOption[] {
-          const question = currentQuestion();
-          return question ? getRenderOptions(question) : [];
-        }
-
-        function applyEffect(
-          effect: ReturnType<typeof reduceAskRuntime>["effect"],
-        ) {
-          if (effect.type === "submit") {
-            submit(effect.cancelled);
-            return;
-          }
-          if (effect.type === "startInput" || effect.type === "clearInput") {
-            editor.setText("");
-          }
-          if (effect.type === "startNote") {
-            editor.setText(state.noteDrafts.get(effect.questionId) ?? "");
-          }
-          if (effect.type !== "none") {
-            refresh();
-          }
-        }
-
-        function dispatch(action: Parameters<typeof reduceAskRuntime>[1]) {
-          const reduced = reduceAskRuntime(state, action, questions);
-          state = reduced.state;
-          applyEffect(reduced.effect);
-        }
-
-        editor.onSubmit = (value) => {
-          if (state.notesMode && state.noteQuestionId) {
-            dispatch({
-              type: "saveNoteDraft",
-              questionId: state.noteQuestionId,
-              value,
-            });
-            return;
-          }
-          if (!state.inputQuestionId) {
-            return;
-          }
-          dispatch({
-            type: "saveCustomAnswer",
-            questionId: state.inputQuestionId,
-            value,
-          });
-        };
-
-        function handleInput(data: string) {
-          const action = routeAskKey({
-            data,
-            state,
-            questions,
-            options: currentOptions(),
-            allAnswered: isAllAnswered(questions, state.answers),
-            previewNotesEnabled: canUsePreviewNotes(),
-          });
-
-          if (!action) {
-            return;
-          }
-          if (action.type === "editor") {
-            editor.handleInput(data);
-            refresh();
-            return;
-          }
-          dispatch(action);
-        }
-
-        function render(width: number): string[] {
-          if (cachedLines) {
-            return cachedLines;
-          }
-
-          cachedLines = renderAskRuntime({
-            width,
-            theme,
-            questions,
-            state,
-            options: currentOptions(),
-            editor,
-            previewEnabled: canUsePreview(),
-          });
-          return cachedLines;
-        }
-
-        return {
-          render,
-          invalidate: () => {
-            cachedLines = undefined;
-          },
-          handleInput,
-        };
-      });
+      const result = await showAskDialog(ctx.ui, questions, signal);
 
       // Hosts that cannot show custom UI (e.g. subagent children) resolve
       // undefined; report it as the normal cancellation.

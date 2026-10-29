@@ -29,6 +29,8 @@ export interface QuestionInput {
   prompt: string;
   options: QuestionOption[];
   multiSelect?: boolean;
+  // Internal callers only: false drops the free-text row. Not in the ask schema.
+  custom?: boolean;
 }
 
 export interface Question extends QuestionInput {

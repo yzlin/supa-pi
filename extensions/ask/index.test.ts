@@ -2,6 +2,13 @@ import { describe, expect, it } from "bun:test";
 
 import { visibleWidth } from "@earendil-works/pi-tui";
 
+import { routeAskKey } from "../shared/ask-ui/keys";
+import { renderAskRuntime } from "../shared/ask-ui/render";
+import {
+  createAskRuntimeState,
+  reduceAskRuntime,
+} from "../shared/ask-ui/state";
+import { stripTerminalControlsUpTo } from "../shared/ask-ui/text";
 import ask, {
   CUSTOM_OPTION_LABEL,
   CUSTOM_OPTION_VALUE,
@@ -12,10 +19,6 @@ import ask, {
   validateAskParams,
   wrapAskText,
 } from "./index";
-import { routeAskKey } from "./keys";
-import { renderAskRuntime } from "./render";
-import { createAskRuntimeState, reduceAskRuntime } from "./state";
-import { stripTerminalControlsUpTo } from "./text";
 
 const PLAIN_THEME = {
   fg(_color: string, text: string): string {

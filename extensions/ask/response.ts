@@ -1,4 +1,4 @@
-import type { Answer, AskResult, Question } from "./types";
+import type { Answer, AskResult, Question } from "../shared/ask-ui/types";
 
 function createAnswerSummary(questions: Question[], answers: Answer[]): string {
   return answers
