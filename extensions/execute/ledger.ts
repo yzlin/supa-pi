@@ -281,6 +281,16 @@ export function validateLedger(input: unknown): ExecutionLedger {
       validateReport(item.report);
     }
     if (
+      item.executor === "main" &&
+      (!["running", "blocked", "completed"].includes(item.status) ||
+        !item.attemptId ||
+        item.toolCallId ||
+        item.runId ||
+        item.report)
+    ) {
+      throw new Error("Invalid main-executed attempt");
+    }
+    if (
       item.status === "pending" &&
       (item.attemptId ||
         item.toolCallId ||
@@ -323,7 +333,9 @@ export function validateLedger(input: unknown): ExecutionLedger {
     }
     if (
       item.status === "completed" &&
-      ((item.report ? item.report.status !== "done" : item.resumed !== true) ||
+      ((item.report
+        ? item.report.status !== "done"
+        : item.executor !== "main" && item.resumed !== true) ||
         !item.evidence.length ||
         item.blockers.length)
     ) {
@@ -358,6 +370,9 @@ export function validateLedger(input: unknown): ExecutionLedger {
     throw new Error(
       "Invalid active assignment count or overlapping write scopes",
     );
+  }
+  if (active.length > 1 && active.some((item) => item.executor === "main")) {
+    throw new Error("A main-executed attempt must run alone");
   }
   for (const key of ["attemptId", "toolCallId", "runId"] as const) {
     const values = input.assignments.flatMap((item) =>
@@ -507,7 +522,28 @@ export function transitionLedger(
     if (active.some((assignment) => scopesOverlap(item, assignment))) {
       throw new Error("Active write scopes overlap");
     }
-    return replaceAssignment(state, { ...item, status: "running", attemptId });
+    // Main's own attempt edits the shared checkout; it runs alone.
+    if (input.executor === "main" && active.length > 0) {
+      throw new Error(
+        "Main-executed attempts require no other running assignment",
+      );
+    }
+    if (input.executor === "main" && item.cwd?.startsWith("/")) {
+      throw new Error(
+        "Main-executed attempts cannot run outside the workspace",
+      );
+    }
+    if (active.some((assignment) => assignment.executor === "main")) {
+      throw new Error(
+        "A main-executed attempt is running; verify or block it first",
+      );
+    }
+    return replaceAssignment(state, {
+      ...item,
+      status: "running",
+      attemptId,
+      ...(input.executor === "main" ? { executor: "main" as const } : {}),
+    });
   }
   if (input.action === "block") {
     if (item.status === "completed") {
@@ -531,7 +567,15 @@ export function transitionLedger(
       if (item.attemptId !== input.attemptId) {
         throw new Error("Stale verification attempt");
       }
-      if (
+      if (item.executor === "main") {
+        // Main's own attempt has no child claim; the runtime gates verify on
+        // a successful check run after main's last edit in this attempt.
+        if (item.status !== "running") {
+          throw new Error(
+            "Main-executed verification requires a running attempt",
+          );
+        }
+      } else if (
         !item.report ||
         item.report.status !== "done" ||
         !["running", "blocked"].includes(item.status)

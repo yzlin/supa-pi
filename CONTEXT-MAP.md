@@ -13,6 +13,7 @@
 - `docs/adr/` — proposed, accepted, superseded, deprecated, or rejected tradeoff decisions.
 - `docs/adr/0001-local-unified-edit-dialect.md` — read before changing the tool-display edit schema, unified-edit dialect, edit mutation safety, compatibility policy, or the live reliability gate (status: proposed). Gate status and pilot results live in `evals/unified-edit-reliability/README.md`.
 - `docs/adr/0002-use-pi-fullscreen.md` — read before changing Pi version support, setup TUI defaults, fullscreen/regular compatibility, or pieditor viewport ownership.
+- `docs/adr/0003-main-executed-execute-attempts.md` — read before changing `/execute` start or verify rules, the `executor` ledger field, main-attempt guards, or when `/execute` delegates to children.
 
 ## Context notes
 

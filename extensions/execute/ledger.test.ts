@@ -35,7 +35,9 @@ function step(
 ) {
   return transitionLedger(state, { invocationId, ...input }, attemptId, resume);
 }
-function accepted(assignments = roots) {
+function accepted(
+  assignments: Array<(typeof roots)[number] & { cwd?: string }> = roots,
+) {
   return step(emptyLedger("session", invocationId), {
     action: "accept",
     plan: "Canonical brief",
@@ -1085,5 +1087,99 @@ describe("execution ledger", () => {
         restoreLedger([entry(first), entry(invalid)], "session"),
       ).toThrow();
     }
+  });
+});
+
+describe("main-executed attempts", () => {
+  const independent = [
+    roots[0]!,
+    { id: "b", task: "Implement B", scope: ["src/b"], dependencies: [] },
+  ];
+  function mainStarted(state = accepted(independent), assignmentId = "a") {
+    return step(
+      state,
+      { action: "start", assignmentId, executor: "main" },
+      `attempt-${assignmentId}`,
+    );
+  }
+
+  it("records main as executor and completes on main evidence without a child report", () => {
+    const started = mainStarted();
+    const item = started.assignments[0];
+    expect(item).toMatchObject({ status: "running", executor: "main" });
+    expect(item?.toolCallId).toBeNull();
+    const done = verified(started);
+    expect(done.assignments[0]).toMatchObject({
+      status: "completed",
+      executor: "main",
+      report: null,
+    });
+    expect(validateLedger(done)).toEqual(done);
+  });
+
+  it("runs alone: no main start beside a running child, no start beside a running main", () => {
+    const child = step(
+      accepted(independent),
+      { action: "start", assignmentId: "a" },
+      "attempt-a",
+    );
+    expect(() => mainStarted(child, "b")).toThrow(
+      "Main-executed attempts require no other running assignment",
+    );
+    const main = mainStarted();
+    expect(() =>
+      step(main, { action: "start", assignmentId: "b" }, "attempt-b"),
+    ).toThrow("A main-executed attempt is running");
+  });
+
+  it("rejects a bound call, report or concurrent attempt on persisted main state", () => {
+    const started = mainStarted();
+    const item = started.assignments[0]!;
+    for (const patch of [
+      { toolCallId: "call" },
+      { toolCallId: "call", runId: "run", report },
+      { status: "pending" as const },
+    ]) {
+      expect(() =>
+        validateLedger({
+          ...started,
+          assignments: [{ ...item, ...patch }, started.assignments[1]!],
+        }),
+      ).toThrow();
+    }
+    expect(() =>
+      validateLedger({
+        ...started,
+        assignments: [
+          item,
+          { ...started.assignments[1]!, status: "running", attemptId: "b1" },
+        ],
+      }),
+    ).toThrow("A main-executed attempt must run alone");
+  });
+
+  it("keeps failed main verification blocked and repairable as a child attempt", () => {
+    const failed = verified(mainStarted(), "a", "attempt-a", false);
+    expect(failed.assignments[0]).toMatchObject({
+      status: "blocked",
+      executor: "main",
+    });
+    expect(() => verified(failed)).toThrow(
+      "Main-executed verification requires a running attempt",
+    );
+    const repaired = step(failed, {
+      action: "repair",
+      assignmentId: "a",
+      newAssignmentId: "a2",
+      task: "Fix A",
+    });
+    expect(repaired.assignments.at(-1)?.executor).toBeUndefined();
+  });
+
+  it("rejects main attempts outside the workspace", () => {
+    const outside = accepted([{ ...roots[0]!, cwd: "/elsewhere" }]);
+    expect(() => mainStarted(outside)).toThrow(
+      "cannot run outside the workspace",
+    );
   });
 });

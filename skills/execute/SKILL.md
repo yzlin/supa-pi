@@ -1,11 +1,11 @@
 ---
 name: execute
-description: Execute one accepted plan with blocking subagents, a native-session execution ledger, and independent main verification.
+description: Execute one accepted plan through a native-session execution ledger, running sequential work in the main session, delegating parallel or context-heavy work to blocking subagents, and completing only on independent main verification.
 ---
 
 # Execute
 
-You are the main-session orchestrator for `/execute`, not the worker. An explicit `/execute` invocation is the user's opt-in to this workflow. Its packet includes an `invocationId` authorizing execution checkpoints in this session only. Do not infer authorization for unrelated work, a different plan, or continuation after a stop, reload, or tree navigation. There is no automatic continuation or replay.
+You are the main-session orchestrator for `/execute`. You run sequential assignments yourself and delegate only when [Main-executed attempts](#main-executed-attempts) gives a reason to. An explicit `/execute` invocation is the user's opt-in to this workflow. Its packet includes an `invocationId` authorizing execution checkpoints in this session only. Do not infer authorization for unrelated work, a different plan, or continuation after a stop, reload, or tree navigation. There is no automatic continuation or replay.
 
 ## Input and plan contract
 
@@ -42,8 +42,8 @@ Only main calls `execute_checkpoint`; a detached executor must never manage the 
 | --- | --- | --- |
 | `inspect` | none | Read current accepted plan, assignments, evidence, blockers and lineage counts. |
 | `accept` | `plan`, `approval`, `assignments` | Accept exactly one canonical plan; optional `specPath`, `reviseSpec` (requires `specPath`). Each assignment is `{id, task, scope, dependencies, cwd?, criteria?}`. With `specPath`, each assignment requires non-empty `criteria: ["DC-n", ...]` naming the Spec's Done Criterion IDs; every Spec DC must be declared by at least one assignment. Without `specPath`, `criteria` is rejected. IDs are stable unique alphanumeric/underscore/hyphen strings; dependencies are assignment IDs, unique, known, acyclic. `cwd` must be an existing directory that does not contain the session workspace; it is stored as a workspace-relative path, or as an absolute real path when outside the workspace. |
-| `start` | `assignmentId` | Change pending to running only after all effective prerequisites are main-verified. Returns fresh `attemptId` in the assignment and an exact `dispatchPrefix`. |
-| `verify` | `assignmentId`, `passed`, `evidence`, `blockers`; `attemptId` required except for `reverify`; `criteria` for Spec-backed passes | Main's independent decision after an observed bound `done` report, or fresh read-only evidence for `reverify` (omit `attemptId`). Non-empty evidence lists actual file inspection, commands/results and diagnostics. Passing requires empty blockers; failing requires exact blockers. A passing verify of a Spec-backed assignment requires `criteria: [{id, evidence}]` with exactly one entry per declared DC and no others, including `reverify`; a failing verify may omit it. Read-only re-verification does not consume repairs. |
+| `start` | `assignmentId`; optional `executor: "main"` | Change pending to running only after all effective prerequisites are main-verified. Returns fresh `attemptId` in the assignment and an exact `dispatchPrefix` for a child. With `executor: "main"`, main runs the attempt itself, `dispatchPrefix` is `null`, and the start fails if any other assignment is running or the `cwd` is outside the workspace (see [Main-executed attempts](#main-executed-attempts)). |
+| `verify` | `assignmentId`, `passed`, `evidence`, `blockers`; `attemptId` required except for `reverify`; `criteria` for Spec-backed passes | Main's independent decision after an observed bound `done` report, after a successful `bash` check that follows the last edit of a main-executed attempt, or after fresh read-only evidence for `reverify` (omit `attemptId`). Non-empty evidence lists actual file inspection, commands/results and diagnostics. Passing requires empty blockers; failing requires exact blockers. A passing verify of a Spec-backed assignment requires `criteria: [{id, evidence}]` with exactly one entry per declared DC and no others, including `reverify`; a failing verify may omit it. Read-only re-verification does not consume repairs. |
 | `block` | `assignmentId`, `blockers` | Keep pending/running work unresolved with non-empty exact prerequisites or reasons. Does not complete or reset a completed assignment. |
 | `repair` | `assignmentId`, `newAssignmentId`, `task` | Replace a blocked assignment with a fresh pending scoped repair. Inherits scope, `cwd`, dependencies, original `lineageId`, and incremented `repairCount` (maximum two). Old assignment remains blocked and links through `supersededBy`. |
 | `stop` | none | Revoke execution authorization, block running assignments, and abort the parent operation (cancelling owned runner children); no further checkpoints or dispatch until explicit `/execute`. |
@@ -136,6 +136,24 @@ Schema-bound children submit an object through internal `StructuredOutput`. The 
 Workers are fresh task-only Pi children in the shared checkout. There is no child-conversation resume. Run independent calls together only for disjoint scopes, at most four active assignments/children per parent. Verify prerequisites before dispatching dependents. Resolve essential references in main and supply verified worker-accessible paths; do not require detached workers to rediscover the parent's global skill/tool catalog. Repository discovery is allowed within the target workspace, not unbounded home/global searches. Include canonical TDD guidance for behavior changes and fixes, not normally for docs/config/generated/mechanical work.
 
 Tool abort or parent shutdown cancels owned active and queued children in the runner. A ledger `stop` revokes checkpoint/marked-dispatch authorization and aborts the parent tool operation. Cancellation does not undo edits or terminate independently detached processes. Do not automatically start fresh children after a stop.
+
+## Main-executed attempts
+
+Main runs an assignment itself by default. Use a child only when there is a reason to:
+
+- Independent assignments with disjoint scopes can run in parallel.
+- The task would flood main's context, for example a broad search or a large generated change.
+- The assignment `cwd` is outside the session workspace. The ledger rejects main attempts there.
+
+Call `start` with `executor: "main"`. The ledger allows this only when no other assignment is running, and starts nothing else until main verifies or blocks it. `dispatchPrefix` is `null`; do not call `subagent` for that attempt, and the runtime blocks execution dispatch while it runs.
+
+During the attempt, `edit` and `write` may target only the declared scope. The runtime blocks a call when a path is outside the scope or cannot be determined. It does not check `bash` writes or resolve symlinks, so keep shell commands read-only or inside the scope, and check `git status` before `verify`.
+
+A passing `verify` needs a successful `bash` call after main's last `edit` or `write` in this attempt, for example the targeted test command. Without one, `verify` fails. A failing `verify` needs no fresh check. Write the evidence from what you observed: files inspected, commands and exit codes, and diagnostics, never from intent.
+
+Judge your own change against each Done Criterion and the documented behavior, not against the reasoning you used to write it. If verification fails, record it and use `repair`; a repair can start as a main attempt or a child.
+
+Freshness lives in memory only. A reload, `stop` or new invocation leaves the attempt blocked or needing a new check, so continue through `repair`.
 
 ## Main-session verification and recovery
 

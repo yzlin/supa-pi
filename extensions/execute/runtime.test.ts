@@ -2844,3 +2844,143 @@ describe("Spec-drafted marker", () => {
     expect(markers(h.branch)).toEqual([]);
   });
 });
+
+describe("main-executed attempts", () => {
+  async function mainStart(h: ReturnType<typeof harness>) {
+    const token = await h.invoke();
+    await h.accept(token);
+    const started = await h.checkpoint(token, {
+      action: "start",
+      assignmentId: "a",
+      executor: "main",
+    });
+    return {
+      token,
+      started,
+      attemptId: started.ledger.assignments[0]?.attemptId,
+    };
+  }
+  // Resolves to the rejection message so each assertion is awaited and enforced.
+  async function rejection(promise: Promise<unknown>): Promise<string> {
+    try {
+      await promise;
+    } catch (error) {
+      return error instanceof Error ? error.message : String(error);
+    }
+    throw new Error("Expected the checkpoint to reject");
+  }
+  function pass(attemptId: unknown) {
+    return {
+      action: "verify",
+      assignmentId: "a",
+      attemptId,
+      passed: true,
+      evidence: ["bun test src/a.test.ts: exit 0"],
+      blockers: [],
+    };
+  }
+  const editIn = (path: string) => ({
+    toolName: "edit",
+    toolCallId: "edit-call",
+    input: { text: `[${path}]\n@APPEND\n+x` },
+  });
+
+  it("issues no dispatch prefix and blocks edits outside the declared scope", async () => {
+    const h = harness();
+    const { started } = await mainStart(h);
+    expect(started.dispatchPrefix).toBeNull();
+    expect(started.ledger.assignments[0]?.executor).toBe("main");
+    expect(await h.emit("tool_call", editIn("src/a.ts"))).toBeUndefined();
+    expect(
+      await h.emit("tool_call", {
+        toolName: "write",
+        toolCallId: "write-call",
+        input: { path: "/workspace/src/a.ts", content: "x" },
+      }),
+    ).toBeUndefined();
+    for (const outside of [
+      editIn("src/b.ts"),
+      editIn("src/a.ts.bak"),
+      editIn("../src/a.ts"),
+      {
+        toolName: "edit",
+        toolCallId: "patch-call",
+        input: {
+          text: "*** Begin Patch\n*** Update File: src/a.ts\n@@\n-a\n+b\n*** Update File: README.md\n@@\n-a\n+b\n*** End Patch",
+        },
+      },
+      {
+        toolName: "edit",
+        toolCallId: "no-path",
+        input: { text: "@APPEND\n+x" },
+      },
+    ]) {
+      expect(await h.emit("tool_call", outside)).toMatchObject({ block: true });
+    }
+  });
+
+  it("requires a successful bash check after the last edit before a passing verify", async () => {
+    const h = harness();
+    const { token, attemptId } = await mainStart(h);
+    const stale =
+      "Main-executed verification requires a successful bash check after the last edit in this attempt";
+    expect(await rejection(h.checkpoint(token, pass(attemptId)))).toBe(stale);
+    await h.emit("tool_result", { toolName: "bash", isError: false });
+    await h.emit("tool_result", {
+      toolName: "edit",
+      isError: false,
+      input: {},
+    });
+    expect(await rejection(h.checkpoint(token, pass(attemptId)))).toBe(stale);
+    await h.emit("tool_result", { toolName: "bash", isError: true });
+    expect(await rejection(h.checkpoint(token, pass(attemptId)))).toBe(stale);
+    await h.emit("tool_result", { toolName: "bash", isError: false });
+    const done = await h.checkpoint(token, pass(attemptId));
+    expect(done.ledger.assignments[0]).toMatchObject({
+      status: "completed",
+      executor: "main",
+    });
+  });
+
+  it("allows a failing verify without a fresh check", async () => {
+    const h = harness();
+    const { token, attemptId } = await mainStart(h);
+    const failed = await h.checkpoint(token, {
+      ...pass(attemptId),
+      passed: false,
+      blockers: ["Test fails"],
+    });
+    expect(failed.ledger.assignments[0]?.status).toBe("blocked");
+  });
+
+  it("blocks execution dispatch while a main attempt runs and drops freshness on reload", async () => {
+    const h = harness();
+    const { token, attemptId } = await mainStart(h);
+    expect(
+      await h.emit("tool_call", {
+        toolName: "subagent",
+        toolCallId: "child",
+        input: {
+          agent: "executor",
+          task: "Execution binding: x/a/y\ntask",
+          schema: JSON.parse(JSON.stringify(WorkerReportSchema)),
+        },
+      }),
+    ).toMatchObject({ block: true });
+    await h.emit("tool_result", { toolName: "bash", isError: false });
+    // A new invocation interrupts the running main attempt, so a pass needs a
+    // repair and a fresh attempt, never the old freshness.
+    const next = await h.invoke();
+    expect(await rejection(h.checkpoint(next, pass(attemptId)))).toBe(
+      "Main-executed verification requires a running attempt",
+    );
+    expect(token).not.toBe(next);
+  });
+
+  it("leaves edits unguarded when no main attempt runs", async () => {
+    const h = harness();
+    const token = await h.invoke();
+    await h.accept(token);
+    expect(await h.emit("tool_call", editIn("anything.ts"))).toBeUndefined();
+  });
+});

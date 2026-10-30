@@ -231,7 +231,7 @@ describe("execute command", () => {
       },
     ]);
     expect(runtime.sentUserMessages[0]?.content).toContain(
-      "This explicit `/execute` invocation authorizes blocking `subagent` calls",
+      "This explicit `/execute` invocation authorizes main-session execution and blocking `subagent` calls",
     );
     expect(notifications).toEqual([]);
   });

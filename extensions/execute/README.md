@@ -9,7 +9,7 @@ status: active
 
 # `/execute`
 
-`/execute` sends a plan packet to the main Pi session and grants session-scoped checkpoint authorization. Main owns approval, assignments, blocking `subagent` calls, and independent verification. There is no background workflow, general task runtime, or task dashboard.
+`/execute` sends a plan packet to the main Pi session and grants session-scoped checkpoint authorization. Main owns approval, assignments, independent verification, and the choice to run an assignment itself or through a blocking `subagent` call. There is no background workflow, general task runtime, or task dashboard.
 
 ## Command modes
 
@@ -46,6 +46,14 @@ The checkpoint accepts only `inspect`, `accept`, `start`, `verify`, `block`, `re
 A valid child `done` report stays running, not completed. Only main's `verify` with a bound done claim and non-empty independent evidence completes it; Spec `reverify` instead requires fresh read-only evidence without an `attemptId`. Blocked/needs-followup reports require exact blockers. Repairs inherit original scope, dependencies and lineage; a new assignment ID cannot reset the maximum of two mutation repairs. Read-only re-verification does not consume repair budget. An unfinished accepted plan cannot be replaced to erase that budget. A later explicit command may accept a new plan only after all effective assignments complete; use a separate session for a different plan while terminal blockers remain.
 
 Snapshots use `pi.appendEntry('execute-ledger-v1', ledger)`. `session_start` and `session_tree` reconstruct only `getBranch()`, never all session entries. These boundaries clear live authorization/bindings and never dispatch work. Foreign-session or corrupt ledger data blocks checkpoints. New explicit authorization marks interrupted running assignments blocked; main must inspect current workspace and tests before fresh children or read-only verification. There is no automatic cross-session recovery, old-state import, or child conversation resume. Spec resume is explicit and reads `.pi/specs/` only; legacy `.pi/execute` records are never read or imported. `/goal` checkpoints are unrelated and unchanged.
+
+### Main-executed attempts
+
+`start` with `executor: "main"` lets main run the attempt itself ([ADR 0003](../../docs/adr/0003-main-executed-execute-attempts.md)). The assignment stores `executor: "main"`, and `dispatchPrefix` is `null`. The ledger rejects this start when another assignment is running or the `cwd` is outside the workspace, and starts nothing else while the main attempt runs. A persisted main attempt with a bound call, run ID or report fails validation.
+
+While the attempt runs, the `tool_call` hook blocks `edit` and `write` calls whose targets are outside the declared scope or cannot be determined, and blocks execution `subagent` dispatch. Targets come from `path`, or from the row (`[path]`) and patch (`*** Add/Update/Delete File:`, `*** Move to:`) headers of the local `edit` dialect. The check is lexical: it does not resolve symlinks or see writes made through `bash`.
+
+A passing `verify` of a main attempt needs a successful `bash` tool result after the last `edit` or `write` result in that attempt. Any `edit`/`write` result, even an error, resets it. This freshness is held in memory, so a reload or new invocation never carries it over. A failing `verify` needs no check. Completion of a main attempt needs no child report; its evidence still must be non-empty. Repairs start as ordinary pending assignments and may run as a child or as a new main attempt.
 
 ## Spec log and resume
 

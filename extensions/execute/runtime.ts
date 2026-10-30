@@ -22,6 +22,7 @@ import {
   restoreLedger,
   transitionLedger,
 } from "./ledger";
+import { editTargets, type MainAttemptState, outOfScope } from "./main-attempt";
 import {
   type CheckpointArgs,
   renderCheckpointCall,
@@ -193,6 +194,9 @@ export function registerExecutionLedger(
   const approvedCwds = new Map<string, Set<string>>();
   const pendingApprovals = new Map<string, Promise<boolean>>();
   const calls = new Map<string, BoundCall>();
+  // Freshness of the running main-executed attempt; memory only, so a reload
+  // or new invocation requires a fresh check before verify.
+  let mainAttempt: MainAttemptState | undefined;
   // Spec review trigger results per invocation and Spec hash.
   const reviewDecisions = new Map<string, SpecReviewDecision>();
   const reviewKey = (invocationId: string, specHash: string) =>
@@ -261,6 +265,23 @@ export function registerExecutionLedger(
     }
     pi.appendEntry(LEDGER_ENTRY_TYPE, structuredClone(next));
     ledger = next;
+    syncMainAttempt(next);
+  }
+
+  // Tracks freshness only for the one running main-executed attempt. A new
+  // attempt starts unchecked; anything else clears the tracker.
+  function syncMainAttempt(next: ExecutionLedger): void {
+    const running = next.assignments.find(
+      (item) => item.executor === "main" && item.status === "running",
+    );
+    if (!running?.attemptId) {
+      mainAttempt = undefined;
+    } else if (mainAttempt?.attemptId !== running.attemptId) {
+      mainAttempt = {
+        attemptId: running.attemptId,
+        checkedAfterLastEdit: false,
+      };
+    }
   }
 
   function approveCwds(invocationId: string, cwds: string[]): void {
@@ -644,6 +665,7 @@ export function registerExecutionLedger(
     authorizations.clear();
     approvedCwds.clear();
     calls.clear();
+    mainAttempt = undefined;
     clearReviews();
     ledger = null;
     loadError = null;
@@ -708,7 +730,7 @@ export function registerExecutionLedger(
     name: "execute_checkpoint",
     label: "Execution checkpoint",
     description:
-      "Main-session execution ledger only. Requires the invocationId from explicit /execute. accept one canonical plan; start returns an exact subagent task prefix; inspect; verify with independent main evidence; block; repair (max two per lineage); stop. Child claims never complete assignments.",
+      'Main-session execution ledger only. Requires the invocationId from explicit /execute. accept one canonical plan; start returns an exact subagent task prefix, or with executor:"main" runs the attempt in main (alone, edits limited to scope); inspect; verify with independent main evidence (a main attempt needs a successful bash check after its last edit); block; repair (max two per lineage); stop. Child claims never complete assignments.',
     parameters: CheckpointParametersSchema,
     outputSchema: CheckpointOutputSchema,
     renderShell: "self",
@@ -859,6 +881,23 @@ export function registerExecutionLedger(
         resume,
         specCriteria,
       );
+      if (params.action === "verify" && params.passed) {
+        const target = current.assignments.find(
+          (item) => item.id === params.assignmentId,
+        );
+        if (
+          target?.executor === "main" &&
+          target.status === "running" &&
+          !(
+            mainAttempt?.attemptId === target.attemptId &&
+            mainAttempt.checkedAfterLastEdit
+          )
+        ) {
+          throw new Error(
+            "Main-executed verification requires a successful bash check after the last edit in this attempt",
+          );
+        }
+      }
       if (reviewGate) {
         const { approved, latestDecision } = reviewState(
           reviewGate.events,
@@ -961,7 +1000,11 @@ export function registerExecutionLedger(
           : null;
       const output = {
         ledger: structuredClone(next),
-        dispatchPrefix: assignment ? dispatchPrefix(next, assignment) : null,
+        // Main's own attempt is not dispatched, so it gets no task prefix.
+        dispatchPrefix:
+          assignment && assignment.executor !== "main"
+            ? dispatchPrefix(next, assignment)
+            : null,
       };
       if (params.action === "stop") {
         revoke("Execution stopped; explicit /execute required", ctx);
@@ -1078,6 +1121,44 @@ export function registerExecutionLedger(
   }
 
   pi.on("tool_call", async (event, ctx) => {
+    if (mainAttempt && ledger) {
+      const running = ledger.assignments.find(
+        (item) =>
+          item.executor === "main" &&
+          item.status === "running" &&
+          item.attemptId === mainAttempt?.attemptId,
+      );
+      if (
+        running &&
+        (event.toolName === "edit" || event.toolName === "write")
+      ) {
+        const targets = editTargets(event.toolName, event.input);
+        if (!targets) {
+          return {
+            block: true,
+            reason: `Main-executed attempt ${running.id}: cannot determine edit targets; name each file path explicitly`,
+          };
+        }
+        const outside = outOfScope(ctx.cwd, running, targets);
+        if (outside.length > 0) {
+          return {
+            block: true,
+            reason: `Main-executed attempt ${running.id} may edit only its declared scope (${running.scope.join(", ")}); outside: ${outside.join(", ")}`,
+          };
+        }
+      }
+      if (
+        running &&
+        event.toolName === "subagent" &&
+        typeof event.input.task === "string" &&
+        event.input.task.startsWith("Execution binding:")
+      ) {
+        return {
+          block: true,
+          reason: `Main-executed attempt ${running.id} is running; verify or block it before dispatching children`,
+        };
+      }
+    }
     if (
       event.toolName === "subagent" &&
       typeof event.input.task === "string" &&
@@ -1233,6 +1314,14 @@ export function registerExecutionLedger(
       const slug = draftedSpecSlug(ctx.cwd, event.input.path);
       if (slug) {
         pi.appendEntry(SPEC_DRAFTED_ENTRY_TYPE, { slug });
+      }
+    }
+    if (mainAttempt) {
+      if (event.toolName === "write" || event.toolName === "edit") {
+        // Count every write attempt, even a failed one: it may have changed files.
+        mainAttempt.checkedAfterLastEdit = false;
+      } else if (event.toolName === "bash" && !event.isError) {
+        mainAttempt.checkedAfterLastEdit = true;
       }
     }
     if (event.toolName !== "subagent") {

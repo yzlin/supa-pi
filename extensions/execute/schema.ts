@@ -102,6 +102,8 @@ const AssignmentSchema = Type.Object(
     // Optional so persisted v1 session ledger entries from before Spec support still validate.
     resumed: Type.Optional(Type.Boolean()),
     priorRepairs: Type.Optional(Type.Integer({ minimum: 0, maximum: 2 })),
+    // Set at start when main runs the attempt itself; absent means a bound child.
+    executor: Type.Optional(Type.Literal("main")),
     attemptId: nullableText,
     toolCallId: nullableText,
     runId: nullableText,
@@ -176,7 +178,12 @@ export const CheckpointSchema = Type.Union([
     objectOptions,
   ),
   Type.Object(
-    { ...common, action: Type.Literal("start"), assignmentId: id },
+    {
+      ...common,
+      action: Type.Literal("start"),
+      assignmentId: id,
+      executor: Type.Optional(Type.Literal("main")),
+    },
     objectOptions,
   ),
   Type.Object(
@@ -246,6 +253,7 @@ export const CheckpointParametersSchema = Type.Object(
       Type.Array(AssignmentInputSchema, { minItems: 1, maxItems: 100 }),
     ),
     assignmentId: Type.Optional(id),
+    executor: Type.Optional(Type.Literal("main")),
     attemptId: Type.Optional(text),
     passed: Type.Optional(Type.Boolean()),
     evidence: Type.Optional(Type.Array(text, { minItems: 1, maxItems: 100 })),

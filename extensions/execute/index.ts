@@ -255,7 +255,7 @@ export default function executeExtension(pi: ExtensionAPI): void {
   const authorize = registerExecutionLedger(pi);
   pi.registerCommand(EXECUTE_COMMAND_NAME, {
     description:
-      "Execute a plan with blocking subagents and main verification: /execute [plan]",
+      "Execute a plan with a verified ledger, main-session work and blocking subagents: /execute [plan]",
     async handler(args, ctx) {
       const explicitPlan = (args ?? "").trim();
       const packet = explicitPlan
