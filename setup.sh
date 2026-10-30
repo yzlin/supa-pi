@@ -5,7 +5,6 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PI_AGENT_DIR="$HOME/.pi/agent"
 PI_PACKAGES=(
   "npm:@yzlin/pieditor@2.0.0"
-  "npm:pi-mcp-adapter"
   "npm:pi-rewind"
   "npm:pi-web-access"
   "npm:@plannotator/pi-extension"

@@ -180,7 +180,6 @@ describe("setup local package deployment", () => {
     expect(calls.every((call) => call.startsWith("install "))).toBe(true);
     expect(packages).toEqual([
       "npm:@yzlin/pieditor@2.0.0",
-      "npm:pi-mcp-adapter",
       "npm:pi-rewind",
       "npm:pi-web-access",
       "npm:@plannotator/pi-extension",

@@ -555,7 +555,8 @@ describe("renderer resolver", () => {
       { reasoning: "Inspect\nfile\u0007", key: "\u001b[31mabc\u001b[0m" },
       "\u001b[31mfirst\u001b[0m\nsecond",
     );
-    expect(rendered.call).toContain("mcp__figma__get_file Inspect file");
+    expect(rendered.call).toContain("mcp__figma__get_file figma · get_file");
+    expect(rendered.call).not.toContain("\u001b[31m");
     expect(rendered.result).toContain("first");
     expect(rendered.result).not.toContain("second");
     expect(rendered.result).toContain("1s");
@@ -806,6 +807,7 @@ describe("companion renderer ownership", () => {
     };
     for (const name of [
       "mcpScript",
+      "mcp",
       "xmcp__a",
       "TaskSomething",
       "subagent",
@@ -833,15 +835,19 @@ describe("companion renderer ownership", () => {
       const renderer = h.resolve(fixture.name) as ToolRenderers;
       const args = { unfamiliar: ["shape"] };
       const context = { args, state: {}, invalidate() {} };
-      expect(
-        renderer
-          .renderCall?.(args, plainTheme as never, context as never)
-          ?.render(180),
-      ).toEqual(
-        renderGenericToolCall(fixture.name, args, plainTheme, context).render(
-          180,
-        ),
-      );
+      const call = renderer
+        .renderCall?.(args, plainTheme as never, context as never)
+        ?.render(180);
+      if (fixture.group === "mcp") {
+        // Built-in MCP args are the MCP tool's own; the header comes from the name.
+        expect(call?.join("\n")).toContain(fixture.call);
+      } else {
+        expect(call).toEqual(
+          renderGenericToolCall(fixture.name, args, plainTheme, context).render(
+            180,
+          ),
+        );
+      }
       const result = {
         content: [{ type: "text", text: "unknown\nbody\u001b[31m" }],
         details: { unfamiliar: true },

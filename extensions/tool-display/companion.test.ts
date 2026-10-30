@@ -6,42 +6,47 @@ import {
   companionResultSummary,
 } from "./companion";
 
-// Additional installed success/mode shapes: pi-mcp-adapter 5.0.0 gateway,
+// Additional installed success shapes: Pi built-in MCP 1.4.0 tool details,
 // pi-web-access 0.30.0 index.ts search/content response details.
 describe("guarded companion shapes", () => {
-  test("gateway summaries identify the active mode", () => {
-    for (const [args, summary] of [
-      [{}, "status"],
-      [{ action: "auth-start", server: "docs" }, "auth-start · docs"],
-      [{ search: "themes" }, "search · themes"],
-      [{ describe: "docs_lookup" }, "describe · docs_lookup"],
-      [{ connect: "docs" }, "connect · docs"],
-      [{ instructions: "docs" }, "instructions · docs"],
-    ] as const) {
-      expect(companionCallSummary("mcp", args)).toBe(summary);
-    }
+  test("built-in MCP tools summarize by server and first result line", () => {
+    expect(companionGroup("mcp__docs__lookup")).toBe("mcp");
     expect(
       companionResultSummary(
-        "mcp",
+        "mcp__docs__lookup",
         {},
-        {
-          mode: "status",
-          servers: [],
-          totalTools: 12,
-          connectedCount: 2,
-          disabledCount: 1,
-        },
-        "Status",
+        { server: "docs", tool: "lookup" },
+        "\nFound docs\nmore",
       ),
-    ).toBe("2 connected · 12 tools");
+    ).toBe("Found docs");
+  });
+
+  test("built-in MCP call summaries come from the tool name, not the arguments", () => {
+    expect(companionCallSummary("mcp__docs__lookup", { query: "Pi" })).toBe(
+      "docs · lookup",
+    );
+    expect(
+      companionCallSummary("mcp__docs__lookup", { tool: "other", args: [] }),
+    ).toBe("docs · lookup");
+    expect(companionCallSummary("mcp__my_server__get__file", {})).toBe(
+      "my_server · get__file",
+    );
+    for (const name of ["mcp__", "mcp__docs", "mcp____lookup"]) {
+      expect(companionCallSummary(name, {})).toBeUndefined();
+    }
+  });
+
+  test("the retired adapter gateway name is not an MCP companion", () => {
+    expect(companionGroup("mcp")).toBeUndefined();
+    expect(companionCallSummary("mcp", { search: "docs" })).toBeUndefined();
     expect(
       companionResultSummary(
         "mcp",
-        { describe: "docs_lookup" },
-        { mode: "describe", server: "docs", tool: "lookup" },
-        "Tool schema",
+        { search: "docs" },
+        { mode: "search", matches: [], count: 3 },
+        "Found tools",
       ),
-    ).toBe("Tool schema");
+    ).toBeUndefined();
   });
 
   test("search and stored content success details use compact counts", () => {
@@ -86,8 +91,6 @@ describe("guarded companion shapes", () => {
 
   test("mismatched consumed fields degrade rather than stringifying objects", () => {
     for (const [name, args] of [
-      ["mcp", { tool: "lookup", args: [] }],
-      ["mcp", { connect: true }],
       ["codemode", { code: ["first"] }],
       ["web_search", { query: {}, queries: ["Pi"] }],
       ["fetch_content", { urls: [1] }],
@@ -115,70 +118,6 @@ describe("guarded companion shapes", () => {
       ),
     ).toBeUndefined();
   });
-});
-
-test("installed MCP non-call successes remain compact rather than degrading", () => {
-  expect(
-    companionResultSummary(
-      "mcp",
-      { search: "docs" },
-      {
-        mode: "search",
-        matches: [{ server: "docs", tool: "lookup", score: 1 }],
-        count: 3,
-        hasMore: false,
-        nextOffset: null,
-        query: "docs",
-      },
-      "Found tools",
-    ),
-  ).toBe("3 tools");
-  expect(
-    companionResultSummary(
-      "mcp",
-      { connect: "docs" },
-      {
-        mode: "list",
-        server: "docs",
-        tools: ["lookup"],
-        count: 1,
-        hasInstructions: true,
-      },
-      "Connected",
-    ),
-  ).toBe("1 tool · docs");
-  expect(
-    companionResultSummary(
-      "mcp",
-      { instructions: "docs" },
-      { mode: "instructions", server: "docs", length: 42 },
-      "Usage instructions",
-    ),
-  ).toBe("Usage instructions");
-  expect(
-    companionResultSummary(
-      "mcp",
-      { describe: "docs_lookup" },
-      {
-        mode: "describe",
-        server: "docs",
-        tool: {
-          name: "lookup",
-          description: "Lookup docs",
-          inputSchema: { type: "object" },
-        },
-      },
-      "Tool schema",
-    ),
-  ).toBe("Tool schema");
-  expect(
-    companionResultSummary(
-      "mcp",
-      { action: "auth-start", server: "docs" },
-      { mode: "auth-start", server: "docs", authenticated: true },
-      "Authenticated",
-    ),
-  ).toBe("Authenticated");
 });
 
 test("retired task shapes are not companion adapters", () => {

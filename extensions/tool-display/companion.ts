@@ -10,7 +10,7 @@ const WEB_NAMES = new Set([
 ]);
 
 export function companionGroup(name: string): CompanionGroup | undefined {
-  if (name === "mcp" || name.startsWith("mcp__")) {
+  if (name.startsWith("mcp__")) {
     return "mcp";
   }
   if (name === "codemode") {
@@ -35,9 +35,6 @@ function optionalString(value: unknown): value is string | undefined {
 }
 function count(value: unknown): value is number {
   return typeof value === "number" && Number.isInteger(value) && value >= 0;
-}
-function emptyArgs(args: Record<string, unknown>): boolean {
-  return Object.keys(args).every((key) => key === "reasoning");
 }
 function scope(
   single: unknown,
@@ -103,47 +100,12 @@ export function companionCallSummary(
 
 function mcpCallSummary(
   name: string,
-  args: Record<string, unknown>,
+  _args: Record<string, unknown>,
 ): string | undefined {
-  if (companionGroup(name) !== "mcp") {
-    return undefined;
-  }
-  const server = name.startsWith("mcp__")
-    ? name.slice(5).split("__")[0]
-    : args.server;
-  if (!optionalString(server) || !optionalString(args.tool)) {
-    return undefined;
-  }
-  if (
-    args.args !== undefined &&
-    typeof args.args !== "string" &&
-    !record(args.args)
-  ) {
-    return undefined;
-  }
-  if (name === "mcp" && args.action !== undefined) {
-    return typeof args.action === "string"
-      ? `${args.action}${server ? ` · ${server}` : ""}`
-      : undefined;
-  }
-  if (typeof args.tool === "string") {
-    return [server, args.tool].filter(Boolean).join(" · ");
-  }
-  if (name !== "mcp") {
-    return undefined;
-  }
-  for (const mode of [
-    "search",
-    "describe",
-    "connect",
-    "instructions",
-  ] as const) {
-    const value = args[mode];
-    if (value !== undefined) {
-      return typeof value === "string" ? `${mode} · ${value}` : undefined;
-    }
-  }
-  return emptyArgs(args) ? "status" : undefined;
+  // Pi built-in MCP names tools `mcp__<server>__<tool>` and passes the MCP
+  // tool's own arguments, so the label comes from the name (as Pi parses it).
+  const match = /^mcp__(.+?)__(.+)$/u.exec(name);
+  return match ? `${match[1]} · ${match[2]}` : undefined;
 }
 
 export function companionResultSummary(
@@ -170,47 +132,8 @@ export function companionResultSummary(
     return firstLine === "done" ? details.error : firstLine;
   }
   if (group === "mcp") {
-    if (
-      details.mode === "status" &&
-      Array.isArray(details.servers) &&
-      count(details.totalTools) &&
-      count(details.connectedCount)
-    ) {
-      return `${details.connectedCount} connected · ${details.totalTools} tools`;
-    }
-    if (
-      details.mode === "search" &&
-      Array.isArray(details.matches) &&
-      count(details.count)
-    ) {
-      return `${details.count} tool${details.count === 1 ? "" : "s"}`;
-    }
     if (typeof details.server !== "string") {
       return undefined;
-    }
-    if (
-      details.mode === "list" &&
-      strings(details.tools) &&
-      count(details.count)
-    ) {
-      return `${details.count} tool${details.count === 1 ? "" : "s"} · ${details.server}`;
-    }
-    if (details.mode === "instructions" && count(details.length)) {
-      return firstLine;
-    }
-    if (
-      details.mode === "describe" &&
-      record(details.tool) &&
-      typeof details.tool.name === "string"
-    ) {
-      return firstLine;
-    }
-    if (
-      (details.mode === "auth-start" || details.mode === "auth-complete") &&
-      (typeof details.authenticated === "boolean" ||
-        typeof details.authorizationUrl === "string")
-    ) {
-      return firstLine;
     }
     return typeof details.tool === "string" ? firstLine : undefined;
   }

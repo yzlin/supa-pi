@@ -182,7 +182,6 @@ The new runner requires tmux, Pi 1.0.1+, and the full checkout (plus Bun for str
 The setup script installs or reconciles these Pi packages. It no longer installs `pi-skill-palette`; uninstall that global package yourself if it is still present from an older setup.
 
 - `npm:@yzlin/pieditor@2.0.0` — exact required compositor-free release
-- `pi-mcp-adapter`
 - `pi-rewind`
 - `pi-web-access`
 - `@plannotator/pi-extension`
