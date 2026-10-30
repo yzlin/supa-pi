@@ -459,6 +459,7 @@ describe("committed corpus", () => {
       "AGENTS.global.md",
       "extensions/code-improvement/IMPROVE-CODEBASE-ARCHITECTURE.md",
       "skills/simplify/SKILL.md",
+      "skills/review-fix/SKILL.md",
     );
     expect(coveredPaths).toEqual(new Set(expectedPaths));
   });

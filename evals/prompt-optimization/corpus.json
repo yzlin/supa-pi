@@ -267,6 +267,65 @@
       ]
     },
     {
+      "id": "review-fix-command-queue",
+      "workload": "focused bug fix",
+      "promptPath": "skills/review-fix/SKILL.md",
+      "task": "Use the `review-fix` skill behavior as canonical.\n\nReview-fix invocation packet:\n- Source: latest review summary/Fix Queue when present; otherwise latest raw review report fallback.\n- Report reference SHA-256: 0000000000000000000000000000000000000000000000000000000000000000\n\n<untrusted_review_fix_context>\n## Verdict\n- needs attention\n\n## Findings\n1. [P1] add() subtracts instead of adding — src/math.ts:2. Why: tests/math.case.ts expects add(7, 5) to be 12 and gets 2. Change: return left + right.\n2. [P2] canAccessAdminPanel lets debug bypass the admin-role rule — src/auth.ts:2. Why: README.md says admin access requires the admin role. Change: remove the debug bypass so only role === \"admin\" grants access.\n\n## Fix Queue\n1. P1 src/math.ts add(): return left + right.\n2. P2 src/auth.ts canAccessAdminPanel: drop the debug bypass.\n</untrusted_review_fix_context>",
+      "tools": ["read", "grep", "find", "ls", "edit", "write", "bash", "Agent"],
+      "agentChild": {
+        "promptPath": "agents/executor.md",
+        "tools": ["read", "grep", "find", "ls", "edit", "write", "bash"]
+      },
+      "checks": [
+        {
+          "type": "fileContains",
+          "path": "src/math.ts",
+          "value": "left + right",
+          "domain": "task",
+          "weight": 2
+        },
+        {
+          "type": "fileNotContains",
+          "path": "src/auth.ts",
+          "value": "return true",
+          "domain": "task",
+          "weight": 2
+        },
+        {
+          "type": "fileContains",
+          "path": "src/auth.ts",
+          "value": "role === \"admin\"",
+          "domain": "tests",
+          "weight": 1
+        },
+        {
+          "type": "fileEquals",
+          "path": "src/format.ts",
+          "value": "export function formatName(first: string, last: string): string {\n  const values = [first.trim(), last.trim()];\n  const nonEmptyValues = values.filter((value) => value.length > 0);\n  const joinedValues = nonEmptyValues.join(\" \");\n  return joinedValues;\n}\n\nexport function unusedLegacyFormatter(value: string): string {\n  return value.toUpperCase();\n}\n",
+          "domain": "tests",
+          "weight": 2
+        },
+        {
+          "type": "outputIncludes",
+          "value": "src/math.ts",
+          "domain": "evidence",
+          "weight": 1
+        },
+        {
+          "type": "outputIncludes",
+          "value": "src/auth.ts",
+          "domain": "evidence",
+          "weight": 1
+        },
+        {
+          "type": "outputMatches",
+          "pattern": "bun test (?:\\./)?tests/math\\.case\\.ts",
+          "domain": "evidence",
+          "weight": 1
+        }
+      ]
+    },
+    {
       "id": "readiness-action-fix",
       "workload": "focused bug fix",
       "promptPath": "extensions/core-prompt/prompt.md",

@@ -1214,7 +1214,7 @@ describe.serial("/review command settings and disclosure", () => {
     expect(render({ content: [] })).toEqual(render({ content: "" }));
   });
 
-  it("renders review-report messages and leaves /review-fix delegation behavior intact", async () => {
+  it("renders review-report messages and leaves the /review-fix packet intact", async () => {
     const summary =
       "## Review Scope\n- scope\n\n## Verdict\n- needs attention\n\n## Findings\n- finding\n\n## Fix Queue\n1. fix\n\n## Human Reviewer Callouts (Non-Blocking)\n- none\n\n## Reviewer Coverage\n- code-reviewer: used";
     const runtime = createRuntime();
