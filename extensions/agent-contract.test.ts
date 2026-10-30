@@ -24,30 +24,4 @@ describe("agent prompt contracts", () => {
     expect(reviewer).toContain("findings");
     expect(reviewer).toContain("humanReviewerCallouts");
   });
-
-  it("keeps existing-capability replacement within the simplifier scope", () => {
-    const simplifier = readRepoFile("agents", "code-simplifier.md");
-
-    expect(simplifier).toContain(
-      "Within the assigned scope, consider replacing an in-scope custom mechanism",
-    );
-    expect(simplifier).toContain(
-      "repository, standard-library, native-platform, or already-installed dependency capability",
-    );
-    expect(simplifier).toContain(
-      "Do not widen editable files for it; if another file or new package research is needed, stop and report it.",
-    );
-  });
-
-  it("keeps the simplifier comment keep list, suppression audit, and reshape flags", () => {
-    const simplifier = readRepoFile("agents", "code-simplifier.md");
-
-    expect(simplifier).toContain("Keep license headers");
-    expect(simplifier).toContain(
-      "Never reword a justification into a shorter one.",
-    );
-    expect(simplifier).toContain("look up the suppressed rule");
-    expect(simplifier).toContain("A reshape flag names the exact symbol");
-    expect(simplifier).not.toContain("obvious comments only when non-use");
-  });
 });

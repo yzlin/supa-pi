@@ -51,20 +51,21 @@ describe("skill-backed command contracts", () => {
     );
   });
 
-  it("keeps /simplify static edit-boundary rules in simplify skill", () => {
+  it("keeps /simplify main-session edit-boundary rules in simplify skill", () => {
     const skill = readSkill("simplify");
 
-    expect(skill).toContain("Delegate to `code-simplifier`");
-    expect(skill).toContain('subagent({agent: "code-simplifier", task:');
-    expect(skill).toContain("self-contained");
+    expect(skill).toContain(
+      "Work in the main session; do not delegate this task.",
+    );
+    expect(skill).not.toContain("subagent(");
+    expect(skill).not.toContain("code-simplifier");
     expect(skill).not.toContain("max_turns");
-    expect(skill).not.toContain("Agent call");
     expect(skill).toContain(
       "Do not edit ignored lockfiles or unsupported changed files",
     );
-    expect(skill).toContain("rerun once with the failure named");
+    expect(skill).toContain("retry once with the failure named");
     expect(skill).toContain(
-      "Before delegating, record a baseline without modifying the working tree: run `git status --porcelain --untracked-files=all`",
+      "Before editing, record a baseline without modifying the working tree: run `git status --porcelain --untracked-files=all`",
     );
     expect(skill).toContain(
       "run `git status --porcelain --untracked-files=all` for detection only, then copy every editable file to a temp directory outside the repo",
@@ -76,7 +77,7 @@ describe("skill-backed command contracts", () => {
       "copy every editable file plus every path that status lists as changed or untracked",
     );
     expect(skill).toContain(
-      "If the run has no `Editable files` list, first resolve the recent-session files named by the focus instruction, write that list down, and pass it to the subagent as `Editable files`",
+      "If the run has no `Editable files` list, first resolve the recent-session files named by the focus instruction and write that list down.",
     );
     expect(skill).toContain(
       "That list is the edit boundary for the baseline and the Audit",
@@ -86,25 +87,36 @@ describe("skill-backed command contracts", () => {
       "rerun the same status, rehash those paths, and diff editable files against their saved copies",
     );
     expect(skill).toContain(
-      "Any path outside editable files whose status line changed or whose hash differs from the baseline is a scope escape: reject the report and list those paths for the user",
+      "Any path outside editable files whose status line changed or whose hash differs from the baseline is a scope escape: report those paths for the user",
     );
     expect(skill).toContain(
       "never revert, restore, or trash paths outside editable files",
     );
     expect(skill).toContain(
-      "license headers; non-obvious behavior forced by an external dependency, platform, vendor, or protocol; doc comments that define a public API contract; issue or RFC links for constraints code cannot express.",
+      "Keep license headers; non-obvious behavior forced by an external dependency, platform, vendor, or protocol; doc comments that define a public API contract; and issue or RFC links for constraints code cannot express.",
     );
     expect(skill).not.toContain("workarounds forced by");
     expect(skill).toContain(
-      "Revert a rejected report only inside editable files: restore each saved copy and move editable paths noted as not existing to Trash with `trash`",
+      "restore each saved copy inside editable files and move editable paths noted as not existing to Trash with `trash`",
     );
     expect(skill).not.toContain("`git restore -- <path>` is allowed");
-    expect(skill).not.toContain("holds no user work");
     expect(skill).toContain("from the restored baseline");
     expect(skill).toContain(
       "Never use `git checkout`, `git restore`, `git reset`, or `git stash` push/pop/apply to revert /simplify results",
     );
-    expect(skill).not.toContain("Never revert with `git checkout`");
+    // Craft safeguards moved from the retired code-simplifier agent.
+    expect(skill).toContain(
+      "Within the assigned scope, consider replacing an in-scope custom mechanism",
+    );
+    expect(skill).toContain(
+      "Do not widen editable files for it; if another file or new package research is needed, stop and report it.",
+    );
+    expect(skill).toContain("Never reword a justification into a shorter one.");
+    expect(skill).toContain("look up the suppressed rule");
+    expect(skill).toContain("A reshape flag names the exact symbol");
+    expect(skill).toContain(
+      "Treat unused-code tool output as evidence, not proof.",
+    );
   });
 });
 

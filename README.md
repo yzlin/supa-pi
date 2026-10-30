@@ -28,7 +28,7 @@ Documented extensions in this repo include:
 - **`extensions/context-docs`** — deterministic `/context-setup`, `/context-note`, `/adr`, and `/context-review` workflows for durable project context docs; canonical workflow behavior lives in `skills/context-docs/SKILL.md`
 - **[`extensions/skill-router`](extensions/skill-router/README.md)** — registered-first, default-off paid JEV skill selection with bounded conversation transfer, Pi-managed authentication and explicit consent, and native fallback
 - **`extensions/docs-list`** — `docs_list` tool for discovering project markdown docs before coding; backed by the same implementation as the `docs-list` CLI
-- **`extensions/code-improvement`** — scoped `/simplify` code-simplifier delegation with strict target grammar, `--extra` guidance, `--yes` consent bypass for large/PR scopes, hard file allowlists, and `/improve-codebase-architecture` read-only architecture review workflow
+- **`extensions/code-improvement`** — scoped main-session `/simplify` with strict target grammar, `--extra` guidance, `--yes` consent bypass for large/PR scopes, hard file allowlists, and `/improve-codebase-architecture` read-only architecture review workflow (explorer delegation only for broad scope)
 - **`extensions/review`** — current-session review with `/review-summary` and `/review-fix` follow-ups; closed blocking `review_run({runId})` then `review_finalize({runId})` pipeline with deterministic stage validation and freshness checks (see `extensions/review/README.md` for evidence and limits); adapted in part from `@earendil-works/pi-review`
 - **`extensions/tool-display`** — compact tool renderers and the `read` override that returns exact loaded skill files in full, ignores pagination for those skill reads, and marks results so RTK does not compact them
 
@@ -56,7 +56,6 @@ See `package.json` for the full registration list.
 - `explorer` / `Explore`
 - `researcher`
 - `code-reviewer`
-- `code-simplifier`
 - `security-reviewer`
 - `database-reviewer`
 - `performance-reviewer`

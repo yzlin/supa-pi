@@ -258,31 +258,6 @@ describe("code-improvement commands", () => {
     );
   });
 
-  it("keeps the retained simplify reference aligned with blocking canonical delegation and strict file boundaries", () => {
-    const prompt = readRepoFile(
-      "extensions",
-      "code-improvement",
-      "SIMPLIFY.md",
-    );
-    expect(prompt).toContain('subagent({agent: "code-simplifier", task})');
-    expect(prompt).toContain("Use the `simplify` skill behavior as canonical.");
-    expect(prompt).toContain("treat that list as the hard edit boundary");
-    expect(prompt).toContain("you may edit only editable files");
-    expect(prompt).toContain(
-      "stop and report the missing file path instead of widening scope",
-    );
-    expect(prompt).toContain(
-      "main audits, reverts, and reruns per the Audit section of `skills/simplify/SKILL.md`",
-    );
-    expect(prompt).toContain("record the baseline snapshot");
-    expect(prompt).toContain(
-      "resolve those files into the `Editable files` list passed to the subagent",
-    );
-    expect(prompt).not.toContain("Your first substantive action must be");
-    expect(prompt).not.toContain("inspect the touched files, then report");
-    expect(prompt).not.toMatch(/`Agent`|subagent_type|max_turns/);
-  });
-
   it("keeps bare no-UI /simplify legacy recent-session fallback", async () => {
     const runtime = createMockPiRuntime();
     const { ctx, notifications } = createMockCtx();
@@ -434,7 +409,7 @@ describe("code-improvement commands", () => {
       "Extra guidance: prefer smaller functions",
     );
     expect(runtime.sentUserMessages[0]?.content).toContain(
-      "Before delegating, re-resolve this scope and compare editable files only. Ignore lockfile drift. Stop if editable files changed. Stop if new unsupported non-lock files appeared",
+      "Before editing, re-resolve this scope and compare editable files only. Ignore lockfile drift. Stop if editable files changed. Stop if new unsupported non-lock files appeared",
     );
     expect(notifications).toContainEqual({
       message: "Queued /simplify as a follow-up",

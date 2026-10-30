@@ -146,7 +146,7 @@ export function buildScopedSimplifyCommandMessage(options: {
     ? `\n\nExtra guidance: ${options.extraInstruction.trim()}`
     : "";
   const staleCheck = options.staleCheck?.trim()
-    ? `\n\nBefore delegating, re-resolve this scope and compare editable files only. Ignore lockfile drift. Stop if editable files changed. Stop if new unsupported non-lock files appeared: ${options.staleCheck.trim()}`
+    ? `\n\nBefore editing, re-resolve this scope and compare editable files only. Ignore lockfile drift. Stop if editable files changed. Stop if new unsupported non-lock files appeared: ${options.staleCheck.trim()}`
     : "";
   const ignoredLockfiles = options.ignoredLockfiles ?? [];
   const unsupportedChangedFiles = options.unsupportedChangedFiles ?? [];
@@ -378,7 +378,7 @@ async function dispatchSimplify(
     }
     const confirmed = await ctx.ui.confirm(
       "Large simplify scope",
-      `Allow code-simplifier to edit ${scope.editableFiles.length} files?`,
+      `Allow /simplify to edit ${scope.editableFiles.length} files?`,
     );
     if (!confirmed) {
       return;

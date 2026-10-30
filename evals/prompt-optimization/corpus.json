@@ -203,6 +203,70 @@
       ]
     },
     {
+      "id": "simplify-command-scoped",
+      "workload": "focused bug fix",
+      "promptPath": "skills/simplify/SKILL.md",
+      "task": "Use the `simplify` skill behavior as canonical.\n\nSimplify invocation packet:\n- Scope: folder src/format.ts\n- Editable files (1):\n- src/format.ts\n- Ignored lockfiles (read-only, 0):\n- None\n- Unsupported changed files (0):\n- None\n\nExtra guidance: unusedLegacyFormatter has no callers anywhere in this package; remove it.",
+      "tools": ["read", "grep", "find", "ls", "edit", "write"],
+      "checks": [
+        {
+          "type": "fileNotContains",
+          "path": "src/format.ts",
+          "value": "nonEmptyValues",
+          "domain": "task",
+          "weight": 2
+        },
+        {
+          "type": "fileNotContains",
+          "path": "src/format.ts",
+          "value": "unusedLegacyFormatter",
+          "domain": "task",
+          "weight": 2
+        },
+        {
+          "type": "fileContains",
+          "path": "src/format.ts",
+          "value": "export function formatName",
+          "domain": "tests",
+          "weight": 1
+        },
+        {
+          "type": "fileContains",
+          "path": "src/format.ts",
+          "value": "first.trim()",
+          "domain": "tests",
+          "weight": 1
+        },
+        {
+          "type": "fileContains",
+          "path": "src/format.ts",
+          "value": "last.trim()",
+          "domain": "tests",
+          "weight": 1
+        },
+        {
+          "type": "fileContains",
+          "path": "src/format.ts",
+          "value": ".join(\" \")",
+          "domain": "tests",
+          "weight": 1
+        },
+        {
+          "type": "fileEquals",
+          "path": "src/search.ts",
+          "value": "export function rankMatches(items: string[], queries: string[]): string[] {\n  const matches: string[] = [];\n  for (const query of queries) {\n    for (const item of items.sort()) {\n      if (item.includes(query)) {\n        matches.push(item);\n      }\n    }\n  }\n  return matches;\n}\n",
+          "domain": "tests",
+          "weight": 2
+        },
+        {
+          "type": "outputIncludes",
+          "value": "src/format.ts",
+          "domain": "evidence",
+          "weight": 1
+        }
+      ]
+    },
+    {
       "id": "readiness-action-fix",
       "workload": "focused bug fix",
       "promptPath": "extensions/core-prompt/prompt.md",
@@ -579,7 +643,7 @@
     {
       "id": "simplify-code",
       "workload": "focused bug fix",
-      "promptPath": "agents/code-simplifier.md",
+      "promptPath": "skills/simplify/SKILL.md",
       "task": "Simplify formatName in src/format.ts without changing behavior. Keep scope to that function and report the change.",
       "tools": ["read", "grep", "find", "ls", "edit", "write"],
       "checks": [
@@ -776,7 +840,7 @@
     {
       "id": "remove-dead-code",
       "workload": "focused bug fix",
-      "promptPath": "agents/code-simplifier.md",
+      "promptPath": "skills/simplify/SKILL.md",
       "task": "Remove the unused legacy formatter from src/format.ts without changing formatName. Report the scoped change.",
       "tools": ["read", "grep", "find", "ls", "edit", "write"],
       "checks": [

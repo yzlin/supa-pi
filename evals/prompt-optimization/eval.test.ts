@@ -200,6 +200,46 @@ describe("parseCorpus", () => {
     }
   });
 
+  it("accepts agentChild only with Agent and without agentResponse", () => {
+    const evalCase = {
+      id: "agent-child",
+      workload: "focused bug fix",
+      promptPath: "skills/simplify/SKILL.md",
+      task: "Simplify.",
+      tools: ["read", "Agent"],
+      agentChild: { promptPath: "agents/executor.md", tools: ["read"] },
+      checks: [
+        { type: "toolCalled", name: "Agent", domain: "task", weight: 1 },
+      ],
+    };
+
+    expect(
+      parseCorpus({ version: 1, cases: [evalCase] }).cases[0]?.agentChild,
+    ).toEqual({ promptPath: "agents/executor.md", tools: ["read"] });
+    for (const [invalid, message] of [
+      [{ ...evalCase, tools: ["read"] }, "requires Agent"],
+      [{ ...evalCase, agentResponse: "fixed" }, "excludes agentResponse"],
+      [
+        { ...evalCase, agentChild: { promptPath: "skills/x.md", tools: [] } },
+        "must target agents/*.md",
+      ],
+      [
+        {
+          ...evalCase,
+          agentChild: {
+            promptPath: "agents/executor.md",
+            tools: ["Agent"],
+          },
+        },
+        "unsupported tool",
+      ],
+    ] as const) {
+      expect(() => parseCorpus({ version: 1, cases: [invalid] })).toThrow(
+        message,
+      );
+    }
+  });
+
   it("accepts agentResponse only with the Agent tool", () => {
     const evalCase = {
       id: "agent-response",
@@ -403,7 +443,6 @@ describe("committed corpus", () => {
     const expectedPaths = [
       "extensions/core-prompt/prompt.md",
       "code-reviewer",
-      "code-simplifier",
       "database-reviewer",
       "executor",
       "explorer",
@@ -419,6 +458,7 @@ describe("committed corpus", () => {
       "skills/context-docs/SKILL.md",
       "AGENTS.global.md",
       "extensions/code-improvement/IMPROVE-CODEBASE-ARCHITECTURE.md",
+      "skills/simplify/SKILL.md",
     );
     expect(coveredPaths).toEqual(new Set(expectedPaths));
   });
