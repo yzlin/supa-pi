@@ -312,6 +312,57 @@ describe("runVariant", () => {
     });
   });
 
+  it("applies setupFiles before the run and excludes them from agent changes", async () => {
+    const model = modelRegistry.find("openai", "gpt-4o");
+    if (!model) {
+      throw new Error("test model is unavailable");
+    }
+    const seeded =
+      "export function add(left: number, right: number): number {\n  return Math.round(left + right);\n}\n";
+    const result = await runVariant({
+      evalCase: {
+        id: "setup-files",
+        workload: "explanation",
+        promptPath: "extensions/core-prompt/prompt.md",
+        task: "Check the change.",
+        tools: [],
+        setupFiles: { "src/math.ts": seeded },
+        checks: [
+          {
+            type: "fileEquals",
+            path: "src/math.ts",
+            value: seeded,
+            domain: "task",
+            weight: 1,
+          },
+          {
+            type: "workspaceChangesOnly",
+            paths: ["src/math.ts"],
+            domain: "tests",
+            weight: 1,
+          },
+        ],
+      },
+      variant: "candidate",
+      repetition: 1,
+      promptContent: "Be evidence driven.",
+      promptSha256: "candidate-hash",
+      fixturePath,
+      model,
+      thinking: "medium",
+      timeoutMs: 5000,
+      maxTurns: 3,
+      getApiKey: () => Promise.resolve("test-key"),
+      streamFn: (selectedModel) => createSuccessfulStream(selectedModel),
+    });
+
+    const [contentCheck, changesCheck] = result.score.checks;
+    expect(contentCheck?.passed).toBe(true);
+    // The seeded file is part of the initial snapshot, so no agent change shows.
+    expect(changesCheck?.passed).toBe(false);
+    expect(changesCheck?.evidence).toBe("changed paths: none");
+  });
+
   it("forwards and records priority service tier", async () => {
     const model = modelRegistry.find("openai", "gpt-4o");
     if (!model) {

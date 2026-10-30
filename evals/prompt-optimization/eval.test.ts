@@ -240,6 +240,33 @@ describe("parseCorpus", () => {
     }
   });
 
+  it("accepts setupFiles only as safe non-test relative text files", () => {
+    const evalCase = {
+      id: "setup-files",
+      workload: "explanation",
+      promptPath: "extensions/core-prompt/prompt.md",
+      task: "Check.",
+      tools: ["read"],
+      setupFiles: { "src/math.ts": "export {};\n" },
+      checks: [{ type: "toolCalled", name: "read", domain: "task", weight: 1 }],
+    };
+
+    expect(
+      parseCorpus({ version: 1, cases: [evalCase] }).cases[0]?.setupFiles,
+    ).toEqual({ "src/math.ts": "export {};\n" });
+    for (const setupFiles of [
+      {},
+      { "../x.ts": "" },
+      { "/abs.ts": "" },
+      { "tests/math.case.ts": "" },
+      { "src/math.ts": 1 },
+    ]) {
+      expect(() =>
+        parseCorpus({ version: 1, cases: [{ ...evalCase, setupFiles }] }),
+      ).toThrow("setupFiles must map");
+    }
+  });
+
   it("accepts agentResponse only with the Agent tool", () => {
     const evalCase = {
       id: "agent-response",

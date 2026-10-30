@@ -1,5 +1,13 @@
 import { existsSync, readFileSync } from "node:fs";
-import { cp, mkdir, mkdtemp, readdir, realpath, rm } from "node:fs/promises";
+import {
+  cp,
+  mkdir,
+  mkdtemp,
+  readdir,
+  realpath,
+  rm,
+  writeFile,
+} from "node:fs/promises";
 import { tmpdir } from "node:os";
 import {
   dirname,
@@ -822,6 +830,12 @@ export async function runVariant(
   const workspace = await mkdtemp(join(tmpdir(), "supa-pi-prompt-eval-"));
   const sessionId = SessionManager.inMemory().getSessionId();
   await copyFixture(options.fixturePath, workspace);
+  for (const [path, content] of Object.entries(
+    options.evalCase.setupFiles ?? {},
+  )) {
+    await mkdir(dirname(join(workspace, path)), { recursive: true });
+    await writeFile(join(workspace, path), content);
+  }
   const initialWorkspaceSnapshot = await snapshotWorkspace(workspace);
   // Child usage (tokens, cost, turns) is folded into this run's metrics so a
   // delegating arm pays for its worker. Child tool calls stay out of the

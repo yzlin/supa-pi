@@ -183,6 +183,8 @@ export interface EvalCase {
   agentResponse?: string;
   /** Run `Agent` as a real nested loop with this role prompt and tool set. */
   agentChild?: AgentChild;
+  /** Fixture files overwritten before the run, as relative path → full content. */
+  setupFiles?: Record<string, string>;
   checks: EvalCheck[];
 }
 
@@ -529,6 +531,32 @@ function parseCheck(value: unknown, label: string): EvalCheck {
   }
 }
 
+function parseSetupFiles(
+  caseValue: Record<string, unknown>,
+  label: string,
+): Record<string, string> | undefined {
+  const files = caseValue.setupFiles;
+  if (files === undefined) {
+    return undefined;
+  }
+  assertObject(files, `${label}.setupFiles`);
+  const entries = Object.entries(files);
+  if (
+    entries.length === 0 ||
+    !entries.every(
+      ([path, content]) =>
+        isSafeRelativePath(path) &&
+        !path.startsWith("tests/") &&
+        typeof content === "string",
+    )
+  ) {
+    throw new Error(
+      `${label}.setupFiles must map safe non-test relative paths to text`,
+    );
+  }
+  return Object.fromEntries(entries) as Record<string, string>;
+}
+
 function parseAgentChild(
   caseValue: Record<string, unknown>,
   label: string,
@@ -680,6 +708,7 @@ export function parseCorpus(value: unknown): EvalCorpus {
       );
     }
     const agentChild = parseAgentChild(caseValue, label);
+    const setupFiles = parseSetupFiles(caseValue, label);
 
     return {
       id: caseValue.id,
@@ -693,6 +722,7 @@ export function parseCorpus(value: unknown): EvalCorpus {
         ? {}
         : { agentResponse: caseValue.agentResponse as string }),
       ...(agentChild === undefined ? {} : { agentChild }),
+      ...(setupFiles === undefined ? {} : { setupFiles }),
       checks: caseValue.checks.map((check, checkIndex) =>
         parseCheck(check, `${label}.checks[${checkIndex}]`),
       ),
