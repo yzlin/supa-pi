@@ -13,9 +13,7 @@ These are repository defaults, not the effective settings of a running Pi sessio
 | First-run main session | `claude-code/claude-opus-5-5`, `high` | [`setup.sh`](../../setup.sh) |
 | Direct executor agent | `claude-code/claude-opus-5-5`, `high` | [`agents/executor.md`](../../agents/executor.md) |
 | Direct explorer agent | `claude-code/claude-sonnet-5-5`, `low` | [`agents/explorer.md`](../../agents/explorer.md) |
-| Direct review-synthesizer agent | `claude-code/claude-sonnet-5-5`, `low` | [`agents/review-synthesizer.md`](../../agents/review-synthesizer.md) |
 | `/review` built-in reviewer panel / verifier | `openai-codex/gpt-6-astra`, `medium` | [`workflow.ts`](../../extensions/review/workflow.ts), [`pipeline-contracts.ts`](../../extensions/review/pipeline-contracts.ts), [`pipeline.ts`](../../extensions/review/pipeline.ts) |
-| `/review` built-in synthesizer | `openai-codex/gpt-6-luna`, `medium` | [`workflow.ts`](../../extensions/review/workflow.ts), [`pipeline-contracts.ts`](../../extensions/review/pipeline-contracts.ts), [`pipeline.ts`](../../extensions/review/pipeline.ts) |
 | Prompt-eval CLI | `openai-codex/gpt-6-sol`, `high` | [`cli.ts`](../../evals/prompt-optimization/cli.ts) |
 
 Other direct agent defaults live in their [`agents/` frontmatter](../../agents/). `/review` layers invocation flags, project config, global config, then built-in defaults **per field**; see [review configuration](../../extensions/review/README.md#configuration-and-disclosure).

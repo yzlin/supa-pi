@@ -11,7 +11,6 @@ const reviewAgents = [
   "agents/security-reviewer.md",
   "agents/performance-reviewer.md",
   "agents/database-reviewer.md",
-  "agents/review-synthesizer.md",
 ];
 
 describe("Plain report wiring contracts", () => {

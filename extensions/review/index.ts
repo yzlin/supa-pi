@@ -87,7 +87,6 @@ import { ReviewRunController } from "./lifecycle";
 import { assertReviewEfforts } from "./pipeline-contracts";
 import {
   DEFAULT_REVIEWER_PANEL,
-  DEFAULT_SYNTHESIZER_MODEL,
   DEFAULT_VERIFIER_MODEL,
   REVIEW_REPORT_MESSAGE_TYPE,
   type ReviewerAgent,
@@ -808,16 +807,10 @@ const CAMEL_CASE_BOUNDARY = /([A-Z])/g;
 const MODEL_CONFIG_ACTIONS = [
   "globalReviewerPanel",
   "projectReviewerPanel",
-  "globalSynthesizerModel",
-  "projectSynthesizerModel",
   "globalVerifierModel",
   "projectVerifierModel",
 ] as const;
-const MODEL_CONFIG_FIELDS = [
-  "reviewerPanel",
-  "synthesizerModel",
-  "verifierModel",
-] as const;
+const MODEL_CONFIG_FIELDS = ["reviewerPanel", "verifierModel"] as const;
 type ModelConfigAction = (typeof MODEL_CONFIG_ACTIONS)[number];
 type ModelConfigField = (typeof MODEL_CONFIG_FIELDS)[number];
 
@@ -828,9 +821,6 @@ function isModelConfigAction(value: string): value is ModelConfigAction {
 function modelConfigField(action: ModelConfigAction): ModelConfigField {
   if (action.endsWith("ReviewerPanel")) {
     return "reviewerPanel";
-  }
-  if (action.endsWith("SynthesizerModel")) {
-    return "synthesizerModel";
   }
   return "verifierModel";
 }
@@ -855,9 +845,7 @@ function builtInModelConfigValue(
   if (field === "reviewerPanel") {
     return [...DEFAULT_REVIEWER_PANEL];
   }
-  return field === "synthesizerModel"
-    ? DEFAULT_SYNTHESIZER_MODEL
-    : DEFAULT_VERIFIER_MODEL;
+  return DEFAULT_VERIFIER_MODEL;
 }
 
 type ReviewPresetValue =
@@ -900,11 +888,6 @@ function assertEffectiveReviewModelsAvailable(
   for (const entry of models.reviewerPanel) {
     assertReviewModelAvailable(ctx, entry.model, "Reviewer");
   }
-  assertReviewModelAvailable(
-    ctx,
-    models.synthesizerModel,
-    "Review synthesizer",
-  );
   assertReviewModelAvailable(ctx, models.verifierModel, "Review verifier");
 }
 
@@ -923,7 +906,6 @@ function formatEffectiveModelDisclosure(models: EffectiveReviewModels): string {
     ...models.reviewerPanel.map((entry) =>
       formatModelDisclosure("reviewer", entry.model, entry.thinkingLevel),
     ),
-    formatModelDisclosure("synthesizer", models.synthesizerModel, "medium"),
     formatModelDisclosure("verifier", models.verifierModel, "medium"),
   ].join("\n");
 }
@@ -1953,7 +1935,7 @@ export default function reviewExtension(pi: ExtensionAPI) {
         const instruction =
           field === "reviewerPanel"
             ? `Enter ${project ? "project" : "global"} reviewer models as model=level, comma-separated (blank clears):`
-            : `Enter ${project ? "project" : "global"} ${field === "synthesizerModel" ? "synthesizer" : "verifier"} model (provider/model; blank clears):`;
+            : `Enter ${project ? "project" : "global"} verifier model (provider/model; blank clears):`;
         const value = await ctx.ui.editor(
           `${instruction}\n${current === undefined ? "Default" : "Current"}: ${formatModelConfigValue(current ?? fallback)}`,
           initial,
@@ -1998,10 +1980,6 @@ export default function reviewExtension(pi: ExtensionAPI) {
             projectConfig.reviewerPanel ??
             globalConfig.reviewerPanel ??
             DEFAULT_REVIEWER_PANEL;
-          const prospectiveSynthesizer =
-            projectConfig.synthesizerModel ??
-            globalConfig.synthesizerModel ??
-            DEFAULT_SYNTHESIZER_MODEL;
           const prospectiveVerifier =
             projectConfig.verifierModel ??
             globalConfig.verifierModel ??
@@ -2009,7 +1987,6 @@ export default function reviewExtension(pi: ExtensionAPI) {
           validateReviewConfig(
             {
               reviewerPanel: prospectivePanel,
-              synthesizerModel: prospectiveSynthesizer,
               verifierModel: prospectiveVerifier,
             },
             "<effective review configuration>",
@@ -2017,11 +1994,6 @@ export default function reviewExtension(pi: ExtensionAPI) {
           for (const entry of prospectivePanel) {
             assertReviewModelAvailable(ctx, entry.model, "Reviewer");
           }
-          assertReviewModelAvailable(
-            ctx,
-            prospectiveSynthesizer,
-            "Review synthesizer",
-          );
           assertReviewModelAvailable(
             ctx,
             prospectiveVerifier,
@@ -2569,7 +2541,6 @@ export default function reviewExtension(pi: ExtensionAPI) {
       extraInstruction?: string;
       reviewers?: ReviewerAgent[];
       reviewerPanel?: ReviewPanelEntry[];
-      synthesizerModel?: string;
       verifierModel?: string;
     },
     reviewController = new AbortController(),
@@ -2644,17 +2615,14 @@ export default function reviewExtension(pi: ExtensionAPI) {
       // No watcher: every review resolves both files again, then applies invocation flags.
       const resolvedConfig = await resolveReviewConfig(ctx.cwd, {
         reviewerPanel: options?.reviewerPanel,
-        synthesizerModel: options?.synthesizerModel?.trim() || undefined,
         verifierModel: options?.verifierModel?.trim() || undefined,
       });
-      const { reviewerPanel, synthesizerModel, verifierModel } =
-        resolvedConfig.effective;
+      const { reviewerPanel, verifierModel } = resolvedConfig.effective;
       assertReviewEfforts(reviewerPanel);
       if (!(await isProjectReviewConfigApproved(resolvedConfig.project))) {
         const projectConfig = resolvedConfig.project.config;
         const projectFieldOverrides = [
           ["reviewerPanel", options?.reviewerPanel],
-          ["synthesizerModel", options?.synthesizerModel],
           ["verifierModel", options?.verifierModel],
         ] as const;
         const projectConfigHasMaskedFields = projectFieldOverrides.some(
@@ -2715,7 +2683,7 @@ export default function reviewExtension(pi: ExtensionAPI) {
         )
         .join(", ");
       ctx.ui.notify(
-        `Review plan: initial calls: ${reviewerRunCount} reviewer ${reviewerCallLabel} (${reviewers.length} ${reviewerRoleLabel} × ${reviewerPanel.length} ${reviewerModelLabel}), plus 2 downstream calls if findings (1 synthesizer + 1 verifier). Possible end-of-run structured corrections: up to ${reviewerRunCount} reviewer ${reviewerCorrectionLabel}, plus up to 2 downstream corrections when those stages run (1 synthesizer + 1 verifier). Only missing valid reports receive a final correction; semantic failures do not retry. Reviewers: ${plannedModels}. Synthesizer: ${sanitizeModelForUi(synthesizerModel)}=medium. Verifier: ${sanitizeModelForUi(verifierModel)}=medium. Scope: ${hint}.`,
+        `Review plan: initial calls: ${reviewerRunCount} reviewer ${reviewerCallLabel} (${reviewers.length} ${reviewerRoleLabel} × ${reviewerPanel.length} ${reviewerModelLabel}), plus 1 verifier call if findings. Possible end-of-run structured corrections: up to ${reviewerRunCount} reviewer ${reviewerCorrectionLabel}, plus up to 1 verifier correction when it runs. Only missing valid reports receive a final correction; semantic failures do not retry. Reviewers: ${plannedModels}. Verifier: ${sanitizeModelForUi(verifierModel)}=medium. Scope: ${hint}.`,
         "info",
       );
 
@@ -2733,7 +2701,6 @@ export default function reviewExtension(pi: ExtensionAPI) {
           invocationPacket,
           reviewers,
           reviewerPanel,
-          synthesizerModel,
           verifierModel,
           projectGuidelines,
         },
@@ -2789,7 +2756,6 @@ export default function reviewExtension(pi: ExtensionAPI) {
     const tokens = tokenizeReviewTargetArgs(args ?? "");
     const remaining: string[] = [];
     let reviewerModelsValue: string | undefined;
-    let synthesizerModel: string | undefined;
 
     for (let index = 0; index < tokens.length; index++) {
       const token = tokens[index];
@@ -2806,7 +2772,22 @@ export default function reviewExtension(pi: ExtensionAPI) {
         }
         continue;
       }
-      if (token === "--reviewer-models" || token === "--synthesizer-model") {
+      if (
+        token === "--synthesizer-model" ||
+        token.startsWith("--synthesizer-model=")
+      ) {
+        return {
+          target: null,
+          error:
+            "--synthesizer-model was removed; the verifier now groups findings.",
+          extraInstruction: undefined,
+          reviewers: undefined,
+          useAutoReviewers: undefined,
+          verifierModel: undefined,
+          reviewerPanel: undefined,
+        };
+      }
+      if (token === "--reviewer-models") {
         const value = tokens[index + 1];
         if (!value) {
           return {
@@ -2817,23 +2798,14 @@ export default function reviewExtension(pi: ExtensionAPI) {
             useAutoReviewers: undefined,
             verifierModel: undefined,
             reviewerPanel: undefined,
-            synthesizerModel: undefined,
           };
         }
-        if (token === "--reviewer-models") {
-          reviewerModelsValue = value;
-        } else {
-          synthesizerModel = value.trim();
-        }
+        reviewerModelsValue = value;
         index += 1;
         continue;
       }
       if (token.startsWith("--reviewer-models=")) {
         reviewerModelsValue = token.slice("--reviewer-models=".length);
-        continue;
-      }
-      if (token.startsWith("--synthesizer-model=")) {
-        synthesizerModel = token.slice("--synthesizer-model=".length).trim();
         continue;
       }
       remaining.push(token);
@@ -2844,9 +2816,6 @@ export default function reviewExtension(pi: ExtensionAPI) {
       if (reviewerModelsValue !== undefined) {
         reviewerPanel = parseReviewerPanel(reviewerModelsValue);
       }
-      if (synthesizerModel !== undefined && !synthesizerModel) {
-        throw new Error("Review synthesizer model cannot be blank.");
-      }
     } catch (error) {
       return {
         target: null,
@@ -2856,7 +2825,6 @@ export default function reviewExtension(pi: ExtensionAPI) {
         useAutoReviewers: undefined,
         verifierModel: undefined,
         reviewerPanel: undefined,
-        synthesizerModel: undefined,
       };
     }
 
@@ -2869,7 +2837,6 @@ export default function reviewExtension(pi: ExtensionAPI) {
       ...parsed,
       reviewers: parsed.reviewers as ReviewerAgent[] | undefined,
       reviewerPanel,
-      synthesizerModel,
     };
   }
 
@@ -2921,14 +2888,12 @@ export default function reviewExtension(pi: ExtensionAPI) {
       const useAutoReviewers = parsed.useAutoReviewers ?? false;
       const verifierModel = parsed.verifierModel?.trim() || undefined;
       const reviewerPanel = parsed.reviewerPanel;
-      const synthesizerModel = parsed.synthesizerModel;
 
       let modelsPreflighted = false;
       if (parsed.target) {
         try {
           const resolved = await resolveReviewConfig(ctx.cwd, {
             reviewerPanel,
-            synthesizerModel,
             verifierModel,
           });
           assertEffectiveReviewModelsAvailable(ctx, resolved.effective);
@@ -3019,7 +2984,6 @@ export default function reviewExtension(pi: ExtensionAPI) {
           if (!modelsPreflighted) {
             const resolved = await resolveReviewConfig(ctx.cwd, {
               reviewerPanel,
-              synthesizerModel,
               verifierModel,
             });
             assertEffectiveReviewModelsAvailable(ctx, resolved.effective);
@@ -3033,7 +2997,6 @@ export default function reviewExtension(pi: ExtensionAPI) {
             extraInstruction,
             reviewers: reviewerSelection.reviewers,
             reviewerPanel,
-            synthesizerModel,
             verifierModel,
           };
           if (ctx.mode === "tui") {

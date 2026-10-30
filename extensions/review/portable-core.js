@@ -253,87 +253,11 @@ export const runPortableReviewCore = (operation, input) => {
     });
   }
 
-  function parseSynthesizer(value, candidates) {
-    if (
-      !(
-        isObject(value) &&
-        hasOnlyKeys(value, ["clusters"]) &&
-        Array.isArray(value.clusters)
-      )
-    ) {
-      return {
-        ok: false,
-        error: "Synthesizer output must contain only a clusters array.",
-      };
-    }
-    const knownIds = new Set(
-      candidates.map((candidate) => candidate.candidateId)
-    );
-    const usedIds = new Set();
-    const byId = new Map(
-      candidates.map((candidate) => [candidate.candidateId, candidate])
-    );
-    const clusters = [];
-    for (const raw of value.clusters) {
-      if (
-        !(
-          isObject(raw) &&
-          hasOnlyKeys(raw, ["memberIds", "title", "why", "change"]) &&
-          isStringArray(raw.memberIds)
-        ) ||
-        raw.memberIds.length === 0
-      ) {
-        return { ok: false, error: "Synthesizer cluster has invalid fields." };
-      }
-      for (const field of ["title", "why", "change"]) {
-        if (typeof raw[field] !== "string" || !raw[field].trim()) {
-          return {
-            ok: false,
-            error: `Synthesizer cluster ${field} must be non-empty.`,
-          };
-        }
-      }
-      for (const id of raw.memberIds) {
-        if (!knownIds.has(id)) {
-          return {
-            ok: false,
-            error: `Synthesizer used unknown candidate ID '${id}'.`,
-          };
-        }
-        if (usedIds.has(id)) {
-          return {
-            ok: false,
-            error: `Synthesizer repeated candidate ID '${id}'.`,
-          };
-        }
-        usedIds.add(id);
-      }
-      const members = raw.memberIds.map((id) => byId.get(id));
-      clusters.push({
-        clusterId: `cluster-${String(clusters.length + 1).padStart(4, "0")}`,
-        memberIds: raw.memberIds,
-        title: raw.title.trim(),
-        why: raw.why.trim(),
-        change: raw.change.trim(),
-        reportedPriorities: members.map((member) => member.priority),
-        locations: distinctLocations(members),
-      });
-    }
-    if (usedIds.size !== knownIds.size) {
-      const missing = [...knownIds].filter((id) => !usedIds.has(id));
-      return {
-        ok: false,
-        error: `Synthesizer omitted candidate IDs: ${missing.join(", ")}.`,
-      };
-    }
-    return { ok: true, value: clusters };
-  }
-
   function validateVerifier(value, candidateFindings) {
     if (
       !(
         isObject(value) &&
-        hasOnlyKeys(value, ["reviewScope", "verdict", "findings"])
+        hasOnlyKeys(value, ["reviewScope", "verdict", "findings", "rejected"])
       )
     ) {
       return { ok: false, error: "Verifier output must be a closed object." };
@@ -342,7 +266,8 @@ export const runPortableReviewCore = (operation, input) => {
       !(
         isStringArray(value.reviewScope) &&
         isVerdict(value.verdict) &&
-        Array.isArray(value.findings)
+        Array.isArray(value.findings) &&
+        Array.isArray(value.rejected)
       )
     ) {
       return {
@@ -445,12 +370,48 @@ export const runPortableReviewCore = (operation, input) => {
         consensusEffect: raw.consensusEffect,
       });
     }
+    const rejected = [];
+    for (const raw of value.rejected) {
+      if (
+        !(
+          isObject(raw) &&
+          hasOnlyKeys(raw, ["id", "reason"]) &&
+          typeof raw.id === "string" &&
+          typeof raw.reason === "string" &&
+          raw.reason.trim()
+        )
+      ) {
+        return {
+          ok: false,
+          error: "Verifier rejection needs only an ID and a non-empty reason.",
+        };
+      }
+      if (!knownIds.has(raw.id)) {
+        return {
+          ok: false,
+          error: `Verifier rejected unknown member ID '${raw.id}'.`,
+        };
+      }
+      if (usedIds.has(raw.id)) {
+        return { ok: false, error: `Verifier repeated member ID '${raw.id}'.` };
+      }
+      usedIds.add(raw.id);
+      rejected.push({ id: raw.id, reason: raw.reason.trim() });
+    }
+    if (usedIds.size !== knownIds.size) {
+      const missing = [...knownIds].filter((id) => !usedIds.has(id));
+      return {
+        ok: false,
+        error: `Verifier omitted candidate IDs: ${missing.join(", ")}.`,
+      };
+    }
     return {
       ok: true,
       value: {
         reviewScope: value.reviewScope,
         verdict: value.verdict,
         findings,
+        rejected,
       },
     };
   }
@@ -540,8 +501,6 @@ export const runPortableReviewCore = (operation, input) => {
       return buildCandidateFindings(input.runs);
     case "distinctLocations":
       return distinctLocations(input.candidates);
-    case "parseSynthesizer":
-      return parseSynthesizer(input.value, input.candidates);
     case "validateVerifier":
       return validateVerifier(input.value, input.candidateFindings || []);
     case "applyDeterministicReportFields":
@@ -572,8 +531,6 @@ export const buildPortableCandidateFindings = (runs) =>
   runPortableReviewCore("buildCandidateFindings", { runs });
 export const distinctPortableLocations = (candidates) =>
   runPortableReviewCore("distinctLocations", { candidates });
-export const parsePortableSynthesizerOutput = (value, candidates) =>
-  runPortableReviewCore("parseSynthesizer", { value, candidates });
 export const validatePortableVerifier = (value, candidateFindings) =>
   runPortableReviewCore("validateVerifier", { value, candidateFindings });
 export const applyPortableDeterministicReportFields = (

@@ -27,11 +27,6 @@
         }
       }
     },
-    "synthesizerModel": {
-      "type": "string",
-      "description": "provider/model with no whitespace, Unicode control, or Unicode format characters",
-      "pattern": "^(?!.*[\\p{Cc}\\p{Cf}])[^\\s/]+/[^\\s]+$"
-    },
     "verifierModel": {
       "type": "string",
       "description": "provider/model with no whitespace, Unicode control, or Unicode format characters",

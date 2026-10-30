@@ -9,7 +9,6 @@ export interface ReviewPipelineInput {
   invocationPacket: string;
   reviewers: readonly ReviewerAgent[];
   reviewerPanel: readonly ReviewPanelEntry[];
-  synthesizerModel: string;
   verifierModel: string;
   projectGuidelines?: string | null;
 }
@@ -23,7 +22,6 @@ export interface ReviewRawResult {
     status: "succeeded" | "failed";
     output?: unknown;
   }>;
-  synthesizerOutput?: unknown;
   verifierOutput?: unknown;
 }
 
@@ -78,15 +76,14 @@ export function prepareReviewPlan(input: ReviewPipelineInput) {
     models.add(model);
     return { model, thinkingLevel: entry.thinkingLevel };
   });
-  if (!(input.synthesizerModel.trim() && input.verifierModel.trim())) {
-    throw new Error("Review pipeline downstream model IDs cannot be blank.");
+  if (!input.verifierModel.trim()) {
+    throw new Error("Review pipeline verifier model ID cannot be blank.");
   }
   return {
     scopeHint: input.scopeHint.trim(),
     invocationPacket: input.invocationPacket,
     reviewers: [...input.reviewers],
     reviewerPanel,
-    synthesizerModel: input.synthesizerModel.trim(),
     verifierModel: input.verifierModel.trim(),
     projectGuidelines: input.projectGuidelines?.trim() || "",
   };

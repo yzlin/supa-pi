@@ -28,10 +28,6 @@ export function buildPortableCorrectReviewResult(
 ): unknown;
 export function buildPortableCandidateFindings(runs: unknown[]): unknown[];
 export function distinctPortableLocations(candidates: unknown[]): unknown[];
-export function parsePortableSynthesizerOutput(
-  value: unknown,
-  candidates: unknown[],
-): PortableValidationResult;
 export function validatePortableVerifier(
   value: unknown,
   candidateFindings: unknown[],

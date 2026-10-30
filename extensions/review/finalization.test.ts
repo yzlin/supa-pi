@@ -11,7 +11,6 @@ const prepared: ReviewPipelineInput = {
     { model: "test/alpha", thinkingLevel: "medium" },
     { model: "test/beta", thinkingLevel: "high" },
   ],
-  synthesizerModel: "test/synthesizer",
   verifierModel: "test/verifier",
 };
 const finding = {
@@ -37,16 +36,6 @@ function raw(findings = [finding]) {
     })),
     ...(findings.length
       ? {
-          synthesizerOutput: {
-            clusters: [
-              {
-                memberIds: ["candidate-0001", "candidate-0002"],
-                title: finding.title,
-                why: finding.why,
-                change: finding.change,
-              },
-            ],
-          },
           verifierOutput: {
             reviewScope: ["src snapshot"],
             verdict: "needs attention",
@@ -64,6 +53,7 @@ function raw(findings = [finding]) {
                 consensusEffect: "raised-one-level",
               },
             ],
+            rejected: [],
           },
         }
       : {}),
@@ -85,21 +75,22 @@ describe("prepared review raw result derivation", () => {
     ]);
     expect(result.verifier.findings[0]?.supportCount).toBe(2);
     expect(result.coverage.degraded).toBe(false);
-    expect(result.coverage.callPlan.synthesizer?.model).toBe(
-      "test/synthesizer",
-    );
+    expect(result.coverage.callPlan.verifier?.model).toBe("test/verifier");
+    expect(result.verifier.findings[0]?.memberIds).toEqual([
+      "candidate-0001",
+      "candidate-0002",
+    ]);
   });
 
   it("skips downstream stages for a clean review", () => {
     const result = derive(raw([]));
     expect(result.verifier.verdict).toBe("correct");
     expect(result.verifier.reviewScope).toEqual(["src snapshot"]);
-    expect(result.clusters).toEqual([]);
-    expect(result.coverage.callPlan.synthesizer).toBeUndefined();
+    expect(result.coverage.callPlan).not.toHaveProperty("synthesizer");
     expect(result.coverage.callPlan.verifier).toBeUndefined();
     expect(() =>
       derive({ ...raw([]), synthesizerOutput: { clusters: [] } }),
-    ).toThrow();
+    ).toThrow("Invalid raw review result");
   });
 
   it("allows degraded coverage but requires success for each selected role", () => {
@@ -166,21 +157,21 @@ describe("prepared review raw result derivation", () => {
   });
 
   it("rejects invalid, repeated and lossy downstream IDs without retries", () => {
-    for (const memberIds of [
-      [],
-      ["invented"],
-      ["candidate-0001"],
-      ["candidate-0001", "candidate-0001"],
+    for (const rejected of [
+      [{ id: "candidate-0001", reason: "Repeats an accepted ID." }],
+      [{ id: "invented", reason: "Unknown ID." }],
+      [{ id: "candidate-0003", reason: " " }],
     ]) {
       const value = raw();
-      if (value.synthesizerOutput) {
-        value.synthesizerOutput.clusters[0].memberIds = memberIds;
+      if (value.verifierOutput) {
+        value.verifierOutput.rejected = rejected;
       }
-      expect(() => derive(value)).toThrow("Invalid synthesizer output");
+      expect(() => derive(value)).toThrow("Invalid verifier output");
     }
     for (const memberIds of [
       ["invented"],
       ["candidate-0001", "candidate-0001"],
+      ["candidate-0001"],
     ]) {
       const value = raw();
       if (value.verifierOutput) {

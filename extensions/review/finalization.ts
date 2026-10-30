@@ -7,7 +7,6 @@ import {
   buildPortableCorrectReviewResult,
   buildPortableReviewerCoverage,
   collectPortableHumanReviewerCallouts,
-  parsePortableSynthesizerOutput,
   validatePortableReviewer,
   validatePortableVerifier,
 } from "./portable-core";
@@ -17,7 +16,6 @@ import type {
   ReviewRunOutcome,
   ReviewWorkflowCoverage,
   ReviewWorkflowResult,
-  SynthesizedClusterContract,
   VerifierJsonContract,
 } from "./workflow";
 
@@ -87,7 +85,7 @@ function parseRaw(rawJson: string): Record<string, unknown> {
   }
   boundJson(value);
   const result = record(value);
-  closed(result, ["reviewerRuns", "synthesizerOutput", "verifierOutput"]);
+  closed(result, ["reviewerRuns", "verifierOutput"]);
   return result;
 }
 
@@ -178,10 +176,6 @@ export function derivePreparedReviewResult(
       })),
       ...(candidates.length
         ? {
-            synthesizer: {
-              model: prepared.synthesizerModel,
-              thinkingLevel: "medium",
-            },
             verifier: {
               model: prepared.verifierModel,
               thinkingLevel: "medium",
@@ -196,29 +190,18 @@ export function derivePreparedReviewResult(
     reviewerCoverage: buildPortableReviewerCoverage([...prepared.reviewers]),
   };
   if (!candidates.length) {
-    if (
-      Object.hasOwn(raw, "synthesizerOutput") ||
-      Object.hasOwn(raw, "verifierOutput")
-    ) {
+    if (Object.hasOwn(raw, "verifierOutput")) {
       return invalidRaw();
     }
     return {
       reviewerOutputs,
       candidates,
       coverage,
-      clusters: [],
       verifier: buildPortableCorrectReviewResult(
         prepared,
         deterministicReportFields,
       ) as VerifierJsonContract,
     };
-  }
-  const parsedClusters = parsePortableSynthesizerOutput(
-    raw.synthesizerOutput,
-    candidates,
-  );
-  if (!parsedClusters.ok) {
-    throw new Error("Invalid synthesizer output.");
   }
   const parsedVerifier = validatePortableVerifier(
     raw.verifierOutput,
@@ -231,7 +214,6 @@ export function derivePreparedReviewResult(
     reviewerOutputs,
     candidates,
     coverage,
-    clusters: parsedClusters.value as SynthesizedClusterContract[],
     verifier: applyPortableDeterministicReportFields(
       parsedVerifier.value,
       candidates,

@@ -1,6 +1,5 @@
 export const REVIEW_REPORT_MESSAGE_TYPE = "review-report";
 export const REVIEWER_MODEL_POLICY_MODEL = "openai-codex/gpt-6-astra";
-export const DEFAULT_SYNTHESIZER_MODEL = "openai-codex/gpt-6-luna";
 export const DEFAULT_VERIFIER_MODEL = "openai-codex/gpt-6-astra";
 export const REVIEW_WORKFLOW_CONCURRENCY = 4;
 
@@ -52,15 +51,6 @@ export interface ReviewCandidateFindingContract extends ReviewFindingContract {
   model: string;
   thinkingLevel: ReviewThinkingLevel;
 }
-export interface SynthesizedClusterContract {
-  clusterId: string;
-  memberIds: string[];
-  title: string;
-  why: string;
-  change: string;
-  reportedPriorities: ReviewPriority[];
-  locations: ReviewLocation[];
-}
 export type ReviewSketchKind = "flow" | "diff";
 export interface ReviewSketch {
   kind: ReviewSketchKind;
@@ -96,6 +86,8 @@ export interface VerifierSubmissionJsonContract {
     reason: string;
     consensusEffect: "none" | "raised-one-level";
   }>;
+  /** Every candidate ID not in an accepted finding, with the reason. */
+  rejected: Array<{ id: string; reason: string }>;
 }
 export interface VerifierJsonContract {
   reviewScope: string[];
@@ -119,7 +111,6 @@ export interface ReviewWorkflowCallPlan {
     model: string;
     thinkingLevel: ReviewThinkingLevel;
   }>;
-  synthesizer?: ReviewPanelEntry;
   verifier?: ReviewPanelEntry;
 }
 export interface ReviewWorkflowCoverage {
@@ -134,7 +125,6 @@ export interface ReviewWorkflowResult {
   reviewerOutputs: ReviewerJsonContract[];
   coverage: ReviewWorkflowCoverage;
   candidates: ReviewCandidateFindingContract[];
-  clusters: SynthesizedClusterContract[];
 }
 
 const MODEL_MARKDOWN_ESCAPE_RE = /([\\`#])/g;

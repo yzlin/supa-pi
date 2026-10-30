@@ -323,7 +323,7 @@ async function extensionFixture() {
   await commands
     .get("review")!
     .handler(
-      "folder target.txt --reviewers code-reviewer --reviewer-models test/alpha=medium,test/beta=high --synthesizer-model test/synth --verifier-model test/verify",
+      "folder target.txt --reviewers code-reviewer --reviewer-models test/alpha=medium,test/beta=high --verifier-model test/verify",
       f.ctx,
     );
   const id = handoffs[0]?.match(

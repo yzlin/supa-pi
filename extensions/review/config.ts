@@ -5,7 +5,6 @@ import path from "node:path";
 
 import {
   DEFAULT_REVIEWER_PANEL,
-  DEFAULT_SYNTHESIZER_MODEL,
   DEFAULT_VERIFIER_MODEL,
   type ReviewPanelEntry,
   type ReviewThinkingLevel,
@@ -14,13 +13,11 @@ import {
 export interface ReviewModelConfig {
   $schema?: string;
   reviewerPanel?: ReviewPanelEntry[];
-  synthesizerModel?: string;
   verifierModel?: string;
 }
 
 export interface EffectiveReviewModels {
   reviewerPanel: ReviewPanelEntry[];
-  synthesizerModel: string;
   verifierModel: string;
 }
 
@@ -42,11 +39,7 @@ interface ReviewTrustFile {
   approvals?: Array<{ path: string; hash: string }>;
 }
 
-const MODEL_FIELDS = [
-  "reviewerPanel",
-  "synthesizerModel",
-  "verifierModel",
-] as const;
+const MODEL_FIELDS = ["reviewerPanel", "verifierModel"] as const;
 const CONFIG_KEYS = new Set(["$schema", ...MODEL_FIELDS]);
 const SHA256_PATTERN = /^[a-f0-9]{64}$/;
 const MODEL_ID_PATTERN = /^[^\s/]+\/[^\s]+$/;
@@ -157,13 +150,6 @@ export function validateReviewConfig(
       };
     });
   }
-  if (record.synthesizerModel !== undefined) {
-    config.synthesizerModel = validateModel(
-      record.synthesizerModel,
-      file,
-      "synthesizerModel",
-    );
-  }
   if (record.verifierModel !== undefined) {
     config.verifierModel = validateModel(
       record.verifierModel,
@@ -227,11 +213,6 @@ async function loadReviewConfig(
         global.config.reviewerPanel ??
         DEFAULT_REVIEWER_PANEL,
     ),
-    synthesizerModel:
-      explicit.synthesizerModel ??
-      project.config.synthesizerModel ??
-      global.config.synthesizerModel ??
-      DEFAULT_SYNTHESIZER_MODEL,
     verifierModel:
       explicit.verifierModel ??
       project.config.verifierModel ??

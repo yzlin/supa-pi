@@ -11,15 +11,12 @@ import {
 } from "./pipeline-contracts";
 import {
   buildReviewerPrompt,
-  buildSynthesizerPrompt,
   buildVerifierPrompt,
   reviewerSchema,
-  synthesizerSchema,
   verifierSchema,
 } from "./pipeline-prompts";
 import {
   buildPortableCandidateFindings,
-  parsePortableSynthesizerOutput,
   validatePortableReviewer,
   validatePortableVerifier,
 } from "./portable-core";
@@ -28,7 +25,6 @@ import type {
   ReviewCandidateFindingContract,
   ReviewerJsonContract,
   ReviewRunOutcome,
-  SynthesizedClusterContract,
 } from "./workflow";
 
 const CHILD_RUN_ID =
@@ -191,30 +187,11 @@ export async function runReviewPipeline(
     validatedRuns,
   ) as ReviewCandidateFindingContract[];
   if (candidates.length) {
-    const synthesis = await invoke(
-      "review-synthesizer",
-      plan.synthesizerModel,
-      "medium",
-      buildSynthesizerPrompt(plan, candidates),
-      synthesizerSchema(),
-    );
-    if (synthesis.failed) {
-      throw new Error("Review synthesizer agent run failed.");
-    }
-    raw.synthesizerOutput = synthesis.output;
-    const parsed = parsePortableSynthesizerOutput(synthesis.output, candidates);
-    if (!parsed.ok) {
-      throw new Error("Invalid synthesizer output.");
-    }
     const verification = await invoke(
       "review-verifier",
       plan.verifierModel,
       "medium",
-      buildVerifierPrompt(
-        plan,
-        candidates,
-        parsed.value as SynthesizedClusterContract[],
-      ),
+      buildVerifierPrompt(plan, candidates),
       verifierSchema(),
     );
     if (

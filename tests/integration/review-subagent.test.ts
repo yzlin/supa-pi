@@ -32,7 +32,7 @@ import { isRecord } from "../../extensions/subagent/agents";
 import subagentExtension from "../../extensions/subagent/index";
 
 // Actual tmux/Pi children; deterministic reports verify boundaries, not model review quality.
-test("native review captures three actual offline children before single owned publication", async () => {
+test("native review captures two actual offline children before single owned publication", async () => {
   const root = await mkdtemp(path.join(tmpdir(), "supa-review-native-"));
   const agentDir = path.join(root, "agent");
   const cwd = path.join(root, "workspace");
@@ -56,20 +56,16 @@ test("native review captures three actual offline children before single owned p
       humanReviewerCallouts: [],
       notes: ["No actual code defect is claimed."],
     },
-    "review-synthesizer": {
-      clusters: [
-        {
-          memberIds: ["candidate-0001"],
-          title: "Offline fixture",
-          why: "This is a synthetic boundary fixture.",
-          change: "Do not change the fixture.",
-        },
-      ],
-    },
     "review-verifier": {
       reviewScope: ["target snapshot"],
       verdict: "correct",
       findings: [],
+      rejected: [
+        {
+          id: "candidate-0001",
+          reason: "The fixture states that it claims no code defect.",
+        },
+      ],
     },
   };
   for (const [role, report] of Object.entries(reports)) {
@@ -172,7 +168,6 @@ export default function(pi) {
                     "Inspect target.txt. This is a boundary fixture, not a real defect report.",
                   reviewers: ["code-reviewer"],
                   reviewerPanel: [{ model: modelId, thinkingLevel: "medium" }],
-                  synthesizerModel: modelId,
                   verifierModel: modelId,
                 },
                 signal,
@@ -184,7 +179,7 @@ export default function(pi) {
               );
               expect(
                 new Set(captures.map((capture) => capture.runId)).size,
-              ).toBe(3);
+              ).toBe(2);
               for (const capture of captures) {
                 const evidence: unknown = JSON.parse(
                   await readFile(capture.resultPath, "utf8"),

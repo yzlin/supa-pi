@@ -21,7 +21,6 @@ import reviewExtension from "./index";
 import type { SubagentParams } from "./test-fixtures";
 import {
   DEFAULT_REVIEWER_PANEL,
-  DEFAULT_SYNTHESIZER_MODEL,
   DEFAULT_VERIFIER_MODEL,
   REVIEW_REPORT_MESSAGE_TYPE,
 } from "./workflow";
@@ -35,7 +34,6 @@ interface SessionEntry {
   message?: { role: string; content: string };
 }
 
-const TEST_SYNTHESIZER = "test/synth";
 const TEST_VERIFIER = "test/verify";
 const MODEL_CONTROL_OR_FORMAT_RE = /[\p{Cc}\p{Cf}]/u;
 let testRoot = "";
@@ -302,11 +300,10 @@ async function withReviewConfigSandbox(
 }
 
 describe.serial("review model config", () => {
-  it("keeps Astra reviewers and verifier while defaulting synthesis to Luna", () => {
+  it("keeps Astra reviewer and verifier defaults", () => {
     expect(DEFAULT_REVIEWER_PANEL).toEqual([
       { model: "openai-codex/gpt-6-astra", thinkingLevel: "medium" },
     ]);
-    expect(DEFAULT_SYNTHESIZER_MODEL).toBe("openai-codex/gpt-6-luna");
     expect(DEFAULT_VERIFIER_MODEL).toBe("openai-codex/gpt-6-astra");
   });
 
@@ -316,11 +313,6 @@ describe.serial("review model config", () => {
         getGlobalReviewConfigPath(),
         "reviewerPanel",
         [{ model: "global/reviewer", thinkingLevel: "low" }],
-      );
-      await writeReviewConfigField(
-        getGlobalReviewConfigPath(),
-        "synthesizerModel",
-        "global/synth",
       );
       const projectPath = await getProjectReviewConfigPath(cwd);
       await writeReviewConfigField(
@@ -332,14 +324,15 @@ describe.serial("review model config", () => {
       const layered = await resolveReviewConfig(cwd);
       expect(layered.effective).toEqual({
         reviewerPanel: [{ model: "global/reviewer", thinkingLevel: "low" }],
-        synthesizerModel: "global/synth",
         verifierModel: "project/verify",
       });
       const explicit = await resolveReviewConfig(cwd, {
-        synthesizerModel: "flag/synth",
+        verifierModel: "flag/verify",
       });
-      expect(explicit.effective.synthesizerModel).toBe("flag/synth");
-      expect(explicit.effective.verifierModel).toBe("project/verify");
+      expect(explicit.effective.verifierModel).toBe("flag/verify");
+      expect(explicit.effective.reviewerPanel).toEqual([
+        { model: "global/reviewer", thinkingLevel: "low" },
+      ]);
     });
   });
 
@@ -349,18 +342,18 @@ describe.serial("review model config", () => {
       const projectPath = await getProjectReviewConfigPath(cwd);
       await writeReviewConfigField(
         globalPath,
-        "synthesizerModel",
-        "global/synth",
+        "verifierModel",
+        "global/verify",
       );
       await writeReviewConfigField(
         projectPath,
-        "synthesizerModel",
-        "project/synth",
+        "verifierModel",
+        "project/verify",
       );
-      await writeReviewConfigField(projectPath, "synthesizerModel", undefined);
+      await writeReviewConfigField(projectPath, "verifierModel", undefined);
 
-      expect((await resolveReviewConfig(cwd)).effective.synthesizerModel).toBe(
-        "global/synth",
+      expect((await resolveReviewConfig(cwd)).effective.verifierModel).toBe(
+        "global/verify",
       );
       expect(await fs.stat(projectPath).catch(() => null)).toBeNull();
     });
@@ -385,7 +378,7 @@ describe.serial("review model config", () => {
       );
       await fs.writeFile(
         projectPath,
-        JSON.stringify({ synthesizerModel: "provider/model\nspoof" }),
+        JSON.stringify({ verifierModel: "provider/model\nspoof" }),
       );
       expect(resolveReviewConfig(cwd)).rejects.toThrow("without whitespace");
       for (const unsafeModel of [
@@ -394,7 +387,7 @@ describe.serial("review model config", () => {
       ]) {
         await fs.writeFile(
           projectPath,
-          JSON.stringify({ synthesizerModel: unsafeModel }),
+          JSON.stringify({ verifierModel: unsafeModel }),
         );
         expect(resolveReviewConfig(cwd)).rejects.toThrow(
           "control, or Unicode format characters",
@@ -406,7 +399,7 @@ describe.serial("review model config", () => {
   it("reports malformed project config from the interactive selector without model calls", async () => {
     await withReviewConfigSandbox(async (cwd) => {
       const projectPath = await getProjectReviewConfigPath(cwd);
-      await fs.writeFile(projectPath, '{"synthesizerModel":');
+      await fs.writeFile(projectPath, '{"verifierModel":');
       const runtime = changedFilesRuntime();
       const { ctx, notifications } = createCtx();
       ctx.cwd = cwd;
@@ -430,7 +423,7 @@ describe.serial("review model config", () => {
   it("rejects unsafe invocation model IDs without rendering controls or making calls", async () => {
     await withReviewConfigSandbox(async (cwd) => {
       for (const args of [
-        "uncommitted --reviewers code-reviewer --synthesizer-model test/model\u001b",
+        "uncommitted --reviewers code-reviewer --reviewer-models test/model\u001b=high",
         "uncommitted --reviewers code-reviewer --verifier-model test/model\u202e",
       ]) {
         const runtime = changedFilesRuntime();
@@ -458,26 +451,18 @@ describe.serial("review model config", () => {
   it("approves exact canonical project path/hash and requires reapproval after changes", async () => {
     await withReviewConfigSandbox(async (cwd) => {
       const projectPath = await getProjectReviewConfigPath(cwd);
-      await writeReviewConfigField(
-        projectPath,
-        "synthesizerModel",
-        "one/model",
-      );
+      await writeReviewConfigField(projectPath, "verifierModel", "one/model");
       const first = (await resolveReviewConfig(cwd)).project;
       expect(await isProjectReviewConfigApproved(first)).toBe(false);
       await approveProjectReviewConfig(first);
       expect(await isProjectReviewConfigApproved(first)).toBe(true);
 
-      await writeReviewConfigField(
-        projectPath,
-        "synthesizerModel",
-        "two/model",
-      );
+      await writeReviewConfigField(projectPath, "verifierModel", "two/model");
       const changed = (await resolveReviewConfig(cwd)).project;
       expect(await isProjectReviewConfigApproved(changed)).toBe(false);
       await fs.writeFile(
         projectPath,
-        JSON.stringify({ synthesizerModel: "three/model" }),
+        JSON.stringify({ verifierModel: "three/model" }),
       );
       expect(approveProjectReviewConfig(changed)).rejects.toThrow(
         "changed before approval",
@@ -492,7 +477,7 @@ describe.serial("review model config", () => {
       const globalPath = getGlobalReviewConfigPath();
       await writeReviewConfigField(
         globalPath,
-        "synthesizerModel",
+        "verifierModel",
         "global/original",
       );
       await fs.rm(path.join(cwd, ".pi"), { recursive: true });
@@ -502,12 +487,12 @@ describe.serial("review model config", () => {
       expect(
         writeReviewConfigField(
           await getProjectReviewConfigPath(cwd),
-          "synthesizerModel",
+          "verifierModel",
           "project/escaped",
         ),
       ).rejects.toThrow("symlinked directory");
       expect(JSON.parse(await fs.readFile(globalPath, "utf8"))).toEqual({
-        synthesizerModel: "global/original",
+        verifierModel: "global/original",
       });
     });
   });
@@ -516,16 +501,14 @@ describe.serial("review model config", () => {
     await withReviewConfigSandbox(async (cwd) => {
       const projectPath = await getProjectReviewConfigPath(cwd);
       await Promise.all([
-        writeReviewConfigField(
-          projectPath,
-          "synthesizerModel",
-          "project/synth",
-        ),
+        writeReviewConfigField(projectPath, "reviewerPanel", [
+          { model: "project/reviewer", thinkingLevel: "high" },
+        ]),
         writeReviewConfigField(projectPath, "verifierModel", "project/verify"),
       ]);
 
       expect(JSON.parse(await fs.readFile(projectPath, "utf8"))).toEqual({
-        synthesizerModel: "project/synth",
+        reviewerPanel: [{ model: "project/reviewer", thinkingLevel: "high" }],
         verifierModel: "project/verify",
       });
     });
@@ -539,7 +522,7 @@ describe.serial("review model config", () => {
         projects.map(async (project, index) => {
           await writeReviewConfigField(
             await getProjectReviewConfigPath(project),
-            "synthesizerModel",
+            "verifierModel",
             `project/model-${index}`,
           );
           return (await resolveReviewConfig(project)).project;
@@ -592,8 +575,8 @@ describe.serial("review model config", () => {
     await withReviewConfigSandbox(async (cwd) => {
       await writeReviewConfigField(
         await getProjectReviewConfigPath(cwd),
-        "synthesizerModel",
-        TEST_SYNTHESIZER,
+        "verifierModel",
+        TEST_VERIFIER,
       );
       const runtime = changedFilesRuntime();
       const { ctx, notifications } = createCtx();
@@ -619,11 +602,6 @@ describe.serial("review model config", () => {
       ]);
       await writeReviewConfigField(
         projectPath,
-        "synthesizerModel",
-        "project/synth",
-      );
-      await writeReviewConfigField(
-        projectPath,
         "verifierModel",
         "project/verify",
       );
@@ -636,7 +614,7 @@ describe.serial("review model config", () => {
       await runtime.commands
         .get("review")
         ?.handler(
-          "uncommitted --reviewers code-reviewer --reviewer-models test/flag-reviewer=high --synthesizer-model test/flag-synth --verifier-model test/flag-verify",
+          "uncommitted --reviewers code-reviewer --reviewer-models test/flag-reviewer=high --verifier-model test/flag-verify",
           ctx as never,
         );
 
@@ -654,11 +632,9 @@ describe.serial("review model config", () => {
   it("fails closed headlessly when an unapproved project field is only partially masked", async () => {
     await withReviewConfigSandbox(async (cwd) => {
       const projectPath = await getProjectReviewConfigPath(cwd);
-      await writeReviewConfigField(
-        projectPath,
-        "synthesizerModel",
-        "project/synth",
-      );
+      await writeReviewConfigField(projectPath, "reviewerPanel", [
+        { model: "project/reviewer", thinkingLevel: "high" },
+      ]);
       await writeReviewConfigField(
         projectPath,
         "verifierModel",
@@ -673,7 +649,7 @@ describe.serial("review model config", () => {
       await runtime.commands
         .get("review")
         ?.handler(
-          "uncommitted --reviewers code-reviewer --synthesizer-model test/flag-synth",
+          "uncommitted --reviewers code-reviewer --verifier-model test/flag-verify",
           ctx as never,
         );
 
@@ -748,11 +724,7 @@ describe.serial("review model config", () => {
   it("shows exact effective models for consent and selector project saves approve", async () => {
     await withReviewConfigSandbox(async (cwd) => {
       const projectPath = await getProjectReviewConfigPath(cwd);
-      await writeReviewConfigField(
-        projectPath,
-        "synthesizerModel",
-        TEST_SYNTHESIZER,
-      );
+      await writeReviewConfigField(projectPath, "verifierModel", TEST_VERIFIER);
       const runtime = changedFilesRuntime();
       const { ctx } = createCtx();
       ctx.cwd = cwd;
@@ -768,7 +740,7 @@ describe.serial("review model config", () => {
       expect(preparedCalls(runtime)).toHaveLength(
         DEFAULT_REVIEWER_PANEL.length,
       );
-      expect(disclosure).toContain(`synthesizer ${TEST_SYNTHESIZER}`);
+      expect(disclosure).toContain(`verifier ${TEST_VERIFIER}`);
       expect(disclosure).toContain("provider: test");
       expect(
         await isProjectReviewConfigApproved(
@@ -778,7 +750,7 @@ describe.serial("review model config", () => {
 
       await writeReviewConfigField(
         projectPath,
-        "synthesizerModel",
+        "verifierModel",
         "test/changed",
       );
       expect(
@@ -796,7 +768,7 @@ describe.serial("review model config", () => {
       ];
       const modelSelections = [
         "Set global verifier model",
-        "Set project synthesizer model",
+        "Set project verifier model",
       ];
       const editorPrompts: string[] = [];
       selectorCtx.ui.custom = async () => selections.shift() as never;
@@ -822,7 +794,7 @@ describe.serial("review model config", () => {
       ).toBe(true);
       expect(editorPrompts).toEqual([
         `Enter global verifier model (provider/model; blank clears):\nDefault: ${DEFAULT_VERIFIER_MODEL}`,
-        "Enter project synthesizer model (provider/model; blank clears):\nCurrent: test/changed",
+        "Enter project verifier model (provider/model; blank clears):\nCurrent: test/changed",
       ]);
     });
   });
@@ -830,23 +802,16 @@ describe.serial("review model config", () => {
   it("leaves a selector write unapproved when untouched project fields are not confirmed", async () => {
     await withReviewConfigSandbox(async (cwd) => {
       const projectPath = await getProjectReviewConfigPath(cwd);
-      await writeReviewConfigField(
-        projectPath,
-        "synthesizerModel",
-        "test/existing-synth",
-      );
-      await writeReviewConfigField(
-        projectPath,
-        "verifierModel",
-        "test/existing-verifier",
-      );
+      await writeReviewConfigField(projectPath, "reviewerPanel", [
+        { model: "test/existing-reviewer", thinkingLevel: "high" },
+      ]);
       const runtime = createRuntime();
       const { ctx, notifications } = createCtx();
       ctx.cwd = cwd;
       const selections = ["configureReviewModels", null];
       ctx.ui.custom = async () => selections.shift() as never;
-      ctx.ui.select = async () => "Set project synthesizer model";
-      ctx.ui.editor = async () => "test/saved-synth";
+      ctx.ui.select = async () => "Set project verifier model";
+      ctx.ui.editor = async () => "test/saved-verifier";
       let disclosure = "";
       ctx.ui.confirm = (_title: string, message: string) => {
         disclosure = message;
@@ -857,13 +822,13 @@ describe.serial("review model config", () => {
       await runtime.commands.get("review")?.handler("", ctx as never);
 
       const resolved = await resolveReviewConfig(cwd);
-      expect(resolved.project.config.synthesizerModel).toBe("test/saved-synth");
-      expect(resolved.project.config.verifierModel).toBe(
-        "test/existing-verifier",
-      );
+      expect(resolved.project.config.verifierModel).toBe("test/saved-verifier");
+      expect(resolved.project.config.reviewerPanel).toEqual([
+        { model: "test/existing-reviewer", thinkingLevel: "high" },
+      ]);
       expect(await isProjectReviewConfigApproved(resolved.project)).toBe(false);
-      expect(disclosure).toContain("synthesizer test/saved-synth");
-      expect(disclosure).toContain("verifier test/existing-verifier");
+      expect(disclosure).toContain("verifier test/saved-verifier");
+      expect(disclosure).toContain("reviewer test/existing-reviewer");
       expect(
         notifications.some(({ message }) =>
           message.includes("project models remain unapproved"),
@@ -880,11 +845,6 @@ describe.serial("review model config", () => {
       ]);
       await writeReviewConfigField(
         projectPath,
-        "synthesizerModel",
-        "project/synth",
-      );
-      await writeReviewConfigField(
-        projectPath,
         "verifierModel",
         "project/verify",
       );
@@ -897,7 +857,7 @@ describe.serial("review model config", () => {
       await runtime.commands
         .get("review")
         ?.handler(
-          "uncommitted --reviewers code-reviewer --reviewer-models test/flag-reviewer=high --synthesizer-model test/flag-synth --verifier-model test/flag-verify",
+          "uncommitted --reviewers code-reviewer --reviewer-models test/flag-reviewer=high --verifier-model test/flag-verify",
           ctx as never,
         );
 
@@ -929,10 +889,7 @@ describe.serial("/review command settings and disclosure", () => {
         ({ message }) =>
           message.includes("initial calls: 1 reviewer call") &&
           message.includes(
-            "Possible end-of-run structured corrections: up to 1 reviewer correction, plus up to 2 downstream corrections when those stages run",
-          ) &&
-          message.includes(
-            `Synthesizer: ${DEFAULT_SYNTHESIZER_MODEL}=medium`,
+            "Possible end-of-run structured corrections: up to 1 reviewer correction, plus up to 1 verifier correction when it runs",
           ) &&
           message.includes(`Verifier: ${DEFAULT_VERIFIER_MODEL}=medium`),
       ),
@@ -948,7 +905,7 @@ describe.serial("/review command settings and disclosure", () => {
     await runtime.commands
       .get("review")
       ?.handler(
-        "uncommitted --reviewers code-reviewer --reviewer-models test/alpha=low,test/alpha=xhigh,test/beta=minimal --synthesizer-model test/synth",
+        "uncommitted --reviewers code-reviewer --reviewer-models test/alpha=low,test/alpha=xhigh,test/beta=minimal",
         ctx as never,
       );
     expect(
@@ -956,6 +913,26 @@ describe.serial("/review command settings and disclosure", () => {
         .map(({ model, thinking }) => `${model}=${thinking}`)
         .sort(),
     ).toEqual(["test/alpha=low", "test/beta=minimal"]);
+  });
+
+  it("rejects the removed --synthesizer-model flag before any model call", async () => {
+    for (const args of [
+      "uncommitted --reviewers code-reviewer --synthesizer-model test/synth",
+      "folder a.txt --synthesizer-model=test/synth",
+    ]) {
+      const runtime = changedFilesRuntime();
+      const { ctx, notifications } = createCtx();
+      reviewExtension(runtime.pi as never);
+
+      await runtime.commands.get("review")?.handler(args, ctx as never);
+
+      expect(preparedCalls(runtime)).toHaveLength(0);
+      expect(notifications).toContainEqual({
+        message:
+          "--synthesizer-model was removed; the verifier now groups findings.",
+        level: "error",
+      });
+    }
   });
 
   it("keeps model-looking --extra values as review instructions", async () => {
@@ -982,7 +959,7 @@ describe.serial("/review command settings and disclosure", () => {
       );
       expect(
         notifications.some(({ message }) =>
-          message.includes(`Synthesizer: ${DEFAULT_SYNTHESIZER_MODEL}=medium`),
+          message.includes(`Verifier: ${DEFAULT_VERIFIER_MODEL}=medium`),
         ),
       ).toBe(true);
     }
@@ -1294,7 +1271,7 @@ it("locks explicit role/model/default downstream configuration into owned calls"
   await runtime.commands
     .get("review")
     ?.handler(
-      "uncommitted --reviewers code-reviewer,security-reviewer --reviewer-models test/alpha=high,test/beta=xhigh --synthesizer-model test/explicit-synth --verifier-model test/explicit-verify",
+      "uncommitted --reviewers code-reviewer,security-reviewer --reviewer-models test/alpha=high,test/beta=xhigh --verifier-model test/explicit-verify",
       ctx,
     );
   expect(
@@ -1310,7 +1287,7 @@ it("locks explicit role/model/default downstream configuration into owned calls"
     { type: "security-reviewer", model: "test/beta", thinking: "xhigh" },
   ]);
   expect(notifications.at(-1)?.message).toContain(
-    "Synthesizer: test/explicit-synth=medium. Verifier: test/explicit-verify=medium.",
+    "Verifier: test/explicit-verify=medium.",
   );
   expect(preparedCalls(runtime)).toHaveLength(4);
   await runtime.commands.get("review")?.handler("cancel", ctx);
@@ -1322,7 +1299,7 @@ it("locks explicit role/model/default downstream configuration into owned calls"
     thinking: DEFAULT_REVIEWER_PANEL[0]?.thinkingLevel,
   });
   expect(notifications.at(-1)?.message).toContain(
-    `Synthesizer: ${DEFAULT_SYNTHESIZER_MODEL}=medium. Verifier: ${DEFAULT_VERIFIER_MODEL}=medium.`,
+    `Verifier: ${DEFAULT_VERIFIER_MODEL}=medium.`,
   );
   expect(runtime.appendedEntries.at(-1)?.data).not.toHaveProperty(
     "reviewerPanel",

@@ -23,7 +23,6 @@ export const plan: ReviewPipelineInput = {
     { model: "test/alpha", thinkingLevel: "medium" },
     { model: "test/beta", thinkingLevel: "high" },
   ],
-  synthesizerModel: "test/synth",
   verifierModel: "test/verify",
 };
 export const finding = {
@@ -46,14 +45,10 @@ export function reviewer(
     notes: [],
   };
 }
-export function clusters(memberIds = ["candidate-0001", "candidate-0002"]) {
-  return {
-    clusters: [
-      { memberIds, title: "Bug", why: "Broken guard", change: "Fix guard" },
-    ],
-  };
-}
-export function verifier(memberIds = ["candidate-0001", "candidate-0002"]) {
+export function verifier(
+  memberIds = ["candidate-0001", "candidate-0002"],
+  rejected: Array<{ id: string; reason: string }> = [],
+) {
   return {
     reviewScope: ["target snapshot"],
     verdict: "needs attention",
@@ -71,6 +66,7 @@ export function verifier(memberIds = ["candidate-0001", "candidate-0002"]) {
         consensusEffect: "none",
       },
     ],
+    rejected,
   };
 }
 export function outcome(

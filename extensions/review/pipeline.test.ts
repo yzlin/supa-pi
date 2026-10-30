@@ -11,7 +11,6 @@ import { prepareReviewPlan } from "./pipeline-contracts";
 import { validatePortableVerifier } from "./portable-core";
 import type { SubagentParams } from "./test-fixtures";
 import {
-  clusters,
   mockChildren,
   outcome,
   plan,
@@ -60,13 +59,8 @@ function assertSchema(value: unknown): void {
 }
 
 describe("deterministic blocking review pipeline", () => {
-  it("dispatches reviewers, synthesis and verification through exact native outcomes", async () => {
-    const children = mockChildren([
-      reviewer(),
-      reviewer(),
-      clusters(),
-      verifier(),
-    ]);
+  it("dispatches reviewers and the grouping verifier through exact native outcomes", async () => {
+    const children = mockChildren([reviewer(), reviewer(), verifier()]);
     const raw = await runReviewPipeline(children, plan, options());
     expect(
       children.calls.map(({ agent, model, thinking }) => ({
@@ -77,7 +71,6 @@ describe("deterministic blocking review pipeline", () => {
     ).toEqual([
       { agent: "code-reviewer", model: "test/alpha", thinking: "medium" },
       { agent: "code-reviewer", model: "test/beta", thinking: "high" },
-      { agent: "review-synthesizer", model: "test/synth", thinking: "medium" },
       { agent: "review-verifier", model: "test/verify", thinking: "medium" },
     ]);
     for (const call of children.calls) {
@@ -89,13 +82,12 @@ describe("deterministic blocking review pipeline", () => {
     );
     expect(children.calls[0]?.task).toContain(plan.invocationPacket);
     expect(children.calls[2]?.task).toContain("same root cause");
-    expect(children.calls[3]?.task).toContain("Code evidence is mandatory");
+    expect(children.calls[2]?.task).toContain("Code evidence is mandatory");
     const result = derivePreparedReviewResult(plan, JSON.stringify(raw));
     expect(result.verifier.findings[0]?.supportingModels).toEqual([
       "test/alpha",
       "test/beta",
     ]);
-    expect(raw.synthesizerOutput).toEqual(clusters());
     expect(raw.verifierOutput).toEqual(verifier());
   });
 
@@ -138,14 +130,14 @@ describe("deterministic blocking review pipeline", () => {
     expect(children.calls).toHaveLength(6);
   });
 
-  it("empty candidates skip both downstream agents", async () => {
+  it("empty candidates skip the verifier", async () => {
     const children = mockChildren([
       reviewer("code-reviewer", []),
       reviewer("code-reviewer", []),
     ]);
     const raw = await runReviewPipeline(children, plan, options());
     expect(children.calls).toHaveLength(2);
-    expect(raw).not.toHaveProperty("synthesizerOutput");
+    expect(raw).not.toHaveProperty("verifierOutput");
     expect(
       derivePreparedReviewResult(plan, JSON.stringify(raw)).verifier.verdict,
     ).toBe("correct");
@@ -256,25 +248,22 @@ describe("deterministic blocking review pipeline", () => {
   });
 
   it.each([
-    clusters([]),
-    clusters(["invented"]),
-    clusters(["candidate-0001", "candidate-0001"]),
-    new Error("provider error"),
-  ])("fails invalid synthesis without local repair", async (bad) => {
-    const children = mockChildren([reviewer(), reviewer(), bad]);
-    expect(runReviewPipeline(children, plan, options())).rejects.toThrow();
-    expect(children.calls).toHaveLength(3);
-  });
-  it.each([
     verifier(["invented"]),
     verifier(["candidate-0001", "candidate-0001"]),
     verifier([]),
+    verifier(["candidate-0001"]),
+    verifier(["candidate-0001"], [{ id: "candidate-0001", reason: "dup" }]),
+    verifier(["candidate-0001"], [{ id: "candidate-0002", reason: " " }]),
+    { ...verifier(), rejected: undefined },
     new Error("provider error"),
-  ])("fails invalid verification without local repair", async (bad) => {
-    const children = mockChildren([reviewer(), reviewer(), clusters(), bad]);
-    expect(runReviewPipeline(children, plan, options())).rejects.toThrow();
-    expect(children.calls).toHaveLength(4);
-  });
+  ])(
+    "fails invalid or lossy verification without local repair",
+    async (bad) => {
+      const children = mockChildren([reviewer(), reviewer(), bad]);
+      expect(runReviewPipeline(children, plan, options())).rejects.toThrow();
+      expect(children.calls).toHaveLength(3);
+    },
+  );
 
   it("abort stops the current group and prevents subsequent batches", async () => {
     const controller = new AbortController();
@@ -345,19 +334,26 @@ it("fatal metadata invalidation aborts and settles other children in the owned b
   expect(settled).toBe(1);
 });
 
-it("preserves independent verifier rejection by omission", async () => {
+it("accepts explicit verifier rejections that account for every candidate", async () => {
   const children = mockChildren([
     reviewer(),
     reviewer(),
-    clusters(),
-    { reviewScope: ["target snapshot"], verdict: "correct", findings: [] },
+    {
+      reviewScope: ["target snapshot"],
+      verdict: "correct",
+      findings: [],
+      rejected: [
+        { id: "candidate-0001", reason: "Line 1 has no guard." },
+        { id: "candidate-0002", reason: "Same claim; no guard exists." },
+      ],
+    },
   ]);
   const raw = await runReviewPipeline(children, plan, options());
   expect(
     derivePreparedReviewResult(plan, JSON.stringify(raw)).verifier.verdict,
   ).toBe("correct");
-  expect(children.calls[3]?.task).toContain(
-    "Omitted IDs are treated as rejected candidates",
+  expect(children.calls[2]?.task).toContain(
+    "Account for every candidate ID exactly once",
   );
 });
 
