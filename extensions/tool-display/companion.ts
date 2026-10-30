@@ -94,14 +94,11 @@ export function companionCallSummary(
         .join(" · ");
     }
     default:
-      return mcpCallSummary(name, args);
+      return mcpCallSummary(name);
   }
 }
 
-function mcpCallSummary(
-  name: string,
-  _args: Record<string, unknown>,
-): string | undefined {
+function mcpCallSummary(name: string): string | undefined {
   // Pi built-in MCP names tools `mcp__<server>__<tool>` and passes the MCP
   // tool's own arguments, so the label comes from the name (as Pi parses it).
   const match = /^mcp__(.+?)__(.+)$/u.exec(name);
