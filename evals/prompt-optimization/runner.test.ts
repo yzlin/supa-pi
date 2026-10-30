@@ -15,6 +15,7 @@ import { ModelRegistry, ModelRuntime } from "@earendil-works/pi-coding-agent";
 import type { EvalCase } from "./index";
 import {
   historyMessages,
+  isAllowedFixtureTestCommand,
   isContainedRelativePath,
   planRuns,
   runAllowedFixtureTest,
@@ -66,6 +67,18 @@ describe("run planning", () => {
       { caseId: "a", repetition: 1, variant: "baseline" },
     ]);
   });
+});
+it("accepts ./-prefixed and spaced forms of the allowed test command", () => {
+  expect(isAllowedFixtureTestCommand("bun test ./tests/math.case.ts")).toBe(
+    true,
+  );
+  expect(isAllowedFixtureTestCommand("  bun  test tests/math.case.ts ")).toBe(
+    true,
+  );
+  expect(isAllowedFixtureTestCommand("bun test")).toBe(false);
+  expect(isAllowedFixtureTestCommand("bun test ../tests/math.case.ts")).toBe(
+    false,
+  );
 });
 
 describe("canonical fixture test execution", () => {

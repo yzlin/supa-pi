@@ -363,10 +363,16 @@ export function runAllowedFixtureTest(
 
 const ALLOWED_FIXTURE_TEST_COMMANDS = new Set(["bun test tests/math.case.ts"]);
 
+/** Collapses whitespace and a leading `./` on path arguments (`./tests/x` is `tests/x`). */
+function normalizeFixtureCommand(command: string): string {
+  return command
+    .trim()
+    .replaceAll(/\s+/g, " ")
+    .replaceAll(/(^| )\.\//g, "$1");
+}
+
 export function isAllowedFixtureTestCommand(command: string): boolean {
-  return ALLOWED_FIXTURE_TEST_COMMANDS.has(
-    command.trim().replaceAll(/\s+/g, " "),
-  );
+  return ALLOWED_FIXTURE_TEST_COMMANDS.has(normalizeFixtureCommand(command));
 }
 
 function createSafeBashOperations() {
@@ -380,7 +386,7 @@ function createSafeBashOperations() {
         timeout?: number;
       },
     ): Promise<{ exitCode: number | null }> {
-      const normalized = command.trim().replaceAll(/\s+/g, " ");
+      const normalized = normalizeFixtureCommand(command);
       if (!isAllowedFixtureTestCommand(command)) {
         options.onData(
           Buffer.from(`Blocked by eval command allowlist: ${command}\n`),
