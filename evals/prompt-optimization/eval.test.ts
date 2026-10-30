@@ -64,6 +64,63 @@ afterEach(() => {
   }
 });
 
+describe("findingGroup check", () => {
+  const group = (memberIds: string[], present: boolean) =>
+    ({
+      type: "findingGroup",
+      memberIds,
+      present,
+      domain: "task",
+      weight: 1,
+    }) as const;
+
+  it("matches exact memberIds sets from the last findings object", async () => {
+    const output = `Draft {"findings":[{"memberIds":["x"]}]}\nFinal:\n{"verdict":"needs attention","findings":[{"memberIds":["c2","c1"],"title":"t"},{"memberIds":["c3"]}]}`;
+    const result = await scoreOutput(output, [
+      group(["c1", "c2"], true),
+      group(["c3"], true),
+      group(["c1"], true),
+      group(["x"], false),
+      group(["c4"], false),
+      group(["c3"], false),
+    ]);
+    expect(result.checks.map((check) => check.passed)).toEqual([
+      true,
+      true,
+      false,
+      true,
+      true,
+      false,
+    ]);
+  });
+
+  it("fails without a JSON findings object and rejects invalid configuration", async () => {
+    const result = await scoreOutput("No JSON here.", [group(["c1"], false)]);
+    expect(result.checks[0]?.passed).toBe(false);
+    const evalCase = {
+      id: "group",
+      workload: "code review",
+      promptPath: "agents/review-verifier.md",
+      task: "Verify.",
+      tools: ["read"],
+    };
+    for (const check of [
+      { type: "findingGroup", memberIds: [], present: true },
+      { type: "findingGroup", memberIds: ["a", "a"], present: true },
+      { type: "findingGroup", memberIds: ["a"] },
+    ]) {
+      expect(() =>
+        parseCorpus({
+          version: 1,
+          cases: [
+            { ...evalCase, checks: [{ ...check, domain: "task", weight: 1 }] },
+          ],
+        }),
+      ).toThrow("memberIds and a boolean present");
+    }
+  });
+});
+
 describe("plainReport check", () => {
   const check = { type: "plainReport", domain: "quality", weight: 1 } as const;
 

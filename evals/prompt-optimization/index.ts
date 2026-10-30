@@ -159,7 +159,14 @@ export type EvalCheck =
     })
   | (CheckBase & { type: "workspaceUnchanged" })
   | (CheckBase & { type: "workspaceChangesOnly"; paths: string[] })
-  | (CheckBase & { type: "plainReport" });
+  | (CheckBase & { type: "plainReport" })
+  | (CheckBase & {
+      /** Parses the final JSON review object and checks one `findings[].memberIds` group. */
+      type: "findingGroup";
+      memberIds: string[];
+      /** true: one finding has exactly these IDs; false: no finding holds any of them. */
+      present: boolean;
+    });
 
 export interface HistoryTurn {
   role: "user" | "assistant";
@@ -527,6 +534,26 @@ function parseCheck(value: unknown, label: string): EvalCheck {
         );
       }
       return { ...base, type: value.type, paths: value.paths as string[] };
+    case "findingGroup":
+      if (
+        !Array.isArray(value.memberIds) ||
+        value.memberIds.length === 0 ||
+        !value.memberIds.every(
+          (id) => typeof id === "string" && id.trim().length > 0,
+        ) ||
+        new Set(value.memberIds).size !== value.memberIds.length ||
+        typeof value.present !== "boolean"
+      ) {
+        throw new Error(
+          `${label} needs unique non-empty memberIds and a boolean present`,
+        );
+      }
+      return {
+        ...base,
+        type: value.type,
+        memberIds: value.memberIds as string[],
+        present: value.present,
+      };
     default:
       throw new Error(`${label}.type is unsupported`);
   }
@@ -1338,6 +1365,44 @@ function hasAuthPolicyDecisionRequest(output: string): boolean {
   });
 }
 
+/**
+ * `findings[].memberIds` groups of the last top-level JSON object in the
+ * output that has a `findings` array, or null when there is none.
+ */
+export function reviewFindingGroups(output: string): string[][] | null {
+  for (
+    let end = output.lastIndexOf("}");
+    end >= 0;
+    end = output.lastIndexOf("}", end - 1)
+  ) {
+    for (
+      let start = output.lastIndexOf("{", end);
+      start >= 0;
+      start = output.lastIndexOf("{", start - 1)
+    ) {
+      let value: unknown;
+      try {
+        value = JSON.parse(output.slice(start, end + 1));
+      } catch {
+        continue;
+      }
+      if (
+        value &&
+        typeof value === "object" &&
+        Array.isArray((value as { findings?: unknown }).findings)
+      ) {
+        return (value as { findings: unknown[] }).findings.map((finding) => {
+          const ids = (finding as { memberIds?: unknown } | null)?.memberIds;
+          return Array.isArray(ids)
+            ? ids.filter((id): id is string => typeof id === "string")
+            : [];
+        });
+      }
+    }
+  }
+  return null;
+}
+
 async function scoreCheck(
   input: ScoreInput,
   check: EvalCheck,
@@ -1613,6 +1678,27 @@ async function scoreCheck(
         evidence: passed
           ? "ask gate matched"
           : "ask gate shape or options differed",
+      };
+    }
+    case "findingGroup": {
+      const groups = reviewFindingGroups(input.output);
+      if (!groups) {
+        return {
+          check,
+          passed: false,
+          evidence: "no JSON object with a findings array in output",
+        };
+      }
+      const wanted = [...check.memberIds].sort().join(",");
+      const passed = check.present
+        ? groups.some((group) => [...group].sort().join(",") === wanted)
+        : !groups.some((group) =>
+            group.some((id) => check.memberIds.includes(id)),
+          );
+      return {
+        check,
+        passed,
+        evidence: `finding groups: ${groups.map((group) => `[${group.join(",")}]`).join(" ") || "none"}`,
       };
     }
     case "workspaceUnchanged": {
