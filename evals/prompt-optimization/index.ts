@@ -28,6 +28,7 @@ const CORE_PROMPT_PATH = "extensions/core-prompt/prompt.md";
 // command file varies between arms.
 const COMMAND_PROMPT_PATHS = new Set([
   "extensions/code-improvement/IMPROVE-CODEBASE-ARCHITECTURE.md",
+  "skills/simplify/SKILL.md",
 ]);
 const REPOSITORY_ROOT = fileURLToPath(new URL("../..", import.meta.url));
 
@@ -163,6 +164,11 @@ export interface HistoryTurn {
   text: string;
 }
 
+export interface AgentChild {
+  promptPath: string;
+  tools: ToolName[];
+}
+
 export interface EvalCase {
   id: string;
   workload: string;
@@ -174,6 +180,8 @@ export interface EvalCase {
   askResponse?: AskResponse;
   /** Fixed text returned by the stub `Agent` tool; requires `Agent` in tools. */
   agentResponse?: string;
+  /** Run `Agent` as a real nested loop with this role prompt and tool set. */
+  agentChild?: AgentChild;
   checks: EvalCheck[];
 }
 
@@ -520,6 +528,58 @@ function parseCheck(value: unknown, label: string): EvalCheck {
   }
 }
 
+function parseAgentChild(
+  caseValue: Record<string, unknown>,
+  label: string,
+): AgentChild | undefined {
+  const child = caseValue.agentChild;
+  if (child === undefined) {
+    return undefined;
+  }
+  assertObject(child, `${label}.agentChild`);
+  const promptPath = child.promptPath;
+  if (
+    !(
+      typeof promptPath === "string" &&
+      promptPath.startsWith("agents/") &&
+      isSafeRelativePath(promptPath)
+    )
+  ) {
+    throw new Error(`${label}.agentChild.promptPath must target agents/*.md`);
+  }
+  const tools = child.tools;
+  if (
+    !(
+      Array.isArray(tools) &&
+      tools.every(
+        (tool) =>
+          TOOL_NAMES.includes(tool as ToolName) &&
+          tool !== "Agent" &&
+          tool !== "ask",
+      )
+    )
+  ) {
+    throw new Error(`${label}.agentChild.tools contains an unsupported tool`);
+  }
+  if (
+    !(caseValue.tools as unknown[]).includes("Agent") ||
+    caseValue.agentResponse !== undefined
+  ) {
+    throw new Error(
+      `${label}.agentChild requires Agent and excludes agentResponse`,
+    );
+  }
+  return { promptPath, tools: tools as ToolName[] };
+}
+
+/** System prompt for a real `Agent` child; identical for both arms. */
+export function composeAgentChildPrompt(promptPath: string): string {
+  return composePrompt(
+    promptPath,
+    readStableContainedFile(REPOSITORY_ROOT, promptPath).toString("utf8"),
+  );
+}
+
 export function parseCorpus(value: unknown): EvalCorpus {
   assertObject(value, "corpus");
   if (value.version !== 1) {
@@ -618,6 +678,7 @@ export function parseCorpus(value: unknown): EvalCorpus {
         `${label}.agentResponse must be non-empty text with Agent enabled`,
       );
     }
+    const agentChild = parseAgentChild(caseValue, label);
 
     return {
       id: caseValue.id,
@@ -630,6 +691,7 @@ export function parseCorpus(value: unknown): EvalCorpus {
       ...(caseValue.agentResponse === undefined
         ? {}
         : { agentResponse: caseValue.agentResponse as string }),
+      ...(agentChild === undefined ? {} : { agentChild }),
       checks: caseValue.checks.map((check, checkIndex) =>
         parseCheck(check, `${label}.checks[${checkIndex}]`),
       ),
@@ -803,7 +865,7 @@ export function composePrompt(promptPath: string, content: string): string {
     return [
       CORE_EVAL_BASE_PROMPT,
       core,
-      `# Active command prompt\n\n${content.trim()}`,
+      `# Active command prompt\n\n${parseFrontmatter(content).body.trim()}`,
     ].join("\n\n");
   }
   if (promptPath === "AGENTS.global.md") {

@@ -35,6 +35,7 @@ import { Type } from "typebox";
 
 import {
   type AssistantMessageRecord,
+  composeAgentChildPrompt,
   composeEvalRequest,
   createEmptyMetrics,
   type EvalCase,
@@ -582,7 +583,39 @@ async function isSafeWorkspacePath(
   return isWithinDirectory(workspacePath, await realpath(existingAncestor));
 }
 
-function createTools(workspace: string, evalCase: EvalCase): AgentTool[] {
+interface ToolEnv {
+  /** Runs a real child for `Agent`; absent when the case uses a fixed response. */
+  runChild?: (task: string, signal?: AbortSignal) => Promise<string>;
+}
+
+function createChildAgentTool(
+  runChild: NonNullable<ToolEnv["runChild"]>,
+): AgentTool<typeof agentToolSchema> {
+  return {
+    name: "Agent",
+    label: "Agent",
+    description:
+      "Delegate one bounded task to a fresh worker in the same workspace. The worker does not see this conversation; pass a self-contained task.",
+    parameters: agentToolSchema,
+    async execute(_toolCallId, params, signal) {
+      return {
+        content: [
+          {
+            type: "text" as const,
+            text: await runChild(params.prompt, signal),
+          },
+        ],
+        details: {},
+      };
+    },
+  };
+}
+
+function createTools(
+  workspace: string,
+  evalCase: EvalCase,
+  env: ToolEnv = {},
+): AgentTool[] {
   const names = evalCase.tools;
   const builtInsByName = new Map(
     [
@@ -596,7 +629,9 @@ function createTools(workspace: string, evalCase: EvalCase): AgentTool[] {
     names.includes(tool.name as EvalCase["tools"][number]),
   );
   const extras = [
-    createAgentTool(evalCase.agentResponse),
+    env.runChild
+      ? createChildAgentTool(env.runChild)
+      : createAgentTool(evalCase.agentResponse),
     webSearchTool,
     fetchContentTool,
   ].filter((tool) => names.includes(tool.name as EvalCase["tools"][number]));
@@ -651,6 +686,130 @@ function textFromContent(
     .join("\n");
 }
 
+/**
+ * Ends the loop after `maxTurns` assistant turns. The earlier
+ * `shouldStopAfterTurn` option is not part of `AgentLoopConfig` and was ignored.
+ */
+function maxTurnsLimit(maxTurns: number): AgentLoopConfig["finishTurn"] {
+  let turns = 0;
+  return () => {
+    turns += 1;
+    return turns >= maxTurns ? { action: "end" } : undefined;
+  };
+}
+
+function workspaceGuard(workspace: string): AgentLoopConfig["beforeToolCall"] {
+  return async ({ toolCall, args }) => {
+    if (
+      ["read", "write", "edit", "grep", "find", "ls"].includes(toolCall.name)
+    ) {
+      const requestedPath = (args as { path?: unknown }).path;
+      if (
+        typeof requestedPath === "string" &&
+        !(await isSafeWorkspacePath(workspace, requestedPath))
+      ) {
+        return {
+          block: true,
+          reason: `Eval tools cannot access paths outside the workspace: ${requestedPath}`,
+        };
+      }
+    }
+    return;
+  };
+}
+
+/** Adds a child's provider usage to a parent run without its tool counts. */
+export function addChildUsage(
+  parent: RunMetrics,
+  child: RunMetrics,
+): RunMetrics {
+  return {
+    ...parent,
+    inputTokens: parent.inputTokens + child.inputTokens,
+    outputTokens: parent.outputTokens + child.outputTokens,
+    reasoningTokens: parent.reasoningTokens + child.reasoningTokens,
+    cacheReadTokens: parent.cacheReadTokens + child.cacheReadTokens,
+    cacheWriteTokens: parent.cacheWriteTokens + child.cacheWriteTokens,
+    costUsd: parent.costUsd + child.costUsd,
+    turns: parent.turns + child.turns,
+  };
+}
+
+interface ChildLoopOptions {
+  workspace: string;
+  agentChild: NonNullable<EvalCase["agentChild"]>;
+  task: string;
+  model: Model<Api>;
+  thinking: ThinkingLevel;
+  maxTurns: number;
+  getApiKey: (provider: string) => Promise<string | undefined>;
+  streamFn?: StreamFn;
+  signal?: AbortSignal;
+}
+
+/** Runs one fresh task-only worker in the parent's workspace. */
+async function runChildLoop(
+  options: ChildLoopOptions,
+): Promise<{ output: string; error?: string; metrics: RunMetrics }> {
+  const childCase: EvalCase = {
+    id: "agent-child",
+    workload: "delegated worker",
+    promptPath: options.agentChild.promptPath,
+    task: options.task,
+    tools: options.agentChild.tools,
+    checks: [],
+  };
+  const context: AgentContext = {
+    messages: [
+      {
+        role: "system",
+        content: [
+          composeAgentChildPrompt(options.agentChild.promptPath),
+          "# Eval environment",
+          `Working directory: ${options.workspace}`,
+        ].join("\n\n"),
+        timestamp: Date.now(),
+      },
+    ],
+    tools: createTools(options.workspace, childCase),
+  };
+  let metrics = createEmptyMetrics();
+  let output = "";
+  let error: string | undefined;
+  try {
+    const eventStream = agentLoop(
+      [{ role: "user", content: options.task, timestamp: Date.now() }],
+      context,
+      {
+        model: options.model,
+        reasoning: options.thinking === "off" ? undefined : options.thinking,
+        sessionId: SessionManager.inMemory().getSessionId(),
+        transport: "auto",
+        convertToLlm: (messages) => convertToLlm(messages),
+        getApiKey: options.getApiKey,
+        beforeToolCall: workspaceGuard(options.workspace),
+        finishTurn: maxTurnsLimit(options.maxTurns),
+      },
+      options.signal,
+      options.streamFn,
+    );
+    for await (const event of eventStream) {
+      metrics = reduceRunEvent(
+        metrics,
+        event as unknown as Record<string, unknown>,
+      );
+      if (event.type === "message_end" && event.message.role === "assistant") {
+        output = textFromContent(event.message.content) || output;
+        error = event.message.errorMessage;
+      }
+    }
+  } catch (childError) {
+    error =
+      childError instanceof Error ? childError.message : String(childError);
+  }
+  return { output, error, metrics };
+}
+
 export async function runVariant(
   options: RunVariantOptions,
 ): Promise<RunRecord> {
@@ -658,7 +817,35 @@ export async function runVariant(
   const sessionId = SessionManager.inMemory().getSessionId();
   await copyFixture(options.fixturePath, workspace);
   const initialWorkspaceSnapshot = await snapshotWorkspace(workspace);
-  const tools = createTools(workspace, options.evalCase);
+  // Child usage (tokens, cost, turns) is folded into this run's metrics so a
+  // delegating arm pays for its worker. Child tool calls stay out of the
+  // parent trajectory: scoring sees only what the evaluated session did.
+  const childRunMetrics: RunMetrics[] = [];
+  const agentChild = options.evalCase.agentChild;
+  const tools = createTools(workspace, options.evalCase, {
+    ...(agentChild
+      ? {
+          runChild: async (task, signal) => {
+            const child = await runChildLoop({
+              workspace,
+              agentChild,
+              task,
+              model: options.model,
+              thinking: options.thinking,
+              maxTurns: options.maxTurns,
+              getApiKey: options.getApiKey,
+              streamFn: options.streamFn,
+              signal,
+            });
+            childRunMetrics.push(child.metrics);
+            return (
+              child.output ||
+              `Worker ended without a report (${child.error ?? "no output"}).`
+            );
+          },
+        }
+      : {}),
+  });
   const request = composeEvalRequest(
     options.evalCase.promptPath,
     options.promptContent,
@@ -727,26 +914,8 @@ export async function runVariant(
         },
         convertToLlm: (messages) => convertToLlm(messages),
         getApiKey: options.getApiKey,
-        beforeToolCall: async ({ toolCall, args }) => {
-          if (
-            ["read", "write", "edit", "grep", "find", "ls"].includes(
-              toolCall.name,
-            )
-          ) {
-            const requestedPath = (args as { path?: unknown }).path;
-            if (
-              typeof requestedPath === "string" &&
-              !(await isSafeWorkspacePath(workspace, requestedPath))
-            ) {
-              return {
-                block: true,
-                reason: `Eval tools cannot access paths outside the workspace: ${requestedPath}`,
-              };
-            }
-          }
-          return;
-        },
-        shouldStopAfterTurn: () => observedTurns >= options.maxTurns,
+        beforeToolCall: workspaceGuard(workspace),
+        finishTurn: maxTurnsLimit(options.maxTurns),
       } as AgentLoopConfig & { serviceTier?: "priority" },
       controller.signal,
       options.streamFn ??
@@ -827,6 +996,9 @@ export async function runVariant(
     error = runError instanceof Error ? runError.message : String(runError);
   } finally {
     clearTimeout(timeout);
+    for (const childMetrics of childRunMetrics) {
+      metrics = addChildUsage(metrics, childMetrics);
+    }
     metrics.latencyMs = Math.round(performance.now() - startedAt);
     closeOpenAICodexWebSocketSessions(sessionId);
   }

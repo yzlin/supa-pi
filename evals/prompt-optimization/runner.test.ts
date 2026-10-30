@@ -482,6 +482,149 @@ describe("runVariant", () => {
     ]);
   });
 
+  it("stops the loop at maxTurns", async () => {
+    const model = modelRegistry.find("openai", "gpt-4o");
+    if (!model) {
+      throw new Error("test model is unavailable");
+    }
+    let providerCalls = 0;
+    const result = await runVariant({
+      evalCase: {
+        id: "max-turns",
+        workload: "exploration",
+        promptPath: "agents/explorer.md",
+        task: "Read forever.",
+        tools: ["read"],
+        checks: [
+          { type: "toolCalled", name: "read", domain: "task", weight: 1 },
+        ],
+      },
+      variant: "candidate",
+      repetition: 1,
+      promptContent: "Read.",
+      promptSha256: "hash",
+      fixturePath,
+      model,
+      thinking: "low",
+      timeoutMs: 5000,
+      maxTurns: 2,
+      getApiKey: () => Promise.resolve("test-key"),
+      streamFn: (selectedModel) => {
+        providerCalls += 1;
+        return createMessageStream(
+          createMessage(
+            selectedModel,
+            [
+              {
+                type: "toolCall",
+                id: `read-${providerCalls}`,
+                name: "read",
+                arguments: { path: "src/math.ts" },
+              },
+            ],
+            "toolUse",
+          ),
+        );
+      },
+    });
+
+    expect(providerCalls).toBe(2);
+    expect(result.metrics.turns).toBe(2);
+  });
+
+  it("runs a real Agent child in the shared workspace and bills its usage", async () => {
+    const model = modelRegistry.find("openai", "gpt-4o");
+    if (!model) {
+      throw new Error("test model is unavailable");
+    }
+    const systemPrompts: string[] = [];
+    let providerCall = 0;
+    const result = await runVariant({
+      evalCase: {
+        id: "agent-child-run",
+        workload: "focused bug fix",
+        promptPath: "extensions/core-prompt/prompt.md",
+        task: "Fix src/math.ts.",
+        tools: ["read", "Agent"],
+        agentChild: { promptPath: "agents/executor.md", tools: ["write"] },
+        checks: [
+          {
+            type: "fileContains",
+            path: "src/math.ts",
+            value: "left + right",
+            domain: "task",
+            weight: 1,
+          },
+        ],
+      },
+      variant: "candidate",
+      repetition: 1,
+      promptContent: "Delegate fixes.",
+      promptSha256: "hash",
+      fixturePath,
+      model,
+      thinking: "low",
+      timeoutMs: 5000,
+      maxTurns: 4,
+      getApiKey: () => Promise.resolve("test-key"),
+      streamFn: (selectedModel, context) => {
+        providerCall += 1;
+        const system = context.messages.find((m) => m.role === "system");
+        systemPrompts.push(
+          typeof system?.content === "string"
+            ? system.content
+            : (system?.content ?? [])
+                .map((block) => ("text" in block ? block.text : ""))
+                .join(""),
+        );
+        // 1 parent delegates, 2 child writes, 3 child reports, 4 parent answers.
+        const steps = [
+          {
+            type: "toolCall" as const,
+            id: "agent-1",
+            name: "Agent",
+            arguments: { prompt: "Make add() add." },
+          },
+          {
+            type: "toolCall" as const,
+            id: "write-1",
+            name: "write",
+            arguments: {
+              path: "src/math.ts",
+              content:
+                "export function add(left: number, right: number): number {\n  return left + right;\n}\n",
+            },
+          },
+          { type: "text" as const, text: "Child: fixed add." },
+          { type: "text" as const, text: "Parent: child fixed src/math.ts." },
+        ];
+        const step = steps[providerCall - 1];
+        if (!step) {
+          throw new Error(`unexpected provider call ${providerCall}`);
+        }
+        return createMessageStream(
+          createMessage(
+            selectedModel,
+            [step],
+            step.type === "toolCall" ? "toolUse" : "stop",
+          ),
+        );
+      },
+    });
+
+    expect(result.score.overall).toBe(1);
+    expect(systemPrompts[1]).toContain("You are a SupaPi subagent.");
+    expect(systemPrompts[0]).not.toContain("You are a SupaPi subagent.");
+    expect(result.toolCalls).toEqual([
+      expect.objectContaining({
+        name: "Agent",
+        resultText: "Child: fixed add.",
+      }),
+    ]);
+    // Parent and child each spent two provider turns.
+    expect(result.metrics.turns).toBe(4);
+  });
+
   it("records an expected red bash result for exact reproduction scoring", async () => {
     const model = modelRegistry.find("openai", "gpt-4o");
     if (!model) {
