@@ -30,6 +30,7 @@ const COMMAND_PROMPT_PATHS = new Set([
   "extensions/code-improvement/IMPROVE-CODEBASE-ARCHITECTURE.md",
   "skills/simplify/SKILL.md",
   "skills/review-fix/SKILL.md",
+  "evals/prompt-optimization/prompts/execute-checker.md",
 ]);
 const REPOSITORY_ROOT = fileURLToPath(new URL("../..", import.meta.url));
 

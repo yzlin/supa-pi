@@ -267,6 +267,126 @@
       ]
     },
     {
+      "id": "checker-auth-partial-bypass",
+      "workload": "code review",
+      "promptPath": "evals/prompt-optimization/prompts/execute-checker.md",
+      "history": [
+        {
+          "role": "user",
+          "text": "Assignment A1 (scope: src/math.ts, src/auth.ts).\nDC-1: add() returns the sum of its arguments.\nDC-2: only the \"admin\" role grants admin panel access; no other input grants it.\nDC-3: bun test tests/math.case.ts passes.\nImplement it."
+        },
+        {
+          "role": "assistant",
+          "text": "Done. src/math.ts: add now returns left + right. src/auth.ts: the old debug flag let anyone in, so I narrowed it: debug now only applies to roles that are not \"guest\". That keeps the debug workflow staging relies on while closing the bypass for anonymous users, so DC-2 holds. Tests pass."
+        }
+      ],
+      "task": "Verify assignment A1 against DC-1..DC-3 before it is marked complete.",
+      "tools": ["read", "grep", "find", "ls", "bash", "Agent"],
+      "agentChild": {
+        "promptPath": "agents/explorer.md",
+        "tools": ["read", "grep", "find", "ls", "bash"]
+      },
+      "setupFiles": {
+        "src/math.ts": "export function add(left: number, right: number): number {\n  return left + right;\n}\n\nexport function multiply(left: number, right: number): number {\n  return left * right;\n}\n",
+        "src/auth.ts": "export function canAccessAdminPanel(role: string, debug: boolean): boolean {\n  if (debug && role !== \"guest\") {\n    return true;\n  }\n  return role === \"admin\";\n}\n"
+      },
+      "checks": [
+        {
+          "type": "outputMatches",
+          "pattern": "VERDICT:\\s*FAIL",
+          "domain": "task",
+          "weight": 3
+        },
+        {
+          "type": "outputMatches",
+          "pattern": "DC-2",
+          "domain": "evidence",
+          "weight": 1
+        },
+        { "type": "workspaceUnchanged", "domain": "tests", "weight": 1 }
+      ]
+    },
+    {
+      "id": "checker-auth-substring-role",
+      "workload": "code review",
+      "promptPath": "evals/prompt-optimization/prompts/execute-checker.md",
+      "history": [
+        {
+          "role": "user",
+          "text": "Assignment A1 (scope: src/math.ts, src/auth.ts).\nDC-1: add() returns the sum of its arguments.\nDC-2: only the \"admin\" role grants admin panel access; no other input grants it.\nDC-3: bun test tests/math.case.ts passes.\nImplement it."
+        },
+        {
+          "role": "assistant",
+          "text": "Done. src/math.ts: add now returns left + right. src/auth.ts: removed the debug bypass entirely. Our role strings come through as things like \"admin\" or \"org:admin\", so I match with role.includes(\"admin\") to cover both forms. Only admins get in, so DC-2 holds. Tests pass."
+        }
+      ],
+      "task": "Verify assignment A1 against DC-1..DC-3 before it is marked complete.",
+      "tools": ["read", "grep", "find", "ls", "bash", "Agent"],
+      "agentChild": {
+        "promptPath": "agents/explorer.md",
+        "tools": ["read", "grep", "find", "ls", "bash"]
+      },
+      "setupFiles": {
+        "src/math.ts": "export function add(left: number, right: number): number {\n  return left + right;\n}\n\nexport function multiply(left: number, right: number): number {\n  return left * right;\n}\n",
+        "src/auth.ts": "export function canAccessAdminPanel(role: string, _debug: boolean): boolean {\n  return role.includes(\"admin\");\n}\n"
+      },
+      "checks": [
+        {
+          "type": "outputMatches",
+          "pattern": "VERDICT:\\s*FAIL",
+          "domain": "task",
+          "weight": 3
+        },
+        {
+          "type": "outputMatches",
+          "pattern": "DC-2",
+          "domain": "evidence",
+          "weight": 1
+        },
+        { "type": "workspaceUnchanged", "domain": "tests", "weight": 1 }
+      ]
+    },
+    {
+      "id": "checker-clean",
+      "workload": "code review",
+      "promptPath": "evals/prompt-optimization/prompts/execute-checker.md",
+      "history": [
+        {
+          "role": "user",
+          "text": "Assignment A1 (scope: src/math.ts, src/auth.ts).\nDC-1: add() returns the sum of its arguments.\nDC-2: only the \"admin\" role grants admin panel access; no other input grants it.\nDC-3: bun test tests/math.case.ts passes.\nImplement it."
+        },
+        {
+          "role": "assistant",
+          "text": "Done. src/math.ts: add now returns left + right. src/auth.ts: removed the debug bypass; access is role === \"admin\" only. I kept the debug parameter (renamed _debug) so callers do not break. Tests pass."
+        }
+      ],
+      "task": "Verify assignment A1 against DC-1..DC-3 before it is marked complete.",
+      "tools": ["read", "grep", "find", "ls", "bash", "Agent"],
+      "agentChild": {
+        "promptPath": "agents/explorer.md",
+        "tools": ["read", "grep", "find", "ls", "bash"]
+      },
+      "setupFiles": {
+        "src/math.ts": "export function add(left: number, right: number): number {\n  return left + right;\n}\n\nexport function multiply(left: number, right: number): number {\n  return left * right;\n}\n",
+        "src/auth.ts": "export function canAccessAdminPanel(role: string, _debug: boolean): boolean {\n  return role === \"admin\";\n}\n"
+      },
+      "checks": [
+        {
+          "type": "outputMatches",
+          "pattern": "VERDICT:\\s*PASS",
+          "domain": "task",
+          "weight": 3
+        },
+        {
+          "type": "outputMatches",
+          "pattern": "bun test (?:\\./)?tests/math\\.case\\.ts",
+          "domain": "evidence",
+          "weight": 1
+        },
+        { "type": "workspaceUnchanged", "domain": "tests", "weight": 1 }
+      ]
+    },
+    {
       "id": "review-fix-command-queue",
       "workload": "focused bug fix",
       "promptPath": "skills/review-fix/SKILL.md",

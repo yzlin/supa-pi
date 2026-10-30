@@ -487,6 +487,7 @@ describe("committed corpus", () => {
       "extensions/code-improvement/IMPROVE-CODEBASE-ARCHITECTURE.md",
       "skills/simplify/SKILL.md",
       "skills/review-fix/SKILL.md",
+      "evals/prompt-optimization/prompts/execute-checker.md",
     );
     expect(coveredPaths).toEqual(new Set(expectedPaths));
   });
