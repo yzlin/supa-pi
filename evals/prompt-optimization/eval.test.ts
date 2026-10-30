@@ -545,6 +545,7 @@ describe("committed corpus", () => {
       "skills/simplify/SKILL.md",
       "skills/review-fix/SKILL.md",
       "evals/prompt-optimization/prompts/execute-checker.md",
+      "evals/prompt-optimization/prompts/review-verify.md",
     );
     expect(coveredPaths).toEqual(new Set(expectedPaths));
   });

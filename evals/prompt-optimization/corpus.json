@@ -267,6 +267,48 @@
       ]
     },
     {
+      "id": "review-synthesis-verify",
+      "workload": "code review",
+      "promptPath": "evals/prompt-optimization/prompts/review-verify.md",
+      "task": "Run /review verification for this change (scope: src/). Candidate findings from the reviewer panel (models model-a, model-b, model-c):\n[\n  {\n    \"candidateId\": \"candidate-0001\",\n    \"reviewer\": \"security-reviewer\",\n    \"model\": \"model-a\",\n    \"thinkingLevel\": \"medium\",\n    \"priority\": \"P0\",\n    \"title\": \"Debug flag bypasses admin role check\",\n    \"file\": \"src/auth.ts\",\n    \"line\": 2,\n    \"why\": \"Any caller that passes debug=true gets admin panel access, whatever the role.\",\n    \"change\": \"Remove the debug branch so only role === \\\"admin\\\" grants access.\"\n  },\n  {\n    \"candidateId\": \"candidate-0002\",\n    \"reviewer\": \"code-reviewer\",\n    \"model\": \"model-b\",\n    \"thinkingLevel\": \"medium\",\n    \"priority\": \"P1\",\n    \"title\": \"canAccessAdminPanel returns true for every role when debug is set\",\n    \"file\": \"src/auth.ts\",\n    \"line\": 3,\n    \"why\": \"README says admin access requires the admin role, but the early return ignores the role.\",\n    \"change\": \"Delete the early return; keep the role comparison as the only path.\"\n  },\n  {\n    \"candidateId\": \"candidate-0003\",\n    \"reviewer\": \"code-reviewer\",\n    \"model\": \"model-a\",\n    \"thinkingLevel\": \"medium\",\n    \"priority\": \"P1\",\n    \"title\": \"add() subtracts its arguments\",\n    \"file\": \"src/math.ts\",\n    \"line\": 2,\n    \"why\": \"add(7, 5) returns 2, so tests/math.case.ts fails.\",\n    \"change\": \"Return left + right.\"\n  },\n  {\n    \"candidateId\": \"candidate-0004\",\n    \"reviewer\": \"code-reviewer\",\n    \"model\": \"model-c\",\n    \"thinkingLevel\": \"medium\",\n    \"priority\": \"P1\",\n    \"title\": \"add uses the minus operator\",\n    \"file\": \"src/math.ts\",\n    \"line\": 2,\n    \"why\": \"The documented behavior is addition; callers get differences instead of sums.\",\n    \"change\": \"Change - to +.\"\n  },\n  {\n    \"candidateId\": \"candidate-0005\",\n    \"reviewer\": \"performance-reviewer\",\n    \"model\": \"model-b\",\n    \"thinkingLevel\": \"medium\",\n    \"priority\": \"P2\",\n    \"title\": \"rankMatches sorts the caller's array inside the query loop\",\n    \"file\": \"src/search.ts\",\n    \"line\": 4,\n    \"why\": \"items.sort() mutates the caller's array and re-sorts it once per query.\",\n    \"change\": \"Sort a copy once before the loop.\"\n  },\n  {\n    \"candidateId\": \"candidate-0006\",\n    \"reviewer\": \"code-reviewer\",\n    \"model\": \"model-c\",\n    \"thinkingLevel\": \"medium\",\n    \"priority\": \"P3\",\n    \"title\": \"Rename the debug parameter to describe its purpose\",\n    \"file\": \"src/auth.ts\",\n    \"line\": 1,\n    \"why\": \"The name debug does not say what the flag enables.\",\n    \"change\": \"Rename debug to isDebugSession.\"\n  },\n  {\n    \"candidateId\": \"candidate-0007\",\n    \"reviewer\": \"code-reviewer\",\n    \"model\": \"model-a\",\n    \"thinkingLevel\": \"medium\",\n    \"priority\": \"P1\",\n    \"title\": \"multiply overflows for large inputs\",\n    \"file\": \"src/math.ts\",\n    \"line\": 6,\n    \"why\": \"Multiplying two large integers wraps around and returns a negative number.\",\n    \"change\": \"Use BigInt or check bounds before multiplying.\"\n  }\n]",
+      "tools": ["read", "grep", "find", "ls", "Agent"],
+      "agentChild": {
+        "promptPath": "agents/review-synthesizer.md",
+        "tools": []
+      },
+      "checks": [
+        {
+          "type": "findingGroup",
+          "memberIds": ["candidate-0001", "candidate-0002"],
+          "present": true,
+          "domain": "task",
+          "weight": 2
+        },
+        {
+          "type": "findingGroup",
+          "memberIds": ["candidate-0003", "candidate-0004"],
+          "present": true,
+          "domain": "task",
+          "weight": 2
+        },
+        {
+          "type": "findingGroup",
+          "memberIds": ["candidate-0005"],
+          "present": true,
+          "domain": "task",
+          "weight": 1
+        },
+        {
+          "type": "findingGroup",
+          "memberIds": ["candidate-0007"],
+          "present": false,
+          "domain": "task",
+          "weight": 2
+        },
+        { "type": "workspaceUnchanged", "domain": "tests", "weight": 1 }
+      ]
+    },
+    {
       "id": "checker-auth-partial-bypass",
       "workload": "code review",
       "promptPath": "evals/prompt-optimization/prompts/execute-checker.md",
