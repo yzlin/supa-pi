@@ -186,6 +186,12 @@ The historical inventory above records the initial audit's `KEEP` decision for `
 
 `/simplify` now runs in the main session. Its craft, comment keep list, suppression audit, reshape flags, existing-capability replacement, and dead-code/duplicate/dependency safeguards moved verbatim into `skills/simplify/SKILL.md`; the baseline and Audit are unchanged except that main audits its own diff instead of a child report. Evidence: live prompt A/B `simplify-command-scoped` (claude-opus-5-5, 2 repetitions, real nested child for the delegating arm) scored 1.00 in both arms; the main-session arm cost $0.117 vs $0.204 per run and took 27.6 s vs 50.7 s. The `simplify-code` and `remove-dead-code` eval cases now target the skill.
 
+### Main-session `/review-fix` and `/execute` attempts
+
+On 2026-10-30, `/review-fix` moved to the main session. It delegates to `executor` children only when a fix queue spans several independent areas. Evidence: live A/B `review-fix-command-queue` (claude-opus-5-5, 2 repetitions, real executor child for the delegating arm) scored 1.00 in both arms; the main-session arm cost $0.151 vs $0.257 per run. See [review](../../extensions/review/README.md#review-summary-and-review-fix).
+
+On the same date, `/execute` gained main-executed attempts ([ADR 0003](../adr/0003-main-executed-execute-attempts.md)). Main runs sequential assignments itself; children remain for parallel disjoint work, context-heavy tasks, and outside-workspace `cwd`. Evidence for the checker side: the planted-defect cases `checker-auth-partial-bypass`, `checker-auth-substring-role` and `checker-clean` (3 repetitions per arm) gave correct verdicts in 9 of 9 runs for main checking its own seeded change, the same as a fresh read-only child checker, at $0.102 vs $0.164 per run. Both defects break written criteria, so this does not show that self-checking catches defects no criterion states. Main-executed `/execute` has no live A/B of its own.
+
 ## Current repo-owned delegation boundary
 
 The subsequent repo-only replacement retires `Agent`, `SubagentWorkflow`, Task tools, and the external Workflows UI contracts. Research lookup remains main-owned and direct when simple; justified material research now uses blocking `subagent({agent: "researcher", task})` with self-contained context and explicit artifact ownership. No historical audit or model-quality result above is recertified by this migration.
