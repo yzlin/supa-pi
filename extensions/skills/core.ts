@@ -1,5 +1,6 @@
 import { createHash, randomUUID } from "node:crypto";
 import {
+  chmodSync,
   closeSync,
   copyFileSync,
   existsSync,
@@ -18,7 +19,7 @@ import { basename, dirname, join, relative, resolve, sep } from "node:path";
 export const SKILL_FILE_NAME = "SKILL.md";
 export const MANIFEST_VERSION = 1;
 export const SEARCH_CACHE_VERSION = 5;
-export const GITHUB_TREE_CACHE_VERSION = 2;
+export const GITHUB_TREE_CACHE_VERSION = 3;
 export const GITHUB_TREE_CACHE_MAX_ENTRIES = 32;
 
 const GITHUB_TREE_CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
@@ -97,6 +98,7 @@ export interface GitHubTreeItem {
   path?: string;
   type?: string;
   sha?: string;
+  mode?: string;
 }
 
 interface GitHubBlobItem extends GitHubTreeItem {
@@ -322,16 +324,19 @@ function parseGithubTreeItem(value: unknown): GitHubTreeItem | null {
       isRecord(value) &&
       typeof value.path === "string" &&
       typeof value.type === "string" &&
-      (value.sha === undefined || typeof value.sha === "string")
+      (value.sha === undefined || typeof value.sha === "string") &&
+      (value.mode === undefined || typeof value.mode === "string")
     )
   ) {
     return null;
   }
   const sha = value.sha as string | undefined;
+  const mode = value.mode as string | undefined;
   return {
     path: value.path,
     type: value.type,
     ...(sha === undefined ? {} : { sha }),
+    ...(mode === undefined ? {} : { mode }),
   };
 }
 
@@ -1405,7 +1410,17 @@ async function writeGithubSkillFiles(
     );
     const rawUrl = `https://raw.githubusercontent.com/${owner}/${repo}/${ref}/${item.path}`;
     await writeResponseFile(fetcher, rawUrl, targetPath);
+    if (item.mode === "100755") {
+      grantExecuteToReaders(targetPath);
+    }
   }
+}
+
+function grantExecuteToReaders(path: string): void {
+  /* oxlint-disable no-bitwise -- permission bits */
+  const permissions = statSync(path).mode & 0o777;
+  chmodSync(path, permissions | ((permissions & 0o444) >> 2));
+  /* oxlint-enable no-bitwise */
 }
 
 function githubTreePageUrl(

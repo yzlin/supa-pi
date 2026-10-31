@@ -6,6 +6,7 @@ import {
   readdirSync,
   readFileSync,
   rmSync,
+  statSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
@@ -25,6 +26,7 @@ import {
   fetchSkillsShSearchCache,
   findListedSkillSourceDir,
   GITHUB_TREE_CACHE_MAX_ENTRIES,
+  GITHUB_TREE_CACHE_VERSION,
   githubSkillFolderHash,
   hashSkillDirectory,
   installSelectedSkillsSequentially,
@@ -270,6 +272,52 @@ describe("skills core", () => {
     expect(
       readFileSync(join(sourceRoot, "skills", "one", "README.md"), "utf8"),
     ).toBe("# one\n");
+  });
+
+  it("keeps the executable bit for GitHub tree blobs with mode 100755", async () => {
+    const root = tempRoot("github-exec-mode");
+    const paths = createSkillsManagerPaths(join(root, ".pi", "agent"));
+    const resolved = parseSkillSource("owner/repo");
+    const responses = new Map<string, Response>([
+      [
+        "https://api.github.com/repos/owner/repo/git/trees/HEAD?recursive=1",
+        Response.json({
+          tree: [
+            { path: "skills/one/SKILL.md", type: "blob", mode: "100644" },
+            { path: "skills/one/scripts/run", type: "blob", mode: "100755" },
+          ],
+        }),
+      ],
+      [
+        "https://raw.githubusercontent.com/owner/repo/HEAD/skills/one/SKILL.md",
+        new Response("# One Skill\n\ndescription: First.\n"),
+      ],
+      [
+        "https://raw.githubusercontent.com/owner/repo/HEAD/skills/one/scripts/run",
+        new Response("#!/bin/sh\n"),
+      ],
+    ]);
+    const fetcher = (url: string | URL | Request) =>
+      Promise.resolve(
+        responses.get(fetchUrl(url)) ??
+          new Response("missing", { status: 404 }),
+      );
+
+    const sourceRoot = await materializeResolvedSkillSource(
+      resolved,
+      paths,
+      fetcher as typeof fetch,
+    );
+    /* oxlint-disable no-bitwise -- permission bits */
+    const permissions = (...parts: string[]) =>
+      statSync(join(sourceRoot, ...parts)).mode & 0o777;
+    const script = permissions("skills", "one", "scripts", "run");
+    const skillFile = permissions("skills", "one", "SKILL.md");
+    const readersCanExecute = (skillFile & 0o444) >> 2;
+
+    expect(script).toBe(skillFile | readersCanExecute);
+    expect(skillFile & 0o111).toBe(0);
+    /* oxlint-enable no-bitwise */
   });
 
   it("materializes exact GitHub subpaths without HTML child-folder guessing", async () => {
@@ -1595,7 +1643,7 @@ describe("skills core", () => {
     for (const cacheContents of [
       "{not-json",
       JSON.stringify({
-        version: 2,
+        version: GITHUB_TREE_CACHE_VERSION,
         entries: {
           "owner/repo#main": {
             fetchedAt: new Date().toISOString(),
@@ -1628,7 +1676,7 @@ describe("skills core", () => {
       expect(snapshot).toMatchObject({ fromCache: false, tree });
       expect(calls[0]?.headers).not.toHaveProperty("If-None-Match");
       expect(JSON.parse(readFileSync(cachePath, "utf8"))).toMatchObject({
-        version: 2,
+        version: GITHUB_TREE_CACHE_VERSION,
         entries: { "owner/repo#main": { tree } },
       });
       expect(
@@ -1646,7 +1694,7 @@ describe("skills core", () => {
     writeFileSync(
       cachePath,
       JSON.stringify({
-        version: 2,
+        version: GITHUB_TREE_CACHE_VERSION,
         entries: Object.fromEntries(
           Array.from(
             { length: GITHUB_TREE_CACHE_MAX_ENTRIES + 10 },
