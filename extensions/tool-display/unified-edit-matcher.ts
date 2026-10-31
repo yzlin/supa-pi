@@ -45,6 +45,20 @@ function isWholeLine(
   );
 }
 
+const CHARS_PER_BUDGET_UNIT = 1000;
+
+function lineCount(text: string): number {
+  let count = 1;
+  for (
+    let at = text.indexOf("\n");
+    at !== -1;
+    at = text.indexOf("\n", at + 1)
+  ) {
+    count++;
+  }
+  return count;
+}
+
 function locations(
   content: string,
   needle: string,
@@ -55,7 +69,11 @@ function locations(
     return [];
   }
   if (budget) {
-    budget.remaining -= Math.max(1, content.length - needle.length + 1);
+    // Charge line positions (the unit seek() uses) plus scanned size, so
+    // long-line files still exhaust the budget.
+    budget.remaining -=
+      Math.max(1, lineCount(content) - lineCount(needle) + 1) +
+      Math.ceil(content.length / CHARS_PER_BUDGET_UNIT);
     if (budget.remaining < 0) {
       throw new Error("Matcher comparison limit exceeded.");
     }
@@ -145,7 +163,9 @@ export function applyOriginalContentEdits(
   const fuzzy = initial.some((match) => match.fuzzy);
   const base = fuzzy ? normalizeForFuzzyMatch(normalized) : normalized;
   const matches = prepared.map((edit, index) => {
-    const match = uniqueMatch(base, edit.oldText, wholeLines, path, budget);
+    const match = fuzzy
+      ? uniqueMatch(base, edit.oldText, wholeLines, path, budget)
+      : initial[index];
     return {
       ...match,
       length:

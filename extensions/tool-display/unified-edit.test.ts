@@ -225,7 +225,39 @@ describe("local unified-edit parser and planner", () => {
         "[a.txt]\n@REPLACE\n-missing\n+x",
         "/tmp",
         reader({
-          "a.txt": `${"a".repeat(200_001)}\n`,
+          "a.txt": "a\n".repeat(150_000),
+        }),
+      ),
+    ).rejects.toThrow("Matcher comparison limit");
+  });
+
+  test("budget allows many replace pairs on a mid-size file", async () => {
+    const lines = Array.from(
+      { length: 300 },
+      (_, i) => `line ${i} ${"x".repeat(50)}`,
+    );
+    const pairs = [10, 50, 90, 130, 170, 210, 250]
+      .map((i) => `@REPLACE\n-${lines[i]}\n+changed ${i}`)
+      .join("\n");
+    const plan = await buildUnifiedEditPlan(
+      `[a.txt]\n${pairs}`,
+      "/tmp",
+      reader({ "a.txt": `${lines.join("\n")}\n` }),
+    );
+    expect(JSON.stringify(plan)).toContain("changed 250");
+  });
+
+  test("budget still limits many edits on a long-line file", async () => {
+    const targets = Array.from({ length: 50 }, (_, i) => `target ${i}`);
+    const ops = targets
+      .map((line, i) => `@REPLACE\n-${line}\n+changed ${i}`)
+      .join("\n");
+    expect(
+      buildUnifiedEditPlan(
+        `[a.txt]\n${ops}`,
+        "/tmp",
+        reader({
+          "a.txt": `${"a".repeat(5_000_000)}\n${targets.join("\n")}\n`,
         }),
       ),
     ).rejects.toThrow("Matcher comparison limit");
