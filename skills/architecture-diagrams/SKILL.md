@@ -33,3 +33,8 @@ Choose the smallest diagram set that answers the question. Start with one diagra
 - Omit decorative infrastructure, actors, and flows.
 - Do not repeat the same relationships across multiple diagram types.
 - If a text tree or pseudocode is clearer, render it directly instead of Mermaid.
+- State diagrams:
+  - Name each state by what the reader sees or cares about, such as "Paying", not by a variable name.
+  - Label each arrow with the event in the user's words, such as "you press play". Add a `[condition]` when it matters.
+  - Merge states that act the same. Aim for about 20 arrows or fewer.
+  - Mark inferred states and arrows. When the flow needs to be checked, not only shown, suggest `/statechart`.

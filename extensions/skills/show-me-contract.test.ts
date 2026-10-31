@@ -104,5 +104,8 @@ describe("visual explanation skill contracts", () => {
       "For every architectural assessment, create the following diagrams",
     );
     expect(skill).not.toContain("use `show-me`");
+    expect(skill).toContain("- State diagrams:");
+    expect(skill).toContain("not by a variable name");
+    expect(skill).toContain("suggest `/statechart`");
   });
 });

@@ -327,6 +327,18 @@ Approved by `/grill-me` on 2026-10-24. Implemented in repo files (`agents/*.md`,
 - Schema simplification limit: `pi-claude-code` (`normalizeInputSchema` in its `src/transcript.ts`) strips `null` from `T | null` unions, so the model cannot send JSON `null`; a probe asked for `null` received the string `"null"` in 3 of 3 runs. Repo tools must not need `null` as an argument. `goal_checkpoint` was the only one: its `currentMilestone` and `blockerState.reason` now take a plain string, and an empty string clears the value (stored as `null`). A live probe of that schema sent `""` in 3 of 3 `claude-code` runs.
 - No ADR: the switch is easy to undo by re-adding one package line and has no data migration.
 
+## Statechart: implemented direction
+
+Approved by `/grill-me` on 2026-10-31 and implemented via `/execute` on 2026-10-31 (Spec `.pi/specs/statechart-integration.md`). Live check on 2026-10-31: `pi -p "/skill install https://github.com/cursor/plugins/tree/main/pstack/skills/statechart"` installed 407 files to `~/.pi/agent/skills/statechart`, with manifest `ref: main`. `scripts/statechart` has mode `755`. A smoke run on a scratch copy of upstream `MediaPlayerFixed` exited 0 and wrote `chart.mmd`, `report.md`, and `tlc.out`. TLC reached 11 states, and TypeOK, LoudWhenStopped, and NoDeadlock hold. Not verified: an interactive `/statechart` session from end to end, and the agent's behavior when it follows the skill.
+
+- **Statechart** — external skill `statechart` from [cursor/plugins `pstack/skills/statechart`](https://github.com/cursor/plugins/tree/main/pstack/skills/statechart) (MIT, Copyright (c) 2026 Lauren Tan; `pstack/LICENSE`). It model-checks a TLA+ spec with TLC and draws a Mermaid statechart that marks each broken rule and its shortest bug path. Reviewed at commit `4dd1d05818d19792e7cd6e818f1667f95f7e1dbe`. _Avoid_: vendored statechart, show-me checking.
+- Not vendored: Ethan installs it with `/skill install https://github.com/cursor/plugins/tree/main/pstack/skills/statechart` into `~/.pi/agent/skills`. Updates track `main` (not pinned), so `/skill update` brings in upstream script changes that nobody has reviewed. `setup.sh` does not install it.
+- Runtime: the skill installs Java and TLC 1.7.4 with mise on its first run (needs network). Its upstream `disable-model-invocation: true` stays.
+- Entry: `prompts/statechart.md` is a thin `/statechart` wrapper. On machines without the skill, the command fails; the recommended prompt behavior is to stop and print the install command.
+- `/skill install` keeps the executable bit. The GitHub tree parser keeps `mode`. For each `100755` blob, `writeGithubSkillFiles` adds an execute bit for each read bit that the umask already granted, so it never widens access (under umask `077` the script is `700`). The upstream launcher `scripts/statechart` is `100755`. `GITHUB_TREE_CACHE_VERSION` is 3, so trees cached without modes are fetched again. A regression test is in `extensions/skills/core.test.ts`. The HTML fallback and the skills.sh snapshot path still do not keep modes.
+- Showing and checking stay separate. `architecture-diagrams` owns state-diagram wording rules: states are what the reader sees, arrows are events in user words with a `[condition]` when it matters, states that act the same are merged (about 20 arrows or fewer), and inferred parts are marked. It points to `/statechart` when a flow needs checking. `showing-me` gets these through its existing Mermaid route.
+- No ADR: each part is cheap to undo (one skill install, one prompt, one small fix).
+
 ## Open questions
 
 - Extension isolation (resolved 2026-10-04): no approved exception; RTK's tool-display dependency is removed under "Tool rendering: implemented product direction".
