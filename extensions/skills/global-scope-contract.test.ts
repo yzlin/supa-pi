@@ -87,7 +87,11 @@ const expectedUnrelatedSections = `## Docs
 
 ### trash
 
-- Move files to Trash: \`trash …\` (system command).`;
+- Move files to Trash: \`trash …\` (system command).
+
+### Slack links
+
+- Slack URLs (\`*.slack.com/archives/…\`): always use the \`slack-links\` skill (executor MCP). Never web-fetch or browse them.`;
 
 describe("global scope instruction contract", () => {
   it("keeps one compact owner for requested scope and implementation restraint", () => {

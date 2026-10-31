@@ -47,3 +47,7 @@
 ### trash
 
 - Move files to Trash: `trash …` (system command).
+
+### Slack links
+
+- Slack URLs (`*.slack.com/archives/…`): always use the `slack-links` skill (executor MCP). Never web-fetch or browse them.
