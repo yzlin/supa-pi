@@ -58,19 +58,19 @@ describe("web-browser routing instruction assertions (not proof of model complia
     }
   });
 
-  it("asserts explicit pi-computer-use authorization and blocker reporting", () => {
+  it("asserts explicit agent-desktop authorization and blocker reporting", () => {
     const skill = readFile(browserSkillPath);
 
     for (const instruction of [
-      "`pi-computer-use`, including its browser-capable tools, requires an explicit user request",
+      "`agent-desktop`, including its browser-capable tools, requires an explicit user request",
       "A launch or capability blocker alone is not authorization",
-      "report the blocker and ask the user to explicitly request `pi-computer-use`",
+      "report the blocker and ask the user to explicitly request `agent-desktop`",
     ]) {
       expect(skill).toContain(instruction);
     }
 
     expect(skill.indexOf("canonical browser-interaction route")).toBeLessThan(
-      skill.indexOf("pi-computer-use"),
+      skill.indexOf("agent-desktop"),
     );
   });
 
@@ -111,7 +111,7 @@ describe("web-browser routing instruction assertions (not proof of model complia
       expect(resolvedSkillPath).toBe(browserSkillPath);
       expect(existsSync(resolvedSkillPath)).toBe(true);
       expect(content).not.toContain("./scripts/");
-      expect(content).not.toContain("pi-computer-use");
+      expect(content).not.toContain("agent-desktop");
     }
   });
 });

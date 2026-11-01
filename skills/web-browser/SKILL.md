@@ -14,7 +14,7 @@ Use this skill when an agent needs direct interaction with a web UI for interact
 
 For either task, this skill is the canonical browser-interaction route. Agents MUST use the scripts in this skill (`./scripts/`) for agent-driven web interaction. Start Chrome headless by default with `./scripts/start.js --headless`; use a visible browser only when the task requires a person to see or interact with it.
 
-`pi-computer-use`, including its browser-capable tools, requires an explicit user request. A launch or capability blocker alone is not authorization. If these scripts cannot launch or provide a needed capability, report the blocker and ask the user to explicitly request `pi-computer-use` if they want that alternative; do not infer authorization from the blocker.
+`agent-desktop`, including its browser-capable tools, requires an explicit user request. A launch or capability blocker alone is not authorization. If these scripts cannot launch or provide a needed capability, report the blocker and ask the user to explicitly request `agent-desktop` if they want that alternative; do not infer authorization from the blocker.
 
 Preserve authoring and execution of existing project E2E runners (Playwright, Cypress, or another repository runner). Use the existing runner for its project test code and suite execution; do not replace the runner with these scripts. These scripts are for direct agent-driven browser interaction.
 
