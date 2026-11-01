@@ -119,7 +119,7 @@ Rendered reports contain `Review Scope`, `Verdict`, `Findings`, `Human Reviewer 
 
 ## Blocking lifecycle and local finalization
 
-Live pane progress and copyable tmux attachment commands stream through `review_run` into the parent; finished child sessions are closed. There is no Workflows UI or background run. Owner-only child task/result/session evidence is saved by the subagent runner, but publication uses the controller's complete private captures rather than model-provided artifact paths.
+`review_run` renders one stable progress panel in the parent: one status row per child (reviewers, then verifier), and for running children a 3-line pane tail plus the `pi --attach-subagent <id>` command on its own unprefixed line for copying. Child updates are merged per child; status changes redraw at once, pane churn at most every 250ms. Finished child sessions are closed. There is no Workflows UI or background run. Owner-only child task/result/session evidence is saved by the subagent runner, but publication uses the controller's complete private captures rather than model-provided artifact paths.
 
 A second `/review` is rejected while pending. Interactive text-only prompts stay in the editor; image-bearing or other non-extension input and user bash cancel the review before proceeding. Extension-origin input remains available for the handoff. Session shutdown/start/switch/fork/tree boundaries invalidate publication. Headless calls use the same two blocking tools.
 

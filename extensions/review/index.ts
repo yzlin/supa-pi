@@ -85,6 +85,7 @@ import {
 } from "./config";
 import { ReviewRunController } from "./lifecycle";
 import { assertReviewEfforts } from "./pipeline-contracts";
+import { renderReviewRunCall, renderReviewRunResult } from "./progress-render";
 import {
   DEFAULT_REVIEWER_PANEL,
   DEFAULT_VERIFIER_MODEL,
@@ -1448,6 +1449,10 @@ export default function reviewExtension(pi: ExtensionAPI) {
       },
       { additionalProperties: false },
     ),
+    renderShell: "self",
+    renderCall: (_args, theme, context) => renderReviewRunCall(theme, context),
+    renderResult: (result, options, theme, context) =>
+      renderReviewRunResult(result, options, theme, context),
     async execute(_toolCallId, params, signal, onUpdate, ctx) {
       if (
         Object.keys(params).length !== 1 ||
@@ -1456,7 +1461,11 @@ export default function reviewExtension(pi: ExtensionAPI) {
       ) {
         throw new Error("Invalid review_run arguments.");
       }
-      await pendingReview.run(params.runId, ctx, signal, onUpdate);
+      let progress: unknown = {};
+      await pendingReview.run(params.runId, ctx, signal, (update) => {
+        progress = update.details;
+        onUpdate?.(update);
+      });
       return {
         content: [
           {
@@ -1464,7 +1473,7 @@ export default function reviewExtension(pi: ExtensionAPI) {
             text: "Review run complete; call review_finalize with the prepared runId.",
           },
         ],
-        details: {},
+        details: progress,
       };
     },
   });

@@ -19,6 +19,7 @@ import {
 import { Type } from "typebox";
 
 import { ReviewRunController } from "./lifecycle";
+import type { ReviewProgressDetails } from "./progress";
 import { outcome, plan, reviewer } from "./test-fixtures";
 import type { ReviewWorkflowResult } from "./workflow";
 
@@ -45,7 +46,7 @@ test("public SDK nested subagent outcomes bind a blocking owned review with nati
   });
   const sessionManager = SessionManager.inMemory(root);
   const hooks: string[] = [];
-  const progress: string[] = [];
+  const progress: unknown[] = [];
   const reports: ReviewWorkflowResult[] = [];
   const controller = new ReviewRunController();
   const input = {
@@ -91,7 +92,12 @@ test("public SDK nested subagent outcomes bind a blocking owned review with nati
           execute(_id, params, _signal, onUpdate) {
             onUpdate?.({
               content: [{ type: "text", text: "running child pane" }],
-              details: {},
+              details: {
+                runId: "child",
+                status: "running",
+                text: "running child pane",
+                attachCommand: "pi --attach-subagent child",
+              },
             });
             const result = outcome(
               { ...params, thinking: "medium" },
@@ -114,11 +120,7 @@ test("public SDK nested subagent outcomes bind a blocking owned review with nati
               signal,
             );
             await controller.run(prepared.id, ctx, signal, (update) => {
-              for (const part of update.content) {
-                if (part.type === "text") {
-                  progress.push(part.text);
-                }
-              }
+              progress.push(update.details);
             });
             await controller.finalize(
               prepared.id,
@@ -154,7 +156,17 @@ test("public SDK nested subagent outcomes bind a blocking owned review with nati
     await session.prompt("Run the offline review boundary.");
     expect(hooks).toHaveLength(1);
     expect(hooks[0]).not.toBe("missing");
-    expect(progress).toEqual(["running child pane"]);
+    const rows = progress.map(
+      (details) => (details as ReviewProgressDetails).reviewProgress[0]?.status,
+    );
+    expect(rows).toEqual(["waiting", "running", "done"]);
+    expect(
+      (progress[1] as ReviewProgressDetails).reviewProgress[0],
+    ).toMatchObject({
+      agent: "code-reviewer",
+      tail: ["running child pane"],
+      attachCommand: "pi --attach-subagent child",
+    });
     expect(reports).toHaveLength(1);
     expect(reports[0]?.verifier.verdict).toBe("correct");
     expect(provider.state.callCount).toBe(2);

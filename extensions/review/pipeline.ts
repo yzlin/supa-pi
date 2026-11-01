@@ -20,6 +20,7 @@ import {
   validatePortableReviewer,
   validatePortableVerifier,
 } from "./portable-core";
+import { ReviewProgress } from "./progress";
 import { REVIEW_WORKFLOW_CONCURRENCY } from "./workflow";
 import type {
   ReviewCandidateFindingContract,
@@ -56,12 +57,26 @@ export async function runReviewPipeline(
   input: ReviewPipelineInput,
   options: { signal: AbortSignal; onUpdate?: AgentToolUpdateCallback },
 ): Promise<Readonly<ReviewRawResult>> {
+  const progress = new ReviewProgress(options.onUpdate);
+  try {
+    return await runPipeline(ctx, input, options.signal, progress);
+  } finally {
+    progress.dispose();
+  }
+}
+
+async function runPipeline(
+  ctx: Pick<ExtensionToolContext, "executeTool">,
+  input: ReviewPipelineInput,
+  parentSignal: AbortSignal,
+  progress: ReviewProgress,
+): Promise<Readonly<ReviewRawResult>> {
   const plan = prepareReviewPlan(input);
-  const { onUpdate } = options;
   const controller = new AbortController();
-  const signal = AbortSignal.any([options.signal, controller.signal]);
+  const signal = AbortSignal.any([parentSignal, controller.signal]);
   const ids = new Set<string>();
   const invoke = async (
+    row: number,
     agent: string,
     model: string,
     thinking: string,
@@ -69,11 +84,20 @@ export async function runReviewPipeline(
     schema: Record<string, unknown>,
   ) => {
     checkAbort(signal);
-    const outcome = await ctx.executeTool(
-      "subagent",
-      { agent, model, thinking, task, schema },
-      { signal, onUpdate },
-    );
+    const outcome = await ctx
+      .executeTool(
+        "subagent",
+        { agent, model, thinking, task, schema },
+        {
+          signal,
+          onUpdate: (partial) => progress.childUpdate(row, partial.details),
+        },
+      )
+      .catch((error: unknown) => {
+        progress.settle(row, true);
+        throw error;
+      });
+    progress.settle(row, outcome.isError);
     checkAbort(signal);
     if (outcome.isError) {
       return { failed: true as const };
@@ -110,7 +134,11 @@ export async function runReviewPipeline(
     return { failed: false as const, output };
   };
   const jobs = plan.reviewers.flatMap((reviewer) =>
-    plan.reviewerPanel.map((entry) => ({ reviewer, ...entry })),
+    plan.reviewerPanel.map((entry) => ({
+      reviewer,
+      ...entry,
+      row: progress.add(reviewer, entry.model, entry.thinkingLevel),
+    })),
   );
   const raw: ReviewRawResult = { reviewerRuns: [] };
   const validatedRuns: ReviewRunOutcome[] = [];
@@ -123,9 +151,10 @@ export async function runReviewPipeline(
     const settled = await Promise.allSettled(
       jobs
         .slice(offset, offset + REVIEW_WORKFLOW_CONCURRENCY)
-        .map(async (job) => {
+        .map(async ({ row, ...job }) => {
           try {
             const call = await invoke(
+              row,
               job.reviewer,
               job.model,
               job.thinkingLevel,
@@ -188,6 +217,7 @@ export async function runReviewPipeline(
   ) as ReviewCandidateFindingContract[];
   if (candidates.length) {
     const verification = await invoke(
+      progress.add("review-verifier", plan.verifierModel, "medium"),
       "review-verifier",
       plan.verifierModel,
       "medium",
