@@ -175,6 +175,7 @@ describe("ask public runtime boundary", () => {
       startEvent.systemPromptOptions.sections.question_asking_rules,
     ).toContain("prefer the ask tool");
     expect(askFacingCopy.toLowerCase()).toContain("ask");
+    expect(askFacingCopy).toContain("The user cannot see your reasoning.");
     expect(askFacingCopy.toLowerCase()).not.toContain("questionnaire");
 
     const agentEnd = handlers.get("agent_end");

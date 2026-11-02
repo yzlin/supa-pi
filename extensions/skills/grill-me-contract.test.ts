@@ -76,6 +76,18 @@ describe("grilling skill contract", () => {
     }
   });
 
+  it("keeps context that a question depends on visible to the user", () => {
+    const skill = readRepositoryFile("skills", "grilling", "SKILL.md");
+
+    for (const text of [
+      "The user sees only visible assistant text and the `ask` dialog, never your reasoning.",
+      "Put a shared diagram or finding in visible text before the `ask` call",
+      "Do not refer to",
+    ]) {
+      expect(skill).toContain(text);
+    }
+  });
+
   it("conditionally composes domain modeling without making it always-on", () => {
     const skill = readRepositoryFile("skills", "grilling", "SKILL.md");
 

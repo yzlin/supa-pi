@@ -377,6 +377,7 @@ export default function ask(pi: ExtensionAPI): void {
       "When you need user input in the interactive main session, prefer ask over asking plain-text questions.",
       "Use a single question with options for simple clarifications; use multiple questions only when several answers are needed together.",
       "Keep questions short, decision-oriented, and limited to what is needed to proceed.",
+      "The user cannot see your reasoning. Put context a question depends on (diagrams, findings) in visible text before calling ask or in the prompt or option preview; never refer to context the user has not seen.",
       "Single-select questions include a custom input row. Multi-select questions use checkboxes and a Next row, with no custom input row.",
       "Do not use ask in background or non-interactive contexts.",
     ],
