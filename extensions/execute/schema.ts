@@ -227,6 +227,10 @@ export const CheckpointSchema = Type.Union([
     { ...common, action: Type.Literal("resolve_review"), specPath: text },
     objectOptions,
   ),
+  Type.Object(
+    { ...common, action: Type.Literal("resolve_revision"), specPath: text },
+    objectOptions,
+  ),
 ]);
 export type Checkpoint = Static<typeof CheckpointSchema>;
 
@@ -244,6 +248,7 @@ export const CheckpointParametersSchema = Type.Object(
       "stop",
       "review",
       "resolve_review",
+      "resolve_revision",
     ]),
     plan: Type.Optional(text),
     approval: Type.Optional(text),
@@ -298,6 +303,24 @@ export const CheckpointOutputSchema = Type.Object(
           ),
           findings: Type.Optional(
             Type.Array(SpecReviewFindingSchema, { maxItems: 100 }),
+          ),
+        },
+        objectOptions,
+      ),
+    ),
+    // Spec revision gate state; resolve_revision never changes the ledger.
+    revision: Type.Optional(
+      Type.Object(
+        {
+          note: text,
+          // resolve_revision sent the diff; call it again to ask.
+          presented: Type.Optional(Type.Literal(true)),
+          decision: Type.Optional(
+            Type.Union([
+              Type.Literal("revise"),
+              Type.Literal("restore"),
+              Type.Literal("stop"),
+            ]),
           ),
         },
         objectOptions,

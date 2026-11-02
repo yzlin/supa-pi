@@ -77,7 +77,7 @@ Recheck collisions before writing, including after confirmation. If existence ca
 
 Write only `.pi/specs/<slug>.md`; create the `.pi/specs/` directory if needed. This storage is local and git-ignored; do not publish, commit, or change ignore configuration as part of this workflow.
 
-Never write or edit the Spec log or Snapshot refs. The execute Extension alone writes the append-only Spec log and manages Snapshot refs. Never edit a Spec after it is accepted; changes go through `/execute`'s explicit revision. Do not write context docs, issue-tracker records, or implementation files.
+Never write or edit the Spec log or Snapshot refs. The execute Extension alone writes the append-only Spec log and manages Snapshot refs. `/to-spec` never edits a Spec after it is accepted; changes go through `/execute`'s Spec revision, which shows the diff and asks the user through `resolve_revision` in the same session. Do not write context docs, issue-tracker records, or implementation files.
 
 ## Finish
 

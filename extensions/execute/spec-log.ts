@@ -50,6 +50,10 @@ export const SpecLogEventSchema = Type.Union([
       assignments: Type.Array(
         Type.Object({ id: text, dependencies: texts, criteria }, options),
       ),
+      // Accepted Spec text, so a later revision can show its diff.
+      // Optional only so older logs still parse (persisted-state reason).
+      // Remove the Optional when no such log remains under .pi/specs/.
+      content: Type.Optional(Type.String()),
     },
     options,
   ),
@@ -367,6 +371,20 @@ export function deriveSpecResume(events: SpecLogEvent[]): {
 }
 
 export type CriterionState = "passed" | "pending" | "unmet";
+
+// Text of the latest acceptance of the logged hash, when the log stored it.
+export function acceptedContent(
+  events: SpecLogEvent[],
+  loggedHash: string,
+): string | undefined {
+  const accepted = events.findLast(
+    (event) =>
+      event.event === "accepted" &&
+      event.hash === loggedHash &&
+      event.content !== undefined,
+  );
+  return accepted?.event === "accepted" ? accepted.content : undefined;
+}
 
 // Derives each Done Criterion's state from the latest accepted plan. Only
 // verification after that acceptance counts; earlier evidence is history.

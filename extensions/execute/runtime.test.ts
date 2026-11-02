@@ -288,6 +288,30 @@ async function verifyA(h: ReturnType<typeof specHarness>, token: string) {
   });
 }
 
+// Approves the current Spec hash through resolve_revision, as the user would.
+async function approveRevision(
+  h: Pick<ReturnType<typeof specHarness>, "ctx" | "checkpoint" | "endTurn"> & {
+    specPath: string;
+  },
+  token: string,
+  choice = "Revise and re-accept",
+) {
+  const prompts: Array<{ title: string; options: string[] }> = [];
+  Object.assign(h.ctx, { hasUI: true });
+  Object.assign(h.ctx.ui, {
+    select: (title: string, options: string[]) => {
+      prompts.push({ title, options });
+      return Promise.resolve(choice);
+    },
+  });
+  const step = () =>
+    h.checkpoint(token, { action: "resolve_revision", specPath: h.specPath });
+  const first = await step();
+  h.endTurn();
+  const second = await step();
+  return { first, second, prompts };
+}
+
 function seedVerified(h: ReturnType<typeof specHarness>) {
   appendSpecEvents(h.logPath, [
     {
@@ -348,6 +372,7 @@ describe("Spec runtime", () => {
           { id: "a", dependencies: [], criteria: ["DC-1"] },
           { id: "b", dependencies: ["a"], criteria: ["DC-1"] },
         ],
+        content: h.content,
       },
     ]);
     await verifyA(h, token);
@@ -544,6 +569,13 @@ describe("Spec runtime", () => {
       "Spec changed since it was accepted",
     );
     expect(h.branch).toEqual([]);
+    expect(
+      h.accept(token, { specPath: h.specPath, reviseSpec: true }),
+    ).rejects.toThrow(
+      "Spec revision needs user approval: call execute_checkpoint resolve_revision for .pi/specs/test.md",
+    );
+    expect(h.branch).toEqual([]);
+    await approveRevision(h, token);
     await h.accept(token, { specPath: h.specPath, reviseSpec: true });
     const events = readSpecLog(h.logPath);
     expect(events.slice(-2).map((event) => event.event)).toEqual([
@@ -707,7 +739,9 @@ describe("Spec runtime", () => {
     writeFileSync(join(h.ctx.cwd, h.specPath), spec("Revised Spec without A"));
     // Fresh sessions start with empty ledgers, as a later /execute would.
     const revising = harness([], h.ctx.cwd);
-    await revising.accept(await revising.invoke(), {
+    const revisingToken = await revising.invoke();
+    await approveRevision({ ...revising, specPath: h.specPath }, revisingToken);
+    await revising.accept(revisingToken, {
       specPath: h.specPath,
       reviseSpec: true,
       assignments: [b],
@@ -720,6 +754,323 @@ describe("Spec runtime", () => {
     expect(
       resumed.ledger.assignments.map(({ id, status }) => ({ id, status })),
     ).toEqual([{ id: "b", status: "pending" }]);
+  });
+
+  describe("same-session revision", () => {
+    const b = {
+      id: "b",
+      task: "B",
+      scope: ["src/b.ts"],
+      dependencies: [],
+      criteria: ["DC-1"],
+    };
+    const a = { ...b, id: "a", scope: ["src/a.ts"] };
+    const revise = (h: ReturnType<typeof specHarness>) =>
+      writeFileSync(join(h.ctx.cwd, h.specPath), spec("Revised plan"));
+
+    it("replaces an unfinished plan in the same session and keeps lineage state", async () => {
+      for (const reinvoke of [false, true]) {
+        const h = specHarness();
+        const first = await h.invoke();
+        await h.accept(first, { specPath: h.specPath, assignments: [a, b] });
+        await verifyA(h, first);
+        // b gets progress, then a repair, then blocks again.
+        await h.checkpoint(first, { action: "start", assignmentId: "b" });
+        await h.checkpoint(first, {
+          action: "block",
+          assignmentId: "b",
+          blockers: ["Needs fix"],
+        });
+        await h.checkpoint(first, {
+          action: "repair",
+          assignmentId: "b",
+          newAssignmentId: "b-fix",
+          task: "Fix B",
+        });
+        await h.checkpoint(first, {
+          action: "block",
+          assignmentId: "b-fix",
+          blockers: ["Still broken"],
+        });
+        revise(h);
+        const token = reinvoke ? await h.invoke() : first;
+        await approveRevision(h, token);
+        const revised = await h.accept(token, {
+          specPath: h.specPath,
+          reviseSpec: true,
+          plan: "Revised plan",
+          assignments: [a, b],
+        });
+        expect(revised.ledger.plan).toBe("Revised plan");
+        expect(
+          revised.ledger.assignments.map(
+            ({ id, status, blockers, priorRepairs }) => ({
+              id,
+              status,
+              blockers,
+              priorRepairs,
+            }),
+          ),
+        ).toEqual([
+          { id: "a", status: "reverify", blockers: [], priorRepairs: 0 },
+          {
+            id: "b",
+            status: "blocked",
+            blockers: ["Still broken"],
+            priorRepairs: 1,
+          },
+        ]);
+        const events = readSpecLog(h.logPath);
+        const at = events.findIndex((event) => event.event === "revised");
+        // Like a new-session resume, the rebuilt plan re-logs restored blockers.
+        expect(events.slice(at)).toMatchObject([
+          {
+            event: "revised",
+            hash: hashSpec(spec("Revised plan")),
+            previousHash: hashSpec(h.content),
+          },
+          { event: "accepted", content: spec("Revised plan") },
+          { event: "blocked", assignment: "b", blockers: ["Still broken"] },
+        ]);
+        // One repair left: the budget did not reset.
+        await h.checkpoint(token, {
+          action: "repair",
+          assignmentId: "b",
+          newAssignmentId: "b-fix2",
+          task: "Fix B again",
+        });
+        await h.checkpoint(token, {
+          action: "block",
+          assignmentId: "b-fix2",
+          blockers: ["Still broken"],
+        });
+        expect(
+          h.checkpoint(token, {
+            action: "repair",
+            assignmentId: "b-fix2",
+            newAssignmentId: "b-fix3",
+            task: "Fix B once more",
+          }),
+        ).rejects.toThrow("budget exhausted");
+      }
+    });
+
+    it("refuses replacement without reviseSpec, for another Spec, while running, or with a bound child", async () => {
+      const reset =
+        "One plan is already accepted; unfinished lineage cannot be reset";
+      // Running assignment.
+      const running = specHarness();
+      const token = await running.invoke();
+      await running.accept(token, { specPath: running.specPath });
+      await running.checkpoint(token, {
+        action: "start",
+        assignmentId: "a",
+        executor: "main",
+      });
+      revise(running);
+      await approveRevision(running, token);
+      expect(
+        running.accept(token, { specPath: running.specPath, reviseSpec: true }),
+      ).rejects.toThrow(reset);
+      // Bound child.
+      const bound = specHarness();
+      const boundToken = await bound.invoke();
+      await bound.accept(boundToken, { specPath: bound.specPath });
+      await bound.dispatch(boundToken);
+      revise(bound);
+      await approveRevision(bound, boundToken);
+      expect(
+        bound.accept(boundToken, {
+          specPath: bound.specPath,
+          reviseSpec: true,
+        }),
+      ).rejects.toThrow(reset);
+      // Without reviseSpec, after approval.
+      const h = specHarness();
+      const first = await h.invoke();
+      await h.accept(first, { specPath: h.specPath });
+      revise(h);
+      await approveRevision(h, first);
+      expect(h.accept(first, { specPath: h.specPath })).rejects.toThrow(
+        "Spec changed since it was accepted",
+      );
+      // A different Spec cannot replace this plan.
+      writeFileSync(join(h.ctx.cwd, ".pi/specs/other.md"), spec("Other"));
+      expect(
+        h.accept(first, { specPath: ".pi/specs/other.md" }),
+      ).rejects.toThrow(reset);
+      // A plan without a Spec cannot be replaced.
+      const inline = specHarness();
+      const inlineToken = await inline.invoke();
+      await inline.accept(inlineToken);
+      expect(
+        inline.accept(inlineToken, { specPath: inline.specPath }),
+      ).rejects.toThrow(reset);
+    });
+
+    it("requires approval of the current hash; reload and stop clear it", async () => {
+      const h = specHarness();
+      const token = await h.invoke();
+      await h.accept(token, { specPath: h.specPath });
+      revise(h);
+      await approveRevision(h, token);
+      writeFileSync(join(h.ctx.cwd, h.specPath), spec("Revised again"));
+      const needs =
+        "Spec revision needs user approval: call execute_checkpoint resolve_revision for .pi/specs/test.md";
+      expect(
+        h.accept(token, { specPath: h.specPath, reviseSpec: true }),
+      ).rejects.toThrow(needs);
+      const logged = readSpecLog(h.logPath).length;
+      await approveRevision(h, token);
+      await h.emit("session_tree");
+      const next = await h.invoke();
+      expect(
+        h.accept(next, { specPath: h.specPath, reviseSpec: true }),
+      ).rejects.toThrow(needs);
+      await approveRevision(h, next);
+      await h.checkpoint(next, { action: "stop" });
+      const after = await h.invoke();
+      expect(
+        h.accept(after, { specPath: h.specPath, reviseSpec: true }),
+      ).rejects.toThrow(needs);
+      expect(
+        readSpecLog(h.logPath)
+          .slice(logged)
+          .map((event) => event.event),
+      ).toEqual(["stopped"]);
+    });
+
+    it("presents the diff first, then asks a single short question", async () => {
+      const h = specHarness();
+      const token = await h.invoke();
+      await h.accept(token, { specPath: h.specPath });
+      writeFileSync(
+        join(h.ctx.cwd, h.specPath),
+        spec("Revised plan\n```ts\ncode\n```"),
+      );
+      Object.assign(h.ctx, { hasUI: true });
+      const prompts: Array<{ title: string; options: string[] }> = [];
+      Object.assign(h.ctx.ui, {
+        select: (title: string, options: string[]) => {
+          prompts.push({ title, options });
+          return Promise.resolve("Stop");
+        },
+      });
+      const step = () =>
+        h.checkpoint(token, {
+          action: "resolve_revision",
+          specPath: h.specPath,
+        });
+      const first = await step();
+      expect(first.revision?.presented).toBe(true);
+      expect(prompts).toEqual([]);
+      expect(h.sent).toHaveLength(1);
+      const shown = h.sent[0] as { customType: string; content: string };
+      expect(shown.customType).toBe("spec-revision");
+      expect(shown.content).toStartWith(
+        "Spec revision since acceptance:\n````diff\n",
+      );
+      expect(shown.content).toContain("-Canonical plan");
+      expect(shown.content).toContain("+Revised plan");
+      expect(shown.content).toEndWith("````");
+      // Before Pi appends the message, the second call refuses to ask.
+      expect(step()).rejects.toThrow(
+        "Spec revision diff is not in the transcript yet",
+      );
+      h.endTurn();
+      const second = await step();
+      expect(second.revision?.decision).toBe("stop");
+      expect(prompts).toEqual([
+        {
+          title: "Spec revision of .pi/specs/test.md",
+          options: [
+            "Revise and re-accept",
+            "Restore the accepted Spec",
+            "Stop",
+          ],
+        },
+      ]);
+      expect(h.sent).toHaveLength(1);
+    });
+
+    it("offers no restore and shows a no-diff note without stored text", async () => {
+      const h = specHarness();
+      seedVerified(h);
+      const token = await h.invoke();
+      revise(h);
+      const { prompts } = await approveRevision(h, token);
+      expect((h.sent[0] as { content: string }).content).toBe(
+        "Spec .pi/specs/test.md changed since it was accepted; no accepted copy is stored, so no diff is shown. Read the Spec before choosing.",
+      );
+      expect(prompts[0]?.options).toEqual(["Revise and re-accept", "Stop"]);
+      // Old logs without content still resume after an approved revision.
+      const revised = await h.accept(token, {
+        specPath: h.specPath,
+        reviseSpec: true,
+      });
+      expect(revised.ledger.assignments[0]).toMatchObject({
+        status: "reverify",
+        priorRepairs: 1,
+      });
+    });
+
+    it("restores the accepted text and leaves ledger and log unchanged", async () => {
+      const h = specHarness();
+      const token = await h.invoke();
+      const accepted = await h.accept(token, { specPath: h.specPath });
+      revise(h);
+      const log = readFileSync(h.logPath, "utf8");
+      const { second } = await approveRevision(
+        h,
+        token,
+        "Restore the accepted Spec",
+      );
+      expect(second.revision?.decision).toBe("restore");
+      expect(readFileSync(join(h.ctx.cwd, h.specPath), "utf8")).toBe(h.content);
+      expect(readFileSync(h.logPath, "utf8")).toBe(log);
+      expect(second.ledger).toEqual(accepted.ledger);
+    });
+
+    it("records nothing on stop, cancel, a mid-gate change, no UI or no change", async () => {
+      const h = specHarness();
+      const token = await h.invoke();
+      await h.accept(token, { specPath: h.specPath });
+      const log = readFileSync(h.logPath, "utf8");
+      const step = () =>
+        h.checkpoint(token, {
+          action: "resolve_revision",
+          specPath: h.specPath,
+        });
+      expect(step()).rejects.toThrow(
+        "Spec revision needs an interactive session",
+      );
+      Object.assign(h.ctx, { hasUI: true });
+      expect(step()).rejects.toThrow("Spec unchanged; nothing to revise");
+      revise(h);
+      await approveRevision(h, token, "Stop");
+      const reviseNeeded = "Spec revision needs user approval";
+      expect(
+        h.accept(token, { specPath: h.specPath, reviseSpec: true }),
+      ).rejects.toThrow(reviseNeeded);
+      // Cancel.
+      Object.assign(h.ctx.ui, {
+        select: () => Promise.resolve(undefined),
+      });
+      await step();
+      h.endTurn();
+      expect(step()).rejects.toThrow(
+        "Spec revision cancelled; nothing recorded",
+      );
+      // The diff is not resent after a cancel; a Spec change voids it.
+      writeFileSync(join(h.ctx.cwd, h.specPath), spec("Changed mid-gate"));
+      expect(step()).rejects.toThrow(
+        "Spec changed during revision; call resolve_revision again",
+      );
+      expect(
+        h.accept(token, { specPath: h.specPath, reviseSpec: true }),
+      ).rejects.toThrow(reviseNeeded);
+      expect(readFileSync(h.logPath, "utf8")).toBe(log);
+    });
   });
 
   it("logs resumed verification with null snapshots outside git", async () => {
@@ -1118,6 +1469,55 @@ describe("Spec runtime", () => {
       appendSpecEvents(resumed.logPath, readSpecLog(h.logPath));
       const again = await resumed.invoke();
       await resumed.acceptSpec(again, allCriteria);
+    });
+
+    it("gates a revised hash on review, keeping the revision approval for the later accept", async () => {
+      const h = reviewHarness({ content: spec("Plan", many) });
+      const reviewed = {
+        event: "reviewed" as const,
+        ts: new Date().toISOString(),
+        round: 1,
+        trigger: {
+          source: "fallback" as const,
+          dcCount: 8,
+          reason: "no consent",
+        },
+        answers: [],
+        findings: 0,
+      };
+      appendSpecEvents(h.logPath, [
+        { ...reviewed, hash: hashSpec(h.content), decision: "accept" },
+      ]);
+      const token = await h.invoke();
+      await h.acceptSpec(token, allCriteria);
+      const revised = spec("Revised plan", many);
+      writeFileSync(join(h.ctx.cwd, h.specPath), revised);
+      await approveRevision(h, token);
+      const reviseAccept = () =>
+        h.accept(token, {
+          specPath: h.specPath,
+          reviseSpec: true,
+          assignments: [
+            {
+              id: "a",
+              task: "A",
+              scope: ["src/a.ts"],
+              dependencies: [],
+              criteria: allCriteria,
+            },
+          ],
+        });
+      expect(reviseAccept()).rejects.toThrow(required);
+      appendSpecEvents(h.logPath, [
+        { ...reviewed, round: 2, hash: hashSpec(revised), decision: "accept" },
+      ]);
+      const accepted = await reviseAccept();
+      expect(accepted.ledger.plan).toBe("Canonical plan");
+      expect(
+        readSpecLog(h.logPath)
+          .slice(-2)
+          .map((event) => event.event),
+      ).toEqual(["revised", "accepted"]);
     });
 
     it("refuses accept after a recorded stop or revise even when the trigger says not required", async () => {

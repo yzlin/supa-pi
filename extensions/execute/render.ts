@@ -131,6 +131,8 @@ function statusText(
       return `${arrow}${theme.fg("dim", dispatchPrefix ? "review · prefix issued" : "review · round limit")}`;
     case "resolve_review":
       return `${arrow}${theme.fg("dim", "review resolved")}`;
+    case "resolve_revision":
+      return `${arrow}${theme.fg("dim", "revision resolved")}`;
     case "inspect":
     case undefined:
       return `${arrow}${theme.fg("dim", "ledger")}${tail}`;
@@ -257,6 +259,7 @@ function detailLines(args: CheckpointArgs, ledger: ExecutionLedger): string[] {
     case "review":
       return label("focus", join(args.focus));
     case "resolve_review":
+    case "resolve_revision":
     case "inspect":
     case "stop":
     case undefined:

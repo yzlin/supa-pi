@@ -438,8 +438,12 @@ export function transitionLedger(
       "Execution stopped; explicit /execute and current-state reconciliation required",
     );
   }
-  if (input.action === "review" || input.action === "resolve_review") {
-    throw new Error("Spec review actions never change the ledger");
+  if (
+    input.action === "review" ||
+    input.action === "resolve_review" ||
+    input.action === "resolve_revision"
+  ) {
+    throw new Error("Spec review and revision actions never change the ledger");
   }
   if (input.action === "accept") {
     if (state.plan !== null) {

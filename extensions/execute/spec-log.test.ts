@@ -22,6 +22,7 @@ import {
 } from "./ledger";
 import type { ExecutionLedger, SpecResume } from "./schema";
 import {
+  acceptedContent,
   appendSpecEvents,
   deleteSnapshotRefs,
   deriveCriteriaStates,
@@ -241,6 +242,7 @@ describe("Spec event log", () => {
   it("validates all closed event variants and ISO timestamps", () => {
     const events: SpecLogEvent[] = [
       accepted,
+      { ...accepted, content: "# Execution Brief\n" },
       { event: "revised", ts, hash, previousHash: "b".repeat(64) },
       {
         event: "started",
@@ -299,6 +301,21 @@ describe("Spec event log", () => {
         false,
       );
     }
+  });
+  it("returns the stored text of the logged hash's latest acceptance", () => {
+    const other = "b".repeat(64);
+    expect(acceptedContent([accepted], hash)).toBeUndefined();
+    expect(
+      acceptedContent(
+        [
+          { ...accepted, content: "first" },
+          { ...accepted, content: "second" },
+          { ...accepted, hash: other, content: "other" },
+          { ...accepted },
+        ],
+        hash,
+      ),
+    ).toBe("second");
   });
   it("allows reviewed events before the first accepted event", () => {
     const path = join(temporary(), "example.log.jsonl");

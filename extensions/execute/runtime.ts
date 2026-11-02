@@ -1,5 +1,11 @@
 import { randomUUID } from "node:crypto";
-import { existsSync, readFileSync, realpathSync, statSync } from "node:fs";
+import {
+  existsSync,
+  readFileSync,
+  realpathSync,
+  statSync,
+  writeFileSync,
+} from "node:fs";
 import { isAbsolute, relative, resolve, sep } from "node:path";
 import { isDeepStrictEqual } from "node:util";
 
@@ -42,6 +48,7 @@ import {
 } from "./schema";
 import { draftedSpecSlug } from "./spec-draft";
 import {
+  acceptedContent,
   appendSpecEvents,
   deleteSnapshotRefs,
   deriveSpecResume,
@@ -72,6 +79,10 @@ const REVIEW_FOCUS_LABEL = "Focus: ";
 // Each focus may be dispatched once more after a failed or invalid report.
 const REVIEW_ATTEMPTS = 2;
 const REVIEW_SPEC_SHOWN = "spec-review";
+const REVISION_SHOWN = "spec-revision";
+const REVISE = "Revise and re-accept";
+const RESTORE = "Restore the accepted Spec";
+const STOP = "Stop";
 const UNAUTHORIZED =
   "Unauthorized checkpoint: explicitly invoke /execute in this session after stop or reload";
 
@@ -117,11 +128,25 @@ function revisionText(
   if (previous.content === undefined) {
     return `Spec ${round.specPath} changed since review round ${previous.round}; no reviewed copy is stored, so no diff is shown. Read the Spec before choosing.`;
   }
-  const patch = createTwoFilesPatch(
+  return `Spec revision since review round ${previous.round}:\n${fencedDiff(
     `${round.specPath} (round ${previous.round})`,
     `${round.specPath} (round ${round.round})`,
     previous.content,
     content,
+  )}`;
+}
+
+function fencedDiff(
+  oldName: string,
+  newName: string,
+  oldText: string,
+  newText: string,
+): string {
+  const patch = createTwoFilesPatch(
+    oldName,
+    newName,
+    oldText,
+    newText,
     undefined,
     undefined,
     { context: 3 },
@@ -133,7 +158,7 @@ function revisionText(
     ...(patch.match(/`+/g) ?? []).map((run) => run.length),
   );
   const fence = "`".repeat(Math.max(3, longest + 1));
-  return `Spec revision since review round ${previous.round}:\n${fence}diff\n${patch}${fence}`;
+  return `${fence}diff\n${patch}${fence}`;
 }
 
 function errorMessage(error: unknown): string {
@@ -204,6 +229,10 @@ export function registerExecutionLedger(
   // Live review rounds by reviewKey, and bound reviewer calls by tool call.
   const reviewRounds = new Map<string, ReviewRound>();
   const reviewCalls = new Map<string, { round: ReviewRound; slot: number }>();
+  const revisionApprovals = new Set<string>();
+  const revisionShown = new Map<string, { hash: string; shown: string }>();
+  const revisionKey = (sessionId: string, specPath: string, hash: string) =>
+    JSON.stringify([sessionId, specPath, hash]);
   let stopWatchingAbort: (() => void) | undefined;
   let workspace: string | undefined;
 
@@ -217,6 +246,8 @@ export function registerExecutionLedger(
     ctx?: ExtensionContext,
     strict = false,
     extraEvents: SpecLogEvent[] = [],
+    // A replaced plan logs its fresh state, not a diff from the old plan.
+    previous: ExecutionLedger | null = ledger,
   ): void {
     workspace = ctx?.cwd ?? workspace;
     try {
@@ -232,7 +263,7 @@ export function registerExecutionLedger(
         ).length;
         const events = [
           ...extraEvents.filter((event) => event.event !== "stopped"),
-          ...specEventsFromTransition(ledger, next, new Date().toISOString()),
+          ...specEventsFromTransition(previous, next, new Date().toISOString()),
           ...extraEvents.filter((event) => event.event === "stopped"),
         ];
         for (const event of events) {
@@ -337,6 +368,8 @@ export function registerExecutionLedger(
   function clearReviews(): void {
     reviewRounds.clear();
     reviewCalls.clear();
+    revisionApprovals.clear();
+    revisionShown.clear();
   }
 
   function liveRound(round: ReviewRound, sessionId: string): boolean {
@@ -356,6 +389,7 @@ export function registerExecutionLedger(
     const content = readFileSync(absSpecPath, "utf8");
     return {
       specPath,
+      absSpecPath,
       content,
       hash: hashSpec(content),
       absLogPath: resolve(cwd, logPath),
@@ -649,6 +683,135 @@ export function registerExecutionLedger(
     });
   }
 
+  // Runtime-owned gate for an edited accepted Spec: the first call sends the
+  // diff, the second asks. Only a revise choice lets accept use reviseSpec.
+  async function revisionCheckpoint(
+    params: Extract<Checkpoint, { action: "resolve_revision" }>,
+    ctx: ExtensionContext,
+    signal: AbortSignal | undefined,
+    sessionId: string,
+  ) {
+    if (!ctx.hasUI) {
+      throw new Error("Spec revision needs an interactive session");
+    }
+    const spec = readSpec(params.specPath, ctx.cwd);
+    const events = readSpecLog(spec.absLogPath);
+    const { hash: loggedHash } = deriveSpecResume(events);
+    if (!loggedHash) {
+      throw new Error(
+        "Spec has not been accepted; accept it instead of revising",
+      );
+    }
+    if (loggedHash === spec.hash) {
+      throw new Error("Spec unchanged; nothing to revise");
+    }
+    const output = (revision: {
+      note: string;
+      presented?: true;
+      decision?: "revise" | "restore" | "stop";
+    }) => {
+      const result = {
+        ledger: structuredClone(
+          ledger ?? emptyLedger(sessionId, params.invocationId),
+        ),
+        dispatchPrefix: null,
+        revision,
+      };
+      return {
+        content: [{ type: "text" as const, text: JSON.stringify(result) }],
+        structuredContent: result,
+        details: {},
+      };
+    };
+    const accepted = acceptedContent(events, loggedHash);
+    const key = JSON.stringify([params.invocationId, spec.specPath]);
+    const presented = revisionShown.get(key);
+    if (presented?.hash !== spec.hash) {
+      if (presented) {
+        revisionShown.delete(key);
+        throw new Error(
+          "Spec changed during revision; call resolve_revision again",
+        );
+      }
+      const shown =
+        accepted === undefined
+          ? `Spec ${spec.specPath} changed since it was accepted; no accepted copy is stored, so no diff is shown. Read the Spec before choosing.`
+          : `Spec revision since acceptance:\n${fencedDiff(
+              `${spec.specPath} (accepted)`,
+              `${spec.specPath} (current)`,
+              accepted,
+              spec.content,
+            )}`;
+      // Pi holds a custom message sent during a tool call until the turn
+      // ends, so this call only presents; the next call asks.
+      pi.sendMessage(
+        { customType: REVISION_SHOWN, content: shown, display: true },
+        { triggerTurn: false },
+      );
+      revisionShown.set(key, { hash: spec.hash, shown });
+      return output({
+        presented: true,
+        note: "Revision diff sent to the transcript; Pi shows it after this call. Call resolve_revision again, alone in a later tool call, to ask the user.",
+      });
+    }
+    if (
+      !ctx.sessionManager
+        .getBranch()
+        .some(
+          (entry) =>
+            entry.type === "custom_message" &&
+            entry.customType === REVISION_SHOWN &&
+            entry.content === presented.shown,
+        )
+    ) {
+      throw new Error(
+        "Spec revision diff is not in the transcript yet; call resolve_revision again alone in a later tool call",
+      );
+    }
+    const options =
+      accepted === undefined ? [REVISE, STOP] : [REVISE, RESTORE, STOP];
+    const picked = await askReview(
+      ctx,
+      [{ title: `Spec revision of ${spec.specPath}`, options }],
+      signal,
+    );
+    const choice = picked?.[0];
+    if (choice === undefined) {
+      throw new Error("Spec revision cancelled; nothing recorded");
+    }
+    // Authorization or the Spec may change while the prompt is open.
+    if (authorizations.get(params.invocationId) !== sessionId) {
+      throw new Error(UNAUTHORIZED);
+    }
+    revisionShown.delete(key);
+    if (readSpec(spec.specPath, ctx.cwd).hash !== spec.hash) {
+      throw new Error(
+        "Spec changed during revision; call resolve_revision again",
+      );
+    }
+    if (choice === REVISE) {
+      revisionApprovals.add(revisionKey(sessionId, spec.specPath, spec.hash));
+      return output({
+        decision: "revise",
+        note: "User approved this revision; call accept with reviseSpec: true now.",
+      });
+    }
+    if (choice === RESTORE && accepted !== undefined) {
+      writeFileSync(spec.absSpecPath, accepted);
+      if (readSpec(spec.specPath, ctx.cwd).hash !== loggedHash) {
+        throw new Error("Restored Spec does not match the accepted hash");
+      }
+      return output({
+        decision: "restore",
+        note: "Spec restored to the accepted text; continue the accepted plan.",
+      });
+    }
+    return output({
+      decision: "stop",
+      note: "User stopped; do not accept this revision.",
+    });
+  }
+
   function revoke(reason: string, ctx?: ExtensionContext): void {
     authorizations.clear();
     approvedCwds.clear();
@@ -762,6 +925,9 @@ export function registerExecutionLedger(
       if (params.action === "review" || params.action === "resolve_review") {
         return reviewCheckpoint(params, ctx, signal ?? undefined, sessionId);
       }
+      if (params.action === "resolve_revision") {
+        return revisionCheckpoint(params, ctx, signal ?? undefined, sessionId);
+      }
       if (ledger?.invocationId !== params.invocationId && calls.size > 0) {
         throw new Error(
           "Wait for active execution children to settle or abort the parent before consuming a new packet",
@@ -802,6 +968,7 @@ export function registerExecutionLedger(
           }
         | undefined;
       const extraEvents: SpecLogEvent[] = [];
+      let replaced = false;
       const ts = new Date().toISOString();
       if (params.action === "accept") {
         if (params.reviseSpec !== undefined && !params.specPath) {
@@ -821,11 +988,33 @@ export function registerExecutionLedger(
           const changed = loggedHash !== null && loggedHash !== currentHash;
           if (changed && params.reviseSpec !== true) {
             throw new Error(
-              "Spec changed since it was accepted; ask the user to revise (accept again with reviseSpec: true) or restore the Spec",
+              `Spec changed since it was accepted; call execute_checkpoint resolve_revision for ${specPath}`,
             );
           }
           if (params.reviseSpec === true && !changed) {
             throw new Error("reviseSpec is only valid when the Spec changed");
+          }
+          if (
+            changed &&
+            !revisionApprovals.has(
+              revisionKey(sessionId, specPath, currentHash),
+            )
+          ) {
+            throw new Error(
+              `Spec revision needs user approval: call execute_checkpoint resolve_revision for ${specPath}`,
+            );
+          }
+          // An approved revision of this session's unfinished plan for the
+          // same Spec rebuilds the plan from the log, as a resume would.
+          if (
+            changed &&
+            current.plan !== null &&
+            current.specPath === specPath &&
+            calls.size === 0 &&
+            !current.assignments.some((item) => item.status === "running")
+          ) {
+            current = emptyLedger(sessionId, params.invocationId);
+            replaced = true;
           }
           if (changed && loggedHash) {
             extraEvents.push({
@@ -848,6 +1037,7 @@ export function registerExecutionLedger(
                 ...(criteria ? { criteria: [...criteria] } : {}),
               }),
             ),
+            content,
           });
           resume = derived ?? undefined;
           // Re-accepting an already-accepted hash skips the review trigger.
@@ -982,6 +1172,7 @@ export function registerExecutionLedger(
         ctx,
         params.action !== "stop" && params.action !== "inspect",
         extraEvents,
+        replaced ? null : ledger,
       );
       if (outsideCwds.length > 0) {
         approveCwds(params.invocationId, outsideCwds);
