@@ -347,6 +347,20 @@ Approved by `/grill-me` on 2026-10-31 and implemented via `/execute` on 2026-10-
 - PR workflow (deferred): feasibility of cheap base-branch Before evidence, screenshots, and fork→upstream PR support.
 - Oversight output: it is not verified whether reviewer subagents receive the core prompt; agent files therefore reference `plain-report` directly. Deferred: the video Explainer rung (Manim, ffmpeg, TTS), an HTML review-report view, and a readability eval.
 
+## Skill CLI: implemented direction
+
+Approved by `/grill-me` on 2026-11-01 and implemented via `/execute` on 2026-11-01 (Spec `.pi/specs/skill-cli.md`). It lets Ethan manage skills from a shell without opening a Pi session. Tests use temporary `HOME` directories; no live `setup.sh` run or network test was part of the change.
+
+- **Skill CLI** — the standalone `pi-skill` command (`scripts/pi-skill.ts`) with the same `list|search|install|update|remove` operations as `/skill`. _Avoid_: `pi skill` subcommand.
+- Why not `pi skill`: Pi 1.4.0 has a fixed set of CLI subcommands. Extensions can only register flags (`registerFlag`), not subcommands. A native `pi skill` needs an upstream Pi API and is deferred. A zsh shim that shadows `pi` was rejected.
+- Shared orchestration: install/update/remove/search/list orchestration lives in `extensions/skills/ops.ts`, which does not use `ctx` or import Pi packages. It takes a Prompter interface (select, confirm, input, notify, plus optional `pickSkills`, `progress`, `setUpdateCount` hooks) and explicit choices (`yes`, `all`, `skillNames`) that skip prompts. `/skill` in `extensions/skills/index.ts` adapts `ctx.ui` to it and keeps the TUI Skills Manager, install picker, and activity widget. The Skill CLI adapts the terminal and flags. Both use `extensions/skills/core.ts`. Every write keeps `withSkillsWriteLock`, so the Skill CLI and a running session do not corrupt the manifest.
+- Interaction: on a TTY, the Skill CLI uses plain readline prompts. Off a TTY, it needs `--yes`, `--all`, or `--skill <name>` for each choice. If a choice is missing, it exits with code 2 and names the flag; usage errors also exit 2 and operation failures exit 1. Off a TTY, `search` prints results instead of offering an install. It never opens the TUI manager.
+- `list` prints a plain table (name, source, dirty flag). `--json` gives a stable machine-readable shape.
+- Runtime and PATH: Bun shebang, like `scripts/docs-list.ts`. There is a `package.json` `bin` entry. `setup.sh` makes one idempotent symlink at `~/.local/bin/pi-skill`. Changes take effect in a session after `/reload` or in the next session.
+- zsh completion: `scripts/completions/_pi-skill`, linked by `setup.sh` to `~/.config/zsh/functions/_pi-skill` (assumes that directory is on `fpath`). Skill ids for `update`/`remove` come from the hidden `pi-skill __complete-names` command. Verified in an isolated `zsh -f` through zpty, not in Ethan's live shell.
+- Verification: `extensions/skills/ops.test.ts` (fake Prompter) and `scripts/pi-skill.test.ts` (spawns the real script with isolated `HOME` and no TTY) cover the new seams; pre-existing `extensions/skills/*.test.ts` pass unchanged; `setup.test.ts` asserts the symlink. TTY prompts were not tested automatically.
+- No ADR: the change is easy to undo, with no data migration.
+
 ## Context map
 
 See `CONTEXT-MAP.md`.

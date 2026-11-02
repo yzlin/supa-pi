@@ -218,6 +218,21 @@ describe("setup local package deployment", () => {
         "claude-code": ["git/github.com/yzlin/pi-claude-code"],
       },
     });
+    const skillCli = join(home, ".local", "bin", "pi-skill");
+    expect((await lstat(skillCli)).isSymbolicLink()).toBe(true);
+    expect(await readlink(skillCli)).toBe(
+      join(repositoryDir, "scripts", "pi-skill.ts"),
+    );
+    const skillCompletion = join(
+      home,
+      ".config",
+      "zsh",
+      "functions",
+      "_pi-skill",
+    );
+    expect(await readlink(skillCompletion)).toBe(
+      join(repositoryDir, "scripts", "completions", "_pi-skill"),
+    );
   });
 
   test("upgrades deploy the transformer before reconciling queueable prompt entrypoints", async () => {

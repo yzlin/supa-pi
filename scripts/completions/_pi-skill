@@ -1,0 +1,66 @@
+#compdef pi-skill
+
+# zsh completion for pi-skill (scripts/pi-skill.ts).
+
+_pi-skill_managed() {
+  local -a names
+  names=(${(f)"$(pi-skill __complete-names 2>/dev/null)"})
+  compadd -a names
+}
+
+_pi-skill() {
+  local curcontext="$curcontext" state line
+  typeset -A opt_args
+
+  _arguments -C \
+    '(- *)'{-h,--help}'[show help]' \
+    '1:command:->command' \
+    '*::arg:->args'
+
+  case $state in
+    command)
+      local -a commands
+      commands=(
+        'list:list managed skills'
+        'search:search skills.sh'
+        'install:install from a local dir or GitHub source'
+        'update:update remote managed skills'
+        'remove:remove a managed skill'
+      )
+      _describe -t commands 'pi-skill command' commands
+      ;;
+    args)
+      curcontext="${curcontext%:*:*}:pi-skill-$words[1]:"
+      case $words[1] in
+        list)
+          _arguments '--json[print JSON]'
+          ;;
+        search)
+          _arguments \
+            '(-y --yes)'{-y,--yes}'[confirm every confirmation]' \
+            '1:query: '
+          ;;
+        install)
+          _arguments \
+            '(-y --yes)'{-y,--yes}'[confirm every confirmation]' \
+            '(--skill)--all[install all skills in the source]' \
+            '(--all)*--skill=[skill to install from a multi-skill source]:skill name: ' \
+            '1:source:_files -/'
+          ;;
+        update)
+          _arguments \
+            '(-y --yes)'{-y,--yes}'[confirm every confirmation]' \
+            '(1)--all[update all skills]' \
+            '(--all)1:skill:_pi-skill_managed'
+          ;;
+        remove)
+          _arguments \
+            '(-y --yes)'{-y,--yes}'[confirm removal]' \
+            '1:skill:_pi-skill_managed'
+          ;;
+      esac
+      ;;
+  esac
+}
+
+_pi-skill "$@"

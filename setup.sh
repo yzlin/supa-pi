@@ -223,6 +223,10 @@ echo ""
 link_file "$SCRIPT_DIR/keybindings.json" "$PI_AGENT_DIR/keybindings.json" "keybindings.json"
 echo ""
 
+link_file "$SCRIPT_DIR/scripts/pi-skill.ts" "$HOME/.local/bin/pi-skill" "pi-skill CLI"
+link_file "$SCRIPT_DIR/scripts/completions/_pi-skill" "$HOME/.config/zsh/functions/_pi-skill" "pi-skill zsh completion"
+echo ""
+
 link_dir_section "agents" "$SCRIPT_DIR/agents" "$PI_AGENT_DIR/agents"
 link_dir_section "prompts" "$SCRIPT_DIR/prompts" "$PI_AGENT_DIR/prompts"
 link_dir_section "rules" "$SCRIPT_DIR/rules" "$PI_AGENT_DIR/rules"

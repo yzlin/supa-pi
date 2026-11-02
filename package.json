@@ -4,7 +4,8 @@
   "description": "Ethan's pi coding agent harness",
   "license": "MIT",
   "bin": {
-    "docs-list": "./scripts/docs-list.ts"
+    "docs-list": "./scripts/docs-list.ts",
+    "pi-skill": "./scripts/pi-skill.ts"
   },
   "type": "module",
   "scripts": {
