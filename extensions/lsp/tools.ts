@@ -295,7 +295,9 @@ export function registerLspTool(
       "LSP servers are auto-detected by file extension. Use /lsp to check status.",
     ],
     parameters: Type.Object({
-      operation: StringEnum(LSP_OPERATIONS),
+      operation: Type.Unsafe<(typeof LSP_OPERATIONS)[number]>(
+        StringEnum(LSP_OPERATIONS),
+      ),
       filePath: Type.Optional(
         Type.String({ description: "File path relative to project root" }),
       ),

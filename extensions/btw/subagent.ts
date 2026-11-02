@@ -266,7 +266,7 @@ export function renderProgressPlainLines(
 export async function runSubagent(
   systemPrompt: string,
   task: string,
-  tools: AgentTool<unknown>[],
+  tools: AgentTool[],
   model: unknown,
   thinkingLevel: string,
   apiKeyResolver: (provider: string) => Promise<string | undefined>,

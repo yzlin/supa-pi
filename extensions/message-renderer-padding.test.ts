@@ -13,6 +13,11 @@ import btwExtension from "./btw";
 import goalExtension from "./goal";
 import reviewExtension from "./review";
 
+const keyHints = {
+  keyText: () => "",
+  keyHint: (_keybinding: string, description: string) => description,
+};
+
 function captureRenderer(
   register: (pi: ExtensionAPI) => void,
 ): MessageRenderer {
@@ -63,7 +68,7 @@ describe("custom message output padding", () => {
         details: { title: "Ship", status: "active" },
         timestamp: Date.now(),
       },
-      { expanded: false, outputPad: 1 },
+      { expanded: false, outputPad: 1, ...keyHints },
       theme,
     );
 
@@ -81,7 +86,7 @@ describe("custom message output padding", () => {
         details: { report: "# Review" },
         timestamp: Date.now(),
       },
-      { expanded: false, outputPad: 1 },
+      { expanded: false, outputPad: 1, ...keyHints },
       theme,
     );
 
@@ -116,7 +121,7 @@ describe("custom message output padding", () => {
         },
         timestamp: Date.now(),
       },
-      { expanded: false, outputPad: 0 },
+      { expanded: false, outputPad: 0, ...keyHints },
       theme,
     );
 

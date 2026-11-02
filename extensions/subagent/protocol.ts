@@ -3,8 +3,10 @@ import { createHash, randomUUID } from "node:crypto";
 import { chmod, readFile, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
 
+import { compile, type JsonSchema } from "@earendil-works/pi-schema";
+import { formats } from "@earendil-works/pi-schema/formats";
 import { Type, type Static, type TSchema } from "typebox";
-import { Check, Errors } from "typebox/value";
+import { Check } from "typebox/value";
 
 import {
   isRecord,
@@ -172,14 +174,26 @@ export function validateSchema(
     }
   };
   visit(schema);
-  // Exercise the installed validator now, not after a paid child starts.
-  Check(schema, {});
+  // Compile with Pi's tool-argument validator now, not after a paid child starts.
+  structuredValidator(schema);
 }
-export function validateStructured(schema: TSchema, value: unknown): JsonValue {
-  if (!isJson(value) || !Check(schema, value)) {
-    throw new Error(
-      `Invalid StructuredOutput: ${JSON.stringify(Errors(schema, value)).slice(0, 4000)}`,
-    );
+// Same validator and format set Pi applies to StructuredOutput tool arguments.
+function structuredValidator(schema: JsonSchema) {
+  return compile(schema, { formats });
+}
+export function validateStructured(
+  schema: JsonSchema,
+  value: unknown,
+): JsonValue {
+  const validator = structuredValidator(schema);
+  if (!isJson(value) || !validator.check(value)) {
+    const errors = isJson(value)
+      ? validator
+          .errors(value)
+          .map((error) => `  - ${error.path || "root"}: ${error.message}`)
+          .join("\n")
+      : "  - root: not JSON";
+    throw new Error(`Invalid StructuredOutput:\n${errors}`.slice(0, 4000));
   }
   return value;
 }

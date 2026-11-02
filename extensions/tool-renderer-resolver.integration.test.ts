@@ -8,7 +8,6 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { Type } from "@earendil-works/pi-ai";
 import {
   createEventBus,
   createExtensionRuntime,
@@ -20,6 +19,7 @@ import {
   type ToolRenderers,
 } from "@earendil-works/pi-coding-agent";
 import { Text, visibleWidth } from "@earendil-works/pi-tui";
+import { Type } from "typebox";
 
 import { AuthStorage } from "../node_modules/@earendil-works/pi-coding-agent/dist/core/auth-storage.js";
 import { loadExtensionFromFactory } from "../node_modules/@earendil-works/pi-coding-agent/dist/core/extensions/loader.js";

@@ -29,7 +29,11 @@ const parameters = Type.Object(
     cwd: Type.Optional(Type.String()),
     provider: Type.Optional(Type.String()),
     model: Type.Optional(Type.String()),
-    thinking: Type.Optional(StringEnum(THINKING_LEVELS)),
+    thinking: Type.Optional(
+      Type.Unsafe<(typeof THINKING_LEVELS)[number]>(
+        StringEnum(THINKING_LEVELS),
+      ),
+    ),
     schema: Type.Optional(
       Type.Record(Type.String(), Type.Unknown(), {
         description: "Final report JSON Schema; references unsupported",

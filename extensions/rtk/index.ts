@@ -1,4 +1,3 @@
-import type { Static } from "@earendil-works/pi-ai";
 import {
   type AgentToolResult,
   type AgentToolUpdateCallback,
@@ -7,6 +6,7 @@ import {
   type ExtensionContext,
   type ToolDefinition,
 } from "@earendil-works/pi-coding-agent";
+import type { Static } from "typebox";
 
 import { registerRtkCommands } from "./commands";
 import { loadRtkConfig } from "./config";

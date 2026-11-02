@@ -188,7 +188,7 @@ export default function (pi: ExtensionAPI) {
       }
 
       // Build tools
-      const tools: AgentTool<unknown>[] = [
+      const tools: AgentTool[] = [
         createReadTool(ctx.cwd),
         createBashTool(ctx.cwd),
         createEditTool(ctx.cwd),

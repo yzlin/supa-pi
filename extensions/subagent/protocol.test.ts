@@ -98,6 +98,16 @@ test("malformed and mismatched evidence rejected; parent independently revalidat
   }
   expect(() => validateStructured(schema, { ok: true, extra: 1 })).toThrow();
 });
+test("StructuredOutput errors use Pi's validator messages and formats", () => {
+  expect(() => validateStructured(schema, { ok: "yes", extra: 1 })).toThrow(
+    "Invalid StructuredOutput:\n  - /ok: expected boolean, got string\n  - /extra: unknown field",
+  );
+  const url = { type: "string", format: "url" };
+  expect(validateStructured(url, "https://example.com")).toBe(
+    "https://example.com",
+  );
+  expect(() => validateStructured(url, "not a url")).toThrow();
+});
 test("schema preflight rejects ignored/malformed keywords and references, not data named type", () => {
   for (const invalid of [
     { type: "object", requred: ["ok"] },

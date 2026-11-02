@@ -32,6 +32,13 @@ afterEach(() => {
     process.env.PI_CODING_AGENT_DIR = previousAgentDir;
   }
 });
+const execOk = {
+  code: 0,
+  stdout: "",
+  stderr: "",
+  killed: false,
+  truncated: false,
+};
 const provider = fauxProvider();
 const model = provider.getModel();
 function context(directory: string): RunnerContext {
@@ -58,7 +65,7 @@ test("runner rejects empty tasks, unknown model, absent auth and out-of-scope mo
     getThinkingLevel: () => "off",
     exec: async () => {
       calls++;
-      return { code: 0, stdout: "", stderr: "", killed: false };
+      return execOk;
     },
   };
   await rejects(runSubagent(pi, ctx, { task: "" }), /empty/);
@@ -108,7 +115,7 @@ test("ordinary child launch uses the parent Pi package instead of the repository
         launchScript = await readFile(launchPath, "utf8");
         throw new Error("Launch inspected");
       }
-      return { code: 0, stdout: "", stderr: "", killed: false };
+      return execOk;
     },
   };
   await rejects(
@@ -144,7 +151,7 @@ test("strict-skill child launch passes the parent Pi package to its SDK host", a
         launchScript = await readFile(launchPath, "utf8");
         throw new Error("Launch inspected");
       }
-      return { code: 0, stdout: "", stderr: "", killed: false };
+      return execOk;
     },
   };
   await rejects(
@@ -173,7 +180,7 @@ async function inspectLaunch(
         configPath = path.join(path.dirname(launchPath), "config.json");
         throw new Error("Launch inspected");
       }
-      return { code: 0, stdout: "", stderr: "", killed: false };
+      return execOk;
     },
   };
   await rejects(
@@ -241,7 +248,7 @@ test("malformed provider extension settings fail before launch", async () => {
     getThinkingLevel: () => "off",
     exec: async () => {
       calls++;
-      return { code: 0, stdout: "", stderr: "", killed: false };
+      return execOk;
     },
   };
   await rejects(
@@ -263,6 +270,7 @@ test("startup failure closes owned tmux and retains owner-only failure evidence"
         stdout: "",
         stderr: "startup fixture",
         killed: false,
+        truncated: false,
       };
     },
   };
@@ -317,7 +325,13 @@ test("completed report bound to run and schema; full evidence private; finished 
           finishedAt: Date.now(),
         });
       }
-      return { code: 0, stdout: "live pane", stderr: "", killed: false };
+      return {
+        code: 0,
+        stdout: "live pane",
+        stderr: "",
+        killed: false,
+        truncated: false,
+      };
     },
   };
   const result = await runSubagent(pi, context(dir), {
@@ -375,6 +389,7 @@ test("tmux loss, dead pane and malformed report fail promptly and always close o
           stdout: args.includes("display-message") ? "1" : "",
           stderr: "tmux lost fixture",
           killed: false,
+          truncated: false,
         };
       },
     };
@@ -414,6 +429,7 @@ test("abort from live update stops before querying the killed server and cleans 
         stdout: "live",
         stderr: "server exited unexpectedly",
         killed: false,
+        truncated: false,
       };
     },
   };
@@ -463,6 +479,7 @@ test("abort waits for the child pane process to exit and force-kills it after th
       stdout: args.includes("list-panes") ? `${child.pid}\n` : "live",
       stderr: "",
       killed: false,
+      truncated: false,
     }),
   };
   try {
@@ -525,7 +542,7 @@ test("parent refuses unsafe result evidence permissions", async () => {
         });
         await chmod(result, 0o644);
       }
-      return { code: 0, stdout: "", stderr: "", killed: false };
+      return execOk;
     },
   };
   await rejects(runSubagent(pi, context(dir), { task: "task" }), /owner-only/);
@@ -596,7 +613,7 @@ async function relayRun(ctx: RunnerContext, signal?: AbortSignal) {
           finishedAt: Date.now(),
         });
       }
-      return { code: 0, stdout: "", stderr: "", killed: false };
+      return execOk;
     },
   };
   const result = await runSubagent(pi, ctx, { task: "task" }, { signal });

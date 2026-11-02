@@ -1,6 +1,5 @@
 import { stripVTControlCharacters } from "node:util";
 
-import { type Static, Type } from "@earendil-works/pi-ai";
 import {
   highlightCode,
   keyHint,
@@ -20,6 +19,7 @@ import {
   visibleWidth,
 } from "@earendil-works/pi-tui";
 import { createTwoFilesPatch } from "diff";
+import { type Static, Type } from "typebox";
 
 import type {
   TObject,

@@ -22,7 +22,9 @@ session across all consumers**. Further calls queue. The native tool declares
 
 A schema-bound call supplies an inline JSON Schema object. `StructuredOutput` is
 available only for that call, including roles with `tools: none`. Native Pi
-argument validation returns feedback for invalid submissions. If the child
+argument validation (`@earendil-works/pi-schema`) returns feedback for invalid
+submissions; the parent revalidates the captured report with the same validator
+and standard formats, so both sides agree on what is valid. If the child
 finishes normally without a valid report, one final correction requests the
 report. A second omission fails. Errors, abortion, and unavailable role tools
 never trigger this correction. Capturing shape does not establish task success
