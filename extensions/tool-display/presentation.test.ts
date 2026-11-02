@@ -300,7 +300,7 @@ describe("owned tool presentation", () => {
     );
     await sleep(5);
     expect(call.render(50)).toEqual([
-      "┊ • ✏️ edit Apply edit",
+      "┊ • 📝 edit Apply edit",
       "┊   edit target → <1s",
     ]);
     expect(state.toolDisplayPresentation?.plannedPreviewKey).toBeUndefined();
@@ -471,7 +471,7 @@ describe("owned tool presentation", () => {
     ["grep", "🔍", "accent"],
     ["find", "🔍", "accent"],
     ["ls", "📁", "accent"],
-    ["edit", "✏️", "warning"],
+    ["edit", "📝", "warning"],
     ["write", "📄", "warning"],
     ["bash", "⚡️", "thinkingXhigh"],
   ] as const)(

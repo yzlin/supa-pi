@@ -162,7 +162,7 @@ const ICONS: Record<PresentedToolName, string> = {
   grep: "🔍",
   find: "🔍",
   ls: "📁",
-  edit: "✏️",
+  edit: "📝",
   write: "📄",
   bash: "⚡️",
 };
