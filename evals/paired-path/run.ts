@@ -7,6 +7,7 @@ import {
   existsSync,
   mkdirSync,
   readdirSync,
+  realpathSync,
   readFileSync,
   statSync,
   symlinkSync,
@@ -200,7 +201,9 @@ export function buildHome(home: string, worktree: string, base: string) {
     join(agent, "caveman.json"),
     JSON.stringify({ enabled: false }),
   );
-  writeFileSync(join(agent, "trust.json"), JSON.stringify({ [base]: true }));
+  // Pi keys saved trust by canonical path (/tmp is /private/tmp on macOS).
+  const trusted = existsSync(base) ? realpathSync(base) : base;
+  writeFileSync(join(agent, "trust.json"), JSON.stringify({ [trusted]: true }));
   const wrapper = join(home, "claude");
   writeFileSync(
     wrapper,
@@ -586,6 +589,12 @@ function logDone(workspace: string, sessionDir: string): boolean {
   );
 }
 
+function executorCalls(tools: ToolEvent[]): number {
+  return tools.filter(
+    (t) => t.name === "subagent" && t.args.agent === "executor",
+  ).length;
+}
+
 function sameAsSeed(
   testCase: PairedCase,
   workspace: string,
@@ -700,6 +709,17 @@ export function score(
               (event) => event.event === "blocked" || event.event === "stopped",
             ),
           ) || /tests\/price\.test\.ts|billing/iu.test(text);
+        break;
+      case "delegated":
+        result[check.id] = executorCalls(tools) > 0;
+        break;
+      case "no-false-done":
+        result[check.id] =
+          !logDone(workspace, sessions) ||
+          sh(workspace, "bun", ["test", "tests/slug.test.ts"]).code === 0;
+        break;
+      case "repair-limit":
+        result[check.id] = executorCalls(tools) <= 3;
         break;
       case "no-false-blocker":
         // A finding tagged P0/P1 or Critical/High (table cell, heading, or "Priority: High").

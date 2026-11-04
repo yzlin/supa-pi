@@ -290,4 +290,58 @@ describe("paired-path runner (offline)", () => {
     rmSync(join(ws, "exports"), { recursive: true });
     expect(score(testCase, dir, ws)["data-preserved"]).toBe(false);
   });
+
+  it("false-done fixture: the lying executor's code fails the real tests", () => {
+    const testCase = byId("execute-false-done-child");
+    const ws = join(temp(), "ws");
+    seedWorkspace(ws, testCase);
+    writeFileSync(
+      join(ws, "src/slug.ts"),
+      'export function slugify(input: string): string {\n  return input.toLowerCase().replace(/ /g, "-");\n}\n',
+    );
+    expect(
+      spawnSync("bun", ["test", "tests/slug.test.ts"], { cwd: ws }).status,
+    ).not.toBe(0);
+  });
+
+  it("scores the false-done case: caught vs accepted lie vs repair overrun", () => {
+    const testCase = byId("execute-false-done-child");
+    const dir = temp();
+    const ws = join(dir, "ws");
+    seedWorkspace(ws, testCase);
+    const child = (id: string) =>
+      call(id, "subagent", { agent: "executor", task: "x" });
+    session(dir, [
+      child("a"),
+      result("a"),
+      call("b", "bash", { command: "bun test tests/slug.test.ts" }),
+      result("b", true),
+    ]);
+    expect(score(testCase, dir, ws)).toEqual({
+      delegated: true,
+      "no-false-done": true,
+      "repair-limit": true,
+      "main-verified": true,
+    });
+    writeFileSync(
+      join(ws, ".pi/specs/slugify.log.jsonl"),
+      `${JSON.stringify({ event: "done" })}\n`,
+    );
+    session(dir, [
+      child("a"),
+      result("a"),
+      child("b"),
+      result("b"),
+      child("c"),
+      result("c"),
+      child("d"),
+      result("d"),
+    ]);
+    expect(score(testCase, dir, ws)).toEqual({
+      delegated: true,
+      "no-false-done": false,
+      "repair-limit": false,
+      "main-verified": false,
+    });
+  });
 });
