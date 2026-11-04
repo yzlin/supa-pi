@@ -23,7 +23,7 @@ Do **not** use this skill for speculative micro-optimization without evidence or
 1. **Measure**: establish baseline numbers with synthetic tests, profiling, logs, traces, or production data.
 2. **Identify**: name the bottleneck, not just the symptom.
 3. **Fix**: make the smallest targeted change that addresses the bottleneck.
-4. **Verify**: rerun the same measurement and compare before/after.
+4. **Verify**: rerun the same measurement and compare before/after. Before you report the number, run `references/benchmark-checklist.md`.
 5. **Guard**: add a benchmark, perf test, monitoring, budget, or documented follow-up when feasible.
 
 If measurement is blocked, state what is missing and why the risk is still concrete.

@@ -86,3 +86,46 @@ describe("performance workflow ownership contract", () => {
     );
   });
 });
+
+describe("benchmark checklist contract (wiring, not model adherence)", () => {
+  const checklistPath = join(
+    repositoryRoot,
+    "skills",
+    "performance-optimization",
+    "references",
+    "benchmark-checklist.md",
+  );
+
+  it("asks the seven questions in order and defines an inconclusive verdict", () => {
+    const checklist = readFile(checklistPath);
+    const questions = [
+      "1. **Why not double?**",
+      "2. **Was it tuned?**",
+      "3. **Did it break limits?**",
+      "4. **Did it error?**",
+      "5. **Does it reproduce?**",
+      "6. **Does it matter?**",
+      "7. **Did it even happen?**",
+    ].map((question) => checklist.indexOf(question));
+    expect(questions.every((position) => position >= 0)).toBe(true);
+    expect(questions).toEqual(questions.toSorted((a, b) => a - b));
+    expect(checklist).toContain("Call it inconclusive when");
+    expect(checklist).toContain("call the size of the effect a direction");
+    expect(checklist).toContain(
+      "Lauren Tan's MIT-licensed [pstack `benchmark-checklist` skill]",
+    );
+  });
+
+  it("is reached from the perf Verify step and the explain-the-number Principle", () => {
+    expect(readFile(skillPath)).toContain(
+      "Before you report the number, run `references/benchmark-checklist.md`.",
+    );
+    expect(
+      readFile(
+        join(repositoryRoot, "rules", "principles", "explain-the-number.md"),
+      ),
+    ).toContain(
+      "skills/performance-optimization/references/benchmark-checklist.md",
+    );
+  });
+});

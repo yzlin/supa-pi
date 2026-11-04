@@ -7,7 +7,7 @@ Apply when: reporting a benchmark, eval score, metric, or before/after compariso
 - **List what else the number could measure** and rule each out with evidence: errors, skipped or cached work, code that never ran, an untuned side, noise, a piece too small to matter end to end.
 - **Keep the evidence with the number:** run count, spread, and limiter.
 
-For performance work, follow the `performance-optimization` skill. For an eval, ask whether every run did the task, whether the gap holds across trials and models, and whether the scenario matters. Distinct from [prove-it-works](prove-it-works.md), which checks that an output is real.
+For performance work, follow the `performance-optimization` skill. Before you report any measured number, including an eval score or token count, run its benchmark checklist (`skills/performance-optimization/references/benchmark-checklist.md`). For an eval, ask whether every run did the task, whether the gap holds across trials and models, and whether the scenario matters. Distinct from [prove-it-works](prove-it-works.md), which checks that an output is real.
 
 ---
 
