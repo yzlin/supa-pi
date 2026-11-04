@@ -41,6 +41,8 @@ export interface Options {
   out: string;
   live: boolean;
   dryRun: boolean;
+  /** Run only this arm (for before/after measurement of one path). */
+  arm?: Arm;
 }
 
 export function parseArgs(argv: string[]): Options {
@@ -89,6 +91,14 @@ export function parseArgs(argv: string[]): Options {
       case "--out":
         options.out = resolve(value());
         break;
+      case "--arm": {
+        const arm = value();
+        if (arm !== "old" && arm !== "new") {
+          throw new Error("--arm must be old or new");
+        }
+        options.arm = arm;
+        break;
+      }
       case "--live":
         options.live = true;
         break;
@@ -772,7 +782,7 @@ function plan(options: Options) {
     for (let repetition = 1; repetition <= options.repetitions; repetition++) {
       // Alternate arm order per repetition to spread time-of-day and cache effects.
       const arms: Arm[] = repetition % 2 ? ["old", "new"] : ["new", "old"];
-      for (const arm of arms) {
+      for (const arm of arms.filter((a) => !options.arm || a === options.arm)) {
         runs.push({ testCase, arm, repetition });
       }
     }
@@ -800,8 +810,11 @@ export async function main(argv = process.argv.slice(2)) {
     );
     return;
   }
-  if (!options.old || !options.new) {
-    throw new Error("--live needs --old <worktree> and --new <worktree>");
+  const needed: Arm[] = options.arm ? [options.arm] : ["old", "new"];
+  if (needed.some((arm) => !options[arm])) {
+    throw new Error(
+      `--live needs ${needed.map((arm) => `--${arm} <worktree>`).join(" and ")}`,
+    );
   }
   mkdirSync(options.out, { recursive: true });
   const results: unknown[] = [];
@@ -810,7 +823,7 @@ export async function main(argv = process.argv.slice(2)) {
       options.out,
       `${run.testCase.id}-${run.arm}-${run.repetition}`,
     );
-    const worktree = run.arm === "old" ? options.old : options.new;
+    const worktree = (run.arm === "old" ? options.old : options.new) as string;
     process.stderr.write(
       `running ${run.testCase.id} [${run.arm}] #${run.repetition}\n`,
     );
