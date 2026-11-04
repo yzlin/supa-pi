@@ -39,3 +39,18 @@ Output: `/tmp/supa-pi-paired/runs/<stamp>/<case>-<arm>-<n>/` with `ws/`, `home/`
 Cost: the main session and every child use the configured model (`claude-code/claude-opus-5-5` by default; agents keep their own pins). Usage is summed from session files. The provider may not report a dollar cost.
 
 Offline tests: `bun test evals/paired-path`.
+
+## Results: 2026-11-04, 3 repetitions
+
+Old `a503abd` vs new `e3943fa`; main `claude-code/claude-opus-5-5` thinking medium; agents keep their pins. Run data: `/tmp/supa-pi-paired/runs/full-3/` (local, not kept).
+
+| Case | Old checks | New checks | Median s (old / new) | Median tokens (old / new) |
+| --- | --- | --- | --- | --- |
+| execute-spec-small | 15/15 | 15/15 | 51 / 49 | 270k / 192k |
+| execute-inline-plan | 15/15 | 15/15 | 53 / 59 | 262k / 254k |
+| review-seeded-bugs | 12/12 | 12/12 | 69 / 129 | 176k / 360k |
+| review-clean | 6/6 | 6/6 | 40 / 59 | 128k / 212k |
+
+Observed process, new arm: every execute run called `spec_log` `lint` → `accept` → one `check` per criterion, with evidence quoting observed test output. No run delegated to children. Review ran `code-reviewer`, added `security-reviewer` in 2 of 3 seeded runs (the path table did not match `src/auth.ts`; main added it on content), and called `review-verifier` only when candidates existed.
+
+Limits: four easy cases, n=3. No case probes a gate the deleted code enforced (scope breach, false child `done`, repair limit, approval). Equal outcomes here do not show that those gates hold in prose. The new review costs about 2× in time and tokens on these cases.
