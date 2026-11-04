@@ -92,3 +92,14 @@ New path only (`--arm new`), before `b76fb3f` vs after `753fd28`. Before the fix
 | review-seeded-bugs | 200k / 313k, 259k / 403k | 167k / 345k, 180k / 306k | 2, 3 → 0, 0 |
 
 All checks passed in all 8 runs. Main-session tokens fell 23–31%. Wall time did not change (about 60 s clean, 125 s seeded). Totals on seeded-bugs also vary with the reviewer set: main added `security-reviewer` in 1 of 2 runs before and 1 of 2 after, although no changed path matches the table. Main still spends 1–3 turns finding `SKILL.md` through the prompt alias.
+
+## Review cost: direct skill pointer, 2026-11-05, 2 repetitions
+
+New path only, `7020627`. The `/review`, `/review-fix`, `/execute`, and `/pr` aliases now say to open the location listed in `<available_skills>` and not to search for it. Before, main used 1–3 bash or read turns to resolve `PI_CODING_AGENT_DIR` and the SupaPi link.
+
+| Case | Main tokens (after report fix → after pointer fix) | Total tokens | Search turns |
+| --- | --- | --- | --- |
+| review-clean | 123k, 147k → 103k, 127k | 187k, 212k → 167k, 192k | 0, 0 |
+| review-seeded-bugs | 167k, 180k → 141k, 145k | 345k, 306k → 268k, 306k | 0, 0 |
+
+All checks passed in all 4 runs. Against the first baseline (`b76fb3f`), main-session tokens fell 40–46% on review-clean and 30–44% on review-seeded-bugs. Main again added `security-reviewer` in 1 of 2 seeded-bugs runs with no path match.
