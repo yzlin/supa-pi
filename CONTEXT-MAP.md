@@ -12,9 +12,9 @@
 - `docs/adr/` — proposed, accepted, superseded, deprecated, or rejected tradeoff decisions.
 - `docs/adr/0001-local-unified-edit-dialect.md` — read before changing the tool-display edit schema, unified-edit dialect, edit mutation safety, compatibility policy, or the live reliability gate (status: proposed). Gate status and pilot results live in `evals/unified-edit-reliability/README.md`.
 - `docs/adr/0002-use-pi-fullscreen.md` — read before changing Pi version support, setup TUI defaults, fullscreen/regular compatibility, or pieditor viewport ownership.
-- `docs/adr/0003-main-executed-execute-attempts.md` — read before changing `/execute` start or verify rules, the `executor` ledger field, main-attempt guards, or when `/execute` delegates to children.
-- `docs/adr/0004-merged-review-verifier.md` — read before changing `/review` grouping, the verifier schema or prompt, rejected-candidate handling, or review model configuration.
-- `docs/adr/0005-playbook-prose-gates.md` — read before moving `/execute`, `/review`, or `/goal` gates into Playbook prose, or deleting their enforcement code (status: proposed; supersedes 0003/0004 only after the paired eval passes).
+- `docs/adr/0003-main-executed-execute-attempts.md` — read before changing `/execute` start or verify rules, the `executor` ledger field, main-attempt guards, or when `/execute` delegates to children (superseded by ADR 0005; history only).
+- `docs/adr/0004-merged-review-verifier.md` — read before changing `/review` grouping, the verifier schema or prompt, rejected-candidate handling, or review model configuration (superseded by ADR 0005; history only).
+- `docs/adr/0005-playbook-prose-gates.md` — read before moving `/execute`, `/review`, or `/goal` gates into Playbook prose, or deleting their enforcement code (accepted; supersedes 0003/0004).
 - `evals/paired-path/README.md` — read before running or changing the old-vs-new execute and review comparison.
 
 ## Context notes
@@ -47,7 +47,7 @@
 - `skills/plain-report/SKILL.md` — read before changing Final report style, reviewer `why`/`change` prose rules, the telegraph-versus-Plain-report split, or surfaces that reference `plain-report`.
 - `evals/plain-report/README.md` — read before changing the offline Plain report calibration linter, its rules, or its fixtures.
 - `skills/grilling/SKILL.md` — read before changing natural-language adversarial interviews or the shared grilling contract.
-- `CONTEXT.md` "Playbook architecture: P1–P4 implemented; paired eval pending", `skills/supapi-mode/`, and `rules/principles/` — read before adding the Hub skill, Playbooks, Principles, the core-prompt routing pointer, or converting commands into Playbooks.
+- `CONTEXT.md` "Playbook architecture: implemented; ADR 0005 accepted", `skills/supapi-mode/`, and `rules/principles/` — read before adding the Hub skill, Playbooks, Principles, the core-prompt routing pointer, or converting commands into Playbooks.
 - `skills/grill-me/SKILL.md`, `prompts/grill-me.md`, and `extensions/prompt-commands/index.ts` — read before changing explicit `/grill-me <plan>` behavior. The prompt entrypoint stays queueable and retains a functional no-Extension fallback while the active Extension preserves its raw multiline argument before normal expansion; the command skill permits only lock-gated, qualifying changes to `CONTEXT.md`, `CONTEXT-MAP.md`, and ADRs.
 - `skills/showing-me/SKILL.md` and `prompts/show-me.md` — read before changing `/show-me`, its Explainer ladder, or where discardable HTML explainers are written.
 - `prompts/statechart.md` and `CONTEXT.md` "Statechart: implemented direction" — read before changing `/statechart`, the external statechart skill install, `/skill install` file-mode handling, or state-diagram guidance in `skills/architecture-diagrams/SKILL.md`.

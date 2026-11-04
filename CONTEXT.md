@@ -333,7 +333,7 @@ Approved by `/grill-me` on 2026-10-31 and implemented via `/execute` on 2026-10-
 - Showing and checking stay separate. `architecture-diagrams` owns state-diagram wording rules: states are what the reader sees, arrows are events in user words with a `[condition]` when it matters, states that act the same are merged (about 20 arrows or fewer), and inferred parts are marked. It points to `/statechart` when a flow needs checking. `showing-me` gets these through its existing Mermaid route.
 - No ADR: each part is cheap to undo (one skill install, one prompt, one small fix).
 
-## Playbook architecture: P1–P4 implemented; paired eval pending
+## Playbook architecture: implemented; ADR 0005 accepted
 
 Approved through `/grill-me` on 2026-11-04. Inspired by Lauren Tan's MIT-licensed [pstack](https://github.com/cursor/plugins/tree/main/pstack) (`poteto-mode` hub, playbooks, `principle-*` skills). Shape: orchestrator → Playbooks → Workflow skills + Principles → subagents.
 
@@ -362,7 +362,7 @@ P4 status (2026-11-04): implemented ahead of the paired eval, by user decision. 
   - Principle (P2): `search-first` becomes `rules/principles/search-first.md`; its delegation steps move into the investigation Playbook.
   - Removed 2026-11-04: `wayfinder`.
 - Phases, each passing `bun run check` and its eval: P1 Hub skill, core-prompt pointer, Playbooks investigation, bug-fix, feature, refactoring, prototype, opening-a-pr, plus the `figure-it-out` Workflow skill as fallback; P2 Principles and `AGENTS.global.md` pointers; P3 review rewrite; P4 execute and goal rewrite.
-- Verification: P1 uses an offline routing corpus (about 15 labeled prompts) under `evals/`. P3/P4 machinery is deleted only after a paired eval of 3–5 fixed execute/review tasks shows equal verification, repair-limit behavior, and review findings on the old and new paths.
+- Verification: P1 uses an offline routing corpus (about 15 labeled prompts) under `evals/`. The P3/P4 paired eval (`evals/paired-path/`, 2026-11-04) passed 48/48 checks on both paths; repair-limit, scope-breach, and approval gates were not exercised.
 - Glossary conflict until P1 lands: **Workflow skill** ("not routing policy") and **Task rule** ("does not own orchestration routing") stay accurate; the Hub skill, not Workflow skills or Task rules, owns routing.
 - P1 PR body (opening-a-pr), merging the current `/pr` format with pstack's: `## Why` (user goal, 1–3 sentences), `## Summary` (diagram or diff sketch, then What-changed bullets), `## Scope` (covers and deliberately leaves out), `## Evidence` (Before/After), `## Merge Danger` (Door, Blast Radius), optional `## Tradeoffs`. Drop any section with nothing to say.
 - P3 review, following pstack's `interrogate` and `babysit`: `review-orchestration` becomes a report-only technique skill that Playbooks can call; it spawns reviewer subagents, has a verifier check each candidate, and reports. It applies no fixes. All `/review` code guarantees go: `review_run`/`review_finalize` run binding, freshness, once-only publication, and verifier candidate accounting. Stale or replayed reports are no longer detected. `review-fix` becomes the fix-review-findings Playbook: triage each finding as fix, dismiss with a reason, or ask, then fix in one wave. `/review` and `/review-fix` stay thin aliases.

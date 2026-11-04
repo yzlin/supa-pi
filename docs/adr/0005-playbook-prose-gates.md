@@ -2,15 +2,15 @@
 summary: "Move /execute, /review, and /goal gates from TypeScript enforcement into prose; /review keeps no code guarantees, and execute keeps only an append-only Spec log recorder."
 read_when:
   - "Converting /execute, /review, or /goal into Playbooks, or deleting their ledger, verifier, or checkpoint enforcement code."
-  - "Interpreting why ADR 0003 or ADR 0004 may be superseded."
+  - "Interpreting why ADR 0003 and ADR 0004 are superseded."
 ---
 
 # ADR 0005: Playbook prose gates
 
-- Status: proposed
+- Status: Accepted (2026-11-04, after the paired eval)
 - Date: 2026-11-04
 - Deciders: Ethan
-- Supersedes: none yet; supersedes ADR 0003 and ADR 0004 only after the paired eval passes
+- Supersedes: ADR 0003, ADR 0004
 - Superseded by: none
 
 ## Context
@@ -29,7 +29,13 @@ pstack (Lauren Tan, MIT) gets similar guarantees with prose only. For example, `
 
 ## Implementation note
 
-2026-11-04: by user decision, P3 deleted the `/review` enforcement code and P4 deleted `extensions/execute/` before the paired eval. The old path for that eval is a worktree at commit `a503abd`. P4 dropped the Spec review classifier and moved Spec lint into the `spec_log` tool (`extensions/spec-log/`); `/goal` budget checks stay in code. If the eval fails, restore the deleted extensions from git and keep this ADR proposed.
+2026-11-04: by user decision, P3 deleted the `/review` enforcement code and P4 deleted `extensions/execute/` before the paired eval. The old path for that eval is a worktree at commit `a503abd`. P4 dropped the Spec review classifier and moved Spec lint into the `spec_log` tool (`extensions/spec-log/`); `/goal` budget checks stay in code.
+
+## Eval result
+
+2026-11-04: `evals/paired-path/` ran 4 cases (2 execute, 2 review) × 3 repetitions on old `a503abd` and new `e3943fa`. Both paths passed 48/48 checks: hidden probe tests, scope, recorded completion, main verification after the last edit, all three seeded review defects, and no false blocker on a clean change. New execute cost the same or less; new review took about 2× the time and tokens. See `evals/paired-path/README.md`.
+
+Not tested: repair-limit behavior, scope breach, a false child `done`, and approval gates. No case forced those paths. The decision accepts this gap.
 
 ## Consequences
 

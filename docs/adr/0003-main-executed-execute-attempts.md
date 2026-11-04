@@ -6,11 +6,11 @@ read_when:
 
 # ADR 0003: Main-executed `/execute` attempts
 
-- Status: Accepted
+- Status: Superseded by ADR 0005 (2026-11-04)
 - Date: 2026-10-30
 - Deciders: Ethan
 - Supersedes: none
-- Superseded by: none
+- Superseded by: ADR 0005
 
 ## Context
 
