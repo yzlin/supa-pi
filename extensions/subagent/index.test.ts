@@ -23,7 +23,7 @@ import { Check } from "typebox/value";
 
 import { theme } from "../../node_modules/@earendil-works/pi-coding-agent/dist/modes/interactive/theme/theme.js";
 import { isRecord, THINKING_LEVELS } from "./agents";
-import subagentExtension from "./index";
+import subagentExtension, { resultText } from "./index";
 
 let childConfig: string | undefined;
 beforeEach(() => {
@@ -303,4 +303,31 @@ test("parent without UI leaves ctx.ui unwrapped", async () => {
   } finally {
     session.dispose();
   }
+});
+
+// Regression: the model sees only `content`; the validated report must be in it.
+test("result text carries the validated StructuredOutput", () => {
+  const base = {
+    runId: "run",
+    provider: "faux",
+    model: "faux-1",
+    thinking: "off" as const,
+    output: "",
+    resultPath: "/evidence/result.json",
+  };
+  const report = { status: "done", findings: [{ file: "a.ts", line: 3 }] };
+  const text = resultText({ ...base, structuredOutput: report });
+  expect(text).toContain("Validated StructuredOutput:");
+  expect(
+    JSON.parse(text.split("Validated StructuredOutput:\n")[1] ?? ""),
+  ).toEqual(report);
+  expect(resultText(base)).toEndWith("\n\n(no text output)");
+  expect(resultText({ ...base, output: "prose" })).toEndWith("\n\nprose");
+  const huge = resultText({
+    ...base,
+    structuredOutput: { lines: Array.from({ length: 5000 }, (_, i) => i) },
+  });
+  expect(huge).toContain(
+    "[StructuredOutput capped. Complete evidence: /evidence/result.json]",
+  );
 });

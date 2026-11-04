@@ -28,7 +28,7 @@ Run units in the main session by default. Use a child only for independent units
 ## 4. Run each unit
 
 - **In main:** edit only the unit's declared paths. Keep shell commands read-only or inside the scope, and check `git status` before verifying.
-- **Delegated:** call one blocking `subagent` with agent `executor` and `schema` from `../schemas/executor-report.schema.json`. The task is self-contained: goal, exact write scope, the Done Criteria it proves, references with verified paths, safety gates, and TDD guidance for behavior changes (`skills/tdd-workflow/SKILL.md`). Run at most four children at once, only across disjoint scopes. Read the report from `structuredContent.structuredOutput`; a `done` is a claim.
+- **Delegated:** call one blocking `subagent` with agent `executor` and `schema` from `../schemas/executor-report.schema.json`. The task is self-contained: goal, exact write scope, the Done Criteria it proves, references with verified paths, safety gates, and TDD guidance for behavior changes (`skills/tdd-workflow/SKILL.md`). Run at most four children at once, only across disjoint scopes. Read the report from the "Validated StructuredOutput" JSON in the tool result; do not open `result.json` unless it says the report was capped. A `done` is a claim.
 
 ## 5. Verify and record
 

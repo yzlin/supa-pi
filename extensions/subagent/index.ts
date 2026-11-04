@@ -1,6 +1,9 @@
 // Apache-2.0 adaptation of mitsuhiko/agent-stuff, d265b8e. Modified for SupaPi: thin optional-role tool over the reusable runner.
 import { StringEnum } from "@earendil-works/pi-ai";
-import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import {
+  truncateHead,
+  type ExtensionAPI,
+} from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
 
 import { THINKING_LEVELS } from "./agents";
@@ -124,7 +127,7 @@ export default function subagentExtension(pi: ExtensionAPI): void {
         content: [
           {
             type: "text",
-            text: `Subagent completed: ${result.runId}\nModel: ${result.provider}/${result.model} (${result.thinking})\nEvidence: ${result.resultPath}${result.sessionFile ? `\nChild session: ${result.sessionFile}` : ""}\n\n${result.output || (result.structuredOutput === undefined ? "(no text output)" : "Validated StructuredOutput saved in evidence.")}`,
+            text: resultText(result),
           },
         ],
         details: { ...result, durationMs: Date.now() - startedAt },
@@ -132,4 +135,15 @@ export default function subagentExtension(pi: ExtensionAPI): void {
       };
     },
   });
+}
+
+// The model sees only `content`, so the validated report goes there too; parents
+// need no extra read of result.json. Capped like other output; evidence keeps the rest.
+export function resultText(result: SubagentResult): string {
+  const header = `Subagent completed: ${result.runId}\nModel: ${result.provider}/${result.model} (${result.thinking})\nEvidence: ${result.resultPath}${result.sessionFile ? `\nChild session: ${result.sessionFile}` : ""}`;
+  if (result.structuredOutput === undefined) {
+    return `${header}\n\n${result.output || "(no text output)"}`;
+  }
+  const report = truncateHead(JSON.stringify(result.structuredOutput, null, 2));
+  return `${header}${result.output ? `\n\n${result.output}` : ""}\n\nValidated StructuredOutput:\n${report.content}${report.truncated ? `\n[StructuredOutput capped. Complete evidence: ${result.resultPath}]` : ""}`;
 }

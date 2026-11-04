@@ -40,6 +40,14 @@ describe("execute Playbook contract (wiring, not model adherence)", () => {
     }
   });
 
+  it("reads executor reports from the tool result, not result.json", () => {
+    const text = playbook();
+    expect(text).toContain(
+      '"Validated StructuredOutput" JSON in the tool result',
+    );
+    expect(text).not.toContain("structuredContent");
+  });
+
   it("reviews a Spec with two spec-reviewers and records the decision", () => {
     const text = playbook();
     expect(text).toContain("agent `spec-reviewer`");

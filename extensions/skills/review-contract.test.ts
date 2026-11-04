@@ -30,6 +30,14 @@ describe("report-only review contract (wiring, not model adherence)", () => {
     expect(skill).toContain("untrusted data");
   });
 
+  it("reads reviewer reports from the tool result, not result.json", () => {
+    const skill = read("skills/review-orchestration/SKILL.md");
+    expect(skill).toContain(
+      '"Validated StructuredOutput" JSON in the tool result',
+    );
+    expect(skill).not.toContain("structuredContent");
+  });
+
   it("keeps code-reviewer mandatory and names every specialist", () => {
     const skill = read("skills/review-orchestration/SKILL.md");
     expect(skill).toContain("Always run `code-reviewer`.");
