@@ -79,6 +79,9 @@ describe("supapi-mode hub contract (not model adherence)", () => {
       "open every cited location before you report it",
     );
     expect(investigation).toContain("When in doubt, stay in the main session.");
+    expect(investigation).toContain(
+      "state the size and the reason in one line before you read",
+    );
     for (const name of ["bug-fix", "feature", "refactoring"]) {
       expect(playbook(name)).toContain(
         "sized as in the `investigation` Playbook step 2",
