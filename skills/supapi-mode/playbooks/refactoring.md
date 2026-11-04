@@ -8,9 +8,9 @@ You own the behavior contract. The structure changes; the behavior does not. A r
 4. For `/simplify` or a scoped cleanup request, load the `simplify` skill and follow it as canonical for edit boundaries, baseline, audit, and report.
 5. Move in small behavior-preserving steps that keep the pin green. When an internal API changes, migrate every caller and delete the old API in the same change. Check renames against strings, docs, and back-references.
 6. Prove behavior is unchanged on the real artifact, then run `bun run check` or the repository's check command.
-7. Keep the change only if it lowers reader load somewhere. Otherwise revert it.
+7. Keep the change only if it lowers reader load somewhere, as `minimize-reader-load` measures it. Otherwise revert it.
 8. If the user asked for a PR, run the `opening-a-pr` Playbook.
 
-**Principles:** `subtract-before-you-add`, `laziness-protocol`, `migrate-callers-then-delete-legacy-apis`, `prove-it-works`.
+**Principles:** `subtract-before-you-add`, `laziness-protocol`, `migrate-callers-then-delete-legacy-apis`, `prove-it-works`, `minimize-reader-load`, `redesign-from-first-principles`.
 
 **Reply:** the structure that changed, the pin, the equivalence evidence, the reader-load gain, and what you reverted.

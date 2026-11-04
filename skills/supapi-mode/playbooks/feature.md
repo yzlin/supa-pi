@@ -11,6 +11,6 @@ You own the design and its proof. Name the data shape before you write logic.
 7. Update docs when behavior or an API changes.
 8. If the user asked for a PR, run the `opening-a-pr` Playbook.
 
-**Principles:** `model-the-domain`, `foundational-thinking`, `type-system-discipline`, `boundary-discipline`, `search-first`, `sequence-verifiable-units`, `test-behavior-not-implementation`.
+**Principles:** `model-the-domain`, `foundational-thinking`, `type-system-discipline`, `boundary-discipline`, `search-first`, `sequence-verifiable-units`, `test-behavior-not-implementation`, `redesign-from-first-principles`, `make-operations-idempotent`.
 
 **Reply:** what you built, the shape you chose and why, verification evidence, and open decisions. Use a table for design alternatives.

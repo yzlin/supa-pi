@@ -10,6 +10,6 @@ You own the decision, not the code. The prototype is a throwaway instrument; the
 
 Use this Playbook instead of asking the user when a fork is a fact a run can settle. Ask only about product or preference calls.
 
-**Principles:** `never-block-on-the-human`, `explain-the-number`, `subtract-before-you-add`.
+**Principles:** `never-block-on-the-human`, `explain-the-number`, `subtract-before-you-add`, `build-the-lever`.
 
 **Reply:** the variants, the evidence, tradeoffs, the recommendation, and the scratch path. Say plainly that the prototype is throwaway.

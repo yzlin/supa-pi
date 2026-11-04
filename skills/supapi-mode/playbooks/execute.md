@@ -50,7 +50,7 @@ A resumed Spec keeps its checked boxes as history, not proof of today. Re-run th
 
 `spec_log` writes `done` when every criterion is checked. Then run `bun run check` or the repository's check command once more on the final state.
 
-**Principles:** `prove-it-works`, `sequence-verifiable-units`, `outcome-oriented-execution`, `attack-the-premise`, `never-block-on-the-human`, `guard-the-context-window`.
+**Principles:** `prove-it-works`, `sequence-verifiable-units`, `outcome-oriented-execution`, `attack-the-premise`, `never-block-on-the-human`, `guard-the-context-window`, `make-operations-idempotent`, `build-the-lever`.
 
 **Reply:** the Spec status from `spec_log` `status`, what was built, each criterion's evidence, blockers with exact prerequisites, files touched, and follow-ups. Never present a blocked or open criterion as done. Close with a Final report per the `plain-report` skill.
 

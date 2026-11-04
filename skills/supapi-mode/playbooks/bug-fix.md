@@ -10,6 +10,6 @@ You own the fix and its proof. Every shipped line traces to runtime evidence. A 
 6. Run `bun run check` or the repository's check command.
 7. If the user asked for a PR, run the `opening-a-pr` Playbook.
 
-**Principles:** `fix-root-causes`, `attack-the-premise`, `prove-it-works`, `test-behavior-not-implementation`.
+**Principles:** `fix-root-causes`, `attack-the-premise`, `prove-it-works`, `test-behavior-not-implementation`, `encode-lessons-in-structure`.
 
 **Reply:** what was broken, the root cause, the fix, and failing-then-passing output.
