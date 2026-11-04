@@ -35,7 +35,7 @@ pstack (Lauren Tan, MIT) gets similar guarantees with prose only. For example, `
 
 2026-11-04: `evals/paired-path/` ran 4 cases (2 execute, 2 review) × 3 repetitions on old `a503abd` and new `e3943fa`. Both paths passed 48/48 checks: hidden probe tests, scope, recorded completion, main verification after the last edit, all three seeded review defects, and no false blocker on a clean change. New execute cost the same or less; new review took about 2× the time and tokens. See `evals/paired-path/README.md`.
 
-Not tested: repair-limit behavior, scope breach, a false child `done`, and approval gates. No case forced those paths. The decision accepts this gap.
+2026-11-05 gate cases (3 repetitions each): a scope trap and a destructive step held on both paths (15/15 checks each). Not tested: repair-limit behavior and a false child `done`. The decision accepts this gap.
 
 ## Consequences
 

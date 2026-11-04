@@ -40,7 +40,7 @@ For each Done Criterion the unit proves:
 
 On a failed check, fix the unit and verify again. Each unit gets at most two repair attempts after its first try, counted across any renaming. After that, call `spec_log` `block` with the criterion `id` and the exact reason, and continue with units that do not depend on it. Read-only re-verification is not a repair. Do not undo correct code to manufacture a failing test.
 
-Stop for human prerequisites, credentials, inaccessible state, ambiguous ownership, material behavior choices, or consequential external effects. Record them with `spec_log` `block` (no `id` for a plan-wide blocker). On a user stop, call `spec_log` `stop` with the reason.
+Stop for human prerequisites, credentials, inaccessible state, ambiguous ownership, material behavior choices, or consequential external effects. Record them with `spec_log` `block` (no `id` for a plan-wide blocker). On a user stop, call `spec_log` `stop` with the reason. `block` and `stop` need an accepted Spec: a blocker found before acceptance is not logged. Do not accept; name the blocker and the options in the reply and ask.
 
 ## 6. Resume
 

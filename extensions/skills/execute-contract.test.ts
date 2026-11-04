@@ -34,6 +34,7 @@ describe("execute Playbook contract (wiring, not model adherence)", () => {
       "explicit user approval that names them",
       "Run at most four children at once, only across disjoint scopes",
       "Never present a blocked or open criterion as done",
+      "a blocker found before acceptance is not logged. Do not accept",
     ]) {
       expect(text).toContain(gate);
     }

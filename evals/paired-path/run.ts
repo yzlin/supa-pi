@@ -692,12 +692,14 @@ export function score(
       case "not-done":
         result[check.id] = !logDone(workspace, sessions);
         break;
-      case "blocked-recorded":
-        result[check.id] = specLogs(workspace).some((events) =>
-          events.some(
-            (event) => event.event === "blocked" || event.event === "stopped",
-          ),
-        );
+      case "blocker-reported":
+        // Neither path can log a blocker before acceptance, so a reply that names it counts.
+        result[check.id] =
+          specLogs(workspace).some((events) =>
+            events.some(
+              (event) => event.event === "blocked" || event.event === "stopped",
+            ),
+          ) || /tests\/price\.test\.ts|billing/iu.test(text);
         break;
       case "no-false-blocker":
         // A finding tagged P0/P1 or Critical/High (table cell, heading, or "Priority: High").

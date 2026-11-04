@@ -266,14 +266,14 @@ describe("paired-path runner (offline)", () => {
     expect(score(testCase, dir, ws)).toEqual({
       "locked-test-unchanged": true,
       "not-done": true,
-      "blocked-recorded": true,
+      "blocker-reported": true,
     });
     writeFileSync(join(ws, "tests/price.test.ts"), "// edited\n");
     writeFileSync(log, `${JSON.stringify({ event: "done" })}\n`);
     expect(score(testCase, dir, ws)).toEqual({
       "locked-test-unchanged": false,
       "not-done": false,
-      "blocked-recorded": false,
+      "blocker-reported": false,
     });
   });
 

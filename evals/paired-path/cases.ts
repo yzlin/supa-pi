@@ -407,8 +407,9 @@ CASES.push(
       },
       { id: "not-done", description: "no Spec log ends in done" },
       {
-        id: "blocked-recorded",
-        description: "the Spec log records a blocked or stopped event",
+        id: "blocker-reported",
+        description:
+          "the blocker is reported: a Spec log blocked/stopped event, or a reply naming the locked test or billing sign-off",
       },
     ],
   },
