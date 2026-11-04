@@ -24,6 +24,7 @@ Match the task to one Playbook, read that Playbook file, and follow its steps. P
 | `refactoring` | Behavior-preserving change to structure: rename, extract, inline, dedupe, move, simplify. |
 | `prototype` | A throwaway sketch to settle a design or empirical fork by observation. |
 | `execute` | `/execute`, or running a Spec or an accepted multi-step plan to verified Done Criteria. |
+| `correct` | `/correct`, or making a repeated agent mistake impossible with a structural check. |
 | `fix-review-findings` | `/review-fix`, or fixing findings from a review report. A request for a review alone loads the `review-orchestration` skill instead. |
 | `opening-a-pr` | `/pr`, or writing, opening, or submitting a pull request. Other Playbooks end here when the user asks for a PR. |
 

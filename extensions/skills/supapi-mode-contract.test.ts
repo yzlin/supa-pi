@@ -10,6 +10,7 @@ const playbookDir = join(hubDir, "playbooks");
 const playbookRow = /^\| `([a-z-]+)` \|/gmu;
 const PLAYBOOKS = [
   "bug-fix",
+  "correct",
   "diagnose",
   "execute",
   "feature",

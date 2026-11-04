@@ -24,6 +24,7 @@
 - `docs/context/ask.md` — read before changing the active Ask Extension, its public `ask` tool or `/ask-stats` command, schema/result shape, keyboard behavior, validation, or rpiv-divergence documentation.
 - `docs/context/code-improvement.md` — read before changing `/simplify`, `/improve-codebase-architecture`, or code-improvement prompt files.
 - `docs/context/model-routing.md` — read before checking or documenting current repository model defaults for setup, agents, review, evals, or Fast Mode; live settings and overrides may differ.
+- `docs/context/enforced-rules.md` — read before running `/correct`, adding or weakening a contract test or tool refusal, or when a user corrects the same agent mistake twice.
 - `docs/context/gpt-5.6-harness-optimization.md` — read before interpreting historical GPT-5.6 reasoning, service-tier, prompt, caching, tool-surface, or eval evidence.
 - `docs/context/gpt-6-astra-harness-readiness.md` — read before interpreting historical Astra approvals and comparisons, or planning an approval-gated Astra eval or full-stack probe.
 - `docs/context/harness-contract-audit.md` — read before changing research-artifact ownership, researcher dispatch in the investigation Playbook, or instruction ownership across prompts, agents, skills, and rules; preserves historical audit evidence and deferred live-calibration gates.
