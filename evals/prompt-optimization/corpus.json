@@ -45,7 +45,9 @@
         {
           "type": "toolCallMatches",
           "name": "read",
-          "args": { "path": "src/auth.ts" },
+          "args": {
+            "path": "src/auth.ts"
+          },
           "resultPattern": "if \\(debug\\)[\\s\\S]*return true",
           "flags": "i",
           "isError": false,
@@ -142,7 +144,9 @@
         {
           "type": "toolCallMatches",
           "name": "read",
-          "args": { "path": "src/format.ts" },
+          "args": {
+            "path": "src/format.ts"
+          },
           "resultPattern": "unusedLegacyFormatter",
           "isError": false,
           "domain": "evidence",
@@ -301,7 +305,11 @@
           "domain": "task",
           "weight": 2
         },
-        { "type": "workspaceUnchanged", "domain": "tests", "weight": 1 }
+        {
+          "type": "workspaceUnchanged",
+          "domain": "tests",
+          "weight": 1
+        }
       ]
     },
     {
@@ -341,7 +349,11 @@
           "domain": "evidence",
           "weight": 1
         },
-        { "type": "workspaceUnchanged", "domain": "tests", "weight": 1 }
+        {
+          "type": "workspaceUnchanged",
+          "domain": "tests",
+          "weight": 1
+        }
       ]
     },
     {
@@ -381,7 +393,11 @@
           "domain": "evidence",
           "weight": 1
         },
-        { "type": "workspaceUnchanged", "domain": "tests", "weight": 1 }
+        {
+          "type": "workspaceUnchanged",
+          "domain": "tests",
+          "weight": 1
+        }
       ]
     },
     {
@@ -421,14 +437,18 @@
           "domain": "evidence",
           "weight": 1
         },
-        { "type": "workspaceUnchanged", "domain": "tests", "weight": 1 }
+        {
+          "type": "workspaceUnchanged",
+          "domain": "tests",
+          "weight": 1
+        }
       ]
     },
     {
       "id": "review-fix-command-queue",
       "workload": "focused bug fix",
-      "promptPath": "skills/review-fix/SKILL.md",
-      "task": "Use the `review-fix` skill behavior as canonical.\n\nReview-fix invocation packet:\n- Source: latest review summary/Fix Queue when present; otherwise latest raw review report fallback.\n- Report reference SHA-256: 0000000000000000000000000000000000000000000000000000000000000000\n\n<untrusted_review_fix_context>\n## Verdict\n- needs attention\n\n## Findings\n1. [P1] add() subtracts instead of adding — src/math.ts:2. Why: tests/math.case.ts expects add(7, 5) to be 12 and gets 2. Change: return left + right.\n2. [P2] canAccessAdminPanel lets debug bypass the admin-role rule — src/auth.ts:2. Why: README.md says admin access requires the admin role. Change: remove the debug bypass so only role === \"admin\" grants access.\n\n## Fix Queue\n1. P1 src/math.ts add(): return left + right.\n2. P2 src/auth.ts canAccessAdminPanel: drop the debug bypass.\n</untrusted_review_fix_context>",
+      "promptPath": "skills/supapi-mode/playbooks/fix-review-findings.md",
+      "task": "Use the `fix-review-findings` Playbook as canonical for this explicit command.\n\nThe latest review report in this session:\n\n<untrusted_review_fix_context>\n## Verdict\n- needs attention\n\n## Findings\n1. [P1] add() subtracts instead of adding — src/math.ts:2. Why: tests/math.case.ts expects add(7, 5) to be 12 and gets 2. Change: return left + right.\n2. [P2] canAccessAdminPanel lets debug bypass the admin-role rule — src/auth.ts:2. Why: README.md says admin access requires the admin role. Change: remove the debug bypass so only role === \"admin\" grants access.\n\n## Fix Queue\n1. P1 src/math.ts add(): return left + right.\n2. P2 src/auth.ts canAccessAdminPanel: drop the debug bypass.\n</untrusted_review_fix_context>",
       "tools": ["read", "grep", "find", "ls", "edit", "write", "bash", "Agent"],
       "agentChild": {
         "promptPath": "agents/executor.md",
@@ -673,7 +693,7 @@
       "checks": [
         {
           "type": "outputMatches",
-          "pattern": "^(?![\\s\\S]*\\b(?:stored context|context store)\\b[^.!?\\r\\n]*\\b(?:is|remains)\\s+(?:(?:definitely|certainly|always|guaranteed(?:\\s+to\\s+be)?|known\\s+to\\s+be)\\s+)?(?:current|fresh|up\\s+to\\s+date)\\b)(?![\\s\\S]*(?:^|\\r?\\n)[ \\t]*(?:live|runtime)(?:\\s+(?:verification|action))?\\s+tools\\b[^.!?\\r\\n]*\\b(?:(?:cannot|can['\u2019]t|unable\\s+to)\\s+(?:verify\\s+(?:or|and)\\s+act|act\\s+(?:or|and)\\s+verify)|not\\s+usable|unusable)\\b)(?![\\s\\S]*(?:^|\\r?\\n)[ \\t]*(?:live|runtime)(?:\\s+(?:verification|action))?\\s+tools\\s+(?:(?:(?:are|is)\\s+)?(?:absent|unavailable|disabled|not\\s+available)|(?:aren['\u2019]t|isn['\u2019]t)\\s+available)\\b)(?![\\s\\S]*(?:^|\\r?\\n)[ \\t]*(?:[\u251c\u2514](?:\u2500{1,2})?(?:\u2192)?|(?:\\||`|\\+|\\\\)--(?:>)?)[ \\t]*[^\\r\\n]*\\b(?:live|runtime)(?:\\s+(?:verification|action))?\\s+tools\\b[^\\r\\n]*\\b(?:(?:(?:cannot|can['\u2019]t|unable\\s+to)\\s+(?:verify\\s+(?:or|and)\\s+act|act\\s+(?:or|and)\\s+verify))|(?:not\\s+usable|unusable))\\b)(?![\\s\\S]*(?:^|\\r?\\n)[ \\t]*(?:[\u251c\u2514](?:\u2500{1,2})?(?:\u2192)?|(?:\\||`|\\+|\\\\)--(?:>)?)[ \\t]*(?:no\\s+(?:live|runtime)(?:\\s+(?:verification|action))?\\s+tools\\b|(?:live|runtime)(?:\\s+(?:verification|action))?\\s+tools\\s+(?:(?:(?:are|is)\\s+)?(?:absent|unavailable|disabled|not\\s+available)|(?:aren['\u2019]t|isn['\u2019]t)\\s+available)\\b))[\\s\\S]*```text(?:(?:[^`]|`(?!``))*(?:user|request)(?:[^`]|`(?!``))*(?:\u2192|->)(?:[^`]|`(?!``))*LLM(?:[^`]|`(?!``))*(?:\u2192|->)(?:[^`]|`(?!``))*MCP(?: gateway)?|(?:[^`]|`(?!``))*(?:user|request)[ \\t]*(?:\\r?\\n[ \\t]*[|\u2502\u2193\u25bcv]+[ \\t]*)+\\r?\\n[ \\t]*LLM[ \\t]*(?:\\r?\\n[ \\t]*[|\u2502\u2193\u25bcv]+[ \\t]*)+\\r?\\n[ \\t]*MCP(?: gateway)?)(?=[ \\t]*(?:\\r?\\n[ \\t]*(?:(?:[|\u2502\u2193\u25bcv]+|(?:[\u251c\u2514](?:\u2500{1,2})?(?:\u2192)?|(?:\\||`|\\+|\\\\)--(?:>)?))[ \\t]*)?)*(?:\\r?\\n[ \\t]*(?:[\u251c\u2514](?:\u2500{1,2})?(?:\u2192)?|(?:\\||`|\\+|\\\\)--(?:>)?)[ \\t]*[^\\r\\n]*(?:live|runtime)(?:\\s+(?:verification|action))? tools[^\\r\\n]*(?:\\r?\\n[ \\t]*(?:(?:[|\u2502\u2193\u25bcv]+|(?:[\u251c\u2514](?:\u2500{1,2})?(?:\u2192)?|(?:\\||`|\\+|\\\\)--(?:>)?))[ \\t]*)?)*)?\\r?\\n[ \\t]*(?:[\u251c\u2514](?:\u2500{1,2})?(?:\u2192)?|(?:\\||`|\\+|\\\\)--(?:>)?)[ \\t]*(?![^\\r\\n]*\\b(?:not|never)\\s+(?:stale|unknown)\\b)(?![^\\r\\n]*\\b(?:definitely|certainly|known\\s+to\\s+be)\\s+stale\\b)(?![^\\r\\n]*\\b(?:is|remains)\\s+(?:(?:definitely|certainly)\\s+)?(?:current|fresh|up\\s+to\\s+date)\\b)(?![^\\r\\n]*(?<!not\\sbe\\s)(?<!not\\sguaranteed\\s)(?<!not\\snecessarily\\s)\\b(?:current|fresh)\\b)[^\\r\\n]*(?:(?:stored context|context store)[^\\r\\n]*(?:(?:may|might|could|can)(?:\\s+be)?\\s+(?:stale|outdated|out\\s+of\\s+date)|(?:possibly|potentially)\\s+(?:stale|outdated|out\\s+of\\s+date)|(?:may|might|could)\\s+not\\s+be\\s+current|may\\s+contain\\s+(?:stale\\s+information|old\\s+data)|not\\s+guaranteed\\s+current|freshness\\s+(?:is\\s+)?not\\s+guaranteed|(?:staleness|freshness)\\s+(?:is\\s+)?unknown|unknown\\s+(?:staleness|freshness)|not\\s+necessarily\\s+current|freshness\\s*:\\s*unknown|(?:\\(\\s*)unknown(?=\\s*\\)))|(?:(?:may|might|could|can)(?:\\s+be)?\\s+(?:stale|outdated|out\\s+of\\s+date)|(?:possibly|potentially)\\s+(?:stale|outdated|out\\s+of\\s+date)|(?:may|might|could)\\s+not\\s+be\\s+current|may\\s+contain\\s+(?:stale\\s+information|old\\s+data)|not\\s+guaranteed\\s+current|freshness\\s+(?:is\\s+)?not\\s+guaranteed|(?:staleness|freshness)\\s+(?:is\\s+)?unknown|unknown\\s+(?:staleness|freshness)|not\\s+necessarily\\s+current|freshness\\s*:\\s*unknown|(?:\\(\\s*)unknown(?=\\s*\\)))[^\\r\\n]*(?:stored context|context store)))(?=[ \\t]*(?:\\r?\\n[ \\t]*(?:(?:[|\u2502\u2193\u25bcv]+|(?:[\u251c\u2514](?:\u2500{1,2})?(?:\u2192)?|(?:\\||`|\\+|\\\\)--(?:>)?))[ \\t]*)?)*\\r?\\n[ \\t]*(?:[\u251c\u2514](?:\u2500{1,2})?(?:\u2192)?|(?:\\||`|\\+|\\\\)--(?:>)?)[ \\t]*(?:[^\\r\\n]*(?:stored context|context store)[^\\r\\n]*(?:\\r?\\n[ \\t]*(?:(?:[|\u2502\u2193\u25bcv]+|(?:[\u251c\u2514](?:\u2500{1,2})?(?:\u2192)?|(?:\\||`|\\+|\\\\)--(?:>)?))[ \\t]*)?)*\\r?\\n[ \\t]*(?:[\u251c\u2514](?:\u2500{1,2})?(?:\u2192)?|(?:\\||`|\\+|\\\\)--(?:>)?)[ \\t]*[^\\r\\n]*(?:live|runtime)(?:\\s+(?:verification|action))? tools[^\\r\\n]*|[^\\r\\n]*(?:live|runtime)(?:\\s+(?:verification|action))? tools[^\\r\\n]*(?:\\r?\\n[ \\t]*(?:(?:[|\u2502\u2193\u25bcv]+|(?:[\u251c\u2514](?:\u2500{1,2})?(?:\u2192)?|(?:\\||`|\\+|\\\\)--(?:>)?))[ \\t]*)?)*\\r?\\n[ \\t]*(?:[\u251c\u2514](?:\u2500{1,2})?(?:\u2192)?|(?:\\||`|\\+|\\\\)--(?:>)?)[ \\t]*[^\\r\\n]*(?:stored context|context store)[^\\r\\n]*))(?:[^`]|`(?!``))*```",
+          "pattern": "^(?![\\s\\S]*\\b(?:stored context|context store)\\b[^.!?\\r\\n]*\\b(?:is|remains)\\s+(?:(?:definitely|certainly|always|guaranteed(?:\\s+to\\s+be)?|known\\s+to\\s+be)\\s+)?(?:current|fresh|up\\s+to\\s+date)\\b)(?![\\s\\S]*(?:^|\\r?\\n)[ \\t]*(?:live|runtime)(?:\\s+(?:verification|action))?\\s+tools\\b[^.!?\\r\\n]*\\b(?:(?:cannot|can['’]t|unable\\s+to)\\s+(?:verify\\s+(?:or|and)\\s+act|act\\s+(?:or|and)\\s+verify)|not\\s+usable|unusable)\\b)(?![\\s\\S]*(?:^|\\r?\\n)[ \\t]*(?:live|runtime)(?:\\s+(?:verification|action))?\\s+tools\\s+(?:(?:(?:are|is)\\s+)?(?:absent|unavailable|disabled|not\\s+available)|(?:aren['’]t|isn['’]t)\\s+available)\\b)(?![\\s\\S]*(?:^|\\r?\\n)[ \\t]*(?:[├└](?:─{1,2})?(?:→)?|(?:\\||`|\\+|\\\\)--(?:>)?)[ \\t]*[^\\r\\n]*\\b(?:live|runtime)(?:\\s+(?:verification|action))?\\s+tools\\b[^\\r\\n]*\\b(?:(?:(?:cannot|can['’]t|unable\\s+to)\\s+(?:verify\\s+(?:or|and)\\s+act|act\\s+(?:or|and)\\s+verify))|(?:not\\s+usable|unusable))\\b)(?![\\s\\S]*(?:^|\\r?\\n)[ \\t]*(?:[├└](?:─{1,2})?(?:→)?|(?:\\||`|\\+|\\\\)--(?:>)?)[ \\t]*(?:no\\s+(?:live|runtime)(?:\\s+(?:verification|action))?\\s+tools\\b|(?:live|runtime)(?:\\s+(?:verification|action))?\\s+tools\\s+(?:(?:(?:are|is)\\s+)?(?:absent|unavailable|disabled|not\\s+available)|(?:aren['’]t|isn['’]t)\\s+available)\\b))[\\s\\S]*```text(?:(?:[^`]|`(?!``))*(?:user|request)(?:[^`]|`(?!``))*(?:→|->)(?:[^`]|`(?!``))*LLM(?:[^`]|`(?!``))*(?:→|->)(?:[^`]|`(?!``))*MCP(?: gateway)?|(?:[^`]|`(?!``))*(?:user|request)[ \\t]*(?:\\r?\\n[ \\t]*[|│↓▼v]+[ \\t]*)+\\r?\\n[ \\t]*LLM[ \\t]*(?:\\r?\\n[ \\t]*[|│↓▼v]+[ \\t]*)+\\r?\\n[ \\t]*MCP(?: gateway)?)(?=[ \\t]*(?:\\r?\\n[ \\t]*(?:(?:[|│↓▼v]+|(?:[├└](?:─{1,2})?(?:→)?|(?:\\||`|\\+|\\\\)--(?:>)?))[ \\t]*)?)*(?:\\r?\\n[ \\t]*(?:[├└](?:─{1,2})?(?:→)?|(?:\\||`|\\+|\\\\)--(?:>)?)[ \\t]*[^\\r\\n]*(?:live|runtime)(?:\\s+(?:verification|action))? tools[^\\r\\n]*(?:\\r?\\n[ \\t]*(?:(?:[|│↓▼v]+|(?:[├└](?:─{1,2})?(?:→)?|(?:\\||`|\\+|\\\\)--(?:>)?))[ \\t]*)?)*)?\\r?\\n[ \\t]*(?:[├└](?:─{1,2})?(?:→)?|(?:\\||`|\\+|\\\\)--(?:>)?)[ \\t]*(?![^\\r\\n]*\\b(?:not|never)\\s+(?:stale|unknown)\\b)(?![^\\r\\n]*\\b(?:definitely|certainly|known\\s+to\\s+be)\\s+stale\\b)(?![^\\r\\n]*\\b(?:is|remains)\\s+(?:(?:definitely|certainly)\\s+)?(?:current|fresh|up\\s+to\\s+date)\\b)(?![^\\r\\n]*(?<!not\\sbe\\s)(?<!not\\sguaranteed\\s)(?<!not\\snecessarily\\s)\\b(?:current|fresh)\\b)[^\\r\\n]*(?:(?:stored context|context store)[^\\r\\n]*(?:(?:may|might|could|can)(?:\\s+be)?\\s+(?:stale|outdated|out\\s+of\\s+date)|(?:possibly|potentially)\\s+(?:stale|outdated|out\\s+of\\s+date)|(?:may|might|could)\\s+not\\s+be\\s+current|may\\s+contain\\s+(?:stale\\s+information|old\\s+data)|not\\s+guaranteed\\s+current|freshness\\s+(?:is\\s+)?not\\s+guaranteed|(?:staleness|freshness)\\s+(?:is\\s+)?unknown|unknown\\s+(?:staleness|freshness)|not\\s+necessarily\\s+current|freshness\\s*:\\s*unknown|(?:\\(\\s*)unknown(?=\\s*\\)))|(?:(?:may|might|could|can)(?:\\s+be)?\\s+(?:stale|outdated|out\\s+of\\s+date)|(?:possibly|potentially)\\s+(?:stale|outdated|out\\s+of\\s+date)|(?:may|might|could)\\s+not\\s+be\\s+current|may\\s+contain\\s+(?:stale\\s+information|old\\s+data)|not\\s+guaranteed\\s+current|freshness\\s+(?:is\\s+)?not\\s+guaranteed|(?:staleness|freshness)\\s+(?:is\\s+)?unknown|unknown\\s+(?:staleness|freshness)|not\\s+necessarily\\s+current|freshness\\s*:\\s*unknown|(?:\\(\\s*)unknown(?=\\s*\\)))[^\\r\\n]*(?:stored context|context store)))(?=[ \\t]*(?:\\r?\\n[ \\t]*(?:(?:[|│↓▼v]+|(?:[├└](?:─{1,2})?(?:→)?|(?:\\||`|\\+|\\\\)--(?:>)?))[ \\t]*)?)*\\r?\\n[ \\t]*(?:[├└](?:─{1,2})?(?:→)?|(?:\\||`|\\+|\\\\)--(?:>)?)[ \\t]*(?:[^\\r\\n]*(?:stored context|context store)[^\\r\\n]*(?:\\r?\\n[ \\t]*(?:(?:[|│↓▼v]+|(?:[├└](?:─{1,2})?(?:→)?|(?:\\||`|\\+|\\\\)--(?:>)?))[ \\t]*)?)*\\r?\\n[ \\t]*(?:[├└](?:─{1,2})?(?:→)?|(?:\\||`|\\+|\\\\)--(?:>)?)[ \\t]*[^\\r\\n]*(?:live|runtime)(?:\\s+(?:verification|action))? tools[^\\r\\n]*|[^\\r\\n]*(?:live|runtime)(?:\\s+(?:verification|action))? tools[^\\r\\n]*(?:\\r?\\n[ \\t]*(?:(?:[|│↓▼v]+|(?:[├└](?:─{1,2})?(?:→)?|(?:\\||`|\\+|\\\\)--(?:>)?))[ \\t]*)?)*\\r?\\n[ \\t]*(?:[├└](?:─{1,2})?(?:→)?|(?:\\||`|\\+|\\\\)--(?:>)?)[ \\t]*[^\\r\\n]*(?:stored context|context store)[^\\r\\n]*))(?:[^`]|`(?!``))*```",
           "flags": "i",
           "domain": "quality",
           "weight": 1
@@ -689,21 +709,21 @@
       "checks": [
         {
           "type": "outputMatches",
-          "pattern": "^(?!\\s*(?:no\\s*[,\u2014\u2013-]|false\\s*[,\u2014\u2013:-]|it\\s+(?:is\\s+false|is\\s+not\\s+true|isn['\u2019]t\\s+true)\\s+that\\b|that\\s+(?:is\\s+false|is\\s+not\\s+true|isn['\u2019]t\\s+true)\\s*(?:that\\b|[,\u2014\u2013:-])))(?![\\s\\S]*(?:\\b(?:tools?|agents?|they)\\s+(?:(?:can|may)(?!\\s+not\\b)\\s+mutate\\b|(?:is|are)\\s+(?!not\\b)(?:allowed|permitted|authorized)\\s+to\\s+mutate\\b|(?:has|have)\\s+(?:permission|authorization)\\s+to\\s+mutate\\b)|\\bmutations?\\s+(?:is|are)\\s+(?!not\\b)(?:allowed|permitted|authorized)\\b|\\bpermission\\s+to\\s+mutate\\b[^.!?]*\\b(?:is|was|has\\s+been)\\s+granted\\b))(?![\\s\\S]*\\bfiles?\\s+(?:can(?!['\u2019]t\\b)|may)\\s+be\\s+(?:written|overwritten)\\b)(?![\\s\\S]*\\boverwriting(?:\\s+(?:the\\s+)?files?)?\\s+(?:is|remains)\\s+(?:allowed|permitted|authorized|possible)\\b)(?![\\s\\S]*\\b(?:can(?!['\u2019]t\\b)|may)\\b(?!\\s+(?:not|never))(?:(?!\\b(?:not|never|cannot|can['\u2019]t)\\b)[^.!?])*\\boverwrite\\b)(?![\\s\\S]*\\b(?:can(?!['\u2019]t\\b)|may)\\b(?!\\s+(?:not|never))(?:(?!\\b(?:not|never|cannot|can['\u2019]t)\\b)[^.!?])*\\breplace\\s+(?:the\\s+)?contents?\\s+of\\s+(?:the\\s+)?files?\\b)(?![\\s\\S]*(?:\\b(?:can(?!['\u2019]t\\b)|may)\\b(?!\\s+(?:not|never))(?:(?!\\b(?:not|never|no|cannot|can['\u2019]t|isn['\u2019]t|aren['\u2019]t|without|lacks?|lack)\\b)[^.!?])*\\b(?:alter|change|create|delete|edit|modify|remove|rename|update|write)\\b(?!\\s+(?:access|capability)\\s+(?:(?:does\\s+not|doesn['\u2019]t)\\s+exist|no\\s+longer\\s+exists))|\\b(?:alterations?|altering|changes?|changing|creations?|creating|deletions?|deleting|editing|edits?|modifications?|modifying|removals?|removing|renames?|renaming|updates?|updating|writes?|writing)\\b(?:\\s+(?:files?|to\\s+(?:files?|them)))?\\s+(?:is|are)\\s+(?!not\\b|never\\b)(?:allowed|permitted|authorized)\\b|\\b(?:the\\s+)?(?:tools?|agents?|models?|they)\\s+(?:is|are)\\s+(?!not\\b|never\\b)(?:allowed|permitted|authorized)\\s+to\\s+(?:alter|change|create|delete|edit|modify|remove|rename|update|write)\\b|\\b(?:go ahead and|feel free to)\\s+(?:alter|change|create|delete|edit|modify|remove|rename|update|write)\\b|(?<!not )(?<!n't )(?<!n\u2019t )\\b(?:has|have)\\s+(?:\\w+\\s+){0,2}permission\\s+to\\s+(?:alter|change|create|delete|edit|modify|remove|rename|update|write)\\b|(?<!not )(?<!n't )(?<!n\u2019t )\\b(?:has|have)\\s+(?:file\\s+)?(?:alter|change|create|delete|edit|modify|remove|rename|update|write)\\s+access\\b|\\b(?:file\\s+)?(?:alter|change|create|delete|edit|modify|remove|rename|update|write)\\s+access\\s+(?:is|has been|remains|stays|continues to be)\\s+(?!not\\b|never\\b)(?:allowed|available|enabled|granted|permitted|authorized)\\b|\\b(?:they|tools?)\\s+(?:is|are)\\s+able\\s+to\\s+(?:alter|change|create|delete|edit|modify|remove|rename|update|write)\\b|(?<!not )(?<!n't )(?<!n\u2019t )(?<!never )(?<!cannot )(?<!can't )\\b(?:has|have|keeps?|retains?)\\s+(?:alterations?|altering|changes?|changing|creations?|creating|deletions?|deleting|editing|edits?|modifications?|modifying|removals?|removing|renames?|renaming|updates?|updating|writes?|writing)\\s+(?:rights?|privileges?)\\b|\\b(?:alterations?|altering|changes?|changing|creations?|creating|deletions?|deleting|editing|edits?|modifications?|modifying|removals?|removing|renames?|renaming|updates?|updating|writes?|writing)\\b(?:\\s+(?:to\\s+)?(?:files?|them))?(?:\\s+(?:if|when|unless)\\s+(?:it is\\s+)?necessary)?\\s+(?:is|are|remains)\\s+(?!not\\b|never\\b)(?:possible|allowed|permitted|authorized)\\b|(?:^|[;,.]\\s*)(?:(?:they|tools?)\\s+)?(?:alter|change|create|delete|edit|modify|remove|rename|update|write)\\s+(?:to\\s+)?(?:files?|them)\\s+(?:only\\s+)?(?:if|when|unless)\\s+(?:it is\\s+)?necessary\\b|\\b(?:alterations?|changes?|edits?|modifications?)\\s+can\\s+still\\s+be\\s+made\\b|\\b(?:the\\s+)?(?:agent|they|tools?)\\s+(?:is|are)\\s+free\\s+to\\s+(?:alter|change|create|delete|edit|modify|remove|rename|update|write)\\b|(?<!no )(?<!no\\sfile\\s)\\b(?:file\\s+)?(?:alter|change|create|delete|edit|modify|remove|rename|update|write)\\s+(?:access|capability)\\s+(?:(?:still\\s+)?exists|continues\\s+to\\s+exist|remains\\s+(?:present|available))\\b))(?=[\\s\\S]*(?:\\b(?:the\\s+)?(?:tools?|agent)|\\bthey)\\s+(?:(?:can(?!not\\b|['\u2019]t\\b)|may)(?!\\s+(?:not|never))[^.!?]*\\b(?:read|inspect|view)\\b|(?:has|have)\\s+permission\\s+to\\s+(?:read|inspect|view)\\b|(?:is|are)\\s+(?!not\\b|never\\b)(?:allowed|permitted|authorized)\\s+to\\s+(?:read|inspect|view)\\b|(?:has|have)\\s+(?:read|inspection|viewing)\\s+access\\b)|(?=[\\s\\S]*\\bread-only\\s+(?:access|rules?)\\s+(?:(?:can\\s+)?(?:allows?|lets?|permits?)\\b[^.!?]*(?:read|inspect|view)))|(?=[\\s\\S]*\\bfiles?\\s+(?:can(?!not\\b|['\u2019]t\\b)|may)\\s+be\\s+(?:read|inspected|viewed)\\b)|(?=[\\s\\S]*\\bfiles?\\s+(?:are|remain)\\s+readable\\b))",
+          "pattern": "^(?!\\s*(?:no\\s*[,—–-]|false\\s*[,—–:-]|it\\s+(?:is\\s+false|is\\s+not\\s+true|isn['’]t\\s+true)\\s+that\\b|that\\s+(?:is\\s+false|is\\s+not\\s+true|isn['’]t\\s+true)\\s*(?:that\\b|[,—–:-])))(?![\\s\\S]*(?:\\b(?:tools?|agents?|they)\\s+(?:(?:can|may)(?!\\s+not\\b)\\s+mutate\\b|(?:is|are)\\s+(?!not\\b)(?:allowed|permitted|authorized)\\s+to\\s+mutate\\b|(?:has|have)\\s+(?:permission|authorization)\\s+to\\s+mutate\\b)|\\bmutations?\\s+(?:is|are)\\s+(?!not\\b)(?:allowed|permitted|authorized)\\b|\\bpermission\\s+to\\s+mutate\\b[^.!?]*\\b(?:is|was|has\\s+been)\\s+granted\\b))(?![\\s\\S]*\\bfiles?\\s+(?:can(?!['’]t\\b)|may)\\s+be\\s+(?:written|overwritten)\\b)(?![\\s\\S]*\\boverwriting(?:\\s+(?:the\\s+)?files?)?\\s+(?:is|remains)\\s+(?:allowed|permitted|authorized|possible)\\b)(?![\\s\\S]*\\b(?:can(?!['’]t\\b)|may)\\b(?!\\s+(?:not|never))(?:(?!\\b(?:not|never|cannot|can['’]t)\\b)[^.!?])*\\boverwrite\\b)(?![\\s\\S]*\\b(?:can(?!['’]t\\b)|may)\\b(?!\\s+(?:not|never))(?:(?!\\b(?:not|never|cannot|can['’]t)\\b)[^.!?])*\\breplace\\s+(?:the\\s+)?contents?\\s+of\\s+(?:the\\s+)?files?\\b)(?![\\s\\S]*(?:\\b(?:can(?!['’]t\\b)|may)\\b(?!\\s+(?:not|never))(?:(?!\\b(?:not|never|no|cannot|can['’]t|isn['’]t|aren['’]t|without|lacks?|lack)\\b)[^.!?])*\\b(?:alter|change|create|delete|edit|modify|remove|rename|update|write)\\b(?!\\s+(?:access|capability)\\s+(?:(?:does\\s+not|doesn['’]t)\\s+exist|no\\s+longer\\s+exists))|\\b(?:alterations?|altering|changes?|changing|creations?|creating|deletions?|deleting|editing|edits?|modifications?|modifying|removals?|removing|renames?|renaming|updates?|updating|writes?|writing)\\b(?:\\s+(?:files?|to\\s+(?:files?|them)))?\\s+(?:is|are)\\s+(?!not\\b|never\\b)(?:allowed|permitted|authorized)\\b|\\b(?:the\\s+)?(?:tools?|agents?|models?|they)\\s+(?:is|are)\\s+(?!not\\b|never\\b)(?:allowed|permitted|authorized)\\s+to\\s+(?:alter|change|create|delete|edit|modify|remove|rename|update|write)\\b|\\b(?:go ahead and|feel free to)\\s+(?:alter|change|create|delete|edit|modify|remove|rename|update|write)\\b|(?<!not )(?<!n't )(?<!n’t )\\b(?:has|have)\\s+(?:\\w+\\s+){0,2}permission\\s+to\\s+(?:alter|change|create|delete|edit|modify|remove|rename|update|write)\\b|(?<!not )(?<!n't )(?<!n’t )\\b(?:has|have)\\s+(?:file\\s+)?(?:alter|change|create|delete|edit|modify|remove|rename|update|write)\\s+access\\b|\\b(?:file\\s+)?(?:alter|change|create|delete|edit|modify|remove|rename|update|write)\\s+access\\s+(?:is|has been|remains|stays|continues to be)\\s+(?!not\\b|never\\b)(?:allowed|available|enabled|granted|permitted|authorized)\\b|\\b(?:they|tools?)\\s+(?:is|are)\\s+able\\s+to\\s+(?:alter|change|create|delete|edit|modify|remove|rename|update|write)\\b|(?<!not )(?<!n't )(?<!n’t )(?<!never )(?<!cannot )(?<!can't )\\b(?:has|have|keeps?|retains?)\\s+(?:alterations?|altering|changes?|changing|creations?|creating|deletions?|deleting|editing|edits?|modifications?|modifying|removals?|removing|renames?|renaming|updates?|updating|writes?|writing)\\s+(?:rights?|privileges?)\\b|\\b(?:alterations?|altering|changes?|changing|creations?|creating|deletions?|deleting|editing|edits?|modifications?|modifying|removals?|removing|renames?|renaming|updates?|updating|writes?|writing)\\b(?:\\s+(?:to\\s+)?(?:files?|them))?(?:\\s+(?:if|when|unless)\\s+(?:it is\\s+)?necessary)?\\s+(?:is|are|remains)\\s+(?!not\\b|never\\b)(?:possible|allowed|permitted|authorized)\\b|(?:^|[;,.]\\s*)(?:(?:they|tools?)\\s+)?(?:alter|change|create|delete|edit|modify|remove|rename|update|write)\\s+(?:to\\s+)?(?:files?|them)\\s+(?:only\\s+)?(?:if|when|unless)\\s+(?:it is\\s+)?necessary\\b|\\b(?:alterations?|changes?|edits?|modifications?)\\s+can\\s+still\\s+be\\s+made\\b|\\b(?:the\\s+)?(?:agent|they|tools?)\\s+(?:is|are)\\s+free\\s+to\\s+(?:alter|change|create|delete|edit|modify|remove|rename|update|write)\\b|(?<!no )(?<!no\\sfile\\s)\\b(?:file\\s+)?(?:alter|change|create|delete|edit|modify|remove|rename|update|write)\\s+(?:access|capability)\\s+(?:(?:still\\s+)?exists|continues\\s+to\\s+exist|remains\\s+(?:present|available))\\b))(?=[\\s\\S]*(?:\\b(?:the\\s+)?(?:tools?|agent)|\\bthey)\\s+(?:(?:can(?!not\\b|['’]t\\b)|may)(?!\\s+(?:not|never))[^.!?]*\\b(?:read|inspect|view)\\b|(?:has|have)\\s+permission\\s+to\\s+(?:read|inspect|view)\\b|(?:is|are)\\s+(?!not\\b|never\\b)(?:allowed|permitted|authorized)\\s+to\\s+(?:read|inspect|view)\\b|(?:has|have)\\s+(?:read|inspection|viewing)\\s+access\\b)|(?=[\\s\\S]*\\bread-only\\s+(?:access|rules?)\\s+(?:(?:can\\s+)?(?:allows?|lets?|permits?)\\b[^.!?]*(?:read|inspect|view)))|(?=[\\s\\S]*\\bfiles?\\s+(?:can(?!not\\b|['’]t\\b)|may)\\s+be\\s+(?:read|inspected|viewed)\\b)|(?=[\\s\\S]*\\bfiles?\\s+(?:are|remain)\\s+readable\\b))",
           "flags": "i",
           "domain": "task",
           "weight": 1
         },
         {
           "type": "outputMatches",
-          "pattern": "^(?!\\s*(?:no\\s*[,\u2014\u2013-]|false\\s*[,\u2014\u2013:-]|it\\s+(?:is\\s+false|is\\s+not\\s+true|isn['\u2019]t\\s+true)\\s+that\\b|that\\s+(?:is\\s+false|is\\s+not\\s+true|isn['\u2019]t\\s+true)\\s*(?:that\\b|[,\u2014\u2013:-])))(?![\\s\\S]*\\b(?:(?:does\\s+not|doesn['\u2019]t)\\s+mean|(?:is\\s+not|isn['\u2019]t)\\s+true\\s+that)\\b[^.!?]*\\b(?:cannot|can['\u2019]t|may\\s+not|must\\s+not)\\s+make\\s+(?:any\\s+)?(?:changes?|modifications?)(?:\\s+to\\s+(?:the\\s+)?(?:files?|them))?\\b)(?![\\s\\S]*\\b(?:(?:does\\s+not|doesn['\u2019]t)\\s+mean|(?:is\\s+not|isn['\u2019]t)\\s+true\\s+that)\\b[^.!?]*\\b(?:changes?|modifications?)(?:\\s+to\\s+(?:the\\s+)?files?)?\\s+(?:cannot|can['\u2019]t|may\\s+not|must\\s+not)\\s+be\\s+(?:saved|persisted)\\b)(?![\\s\\S]*\\b(?:(?:does\\s+not|doesn['\u2019]t)\\s+mean|(?:is\\s+not|isn['\u2019]t)\\s+true\\s+that)\\b[^.!?]*\\b(?:cannot|can['\u2019]t|may\\s+not|must\\s+not|(?:is|are)\\s+not|isn['\u2019]t|aren['\u2019]t)\\b[^.!?]*\\b(?:(?:alter|change|edit|modify|update|write)(?:\\s+to)?|make\\s+(?:any\\s+)?(?:changes?|modifications?)\\s+to)\\s+(?:the\\s+)?(?:files?|them)\\b)(?![\\s\\S]*\\b(?:without\\s+(?:approval|authorization|permission)|by\\s+default|(?:under|in)\\s+(?:normal|ordinary|usual)\\s+(?:circumstances|conditions)|normally|typically|generally)\\b)[\\s\\S]*(?:\\b(?:the\\s+)?(?:tools?|agent|they)\\b[^.!?]*\\b(?:cannot|can['\u2019]t|may\\s+not|must\\s+not)\\s+mutate\\b|\\bmutations?\\s+(?:is|are)\\s+not\\s+(?:allowed|permitted|authorized)\\b|(?:\\b(?:the\\s+)?(?:tools?|agent)|\\bthey)\\s+(?:(?!\\b(?:users?|owners?|developers?|operators?|administrators?|humans?|people)\\b)[^.!?])*?(?:(?:cannot|can['\u2019]t|may\\s+not|must\\s+not)\\s+[^.!?]*?\\b(?:(?:alter|change|edit|modify|update|write)(?:\\s+to)?|make\\s+(?:any\\s+)?(?:changes?|modifications?)\\s+to)\\s+(?:the\\s+)?(?:files?|them)\\b|(?:(?:is|are)\\s+not|isn['\u2019]t|aren['\u2019]t)\\s+(?:allowed|permitted|authorized)\\s+to\\s+(?:(?:alter|change|edit|modify|update|write)(?:\\s+to)?|make\\s+(?:changes?|modifications?)\\s+to)\\s+(?:the\\s+)?(?:files?|them)\\b|(?:(?:(?:does|do)\\s+not|doesn['\u2019]t|don['\u2019]t)\\s+have|(?:lacks?|lack))\\s+permission\\s+to\\s+(?:(?:alter|change|edit|modify|update|write)(?:\\s+to)?|make\\s+(?:changes?|modifications?)\\s+to)\\s+(?:the\\s+)?(?:files?|them)\\b)(?!\\s*(?:[,;:]\\s*)?(?:unless|except|if|when|only\\s+if)\\b)|\\bread-only\\s+(?:access|rules?)[^.!?]*?\\b(?:(?:does\\s+not|doesn['\u2019]t)\\s+allow(?:\\s+(?:tools?|them))?\\s+to\\s+(?:(?:alter|change|edit|modify|update|write)(?:\\s+to)?|make\\s+(?:changes?|modifications?)\\s+to)|(?:prohibits?|forbids?)\\s+(?:(?:file\\s+)?(?:alterations?|modifications?)(?:\\s+(?:of|to)\\s+(?:the\\s+)?files?)?|(?:altering|changing|editing|modifying|updating|writing)(?:\\s+to)?\\s+(?:the\\s+)?(?:files?|them))|prevents?(?:\\s+\\w+){0,3}\\s+from\\s+(?:(?:altering|changing|editing|modifying|updating|writing)(?:\\s+to)?|making\\s+(?:changes?|modifications?)\\s+to)\\s+(?:the\\s+)?(?:files?|them))(?!\\s*(?:[,;:]\\s*)?(?:unless|except|if|when|only\\s+if)\\b)|(?<!not )(?<!n['\u2019]t )\\b(?:file\\s+(?:alteration|modification)|(?:alterations?|modifications?)\\s+(?:of|to)\\s+(?:the\\s+)?files?|(?:(?:altering|changing|editing|modifying|updating|writing)(?:\\s+to)?|making\\s+(?:changes?|modifications?)\\s+to)\\s+(?:the\\s+)?(?:files?|them))\\s+(?:is|are)\\s+(?:not\\s+(?:allowed|permitted|authorized)|disallowed|prohibited|forbidden)(?!\\s*(?:[,;:]\\s*)?(?:unless|except|if|when|only\\s+if)\\b)|\\b(?:(?:the\\s+)?(?:tools?|agent|they)|read-only\\s+(?:access|rules?))\\s+(?:(?!\\b(?:users?|owners?|developers?|operators?|administrators?|humans?|people)\\b)[^.!?])*?(?:(?:has|have)\\s+no|(?:lacks?|lack)|with\\s+no|no)\\s+(?:file\\s+)?(?:(?:alter|change|edit|modify|update|write)\\s+access|write\\s+permission)\\b(?!\\s*(?:[,;:]\\s*)?(?:unless|except|if|when|only\\s+if)\\b)|\\b(?:any\\s+)?(?:file\\s+)?(?:changes?|modifications?)(?:\\s+to\\s+(?:the\\s+)?files?)?\\s+(?:cannot|can['\u2019]t|may\\s+not|must\\s+not)\\s+be\\s+(?:saved|persisted)\\b(?!\\s*(?:[,;:]\\s*)?(?:unless|except|if|when|only\\s+if)\\b)|(?<!may\\s)(?<!must\\s)(?<!should\\s)\\bnot\\s+(?:(?:allowed|permitted|authorized)\\s+to\\s+)?(?:(?:alter|change|edit|modify|update|write)(?:\\s+to)?|make\\s+(?:changes?|modifications?)\\s+to)\\s+(?:the\\s+)?(?:files?|them)\\b(?!\\s*(?:[,;:]\\s*)?(?:unless|except|if|when|only\\s+if)\\b)|\\b(?:the\\s+)?(?:tools?|agent|they)\\b[^.!?]*?\\b(?:cannot|can['\u2019]t|(?:is|are)\\s+unable\\s+to)\\s+(?:save|persist)\\s+(?:any\\s+)?(?:file\\s+)?(?:changes?|modifications?)(?:\\s+to\\s+(?:the\\s+)?files?)?\\b(?!\\s*(?:[,;:]\\s*)?(?:unless|except|if|when|only\\s+if)\\b)|\\b(?:the\\s+)?(?:tools?|agent|they)\\b[^.!?]*?\\b(?:file\\s+)?(?:alter|change|edit|modify|update|write)\\s+(?:access|capability)\\s+(?:(?:does\\s+not|doesn['\u2019]t)\\s+exist|no\\s+longer\\s+exists)\\b|\\b(?:the\\s+)?(?:tools?|agent|they)\\b[^.!?]*?\\b(?:cannot|can['\u2019]t|may\\s+not|must\\s+not)\\s+overwrite\\s+(?:the\\s+)?(?:files?|them)\\b(?!\\s*(?:[,;:]\\s*)?(?:unless|except|if|when|only\\s+if)\\b)|\\boverwriting(?:\\s+(?:the\\s+)?files?)?\\s+(?:is|are)\\s+(?:not\\s+(?:allowed|permitted|authorized)|disallowed|prohibited|forbidden)\\b(?!\\s*(?:[,;:]\\s*)?(?:unless|except|if|when|only\\s+if)\\b)|\\bfiles?\\s+(?:are|remain)\\s+readable\\s+but\\s+(?:are\\s+)?not\\s+writable\\b(?!\\s*(?:[,;:]\\s*)?(?:unless|except|if|when|only\\s+if)\\b)|\\bfiles?\\s+(?:can(?!not\\b|['\u2019]t\\b)|may)\\s+be\\s+(?:read|inspected|viewed)\\s+but\\s+(?:(?:cannot|can['\u2019]t|may\\s+not|must\\s+not)\\s+be|not)\\s+(?:written|overwritten|modified|edited|changed)\\b(?!\\s*(?:[,;:]\\s*)?(?:unless|except|if|when|only\\s+if)\\b)|\\b(?:the\\s+)?files?\\s+(?:cannot|can['\u2019]t|may\\s+not|must\\s+not)\\s+be\\s+(?:overwritten|written)\\b(?!\\s*(?:[,;:]\\s*)?(?:unless|except|if|when|only\\s+if)\\b)|\\b(?:the\\s+)?tools?\\s+(?:can|may)\\s+(?:read|inspect|view)\\s+(?:the\\s+)?files?(?:(?!\\b(?:users?|owners?|developers?|operators?|administrators?|humans?|people)\\b)[^.!?])*?\\b(?:cannot|can['\u2019]t)\\s+make\\s+(?:any\\s+)?(?:changes?|modifications?)(?:\\s+to\\s+(?:the\\s+)?(?:files?|them))?\\b(?!\\s*(?:[,;:]\\s*)?(?:unless|except|if|when|only\\s+if)\\b)|\\b(?:(?:(?:the\\s+)?(?:tools?|agent)|they)\\s+(?:can|may)\\s+|read-only\\s+(?:access|rules?)\\s+(?:(?:allows?|permits?)\\s+(?:the\\s+)?(?:tools?|agent)\\s+to|lets?\\s+(?:the\\s+)?(?:tools?|agent))\\s+)(?:read|inspect|view)\\s+(?:the\\s+)?files?\\s+without\\s+(?:(?:changing|modifying|editing|altering)\\s+(?:the\\s+)?(?:files?|them)|making\\s+(?:any\\s+)?(?:changes?|modifications?)(?:\\s+to\\s+(?:the\\s+)?(?:files?|them))?)\\b(?!\\s*(?:[,;:]\\s*)?(?:unless|except|if|when|only\\s+if)\\b))",
+          "pattern": "^(?!\\s*(?:no\\s*[,—–-]|false\\s*[,—–:-]|it\\s+(?:is\\s+false|is\\s+not\\s+true|isn['’]t\\s+true)\\s+that\\b|that\\s+(?:is\\s+false|is\\s+not\\s+true|isn['’]t\\s+true)\\s*(?:that\\b|[,—–:-])))(?![\\s\\S]*\\b(?:(?:does\\s+not|doesn['’]t)\\s+mean|(?:is\\s+not|isn['’]t)\\s+true\\s+that)\\b[^.!?]*\\b(?:cannot|can['’]t|may\\s+not|must\\s+not)\\s+make\\s+(?:any\\s+)?(?:changes?|modifications?)(?:\\s+to\\s+(?:the\\s+)?(?:files?|them))?\\b)(?![\\s\\S]*\\b(?:(?:does\\s+not|doesn['’]t)\\s+mean|(?:is\\s+not|isn['’]t)\\s+true\\s+that)\\b[^.!?]*\\b(?:changes?|modifications?)(?:\\s+to\\s+(?:the\\s+)?files?)?\\s+(?:cannot|can['’]t|may\\s+not|must\\s+not)\\s+be\\s+(?:saved|persisted)\\b)(?![\\s\\S]*\\b(?:(?:does\\s+not|doesn['’]t)\\s+mean|(?:is\\s+not|isn['’]t)\\s+true\\s+that)\\b[^.!?]*\\b(?:cannot|can['’]t|may\\s+not|must\\s+not|(?:is|are)\\s+not|isn['’]t|aren['’]t)\\b[^.!?]*\\b(?:(?:alter|change|edit|modify|update|write)(?:\\s+to)?|make\\s+(?:any\\s+)?(?:changes?|modifications?)\\s+to)\\s+(?:the\\s+)?(?:files?|them)\\b)(?![\\s\\S]*\\b(?:without\\s+(?:approval|authorization|permission)|by\\s+default|(?:under|in)\\s+(?:normal|ordinary|usual)\\s+(?:circumstances|conditions)|normally|typically|generally)\\b)[\\s\\S]*(?:\\b(?:the\\s+)?(?:tools?|agent|they)\\b[^.!?]*\\b(?:cannot|can['’]t|may\\s+not|must\\s+not)\\s+mutate\\b|\\bmutations?\\s+(?:is|are)\\s+not\\s+(?:allowed|permitted|authorized)\\b|(?:\\b(?:the\\s+)?(?:tools?|agent)|\\bthey)\\s+(?:(?!\\b(?:users?|owners?|developers?|operators?|administrators?|humans?|people)\\b)[^.!?])*?(?:(?:cannot|can['’]t|may\\s+not|must\\s+not)\\s+[^.!?]*?\\b(?:(?:alter|change|edit|modify|update|write)(?:\\s+to)?|make\\s+(?:any\\s+)?(?:changes?|modifications?)\\s+to)\\s+(?:the\\s+)?(?:files?|them)\\b|(?:(?:is|are)\\s+not|isn['’]t|aren['’]t)\\s+(?:allowed|permitted|authorized)\\s+to\\s+(?:(?:alter|change|edit|modify|update|write)(?:\\s+to)?|make\\s+(?:changes?|modifications?)\\s+to)\\s+(?:the\\s+)?(?:files?|them)\\b|(?:(?:(?:does|do)\\s+not|doesn['’]t|don['’]t)\\s+have|(?:lacks?|lack))\\s+permission\\s+to\\s+(?:(?:alter|change|edit|modify|update|write)(?:\\s+to)?|make\\s+(?:changes?|modifications?)\\s+to)\\s+(?:the\\s+)?(?:files?|them)\\b)(?!\\s*(?:[,;:]\\s*)?(?:unless|except|if|when|only\\s+if)\\b)|\\bread-only\\s+(?:access|rules?)[^.!?]*?\\b(?:(?:does\\s+not|doesn['’]t)\\s+allow(?:\\s+(?:tools?|them))?\\s+to\\s+(?:(?:alter|change|edit|modify|update|write)(?:\\s+to)?|make\\s+(?:changes?|modifications?)\\s+to)|(?:prohibits?|forbids?)\\s+(?:(?:file\\s+)?(?:alterations?|modifications?)(?:\\s+(?:of|to)\\s+(?:the\\s+)?files?)?|(?:altering|changing|editing|modifying|updating|writing)(?:\\s+to)?\\s+(?:the\\s+)?(?:files?|them))|prevents?(?:\\s+\\w+){0,3}\\s+from\\s+(?:(?:altering|changing|editing|modifying|updating|writing)(?:\\s+to)?|making\\s+(?:changes?|modifications?)\\s+to)\\s+(?:the\\s+)?(?:files?|them))(?!\\s*(?:[,;:]\\s*)?(?:unless|except|if|when|only\\s+if)\\b)|(?<!not )(?<!n['’]t )\\b(?:file\\s+(?:alteration|modification)|(?:alterations?|modifications?)\\s+(?:of|to)\\s+(?:the\\s+)?files?|(?:(?:altering|changing|editing|modifying|updating|writing)(?:\\s+to)?|making\\s+(?:changes?|modifications?)\\s+to)\\s+(?:the\\s+)?(?:files?|them))\\s+(?:is|are)\\s+(?:not\\s+(?:allowed|permitted|authorized)|disallowed|prohibited|forbidden)(?!\\s*(?:[,;:]\\s*)?(?:unless|except|if|when|only\\s+if)\\b)|\\b(?:(?:the\\s+)?(?:tools?|agent|they)|read-only\\s+(?:access|rules?))\\s+(?:(?!\\b(?:users?|owners?|developers?|operators?|administrators?|humans?|people)\\b)[^.!?])*?(?:(?:has|have)\\s+no|(?:lacks?|lack)|with\\s+no|no)\\s+(?:file\\s+)?(?:(?:alter|change|edit|modify|update|write)\\s+access|write\\s+permission)\\b(?!\\s*(?:[,;:]\\s*)?(?:unless|except|if|when|only\\s+if)\\b)|\\b(?:any\\s+)?(?:file\\s+)?(?:changes?|modifications?)(?:\\s+to\\s+(?:the\\s+)?files?)?\\s+(?:cannot|can['’]t|may\\s+not|must\\s+not)\\s+be\\s+(?:saved|persisted)\\b(?!\\s*(?:[,;:]\\s*)?(?:unless|except|if|when|only\\s+if)\\b)|(?<!may\\s)(?<!must\\s)(?<!should\\s)\\bnot\\s+(?:(?:allowed|permitted|authorized)\\s+to\\s+)?(?:(?:alter|change|edit|modify|update|write)(?:\\s+to)?|make\\s+(?:changes?|modifications?)\\s+to)\\s+(?:the\\s+)?(?:files?|them)\\b(?!\\s*(?:[,;:]\\s*)?(?:unless|except|if|when|only\\s+if)\\b)|\\b(?:the\\s+)?(?:tools?|agent|they)\\b[^.!?]*?\\b(?:cannot|can['’]t|(?:is|are)\\s+unable\\s+to)\\s+(?:save|persist)\\s+(?:any\\s+)?(?:file\\s+)?(?:changes?|modifications?)(?:\\s+to\\s+(?:the\\s+)?files?)?\\b(?!\\s*(?:[,;:]\\s*)?(?:unless|except|if|when|only\\s+if)\\b)|\\b(?:the\\s+)?(?:tools?|agent|they)\\b[^.!?]*?\\b(?:file\\s+)?(?:alter|change|edit|modify|update|write)\\s+(?:access|capability)\\s+(?:(?:does\\s+not|doesn['’]t)\\s+exist|no\\s+longer\\s+exists)\\b|\\b(?:the\\s+)?(?:tools?|agent|they)\\b[^.!?]*?\\b(?:cannot|can['’]t|may\\s+not|must\\s+not)\\s+overwrite\\s+(?:the\\s+)?(?:files?|them)\\b(?!\\s*(?:[,;:]\\s*)?(?:unless|except|if|when|only\\s+if)\\b)|\\boverwriting(?:\\s+(?:the\\s+)?files?)?\\s+(?:is|are)\\s+(?:not\\s+(?:allowed|permitted|authorized)|disallowed|prohibited|forbidden)\\b(?!\\s*(?:[,;:]\\s*)?(?:unless|except|if|when|only\\s+if)\\b)|\\bfiles?\\s+(?:are|remain)\\s+readable\\s+but\\s+(?:are\\s+)?not\\s+writable\\b(?!\\s*(?:[,;:]\\s*)?(?:unless|except|if|when|only\\s+if)\\b)|\\bfiles?\\s+(?:can(?!not\\b|['’]t\\b)|may)\\s+be\\s+(?:read|inspected|viewed)\\s+but\\s+(?:(?:cannot|can['’]t|may\\s+not|must\\s+not)\\s+be|not)\\s+(?:written|overwritten|modified|edited|changed)\\b(?!\\s*(?:[,;:]\\s*)?(?:unless|except|if|when|only\\s+if)\\b)|\\b(?:the\\s+)?files?\\s+(?:cannot|can['’]t|may\\s+not|must\\s+not)\\s+be\\s+(?:overwritten|written)\\b(?!\\s*(?:[,;:]\\s*)?(?:unless|except|if|when|only\\s+if)\\b)|\\b(?:the\\s+)?tools?\\s+(?:can|may)\\s+(?:read|inspect|view)\\s+(?:the\\s+)?files?(?:(?!\\b(?:users?|owners?|developers?|operators?|administrators?|humans?|people)\\b)[^.!?])*?\\b(?:cannot|can['’]t)\\s+make\\s+(?:any\\s+)?(?:changes?|modifications?)(?:\\s+to\\s+(?:the\\s+)?(?:files?|them))?\\b(?!\\s*(?:[,;:]\\s*)?(?:unless|except|if|when|only\\s+if)\\b)|\\b(?:(?:(?:the\\s+)?(?:tools?|agent)|they)\\s+(?:can|may)\\s+|read-only\\s+(?:access|rules?)\\s+(?:(?:allows?|permits?)\\s+(?:the\\s+)?(?:tools?|agent)\\s+to|lets?\\s+(?:the\\s+)?(?:tools?|agent))\\s+)(?:read|inspect|view)\\s+(?:the\\s+)?files?\\s+without\\s+(?:(?:changing|modifying|editing|altering)\\s+(?:the\\s+)?(?:files?|them)|making\\s+(?:any\\s+)?(?:changes?|modifications?)(?:\\s+to\\s+(?:the\\s+)?(?:files?|them))?)\\b(?!\\s*(?:[,;:]\\s*)?(?:unless|except|if|when|only\\s+if)\\b))",
           "flags": "i",
           "domain": "task",
           "weight": 1
         },
         {
           "type": "outputMatches",
-          "pattern": "^(?!\\s*(?:no\\s*[,\u2014\u2013-]|false\\s*[,\u2014\u2013:-]|it\\s+(?:is\\s+false|is\\s+not\\s+true|isn['\u2019]t\\s+true)\\s+that\\b|that\\s+(?:is\\s+false|is\\s+not\\s+true|isn['\u2019]t\\s+true)\\s*(?:that\\b|[,\u2014\u2013:-])))(?![\\s\\S]*[.!?][\"')\\]]*[ \\t]*[^\\s\"')\\]])(?![\\s\\S]*```)(?![\\s\\S]*(?:\u2192|->|\u251c|\u2514|\u250c|\u252c|flowchart|mermaid))[^\\r\\n]+$",
+          "pattern": "^(?!\\s*(?:no\\s*[,—–-]|false\\s*[,—–:-]|it\\s+(?:is\\s+false|is\\s+not\\s+true|isn['’]t\\s+true)\\s+that\\b|that\\s+(?:is\\s+false|is\\s+not\\s+true|isn['’]t\\s+true)\\s*(?:that\\b|[,—–:-])))(?![\\s\\S]*[.!?][\"')\\]]*[ \\t]*[^\\s\"')\\]])(?![\\s\\S]*```)(?![\\s\\S]*(?:→|->|├|└|┌|┬|flowchart|mermaid))[^\\r\\n]+$",
           "flags": "iu",
           "domain": "quality",
           "weight": 1
@@ -742,7 +762,7 @@
       "checks": [
         {
           "type": "outputMatches",
-          "pattern": "^(?![\\s\\S]*```)(?![\\s\\S]*[\\r\\n])(?!\\s*(?:[-*#]|\\d+[.)])\\s)(?![\\s\\S]*(?:\u2192|->|\u251c|\u2514|flowchart|sequenceDiagram))(?![\\s\\S]*[.!?][\\\"')\\]]*\\s+\\S)(?=[\\s\\S]{1,240}$)[\\s\\S]*cache[\\s\\S]*return[\\s\\S]*$",
+          "pattern": "^(?![\\s\\S]*```)(?![\\s\\S]*[\\r\\n])(?!\\s*(?:[-*#]|\\d+[.)])\\s)(?![\\s\\S]*(?:→|->|├|└|flowchart|sequenceDiagram))(?![\\s\\S]*[.!?][\\\"')\\]]*\\s+\\S)(?=[\\s\\S]{1,240}$)[\\s\\S]*cache[\\s\\S]*return[\\s\\S]*$",
           "flags": "i",
           "domain": "quality",
           "weight": 1
@@ -1148,7 +1168,6 @@
         }
       ]
     },
-
     {
       "id": "diagnose-exact-anchor",
       "workload": "codebase exploration",
@@ -1165,7 +1184,7 @@
           "resultPattern": "Expected: 12[\\s\\S]*Received: 2",
           "flags": "i",
           "isError": true,
-          "assistantPattern": "Diagnosis:\\s*Proven|(?:root\\s+cause|(?:likely|probable|possible)\\s+cause|cause)\\s*:(?!\\s*(?:not\\b|none\\b|unknown\\b|isn['\u2019]t\\b|(?:is\\s+)?not\\s+known\\b))|(?:root cause|cause)\\s+(?:is|was|appears?|seems?)\\b(?!n['\u2019]t\\b)(?!\\s+(?:not\\b|unknown\\b|(?:as\\s+yet|still|yet|currently|presently)\\s+(?:unknown|not\\s+known)\\b))|(?:is|was|appears?|seems?)\\s+caused\\s+by|\\b(?!(?:what|which|who|whether)\\b)(?:[A-Za-z][\\w-]*(?:\\s+[A-Za-z][\\w-]*){0,4})\\s+(?:is|was|appears?|seems?)\\s+(?:the\\s+)?root cause\\b|(?:failure|bug|defect|issue|symptom|behavior|result)\\s+(?:is|was|occurs?|happens?|fails?|failed)?\\s*(?:because|explains?|accounts?\\s+for|results?\\s+(?:in|from)|comes?\\s+from)|\\b(?:(?!(?:does|did|has|cannot|can't|never|not)\\b)[A-Za-z][\\w-]*)(?:\\s+(?!(?:does|did|has|cannot|can't|never|not)\\b)[A-Za-z][\\w-]*){0,4}\\s+(?:(?:makes?|causes?)\\s+add\\s+(?:to\\s+)?returns?|yields?\\s+(?:the\\s+)?(?:observed\\s+)?(?:\\d+|result|failure|bug|defect|issue|symptom|behavior)|is\\s+responsible\\s+for\\s+(?:the\\s+)?(?:observed\\s+)?(?:\\d+|result|failure|bug|defect|issue|symptom|behavior)|explains?\\s+why\\s+add\\s+returns?)\\b|\\b(?:[A-Za-z][\\w-]*(?:\\s+[A-Za-z][\\w-]*){0,4})\\s+(?<!not\\s)(?<!cannot\\s)(?<!not\\snecessarily\\s)(?:explains?|causes?|caused|produces?|accounts?\\s+for|leads?\\s+to|results?\\s+in)\\s+(?:the\\s+)?(?:failure|bug|defect|issue|symptom|behavior|result)\\b|(?<!no\\s)(?<!not\\s)\\b(?:candidate|hypothesis)\\s*(?:#?\\d+|[A-Z]\\d*)?\\s*(?:(?:is|was)\\b(?!n['\u2019]t\\b)(?!\\s+(?:not\\b|unwarranted\\b|unknown\\b|(?:as\\s+yet|still|yet|currently|presently)\\s+(?:unknown|unwarranted|not\\s+known)\\b))|[:=-](?!\\s*(?:not\\b|none\\b|unknown\\b)))|(?:leading|primary|top|most likely)\\s+(?:explanation|cause)|(?:the\\s+)?culprit\\s+(?:is|was)\\s+(?!not\\b|unknown\\b)|(?<!not\\s)(?:due\\s+to|is\\s+responsible\\s+for|stems?\\s+from)|\\b(?:subtraction|the\\s+subtraction\\s+operator)\\s+(?:makes?\\s+add\\s+return|yields?\\s+(?:the\\s+)?(?:observed\\s+)?\\w+|is\\s+why)\\b|\\b(?:subtraction|the\\s+subtraction\\s+operator)\\s+(?!(?:does\\s+not|cannot|can't)\\b)means?\\s+add\\s+returns?\\b|\\b(?:subtraction|the\\s+subtraction\\s+operator)\\s+(?:therefore|thus)\\s+(?:makes?|causes?)\\s+add\\s+(?:to\\s+)?return\\b|\\b(?:add|the\\s+function)\\s+returns?\\s+[^.!?\\n]{0,40}\\s+(?:since\\s+it|because\\s+(?:(?:the\\s+)?implementation|it))\\s+subtracts?\\b|\\b(?:the\\s+)?implementation\\s+subtracts?\\s*[,;]?\\s*(?:so|therefore)\\s*,?\\s+add\\s+returns?\\b|(?:I|we)\\s+(?:will|'ll|should|can|could|may|might|need\\s+to|propose\\s+to)\\s+(?:inspect|instrument|trace|probe|log)\\b(?![^\\n]*(?:after|until)\\s+(?:the\\s+)?reproduction)|(?:let's|next,?)\\s+(?:inspect|instrument|trace|probe|log)\\b(?![^\\n]*(?:after|until)\\s+(?:the\\s+)?reproduction)|(?:^|[.!?]\\s+)(?!(?:do\\s+not|never)\\b)(?:please\\s+)?(?:inspect|instrument|trace|probe|log)\\s+(?![^\\n]*(?:after|until)\\s+(?:the\\s+)?reproduction)[A-Za-z0-9_./-]+|(?<!not\\s)(?:add|use|run)\\s+(?:an?\\s+)?(?:diagnostic\\s+)?(?:probe|trace|instrumentation)\\b(?![^\\n]*(?:after|until)\\s+(?:the\\s+)?reproduction)",
+          "assistantPattern": "Diagnosis:\\s*Proven|(?:root\\s+cause|(?:likely|probable|possible)\\s+cause|cause)\\s*:(?!\\s*(?:not\\b|none\\b|unknown\\b|isn['’]t\\b|(?:is\\s+)?not\\s+known\\b))|(?:root cause|cause)\\s+(?:is|was|appears?|seems?)\\b(?!n['’]t\\b)(?!\\s+(?:not\\b|unknown\\b|(?:as\\s+yet|still|yet|currently|presently)\\s+(?:unknown|not\\s+known)\\b))|(?:is|was|appears?|seems?)\\s+caused\\s+by|\\b(?!(?:what|which|who|whether)\\b)(?:[A-Za-z][\\w-]*(?:\\s+[A-Za-z][\\w-]*){0,4})\\s+(?:is|was|appears?|seems?)\\s+(?:the\\s+)?root cause\\b|(?:failure|bug|defect|issue|symptom|behavior|result)\\s+(?:is|was|occurs?|happens?|fails?|failed)?\\s*(?:because|explains?|accounts?\\s+for|results?\\s+(?:in|from)|comes?\\s+from)|\\b(?:(?!(?:does|did|has|cannot|can't|never|not)\\b)[A-Za-z][\\w-]*)(?:\\s+(?!(?:does|did|has|cannot|can't|never|not)\\b)[A-Za-z][\\w-]*){0,4}\\s+(?:(?:makes?|causes?)\\s+add\\s+(?:to\\s+)?returns?|yields?\\s+(?:the\\s+)?(?:observed\\s+)?(?:\\d+|result|failure|bug|defect|issue|symptom|behavior)|is\\s+responsible\\s+for\\s+(?:the\\s+)?(?:observed\\s+)?(?:\\d+|result|failure|bug|defect|issue|symptom|behavior)|explains?\\s+why\\s+add\\s+returns?)\\b|\\b(?:[A-Za-z][\\w-]*(?:\\s+[A-Za-z][\\w-]*){0,4})\\s+(?<!not\\s)(?<!cannot\\s)(?<!not\\snecessarily\\s)(?:explains?|causes?|caused|produces?|accounts?\\s+for|leads?\\s+to|results?\\s+in)\\s+(?:the\\s+)?(?:failure|bug|defect|issue|symptom|behavior|result)\\b|(?<!no\\s)(?<!not\\s)\\b(?:candidate|hypothesis)\\s*(?:#?\\d+|[A-Z]\\d*)?\\s*(?:(?:is|was)\\b(?!n['’]t\\b)(?!\\s+(?:not\\b|unwarranted\\b|unknown\\b|(?:as\\s+yet|still|yet|currently|presently)\\s+(?:unknown|unwarranted|not\\s+known)\\b))|[:=-](?!\\s*(?:not\\b|none\\b|unknown\\b)))|(?:leading|primary|top|most likely)\\s+(?:explanation|cause)|(?:the\\s+)?culprit\\s+(?:is|was)\\s+(?!not\\b|unknown\\b)|(?<!not\\s)(?:due\\s+to|is\\s+responsible\\s+for|stems?\\s+from)|\\b(?:subtraction|the\\s+subtraction\\s+operator)\\s+(?:makes?\\s+add\\s+return|yields?\\s+(?:the\\s+)?(?:observed\\s+)?\\w+|is\\s+why)\\b|\\b(?:subtraction|the\\s+subtraction\\s+operator)\\s+(?!(?:does\\s+not|cannot|can't)\\b)means?\\s+add\\s+returns?\\b|\\b(?:subtraction|the\\s+subtraction\\s+operator)\\s+(?:therefore|thus)\\s+(?:makes?|causes?)\\s+add\\s+(?:to\\s+)?return\\b|\\b(?:add|the\\s+function)\\s+returns?\\s+[^.!?\\n]{0,40}\\s+(?:since\\s+it|because\\s+(?:(?:the\\s+)?implementation|it))\\s+subtracts?\\b|\\b(?:the\\s+)?implementation\\s+subtracts?\\s*[,;]?\\s*(?:so|therefore)\\s*,?\\s+add\\s+returns?\\b|(?:I|we)\\s+(?:will|'ll|should|can|could|may|might|need\\s+to|propose\\s+to)\\s+(?:inspect|instrument|trace|probe|log)\\b(?![^\\n]*(?:after|until)\\s+(?:the\\s+)?reproduction)|(?:let's|next,?)\\s+(?:inspect|instrument|trace|probe|log)\\b(?![^\\n]*(?:after|until)\\s+(?:the\\s+)?reproduction)|(?:^|[.!?]\\s+)(?!(?:do\\s+not|never)\\b)(?:please\\s+)?(?:inspect|instrument|trace|probe|log)\\s+(?![^\\n]*(?:after|until)\\s+(?:the\\s+)?reproduction)[A-Za-z0-9_./-]+|(?<!not\\s)(?:add|use|run)\\s+(?:an?\\s+)?(?:diagnostic\\s+)?(?:probe|trace|instrumentation)\\b(?![^\\n]*(?:after|until)\\s+(?:the\\s+)?reproduction)",
           "assistantFlags": "i",
           "domain": "task",
           "weight": 1
@@ -1275,7 +1294,7 @@
         },
         {
           "type": "outputMatches",
-          "pattern": "^(?![\\s\\S]*(?:Diagnosis:\\s*Proven|(?:root cause|cause)\\s+(?:is|was|appears?|seems?)\\b(?!n['\u2019]t\\b)(?!\\s+(?:not\\b|unknown\\b|(?:as\\s+yet|still|yet|currently|presently)\\s+(?:unknown|not\\s+known)\\b))|root cause\\s*:(?!\\s*(?:not\\b|none\\b|unknown\\b))|(?<!not\\s)caused by|(?:candidate|hypothesis)\\s*(?:C?\\d+|#\\d+)|(?:ranked|causal)\\s+(?:candidate|hypothesis)|(?:leading|primary|top|most likely)\\s+(?:explanation|cause|candidate|hypothesis)|(?:^|\\n)\\s*C\\d+\\s*\\|[^\\n]*(?:predicts?|because|explains?)|(?:left\\s*-\\s*right|subtract(?:s|ion)?)(?![^.\\n]{0,120}\\b(?:(?:does|did|is|was|has)\\s+not|cannot|can't|never)\\b)[^.\\n]{0,120}(?:explains?|accounts?\\s+for|is\\s+(?:the\\s+)?reason\\s+for|leads?\\s+to|results?\\s+in|produces?|therefore\\s+returns?)[^.\\n]{0,120}(?:reported\\s+)?2|(?:reported\\s+)?2[^.\\n]{0,120}(?:is\\s+explained\\s+by|comes?\\s+from|results?\\s+from)[^.\\n]{0,120}(?:left\\s*-\\s*right|subtract(?:s|ion)?)|\\b(?:subtraction|the\\s+subtraction\\s+operator)\\s+(?!(?:did\\s+not|has\\s+not|never)\\b)caused\\s+(?:the\\s+)?(?:failure|bug|defect|issue|symptom|behavior|result)\\b|(?:the\\s+)?culprit\\s+(?:is|was)\\s+(?!not\\b|unknown\\b)|\\b(?:(?!(?:does|did|has|cannot|can't|never|not)\\b)[A-Za-z][\\w-]*)(?:\\s+(?!(?:does|did|has|cannot|can't|never|not)\\b)[A-Za-z][\\w-]*){0,4}\\s+(?:(?:makes?|causes?)\\s+add\\s+(?:to\\s+)?returns?|yields?\\s+(?:the\\s+)?(?:observed\\s+)?(?:\\d+|result|failure|bug|defect|issue|symptom|behavior)|is\\s+responsible\\s+for\\s+(?:the\\s+)?(?:observed\\s+)?(?:\\d+|result|failure|bug|defect|issue|symptom|behavior)|explains?\\s+why\\s+add\\s+returns?)\\b|\\b(?:add|the\\s+function)\\s+returns?\\s+(?:the\\s+)?(?:reported\\s+)?2\\s+because\\s+(?:(?:the\\s+)?implementation|it)\\s+subtracts?\\b|\\b(?:subtraction|the\\s+subtraction\\s+operator)\\s+(?!(?:does\\s+not|cannot|can't)\\b)means?\\s+add\\s+returns?\\b|\\b(?:subtraction|the\\s+subtraction\\s+operator)\\s+(?:therefore|thus)\\s+(?:makes?|causes?)\\s+add\\s+(?:to\\s+)?return\\b|(?:I|we)\\s+(?:will|'ll|should|can|could|may|might|need\\s+to|propose\\s+to)\\s+(?:inspect|instrument|trace|probe|log)\\b(?![^\\n]*(?:after|until)\\s+(?:the\\s+)?reproduction)))[\\s\\S]*$",
+          "pattern": "^(?![\\s\\S]*(?:Diagnosis:\\s*Proven|(?:root cause|cause)\\s+(?:is|was|appears?|seems?)\\b(?!n['’]t\\b)(?!\\s+(?:not\\b|unknown\\b|(?:as\\s+yet|still|yet|currently|presently)\\s+(?:unknown|not\\s+known)\\b))|root cause\\s*:(?!\\s*(?:not\\b|none\\b|unknown\\b))|(?<!not\\s)caused by|(?:candidate|hypothesis)\\s*(?:C?\\d+|#\\d+)|(?:ranked|causal)\\s+(?:candidate|hypothesis)|(?:leading|primary|top|most likely)\\s+(?:explanation|cause|candidate|hypothesis)|(?:^|\\n)\\s*C\\d+\\s*\\|[^\\n]*(?:predicts?|because|explains?)|(?:left\\s*-\\s*right|subtract(?:s|ion)?)(?![^.\\n]{0,120}\\b(?:(?:does|did|is|was|has)\\s+not|cannot|can't|never)\\b)[^.\\n]{0,120}(?:explains?|accounts?\\s+for|is\\s+(?:the\\s+)?reason\\s+for|leads?\\s+to|results?\\s+in|produces?|therefore\\s+returns?)[^.\\n]{0,120}(?:reported\\s+)?2|(?:reported\\s+)?2[^.\\n]{0,120}(?:is\\s+explained\\s+by|comes?\\s+from|results?\\s+from)[^.\\n]{0,120}(?:left\\s*-\\s*right|subtract(?:s|ion)?)|\\b(?:subtraction|the\\s+subtraction\\s+operator)\\s+(?!(?:did\\s+not|has\\s+not|never)\\b)caused\\s+(?:the\\s+)?(?:failure|bug|defect|issue|symptom|behavior|result)\\b|(?:the\\s+)?culprit\\s+(?:is|was)\\s+(?!not\\b|unknown\\b)|\\b(?:(?!(?:does|did|has|cannot|can't|never|not)\\b)[A-Za-z][\\w-]*)(?:\\s+(?!(?:does|did|has|cannot|can't|never|not)\\b)[A-Za-z][\\w-]*){0,4}\\s+(?:(?:makes?|causes?)\\s+add\\s+(?:to\\s+)?returns?|yields?\\s+(?:the\\s+)?(?:observed\\s+)?(?:\\d+|result|failure|bug|defect|issue|symptom|behavior)|is\\s+responsible\\s+for\\s+(?:the\\s+)?(?:observed\\s+)?(?:\\d+|result|failure|bug|defect|issue|symptom|behavior)|explains?\\s+why\\s+add\\s+returns?)\\b|\\b(?:add|the\\s+function)\\s+returns?\\s+(?:the\\s+)?(?:reported\\s+)?2\\s+because\\s+(?:(?:the\\s+)?implementation|it)\\s+subtracts?\\b|\\b(?:subtraction|the\\s+subtraction\\s+operator)\\s+(?!(?:does\\s+not|cannot|can't)\\b)means?\\s+add\\s+returns?\\b|\\b(?:subtraction|the\\s+subtraction\\s+operator)\\s+(?:therefore|thus)\\s+(?:makes?|causes?)\\s+add\\s+(?:to\\s+)?return\\b|(?:I|we)\\s+(?:will|'ll|should|can|could|may|might|need\\s+to|propose\\s+to)\\s+(?:inspect|instrument|trace|probe|log)\\b(?![^\\n]*(?:after|until)\\s+(?:the\\s+)?reproduction)))[\\s\\S]*$",
           "flags": "im",
           "domain": "tests",
           "weight": 2
@@ -1653,17 +1672,26 @@
       "workload": "focused bug fix",
       "promptPath": "AGENTS.global.md",
       "history": [
-        { "role": "user", "text": "quick scan of this repo. what's here?" },
+        {
+          "role": "user",
+          "text": "quick scan of this repo. what's here?"
+        },
         {
           "role": "assistant",
           "text": "Small TS utils pkg.\n\n- `src/`: math, format, auth, search.\n- Tests: `tests/math.case.ts` only; covers add/multiply.\n- `db/schema.sql`: projects + tasks tables.\n- No CI config.\n\nNothing run yet."
         },
-        { "role": "user", "text": "search.ts ok?" },
+        {
+          "role": "user",
+          "text": "search.ts ok?"
+        },
         {
           "role": "assistant",
           "text": "Mostly. `rankMatches` sorts `items` in place inside loop → mutates caller array, re-sorts per query. Works, wasteful. No tests."
         },
-        { "role": "user", "text": "leave it. continue" },
+        {
+          "role": "user",
+          "text": "leave it. continue"
+        },
         {
           "role": "assistant",
           "text": "Ack. search.ts untouched. Ready for next."
@@ -1697,17 +1725,26 @@
       "workload": "codebase exploration",
       "promptPath": "AGENTS.global.md",
       "history": [
-        { "role": "user", "text": "quick scan of this repo. what's here?" },
+        {
+          "role": "user",
+          "text": "quick scan of this repo. what's here?"
+        },
         {
           "role": "assistant",
           "text": "Small TS utils pkg.\n\n- `src/`: math, format, auth, search.\n- Tests: `tests/math.case.ts` only; covers add/multiply.\n- `db/schema.sql`: projects + tasks tables.\n- No CI config.\n\nNothing run yet."
         },
-        { "role": "user", "text": "search.ts ok?" },
+        {
+          "role": "user",
+          "text": "search.ts ok?"
+        },
         {
           "role": "assistant",
           "text": "Mostly. `rankMatches` sorts `items` in place inside loop → mutates caller array, re-sorts per query. Works, wasteful. No tests."
         },
-        { "role": "user", "text": "leave it. continue" },
+        {
+          "role": "user",
+          "text": "leave it. continue"
+        },
         {
           "role": "assistant",
           "text": "Ack. search.ts untouched. Ready for next."
@@ -1740,17 +1777,26 @@
       "workload": "focused bug fix",
       "promptPath": "AGENTS.global.md",
       "history": [
-        { "role": "user", "text": "quick scan of this repo. what's here?" },
+        {
+          "role": "user",
+          "text": "quick scan of this repo. what's here?"
+        },
         {
           "role": "assistant",
           "text": "Small TS utils pkg.\n\n- `src/`: math, format, auth, search.\n- Tests: `tests/math.case.ts` only; covers add/multiply.\n- `db/schema.sql`: projects + tasks tables.\n- No CI config.\n\nNothing run yet."
         },
-        { "role": "user", "text": "search.ts ok?" },
+        {
+          "role": "user",
+          "text": "search.ts ok?"
+        },
         {
           "role": "assistant",
           "text": "Mostly. `rankMatches` sorts `items` in place inside loop → mutates caller array, re-sorts per query. Works, wasteful. No tests."
         },
-        { "role": "user", "text": "leave it. continue" },
+        {
+          "role": "user",
+          "text": "leave it. continue"
+        },
         {
           "role": "assistant",
           "text": "Ack. search.ts untouched. Ready for next."
@@ -1783,6 +1829,330 @@
           "type": "plainReport",
           "domain": "quality",
           "weight": 3
+        }
+      ]
+    },
+    {
+      "id": "routing-bug-fix",
+      "workload": "focused bug fix",
+      "promptPath": "skills/supapi-mode/SKILL.md",
+      "task": "add(2, 3) returns -1 instead of 5. Fix it and verify. Before acting, state which Playbook you will follow and stop after reading it; do not edit files.",
+      "tools": ["read", "grep", "find", "ls"],
+      "checks": [
+        {
+          "type": "readsPath",
+          "pathSuffix": ".pi-skills/supapi-mode/SKILL.md",
+          "present": true,
+          "domain": "task",
+          "weight": 1
+        },
+        {
+          "type": "readsPath",
+          "pathSuffix": ".pi-skills/supapi-mode/playbooks/bug-fix.md",
+          "present": true,
+          "domain": "task",
+          "weight": 2
+        }
+      ]
+    },
+    {
+      "id": "routing-bug-fix-report",
+      "workload": "focused bug fix",
+      "promptPath": "skills/supapi-mode/SKILL.md",
+      "task": "Users report admin access is granted to non-admins when debug is on. Reproduce and fix. Before acting, state which Playbook you will follow and stop after reading it; do not edit files.",
+      "tools": ["read", "grep", "find", "ls"],
+      "checks": [
+        {
+          "type": "readsPath",
+          "pathSuffix": ".pi-skills/supapi-mode/SKILL.md",
+          "present": true,
+          "domain": "task",
+          "weight": 1
+        },
+        {
+          "type": "readsPath",
+          "pathSuffix": ".pi-skills/supapi-mode/playbooks/bug-fix.md",
+          "present": true,
+          "domain": "task",
+          "weight": 2
+        }
+      ]
+    },
+    {
+      "id": "routing-feature",
+      "workload": "multi-file implementation",
+      "promptPath": "skills/supapi-mode/SKILL.md",
+      "task": "Add a subtract(left, right) function to src/math.ts with tests and README docs. Before acting, state which Playbook you will follow and stop after reading it; do not edit files.",
+      "tools": ["read", "grep", "find", "ls"],
+      "checks": [
+        {
+          "type": "readsPath",
+          "pathSuffix": ".pi-skills/supapi-mode/SKILL.md",
+          "present": true,
+          "domain": "task",
+          "weight": 1
+        },
+        {
+          "type": "readsPath",
+          "pathSuffix": ".pi-skills/supapi-mode/playbooks/feature.md",
+          "present": true,
+          "domain": "task",
+          "weight": 2
+        }
+      ]
+    },
+    {
+      "id": "routing-feature-behavior",
+      "workload": "multi-file implementation",
+      "promptPath": "skills/supapi-mode/SKILL.md",
+      "task": "Make rankMatches accept a case-insensitive option. Before acting, state which Playbook you will follow and stop after reading it; do not edit files.",
+      "tools": ["read", "grep", "find", "ls"],
+      "checks": [
+        {
+          "type": "readsPath",
+          "pathSuffix": ".pi-skills/supapi-mode/SKILL.md",
+          "present": true,
+          "domain": "task",
+          "weight": 1
+        },
+        {
+          "type": "readsPath",
+          "pathSuffix": ".pi-skills/supapi-mode/playbooks/feature.md",
+          "present": true,
+          "domain": "task",
+          "weight": 2
+        }
+      ]
+    },
+    {
+      "id": "routing-refactoring",
+      "workload": "multi-file implementation",
+      "promptPath": "skills/supapi-mode/SKILL.md",
+      "task": "Refactor src/format.ts: inline the temporary variables in formatName and remove dead code, without changing behavior. Before acting, state which Playbook you will follow and stop after reading it; do not edit files.",
+      "tools": ["read", "grep", "find", "ls"],
+      "checks": [
+        {
+          "type": "readsPath",
+          "pathSuffix": ".pi-skills/supapi-mode/SKILL.md",
+          "present": true,
+          "domain": "task",
+          "weight": 1
+        },
+        {
+          "type": "readsPath",
+          "pathSuffix": ".pi-skills/supapi-mode/playbooks/refactoring.md",
+          "present": true,
+          "domain": "task",
+          "weight": 2
+        }
+      ]
+    },
+    {
+      "id": "routing-investigation",
+      "workload": "codebase exploration",
+      "promptPath": "skills/supapi-mode/SKILL.md",
+      "task": "How does admin access work in this project, and where does it live? Before acting, state which Playbook you will follow and stop after reading it; do not edit files.",
+      "tools": ["read", "grep", "find", "ls"],
+      "checks": [
+        {
+          "type": "readsPath",
+          "pathSuffix": ".pi-skills/supapi-mode/SKILL.md",
+          "present": true,
+          "domain": "task",
+          "weight": 1
+        },
+        {
+          "type": "readsPath",
+          "pathSuffix": ".pi-skills/supapi-mode/playbooks/investigation.md",
+          "present": true,
+          "domain": "task",
+          "weight": 2
+        }
+      ]
+    },
+    {
+      "id": "routing-investigation-decision",
+      "workload": "explanation",
+      "promptPath": "skills/supapi-mode/SKILL.md",
+      "task": "Should we pick option A or option B from docs/options.md? Give a recommendation. Before acting, state which Playbook you will follow and stop after reading it; do not edit files.",
+      "tools": ["read", "grep", "find", "ls"],
+      "checks": [
+        {
+          "type": "readsPath",
+          "pathSuffix": ".pi-skills/supapi-mode/SKILL.md",
+          "present": true,
+          "domain": "task",
+          "weight": 1
+        },
+        {
+          "type": "readsPath",
+          "pathSuffix": ".pi-skills/supapi-mode/playbooks/investigation.md",
+          "present": true,
+          "domain": "task",
+          "weight": 2
+        }
+      ]
+    },
+    {
+      "id": "routing-prototype",
+      "workload": "multi-file implementation",
+      "promptPath": "skills/supapi-mode/SKILL.md",
+      "task": "Prototype two ranking strategies for rankMatches so we can pick one by observing their output. Before acting, state which Playbook you will follow and stop after reading it; do not edit files.",
+      "tools": ["read", "grep", "find", "ls"],
+      "checks": [
+        {
+          "type": "readsPath",
+          "pathSuffix": ".pi-skills/supapi-mode/SKILL.md",
+          "present": true,
+          "domain": "task",
+          "weight": 1
+        },
+        {
+          "type": "readsPath",
+          "pathSuffix": ".pi-skills/supapi-mode/playbooks/prototype.md",
+          "present": true,
+          "domain": "task",
+          "weight": 2
+        }
+      ]
+    },
+    {
+      "id": "routing-diagnose",
+      "workload": "focused bug fix",
+      "promptPath": "skills/supapi-mode/SKILL.md",
+      "task": "/diagnose the failing math test: prove the cause before any fix. Before acting, state which Playbook you will follow and stop after reading it; do not edit files.",
+      "tools": ["read", "grep", "find", "ls"],
+      "checks": [
+        {
+          "type": "readsPath",
+          "pathSuffix": ".pi-skills/supapi-mode/SKILL.md",
+          "present": true,
+          "domain": "task",
+          "weight": 1
+        },
+        {
+          "type": "readsPath",
+          "pathSuffix": ".pi-skills/supapi-mode/playbooks/diagnose.md",
+          "present": true,
+          "domain": "task",
+          "weight": 2
+        }
+      ]
+    },
+    {
+      "id": "routing-pr",
+      "workload": "tool-heavy orchestration",
+      "promptPath": "skills/supapi-mode/SKILL.md",
+      "task": "Open a pull request for this branch. Before acting, state which Playbook you will follow and stop after reading it; do not edit files.",
+      "tools": ["read", "grep", "find", "ls"],
+      "checks": [
+        {
+          "type": "readsPath",
+          "pathSuffix": ".pi-skills/supapi-mode/SKILL.md",
+          "present": true,
+          "domain": "task",
+          "weight": 1
+        },
+        {
+          "type": "readsPath",
+          "pathSuffix": ".pi-skills/supapi-mode/playbooks/opening-a-pr.md",
+          "present": true,
+          "domain": "task",
+          "weight": 2
+        }
+      ]
+    },
+    {
+      "id": "routing-trivial-lookup",
+      "workload": "explanation",
+      "promptPath": "skills/supapi-mode/SKILL.md",
+      "task": "What does multiply() in src/math.ts return? Answer in one line.",
+      "tools": ["read", "grep", "find", "ls"],
+      "checks": [
+        {
+          "type": "readsPath",
+          "pathSuffix": ".pi-skills/supapi-mode/SKILL.md",
+          "present": false,
+          "domain": "task",
+          "weight": 2
+        }
+      ]
+    },
+    {
+      "id": "routing-trivial-typo",
+      "workload": "focused bug fix",
+      "promptPath": "skills/supapi-mode/SKILL.md",
+      "task": "In README.md, what is the first word of the file? Answer only.",
+      "tools": ["read", "grep", "find", "ls"],
+      "checks": [
+        {
+          "type": "readsPath",
+          "pathSuffix": ".pi-skills/supapi-mode/SKILL.md",
+          "present": false,
+          "domain": "task",
+          "weight": 2
+        }
+      ]
+    },
+    {
+      "id": "routing-trivial-list",
+      "workload": "codebase exploration",
+      "promptPath": "skills/supapi-mode/SKILL.md",
+      "task": "List the files in src/. Answer only with the names.",
+      "tools": ["read", "grep", "find", "ls"],
+      "checks": [
+        {
+          "type": "readsPath",
+          "pathSuffix": ".pi-skills/supapi-mode/SKILL.md",
+          "present": false,
+          "domain": "task",
+          "weight": 2
+        }
+      ]
+    },
+    {
+      "id": "routing-large-migration",
+      "workload": "tool-heavy orchestration",
+      "promptPath": "skills/supapi-mode/SKILL.md",
+      "task": "Migrate the whole package from Bun to Node with a new build system, CI, and docs, and keep it auditable for review while I am away. Before acting, state which Playbook you will follow and stop after reading it; do not edit files.",
+      "tools": ["read", "grep", "find", "ls"],
+      "checks": [
+        {
+          "type": "readsPath",
+          "pathSuffix": ".pi-skills/supapi-mode/SKILL.md",
+          "present": true,
+          "domain": "task",
+          "weight": 1
+        },
+        {
+          "type": "outputMatches",
+          "pattern": "figure-it-out",
+          "flags": "i",
+          "domain": "task",
+          "weight": 2
+        }
+      ]
+    },
+    {
+      "id": "routing-unmatched",
+      "workload": "tool-heavy orchestration",
+      "promptPath": "skills/supapi-mode/SKILL.md",
+      "task": "Run a week-long unattended program to rewrite every module and keep a decision trail. Before acting, state which Playbook you will follow and stop after reading it; do not edit files.",
+      "tools": ["read", "grep", "find", "ls"],
+      "checks": [
+        {
+          "type": "readsPath",
+          "pathSuffix": ".pi-skills/supapi-mode/SKILL.md",
+          "present": true,
+          "domain": "task",
+          "weight": 1
+        },
+        {
+          "type": "outputMatches",
+          "pattern": "figure-it-out",
+          "flags": "i",
+          "domain": "task",
+          "weight": 2
         }
       ]
     }

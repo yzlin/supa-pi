@@ -19,7 +19,7 @@ Types: feat, fix, refactor, build, ci, chore, docs, style, perf, test
 
 ## Pull Request Workflow
 
-Use the canonical `pr` skill (`/pr`) as the single source for PR preflight, diff review against base, evidence, the PR body template, and one-confirm submission.
+Use the canonical `opening-a-pr` Playbook (`skills/supapi-mode/playbooks/opening-a-pr.md`, `/pr`) as the single source for PR preflight, diff review against base, evidence, the PR body template, and one-confirm submission.
 
 > For the full development process (planning, TDD, code review) before git operations,
 > see [development-workflow.md](./development-workflow.md).

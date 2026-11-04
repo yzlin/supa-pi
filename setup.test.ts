@@ -256,7 +256,7 @@ describe("setup local package deployment", () => {
       '{ "providerExtensions": { "other": ["user/path"] } }\n';
     await writeFile(subagentSettingsPath, existingSubagentSettings);
 
-    for (const command of ["grill-me", "research-brief", "show-me"]) {
+    for (const command of ["grill-me", "show-me"]) {
       await symlink(
         join(repositoryDir, "prompts", `${command}.md`),
         join(promptsDirectory, `${command}.md`),
@@ -269,7 +269,7 @@ describe("setup local package deployment", () => {
       `#!/usr/bin/env bash
 printf '%s\\n' "$*" >> "$PI_CALL_LOG"
 if [ "$2" = "$REPOSITORY_DIR" ]; then
-  for command in grill-me research-brief show-me; do
+  for command in grill-me show-me; do
     [ -L "$HOME/.pi/agent/prompts/$command.md" ] || exit 42
   done
 fi
@@ -302,7 +302,7 @@ fi
     expect(await readFile(subagentSettingsPath, "utf8")).toBe(
       existingSubagentSettings,
     );
-    for (const command of ["grill-me", "research-brief", "show-me"]) {
+    for (const command of ["grill-me", "show-me"]) {
       const promptPath = join(promptsDirectory, `${command}.md`);
       expect((await lstat(promptPath)).isSymbolicLink()).toBe(true);
       expect(await readlink(promptPath)).toBe(

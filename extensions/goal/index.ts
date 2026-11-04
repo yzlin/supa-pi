@@ -259,7 +259,7 @@ function taskModePrompt(checkpoint: GoalCheckpoint): string {
     'Sequentially dispatch exactly one blocking subagent({agent: "executor", task: <self-contained next_executor_prompt and exact write scope>, schema: <executor report JSON Schema>}) at a time.',
     "Supply the executor report schema with status (done, blocked, needs_followup), summary, filesTouched, validation, followUps, blockers. Read structuredOutput from the completed result, not assistant prose; schema validity is not completion proof.",
     "Independently inspect changes and run current targeted checks before recording success. Missing/error/invalid reports leave the task unresolved; report exact blockers and preserve the existing goal task attempt budget.",
-    "Only goal_checkpoint owns goal state. Do not call execute_checkpoint, manage an execution ledger, or use retired Task tools; detached workers report only.",
+    "Only goal_checkpoint owns goal state. Do not write a Spec log or use retired Task tools; detached workers report only. Verify each result as the execute Playbook's Verify and record step describes.",
     "After each executor result, update the goal checkpoint with goal_checkpoint, choose the next pending task, and continue until task budget is done, blocked, or complete.",
     "Keep continuation checkpoint-based; do not create sibling imports or read/import/edit legacy .pi/execute records.",
     "",

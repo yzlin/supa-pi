@@ -104,7 +104,7 @@ This table preserves the initial audit disposition. Names resolve under `agents/
 | Skill: `security-review` | MERGE duplicated policy; RELOCATE selected recipes | Keep detailed security judgment; common policy needs one explicit owner with a resolvable dependency. |
 | Skill: `e2e-testing` | RELOCATE long setup/CI examples; CLARIFY readiness examples | Keep a concise Playwright workflow; preserve discoverable implementation references. |
 | Prompts: `grill-me`, `show-me`, `wait-what` | KEEP | Explicit user controls and functional fallback behavior. |
-| Prompt: `research-brief` | KEEP pending one-shot versus persistent-mode decision | Evidence-language overlap alone does not justify entering persistent research mode. |
+| Prompt: `research-brief` | REMOVED 2026-11-04 | Rarely used; `skills/research-mode/SKILL.md` covers strict-evidence research. |
 | Rules: `common/performance` | REMOVE/RELOCATE unrelated sections; MERGE repeated method | Application performance policy, not model routing or build-agent dispatch. |
 | Rules: `common/security` | MERGE policy ownership with security skill | Preserve the union of applicable safeguards; do not discard skill-only conditions. |
 | Rules: remaining `common` files; `typescript`, `python`, `swift`, `sql`, `misc` packs | KEEP structure | Work/language-specific guidance remains selectively loaded. No wholesale pruning justified. |

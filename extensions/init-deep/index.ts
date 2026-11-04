@@ -290,7 +290,7 @@ export function buildInitDeepMessage(input: InitDeepCommandInput): string {
     "- If dry run is true, inspect and propose changes only. Do not write, edit, or delete files.",
     "- Track discovery, scoring, generation, and review in an ordinary working plan.",
     "- Finish or explicitly report blocked phases before the final answer.",
-    "- /init-deep does not authorize /execute or execution-ledger assignments. Do not modify goal state.",
+    "- /init-deep does not authorize /execute or Spec log writes. Do not modify goal state.",
     "",
     PROMPT,
   ].join("\n");

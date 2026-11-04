@@ -38,9 +38,12 @@ assert.deepEqual(result.errors, []);
 assert.equal(result.extensions.length, manifest.pi.extensions.length);
 const names = result.extensions.flatMap(extension => [...extension.tools.values()].map(tool => tool.definition.name));
 assert.equal(new Set(names).size, names.length);
-for (const name of ['subagent', 'execute_checkpoint', 'review_run', 'review_finalize', 'goal_checkpoint']) {
+for (const name of ['subagent', 'spec_log', 'goal_checkpoint']) {
   assert.ok(names.includes(name), name);
 }
+assert.ok(!names.includes('execute_checkpoint'));
+assert.ok(!names.includes('review_run'));
+assert.ok(!names.includes('review_finalize'));
 assert.ok(!names.includes('Agent'));
 assert.ok(!names.includes('SubagentWorkflow'));
 assert.deepEqual(names.filter(name => name.startsWith('Task')), []);

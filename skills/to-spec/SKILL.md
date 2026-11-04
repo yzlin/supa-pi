@@ -1,13 +1,13 @@
 ---
 name: to-spec
-description: Explicit /to-spec wrapper. Use when the user invokes /to-spec or when an /execute draft-then-execute packet requests it; persists the current conversation's locked plan as a Spec for /execute.
+description: Explicit /to-spec wrapper. Use when the user invokes /to-spec or when the execute Playbook drafts a Spec; persists the current conversation's locked plan as a Spec for /execute.
 ---
 
 # `/to-spec`
 
 ## Input and Synthesis
 
-The execute Extension's `/to-spec` packet supplies an optional slug and may state that an unaccepted Spec already exists for that slug. The Extension itself refuses slugs whose Spec log has an `accepted` event or is corrupt; still check collisions before writing.
+The `spec-log` Extension's `/to-spec` packet supplies an optional slug and may state that an unaccepted Spec already exists for that slug. The Extension itself refuses slugs whose Spec log has an `accepted` event or is corrupt; still check collisions before writing.
 
 Synthesize from the current conversation and codebase understanding. Do not interview. Preserve locked decisions, scope, constraints, and deferred items. Use `CONTEXT.md` glossary vocabulary and respect ADRs in the touched area. Read targeted code and existing tests to resolve facts rather than asking the user. Do not invent unresolved decisions; if the plan is not locked or a non-testing blocker remains, stop and report the gap instead of writing a guessed Spec.
 
@@ -31,7 +31,9 @@ Write plain Markdown, no frontmatter; status lives in the Spec log. Start with `
 
 ## Done Criteria
 - DC-1: <observable acceptance criterion> (US-1)
+  Evidence: <exact command or check that proves it>
 - DC-2: <necessary technical criterion> (technical)
+  Evidence: <exact command or check that proves it>
 
 ## Verification
 <Actual commands or checks, expected evidence, and who verifies it.>
@@ -43,7 +45,7 @@ Write plain Markdown, no frontmatter; status lives in the Spec log. Start with `
 <Explicit exclusions and deferred work.>
 ```
 
-`Testing Seams` is optional; omit its heading when not needed. `Execution Scope`, `Plan`, `Done Criteria`, `Verification`, and `Out of Scope` are required for `/execute` brief detection. Keep `User Stories` even for internal-only work.
+`Testing Seams` is optional; omit its heading when not needed. `Execution Scope`, `Plan`, `Done Criteria`, `Verification`, and `Out of Scope` are required; `spec_log` `lint` rejects a Spec without them. Keep `User Stories` even for internal-only work.
 
 Plan uses literal workspace-relative paths where known, needed for `/execute` write scopes. Do not follow upstream's no-file-path rule. Make the Brief self-contained for a fresh session: include the locked decisions and evidence needed to execute without the old conversation. Verification uses existing commands and the highest practical seams, not speculative tests.
 
@@ -58,13 +60,13 @@ Before writing, check coverage in both directions:
 - each story maps to at least one Done Criterion;
 - each Done Criterion ends with `(US-n)` citations or `(technical)`. Use actual story IDs, for example `(US-1)` or `(US-1) (US-2)`; reserve `(technical)` for necessary technical work without a story.
 
-Each Done Criterion row is `- DC-n: <criterion> (US-n)` or `- DC-n: <criterion> (technical)`. Number labels `DC-1` through `DC-n`, each unique. Start every top-level line in `## Done Criteria` with its label; indent continuation lines. `/execute` rejects a Spec with an unlabeled row, a repeated label, or no rows, and each assignment declares the `DC-n` IDs it proves.
+Each Done Criterion row is `- DC-n: <criterion> (US-n)` or `- DC-n: <criterion> (technical)`. Follow each row with an indented `Evidence: <exact command or check>` line naming how the execute Playbook proves it; `spec_log` `check` later records what was actually observed. Number labels `DC-1` through `DC-n`, each unique. Start every top-level line in `## Done Criteria` with its label; indent continuation lines. `spec_log` `lint` rejects a Spec with an unlabeled row, a repeated label, a row without an `Evidence:` line, or no rows.
 
 Fix gaps before writing. Internal-only work uses `(technical)` for every Done Criterion.
 
 ## Slug and Collision Rules
 
-Use the given slug or derive a short kebab-case slug from the goal. It must match `^[a-z0-9][a-z0-9-]*$` and be at most 48 characters. `status` and `classifier` are reserved subcommand words, never slugs. Reject an invalid supplied slug without silently changing it.
+Use the given slug or derive a short kebab-case slug from the goal. It must match `^[a-z0-9][a-z0-9-]*$` and be at most 48 characters. `status` is a reserved subcommand word, never a slug. Reject an invalid supplied slug without silently changing it.
 
 - If `.pi/specs/<slug>.log.jsonl` has an `accepted` event, or cannot be read and parsed, refuse and suggest a new slug. Never overwrite an accepted or done Spec, even if the packet calls it unaccepted.
 - A log that is empty or has only `reviewed` events means the Spec was never accepted. Treat it like a Spec without a log.
@@ -77,13 +79,13 @@ Recheck collisions before writing, including after confirmation. If existence ca
 
 Write only `.pi/specs/<slug>.md`; create the `.pi/specs/` directory if needed. This storage is local and git-ignored; do not publish, commit, or change ignore configuration as part of this workflow.
 
-Never write or edit the Spec log or Snapshot refs. The execute Extension alone writes the append-only Spec log and manages Snapshot refs. `/to-spec` never edits a Spec after it is accepted; changes go through `/execute`'s Spec revision, which shows the diff and asks the user through `resolve_revision` in the same session. Do not write context docs, issue-tracker records, or implementation files.
+Never write or edit the Spec log or Snapshot refs. The `spec_log` tool alone writes the append-only Spec log and manages Snapshot refs. `/to-spec` never edits a Spec after it is accepted; changes go through `/execute`'s Spec revision, where `spec_log` `accept` shows the diff and the user approves it before `revise: true`. Do not write context docs, issue-tracker records, or implementation files.
 
 ## Finish
 
-Print the path and the next step: run `/execute @.pi/specs/<slug>.md` (a fresh session is fine). `/to-spec status <slug>` shows progress. `/to-spec classifier [enable|disable]` shows or changes consent for the Spec review classifier that `/execute` uses before accept; standalone `/to-spec` never reviews. Suggest the commands; do not start execution automatically.
+Before printing, call `spec_log` with `action: "lint"` and fix every problem it reports. Print the path and the next step: run `/execute @.pi/specs/<slug>.md` (a fresh session is fine). `/to-spec status <slug>` shows progress as checkboxes. Suggest the commands; do not start execution automatically.
 
-Exception: when invoked as the first step of an `/execute` draft-then-execute packet, do not stop after writing; print the path, then continue directly into the `execute` skill on that Spec, passing `specPath` on `accept`. Standalone `/to-spec` never starts execution.
+Exception: when the execute Playbook drafts the Spec, do not stop after writing; print the path, then continue with that Playbook on the Spec. Standalone `/to-spec` never starts execution.
 
 Advise running `/to-spec` before compaction when context is near its limit.
 

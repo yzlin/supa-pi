@@ -6,7 +6,6 @@
 - `AGENTS.md` — read before coding in this repo; contains project workflow, docs, verification, and deletion guardrails.
 - `extensions/AGENTS.md` — read before changing any Extension under `extensions/`; contains extension-boundary and validation rules.
 - `skills/domain-modeling/SKILL.md` — read before changing domain terminology, scenario testing, contradiction handling, boundary analysis, ADR candidacy, or domain-modeling composition with other skills.
-- `skills/wayfinder/SKILL.md`, its `templates/`, and `prompts/wayfinder.md` — read before Wayfinder planning, record formats, resume/ownership behavior, or `/wayfinder` command changes.
 
 ## Architecture decisions
 
@@ -15,6 +14,7 @@
 - `docs/adr/0002-use-pi-fullscreen.md` — read before changing Pi version support, setup TUI defaults, fullscreen/regular compatibility, or pieditor viewport ownership.
 - `docs/adr/0003-main-executed-execute-attempts.md` — read before changing `/execute` start or verify rules, the `executor` ledger field, main-attempt guards, or when `/execute` delegates to children.
 - `docs/adr/0004-merged-review-verifier.md` — read before changing `/review` grouping, the verifier schema or prompt, rejected-candidate handling, or review model configuration.
+- `docs/adr/0005-playbook-prose-gates.md` — read before moving `/execute`, `/review`, or `/goal` gates into Playbook prose, or deleting their enforcement code (status: proposed; supersedes 0003/0004 only after the paired eval passes).
 
 ## Context notes
 
@@ -25,9 +25,9 @@
 - `docs/context/model-routing.md` — read before checking or documenting current repository model defaults for setup, agents, review, evals, or Fast Mode; live settings and overrides may differ.
 - `docs/context/gpt-5.6-harness-optimization.md` — read before interpreting historical GPT-5.6 reasoning, service-tier, prompt, caching, tool-surface, or eval evidence.
 - `docs/context/gpt-6-astra-harness-readiness.md` — read before interpreting historical Astra approvals and comparisons, or planning an approval-gated Astra eval or full-stack probe.
-- `docs/context/harness-contract-audit.md` — read before changing research-artifact ownership, search-first delegation, or instruction ownership across prompts, agents, skills, and rules; preserves historical audit evidence and deferred live-calibration gates.
+- `docs/context/harness-contract-audit.md` — read before changing research-artifact ownership, researcher dispatch in the investigation Playbook, or instruction ownership across prompts, agents, skills, and rules; preserves historical audit evidence and deferred live-calibration gates.
 - `docs/context/upstream-companion-history.md` — read before interpreting historical `@tintinweb/pi-subagents`/`@tintinweb/pi-tasks` execution or public-workflow review decisions; not active instructions.
-- `extensions/review/README.md` — read before changing `/review`, `/review-summary`, `/review-fix`, reviewer-agent orchestration, or review prompt contracts.
+- `skills/review-orchestration/SKILL.md`, its `*.schema.json`, and `skills/supapi-mode/playbooks/fix-review-findings.md` — read before changing `/review`, `/review-fix`, reviewer or verifier agents, or review report shape.
 - `extensions/trust-github-repos/README.md` — read before changing GitHub-owner auto-trust, `/trust-github-repos`, its global owners config, fail-closed behavior, or stored-trust boundaries.
 
 ## Major extension docs
@@ -46,14 +46,15 @@
 - `skills/plain-report/SKILL.md` — read before changing Final report style, reviewer `why`/`change` prose rules, the telegraph-versus-Plain-report split, or surfaces that reference `plain-report`.
 - `evals/plain-report/README.md` — read before changing the offline Plain report calibration linter, its rules, or its fixtures.
 - `skills/grilling/SKILL.md` — read before changing natural-language adversarial interviews or the shared grilling contract.
+- `CONTEXT.md` "Playbook architecture: P1–P4 implemented; paired eval pending", `skills/supapi-mode/`, and `rules/principles/` — read before adding the Hub skill, Playbooks, Principles, the core-prompt routing pointer, or converting commands into Playbooks.
 - `skills/grill-me/SKILL.md`, `prompts/grill-me.md`, and `extensions/prompt-commands/index.ts` — read before changing explicit `/grill-me <plan>` behavior. The prompt entrypoint stays queueable and retains a functional no-Extension fallback while the active Extension preserves its raw multiline argument before normal expansion; the command skill permits only lock-gated, qualifying changes to `CONTEXT.md`, `CONTEXT-MAP.md`, and ADRs.
 - `skills/showing-me/SKILL.md` and `prompts/show-me.md` — read before changing `/show-me`, its Explainer ladder, or where discardable HTML explainers are written.
 - `prompts/statechart.md` and `CONTEXT.md` "Statechart: implemented direction" — read before changing `/statechart`, the external statechart skill install, `/skill install` file-mode handling, or state-diagram guidance in `skills/architecture-diagrams/SKILL.md`.
 - `CONTEXT.md` "Skill CLI: implemented direction", `extensions/skills/ops.ts`, and `extensions/skills/core.ts` — read before changing `/skill`, the `pi-skill` CLI (`scripts/pi-skill.ts`), the shared Prompter-based skill orchestration, or skill-manifest write locking.
-- `skills/pr/SKILL.md` and `prompts/pr.md` — read before changing `/pr`, PR-body format, PR submission gates, or `rules/common/git-workflow.md` PR guidance.
+- `skills/supapi-mode/playbooks/opening-a-pr.md` and `prompts/pr.md` — read before changing `/pr`, PR-body format, PR submission gates, or `rules/common/git-workflow.md` PR guidance.
 - `skills/retro/SKILL.md` and `prompts/retro.md` — read before changing `/retro`, session selection and evidence, report-only boundaries, or agent-environment recommendation routing.
-- `extensions/execute/README.md` — read before changing `/execute`, Execution Brief reuse/synthesis, or execute orchestration behavior.
-- `skills/to-spec/SKILL.md` and `extensions/execute/README.md` — read before changing `/to-spec`, Spec format, Spec log, Snapshot refs, or Spec resume.
+- `skills/supapi-mode/playbooks/execute.md` and `prompts/execute.md` — read before changing `/execute` or execute orchestration behavior.
+- `skills/to-spec/SKILL.md` and `extensions/spec-log/README.md` — read before changing `/to-spec`, Spec format, Spec log, Snapshot refs, or Spec resume.
 - `extensions/goal/README.md` — read before changing `/goal`, goal task mode, goal checkpoint behavior, goal status rendering, or Goal Extension registration.
 - `extensions/init-deep/README.md` — read before changing `/init-deep` AGENTS.md generation behavior.
 - `extensions/lsp/README.md` — read before changing the LSP tool or `/lsp` command behavior.

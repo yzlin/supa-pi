@@ -11,7 +11,7 @@ This command prompt is composed with these required support docs:
 ## HARD RULES
 
 - Read-only by default. Do not edit files, implement code, create branches, commit, or run destructive commands.
-- MUST NOT create or modify execution-ledger assignments or goal state. This command does not authorize /execute.
+- MUST NOT write a Spec log or modify goal state. This command does not authorize /execute.
 - Delegate exploration to blocking `subagent({agent: "explorer", task})` calls only when the scope is broad: no scope instruction, or a scope that spans multiple unfamiliar Modules. For a narrow scope that direct reads can cover, explore in the main session.
 - Use the optional scope instruction when present. If absent, survey the repository broadly, then narrow based on explorer findings.
 - Report missing `CONTEXT.md`, `CONTEXT-MAP.md`, or `docs/adr/` / ADR docs as missing context. Do not block on missing docs.

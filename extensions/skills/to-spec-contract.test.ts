@@ -33,15 +33,15 @@ describe("to-spec resource and instruction contract (not model adherence)", () =
       disableModelInvocation: false,
     });
     expect(loaded.skills[0]?.description).toContain(
-      "/execute draft-then-execute packet",
+      "when the execute Playbook drafts a Spec",
     );
     expect(formatSkillsForPrompt(loaded.skills)).toContain("to-spec");
     expect(readSkill()).not.toContain("disable-model-invocation");
     expectInstructions([
       "Explicit /to-spec wrapper",
-      "Use when the user invokes /to-spec or when an /execute draft-then-execute packet requests it",
+      "Use when the user invokes /to-spec or when the execute Playbook drafts a Spec",
       "persists the current conversation's locked plan as a Spec for /execute.",
-      "execute Extension's `/to-spec` packet",
+      "`spec-log` Extension's `/to-spec` packet",
       "optional slug",
       "unaccepted Spec already exists",
     ]);
@@ -81,7 +81,7 @@ describe("to-spec resource and instruction contract (not model adherence)", () =
       "plain Markdown, no frontmatter",
       "status lives in the Spec log",
       "`Testing Seams` is optional",
-      "`Execution Scope`, `Plan`, `Done Criteria`, `Verification`, and `Out of Scope` are required for `/execute` brief detection",
+      "`Execution Scope`, `Plan`, `Done Criteria`, `Verification`, and `Out of Scope` are required; `spec_log` `lint` rejects a Spec without them",
       "literal workspace-relative paths where known",
       "`/execute` write scopes",
     ]);
@@ -108,12 +108,14 @@ describe("to-spec resource and instruction contract (not model adherence)", () =
     expect(template).toContain(
       "- DC-2: <necessary technical criterion> (technical)",
     );
+    expect(template).toContain(
+      "  Evidence: <exact command or check that proves it>",
+    );
     expectInstructions([
       "Each Done Criterion row is `- DC-n: <criterion> (US-n)` or `- DC-n: <criterion> (technical)`",
       "each unique",
       "indent continuation lines",
-      "`/execute` rejects a Spec with an unlabeled row, a repeated label, or no rows",
-      "each assignment declares the `DC-n` IDs it proves",
+      "`spec_log` `lint` rejects a Spec with an unlabeled row, a repeated label, a row without an `Evidence:` line, or no rows",
     ]);
   });
 
@@ -122,7 +124,7 @@ describe("to-spec resource and instruction contract (not model adherence)", () =
       "given slug or derive a short kebab-case slug from the goal",
       "^[a-z0-9][a-z0-9-]*$",
       "at most 48 characters",
-      "`status` and `classifier` are reserved subcommand words, never slugs",
+      "`status` is a reserved subcommand word, never a slug",
       "If `.pi/specs/<slug>.log.jsonl` has an `accepted` event, or cannot be read and parsed, refuse and suggest a new slug",
       "A log that is empty or has only `reviewed` events means the Spec was never accepted",
       "Extension itself refuses slugs whose Spec log has an `accepted` event or is corrupt",
@@ -138,23 +140,21 @@ describe("to-spec resource and instruction contract (not model adherence)", () =
       "create the `.pi/specs/` directory",
       "local and git-ignored",
       "Never write or edit the Spec log or Snapshot refs",
-      "Never edit a Spec after it is accepted",
-      "changes go through `/execute`'s explicit revision",
+      "`/to-spec` never edits a Spec after it is accepted",
+      "changes go through `/execute`'s Spec revision, where `spec_log` `accept` shows the diff",
       "Print the path",
       "`/execute @.pi/specs/<slug>.md`",
       "a fresh session is fine",
-      "`/to-spec status <slug>` shows progress",
-      "`/to-spec classifier [enable|disable]` shows or changes consent for the Spec review classifier",
-      "standalone `/to-spec` never reviews",
+      "`/to-spec status <slug>` shows progress as checkboxes",
       "before compaction when context is near its limit",
     ]);
   });
 
-  it("starts execution only from the /execute draft-then-execute packet", () => {
+  it("starts execution only when the execute Playbook drafts the Spec", () => {
     expectInstructions([
       "Suggest the commands; do not start execution automatically",
-      "Exception: when invoked as the first step of an `/execute` draft-then-execute packet",
-      "continue directly into the `execute` skill on that Spec, passing `specPath` on `accept`",
+      "Exception: when the execute Playbook drafts the Spec, do not stop after writing",
+      "continue with that Playbook on the Spec",
       "Standalone `/to-spec` never starts execution",
     ]);
   });

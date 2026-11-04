@@ -7,7 +7,7 @@ Rules:
 - Prefer `find`, `grep`, `ls`, `read`, and focused `bash` over speculative reasoning.
 - Track discovery, scoring, generation, and review in an ordinary working plan.
 - Finish or explicitly report blocked phases before the final answer.
-- /init-deep does not authorize /execute or execution-ledger assignments. Do not modify goal state.
+- /init-deep does not authorize /execute or Spec log writes. Do not modify goal state.
 - Use telegraphic style inside generated `AGENTS.md` files.
 - Do not add generic advice that applies to every repo.
 - Child `AGENTS.md` files must not repeat parent guidance.

@@ -9,7 +9,7 @@ origin: Andrej Karpathy's 2026-10-02 oversight idea; ASD-STE100 principles, para
 ## Scope
 
 - Use Plain report for Final reports and reviewer `why`/`change` text.
-- A Final report closes multi-step work: edits, investigations, delegated work, or review, diagnose, Wayfinder, and grill summaries.
+- A Final report closes multi-step work: edits, investigations, delegated work, or review, diagnose, and grill summaries.
 - Do not use Plain report for chat replies, one-line answers, lookups, or progress updates. Those stay terse and telegraphic.
 - When caveman mode is on, caveman voice overrides Plain report and the chat/progress style.
 - Higher-priority instructions, tested contracts, and required report structures take precedence over these style rules.

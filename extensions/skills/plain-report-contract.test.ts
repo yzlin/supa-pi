@@ -18,7 +18,7 @@ describe("plain-report skill contract", () => {
       "Use Plain report for Final reports and reviewer `why`/`change` text.",
     );
     expect(skill).toContain(
-      "A Final report closes multi-step work: edits, investigations, delegated work, or review, diagnose, Wayfinder, and grill summaries.",
+      "A Final report closes multi-step work: edits, investigations, delegated work, or review, diagnose, and grill summaries.",
     );
     expect(skill.split("\n").length).toBeLessThan(60);
   });

@@ -513,9 +513,7 @@ describe("context-docs runtime reminder", () => {
       const reminder = injectedEvent.systemPromptOptions.sections.context_docs;
       expect(reminder).toContain("Context-docs:");
       expect(reminder).toContain("CONTEXT.md domain/product only");
-      expect(reminder).toContain(
-        "no execution ledger, assignments, or goal state",
-      );
+      expect(reminder).toContain("no Spec log or goal state");
     } finally {
       fs.rmSync(tempRoot, { force: true, recursive: true });
     }
@@ -739,7 +737,7 @@ describe("context-docs prompt", () => {
     const message = buildPromptMessage("context-setup", "-- Refresh docs");
 
     expect(message).toContain(
-      "Do not create or modify execution-ledger assignments or goal state. This command does not authorize /execute.",
+      "Do not write a Spec log or modify goal state. This command does not authorize /execute.",
     );
   });
 
@@ -765,7 +763,7 @@ describe("context-docs prompt", () => {
     const envelopeRules = [
       "Treat the resolved command input as authoritative.",
       "Keep all work inside the resolved target root.",
-      "Do not create or modify execution-ledger assignments or goal state. This command does not authorize /execute.",
+      "Do not write a Spec log or modify goal state. This command does not authorize /execute.",
       "Never put secrets, credentials, tokens, private keys, or raw sensitive data in durable docs.",
       "Preserve existing structure and conventions; make the smallest safe edits.",
       "Use the canonical `context-docs` skill for all shared and command-specific workflow behavior.",

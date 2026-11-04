@@ -1,0 +1,72 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "reviewer": {
+      "type": "string",
+      "enum": [
+        "code-reviewer",
+        "security-reviewer",
+        "database-reviewer",
+        "performance-reviewer"
+      ]
+    },
+    "verdict": {
+      "type": "string",
+      "enum": ["correct", "needs attention"]
+    },
+    "findings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "priority": {
+            "type": "string",
+            "enum": ["P0", "P1", "P2", "P3"]
+          },
+          "title": {
+            "type": "string",
+            "minLength": 1
+          },
+          "file": {
+            "type": "string",
+            "minLength": 1
+          },
+          "line": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "why": {
+            "type": "string",
+            "minLength": 1
+          },
+          "change": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": ["priority", "title", "file", "line", "why", "change"]
+      }
+    },
+    "humanReviewerCallouts": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "notes": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "required": [
+    "reviewer",
+    "verdict",
+    "findings",
+    "humanReviewerCallouts",
+    "notes"
+  ]
+}

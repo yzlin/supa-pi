@@ -202,8 +202,8 @@ test("default-off and hard fallback paths preserve the effective catalog with ze
   expect(f.stats()).toMatchObject({ clientCreates: 0, judgeCalls: 0 });
 
   await f.configStore.save(true);
-  await f.input("please execute this safely");
-  const excludedMention = await f.before("please execute this safely", [
+  await f.input("please diagnose this safely");
+  const excludedMention = await f.before("please diagnose this safely", [
     normal,
   ]);
   expect(excludedMention.systemPromptOptions.skills).toEqual([normal]);

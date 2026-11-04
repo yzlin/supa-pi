@@ -230,7 +230,7 @@ test("Jev request and payload bounds fail before classification", async () => {
 
 test("classification thresholds, hidden exclusion, uncertainty and malformed/partial fallback", async () => {
   const prepared = prepareRoute({
-    skills: [skill("execute"), skill("hidden", true), skill("unknown")],
+    skills: [skill("diagnose"), skill("hidden", true), skill("unknown")],
     currentRequest: "x",
     recentText: "",
   });

@@ -49,6 +49,7 @@ import {
   type EvalCase,
   type RunMetrics,
   reduceRunEvent,
+  ROUTING_SKILL_ROOT,
   type ScoreResult,
   scoreRun,
   snapshotWorkspace,
@@ -835,6 +836,17 @@ export async function runVariant(
   )) {
     await mkdir(dirname(join(workspace, path)), { recursive: true });
     await writeFile(join(workspace, path), content);
+  }
+  if (options.evalCase.promptPath === "skills/supapi-mode/SKILL.md") {
+    // The varied hub body is the arm's prompt; playbooks come from the
+    // working tree so both arms read identical Playbook files.
+    const skillRoot = join(workspace, ROUTING_SKILL_ROOT);
+    await cp(
+      new URL("../../skills/supapi-mode/playbooks", import.meta.url),
+      join(skillRoot, "playbooks"),
+      { recursive: true },
+    );
+    await writeFile(join(skillRoot, "SKILL.md"), options.promptContent);
   }
   const initialWorkspaceSnapshot = await snapshotWorkspace(workspace);
   // Child usage (tokens, cost, turns) is folded into this run's metrics so a

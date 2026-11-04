@@ -47,12 +47,9 @@ describe("Plain report wiring contracts", () => {
     expect(prompt).not.toContain("ASD-STE100");
   });
 
-  it("applies Plain report to grill and Wayfinder decision summaries", () => {
+  it("applies Plain report to grill decision summaries", () => {
     expect(readRepositoryFile("skills/grilling/SKILL.md")).toContain(
       "Write the pre-lock summary in Plain report style per the `plain-report` skill.",
-    );
-    expect(readRepositoryFile("skills/wayfinder/SKILL.md")).toContain(
-      "Write the decision summary and handoff in Plain report style per the `plain-report` skill.",
     );
   });
 

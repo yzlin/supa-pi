@@ -2,7 +2,7 @@
 
 > This file extends [common/git-workflow.md](./git-workflow.md) with the development process that happens before git operations.
 
-For phased work, validate each intermediate phase; the final requested outcome must be usable.
+For phased work, follow [outcome-oriented-execution](../principles/outcome-oriented-execution.md) and [sequence-verifiable-units](../principles/sequence-verifiable-units.md).
 
 Use durable planning documents only when complexity, coordination, or rollout needs durable review. Seek independent review when risk, ambiguity, or blast radius makes it valuable; it is not mandatory for trivial changes.
 

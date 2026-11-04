@@ -204,7 +204,8 @@ describe("goal extension", () => {
     );
     expect(prompt).toContain("Independently inspect changes");
     expect(prompt).toContain("Only goal_checkpoint owns goal state");
-    expect(prompt).toContain("Do not call execute_checkpoint");
+    expect(prompt).toContain("Do not write a Spec log");
+    expect(prompt).not.toContain("execute_checkpoint");
     expect(prompt).not.toContain("repo task execution mechanism");
     expect(harness.notifications).toContainEqual({
       message: "Queued /goal continuation as follow-up",

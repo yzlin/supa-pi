@@ -1,0 +1,115 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "reviewScope": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "verdict": {
+      "type": "string",
+      "enum": ["correct", "needs attention"]
+    },
+    "findings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "memberIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            },
+            "minItems": 1
+          },
+          "priority": {
+            "type": "string",
+            "enum": ["P0", "P1", "P2", "P3"]
+          },
+          "title": {
+            "type": "string",
+            "minLength": 1
+          },
+          "trigger": {
+            "type": "string",
+            "minLength": 1
+          },
+          "why": {
+            "type": "string",
+            "minLength": 1
+          },
+          "change": {
+            "type": "string",
+            "minLength": 1
+          },
+          "sketches": {
+            "type": "array",
+            "maxItems": 2,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "kind": {
+                  "type": "string",
+                  "enum": ["flow", "diff"]
+                },
+                "text": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              },
+              "required": ["kind", "text"]
+            }
+          },
+          "confidence": {
+            "type": "string",
+            "enum": ["high", "medium", "low"]
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 1
+          },
+          "consensusEffect": {
+            "type": "string",
+            "enum": ["none", "raised-one-level"]
+          }
+        },
+        "required": [
+          "memberIds",
+          "priority",
+          "title",
+          "trigger",
+          "why",
+          "change",
+          "sketches",
+          "confidence",
+          "reason",
+          "consensusEffect"
+        ]
+      }
+    },
+    "rejected": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": ["id", "reason"]
+      }
+    }
+  },
+  "required": ["reviewScope", "verdict", "findings", "rejected"]
+}

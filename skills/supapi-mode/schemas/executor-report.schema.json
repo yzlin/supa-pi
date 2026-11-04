@@ -1,0 +1,76 @@
+{
+  "type": "object",
+  "required": [
+    "status",
+    "summary",
+    "filesTouched",
+    "validation",
+    "followUps",
+    "blockers"
+  ],
+  "properties": {
+    "status": {
+      "anyOf": [
+        {
+          "type": "string",
+          "const": "done"
+        },
+        {
+          "type": "string",
+          "const": "blocked"
+        },
+        {
+          "type": "string",
+          "const": "needs_followup"
+        }
+      ]
+    },
+    "summary": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 32000,
+      "pattern": "\\S"
+    },
+    "filesTouched": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 32000,
+        "pattern": "\\S"
+      },
+      "maxItems": 100
+    },
+    "validation": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 32000,
+        "pattern": "\\S"
+      },
+      "maxItems": 100
+    },
+    "followUps": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 32000,
+        "pattern": "\\S"
+      },
+      "maxItems": 100
+    },
+    "blockers": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 32000,
+        "pattern": "\\S"
+      },
+      "maxItems": 100
+    }
+  },
+  "additionalProperties": false
+}

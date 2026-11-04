@@ -26,7 +26,7 @@ Options:
 
 `/goal task --tasks N <objective>` starts task mode. It creates `N` placeholder tasks and prompts the main-session orchestrator to dispatch executor tasks sequentially. Each assignment uses one blocking `subagent({agent: "executor", task, schema})` call with a self-contained task, exact write scope, and the six-field executor report schema (`status`, `summary`, `filesTouched`, `validation`, `followUps`, `blockers`). Executors submit through internal `StructuredOutput`; main reads the captured `structuredContent.structuredOutput`, independently inspects changes and runs current checks before recording success. Schema validity is not completion proof; the orchestrator updates the checkpoint, selects the next task, and stops when the goal is complete, blocked, or budget-limited.
 
-Goal task mode uses only `goal_checkpoint`, not `/execute` authorization, its native-session ledger, or retired Task tools. The existing goal budgets, statuses, and checkpoint model are unchanged. Child abort/parent shutdown cancels owned queued/active children; `/goal stop` itself still clears goal state without interrupting the turn (see below).
+Goal task mode uses only `goal_checkpoint`, not the `spec_log` tool or retired Task tools; main verifies each executor result as the execute Playbook describes. The existing goal budgets, statuses, and checkpoint model are unchanged. Child abort/parent shutdown cancels owned queued/active children; `/goal stop` itself still clears goal state without interrupting the turn (see below).
 
 ## Budgets
 

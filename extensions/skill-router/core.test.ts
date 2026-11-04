@@ -35,7 +35,7 @@ function skill(root: string, name: string, description = "Useful"): Skill {
 
 test("policy excludes hard gates but allows unknown names", () => {
   const root = "/tmp/x";
-  const skills = [skill(root, "execute"), skill(root, "new-import")];
+  const skills = [skill(root, "diagnose"), skill(root, "new-import")];
   const result = prepareRoute({
     skills,
     currentRequest: "do it",

@@ -543,9 +543,10 @@ describe("committed corpus", () => {
       "AGENTS.global.md",
       "extensions/code-improvement/IMPROVE-CODEBASE-ARCHITECTURE.md",
       "skills/simplify/SKILL.md",
-      "skills/review-fix/SKILL.md",
+      "skills/supapi-mode/playbooks/fix-review-findings.md",
       "evals/prompt-optimization/prompts/execute-checker.md",
       "evals/prompt-optimization/prompts/review-verify.md",
+      "skills/supapi-mode/SKILL.md",
     );
     expect(coveredPaths).toEqual(new Set(expectedPaths));
   });
@@ -2557,6 +2558,27 @@ describe("composePrompt", () => {
     expect(prompt).toContain("# Diagnose\nReproduce first.");
     expect(prompt).not.toContain("name: diagnose");
   });
+
+  it("exposes the routing hub only through a one-entry skill catalog", () => {
+    const prompt = composePrompt(
+      "skills/supapi-mode/SKILL.md",
+      "---\nname: supapi-mode\ndescription: Route non-trivial work\n---\n\n# Hub body\nPick a Playbook.",
+    );
+    const core = readFileSync(
+      join(moduleDirectory, "../../extensions/core-prompt/prompt.md"),
+      "utf8",
+    ).trim();
+
+    expect(prompt).toStartWith(CORE_EVAL_BASE_PROMPT);
+    expect(prompt).toContain(core);
+    expect(prompt).toContain(
+      "<description>Route non-trivial work</description>",
+    );
+    expect(prompt).toContain(
+      "<location>.pi-skills/supapi-mode/SKILL.md</location>",
+    );
+    expect(prompt).not.toContain("Pick a Playbook.");
+  });
 });
 
 describe("run metrics", () => {
@@ -2697,6 +2719,70 @@ describe("scoreRun and aggregateVariants", () => {
         ])
       ).overall,
     ).toBe(1);
+  });
+
+  it("scores routing by successful reads of a path suffix", async () => {
+    const read = (path: string, isError = false) => ({
+      name: "read",
+      args: { path },
+      assistantTurn: 1,
+      isError,
+      resultText: "# Playbook",
+    });
+    const score = async (
+      present: boolean,
+      toolCalls: Parameters<typeof scoreRun>[0]["toolCalls"],
+    ) =>
+      (
+        await scoreRun(
+          { output: "", workspace: createTemporaryDirectory(), toolCalls },
+          [
+            {
+              type: "readsPath",
+              pathSuffix: ".pi-skills/supapi-mode/playbooks/bug-fix.md",
+              present,
+              domain: "task",
+              weight: 1,
+            },
+          ],
+        )
+      ).overall;
+    const hit = "/tmp/ws/.pi-skills/supapi-mode/playbooks/bug-fix.md";
+
+    expect(await score(true, [read(hit)])).toBe(1);
+    expect(await score(true, [read(hit, true)])).toBe(0);
+    expect(
+      await score(true, [
+        read("/tmp/ws/.pi-skills/supapi-mode/playbooks/feature.md"),
+      ]),
+    ).toBe(0);
+    expect(await score(false, [])).toBe(1);
+    expect(await score(false, [read(hit)])).toBe(0);
+  });
+
+  it("rejects a readsPath check without a boolean present", () => {
+    expect(() =>
+      parseCorpus({
+        version: 1,
+        cases: [
+          {
+            id: "routing-bad",
+            workload: "explanation",
+            promptPath: "skills/supapi-mode/SKILL.md",
+            task: "Route.",
+            tools: ["read"],
+            checks: [
+              {
+                type: "readsPath",
+                pathSuffix: "playbooks/bug-fix.md",
+                domain: "task",
+                weight: 1,
+              },
+            ],
+          },
+        ],
+      }),
+    ).toThrow("present must be a boolean");
   });
 
   it("binds reproduction evidence to the exact bash call and expected red result", async () => {

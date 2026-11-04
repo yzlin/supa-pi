@@ -11,7 +11,6 @@ import {
 } from "../node_modules/@earendil-works/pi-coding-agent/dist/modes/interactive/theme/theme.js";
 import btwExtension from "./btw";
 import goalExtension from "./goal";
-import reviewExtension from "./review";
 
 const keyHints = {
   keyText: () => "",
@@ -66,24 +65,6 @@ describe("custom message output padding", () => {
         content: "",
         display: true,
         details: { title: "Ship", status: "active" },
-        timestamp: Date.now(),
-      },
-      { expanded: false, outputPad: 1, ...keyHints },
-      theme,
-    );
-
-    expect(paddingX(component)).toBe(1);
-  });
-
-  it("uses outputPad for review reports", () => {
-    const renderer = captureRenderer(reviewExtension);
-    const component = renderer(
-      {
-        role: "custom",
-        customType: "review-report",
-        content: "# Review",
-        display: true,
-        details: { report: "# Review" },
         timestamp: Date.now(),
       },
       { expanded: false, outputPad: 1, ...keyHints },

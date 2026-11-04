@@ -24,12 +24,17 @@ export const CORE_EVAL_BASE_PROMPT = `You are an expert coding assistant operati
 Work inside the provided workspace. Inspect before editing. Make the smallest complete change. Preserve safety and type correctness. Verify changed behavior. Lead with the result and retain concrete evidence.`;
 export type CheckDomain = (typeof CHECK_DOMAINS)[number];
 const CORE_PROMPT_PATH = "extensions/core-prompt/prompt.md";
+const ROUTING_HUB_PATH = "skills/supapi-mode/SKILL.md";
+// Routing cases vary the hub skill. The fixture workspace carries copies of
+// the hub and its playbooks so `read` calls resolve, and the core prompt plus
+// a one-entry skill catalog come from the working tree for both arms.
+export const ROUTING_SKILL_ROOT = ".pi-skills/supapi-mode";
 // Command prompts reach the main session on top of the core prompt; only the
 // command file varies between arms.
 const COMMAND_PROMPT_PATHS = new Set([
   "extensions/code-improvement/IMPROVE-CODEBASE-ARCHITECTURE.md",
   "skills/simplify/SKILL.md",
-  "skills/review-fix/SKILL.md",
+  "skills/supapi-mode/playbooks/fix-review-findings.md",
   "evals/prompt-optimization/prompts/execute-checker.md",
   "evals/prompt-optimization/prompts/review-verify.md",
 ]);
@@ -137,6 +142,11 @@ export type EvalCheck =
   | (CheckBase & { type: "fileEquals"; path: string; value: string })
   | (CheckBase & { type: "toolCalled"; name: string })
   | (CheckBase & { type: "toolNotCalled"; name: string })
+  | (CheckBase & {
+      type: "readsPath";
+      pathSuffix: string;
+      present: boolean;
+    })
   | ToolCallCountCheck
   | (ToolCallMatchCheck & { type: "toolCallMatches" })
   | (ToolCallSequenceCheck & { type: "toolCallSequence" })
@@ -370,6 +380,17 @@ function parseCheck(value: unknown, label: string): EvalCheck {
     case "toolNotCalled":
       assertNonEmptyString(value.name, `${label}.name`);
       return { ...base, type: value.type, name: value.name };
+    case "readsPath":
+      assertNonEmptyString(value.pathSuffix, `${label}.pathSuffix`);
+      if (typeof value.present !== "boolean") {
+        throw new Error(`${label}.present must be a boolean`);
+      }
+      return {
+        ...base,
+        type: value.type,
+        pathSuffix: value.pathSuffix,
+        present: value.present,
+      };
     case "toolCallCount": {
       assertNonEmptyString(value.name, `${label}.name`);
       let args: Record<string, unknown> | undefined;
@@ -666,6 +687,7 @@ export function parseCorpus(value: unknown): EvalCorpus {
     }
     if (
       caseValue.promptPath !== "extensions/core-prompt/prompt.md" &&
+      caseValue.promptPath !== ROUTING_HUB_PATH &&
       caseValue.promptPath !== "skills/diagnose/SKILL.md" &&
       caseValue.promptPath !== "skills/showing-me/SKILL.md" &&
       caseValue.promptPath !== "skills/e2e-testing/SKILL.md" &&
@@ -917,6 +939,26 @@ export async function loadPromptPair(
 export function composePrompt(promptPath: string, content: string): string {
   if (promptPath === "extensions/core-prompt/prompt.md") {
     return `${CORE_EVAL_BASE_PROMPT}\n\n${content}`;
+  }
+  if (promptPath === ROUTING_HUB_PATH) {
+    const core = readStableContainedFile(REPOSITORY_ROOT, CORE_PROMPT_PATH)
+      .toString("utf8")
+      .trim();
+    const { frontmatter } = parseFrontmatter<{ description?: string }>(content);
+    return [
+      CORE_EVAL_BASE_PROMPT,
+      core,
+      [
+        "Use the read tool to load a skill's file when the task matches its description. Resolve relative paths against the skill's directory.",
+        "<available_skills>",
+        "  <skill>",
+        "    <name>supapi-mode</name>",
+        `    <description>${frontmatter.description ?? ""}</description>`,
+        `    <location>${ROUTING_SKILL_ROOT}/SKILL.md</location>`,
+        "  </skill>",
+        "</available_skills>",
+      ].join("\n"),
+    ].join("\n\n");
   }
   if (COMMAND_PROMPT_PATHS.has(promptPath)) {
     const core = readStableContainedFile(REPOSITORY_ROOT, CORE_PROMPT_PATH)
@@ -1477,6 +1519,20 @@ async function scoreCheck(
         check,
         passed,
         evidence: `${check.name} called ${count} time(s)`,
+      };
+    }
+    case "readsPath": {
+      const count = input.toolCalls.filter(
+        (call) =>
+          call.name === "read" &&
+          call.isError !== true &&
+          typeof call.args.path === "string" &&
+          call.args.path.endsWith(check.pathSuffix),
+      ).length;
+      return {
+        check,
+        passed: check.present ? count > 0 : count === 0,
+        evidence: `read ${check.pathSuffix}: ${count} successful call(s)`,
       };
     }
     case "toolCallCount": {

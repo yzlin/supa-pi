@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
 const prCommandEntry = /["']?pr["']?\s*:\s*\{/u;
@@ -10,11 +10,13 @@ function readRepositoryFile(path: string): string {
   return readFileSync(join(process.cwd(), path), "utf8");
 }
 
-const skill = readRepositoryFile("skills/pr/SKILL.md");
+const skill = readRepositoryFile(
+  "skills/supapi-mode/playbooks/opening-a-pr.md",
+);
 
-describe("pr skill contract", () => {
+describe("opening-a-pr Playbook contract", () => {
   it.each([
-    "name: pr",
+    "# Opening a PR",
     "Accept an optional `--base <branch>`",
     "Reject malformed or extra arguments",
     "if origin is missing, report it and stop",
@@ -48,7 +50,12 @@ describe("pr skill contract", () => {
     "Record each failure under Evidence and flag failures prominently in the confirmation",
     "<type>: <description>",
     "feat, fix, refactor, build, ci, chore, docs, style, perf, test",
+    "## Why",
     "## Summary",
+    "## Scope",
+    "## Tradeoffs",
+    "Drop any section with nothing to say",
+    "reuse its stated goal and verification evidence",
     "Apply the `showing-me` skill to the diff",
     "Choose the smallest useful view",
     "## Evidence",
@@ -84,6 +91,7 @@ describe("pr skill contract", () => {
     "Matt Pocock's MIT-licensed",
     "c55ee46073ed923f86ce59a5eb3b6d895095d1b7",
     "HumanLayer's MIT-licensed `show-me`; credit is carried by `skills/showing-me`",
+    "pstack `opening-a-pr` Playbook",
   ])("preserves %s", (requirement) => {
     expect(skill).toContain(requirement);
   });
@@ -111,12 +119,16 @@ describe("pr skill contract", () => {
     expect(skill).not.toContain("--draft");
   });
 
-  it("keeps /pr as a thin canonical prompt wrapper", () => {
+  it("keeps /pr as a thin alias that opens the Playbook by path", () => {
     const prompt = readRepositoryFile("prompts/pr.md");
     expect(prompt).toContain('argument-hint: "[--base <branch>]"');
     expect(prompt).toContain(
-      "Use the `pr` skill as canonical for this explicit command.",
+      "Use the `opening-a-pr` Playbook as canonical for this explicit command.",
     );
+    expect(prompt).toContain(
+      "read `skills/supapi-mode/playbooks/opening-a-pr.md` from the SupaPi checkout",
+    );
+    expect(existsSync(join(process.cwd(), "skills", "pr"))).toBe(false);
     expect(prompt).toContain(
       ["$", "{@:-Use the repository default branch as base.}"].join(""),
     );

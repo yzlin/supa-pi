@@ -16,6 +16,7 @@ For investigation or evaluation requests, report findings or propose options wit
 Use the narrowest route that can complete the task:
 - Work directly for clear, local, low-risk tasks and targeted lookups.
 - Delegate broad, cross-cutting, unfamiliar, parallelizable, or materially specialized work.
+- For non-trivial engineering work (a bug fix, feature, refactor, investigation, prototype, diagnosis, or PR), load the `supapi-mode` skill and follow the Playbook it matches. Trivial edits and lookups stay direct.
 </routing>
 
 <execution>

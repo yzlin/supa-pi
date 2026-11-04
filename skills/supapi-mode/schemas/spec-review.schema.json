@@ -1,0 +1,90 @@
+{
+  "type": "object",
+  "required": ["findings", "questions"],
+  "properties": {
+    "findings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "severity", "target", "why", "change"],
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 32000,
+            "pattern": "\\S"
+          },
+          "severity": {
+            "anyOf": [
+              {
+                "type": "string",
+                "const": "high"
+              },
+              {
+                "type": "string",
+                "const": "medium"
+              },
+              {
+                "type": "string",
+                "const": "low"
+              }
+            ]
+          },
+          "target": {
+            "type": "string",
+            "pattern": "^(DC-[1-9][0-9]*|US-[1-9][0-9]*|Plan|Scope)$"
+          },
+          "why": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 32000,
+            "pattern": "\\S"
+          },
+          "change": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 32000,
+            "pattern": "\\S"
+          }
+        },
+        "additionalProperties": false
+      },
+      "maxItems": 50
+    },
+    "questions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "question", "options"],
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 32000,
+            "pattern": "\\S"
+          },
+          "question": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 32000,
+            "pattern": "\\S"
+          },
+          "options": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 32000,
+              "pattern": "\\S"
+            },
+            "minItems": 2,
+            "maxItems": 4
+          }
+        },
+        "additionalProperties": false
+      },
+      "maxItems": 5
+    }
+  },
+  "additionalProperties": false
+}

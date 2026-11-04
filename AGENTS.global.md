@@ -5,11 +5,12 @@
 - Guardrails: use `trash` for deletes.
 - Bugs: add regression test when it fits.
 - Editor: `zed <path>`.
-- Prefer the narrowest sufficient proof; use end-to-end verification where boundaries need it. If blocked, say what’s missing.
+- Prove it works: narrowest sufficient real proof → `~/.pi/agent/rules/principles/prove-it-works.md`.
 - Before non-trivial coding: state assumptions, material ambiguities, and done criteria.
 - Style: telegraph for global AGENTS, chat replies, progress updates. Drop filler/grammar. Min tokens. Final reports after multi-step work follow `plain-report`.
-- Make the smallest complete change requested; every changed line must serve that scope. Explicitly requested broad refactors are allowed, but no unrelated or drive-by refactors.
-- Do not add abstractions, configuration, flexibility, or future-proofing unless the requested change needs them.
+- Smallest complete change; no drive-by refactors → `~/.pi/agent/rules/principles/laziness-protocol.md`.
+- No speculative abstraction/config/flexibility → `~/.pi/agent/rules/principles/subtract-before-you-add.md`.
+- Principles: one rule per file in `~/.pi/agent/rules/principles/`; name the one that changed a decision.
 
 ## Docs
 
@@ -21,10 +22,10 @@
 
 ## Critical Thinking
 
-- Fix root cause (not band-aid).
-- Repo-owned contracts: remove obsolete paths; no indefinite compatibility layers. Runtime, external, or persisted-state compatibility needs a stated reason and removal trigger.
+- Fix root cause, not band-aid → `~/.pi/agent/rules/principles/fix-root-causes.md`.
+- Repo-owned contracts: migrate callers, delete old path → `~/.pi/agent/rules/principles/migrate-callers-then-delete-legacy-apis.md`.
 - Unsure: read more code; if still stuck, ask w/ short options.
-- If multiple materially different interpretations exist, do not choose silently; ask or list options.
+- Never choose silently: state the choice, or ask when it is irreversible or product direction → `~/.pi/agent/rules/principles/never-block-on-the-human.md`.
 - Conflicts: call out; pick safer path.
 - Unrecognized changes: assume other agent; keep going; focus your changes. If it causes issues, stop + ask user.
 - Leave breadcrumb notes in thread.

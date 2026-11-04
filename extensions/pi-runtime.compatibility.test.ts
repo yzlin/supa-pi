@@ -19,7 +19,7 @@ const loaderUrl = new URL("./core/extensions/loader.js", codingAgentEntry);
 const { loadExtensions } = await import(loaderUrl.href);
 const result = await loadExtensions([
   ${JSON.stringify(resolve(projectRoot, "extensions/notify.ts"))},
-  ${JSON.stringify(resolve(projectRoot, "extensions/execute"))},
+  ${JSON.stringify(resolve(projectRoot, "extensions/spec-log"))},
   ${JSON.stringify(resolve(projectRoot, "extensions/model-profiles"))},
 ], ${JSON.stringify(projectRoot)});
 process.stdout.write(JSON.stringify({ loaded: result.extensions.length, errors: result.errors }));
@@ -35,7 +35,7 @@ describe("Pi runtime compatibility", () => {
     }
   });
 
-  test("loads execute and model-profiles with production defaults through Pi's Node loader", () => {
+  test("loads spec-log and model-profiles with production defaults through Pi's Node loader", () => {
     const result = spawnSync(
       "node",
       ["--input-type=module", "--eval", loadMultipleExtensionsScript],

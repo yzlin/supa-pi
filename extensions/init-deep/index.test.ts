@@ -136,7 +136,7 @@ describe("init-deep prompt builder", () => {
       "Finish or explicitly report blocked phases before the final answer.",
     );
     expect(message).toContain(
-      "/init-deep does not authorize /execute or execution-ledger assignments.",
+      "/init-deep does not authorize /execute or Spec log writes.",
     );
     expect(message).toContain(
       'blocking `subagent({agent: "explorer", task})` calls',
