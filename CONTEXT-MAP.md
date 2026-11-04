@@ -53,6 +53,7 @@
 - `skills/showing-me/SKILL.md` and `prompts/show-me.md` — read before changing `/show-me`, its Explainer ladder, or where discardable HTML explainers are written.
 - `skills/why/SKILL.md` and `prompts/why.md` — read before changing `/why`, its evidence tiers, or which sources it searches by default.
 - `skills/teach/SKILL.md` and `prompts/teach.md` — read before changing `/teach` or how it reuses the investigation how-it-works step and `why`.
+- `skills/ketchup/SKILL.md` and `prompts/ketchup.md` — read before changing `/ketchup`, what counts as an action item, or how it differs from `/wait-what`.
 - `skills/blast-radius/SKILL.md` and `prompts/blast-radius.md` — read before changing `/blast-radius`, its proof ladder, or where its probes run.
 - `prompts/statechart.md` and `CONTEXT.md` "Statechart: implemented direction" — read before changing `/statechart`, the external statechart skill install, `/skill install` file-mode handling, or state-diagram guidance in `skills/architecture-diagrams/SKILL.md`.
 - `CONTEXT.md` "Skill CLI: implemented direction", `extensions/skills/ops.ts`, and `extensions/skills/core.ts` — read before changing `/skill`, the `pi-skill` CLI (`scripts/pi-skill.ts`), the shared Prompter-based skill orchestration, or skill-manifest write locking.
