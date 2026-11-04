@@ -15,6 +15,7 @@
 - `docs/adr/0003-main-executed-execute-attempts.md` — read before changing `/execute` start or verify rules, the `executor` ledger field, main-attempt guards, or when `/execute` delegates to children.
 - `docs/adr/0004-merged-review-verifier.md` — read before changing `/review` grouping, the verifier schema or prompt, rejected-candidate handling, or review model configuration.
 - `docs/adr/0005-playbook-prose-gates.md` — read before moving `/execute`, `/review`, or `/goal` gates into Playbook prose, or deleting their enforcement code (status: proposed; supersedes 0003/0004 only after the paired eval passes).
+- `evals/paired-path/README.md` — read before running or changing the old-vs-new execute and review comparison.
 
 ## Context notes
 

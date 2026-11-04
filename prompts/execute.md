@@ -1,5 +1,5 @@
 ---
-description: Execute a Spec or plan with main-session verification and a Spec log: /execute [@.pi/specs/<slug>.md | plan]
+description: "Execute a Spec or plan with main-session verification and a Spec log"
 argument-hint: "[@.pi/specs/<slug>.md | plan text]"
 ---
 
