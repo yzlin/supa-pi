@@ -138,12 +138,16 @@ export default function subagentExtension(pi: ExtensionAPI): void {
 }
 
 // The model sees only `content`, so the validated report goes there too; parents
-// need no extra read of result.json. Capped like other output; evidence keeps the rest.
+// need no extra read of result.json. A capped report is cut JSON that will not
+// parse, so it is left out and the parent reads it from evidence instead.
 export function resultText(result: SubagentResult): string {
   const header = `Subagent completed: ${result.runId}\nModel: ${result.provider}/${result.model} (${result.thinking})\nEvidence: ${result.resultPath}${result.sessionFile ? `\nChild session: ${result.sessionFile}` : ""}`;
   if (result.structuredOutput === undefined) {
     return `${header}\n\n${result.output || "(no text output)"}`;
   }
-  const report = truncateHead(JSON.stringify(result.structuredOutput, null, 2));
-  return `${header}${result.output ? `\n\n${result.output}` : ""}\n\nValidated StructuredOutput:\n${report.content}${report.truncated ? `\n[StructuredOutput capped. Complete evidence: ${result.resultPath}]` : ""}`;
+  const json = JSON.stringify(result.structuredOutput, null, 2);
+  const report = truncateHead(json).truncated
+    ? `Validated StructuredOutput:\n[StructuredOutput capped: ${Buffer.byteLength(json)} bytes is over the tool result limit. Complete evidence: ${result.resultPath}]`
+    : `Validated StructuredOutput:\n${json}`;
+  return `${header}${result.output ? `\n\n${result.output}` : ""}\n\n${report}`;
 }

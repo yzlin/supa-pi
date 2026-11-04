@@ -327,7 +327,14 @@ test("result text carries the validated StructuredOutput", () => {
     ...base,
     structuredOutput: { lines: Array.from({ length: 5000 }, (_, i) => i) },
   });
-  expect(huge).toContain(
-    "[StructuredOutput capped. Complete evidence: /evidence/result.json]",
-  );
+  expect(huge).toContain("[StructuredOutput capped: ");
+  expect(huge).toContain("Complete evidence: /evidence/result.json]");
+  expect(huge).not.toContain("\n{\n");
+  // Regression (blast-radius on 753fd28): one line over the byte cap left a bare "{".
+  const longLine = resultText({
+    ...base,
+    structuredOutput: { s: "x".repeat(60_000) },
+  });
+  expect(longLine).toEndWith("Complete evidence: /evidence/result.json]");
+  expect(longLine).not.toContain("\n{");
 });

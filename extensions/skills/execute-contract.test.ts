@@ -48,6 +48,14 @@ describe("execute Playbook contract (wiring, not model adherence)", () => {
     expect(text).not.toContain("structuredContent");
   });
 
+  it("keeps goal task-mode docs on the model-visible report", () => {
+    const readme = read("extensions/goal/README.md");
+    expect(readme).toContain(
+      '"Validated StructuredOutput" JSON in the tool result',
+    );
+    expect(readme).not.toContain("structuredContent.structuredOutput");
+  });
+
   it("reviews a Spec with two spec-reviewers and records the decision", () => {
     const text = playbook();
     expect(text).toContain("agent `spec-reviewer`");
