@@ -7,7 +7,7 @@ You own the behavior contract. The structure changes; the behavior does not. A r
 3. Subtract first: delete dead code, collapse one-caller wrappers, and drop redundant checks before you add the new shape.
 4. For `/simplify` or a scoped cleanup request, load the `simplify` skill and follow it as canonical for edit boundaries, baseline, audit, and report.
 5. Move in small behavior-preserving steps that keep the pin green. When an internal API changes, migrate every caller and delete the old API in the same change. Check renames against strings, docs, and back-references.
-6. Prove behavior is unchanged on the real artifact, then run `bun run check` or the repository's check command.
+6. Prove behavior is unchanged on the real artifact, then run `bun run check` or the repository's check command. When the reshape renames or moves strings, formats, or files other code may read, run the `blast-radius` skill on the change first.
 7. Keep the change only if it lowers reader load somewhere, as `minimize-reader-load` measures it. Otherwise revert it.
 8. If the user asked for a PR, run the `opening-a-pr` Playbook.
 
