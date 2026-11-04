@@ -2,7 +2,7 @@
 
 You own the design and its proof. Name the data shape before you write logic.
 
-1. Learn the affected subsystem: read the code, its tests, and the docs the context map routes you to.
+1. Learn the affected subsystem: read the code, its tests, and the docs the context map routes you to. Keep the reading sized as in the `investigation` Playbook step 2.
 2. Name the data shape and its organizing structure: a state machine over scattered booleans, a table over branching, a typed model over repeated shape assumptions.
 3. When the shape crosses a function or module boundary, sketch types, signatures, and module layout before implementation. Compare two or three shapes when no precedent exists in the codebase.
 4. Plan the decomposition: blocking first steps, independent workstreams with disjoint write scopes, and shared state. Delegate parallel disjoint slices with the `subagent` tool; otherwise implement in the main session.

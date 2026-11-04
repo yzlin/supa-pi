@@ -66,6 +66,26 @@ describe("supapi-mode hub contract (not model adherence)", () => {
     );
   });
 
+  it("sizes how-it-works questions and reuses that step from other Playbooks", () => {
+    const playbook = (name: string) =>
+      readFileSync(
+        join(root, "skills", "supapi-mode", "playbooks", `${name}.md`),
+        "utf8",
+      );
+    const investigation = playbook("investigation");
+    expect(investigation).toContain("size it first");
+    expect(investigation).toContain("gets 2–4 `explorer` children in parallel");
+    expect(investigation).toContain(
+      "open every cited location before you report it",
+    );
+    expect(investigation).toContain("When in doubt, stay in the main session.");
+    for (const name of ["bug-fix", "feature", "refactoring"]) {
+      expect(playbook(name)).toContain(
+        "sized as in the `investigation` Playbook step 2",
+      );
+    }
+  });
+
   it("is reached from the always-on core prompt pointer", () => {
     const routing = read("extensions/core-prompt/prompt.md")
       .split("<routing>")[1]
