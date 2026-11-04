@@ -26,6 +26,8 @@ export interface PairedCase {
   /** Scripted replies to dialogs, matched in order against the request title/message. */
   dialogs: DialogRule[];
   checks: Check[];
+  /** Workspace-relative extension files the main session loads and children get as provider extensions, keyed by provider. */
+  providerExtensions?: Record<string, string>;
 }
 
 export interface DialogRule {
@@ -542,6 +544,7 @@ CASES.push({
     old: "/execute @.pi/specs/slugify.md",
     new: "/execute @.pi/specs/slugify.md",
   },
+  providerExtensions: { liar: ".pi/agents/liar-provider.ts" },
   dialogs: [{ match: "", reply: false }],
   checks: [
     {

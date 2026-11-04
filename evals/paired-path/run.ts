@@ -162,7 +162,12 @@ export function seedWorkspace(dir: string, testCase: PairedCase) {
  * repo-owned resource at one worktree. Credentials and the claude-code provider
  * are shared read-only; the claude binary keeps the real HOME for its login.
  */
-export function buildHome(home: string, worktree: string, base: string) {
+export function buildHome(
+  home: string,
+  worktree: string,
+  base: string,
+  providerExtensions: Record<string, string> = {},
+) {
   const agent = join(home, ".pi", "agent");
   mkdirSync(join(agent, "extensions"), { recursive: true });
   for (const name of ["agents", "prompts", "rules", "themes"]) {
@@ -172,22 +177,35 @@ export function buildHome(home: string, worktree: string, base: string) {
   symlinkSync(worktree, join(agent, "extensions", "supa-pi"));
   // subagent.json loads the claude-code provider in children from git/; review.json
   // is the old /review panel config. Both mirror the live setup read-only.
-  for (const name of [
-    "auth.json",
-    "models.json",
-    "subagent.json",
-    "review.json",
-    "git",
-  ]) {
+  for (const name of ["auth.json", "models.json", "review.json", "git"]) {
     if (existsSync(join(REAL_AGENT, name))) {
       symlinkSync(join(REAL_AGENT, name), join(agent, name));
     }
   }
+  // Case provider extensions load in the main session (so subagent can resolve their
+  // models) and in children through subagent.json, next to the live claude-code entry.
+  const caseExtensions = Object.fromEntries(
+    Object.entries(providerExtensions).map(([provider, file]) => [
+      provider,
+      [join(base, file)],
+    ]),
+  );
+  const live = existsSync(join(REAL_AGENT, "subagent.json"))
+    ? JSON.parse(readFileSync(join(REAL_AGENT, "subagent.json"), "utf8"))
+    : {};
+  writeFileSync(
+    join(agent, "subagent.json"),
+    JSON.stringify({
+      ...live,
+      providerExtensions: { ...live.providerExtensions, ...caseExtensions },
+    }),
+  );
   writeFileSync(
     join(agent, "settings.json"),
     JSON.stringify(
       {
         packages: [CLAUDE_CODE_PACKAGE],
+        extensions: Object.values(caseExtensions).flat(),
         defaultProvider: "claude-code",
         defaultModel: "claude-opus-5-5",
         defaultThinkingLevel: "medium",
@@ -271,7 +289,12 @@ export function runOne(
   const workspace = join(dir, "ws");
   const home = join(dir, "home");
   seedWorkspace(workspace, testCase);
-  const { wrapper } = buildHome(home, worktree, workspace);
+  const { wrapper } = buildHome(
+    home,
+    worktree,
+    workspace,
+    testCase.providerExtensions,
+  );
   const [provider, ...rest] = options.model.split("/");
   const env = {
     ...process.env,
