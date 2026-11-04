@@ -81,3 +81,14 @@ Old `a503abd` vs new `33745fe`. A trusted `.pi/agents/executor.md` shadows the g
 Main ran the real tests after each child in every run, rejected the false `done`, retried at most twice (3 calls total), then recorded a block. Main made no edits itself, so the block is the only correct end. One new-path run used all three tries the Playbook allows; the old path used at most two.
 
 A first attempt used a Haiku agent told to lie. It did the real work in 6 of 6 runs, so model test doubles do not lie reliably. Use the scripted provider.
+
+## Review cost: report in the tool result, 2026-11-05, 2 repetitions
+
+New path only (`--arm new`), before `b76fb3f` vs after `753fd28`. Before the fix, the `subagent` tool result said only "Validated StructuredOutput saved in evidence", so main opened each child's `result.json` with bash. Each main turn re-sends about 20–30k tokens, so every extra call is expensive. Now the tool result text includes the validated JSON (capped; evidence keeps the rest).
+
+| Case | Before: main / total tokens | After: main / total tokens | `result.json` reads |
+| --- | --- | --- | --- |
+| review-clean | 172k / 236k, 213k / 278k | 123k / 187k, 147k / 212k | 1, 1 → 0, 0 |
+| review-seeded-bugs | 200k / 313k, 259k / 403k | 167k / 345k, 180k / 306k | 2, 3 → 0, 0 |
+
+All checks passed in all 8 runs. Main-session tokens fell 23–31%. Wall time did not change (about 60 s clean, 125 s seeded). Totals on seeded-bugs also vary with the reviewer set: main added `security-reviewer` in 1 of 2 runs before and 1 of 2 after, although no changed path matches the table. Main still spends 1–3 turns finding `SKILL.md` through the prompt alias.
