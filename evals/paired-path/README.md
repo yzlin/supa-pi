@@ -103,3 +103,14 @@ New path only, `7020627`. The `/review`, `/review-fix`, `/execute`, and `/pr` al
 | review-seeded-bugs | 167k, 180k → 141k, 145k | 345k, 306k → 268k, 306k | 0, 0 |
 
 All checks passed in all 4 runs. Against the first baseline (`b76fb3f`), main-session tokens fell 40–46% on review-clean and 30–44% on review-seeded-bugs. Main again added `security-reviewer` in 1 of 2 seeded-bugs runs with no path match.
+
+## Review specialists: word match, 2026-11-05, 2 repetitions
+
+New path only, `2d1cefe`. The specialist table now matches a word against directory names and file names without extensions (`auth` matches `src/auth.ts`), and the skill says "Add no specialist the table does not match." New checks: `security-reviewer-ran` on review-seeded-bugs and `no-extra-specialist` on review-clean. The old path matches directories only, so it is expected to fail `security-reviewer-ran`.
+
+| Case | Reviewers | Main / total tokens | Checks |
+| --- | --- | --- | --- |
+| review-clean | code-reviewer (2 of 2) | 127k / 192k, 103k / 168k | 3/3, 3/3 |
+| review-seeded-bugs | code-reviewer + security-reviewer (2 of 2) | 169k / 314k, 148k / 311k | 5/5, 5/5 |
+
+The reviewer set no longer varies between runs. Seeded-bugs totals are now steady at about 310k, close to the one earlier run that also added `security-reviewer` (306k).

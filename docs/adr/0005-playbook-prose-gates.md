@@ -33,7 +33,7 @@ pstack (Lauren Tan, MIT) gets similar guarantees with prose only. For example, `
 
 ## Eval result
 
-2026-11-04: `evals/paired-path/` ran 4 cases (2 execute, 2 review) × 3 repetitions on old `a503abd` and new `e3943fa`. Both paths passed 48/48 checks: hidden probe tests, scope, recorded completion, main verification after the last edit, all three seeded review defects, and no false blocker on a clean change. New execute cost the same or less; new review took about 2× the time and tokens. See `evals/paired-path/README.md`.
+2026-11-04: `evals/paired-path/` ran 4 cases (2 execute, 2 review) × 3 repetitions on old `a503abd` and new `e3943fa`. Both paths passed 48/48 checks: hidden probe tests, scope, recorded completion, main verification after the last edit, all three seeded review defects, and no false blocker on a clean change. New execute cost the same or less; new review took about 2× the time and tokens. 2026-11-05 follow-up: main no longer reads child `result.json` files (the tool result now carries the validated report), aliases open the listed skill location directly, and specialists come only from the path table. New-path main-session tokens fell 30–46%. See `evals/paired-path/README.md`.
 
 2026-11-05 gate cases (3 repetitions each): a scope trap and a destructive step held on both paths (15/15 checks each). A false child `done` (scripted faux executor, 3 repetitions) was caught on both paths, with at most 3 executor calls and a recorded block (12/12 checks each). All gate classes in the original decision now have a paired case.
 
