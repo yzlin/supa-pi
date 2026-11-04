@@ -40,6 +40,7 @@ The repository is optimized for local workflow quality and maintainable agent be
 - **Final report** — the reply that closes multi-step work: edits, investigations, delegated work, or review, diagnose, and grill summaries. One-line answers and lookups are not Final reports. _Avoid_: summary turn, any long reply.
 - **Plain report** — the output style for Final reports and reviewer `why`/`change` text: roughly 80% of ASD-STE100 Simplified Technical English, using `CONTEXT.md` vocabulary. _Avoid_: STE mode, caveman.
 - **Explainer rung** — one output format on the `/show-me` ladder: text, diagram, or HTML. Video is a deferred rung. _Avoid_: view mode.
+- **Evidence tier** — the grade a `/why` claim carries: Direct, Supported, Inferred, Speculative, or Unknown. The tier sets the claim's section and wording; code is never evidence of its own intent. _Avoid_: confidence score.
 - **Hub skill** — the single orchestrator skill `skills/supapi-mode/` that matches non-trivial work to one Playbook and names the Principles it applies. _Avoid_: mode prompt, router extension.
 - **Playbook** — an ordered step file under `skills/supapi-mode/playbooks/` for one task type, loaded by path only when the Hub skill matches it; it sequences Workflow skills and subagents. _Avoid_: workflow skill, command.
 - **Principle** — one named engineering rule under `rules/principles/`, cited by name when it changes a decision. _Avoid_: task rule, guideline.

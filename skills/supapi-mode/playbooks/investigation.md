@@ -4,6 +4,7 @@ You own the answer. The deliverable is a cited explanation or a recommendation, 
 
 1. Restate the question and what a good answer lets the user decide.
 2. Search before you build an answer, per `rules/principles/search-first.md`. Check existing code, docs (`docs_list`, `CONTEXT.md`, `CONTEXT-MAP.md`, ADRs), and git history before any external research. For a simple local lookup, search the repository directly in the main session without launching a researcher.
+   For a "why is it shaped this way" question about code, a rule, or a decision, load the `why` skill and follow it as canonical; it owns the git-history search and the evidence tiers.
 3. Route external facts through the `research-mode` skill. Delegate broad or parallel reading to the `explorer` or `researcher` agent with the `subagent` tool; keep summaries, not raw payloads, in the main thread.
    The main session owns research dispatch. Dispatch the researcher only after the local checks fail to meet the requirements. It is a blocking call to a fresh task-only child, so include every needed fact; by default it returns a brief and writes no file:
 
