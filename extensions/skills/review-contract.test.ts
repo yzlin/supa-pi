@@ -109,4 +109,16 @@ describe("report-only review contract (wiring, not model adherence)", () => {
       expect(alias.split("\n").length).toBeLessThan(16);
     }
   });
+
+  // Regression: the old "resolve through the SupaPi link" pointer cost 1-3 main
+  // turns of path search per run (evals/paired-path README, review cost).
+  it("aliases open the listed skill location instead of searching", () => {
+    for (const file of ["review", "review-fix", "execute", "pr"]) {
+      const alias = read(`prompts/${file}.md`);
+      expect(alias).toContain(
+        "listed in `<available_skills>` directly; do not search for it.",
+      );
+      expect(alias).not.toContain("PI_CODING_AGENT_DIR");
+    }
+  });
 });

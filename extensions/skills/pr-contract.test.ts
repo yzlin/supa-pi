@@ -126,7 +126,7 @@ describe("opening-a-pr Playbook contract", () => {
       "Use the `opening-a-pr` Playbook as canonical for this explicit command.",
     );
     expect(prompt).toContain(
-      "read `skills/supapi-mode/playbooks/opening-a-pr.md` from the SupaPi checkout",
+      "open `playbooks/opening-a-pr.md` in the directory of the `supapi-mode` location listed in `<available_skills>`",
     );
     expect(existsSync(join(process.cwd(), "skills", "pr"))).toBe(false);
     expect(prompt).toContain(

@@ -5,7 +5,7 @@ argument-hint: "[uncommitted | branch <base> | commit <sha> | pr <n|url> | folde
 
 Use the `review-orchestration` skill as canonical for this explicit command. It reports findings and applies no fixes.
 
-Before proceeding, read `skills/review-orchestration/SKILL.md` from the SupaPi checkout. When working elsewhere, resolve and read `<agent-dir>/extensions/supa-pi/skills/review-orchestration/SKILL.md` through the SupaPi link, using `PI_CODING_AGENT_DIR` when set or `~/.pi/agent` otherwise. If the skill cannot be resolved, stop and report the missing file.
+Before proceeding, read `skills/review-orchestration/SKILL.md`: open the `review-orchestration` location listed in `<available_skills>` directly; do not search for it. If it is not listed, stop and report the missing skill.
 
 Arguments:
 ${@:-uncommitted}
