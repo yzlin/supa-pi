@@ -217,7 +217,8 @@ export const CASES: PairedCase[] = [
       { id: "scope", description: "only src/, tests/, and .pi/ changed" },
       {
         id: "log-done",
-        description: "a Spec log exists and ends in done",
+        description:
+          "completion recorded: Spec log ends in done, or (old inline) every ledger assignment completed",
       },
       {
         id: "main-verified",

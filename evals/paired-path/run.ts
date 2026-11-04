@@ -27,6 +27,8 @@ const REAL_HOME = homedir();
 const REAL_AGENT = join(REAL_HOME, ".pi", "agent");
 const CLAUDE_CODE_PACKAGE = join(REAL_HOME, "dev", "yzlin", "pi-claude-code");
 const RUN_TIMEOUT_MS = 25 * 60 * 1000;
+const HANDLED_GRACE_MS = 15_000;
+const SETTLE_GRACE_MS = 10_000;
 
 export interface Options {
   old?: string;
@@ -296,6 +298,7 @@ export function runOne(
     let raw = "";
     let stderr = "";
     let sent = false;
+    let idle: ReturnType<typeof setTimeout> | undefined;
     let finished = false;
     const finish = (exit: string) => {
       if (finished) {
@@ -303,6 +306,7 @@ export function runOne(
       }
       finished = true;
       clearTimeout(timer);
+      clearTimeout(idle);
       child.stdin.end();
       setTimeout(() => child.kill("SIGTERM"), 5000).unref();
       writeFileSync(stdoutPath, raw);
@@ -356,12 +360,15 @@ export function runOne(
           const disposition = (
             record.data as { disposition?: string } | undefined
           )?.disposition;
-          if (!record.success || disposition === "handled") {
-            setTimeout(
-              () => finish(record.success ? "handled" : "prompt-failed"),
-              3000,
-            );
+          if (!record.success) {
+            finish("prompt-failed");
+          } else if (disposition === "handled") {
+            // Extension commands report handled, then start their own turn via
+            // sendUserMessage. Finish only if no agent run starts soon.
+            idle = setTimeout(() => finish("handled-no-run"), HANDLED_GRACE_MS);
           }
+        } else if (record.type === "agent_start") {
+          clearTimeout(idle);
         } else if (record.type === "extension_ui_request") {
           const haystack = [record.title, record.message]
             .filter((part) => typeof part === "string")
@@ -376,7 +383,13 @@ export function runOne(
             send({ type: "extension_ui_response", id: record.id, ...reply });
           }
         } else if (record.type === "agent_settled") {
-          finish(record.aborted ? "aborted" : "settled");
+          clearTimeout(idle);
+          if (record.aborted) {
+            finish("aborted");
+          } else {
+            // A follow-up queued by the command can start right after settling.
+            idle = setTimeout(() => finish("settled"), SETTLE_GRACE_MS);
+          }
         }
       }
     });
@@ -549,8 +562,24 @@ function specLogs(workspace: string): Record<string, unknown>[][] {
 
 // Both runtimes append `done` only after every Done Criterion is verified
 // (old: ledger completion; new: spec_log check of the last criterion).
-function logDone(workspace: string): boolean {
-  return specLogs(workspace).some((events) => events.at(-1)?.event === "done");
+function logDone(workspace: string, sessionDir: string): boolean {
+  if (specLogs(workspace).some((events) => events.at(-1)?.event === "done")) {
+    return true;
+  }
+  // Old arm: `/execute <inline plan>` kept a session-only ledger and no Spec log.
+  const ledgers = listFiles(sessionDir, ".jsonl")
+    .flatMap((path) => jsonl(path))
+    .filter(
+      (entry) =>
+        entry.type === "custom" && entry.customType === "execute-ledger-v1",
+    );
+  const last = ledgers.at(-1)?.data as
+    | { assignments?: { status?: string }[] }
+    | undefined;
+  return Boolean(
+    last?.assignments?.length &&
+    last.assignments.every((a) => a.status === "completed"),
+  );
 }
 
 function probe(workspace: string, id: string): boolean {
@@ -562,10 +591,13 @@ function probe(workspace: string, id: string): boolean {
   return sh(workspace, "bun", ["test", spec.path]).code === 0;
 }
 
+const BLOCKER_FINDING =
+  /\|\s*\[?(P0|P1|critical|high)\]?\s*\||^#{2,4}\s.*\b(P0|P1)\b|\[(P0|P1)\]|^\s*-?\s*\*{0,2}(priority|severity):?\*{0,2}:?\s*\*{0,2}(P0|P1|critical|high)\b|^(critical|high):/imu;
+
 const FINDING_PATTERNS: Record<string, RegExp> = {
   "finds-debug-bypass": /DEBUG/u,
   "finds-role-substring":
-    /includes\(\s*["']admin["']\s*\)|substring|includes.{0,40}admin|admin.{0,40}includes/iu,
+    /includes\(\s*["']admin["']\s*\)|substring|partial match|contains[^.\n]{0,20}admin|includes.{0,40}admin|admin.{0,40}includes/iu,
   "finds-sql-injection": /SQL\s*injection|injection|parameteri[sz]ed/iu,
 };
 
@@ -590,7 +622,7 @@ export function score(
         );
         break;
       case "log-done":
-        result[check.id] = logDone(workspace);
+        result[check.id] = logDone(workspace, sessions);
         break;
       case "main-verified": {
         const lastEdit = Math.max(
@@ -626,9 +658,8 @@ export function score(
         }
         break;
       case "no-false-blocker":
-        result[check.id] = !/\b(critical|high|blocking|blocker|P0|P1)\b/iu.test(
-          text.replace(/no (critical|high|blocking)[^.\n]*/giu, ""),
-        );
+        // A finding tagged P0/P1 or Critical/High (table cell, heading, or "Priority: High").
+        result[check.id] = !BLOCKER_FINDING.test(text);
         break;
       default:
         if (check.id in PROBES) {

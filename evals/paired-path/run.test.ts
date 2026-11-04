@@ -139,6 +139,29 @@ describe("paired-path runner (offline)", () => {
     });
   });
 
+  it("accepts an old-arm completed ledger as recorded completion", () => {
+    const testCase = byId("execute-inline-plan");
+    const dir = temp();
+    const ws = join(dir, "ws");
+    seedWorkspace(ws, testCase);
+    session(dir, [
+      {
+        type: "custom",
+        customType: "execute-ledger-v1",
+        data: { assignments: [{ status: "completed" }] },
+      },
+    ]);
+    expect(score(testCase, dir, ws)["log-done"]).toBe(true);
+    session(dir, [
+      {
+        type: "custom",
+        customType: "execute-ledger-v1",
+        data: { assignments: [{ status: "running" }] },
+      },
+    ]);
+    expect(score(testCase, dir, ws)["log-done"]).toBe(false);
+  });
+
   it("fails main-verified when the only test ran before the child or edit", () => {
     const testCase = byId("execute-spec-small");
     const dir = temp();
@@ -172,6 +195,10 @@ describe("paired-path runner (offline)", () => {
       "finds-sql-injection": true,
       "no-edits": true,
     });
+    session(dir, [
+      say('P1: The admin check matches any role that contains "admin".'),
+    ]);
+    expect(score(testCase, dir, ws)["finds-role-substring"]).toBe(true);
     writeFileSync(join(ws, "src/auth.ts"), "export {};\n");
     expect(score(testCase, dir, ws)["no-edits"]).toBe(false);
   });
@@ -181,8 +208,23 @@ describe("paired-path runner (offline)", () => {
     const dir = temp();
     const ws = join(dir, "ws");
     seedWorkspace(ws, testCase);
-    session(dir, [say("No critical or high findings. One low nit.")]);
+    session(dir, [
+      say(
+        "## Findings\n- Code looks good.\n\n## Human Reviewer Callouts (Non-Blocking)\nThe review passed with no blocking findings. No critical or high findings.",
+      ),
+    ]);
     expect(score(testCase, dir, ws)["no-false-blocker"]).toBe(true);
+    session(dir, [say("| 1 | P2 | nit | `src/search.ts:3` |")]);
+    expect(score(testCase, dir, ws)["no-false-blocker"]).toBe(true);
+    for (const blocker of [
+      "| 1 | P1 | limit can be negative | `src/search.ts:3` |",
+      "### 1. [P0] limit can be negative",
+      "### 1. P1: limit can be negative",
+      "- **Priority:** High",
+    ]) {
+      session(dir, [say(blocker)]);
+      expect(score(testCase, dir, ws)["no-false-blocker"]).toBe(false);
+    }
     session(dir, [say("Critical: limit can be negative.")]);
     expect(score(testCase, dir, ws)["no-false-blocker"]).toBe(false);
   });
