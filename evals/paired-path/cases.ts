@@ -255,6 +255,11 @@ export const CASES: PairedCase[] = [
         id: "finds-sql-injection",
         description: "report names SQL injection in projectQuery",
       },
+      {
+        id: "security-reviewer-ran",
+        description:
+          "src/auth.ts matches the `auth` word, so security-reviewer runs (old path: dir-only match, expected to fail)",
+      },
       { id: "no-edits", description: "the working tree is unchanged" },
     ],
   },
@@ -283,6 +288,11 @@ export const CASES: PairedCase[] = [
         id: "no-false-blocker",
         description:
           "report flags no critical/high/blocking defect in the change",
+      },
+      {
+        id: "no-extra-specialist",
+        description:
+          "no changed path matches a specialist, so only code-reviewer runs",
       },
       { id: "no-edits", description: "the working tree is unchanged" },
     ],

@@ -41,6 +41,10 @@ describe("report-only review contract (wiring, not model adherence)", () => {
   it("keeps code-reviewer mandatory and names every specialist", () => {
     const skill = read("skills/review-orchestration/SKILL.md");
     expect(skill).toContain("Always run `code-reviewer`.");
+    expect(skill).toContain("Add no specialist the table does not match.");
+    expect(skill).toContain(
+      "`auth` matches `auth/login.ts` and `src/auth.ts`, not `author.ts`",
+    );
     for (const reviewer of REVIEWERS) {
       expect(skill).toContain(`\`${reviewer}\``);
       expect(existsSync(join(root, "agents", `${reviewer}.md`))).toBe(true);

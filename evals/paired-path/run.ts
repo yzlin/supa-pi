@@ -622,6 +622,13 @@ function logDone(workspace: string, sessionDir: string): boolean {
   );
 }
 
+// Reviewer agents main called, not counting the verifier.
+function reviewers(tools: ToolEvent[]): string[] {
+  return tools
+    .filter((t) => t.name === "subagent" && t.args.agent !== "review-verifier")
+    .map((t) => String(t.args.agent));
+}
+
 function executorCalls(tools: ToolEvent[]): number {
   return tools.filter(
     (t) => t.name === "subagent" && t.args.agent === "executor",
@@ -703,6 +710,12 @@ export function score(
         );
         break;
       }
+      case "security-reviewer-ran":
+        result[check.id] = reviewers(tools).includes("security-reviewer");
+        break;
+      case "no-extra-specialist":
+        result[check.id] = reviewers(tools).every((r) => r === "code-reviewer");
+        break;
       case "no-edits":
         result[check.id] =
           sh(workspace, "git", ["diff", "--quiet"]).code === 0 ||

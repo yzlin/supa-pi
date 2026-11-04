@@ -27,13 +27,15 @@ State the change's intent in one or two sentences from the user's message, commi
 
 ## 2. Pick reviewers
 
-Always run `code-reviewer`. Add a specialist when a changed path matches, or when the user names it. User-named reviewers replace the automatic set.
+Always run `code-reviewer`. Add a specialist when a changed path matches the table, or when the user names it. Add no specialist the table does not match. User-named reviewers replace the automatic set.
 
-| Reviewer | Add when changed paths include |
-| --- | --- |
-| `security-reviewer` | `auth/`, `permission(s)/`, `middleware/`, `webhook(s)/`, `api/`, `server/`, `config/`, `security/`, `.env*`, cookies, headers, redirects |
-| `database-reviewer` | `db/`, `database/`, `migration(s)/`, `schema/`, `sql/`, `supabase/`, `*.sql` |
-| `performance-reviewer` | `benchmark(s)/`, `perf/`, `performance/`, `profile/`, `profiling/`, `load-test(s)/`, `k6/`, `bundle/`, `metrics/`, `monitoring/`, `*.bench.*`, `*.perf.*` |
+A word matches a directory name or a file name without its extensions, ignoring case: `auth` matches `auth/login.ts` and `src/auth.ts`, not `author.ts`.
+
+| Reviewer | Words | Also matches |
+| --- | --- | --- |
+| `security-reviewer` | `auth`, `permission(s)`, `middleware`, `webhook(s)`, `api`, `server`, `config`, `security`, `session(s)`, `cookie(s)`, `header(s)`, `redirect(s)` | `.env*` |
+| `database-reviewer` | `db`, `database`, `migration(s)`, `schema`, `sql`, `supabase` | `*.sql` |
+| `performance-reviewer` | `benchmark(s)`, `perf`, `performance`, `profile`, `profiling`, `load-test(s)`, `k6`, `bundle`, `metrics`, `monitoring` | `*.bench.*`, `*.perf.*` |
 
 Use each agent's own model unless the user names models. When the user names several models, run each selected reviewer once per model.
 

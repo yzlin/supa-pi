@@ -179,6 +179,32 @@ describe("paired-path runner (offline)", () => {
     expect(checks["log-done"]).toBe(false);
   });
 
+  it("scores the reviewer set from subagent calls, ignoring the verifier", () => {
+    const seeded = byId("review-seeded-bugs");
+    const clean = byId("review-clean");
+    const dir = temp();
+    const ws = join(dir, "ws");
+    const seededWs = join(dir, "seeded-ws");
+    seedWorkspace(ws, clean);
+    seedWorkspace(seededWs, seeded);
+    session(dir, [
+      call("a", "subagent", { agent: "code-reviewer" }),
+      result("a"),
+      call("b", "subagent", { agent: "review-verifier" }),
+      result("b"),
+    ]);
+    expect(score(clean, dir, ws)["no-extra-specialist"]).toBe(true);
+    expect(score(seeded, dir, seededWs)["security-reviewer-ran"]).toBe(false);
+    session(dir, [
+      call("a", "subagent", { agent: "code-reviewer" }),
+      result("a"),
+      call("b", "subagent", { agent: "security-reviewer" }),
+      result("b"),
+    ]);
+    expect(score(clean, dir, ws)["no-extra-specialist"]).toBe(false);
+    expect(score(seeded, dir, seededWs)["security-reviewer-ran"]).toBe(true);
+  });
+
   it("scores review findings from report text and an unchanged tree", () => {
     const testCase = byId("review-seeded-bugs");
     const dir = temp();
@@ -193,6 +219,7 @@ describe("paired-path runner (offline)", () => {
       "finds-debug-bypass": true,
       "finds-role-substring": true,
       "finds-sql-injection": true,
+      "security-reviewer-ran": false,
       "no-edits": true,
     });
     session(dir, [
