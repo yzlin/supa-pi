@@ -93,8 +93,14 @@ describe("supapi-mode hub contract (not model adherence)", () => {
   it("runs an independent review before the PR step in build Playbooks", () => {
     for (const name of ["bug-fix", "feature", "refactoring"]) {
       const text = read(`skills/supapi-mode/playbooks/${name}.md`);
-      const review = text.indexOf("run the `review-orchestration` skill");
-      expect(review).toBeGreaterThan(0);
+      const simplify = text.indexOf(
+        "run the `simplify` skill on the changed files",
+      );
+      const review = text.indexOf(
+        "the `review-orchestration` skill on the diff",
+      );
+      expect(simplify).toBeGreaterThan(0);
+      expect(simplify).toBeLessThan(review);
       expect(text).toContain(
         "crosses a module boundary, changes a public API, or the user is away",
       );
