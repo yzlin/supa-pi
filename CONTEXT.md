@@ -120,6 +120,8 @@ Implemented boundaries:
 
 Live JEV batching compatibility, threshold calibration, latency, actual automatic/overflow compactors, real upstream worker-process E2E, task success/required-skill coverage, and combined JEV/main/worker dollars or provider-cache effects remain unverified. No live router experiment, login, activation, or actual credential was used; Sift's prior live verification is not router validation. Rollout requires user-approved representative live comparisons, not a small-prompt claim.
 
+Live use (checked 2026-11-05): the live config had routing enabled since 2026-09-21, but in 7 days of sessions the router ran twice, both in this repository (a short "hi / what's this repo for?" session and today's `pi -p` captures), and both times selected no skill, which removed the whole native catalog for that request, `supapi-mode` included. It skips every input that starts with `/` (`isExplicitInvocation`) and leaves no session entry when it falls back, so most real turns used the native catalog. The user turned routing off on 2026-11-05 (`{"enabled":false}`, written through `RouterConfigStore`); a `pi -p` capture afterward showed all 80 skills in the system prompt, `supapi-mode` among them, and no router note. The routing evals measure this native-catalog path. Whether the router would select `supapi-mode` for free-form work is unmeasured.
+
 ## PR workflow: implemented product direction
 
 The canonical `opening-a-pr` Playbook (`skills/supapi-mode/playbooks/opening-a-pr.md`, moved from `skills/pr/SKILL.md` in P1) is reached through the plain `prompts/pr.md` alias or `supapi-mode` routing, not the prompt-commands transformer. Live push/PR end-to-end behavior remains unverified.
