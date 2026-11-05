@@ -2272,6 +2272,32 @@
       ]
     },
     {
+      "id": "routing-freeform-compound-pr",
+      "workload": "tool-heavy orchestration",
+      "promptPath": "skills/supapi-mode/SKILL.md",
+      "history": [
+        {
+          "role": "user",
+          "text": "Users report admin access is granted to non-admins when debug is on. Reproduce and fix."
+        },
+        {
+          "role": "assistant",
+          "text": "Fixed. src/auth.ts no longer lets the debug flag grant admin access; only the \"admin\" role does. The new regression test failed before the fix and passes now. The change is staged and not committed."
+        }
+      ],
+      "task": "simplify, commit and open pr",
+      "tools": ["read", "grep", "find", "ls"],
+      "checks": [
+        {
+          "type": "readsPath",
+          "pathSuffix": ".pi-skills/supapi-mode/playbooks/opening-a-pr.md",
+          "present": true,
+          "domain": "task",
+          "weight": 2
+        }
+      ]
+    },
+    {
       "id": "routing-execute",
       "workload": "tool-heavy orchestration",
       "promptPath": "skills/supapi-mode/SKILL.md",

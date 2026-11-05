@@ -1,6 +1,6 @@
 ---
 name: supapi-mode
-description: "Hub router: read before the first tool call on any bug fix, feature, refactor, prototype, diagnosis, PR, or how/why question about code, however small the change looks. Matches the task to one Playbook under playbooks/, then follows its steps. Skip only a one-line answer from one file or a typo fix."
+description: "Hub router: read before the first tool call on any bug fix, feature, refactor, prototype, diagnosis, PR, or how/why question about code, however small the change looks. Check again on every later request in a session and on each step of a multi-step request: in \"simplify, commit and open pr\", the PR step still needs its Playbook, and a skill loaded for another step does not replace it. Matches the task to one Playbook under playbooks/, then follows its steps. Skip only a one-line answer from one file or a typo fix."
 ---
 
 # SupaPi mode
