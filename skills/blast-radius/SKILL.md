@@ -27,6 +27,8 @@ Step 4 is usually one small script that imports the module the app ships and cal
 
 ## Steps
 
+Keep turns few: every turn re-reads the whole context, so the number of turns, not file size, sets the cost. Batch independent searches and reads into one `bash` or `codemode` call. Stop gathering once the key fact is proven and each risk is rated.
+
 1. **Read the change.** Take the target like `/review` does: `uncommitted` by default, or `branch <base>`, `commit <sha>`, `pr <n>`. List the symbols, strings, files, and formats it adds, changes, or deletes, and what now behaves differently, including what the diff does not spell out. For the commits and PR text, use step 2 of the `why` skill.
 2. **Find the fact it is safe because of.** Most risky-looking changes are safe because of one fact, such as "this call only drops entries that are already dead". If that fact holds, most risks clear at once. Spend your time here, not on a long list of maybes.
 3. **Look where the search stops.** Read the source of the library you call, at the pinned version, with any local patch. Work out when things run: startup order, async callbacks, teardown, reload. Follow what a symbol search misses:
