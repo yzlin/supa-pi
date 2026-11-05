@@ -102,6 +102,8 @@ Use these fields for every candidate:
 
 End with the user's choices for separate work. Report no supported candidates when evidence does not support any. Contract tests do not prove model adherence.
 
+When a candidate is a mistake class seen at least twice, with both occurrences cited, name `/correct` as its separate work: the `correct` Playbook picks the highest fix level and proves the check fails on the past mistake. Retro stays report-only.
+
 ## Attribution
 
 Adapted from [Matt Pocock's MIT-licensed retro](https://github.com/mattpocock/skills/blob/a7d038f6bf7f01b516408e95e2fb56e0b338fa6f/skills/engineering/retro/SKILL.md), pinned at `a7d038f6bf7f01b516408e95e2fb56e0b338fa6f`. The exact upstream MIT notice is retained in `LICENSE.upstream`.

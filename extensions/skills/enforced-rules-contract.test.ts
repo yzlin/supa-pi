@@ -49,5 +49,9 @@ describe("enforced-rules table contract", () => {
       "listed in `<available_skills>` directly; do not search for it.",
     );
     expect(read("CONTEXT-MAP.md")).toContain("docs/context/enforced-rules.md");
+    expect(read("skills/retro/SKILL.md")).toContain(
+      "name `/correct` as its separate work",
+    );
+    expect(read("skills/retro/SKILL.md")).toContain("Retro stays report-only.");
   });
 });
