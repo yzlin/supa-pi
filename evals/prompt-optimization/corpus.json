@@ -2155,6 +2155,121 @@
           "weight": 2
         }
       ]
+    },
+    {
+      "id": "routing-freeform-bug-fix",
+      "workload": "focused bug fix",
+      "promptPath": "skills/supapi-mode/SKILL.md",
+      "task": "add(2, 3) returns -1 instead of 5. Fix it and verify.",
+      "tools": ["read", "grep", "find", "ls"],
+      "checks": [
+        {
+          "type": "readsPath",
+          "pathSuffix": ".pi-skills/supapi-mode/SKILL.md",
+          "present": true,
+          "domain": "task",
+          "weight": 1
+        },
+        {
+          "type": "readsPath",
+          "pathSuffix": ".pi-skills/supapi-mode/playbooks/bug-fix.md",
+          "present": true,
+          "domain": "task",
+          "weight": 2
+        }
+      ]
+    },
+    {
+      "id": "routing-freeform-bug-report",
+      "workload": "focused bug fix",
+      "promptPath": "skills/supapi-mode/SKILL.md",
+      "task": "Users report admin access is granted to non-admins when debug is on. Reproduce and fix.",
+      "tools": ["read", "grep", "find", "ls"],
+      "checks": [
+        {
+          "type": "readsPath",
+          "pathSuffix": ".pi-skills/supapi-mode/SKILL.md",
+          "present": true,
+          "domain": "task",
+          "weight": 1
+        },
+        {
+          "type": "readsPath",
+          "pathSuffix": ".pi-skills/supapi-mode/playbooks/bug-fix.md",
+          "present": true,
+          "domain": "task",
+          "weight": 2
+        }
+      ]
+    },
+    {
+      "id": "routing-freeform-feature",
+      "workload": "multi-file implementation",
+      "promptPath": "skills/supapi-mode/SKILL.md",
+      "task": "Add a subtract(left, right) function to src/math.ts with tests and README docs.",
+      "tools": ["read", "grep", "find", "ls"],
+      "checks": [
+        {
+          "type": "readsPath",
+          "pathSuffix": ".pi-skills/supapi-mode/SKILL.md",
+          "present": true,
+          "domain": "task",
+          "weight": 1
+        },
+        {
+          "type": "readsPath",
+          "pathSuffix": ".pi-skills/supapi-mode/playbooks/feature.md",
+          "present": true,
+          "domain": "task",
+          "weight": 2
+        }
+      ]
+    },
+    {
+      "id": "routing-freeform-refactoring",
+      "workload": "multi-file implementation",
+      "promptPath": "skills/supapi-mode/SKILL.md",
+      "task": "Refactor src/format.ts: inline the temporary variables in formatName and remove dead code, without changing behavior.",
+      "tools": ["read", "grep", "find", "ls"],
+      "checks": [
+        {
+          "type": "readsPath",
+          "pathSuffix": ".pi-skills/supapi-mode/SKILL.md",
+          "present": true,
+          "domain": "task",
+          "weight": 1
+        },
+        {
+          "type": "readsPath",
+          "pathSuffix": ".pi-skills/supapi-mode/playbooks/refactoring.md",
+          "present": true,
+          "domain": "task",
+          "weight": 2
+        }
+      ]
+    },
+    {
+      "id": "routing-freeform-investigation",
+      "workload": "codebase exploration",
+      "promptPath": "skills/supapi-mode/SKILL.md",
+      "task": "How does admin access work in this project, and where does it live?",
+      "tools": ["read", "grep", "find", "ls"],
+      "checks": [
+        {
+          "type": "readsPath",
+          "pathSuffix": ".pi-skills/supapi-mode/SKILL.md",
+          "present": true,
+          "domain": "task",
+          "weight": 1
+        },
+        {
+          "type": "readsPath",
+          "pathSuffix": ".pi-skills/supapi-mode/playbooks/investigation.md",
+          "present": true,
+          "domain": "task",
+          "weight": 2
+        }
+      ]
     }
   ]
 }
