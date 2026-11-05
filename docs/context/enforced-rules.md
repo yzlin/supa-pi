@@ -25,4 +25,4 @@ One row per rule. **Enforced by** names the file that fails when the rule breaks
 | Review adds no specialist the path table does not match | `extensions/skills/review-contract.test.ts` (wording); `evals/paired-path/` `no-extra-specialist` (behavior, live runs only) | contract test and eval |
 | Delete with `trash`, never `rm` | `AGENTS.global.md` | prose only |
 | Edit files with the `edit` tool, not Python or ad-hoc scripts | `AGENTS.global.md`; `extensions/skills/global-scope-contract.test.ts` checks the line is present, not obeyed | prose only |
-| Remove a git worktree with `trash` then `git worktree prune`, not `git worktree remove --force` | none (repeated twice in one session, 2026-11-04/05) | prose only |
+| Remove a git worktree with `trash` then `git worktree prune`, never `git worktree remove` | `extensions/worktree-guard.ts`, `extensions/worktree-guard.test.ts` | tool refusal |
