@@ -1,6 +1,6 @@
 ---
 name: supapi-mode
-description: Hub router for non-trivial engineering work. Match the task to one Playbook under playbooks/, then follow its steps. Use for bug fixes, features, refactors, investigations, prototypes, diagnoses, and opening a PR; skip for trivial edits and lookups.
+description: "Hub router: read before the first tool call on any bug fix, feature, refactor, prototype, diagnosis, PR, or how/why question about code, however small the change looks. Matches the task to one Playbook under playbooks/, then follows its steps. Skip only a one-line answer from one file or a typo fix."
 ---
 
 # SupaPi mode
