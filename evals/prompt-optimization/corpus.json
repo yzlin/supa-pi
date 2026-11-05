@@ -2270,6 +2270,75 @@
           "weight": 2
         }
       ]
+    },
+    {
+      "id": "routing-execute",
+      "workload": "tool-heavy orchestration",
+      "promptPath": "skills/supapi-mode/SKILL.md",
+      "task": "We agreed the plan: add subtract, fix add, and document both. Run it to verified done criteria. Before acting, state which Playbook you will follow and stop after reading it; do not edit files.",
+      "tools": ["read", "grep", "find", "ls"],
+      "checks": [
+        {
+          "type": "readsPath",
+          "pathSuffix": ".pi-skills/supapi-mode/SKILL.md",
+          "present": true,
+          "domain": "task",
+          "weight": 1
+        },
+        {
+          "type": "readsPath",
+          "pathSuffix": ".pi-skills/supapi-mode/playbooks/execute.md",
+          "present": true,
+          "domain": "task",
+          "weight": 2
+        }
+      ]
+    },
+    {
+      "id": "routing-correct",
+      "workload": "tool-heavy orchestration",
+      "promptPath": "skills/supapi-mode/SKILL.md",
+      "task": "Agents keep forgetting to update README when they change src/math.ts; this is the third time. Make that mistake impossible. Before acting, state which Playbook you will follow and stop after reading it; do not edit files.",
+      "tools": ["read", "grep", "find", "ls"],
+      "checks": [
+        {
+          "type": "readsPath",
+          "pathSuffix": ".pi-skills/supapi-mode/SKILL.md",
+          "present": true,
+          "domain": "task",
+          "weight": 1
+        },
+        {
+          "type": "readsPath",
+          "pathSuffix": ".pi-skills/supapi-mode/playbooks/correct.md",
+          "present": true,
+          "domain": "task",
+          "weight": 2
+        }
+      ]
+    },
+    {
+      "id": "routing-fix-review-findings",
+      "workload": "focused bug fix",
+      "promptPath": "skills/supapi-mode/SKILL.md",
+      "task": "The review found two issues: add() subtracts, and the debug flag grants admin access. Fix those findings. Before acting, state which Playbook you will follow and stop after reading it; do not edit files.",
+      "tools": ["read", "grep", "find", "ls"],
+      "checks": [
+        {
+          "type": "readsPath",
+          "pathSuffix": ".pi-skills/supapi-mode/SKILL.md",
+          "present": true,
+          "domain": "task",
+          "weight": 1
+        },
+        {
+          "type": "readsPath",
+          "pathSuffix": ".pi-skills/supapi-mode/playbooks/fix-review-findings.md",
+          "present": true,
+          "domain": "task",
+          "weight": 2
+        }
+      ]
     }
   ]
 }
