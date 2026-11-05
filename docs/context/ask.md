@@ -136,6 +136,12 @@ Multi-select questions may include option previews. They still omit the custom-a
 
 Validation failures return a cancelled error envelope and do not open UI.
 
+## Unseen numbered-item refusal
+
+After validation, `ask` refuses a request whose option label is only a reference to numbered items, such as `1 + 2 (recommended)`, `2 only`, `Option 3`, or `All four`, when those items are not defined in text the user has seen. `extensions/ask/item-references.ts` owns the check. Seen text is user and assistant text blocks on the current branch, plus displayed extension messages such as review reports, plus the ask's own prompt, descriptions, and previews. Thinking and tool results do not count. An item counts as defined when a line starts with a list marker (`1.`, `2)`, `(3)`), a labelled heading (`**Option 4** —`, `Part 1:`), or a table row (`| 1 |`).
+
+A label that also names its choice, such as `RPC-only fix (option 1)` or `Fix all 3 now`, passes. Sizes and durations such as `1920 + 1080 px` pass. The refusal returns a cancelled error envelope without opening UI, and its message tells the model to list the items visibly, then ask again. Origin: a session asked `1 + 2 / 2 only / All four` after enumerating an issue's four parts only in hidden reasoning. A replay over 2,685 past asks refused that one and one more borderline case.
+
 ## Plain-text clarification diagnostics
 
 After a UI-backed run ends without an `ask` result, the extension may log assistant text that heuristically resembles a plain-text clarification. This diagnostic is intentionally uncertain: advice, examples, quoted or code questions, and rhetorical questions can match. The entry remains session-only diagnostic data and does not notify the user, inject a message, or trigger another model turn.

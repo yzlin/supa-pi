@@ -25,6 +25,11 @@ import {
   type Question,
   type QuestionInput,
 } from "../shared/ask-ui/types";
+import {
+  findUndefinedItemReferences,
+  formatUndefinedItemReferences,
+  visibleConversationText,
+} from "./item-references";
 import { createAskEnvelope } from "./response";
 
 export { getRenderOptions } from "../shared/ask-ui/dialog";
@@ -378,6 +383,7 @@ export default function ask(pi: ExtensionAPI): void {
       "Use a single question with options for simple clarifications; use multiple questions only when several answers are needed together.",
       "Keep questions short, decision-oriented, and limited to what is needed to proceed.",
       "The user cannot see your reasoning. Put context a question depends on (diagrams, findings) in visible text before calling ask or in the prompt or option preview; never refer to context the user has not seen.",
+      'Make each option label name its choice. Put per-option detail in its preview, not the prompt. Options that refer to numbered items ("1 + 2", "All four") are refused unless those items are listed in visible text.',
       "Single-select questions include a custom input row. Multi-select questions use checkboxes and a Next row, with no custom input row.",
       "Do not use ask in background or non-interactive contexts.",
     ],
@@ -396,6 +402,16 @@ export default function ask(pi: ExtensionAPI): void {
           [],
           validation,
         );
+      }
+      const branch = ctx.sessionManager?.getBranch?.();
+      if (branch) {
+        const problems = findUndefinedItemReferences(
+          validation.questions,
+          visibleConversationText(branch),
+        );
+        if (problems.length > 0) {
+          return errorResult(formatUndefinedItemReferences(problems));
+        }
       }
 
       const questions = validation.questions.map(normalizeQuestion);
