@@ -90,6 +90,24 @@ describe("supapi-mode hub contract (not model adherence)", () => {
     }
   });
 
+  it("runs an independent review before the PR step in build Playbooks", () => {
+    for (const name of ["bug-fix", "feature", "refactoring"]) {
+      const text = read(`skills/supapi-mode/playbooks/${name}.md`);
+      const review = text.indexOf("run the `review-orchestration` skill");
+      expect(review).toBeGreaterThan(0);
+      expect(text).toContain(
+        "crosses a module boundary, changes a public API, or the user is away",
+      );
+      expect(text).toContain("say why you skipped it");
+      expect(text).toContain(
+        "through steps 1–7 of the `fix-review-findings` Playbook",
+      );
+      expect(review).toBeLessThan(
+        text.indexOf("run the `opening-a-pr` Playbook"),
+      );
+    }
+  });
+
   it("is reached from the always-on core prompt pointer", () => {
     const routing = read("extensions/core-prompt/prompt.md")
       .split("<routing>")[1]

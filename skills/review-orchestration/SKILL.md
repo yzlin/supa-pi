@@ -74,7 +74,7 @@ Print this report as the final message. Derive locations, support, and provenanc
 6. `## Reviewer Coverage`: each reviewer × model run as succeeded or failed, any reviewer not used, and `degraded` when any run failed.
 7. `## Fix Queue`: one line per rendered finding, `P<n> <file> <short fix>`, in priority order. Leave it out when there are no findings.
 
-Write finding prose in Plain report style per the `plain-report` skill. Stop after the report. Fixing runs only when the user asks, through `/review-fix` or the `fix-review-findings` Playbook.
+Write finding prose in Plain report style per the `plain-report` skill. Stop after the report. Fixing runs only when the user asks or a calling Playbook step directs it, through `/review-fix` or the `fix-review-findings` Playbook.
 
 **Principles:** `prove-it-works`, `test-behavior-not-implementation`.
 

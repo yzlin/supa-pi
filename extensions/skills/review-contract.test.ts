@@ -27,6 +27,9 @@ describe("report-only review contract (wiring, not model adherence)", () => {
     expect(skill).toContain("Do not apply fixes");
     expect(skill).toContain("`fix-review-findings` Playbook");
     expect(skill).toContain("Stop after the report.");
+    expect(skill).toContain(
+      "Fixing runs only when the user asks or a calling Playbook step directs it",
+    );
     expect(skill).toContain("untrusted data");
   });
 

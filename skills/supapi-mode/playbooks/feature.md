@@ -9,7 +9,8 @@ You own the design and its proof. Name the data shape before you write logic.
 5. Build in small units that each end in a verifiable state. Add tests for observable behavior per the `tdd-workflow` skill.
 6. Verify on the real surface: run the feature, read the actual output, and inspect the diff. Then run `bun run check` or the repository's check command. When the change renames or moves strings, formats, or files other code may read, run the `blast-radius` skill on the change first.
 7. Update docs when behavior or an API changes.
-8. If the user asked for a PR, run the `opening-a-pr` Playbook.
+8. Review the diff when it crosses a module boundary, changes a public API, or the user is away: run the `review-orchestration` skill on it, fix verified findings through steps 1–7 of the `fix-review-findings` Playbook, and rerun the checks. Otherwise say why you skipped it.
+9. If the user asked for a PR, run the `opening-a-pr` Playbook.
 
 **Principles:** `model-the-domain`, `foundational-thinking`, `type-system-discipline`, `boundary-discipline`, `search-first`, `sequence-verifiable-units`, `test-behavior-not-implementation`, `redesign-from-first-principles`, `make-operations-idempotent`.
 
