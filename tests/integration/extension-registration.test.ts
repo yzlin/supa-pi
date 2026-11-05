@@ -20,7 +20,7 @@ import { readFile } from 'node:fs/promises';
 import { DefaultResourceLoader, SettingsManager } from ${JSON.stringify(import.meta.resolve("@earendil-works/pi-coding-agent"))};
 const repo = ${JSON.stringify(path.resolve(import.meta.dir, "../.."))};
 const manifest = JSON.parse(await readFile(path.join(repo, 'package.json'), 'utf8'));
-assert.equal(manifest.pi.extensions[0], './extensions/skill-router');
+assert.equal(manifest.pi.extensions.includes('./extensions/skill-router'), false);
 const loader = new DefaultResourceLoader({
   cwd: ${JSON.stringify(cwd)},
   agentDir: ${JSON.stringify(agentDir)},

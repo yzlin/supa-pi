@@ -116,11 +116,10 @@ describe("setup local package deployment", () => {
     ).toBe(join(checkout, "agents", "executor.md"));
   });
 
-  test("registers the repo-owned subagent without changing skill-router precedence", async () => {
+  test("registers the repo-owned subagent once", async () => {
     const manifest = JSON.parse(
       await readFile(join(repositoryDir, "package.json"), "utf8"),
     );
-    expect(manifest.pi.extensions[0]).toBe("./extensions/skill-router");
     expect(
       manifest.pi.extensions.filter(
         (path: string) => path === "./extensions/subagent",
