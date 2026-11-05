@@ -67,6 +67,21 @@ describe("supapi-mode hub contract (not model adherence)", () => {
     );
   });
 
+  it("keeps investigation and diagnose triggers disjoint", () => {
+    const hub = read("skills/supapi-mode/SKILL.md");
+    const trigger = (name: string) =>
+      hub.split("\n").find((line) => line.startsWith(`| \`${name}\` |`)) ?? "";
+    expect(trigger("investigation")).toContain("no failing behavior");
+    expect(trigger("investigation")).toContain(
+      "A question about why something fails is not an investigation.",
+    );
+    expect(trigger("diagnose")).toContain("Explicit only:");
+    expect(trigger("diagnose")).toContain("Other failures route to `bug-fix`.");
+    expect(read("skills/supapi-mode/playbooks/bug-fix.md")).toContain(
+      "If the user asked only why it fails, and did not ask for a fix, stop here",
+    );
+  });
+
   it("sizes how-it-works questions and reuses that step from other Playbooks", () => {
     const playbook = (name: string) =>
       readFileSync(

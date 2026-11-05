@@ -17,8 +17,8 @@ Match the task to one Playbook, read that Playbook file, and follow its steps. P
 
 | Playbook | Trigger |
 | --- | --- |
-| `investigation` | Read-only question: how X works, why Y exists, should we do X or Y. |
-| `diagnose` | `/diagnose`, or a request to prove the cause of a symptom before any fix. |
+| `investigation` | Read-only question with no failing behavior: how X works, why Y is shaped this way, should we do X or Y. A question about why something fails is not an investigation. |
+| `diagnose` | Explicit only: `/diagnose`, or a request that names the Diagnose skill. Other failures route to `bug-fix`. |
 | `bug-fix` | A reported defect to reproduce, root-cause, fix, and verify. |
 | `feature` | New or changed behavior. |
 | `refactoring` | Behavior-preserving change to structure: rename, extract, inline, dedupe, move, simplify. |

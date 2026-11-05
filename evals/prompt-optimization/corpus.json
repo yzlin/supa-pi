@@ -2203,6 +2203,36 @@
       ]
     },
     {
+      "id": "routing-freeform-failure-question",
+      "workload": "focused bug fix",
+      "promptPath": "skills/supapi-mode/SKILL.md",
+      "task": "Why does add(2, 3) return -1 instead of 5?",
+      "tools": ["read", "grep", "find", "ls"],
+      "checks": [
+        {
+          "type": "readsPath",
+          "pathSuffix": ".pi-skills/supapi-mode/SKILL.md",
+          "present": true,
+          "domain": "task",
+          "weight": 1
+        },
+        {
+          "type": "readsPath",
+          "pathSuffix": ".pi-skills/supapi-mode/playbooks/bug-fix.md",
+          "present": true,
+          "domain": "task",
+          "weight": 2
+        },
+        {
+          "type": "readsPath",
+          "pathSuffix": ".pi-skills/supapi-mode/playbooks/investigation.md",
+          "present": false,
+          "domain": "task",
+          "weight": 1
+        }
+      ]
+    },
+    {
       "id": "routing-freeform-feature",
       "workload": "multi-file implementation",
       "promptPath": "skills/supapi-mode/SKILL.md",
