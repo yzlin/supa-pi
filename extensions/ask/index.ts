@@ -31,6 +31,10 @@ import {
   visibleConversationText,
 } from "./item-references";
 import { createAskEnvelope } from "./response";
+import {
+  lacksVisibleContext,
+  NO_VISIBLE_CONTEXT_ERROR,
+} from "./visible-context";
 
 export { getRenderOptions } from "../shared/ask-ui/dialog";
 
@@ -382,7 +386,7 @@ export default function ask(pi: ExtensionAPI): void {
       "When you need user input in the interactive main session, prefer ask over asking plain-text questions.",
       "Use a single question with options for simple clarifications; use multiple questions only when several answers are needed together.",
       "Keep questions short, decision-oriented, and limited to what is needed to proceed.",
-      "The user cannot see your reasoning. Put context a question depends on (diagrams, findings) in visible text before calling ask or in the prompt or option preview; never refer to context the user has not seen.",
+      "The user cannot see your reasoning. Put context a question depends on (diagrams, findings) in visible text in the same reply as the ask call, or in option previews; an ask with neither is refused. Never refer to context the user has not seen.",
       'Make each option label name its choice. Put per-option detail in its preview, not the prompt. Options that refer to numbered items ("1 + 2", "All four") are refused unless those items are listed in visible text.',
       "Single-select questions include a custom input row. Multi-select questions use checkboxes and a Next row, with no custom input row.",
       "Do not use ask in background or non-interactive contexts.",
@@ -405,6 +409,9 @@ export default function ask(pi: ExtensionAPI): void {
       }
       const branch = ctx.sessionManager?.getBranch?.();
       if (branch) {
+        if (lacksVisibleContext(validation.questions, branch)) {
+          return errorResult(NO_VISIBLE_CONTEXT_ERROR);
+        }
         const problems = findUndefinedItemReferences(
           validation.questions,
           visibleConversationText(branch),

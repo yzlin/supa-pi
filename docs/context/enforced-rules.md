@@ -27,3 +27,4 @@ One row per rule. **Enforced by** names the file that fails when the rule breaks
 | Edit files with the `edit` tool, not Python or ad-hoc scripts | `AGENTS.global.md`; `extensions/skills/global-scope-contract.test.ts` checks the line is present, not obeyed | prose only |
 | Remove a git worktree with `trash` then `git worktree prune`, never `git worktree remove` | `extensions/worktree-guard.ts`, `extensions/worktree-guard.test.ts` | tool refusal |
 | An `ask` option must not point at numbered items the user has not seen | `extensions/ask/item-references.ts` (`ask refused: options refer to numbered items`), `extensions/ask/item-references.test.ts` | tool refusal |
+| An `ask` call's own reply must show visible text (or option previews) | `extensions/ask/visible-context.ts` (`ask refused: this reply has no visible text`), `extensions/ask/visible-context.test.ts` | tool refusal |

@@ -136,6 +136,12 @@ Multi-select questions may include option previews. They still omit the custom-a
 
 Validation failures return a cancelled error envelope and do not open UI.
 
+## No-visible-text refusal
+
+Before the numbered-item check, `ask` refuses a request when the assistant message that holds the ask call has no visible text block and no option has a preview. `extensions/ask/visible-context.ts` owns the check. Earlier tool results in the same message are skipped to find that message. Progress notes from earlier in the turn do not count, because they rarely carry the findings the question depends on. The refusal returns a cancelled error envelope without opening UI. Its message tells the model to write the findings, numbers, or tradeoffs in the same reply, then ask again, or to put each option's detail in its preview.
+
+Origin: session `01a1ab6c` asked "New evidence: …", "Given those costs, …", and, after the user replied "what costs? you didn't show me", "With those costs shown: …". All three had empty text, and the findings were only in hidden thinking. A replay over 707 asks from 14 days of sessions refused 121 (17%). The user chose this strict rule over narrower ones with fewer refusals; each refusal costs one retry.
+
 ## Unseen numbered-item refusal
 
 After validation, `ask` refuses a request whose option label is only a reference to numbered items, such as `1 + 2 (recommended)`, `2 only`, `Option 3`, or `All four`, when those items are not defined in text the user has seen. `extensions/ask/item-references.ts` owns the check. Seen text is user and assistant text blocks on the current branch, plus displayed extension messages such as review reports, plus the ask's own prompt, descriptions, and previews. Thinking and tool results do not count. An item counts as defined when a line starts with a list marker (`1.`, `2)`, `(3)`), a labelled heading (`**Option 4** —`, `Part 1:`), or a table row (`| 1 |`).

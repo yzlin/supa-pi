@@ -176,6 +176,10 @@ describe("ask public runtime boundary", () => {
     ).toContain("prefer the ask tool");
     expect(askFacingCopy.toLowerCase()).toContain("ask");
     expect(askFacingCopy).toContain("The user cannot see your reasoning.");
+    expect(askFacingCopy).toContain(
+      "in visible text in the same reply as the ask call, or in option previews; an ask with neither is refused.",
+    );
+    expect(askFacingCopy).not.toContain("or in the prompt or option preview");
     expect(askFacingCopy.toLowerCase()).not.toContain("questionnaire");
 
     const agentEnd = handlers.get("agent_end");

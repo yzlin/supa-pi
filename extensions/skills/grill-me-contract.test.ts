@@ -81,7 +81,7 @@ describe("grilling skill contract", () => {
 
     for (const text of [
       "The user sees only visible assistant text and the `ask` dialog, never your reasoning.",
-      "Put a shared diagram or finding in visible text before the `ask` call",
+      "Put a shared diagram or finding in visible text in the same reply as the `ask` call, or in option previews; `ask` refuses a call with neither.",
       "Do not refer to",
     ]) {
       expect(skill).toContain(text);
