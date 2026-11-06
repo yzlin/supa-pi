@@ -28,6 +28,8 @@ Since P4 (ADR 0005), `/execute` is a Playbook (`skills/supapi-mode/playbooks/exe
 
 Snapshot refs: each `check` stores the working tree as `refs/pi-specs/<slug>/<n>` through a temporary index, without changing the real index.
 
+Display: the tool has its own `renderCall` (`spec_log <action> <slug> [DC-n]`) and a `renderResult` that shows the result text as Markdown, cut to 20 lines until expanded. Result text is written as Markdown: a blank line before `Blocker:` lines ends the checkbox list, and revision diffs come in a `diff` fence longer than any backtick run in the diff, so code fences in the Spec cannot close it.
+
 ### What it does not check
 
 It does not know who ran what. It accepts any non-blank evidence text and does not bind it to a tool call, a child run, scope, repair counts, or approval. Those gates are prose in the execute Playbook. This is the accepted risk in ADR 0005.

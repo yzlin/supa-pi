@@ -599,6 +599,10 @@ export function renderSpecStatus(cwd: string, slug?: string): string {
       lines.push(`- [ ] ${label}`);
     }
   }
+  if (state.blockers.length) {
+    // Blank line ends the checkbox list; otherwise Markdown folds blockers into the last item.
+    lines.push("");
+  }
   for (const blocker of state.blockers) {
     lines.push(`Blocker: ${blocker}`);
   }

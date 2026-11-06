@@ -9,8 +9,11 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { stripVTControlCharacters } from "node:util";
 
-import { runSpecLog } from "./index";
+import { initTheme } from "@earendil-works/pi-coding-agent";
+
+import { runSpecLog, SpecLogResult, specLogCallLabel } from "./index";
 import { lintSpec, readSpecLog, renderSpecStatus } from "./spec";
 
 const SPEC = `# Execution Brief
@@ -206,5 +209,75 @@ describe("spec_log tool", () => {
       runSpecLog(cwd, { action: "status", specPath: "../x.md" }).isError,
     ).toBe(true);
     expect(readFileSync(join(cwd, SPEC_PATH), "utf8")).toBe(SPEC);
+  });
+});
+
+describe("spec_log rendering", () => {
+  initTheme("dark");
+  const view = (text: string, expanded = true) =>
+    new SpecLogResult(
+      text,
+      (segment) => segment,
+      expanded,
+      (count) => `+${count}`,
+    )
+      .render(80)
+      .map((line) => stripVTControlCharacters(line).trimEnd());
+
+  it("labels the call with action, slug, and criterion", () => {
+    expect(
+      specLogCallLabel({
+        action: "check",
+        specPath: "@.pi/specs/greet.md",
+        id: "DC-2",
+      }),
+    ).toBe("check greet DC-2");
+  });
+
+  it("renders status as Markdown and keeps blockers out of the last item", () => {
+    const cwd = workspace();
+    run(cwd, { action: "accept" });
+    run(cwd, { action: "block", id: "DC-2", reason: "needs `creds`" });
+    run(cwd, { action: "block", reason: "waiting on user" });
+    const lines = view(renderSpecStatus(cwd, "greet"));
+    expect(lines).toContain("  Blocked: needs creds");
+    expect(lines).toContain("Blocker: waiting on user");
+  });
+
+  it("renders revision diffs as a fenced diff block", () => {
+    const cwd = workspace();
+    run(cwd, { action: "accept" });
+    writeFileSync(join(cwd, SPEC_PATH), SPEC.replace("Localization.", "i18n."));
+    const text = run(cwd, { action: "accept" }).text;
+    expect(text).toContain("```diff\n");
+    const lines = view(text);
+    expect(lines).toContain("```diff");
+    expect(lines.some((line) => line.trim() === "+i18n.")).toBe(true);
+  });
+
+  it("keeps the diff fenced when the Spec has its own code fence", () => {
+    const fenced = SPEC.replace(
+      "Localization.",
+      "```\ncode\n```\nLocalization.",
+    );
+    const cwd = workspace();
+    writeFileSync(join(cwd, SPEC_PATH), fenced);
+    run(cwd, { action: "accept" });
+    writeFileSync(
+      join(cwd, SPEC_PATH),
+      fenced.replace("Localization.", "i18n."),
+    );
+    const lines = view(run(cwd, { action: "accept" }).text);
+    // Inside a code block, diff lines keep the block's indent; as prose they do not.
+    expect(lines).toContain("  -Localization.");
+    expect(lines).toContain("  +i18n.");
+  });
+
+  it("collapses long results until expanded", () => {
+    const text = Array.from({ length: 30 }, (_, index) => `line ${index}`).join(
+      "\n\n",
+    );
+    expect(view(text, false).at(-1)).toMatch(/^\+\d+$/u);
+    expect(view(text, true).some((line) => line.startsWith("+"))).toBe(false);
   });
 });

@@ -5,6 +5,8 @@ import type {
   ExtensionAPI,
   ExtensionContext,
 } from "@earendil-works/pi-coding-agent";
+import { getMarkdownTheme } from "@earendil-works/pi-coding-agent";
+import { type Component, Markdown, Text } from "@earendil-works/pi-tui";
 import { createTwoFilesPatch } from "diff";
 import { Type } from "typebox";
 
@@ -28,6 +30,7 @@ import {
 
 export const SPEC_LOG_TOOL_NAME = "spec_log";
 export const SPEC_STATUS_MESSAGE_TYPE = "spec-status";
+const COLLAPSED_RESULT_LINES = 20;
 const TO_SPEC_PREAMBLE =
   "Use the `to-spec` skill as canonical for this explicit command.";
 const INVALID_SLUG =
@@ -96,7 +99,7 @@ function result(text: string, isError = false) {
 }
 
 function revisionDiff(path: string, before: string, after: string): string {
-  return createTwoFilesPatch(
+  const patch = createTwoFilesPatch(
     `${path} (accepted)`,
     `${path} (current)`,
     before,
@@ -105,6 +108,13 @@ function revisionDiff(path: string, before: string, after: string): string {
     "",
     { context: 2 },
   );
+  // The fence outruns any backtick run in the patch, so Spec fences cannot close it.
+  const longestRun = Math.max(
+    0,
+    ...(patch.match(/`+/gu) ?? []).map((run) => run.length),
+  );
+  const fence = "`".repeat(Math.max(3, longestRun + 1));
+  return `${fence}diff\n${patch.trimEnd()}\n${fence}`;
 }
 
 /** Runs one spec_log action. Exported for tests; the tool wraps it. */
@@ -290,6 +300,48 @@ export function runSpecLog(
   return { text: renderSpecStatus(cwd, paths.slug), isError: false };
 }
 
+/** Tool header: `spec_log <action> <slug> [DC-n]`. */
+export function specLogCallLabel(args: Partial<Params>): string {
+  const slug = (args.specPath ?? "")
+    .replace(/^@/u, "")
+    .replace(/^\.pi\/specs\//u, "")
+    .replace(/\.md$/u, "");
+  return [args.action, slug, args.id].filter(Boolean).join(" ");
+}
+
+/** Renders result text as Markdown; collapsed view keeps the first lines. */
+export class SpecLogResult implements Component {
+  private readonly markdown: Markdown;
+  private readonly expanded: boolean;
+  private readonly moreHint: (count: number) => string;
+
+  constructor(
+    text: string,
+    color: (segment: string) => string,
+    expanded: boolean,
+    moreHint: (count: number) => string,
+  ) {
+    this.markdown = new Markdown(text, 0, 0, getMarkdownTheme(), { color });
+    this.expanded = expanded;
+    this.moreHint = moreHint;
+  }
+
+  render(width: number): string[] {
+    const lines = this.markdown.render(width);
+    if (this.expanded || lines.length <= COLLAPSED_RESULT_LINES) {
+      return lines;
+    }
+    return [
+      ...lines.slice(0, COLLAPSED_RESULT_LINES),
+      this.moreHint(lines.length - COLLAPSED_RESULT_LINES),
+    ];
+  }
+
+  invalidate(): void {
+    this.markdown.invalidate();
+  }
+}
+
 function send(pi: ExtensionAPI, ctx: ExtensionContext, message: string): void {
   if (ctx.isIdle()) {
     pi.sendUserMessage(message);
@@ -309,6 +361,27 @@ export default function specLogExtension(pi: ExtensionAPI): void {
     execute(_toolCallId, params, _signal, _onUpdate, ctx) {
       const outcome = runSpecLog(ctx.cwd, params as Params);
       return Promise.resolve(result(outcome.text, outcome.isError));
+    },
+    renderCall(args, theme) {
+      return new Text(
+        `${theme.fg("toolTitle", theme.bold(`${SPEC_LOG_TOOL_NAME} `))}${theme.fg("muted", specLogCallLabel(args as Partial<Params>))}`,
+        0,
+        0,
+      );
+    },
+    renderResult(toolResult, { expanded }, theme, context) {
+      const text = toolResult.content
+        .map((item) => (item.type === "text" ? item.text : ""))
+        .join("\n")
+        .trim();
+      const tone = context.isError ? "error" : "toolOutput";
+      return new SpecLogResult(
+        text,
+        (segment) => theme.fg(tone, segment),
+        expanded,
+        (count) =>
+          `${theme.fg("muted", `... (${count} more lines,`)} ${context.keyHint("app.tools.expand", "to expand")}${theme.fg("muted", ")")}`,
+      );
     },
   });
 
