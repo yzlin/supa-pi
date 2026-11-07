@@ -106,25 +106,33 @@ describe("supapi-mode hub contract (not model adherence)", () => {
   });
 
   it("runs an independent review before the PR step in build Playbooks", () => {
+    const hub = read("skills/supapi-mode/SKILL.md");
+    const simplify = hub.indexOf(
+      "run the `simplify` skill on the changed files",
+    );
+    const review = hub.indexOf("the `review-orchestration` skill on the diff");
+    expect(hub).toContain("**Review gate:**");
+    expect(simplify).toBeGreaterThan(0);
+    expect(simplify).toBeLessThan(review);
+    expect(hub).toContain(
+      "crosses a module boundary, changes a public API, or the user is away",
+    );
+    expect(hub).toContain("say why you skipped it");
+    expect(hub).toContain(
+      "through steps 1–7 of the `fix-review-findings` Playbook",
+    );
     for (const name of ["bug-fix", "feature", "refactoring"]) {
       const text = read(`skills/supapi-mode/playbooks/${name}.md`);
-      const simplify = text.indexOf(
-        "run the `simplify` skill on the changed files",
+      const gate = text.indexOf(
+        "Run the review gate from the `supapi-mode` Shared rules",
       );
-      const review = text.indexOf(
-        "the `review-orchestration` skill on the diff",
-      );
-      expect(simplify).toBeGreaterThan(0);
-      expect(simplify).toBeLessThan(review);
-      expect(text).toContain(
-        "crosses a module boundary, changes a public API, or the user is away",
-      );
-      expect(text).toContain("say why you skipped it");
-      expect(text).toContain(
-        "through steps 1–7 of the `fix-review-findings` Playbook",
-      );
-      expect(review).toBeLessThan(
+      expect(gate).toBeGreaterThan(0);
+      expect(gate).toBeLessThan(
         text.indexOf("run the `opening-a-pr` Playbook"),
+      );
+      // One owner: the gate text lives only in the hub.
+      expect(text).not.toContain(
+        "the `review-orchestration` skill on the diff",
       );
     }
   });

@@ -9,7 +9,7 @@ You own the behavior contract. The structure changes; the behavior does not. A r
 5. Move in small behavior-preserving steps that keep the pin green. When an internal API changes, migrate every caller and delete the old API in the same change. Check renames against strings, docs, and back-references.
 6. Prove behavior is unchanged on the real artifact, then run `bun run check` or the repository's check command. When the reshape renames or moves strings, formats, or files other code may read, run the `blast-radius` skill on the change first.
 7. Keep the change only if it lowers reader load somewhere, as `minimize-reader-load` measures it. Otherwise revert it.
-8. Review the diff when it crosses a module boundary, changes a public API, or the user is away: run the `simplify` skill on the changed files from `git status` unless step 4 already ran it, then the `review-orchestration` skill on the diff, fix verified findings through steps 1–7 of the `fix-review-findings` Playbook, and rerun the checks. Otherwise say why you skipped it.
+8. Run the review gate from the `supapi-mode` Shared rules; skip its `simplify` pass when step 4 already ran it.
 9. If the user asked for a PR, run the `opening-a-pr` Playbook.
 
 **Principles:** `subtract-before-you-add`, `laziness-protocol`, `migrate-callers-then-delete-legacy-apis`, `prove-it-works`, `minimize-reader-load`, `redesign-from-first-principles`.

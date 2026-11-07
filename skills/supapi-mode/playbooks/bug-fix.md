@@ -9,7 +9,7 @@ You own the fix and its proof. Every shipped line traces to runtime evidence. A 
 4. Apply the smallest fix at the first place the system went wrong. A guard is a fix only when the state it handles is legitimate.
 5. Verify on the same surface: the original repro now passes, the regression test passes, and targeted checks pass. "Inconclusive" or a different surface is not a pass.
 6. Run `bun run check` or the repository's check command.
-7. Review the diff when it crosses a module boundary, changes a public API, or the user is away: run the `simplify` skill on the changed files from `git status`, then the `review-orchestration` skill on the diff, fix verified findings through steps 1–7 of the `fix-review-findings` Playbook, and rerun the checks. Otherwise say why you skipped it.
+7. Run the review gate from the `supapi-mode` Shared rules.
 8. If the user asked for a PR, run the `opening-a-pr` Playbook.
 
 **Principles:** `fix-root-causes`, `attack-the-premise`, `prove-it-works`, `test-behavior-not-implementation`, `encode-lessons-in-structure`.
