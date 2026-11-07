@@ -132,6 +132,8 @@ describe("report-only review contract (wiring, not model adherence)", () => {
       "teach",
       "ketchup",
       "blast-radius",
+      "grill-me",
+      "show-me",
     ]) {
       const alias = read(`prompts/${file}.md`);
       expect(alias).toContain(
