@@ -80,6 +80,13 @@ describe("supapi-mode hub contract (not model adherence)", () => {
     expect(read("skills/supapi-mode/playbooks/bug-fix.md")).toContain(
       "If the user asked only why it fails, and did not ask for a fix, stop here",
     );
+    // Regression: bug-fix used to "switch to the diagnose Playbook", which
+    // contradicts Diagnose's explicit-only activation.
+    const bugFix = read("skills/supapi-mode/playbooks/bug-fix.md");
+    expect(bugFix).toContain(
+      "offer `/diagnose`; do not enter it without the user's request",
+    );
+    expect(bugFix).not.toContain("switch to the `diagnose` Playbook");
   });
 
   it("sizes how-it-works questions and reuses that step from other Playbooks", () => {

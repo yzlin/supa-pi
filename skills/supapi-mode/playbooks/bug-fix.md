@@ -3,7 +3,7 @@
 You own the fix and its proof. Every shipped line traces to runtime evidence. A change that "might help" is a hypothesis, not a fix.
 
 1. Reproduce the defect yourself on the surface where it was reported. Use existing tests, commands, or the `web-browser` skill for web UI. Record the exact command and failing output. If it will not reproduce, tighten conditions or instrument until it does, or report what is missing.
-2. Find the root cause. List candidate causes, then rule them out with runtime evidence until one survives. Seed the candidates by learning how the affected code works, sized as in the `investigation` Playbook step 2; for a regression, ask why it is shaped that way with the `why` skill. When the cause is unclear or disputed, switch to the `diagnose` Playbook.
+2. Find the root cause. List candidate causes, then rule them out with runtime evidence until one survives. Seed the candidates by learning how the affected code works, sized as in the `investigation` Playbook step 2; for a regression, ask why it is shaped that way with the `why` skill. When the cause is still unclear or disputed, stop, report the surviving candidates and their evidence, and offer `/diagnose`; do not enter it without the user's request.
    If the user asked only why it fails, and did not ask for a fix, stop here: report the root cause with its runtime evidence, and make no edits.
 3. Write a failing regression test at an honest seam first when one exists, per the `tdd-workflow` skill. Skip it when the seam is expensive, integration-heavy, or unclear, and say why.
 4. Apply the smallest fix at the first place the system went wrong. A guard is a fix only when the state it handles is legitimate.
