@@ -18,7 +18,9 @@ describe("execute Playbook contract (wiring, not model adherence)", () => {
 
   it("keeps /execute a thin alias to the Playbook", () => {
     const alias = read("prompts/execute.md");
-    expect(alias).toContain("skills/supapi-mode/playbooks/execute.md");
+    expect(alias).toContain(
+      "open `playbooks/execute.md` in the directory of the `supapi-mode` location",
+    );
     expect(alias.split("\n").length).toBeLessThan(16);
   });
 

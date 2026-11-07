@@ -106,11 +106,13 @@ describe("report-only review contract (wiring, not model adherence)", () => {
 
   it("keeps /review and /review-fix as thin aliases", () => {
     const review = read("prompts/review.md");
-    expect(review).toContain("skills/review-orchestration/SKILL.md");
+    expect(review).toContain(
+      "open the `review-orchestration` location listed in `<available_skills>`",
+    );
     expect(review).toContain("applies no fixes");
     const fix = read("prompts/review-fix.md");
     expect(fix).toContain(
-      "skills/supapi-mode/playbooks/fix-review-findings.md",
+      "open `playbooks/fix-review-findings.md` in the directory of the `supapi-mode` location",
     );
     for (const alias of [review, fix]) {
       expect(alias.split("\n").length).toBeLessThan(16);
@@ -120,12 +122,25 @@ describe("report-only review contract (wiring, not model adherence)", () => {
   // Regression: the old "resolve through the SupaPi link" pointer cost 1-3 main
   // turns of path search per run (evals/paired-path README, review cost).
   it("aliases open the listed skill location instead of searching", () => {
-    for (const file of ["review", "review-fix", "execute", "pr"]) {
+    for (const file of [
+      "review",
+      "review-fix",
+      "execute",
+      "pr",
+      "correct",
+      "why",
+      "teach",
+      "ketchup",
+      "blast-radius",
+    ]) {
       const alias = read(`prompts/${file}.md`);
       expect(alias).toContain(
         "listed in `<available_skills>` directly; do not search for it.",
       );
       expect(alias).not.toContain("PI_CODING_AGENT_DIR");
+      // The listed location is the only pointer; a repo-relative path repeats it
+      // and only resolves when cwd is the SupaPi checkout.
+      expect(alias).not.toContain("Before proceeding, read `skills/");
     }
   });
 });

@@ -5,7 +5,7 @@ argument-hint: "[uncommitted | branch <base> | commit <sha> | pr <n|url> | folde
 
 Use the `review-orchestration` skill as canonical for this explicit command. It reports findings and applies no fixes.
 
-Before proceeding, read `skills/review-orchestration/SKILL.md`: open the `review-orchestration` location listed in `<available_skills>` directly; do not search for it. If it is not listed, stop and report the missing skill.
+Before proceeding, open the `review-orchestration` location listed in `<available_skills>` directly; do not search for it. If it is not listed, stop and report the missing skill.
 
 Arguments:
 ${@:-uncommitted}
