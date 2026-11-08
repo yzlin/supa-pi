@@ -15,7 +15,7 @@ read_when:
 
 ## Context
 
-The approved Playbook architecture (`CONTEXT.md` "Playbook architecture") routes work through one Hub skill, `skills/supapi-mode/`, and its Playbooks. `/execute`, `/review`, and `/goal` enforce their contracts in TypeScript tools. Examples are `execute_checkpoint` verify and repair rules (ADR 0003), the `review_run`/`review_finalize` binding and the verifier account (ADR 0004), and goal checkpoints. These tools keep a second routing model next to the Playbooks.
+The approved Playbook architecture (`docs/context/subsystems.md` "Playbook architecture") routes work through one Hub skill, `skills/supapi-mode/`, and its Playbooks. `/execute`, `/review`, and `/goal` enforce their contracts in TypeScript tools. Examples are `execute_checkpoint` verify and repair rules (ADR 0003), the `review_run`/`review_finalize` binding and the verifier account (ADR 0004), and goal checkpoints. These tools keep a second routing model next to the Playbooks.
 
 pstack (Lauren Tan, MIT) gets similar guarantees with prose only. For example, `poteto-mode` says "You own every subagent's work" and requires fresh verification. Nothing enforces these rules in code.
 

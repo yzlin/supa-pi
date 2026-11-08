@@ -12,6 +12,7 @@ Read `CONTEXT-MAP.md` first to decide which notes apply.
 
 Current notes:
 
+- `subsystems.md` — per-subsystem implemented directions, removals, and history moved out of `CONTEXT.md`.
 - `code-improvement.md` — `/simplify` scoped grammar, allowlist boundaries, flags, and delegation behavior.
 - `extension-registration.md` — extension registration, ownership, retirement, and deployment boundaries.
 - `model-routing.md` — repository model defaults for setup, agents, review, evals, and Fast Mode; live settings may differ.

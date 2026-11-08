@@ -20,6 +20,7 @@
 ## Context notes
 
 - `docs/context/` — longer durable notes that should not live in chat only.
+- `docs/context/subsystems.md` — read before changing a subsystem named in its headings (oversight output, Sift, PR workflow, model profiles, codemode, tool rendering, retro, subagents, Spec workflow, local context overlay, Claude provider, statechart, Playbooks, skill CLI); holds the implemented directions moved out of `CONTEXT.md`.
 - `docs/context/extension-registration.md` — read before changing `package.json -> pi.extensions`, documenting active Extensions, or reasoning about disabled Extension code.
 - `docs/context/ask.md` — read before changing the active Ask Extension, its public `ask` tool or `/ask-stats` command, schema/result shape, keyboard behavior, validation, or rpiv-divergence documentation.
 - `docs/context/code-improvement.md` — read before changing `/simplify`, `/improve-codebase-architecture`, or code-improvement prompt files.
@@ -47,15 +48,15 @@
 - `skills/plain-report/SKILL.md` — read before changing Final report style, reviewer `why`/`change` prose rules, the telegraph-versus-Plain-report split, or surfaces that reference `plain-report`.
 - `evals/plain-report/README.md` — read before changing the offline Plain report calibration linter, its rules, or its fixtures.
 - `skills/grilling/SKILL.md` — read before changing natural-language adversarial interviews or the shared grilling contract.
-- `CONTEXT.md` "Playbook architecture: implemented; ADR 0005 accepted", `skills/supapi-mode/`, and `rules/principles/` — read before adding the Hub skill, Playbooks, Principles, the core-prompt routing pointer, or converting commands into Playbooks.
+- `docs/context/subsystems.md` "Playbook architecture: implemented; ADR 0005 accepted", `skills/supapi-mode/`, and `rules/principles/` — read before adding the Hub skill, Playbooks, Principles, the core-prompt routing pointer, or converting commands into Playbooks.
 - `skills/grill-me/SKILL.md`, `prompts/grill-me.md`, and `extensions/prompt-commands/index.ts` — read before changing explicit `/grill-me <plan>` behavior. The prompt entrypoint stays queueable and retains a functional no-Extension fallback while the active Extension preserves its raw multiline argument before normal expansion; the command skill permits only lock-gated, qualifying changes to `CONTEXT.md`, `CONTEXT-MAP.md`, and ADRs.
 - `skills/showing-me/SKILL.md` and `prompts/show-me.md` — read before changing `/show-me`, its Explainer ladder, or where discardable HTML explainers are written.
 - `skills/why/SKILL.md` and `prompts/why.md` — read before changing `/why`, its evidence tiers, or which sources it searches by default.
 - `skills/teach/SKILL.md` and `prompts/teach.md` — read before changing `/teach` or how it reuses the investigation how-it-works step and `why`.
 - `skills/ketchup/SKILL.md` and `prompts/ketchup.md` — read before changing `/ketchup`, what counts as an action item, or how it differs from `/wait-what`.
 - `skills/blast-radius/SKILL.md` and `prompts/blast-radius.md` — read before changing `/blast-radius`, its proof ladder, or where its probes run.
-- `prompts/statechart.md` and `CONTEXT.md` "Statechart: implemented direction" — read before changing `/statechart`, the external statechart skill install, `/skill install` file-mode handling, or state-diagram guidance in `skills/architecture-diagrams/SKILL.md`.
-- `CONTEXT.md` "Skill CLI: implemented direction", `extensions/skills/ops.ts`, and `extensions/skills/core.ts` — read before changing `/skill`, the `pi-skill` CLI (`scripts/pi-skill.ts`), the shared Prompter-based skill orchestration, or skill-manifest write locking.
+- `prompts/statechart.md` and `docs/context/subsystems.md` "Statechart: implemented direction" — read before changing `/statechart`, the external statechart skill install, `/skill install` file-mode handling, or state-diagram guidance in `skills/architecture-diagrams/SKILL.md`.
+- `docs/context/subsystems.md` "Skill CLI: implemented direction", `extensions/skills/ops.ts`, and `extensions/skills/core.ts` — read before changing `/skill`, the `pi-skill` CLI (`scripts/pi-skill.ts`), the shared Prompter-based skill orchestration, or skill-manifest write locking.
 - `skills/supapi-mode/playbooks/opening-a-pr.md` and `prompts/pr.md` — read before changing `/pr`, PR-body format, PR submission gates, or `rules/common/git-workflow.md` PR guidance.
 - `skills/retro/SKILL.md` and `prompts/retro.md` — read before changing `/retro`, session selection and evidence, report-only boundaries, or agent-environment recommendation routing.
 - `skills/supapi-mode/playbooks/execute.md` and `prompts/execute.md` — read before changing `/execute` or execute orchestration behavior.
@@ -66,7 +67,7 @@
 - `extensions/obsidian/README.md` — read before changing Obsidian vault activation, dynamic context-file discovery or precedence, guarded path behavior, context injection, or `/obsidian` status output.
 - `extensions/agents-local/README.md` — read before changing `AGENTS.local.md` loading, Local context file discovery/order, the contextFiles mutation, or the -nc opt-out.
 - `@yzlin/pieditor` — external npm-installed Pi package for editor UX behavior; `setup.sh` requires the compositor-free 2.0.0 release via `npm:@yzlin/pieditor@2.0.0`. Pi 0.84+ owns regular/fullscreen viewport composition; read `docs/adr/0002-use-pi-fullscreen.md` before adding editor-surface coordination.
-- `extensions/tool-display/README.md` — read before changing tool renderer ownership, config, skill-file `read` override behavior, tool-display metadata, or RTK full-skill-read compaction exemptions. Also read `CONTEXT.md` "Tool rendering: implemented product direction" before changing tool rendering, `registerToolRenderer` use, the RTK/tool-display boundary, or drawing for companion and core tools (`mcp__*`, `codemode`, web tools), retired-task fallback, or non-owned subagent rendering.
+- `extensions/tool-display/README.md` — read before changing tool renderer ownership, config, skill-file `read` override behavior, tool-display metadata, or RTK full-skill-read compaction exemptions. Also read `docs/context/subsystems.md` "Tool rendering: implemented product direction" before changing tool rendering, `registerToolRenderer` use, the RTK/tool-display boundary, or drawing for companion and core tools (`mcp__*`, `codemode`, web tools), retired-task fallback, or non-owned subagent rendering.
 - `extensions/whimsical/README.md` — read before changing `/whimsical`, working-message sets, or custom set loading from `~/.pi/agent/whimsical/`.
 - `extensions/rtk/README.md` — read before changing output compaction, `bash` ownership, or `/rtk` behavior.
 
