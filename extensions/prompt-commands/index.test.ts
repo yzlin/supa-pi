@@ -20,9 +20,9 @@ import promptCommandsExtension, {
 
 const expectedMessages = {
   "grill-me": (args: string) =>
-    `Use the \`grill-me\` wrapper skill as canonical for this explicit command.\n\nPlan:\n${args}`,
+    `Use the \`grill-me\` wrapper skill as canonical for this explicit command.\n\nBefore proceeding, open the \`grill-me\` location listed in \`<available_skills>\` directly; do not search for it. If it is not listed, stop and report the missing skill.\n\nPlan:\n${args}`,
   "show-me": (args: string) =>
-    `Use the \`showing-me\` skill as canonical for this explicit command.\n\nTopic:\n${args}`,
+    `Use the \`showing-me\` skill as canonical for this explicit command.\n\nBefore proceeding, open the \`showing-me\` location listed in \`<available_skills>\` directly; do not search for it. If it is not listed, stop and report the missing skill.\n\nTopic:\n${args}`,
 } as const;
 
 type CommandName = keyof typeof expectedMessages;

@@ -1,22 +1,40 @@
 import { AsyncLocalStorage } from "node:async_hooks";
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 
 import {
   AgentSession,
   type ExtensionAPI,
   type PromptOptions,
+  stripFrontmatter,
 } from "@earendil-works/pi-coding-agent";
 
+const PROMPTS_DIR = join(
+  dirname(fileURLToPath(import.meta.url)),
+  "..",
+  "..",
+  "prompts",
+);
+const ARGS_PLACEHOLDER = "$@";
+
+function loadTemplate(name: string): { prefix: string; suffix: string } {
+  const body = stripFrontmatter(
+    readFileSync(join(PROMPTS_DIR, `${name}.md`), "utf8"),
+  );
+  const index = body.indexOf(ARGS_PLACEHOLDER);
+  if (index === -1 || body.includes(ARGS_PLACEHOLDER, index + 1)) {
+    throw new Error(`prompts/${name}.md must contain exactly one $@`);
+  }
+  return {
+    prefix: body.slice(0, index),
+    suffix: body.slice(index + ARGS_PLACEHOLDER.length),
+  };
+}
+
 const COMMANDS = {
-  "grill-me": {
-    prefix:
-      "Use the `grill-me` wrapper skill as canonical for this explicit command.\n\nPlan:\n",
-    suffix: "",
-  },
-  "show-me": {
-    prefix:
-      "Use the `showing-me` skill as canonical for this explicit command.\n\nTopic:\n",
-    suffix: "",
-  },
+  "grill-me": loadTemplate("grill-me"),
+  "show-me": loadTemplate("show-me"),
 } as const;
 
 type PromptCommandName = keyof typeof COMMANDS;

@@ -2,6 +2,8 @@ import { describe, expect, it } from "bun:test";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
+import { buildPromptCommandMessage } from "../prompt-commands/index.ts";
+
 function readRepositoryFile(...segments: string[]): string {
   return readFileSync(join(process.cwd(), ...segments), "utf8");
 }
@@ -281,14 +283,13 @@ describe("grill-me command contract", () => {
       "index.ts",
     );
 
-    expect(extension).toContain('"grill-me": {');
     const prompt = readRepositoryFile("prompts", "grill-me.md");
     expect(prompt).toContain('argument-hint: "<plan>"');
     expect(prompt).toContain(
       "Use the `grill-me` wrapper skill as canonical for this explicit command.",
     );
     expect(prompt).toContain("Plan:\n$@");
-    expect(extension).toContain(
+    expect(buildPromptCommandMessage("grill-me", "x")).toContain(
       "Use the `grill-me` wrapper skill as canonical for this explicit command.",
     );
     expect(extension).toContain('pi.on("input"');
