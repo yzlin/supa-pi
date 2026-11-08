@@ -69,7 +69,6 @@
 - `extensions/tool-display/README.md` — read before changing tool renderer ownership, config, skill-file `read` override behavior, tool-display metadata, or RTK full-skill-read compaction exemptions. Also read `CONTEXT.md` "Tool rendering: implemented product direction" before changing tool rendering, `registerToolRenderer` use, the RTK/tool-display boundary, or drawing for companion and core tools (`mcp__*`, `codemode`, web tools), retired-task fallback, or non-owned subagent rendering.
 - `extensions/whimsical/README.md` — read before changing `/whimsical`, working-message sets, or custom set loading from `~/.pi/agent/whimsical/`.
 - `extensions/rtk/README.md` — read before changing output compaction, `bash` ownership, or `/rtk` behavior.
-- `extensions/smart-docs/README.md` — deprecated, disabled Extension; read before re-registering or removing `/smart-docs`.
 
 ## Maintenance rules
 
