@@ -34,22 +34,6 @@ export function transitionGoalStatus(
   return { ok: true, value: next };
 }
 
-export function inferGoalStatus(taskStatuses: GoalTaskStatus[]): GoalStatus {
-  if (taskStatuses.length === 0) {
-    return "active";
-  }
-  if (taskStatuses.some((status) => status === "blocked")) {
-    return "blocked";
-  }
-  if (taskStatuses.some((status) => status === "budget_limited")) {
-    return "budget_limited";
-  }
-  if (taskStatuses.every((status) => status === "complete")) {
-    return "complete";
-  }
-  return "active";
-}
-
 export function isTerminalGoalStatus(status: GoalStatus): boolean {
   return status === "complete" || status === "cleared";
 }

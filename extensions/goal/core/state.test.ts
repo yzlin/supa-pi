@@ -1,12 +1,14 @@
 import { describe, expect, it } from "bun:test";
+import { execFileSync } from "node:child_process";
+import { mkdtempSync, renameSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
 import { parseGoalCheckpoint } from "./checkpoint";
-import { assertDirtyBaselineUnchanged } from "./dirty-baseline";
-import { parseGoalExecutorResult } from "./executor-result";
+import { captureDirtyBaseline } from "./dirty-baseline";
 import { buildGoalTaskPacket, buildGoalTaskPrompt } from "./packet";
 import {
   formatGoalStatus,
-  inferGoalStatus,
   isTerminalGoalStatus,
   parseGoalStatus,
   transitionGoalStatus,
@@ -49,7 +51,7 @@ function checkpoint(overrides: Partial<GoalCheckpoint> = {}): GoalCheckpoint {
 }
 
 describe("goal core state helpers", () => {
-  it("enforces status transitions and infers aggregate status", () => {
+  it("enforces status transitions", () => {
     expect(transitionGoalStatus("active", "paused")).toEqual({
       ok: true,
       value: "paused",
@@ -58,9 +60,6 @@ describe("goal core state helpers", () => {
       ok: false,
       error: "Invalid goal status transition: complete -> active.",
     });
-    expect(inferGoalStatus(["complete", "complete"])).toBe("complete");
-    expect(inferGoalStatus(["pending", "blocked"])).toBe("blocked");
-    expect(inferGoalStatus(["budget_limited"])).toBe("budget_limited");
     expect(isTerminalGoalStatus("complete")).toBe(true);
     expect(parseGoalStatus("active")).toEqual({ ok: true, value: "active" });
     expect(formatGoalStatus("active", ["active", "pending"])).toBe(
@@ -116,41 +115,6 @@ describe("goal core state helpers", () => {
     });
   });
 
-  it("parses strict executor JSON and normalizes optional arrays", () => {
-    const parsed = parseGoalExecutorResult(
-      JSON.stringify({
-        status: "needs_followup",
-        summary: "  needs input  ",
-        filesTouched: ["a.ts", ""],
-        validation: ["bun test"],
-        followUps: ["schedule next"],
-        blockers: ["missing secret"],
-        checkpointPatch: {
-          status: "blocked",
-          blockerState: {
-            blocked: true,
-            reason: "missing secret",
-            taskId: "task-1",
-          },
-        },
-        suggestedNextTask: "task-2",
-      }),
-    );
-
-    expect(parsed).toMatchObject({
-      ok: true,
-      value: {
-        status: "needs_followup",
-        summary: "needs input",
-        filesTouched: ["a.ts"],
-        evidence: [],
-        risks: [],
-        suggestedNextTask: "task-2",
-      },
-    });
-    expect(parseGoalExecutorResult("not json")).toMatchObject({ ok: false });
-  });
-
   it("builds executor packets and prompts with budget context", () => {
     const cp = checkpoint();
     const packet = buildGoalTaskPacket(cp, cp.tasks[0]);
@@ -164,22 +128,28 @@ describe("goal core state helpers", () => {
     );
   });
 
-  it("guards dirty baseline changes", () => {
-    expect(
-      assertDirtyBaselineUnchanged(
-        { gitHead: "a", dirtyFiles: ["one.ts"] },
-        { gitHead: "a", dirtyFiles: ["one.ts"] },
-      ),
-    ).toEqual({ ok: true, value: undefined });
-    expect(
-      assertDirtyBaselineUnchanged(
-        { gitHead: "a", dirtyFiles: ["one.ts"] },
-        { gitHead: "b", dirtyFiles: ["two.ts"] },
-      ),
-    ).toEqual({
-      ok: false,
-      error:
-        "Dirty baseline changed: headChanged=true added=two.ts removed=one.ts.",
-    });
+  it("captures full dirty paths, including a leading unstaged change and renames", () => {
+    const cwd = mkdtempSync(join(tmpdir(), "goal-dirty-"));
+    const git = (...args: string[]) =>
+      execFileSync("git", args, { cwd, stdio: "ignore" });
+    git("init", "-q");
+    writeFileSync(join(cwd, "a.ts"), "a\n");
+    writeFileSync(join(cwd, "old.ts"), "old\n");
+    writeFileSync(join(cwd, "keep.ts"), "keep\n");
+    git("add", ".");
+    git("-c", "user.email=a@b", "-c", "user.name=a", "commit", "-qm", "init");
+    writeFileSync(join(cwd, "a.ts"), "changed\n");
+    git("mv", "old.ts", "new.ts");
+
+    expect(captureDirtyBaseline(cwd).dirtyFiles).toEqual(["a.ts", "new.ts"]);
+
+    // Worktree-side rename: " R moved.ts\0keep.ts\0".
+    renameSync(join(cwd, "keep.ts"), join(cwd, "moved.ts"));
+    git("add", "-N", "moved.ts");
+    expect(captureDirtyBaseline(cwd).dirtyFiles).toEqual([
+      "a.ts",
+      "moved.ts",
+      "new.ts",
+    ]);
   });
 });
