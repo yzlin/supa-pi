@@ -26,7 +26,7 @@ const TEXT_LIKE_FILENAMES = new Set([
   "Dockerfile",
   "Makefile",
 ]);
-export const LOCKFILE_NAMES = new Set([
+const LOCKFILE_NAMES = new Set([
   "bun.lock",
   "Cargo.lock",
   "package-lock.json",

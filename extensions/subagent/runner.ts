@@ -98,7 +98,7 @@ export function paneActivity(capture: string): string {
       : lines;
   return activity.join("\n").trimEnd().split("\n").slice(-18).join("\n").trim();
 }
-export function shellQuote(value: string): string {
+function shellQuote(value: string): string {
   return `'${value.replace(/'/g, `'"'"'`)}'`;
 }
 const bootstrap = fileURLToPath(new URL("./child.ts", import.meta.url));

@@ -28,8 +28,8 @@ import {
   validSlug,
 } from "./spec";
 
-export const SPEC_LOG_TOOL_NAME = "spec_log";
-export const SPEC_STATUS_MESSAGE_TYPE = "spec-status";
+const SPEC_LOG_TOOL_NAME = "spec_log";
+const SPEC_STATUS_MESSAGE_TYPE = "spec-status";
 const COLLAPSED_RESULT_LINES = 20;
 const TO_SPEC_PREAMBLE =
   "Use the `to-spec` skill as canonical for this explicit command.";
@@ -47,7 +47,7 @@ const ACTIONS = [
 ] as const;
 type Action = (typeof ACTIONS)[number];
 
-export const SpecLogParametersSchema = Type.Object({
+const SpecLogParametersSchema = Type.Object({
   action: Type.Union(ACTIONS.map((action) => Type.Literal(action))),
   specPath: Type.String({
     description: "Workspace-relative `.pi/specs/<slug>.md`.",

@@ -370,7 +370,7 @@ export const PATCH_EXAMPLE = `*** Begin Patch
 *** Delete File: obsolete.txt
 *** End Patch`;
 
-export const TOOL_DESCRIPTION = `Edit files with exactly one local unified-edit { text } payload. Choose either the row dialect or Codex patch dialect.
+const TOOL_DESCRIPTION = `Edit files with exactly one local unified-edit { text } payload. Choose either the row dialect or Codex patch dialect.
 
 Row grammar (repeat [path] sections to edit multiple files):
 [path]
@@ -405,9 +405,9 @@ ${PATCH_EXAMPLE}
 
 Local safety: all targets are planned and validated before mutation; ambiguous matches, overlapping targets, changed planning snapshots, no-op changes, limits, and unsafe add collisions fail. Add File requires the write tool to be enabled. Moves are never performed. Do not mix dialects or include prose outside the payload.`;
 
-export const TOOL_PROMPT_SNIPPET =
+const TOOL_PROMPT_SNIPPET =
   "Use edit with one { text } local unified-edit row script or Codex patch payload.";
-export const TOOL_PROMPT_GUIDELINES = [
+const TOOL_PROMPT_GUIDELINES = [
   "Use edit row mode for concise line, anchor, append, replace, or delete operations across known files.",
   "Use edit patch mode when a contextual Codex Add/Update/Delete patch is clearer or creates files.",
   "Before calling edit, include enough context for every content match to be unique and use exact planned targets.",

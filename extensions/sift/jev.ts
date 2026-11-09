@@ -1,6 +1,6 @@
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 
-export const PREFERRED_JEV = { provider: "typesafe", id: "jev-latest" };
+const PREFERRED_JEV = { provider: "typesafe", id: "jev-latest" };
 export type ClassifierRegistry = Pick<
   ExtensionContext["modelRegistry"],
   "getAvailableOfType" | "classify"
@@ -19,7 +19,7 @@ export type JevFailureCategory =
   | "provider"
   | "malformed";
 
-export class JevError extends Error {
+class JevError extends Error {
   readonly category: JevFailureCategory;
 
   constructor(category: JevFailureCategory, message: string) {

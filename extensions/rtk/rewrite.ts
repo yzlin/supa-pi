@@ -10,8 +10,8 @@ import type {
   RtkRuntimeStatus,
 } from "./types";
 
-export const DEFAULT_RTK_REWRITE_TIMEOUT_MS = 3000;
-export const DEFAULT_RTK_VERIFY_TIMEOUT_MS = 1000;
+const DEFAULT_RTK_REWRITE_TIMEOUT_MS = 3000;
+const DEFAULT_RTK_VERIFY_TIMEOUT_MS = 1000;
 
 let cachedRtkBinaryPath: string | undefined;
 
@@ -32,7 +32,7 @@ function formatCommandFailure(
   return stderr || fallback;
 }
 
-export const defaultRtkRunner: RtkRunner = (
+const defaultRtkRunner: RtkRunner = (
   file,
   args,
   timeoutMs,

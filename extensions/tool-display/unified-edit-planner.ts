@@ -27,7 +27,7 @@ import {
 } from "./unified-edit-parser";
 
 const UNICODE_SPACES_PATTERN = /[\u00A0\u2000-\u200A\u202F\u205F\u3000]/g;
-export const UNIFIED_EDIT_LIMITS = {
+const UNIFIED_EDIT_LIMITS = {
   inputBytes: 1_000_000,
   inputLines: 20_000,
   operations: 1000,
@@ -172,7 +172,7 @@ function join(doc: { lines: string[]; finalNewline: boolean }) {
   return doc.finalNewline ? `${body}\n` : body;
 }
 
-export function applyRowOperations(
+function applyRowOperations(
   path: string,
   content: string,
   operations: RowOperation[],
@@ -302,7 +302,7 @@ function seek(
   }
   return -1;
 }
-export function applyPatchChunks(
+function applyPatchChunks(
   path: string,
   content: string,
   chunks: UpdateChunk[],

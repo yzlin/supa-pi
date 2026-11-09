@@ -27,7 +27,7 @@ export interface GitExecResult {
 
 export type GitExec = (args: string[]) => Promise<GitExecResult>;
 
-export class GitChangedPathsError extends Error {
+class GitChangedPathsError extends Error {
   readonly command: string;
 
   constructor(command: string) {
@@ -245,7 +245,7 @@ export function normalizeStatusPaths(lines: string[]): string[] {
     .filter(Boolean);
 }
 
-export async function getMergeBase(
+async function getMergeBase(
   gitExec: GitExec,
   branch: string,
 ): Promise<string | null> {
@@ -293,7 +293,7 @@ export async function getChangedPaths(
   }
 }
 
-export async function getChangedPathsOrThrow(
+async function getChangedPathsOrThrow(
   target: ReviewTarget,
   gitExec: GitExec,
 ): Promise<string[]> {

@@ -17,7 +17,7 @@ const AGENTS_MD_BLOCK_PATTERN =
   /##\s+\/[^\n]+AGENTS\.md[\s\S]*?(?=\n##\s+\/|\n\nThe following skills provide|\n<available_skills>|\nCurrent date:|$)/;
 const RULES_BLOCK_PATTERN = /<rules>[\s\S]*?<\/rules>/i;
 
-export const CONTEXT_BUCKET_ORDER = [
+const CONTEXT_BUCKET_ORDER = [
   "instructions",
   "user_text",
   "assistant_text",

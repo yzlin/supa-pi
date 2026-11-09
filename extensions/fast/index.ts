@@ -100,7 +100,7 @@ function getFastModeSupportSource(model: unknown): FastModeSupportSource {
   return "unsupported";
 }
 
-export function modelSupportsFastMode(model: unknown): boolean {
+function modelSupportsFastMode(model: unknown): boolean {
   return getFastModeSupportSource(model) !== "unsupported";
 }
 

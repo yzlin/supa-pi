@@ -21,7 +21,7 @@ import { convertToLlm } from "@earendil-works/pi-coding-agent";
 // Constants
 // ---------------------------------------------------------------------------
 
-export const MINIBOX_LINES = 10;
+const MINIBOX_LINES = 10;
 
 const REASONING_LEVELS = [
   "minimal",
@@ -76,7 +76,7 @@ export function resolveExitCode(
 // Usage helpers
 // ---------------------------------------------------------------------------
 
-export function emptyUsage(): UsageStats {
+function emptyUsage(): UsageStats {
   return {
     input: 0,
     output: 0,

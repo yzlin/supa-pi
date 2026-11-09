@@ -1,7 +1,7 @@
 import { readFileSync, realpathSync, statSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 
-export const LOCAL_CONTEXT_FILENAME = "AGENTS.local.md";
+const LOCAL_CONTEXT_FILENAME = "AGENTS.local.md";
 
 export interface ContextFile {
   path: string;

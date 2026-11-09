@@ -68,7 +68,7 @@ export function buildPromptCommandMessage(
   return `${command.prefix}${args}${command.suffix}`;
 }
 
-export function expandRawPromptCommand(text: string): string {
+function expandRawPromptCommand(text: string): string {
   for (const name of Object.keys(COMMANDS) as PromptCommandName[]) {
     const prefix = `/${name}`;
     if (text === prefix) {

@@ -372,10 +372,7 @@ export function parseGoalCheckpoint(
   }
 }
 
-export function getGoalCheckpointPath(
-  goalId: string,
-  cwd = process.cwd(),
-): string {
+function getGoalCheckpointPath(goalId: string, cwd = process.cwd()): string {
   return join(cwd, ".pi", "goal", `${goalId}.json`);
 }
 

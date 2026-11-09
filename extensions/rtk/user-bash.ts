@@ -33,7 +33,7 @@ function killChild(child: ReturnType<typeof spawn>): void {
   }, 250).unref();
 }
 
-export function createLocalBashOperations(): BashOperations {
+function createLocalBashOperations(): BashOperations {
   return {
     async exec(command, cwd, { onData, signal, timeout, env }) {
       if (!existsSync(cwd)) {

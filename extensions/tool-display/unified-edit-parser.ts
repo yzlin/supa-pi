@@ -44,7 +44,7 @@ export type PatchOperation =
   | { kind: "delete"; path: string }
   | { kind: "update"; path: string; chunks: UpdateChunk[] };
 
-export function normalizeEditPath(path: string): string {
+function normalizeEditPath(path: string): string {
   const trimmed = path.trim();
   if (!trimmed) {
     throw new Error("File path cannot be empty.");

@@ -28,7 +28,7 @@ import type {
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
 
-export function pathToUri(filePath: string): string {
+function pathToUri(filePath: string): string {
   const abs = filePath.startsWith("/") ? filePath : resolve(filePath);
   return `file://${abs}`;
 }

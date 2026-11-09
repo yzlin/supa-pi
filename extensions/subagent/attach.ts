@@ -200,7 +200,7 @@ export function resolveAttachTarget(runId: string): AttachTarget {
   return { runId, socket: raw.socket, session: raw.session };
 }
 
-export function attachToSubagent(runId: string): number {
+function attachToSubagent(runId: string): number {
   const target = resolveAttachTarget(runId);
   const sameServer =
     process.env.TMUX?.replace(/,[^,]*,[^,]*$/, "") === target.socket;

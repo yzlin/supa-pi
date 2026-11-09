@@ -2,7 +2,7 @@ import { constants } from "node:fs";
 import { open, realpath, stat } from "node:fs/promises";
 import { basename, isAbsolute, relative, resolve, sep } from "node:path";
 
-export const MAX_FILE_BYTES = 50 * 1024;
+const MAX_FILE_BYTES = 50 * 1024;
 const SENSITIVE_NAMES = new Set([
   ".npmrc",
   ".pypirc",

@@ -57,7 +57,7 @@ export function isAllAnswered(
   return questions.every((question) => answers.has(question.id));
 }
 
-export function advanceAfterAnswer(
+function advanceAfterAnswer(
   state: AskRuntimeState,
   questions: Question[],
 ): AskRuntimeState {

@@ -23,7 +23,7 @@ export type JsonValue =
   | string
   | JsonValue[]
   | { [key: string]: JsonValue };
-export function isJson(value: unknown): value is JsonValue {
+function isJson(value: unknown): value is JsonValue {
   if (
     value === null ||
     typeof value === "string" ||

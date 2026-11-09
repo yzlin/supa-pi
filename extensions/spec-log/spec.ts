@@ -17,8 +17,8 @@ import { type Static, Type } from "typebox";
 import { Value } from "typebox/value";
 
 export const SPECS_DIR = ".pi/specs";
-export const SPEC_SLUG_PATTERN = /^[a-z0-9][a-z0-9-]*$/u;
-export const RESERVED_SLUGS: readonly string[] = ["status"];
+const SPEC_SLUG_PATTERN = /^[a-z0-9][a-z0-9-]*$/u;
+const RESERVED_SLUGS: readonly string[] = ["status"];
 
 const SECTIONS = [
   "Execution Scope",
@@ -40,7 +40,7 @@ const text = Type.String({ minLength: 1 });
 const hash = Type.String({ pattern: "^[a-f0-9]{64}$" });
 const ts = Type.String({ format: "date-time" });
 const closed = { additionalProperties: false };
-export const SpecLogEventSchema = Type.Union([
+const SpecLogEventSchema = Type.Union([
   Type.Object(
     {
       ts,
@@ -97,7 +97,7 @@ export type SpecLogEvent = Static<typeof SpecLogEventSchema>;
 type Accepted = Extract<SpecLogEvent, { event: "accepted" }>;
 
 /** A log written before P4 (execute_checkpoint ledger era). Readable for status only. */
-export class LegacySpecLogError extends Error {
+class LegacySpecLogError extends Error {
   readonly lastEvent: string;
   constructor(path: string, lastEvent: string) {
     super(
