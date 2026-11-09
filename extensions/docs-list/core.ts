@@ -17,9 +17,7 @@ export interface DocsListResult {
   ok: boolean;
   target: string;
   root: string;
-  rootPath: string;
   exists: boolean;
-  entries: DocsListItem[];
   docs: DocsListItem[];
   warnings: DocsListWarning[];
   warningCount: number;
@@ -32,6 +30,7 @@ const AT_PREFIX_REGEX = /^@+/;
 const SINGLE_QUOTE_REGEX = /'/g;
 const QUOTE_EDGE_REGEX = /^['"]|['"]$/g;
 const WHITESPACE_REGEX = /\s+/g;
+const BLOCK_SCALAR_REGEX = /^[>|][+-]?\d*$/;
 const EXCLUDED_DIRS = new Set(["archive", "research"]);
 
 function compactStrings(values: unknown[]): string[] {
@@ -164,7 +163,8 @@ function extractMetadata(fullPath: string): Omit<DocsListItem, "path"> {
   const frontMatter = content.slice(3, endIndex).trim();
   const lines = frontMatter.split("\n");
 
-  let summaryLine: string | null = null;
+  let summaryValue: string | null = null;
+  let isCollectingSummaryBlock = false;
   const readWhen: string[] = [];
   const warnings: string[] = [];
   let isCollectingReadWhen = false;
@@ -172,13 +172,24 @@ function extractMetadata(fullPath: string): Omit<DocsListItem, "path"> {
   for (const rawLine of lines) {
     const line = rawLine.trim();
 
-    if (line.startsWith(SUMMARY_KEY)) {
-      summaryLine = line;
+    if (isCollectingSummaryBlock) {
+      if (line === "" || rawLine.startsWith(" ") || rawLine.startsWith("\t")) {
+        summaryValue = `${summaryValue ?? ""} ${line}`;
+        continue;
+      }
+      isCollectingSummaryBlock = false;
+    }
+
+    // Keys are top-level only; indented `summary:` belongs to a nested map.
+    if (rawLine.startsWith(SUMMARY_KEY)) {
+      const value = line.slice(SUMMARY_KEY.length).trim();
+      isCollectingSummaryBlock = BLOCK_SCALAR_REGEX.test(value);
+      summaryValue = isCollectingSummaryBlock ? "" : value;
       isCollectingReadWhen = false;
       continue;
     }
 
-    if (line.startsWith(READ_WHEN_KEY)) {
+    if (rawLine.startsWith(READ_WHEN_KEY)) {
       isCollectingReadWhen = true;
       const inline = line.slice(READ_WHEN_KEY.length).trim();
       readWhen.push(...parseReadWhenInlineArray(inline, warnings));
@@ -197,12 +208,11 @@ function extractMetadata(fullPath: string): Omit<DocsListItem, "path"> {
     }
   }
 
-  if (!summaryLine) {
+  if (summaryValue === null) {
     warnings.push("summary key missing");
     return { summary: null, readWhen, warnings };
   }
 
-  const summaryValue = summaryLine.slice(SUMMARY_KEY.length).trim();
   const normalized = normalizeSummary(summaryValue);
 
   if (!normalized) {
@@ -226,9 +236,7 @@ export function listDocs(
       ok: true,
       target,
       root,
-      rootPath: root,
       exists: false,
-      entries: [],
       docs: [],
       warnings,
       warningCount: warnings.length,
@@ -249,9 +257,7 @@ export function listDocs(
     ok: true,
     target,
     root,
-    rootPath: root,
     exists: true,
-    entries: docs,
     docs,
     warnings,
     warningCount: warnings.length,

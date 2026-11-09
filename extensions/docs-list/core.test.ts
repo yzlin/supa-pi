@@ -70,11 +70,9 @@ describe("docs-list core", () => {
       ok: true,
       target: "docs",
       root: docsDir,
-      rootPath: docsDir,
       exists: true,
       warningCount: 1,
     });
-    expect(result.entries).toBe(result.docs);
     expect(result.warnings).toEqual([
       { path: "bad.md", message: "summary key missing" },
     ]);
@@ -111,6 +109,36 @@ describe("docs-list core", () => {
     ]);
   });
 
+  test("reads block-scalar summaries and ignores nested summary keys", () => {
+    const cwd = makeTempDir();
+    mkdirSync(join(cwd, "docs"));
+    writeFileSync(
+      join(cwd, "docs", "folded.md"),
+      "---\nsummary: >\n  Folded summary\n  across lines.\nread_when:\n  - folding\n---\n",
+    );
+    writeFileSync(
+      join(cwd, "docs", "literal.md"),
+      "---\nsummary: |-\n  Literal summary\n---\n",
+    );
+    writeFileSync(
+      join(cwd, "docs", "nested.md"),
+      "---\nmeta:\n  summary: nested only\n---\n",
+    );
+
+    const docs = listDocs({ cwd }).docs;
+    const byPath = (path: string) => docs.find((doc) => doc.path === path);
+    expect(byPath("folded.md")).toMatchObject({
+      summary: "Folded summary across lines.",
+      readWhen: ["folding"],
+      warnings: [],
+    });
+    expect(byPath("literal.md")?.summary).toBe("Literal summary");
+    expect(byPath("nested.md")).toMatchObject({
+      summary: null,
+      warnings: ["summary key missing"],
+    });
+  });
+
   test("uses optional relative path", () => {
     const cwd = makeTempDir();
     mkdirSync(join(cwd, "knowledge"), { recursive: true });
@@ -124,7 +152,6 @@ describe("docs-list core", () => {
     expect(result).toMatchObject({
       target: "knowledge",
       root: join(cwd, "knowledge"),
-      rootPath: join(cwd, "knowledge"),
       exists: true,
     });
     expect(result.docs.map((doc) => doc.path)).toEqual(["note.md"]);
