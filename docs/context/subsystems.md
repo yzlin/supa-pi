@@ -280,7 +280,8 @@ Decided 2026-11-09 in chat, by user choice: install, do not vendor (same as stat
 - Entry: `prompts/create-formal-verification-skill.md` and `prompts/maintain-formal-verification-skill.md` are thin wrappers. Without the skill they stop and print the `/skill install` command. Updates track `main`; `setup.sh` does not install them.
 - When to run maintain: verified code changed without the verify skill (merges, rebases, refactors that move covered code, new code that writes guarded state, drift across commits). A change made while the verify skill is loaded is that skill's job.
 - Review and context-review: not wired yet. Planned direction is a read-only overlap check (covered files vs. changed paths, `git diff <sync>..HEAD`) that reports "possibly stale, run maintain" and never runs maintain, because maintain edits verification files and `/review` is report-only. Deferred until the first real verify skill exists (`subtract-before-you-add`).
-- Not verified: where Pi discovers a generated verify skill (upstream says only "project-local"; Pi docs list project skill directories and `.agents/skills/`), and an end-to-end run of either skill.
+- First verify skill (2026-11-09): `.agents/skills/verify-subagent-dialog-relay/` (TLA+ model of `extensions/subagent/dialog-relay.ts` + `dialog-queue.ts`; `check.sh` checks code anchors, the model, and 4 mutants in about 30 s). Pi 1.5.0 discovers it from `.agents/skills/` (confirmed with RPC `get_commands`). The review overlap check above is now unblocked but still not wired.
+- Not verified: an end-to-end run of `/maintain-formal-verification-skill`.
 
 ## Playbook architecture: implemented; ADR 0005 accepted
 

@@ -1,0 +1,17 @@
+# model action	file	code text; whitespace runs (incl. newlines) match any whitespace; must occur exactly once
+ChildAsks	extensions/subagent/dialog-relay.ts	callerSignal?.addEventListener("abort", onAbort, { once: true }); // Written before connect so the request always precedes any cancel. socket.write(`${request}\n`);
+Finish	extensions/subagent/dialog-relay.ts	if (settled) { return; } settled = true; callerSignal?.removeEventListener("abort", onAbort); localAbort.abort(); if (!answered && socket.writable) { socket.write(`${JSON.stringify({ type: "cancel", id })}\n`); } socket.end();
+ChildUserAnswers	extensions/subagent/dialog-relay.ts	local(signal).then( (value) => finish(value), () => finish(deny), );
+ChildCallerAborts	extensions/subagent/dialog-relay.ts	const onAbort = () => finish(deny);
+ChildReads	extensions/subagent/dialog-relay.ts	if (answer?.id !== id) { return; } answered = true; if (answer.unavailable) {
+ChildSocketCloses	extensions/subagent/dialog-relay.ts	socket.on("close", () => finish( deny, connected ? "relay disconnected" : "relay connection failed", ), );
+ParentReads	extensions/subagent/dialog-relay.ts	if (message.type === "cancel") { pending.get(message.id)?.abort(); pending.delete(message.id); return; }
+ParentReads	extensions/subagent/dialog-relay.ts	if (!ui || stop.aborted || pending.has(message.id)) { deny(message.id, message.kind); return; } const controller = new AbortController(); pending.set(message.id, controller); const signal = AbortSignal.any([controller.signal, stop]);
+ParentUserAnswers	extensions/subagent/dialog-relay.ts	if (pending.get(message.id) !== controller) { return; } pending.delete(message.id); if (signal.aborted) { deny(message.id, message.kind); } else {
+ParentSocketCloses	extensions/subagent/dialog-relay.ts	socket.on("close", () => { connections.delete(socket); for (const controller of pending.values()) { controller.abort(); } pending.clear(); });
+RelayCloses	extensions/subagent/dialog-relay.ts	closed.abort(); for (const socket of connections) { socket.destroy(); }
+RelayCloses	extensions/subagent/runner.ts	await relay?.close();
+ToolAborts	extensions/subagent/runner.ts	parentUI: () => (ctx.hasUI ? ctx.ui : undefined), signal, });
+Enqueue	extensions/subagent/dialog-queue.ts	const onAbort = () => resolve(abortValue); signal?.addEventListener("abort", onAbort, { once: true });
+Advance	extensions/subagent/dialog-queue.ts	tail = tail.then(async () => { signal?.removeEventListener("abort", onAbort); if (signal?.aborted) { return; } const result = Promise.resolve().then(run); resolve(result); await result.catch(() => undefined); });
+Enqueue	extensions/subagent/index.ts	if (ctx.hasUI) { queueDialogs(ctx.ui); }
