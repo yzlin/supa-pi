@@ -33,7 +33,7 @@ Goal task mode uses only `goal_checkpoint`, not the `spec_log` tool or retired T
 
 - Classic mode has no task budget. Either mode can have a run limit with `--max-runs N`; the checkpoint stores `runLimit` (`null` when unset) and `runsUsed`.
 - Task mode requires `--tasks N` and stores it as `taskBudget`.
-- Each task starts with `budget.maxAttempts` from `--max-attempts-per-task` and tracks `usedAttempts` plus `usedToolCalls`.
+- Each task starts with `budget.maxAttempts` from `--max-attempts-per-task` and tracks `usedAttempts`. Tool calls are not counted; checkpoints that still hold `maxToolCalls` or `usedToolCalls` load with those fields dropped.
 - A task or goal can become `budget_limited` when available attempts, task budget, or the run limit are exhausted.
 - `goal_checkpoint` cannot change `runLimit` or `runsUsed`; only the extension counts runs. Checkpoints written before run limits existed load with no limit.
 - The run limit counts agent runs, not model turns, tool calls, tokens, or cost. Nothing caps spend directly.

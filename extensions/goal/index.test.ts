@@ -279,7 +279,7 @@ describe("goal extension", () => {
             title: "Task 1",
             status: "active",
             attempts: 0,
-            budget: { maxAttempts: 999, usedAttempts: 0, usedToolCalls: 0 },
+            budget: { maxAttempts: 999, usedAttempts: 0 },
           },
         ],
       },

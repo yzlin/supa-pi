@@ -1,12 +1,5 @@
 import { describe, expect, it } from "bun:test";
 
-import {
-  createTaskBudget,
-  getRemainingAttempts,
-  isTaskBudgetExhausted,
-  spendTaskAttempt,
-  spendToolCalls,
-} from "./budget";
 import { parseGoalCheckpoint } from "./checkpoint";
 import { assertDirtyBaselineUnchanged } from "./dirty-baseline";
 import { parseGoalExecutorResult } from "./executor-result";
@@ -48,7 +41,7 @@ function checkpoint(overrides: Partial<GoalCheckpoint> = {}): GoalCheckpoint {
         title: "Task 1",
         status: "active",
         attempts: 0,
-        budget: { maxAttempts: 2, usedAttempts: 1, usedToolCalls: 3 },
+        budget: { maxAttempts: 2, usedAttempts: 1 },
       },
     ],
     ...overrides,
@@ -75,27 +68,24 @@ describe("goal core state helpers", () => {
     );
   });
 
-  it("accounts for task attempts and tool-call budget", () => {
-    const budget = createTaskBudget(2, 3);
-    const first = spendTaskAttempt(budget);
-    expect(first).toEqual({
-      ok: true,
-      value: {
+  it("drops tool-call fields from checkpoints written before their removal", () => {
+    const legacy = checkpoint();
+    const legacyTask = {
+      ...legacy.tasks[0],
+      budget: {
         maxAttempts: 2,
         usedAttempts: 1,
         maxToolCalls: 3,
-        usedToolCalls: 0,
+        usedToolCalls: 3,
       },
-    });
-    if (!first.ok) {
-      throw new Error(first.error);
+    };
+    const parsed = parseGoalCheckpoint({ ...legacy, tasks: [legacyTask] });
+    if ("error" in parsed) {
+      throw new Error(parsed.error);
     }
-    expect(getRemainingAttempts(first.value)).toBe(1);
-    expect(isTaskBudgetExhausted(first.value)).toBe(false);
-    expect(spendToolCalls(first.value, 3)).toMatchObject({ ok: true });
-    expect(spendToolCalls(first.value, 4)).toEqual({
-      ok: false,
-      error: "Task tool-call budget exhausted.",
+    expect(parsed.value.tasks[0]?.budget).toEqual({
+      maxAttempts: 2,
+      usedAttempts: 1,
     });
   });
 
@@ -168,9 +158,7 @@ describe("goal core state helpers", () => {
     expect(packet.checkpointSummary).toBe(
       "1 tasks; status active; updated 2026-01-01T00:00:00.000Z",
     );
-    expect(buildGoalTaskPrompt(packet)).toContain(
-      "Budget: attempts 1/2; tool calls 3/unlimited",
-    );
+    expect(buildGoalTaskPrompt(packet)).toContain("Budget: attempts 1/2");
     expect(buildGoalTaskPrompt(packet)).toContain(
       "Return strict executor JSON",
     );

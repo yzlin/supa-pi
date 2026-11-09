@@ -36,8 +36,6 @@ export interface GoalTask {
 export interface GoalTaskBudget {
   maxAttempts: number;
   usedAttempts: number;
-  maxToolCalls?: number;
-  usedToolCalls: number;
 }
 
 export interface GoalMilestone {

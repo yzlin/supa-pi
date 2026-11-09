@@ -128,23 +128,14 @@ function budget(value: unknown, field: string): GoalTaskBudget {
   if (!isRecord(value)) {
     throw new Error(`Invalid goal checkpoint: ${field} must be an object.`);
   }
+  // Tool-call fields from older checkpoints are dropped, not validated.
   const normalized: GoalTaskBudget = {
     maxAttempts: nonNegativeInteger(value.maxAttempts, `${field}.maxAttempts`),
     usedAttempts: nonNegativeInteger(
       value.usedAttempts,
       `${field}.usedAttempts`,
     ),
-    usedToolCalls: nonNegativeInteger(
-      value.usedToolCalls,
-      `${field}.usedToolCalls`,
-    ),
   };
-  if (value.maxToolCalls !== undefined) {
-    normalized.maxToolCalls = nonNegativeInteger(
-      value.maxToolCalls,
-      `${field}.maxToolCalls`,
-    );
-  }
   if (normalized.maxAttempts <= 0) {
     throw new Error(
       `Invalid goal checkpoint: ${field}.maxAttempts must be positive.`,

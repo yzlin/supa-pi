@@ -25,7 +25,7 @@ export function buildGoalTaskPrompt(packet: GoalTaskPacket): string {
     "",
     `Goal: ${packet.objective}`,
     `Checkpoint: ${packet.checkpointSummary}`,
-    `Budget: attempts ${packet.task.budget.usedAttempts}/${packet.task.budget.maxAttempts}; tool calls ${packet.task.budget.usedToolCalls}/${packet.task.budget.maxToolCalls ?? "unlimited"}`,
+    `Budget: attempts ${packet.task.budget.usedAttempts}/${packet.task.budget.maxAttempts}`,
     "",
     "Stay in scope. Return strict executor JSON with status, summary, filesTouched, validation, followUps, blockers.",
   ].join("\n");

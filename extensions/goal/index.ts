@@ -70,7 +70,7 @@ function makeTask(index: number, maxAttempts: number): GoalTask {
     title: `Task ${index}`,
     status: index === 1 ? "active" : "pending",
     attempts: 0,
-    budget: { maxAttempts, usedAttempts: 0, usedToolCalls: 0 },
+    budget: { maxAttempts, usedAttempts: 0 },
   };
 }
 
@@ -429,10 +429,7 @@ function validateTaskPatch(
     if (before.title !== after.title) {
       return { ok: false, error: "goal_checkpoint cannot change task titles." };
     }
-    if (
-      before.budget.maxAttempts !== after.budget.maxAttempts ||
-      before.budget.maxToolCalls !== after.budget.maxToolCalls
-    ) {
+    if (before.budget.maxAttempts !== after.budget.maxAttempts) {
       return {
         ok: false,
         error: "goal_checkpoint cannot change task budgets.",
@@ -451,21 +448,6 @@ function validateTaskPatch(
       return {
         ok: false,
         error: "goal_checkpoint usedAttempts exceeds budget.",
-      };
-    }
-    if (after.budget.usedToolCalls < before.budget.usedToolCalls) {
-      return {
-        ok: false,
-        error: "goal_checkpoint cannot decrease usedToolCalls.",
-      };
-    }
-    if (
-      after.budget.maxToolCalls !== undefined &&
-      after.budget.usedToolCalls > after.budget.maxToolCalls
-    ) {
-      return {
-        ok: false,
-        error: "goal_checkpoint usedToolCalls exceeds budget.",
       };
     }
     if (after.status === "active") {
