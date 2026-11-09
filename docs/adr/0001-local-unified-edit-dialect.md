@@ -46,7 +46,16 @@ Retire direct classic/patch schema tests, dead bridge execution code, and local 
 
 ## Evaluation gate
 
-Before hard cutover, run 20 representative full-session edit cases against the pre-change structured baseline and candidate `{ text }` contract on one representative OpenAI, Anthropic, and Google coding model: 20 cases × 2 arms × 3 providers = 120 paid calls. Score actual safe file outcomes and first-attempt success; record malformed calls, wrong/unsafe mutations, model IDs, cases, usage, latency, and raw artifacts. Candidate must beat baseline by at least 5 aggregate percentage points, no provider may drop more than 2 points, and candidate must have zero unsafe mutations. Missing credentials, provider access, cost approval, baseline worktree, or a full-session extension-capable harness blocks the gate; results must never be inferred or fabricated.
+Before hard cutover, run the full-session edit cases in `evals/unified-edit-reliability/README.md` against the pre-change structured baseline and candidate `{ text }` contract on one representative OpenAI, Anthropic, and Google coding model, once per case, arm, and provider. Score actual safe file outcomes and first-attempt success; record malformed calls, wrong/unsafe mutations, model IDs, cases, usage, latency, and raw artifacts. Missing credentials, provider access, cost approval, baseline worktree, or a full-session extension-capable harness blocks the gate; results must never be inferred or fabricated.
+
+The gate reads the paired 95% interval of the first-attempt delta (`evals/unified-edit-reliability/gate.ts`), not a fixed margin:
+
+- Fail on any unsafe candidate mutation, or on any provider with more regressed than improved pairs.
+- **Better:** the interval lies above 0. Adopt the candidate as the default.
+- **Non-inferior:** the lower bound is at or above −5 points. The candidate may become the default only for a stated non-reliability reason, such as one schema instead of two.
+- **Inconclusive:** the lower bound is below −5 points, so the run cannot rule out a real loss. This blocks adoption; add cases or providers and rerun.
+
+Revised 2026-11-09: the original rule required +5 aggregate points and no provider drop over 2 points. At 20 cases the worst-case detection floor is about ±44 points and one case per provider is 5 points, so that rule could not be measured. Two pilots also scored 18/18 in both arms, so harder cases 21–28 were added.
 
 ## Upstream sync policy
 

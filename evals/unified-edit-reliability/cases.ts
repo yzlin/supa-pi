@@ -47,6 +47,43 @@ const serverPy = lines(
   "    return (DEFAULT_HOST, DEFAULT_PORT)",
 );
 
+/** 300-line settings file with near-identical rows; only one row may change. */
+const settingsRows = Array.from(
+  { length: 300 },
+  (_, index) =>
+    `  setting_${String(index + 1).padStart(3, "0")}: { enabled: ${index % 7 === 0}, limit: ${(index % 5) * 10} },`,
+);
+const settingsTs = lines("export const settings = {", ...settingsRows, "};");
+
+const retryBlocks = (attempts: [number, number, number]): string =>
+  lines(
+    "export const uploadRetry = {",
+    `  attempts: ${attempts[0]},`,
+    "  backoffMs: 250,",
+    "};",
+    "",
+    "export const downloadRetry = {",
+    `  attempts: ${attempts[1]},`,
+    "  backoffMs: 250,",
+    "};",
+    "",
+    "export const syncRetry = {",
+    `  attempts: ${attempts[2]},`,
+    "  backoffMs: 250,",
+    "};",
+  );
+
+const crlf = (...rows: string[]): string => `${rows.join("\r\n")}\r\n`;
+
+const fiveHunkRows = (changed: boolean): string[] =>
+  Array.from({ length: 60 }, (_, index) => {
+    const row = index + 1;
+    if (changed && row % 12 === 0) {
+      return `const value${row} = ${row * 2}; // updated`;
+    }
+    return `const value${row} = ${row};`;
+  });
+
 export const CASES: EditCase[] = [
   {
     id: "01-single-line",
@@ -362,6 +399,155 @@ export const CASES: EditCase[] = [
       ),
       "src/math.ts": lines(
         "export const square = (n: number): number => n * n;",
+      ),
+    },
+  },
+  // Harder cases (21+): added so a ceiling result (both arms 18/18) stops
+  // being the only outcome. Gate cases 19 and 20 stay reserved.
+  {
+    id: "21-large-file-deep-row",
+    requiresEdit: true,
+    prompt:
+      "In settings.ts, change only `setting_247` so its limit is 999. Every other row has the same shape; change nothing else.",
+    files: { "settings.ts": settingsTs },
+    expected: {
+      "settings.ts": settingsTs.replace(
+        "  setting_247: { enabled: false, limit: 10 },",
+        "  setting_247: { enabled: false, limit: 999 },",
+      ),
+    },
+  },
+  {
+    id: "22-near-duplicate-blocks",
+    requiresEdit: true,
+    prompt:
+      "In retry.ts, change `attempts` to 9 in `downloadRetry` only. `uploadRetry` and `syncRetry` have identical bodies and must stay unchanged.",
+    files: { "retry.ts": retryBlocks([3, 3, 3]) },
+    expected: { "retry.ts": retryBlocks([3, 9, 3]) },
+  },
+  {
+    id: "23-crlf-multi-line-insert",
+    requiresEdit: true,
+    prompt:
+      "In app.ini, insert these two lines directly after the line `[server]`:\nhost=0.0.0.0\nport=9000\nThe file uses CRLF line endings; the new lines must use CRLF too. Change nothing else.",
+    files: {
+      "app.ini": crlf("[server]", "workers=4", "", "[log]", "level=info"),
+    },
+    expected: {
+      "app.ini": crlf(
+        "[server]",
+        "host=0.0.0.0",
+        "port=9000",
+        "workers=4",
+        "",
+        "[log]",
+        "level=info",
+      ),
+    },
+  },
+  {
+    id: "24-five-hunks",
+    requiresEdit: true,
+    prompt:
+      "In values.ts, for each of value12, value24, value36, value48, and value60, double the number and append the comment ` // updated`. For example `const value12 = 12;` becomes `const value12 = 24; // updated`. Change no other line.",
+    files: { "values.ts": lines(...fiveHunkRows(false)) },
+    expected: { "values.ts": lines(...fiveHunkRows(true)) },
+  },
+  {
+    id: "25-tabs-and-trailing-space",
+    requiresEdit: true,
+    prompt:
+      "In Makefile, change the build command `go build ./...` to `go build -trimpath ./...`. Keep the tab indent. The `# keep` comment line ends with two spaces; keep them.",
+    files: {
+      Makefile: lines(
+        "# keep  ",
+        "build:",
+        "\tgo build ./...",
+        "",
+        "test:",
+        "\tgo test ./...",
+      ),
+    },
+    expected: {
+      Makefile: lines(
+        "# keep  ",
+        "build:",
+        "\tgo build -trimpath ./...",
+        "",
+        "test:",
+        "\tgo test ./...",
+      ),
+    },
+  },
+  {
+    id: "26-no-final-newline",
+    requiresEdit: true,
+    prompt:
+      "In LICENSE-NOTE, change `2025` to `2026`. The file has no newline at the end; keep it that way.",
+    files: { "LICENSE-NOTE": "Copyright 2025 Demo\nAll rights reserved." },
+    expected: { "LICENSE-NOTE": "Copyright 2026 Demo\nAll rights reserved." },
+  },
+  {
+    id: "27-rename-across-files",
+    requiresEdit: true,
+    prompt:
+      "Rename the function `fetchUser` to `loadUser` in src/user.ts and src/main.ts. Do not change CHANGELOG.md, which records the old name.",
+    files: {
+      "src/user.ts": lines(
+        "export function fetchUser(id: string) {",
+        "  return { id };",
+        "}",
+      ),
+      "src/main.ts": lines(
+        'import { fetchUser } from "./user";',
+        "",
+        'console.log(fetchUser("1"));',
+      ),
+      "CHANGELOG.md": lines("# Changes", "", "- Add fetchUser."),
+    },
+    expected: {
+      "src/user.ts": lines(
+        "export function loadUser(id: string) {",
+        "  return { id };",
+        "}",
+      ),
+      "src/main.ts": lines(
+        'import { loadUser } from "./user";',
+        "",
+        'console.log(loadUser("1"));',
+      ),
+      "CHANGELOG.md": lines("# Changes", "", "- Add fetchUser."),
+    },
+  },
+  {
+    id: "28-move-block",
+    requiresEdit: true,
+    prompt:
+      "In order.py, move the whole `def helper():` function (its def line and body) so it comes after `def main():` instead of before it. Keep exactly two blank lines between the functions and change nothing else.",
+    files: {
+      "order.py": lines(
+        "import sys",
+        "",
+        "",
+        "def helper():",
+        "    return 1",
+        "",
+        "",
+        "def main():",
+        "    sys.exit(helper())",
+      ),
+    },
+    expected: {
+      "order.py": lines(
+        "import sys",
+        "",
+        "",
+        "def main():",
+        "    sys.exit(helper())",
+        "",
+        "",
+        "def helper():",
+        "    return 1",
       ),
     },
   },

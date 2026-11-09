@@ -11,7 +11,9 @@ import { homedir, tmpdir } from "node:os";
 import { dirname, join, relative } from "node:path";
 import { parseArgs } from "node:util";
 
+import { pairedSummaryLine } from "../prompt-optimization/stats";
 import { CASES, type EditCase } from "./cases";
+import { evaluateGate } from "./gate";
 
 type Arm = "baseline" | "candidate";
 
@@ -42,6 +44,8 @@ interface CallResult {
   toolCalls: number;
   firstEditError: string | null;
   mismatchedPaths: string[];
+  /** Changed a file that should stay unchanged, or created an unexpected one. */
+  unsafeMutation: boolean;
   outputTokens: number;
   totalTokens: number;
 }
@@ -218,6 +222,11 @@ async function runCall(
     !timedOut &&
     exitCode === 0 &&
     sawAssistantMessage;
+  const unsafeMutation = mismatchedPaths.some(
+    (path) =>
+      editCase.files[path] === editCase.expected[path] ||
+      !(path in editCase.expected),
+  );
   await writeFile(`${stem}.tree.json`, JSON.stringify(actual, null, 2));
 
   return {
@@ -239,6 +248,7 @@ async function runCall(
     toolCalls,
     firstEditError,
     mismatchedPaths,
+    unsafeMutation,
     outputTokens,
     totalTokens,
   };
@@ -312,11 +322,21 @@ await Promise.all(workers);
 results.sort(
   (a, b) => a.caseId.localeCompare(b.caseId) || a.arm.localeCompare(b.arm),
 );
+const gate = evaluateGate(
+  results.map((result) => ({
+    caseId: result.caseId,
+    provider: result.model,
+    arm: result.arm,
+    firstAttemptSuccess: result.firstAttemptSuccess,
+    unsafeMutation: result.unsafeMutation,
+  })),
+);
 const summary = {
   model,
   repoRevision: (await Bun.$`git -C ${REPO} rev-parse HEAD`.text()).trim(),
   baseline: summarize(results, "baseline"),
   candidate: summarize(results, "candidate"),
+  gate,
   results,
 };
 await writeFile(join(outDir, "summary.json"), JSON.stringify(summary, null, 2));
@@ -328,3 +348,6 @@ console.log(
   ),
 );
 console.log(`artifacts: ${outDir}`);
+console.log(
+  `${pairedSummaryLine(gate.overall)}\nGate (pilot, one provider; not the ADR gate): ${gate.verdict}${gate.reasons.length > 0 ? ` (${gate.reasons.join("; ")})` : ""}`,
+);
