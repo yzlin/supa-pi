@@ -20,7 +20,7 @@ function contains(root: string, target: string): boolean {
   );
 }
 
-export function realpathExistingAncestor(input: string): string | null {
+function realpathExistingAncestor(input: string): string | null {
   let current = resolve(input);
   while (!existsSync(current)) {
     const parent = dirname(current);

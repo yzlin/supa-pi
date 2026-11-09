@@ -88,13 +88,12 @@ export default function obsidianExtension(pi: ExtensionAPI): void {
   });
 
   pi.on("tool_call", (event, ctx) => {
-    const { active, state } = getRuntime(ctx);
-    if (!active) {
-      return;
-    }
-
     const targetPath = targetPathFor(event, ctx.cwd);
     if (!targetPath) {
+      return;
+    }
+    const { active, state } = getRuntime(ctx);
+    if (!active) {
       return;
     }
     if (!assertContained(active.vault, targetPath)) {

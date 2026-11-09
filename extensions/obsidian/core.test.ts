@@ -513,6 +513,22 @@ describe("obsidian extension behavior", () => {
     });
   });
 
+  it("skips config and session work for unguarded tools", () => {
+    useTempConfig("unguarded");
+    const root = makeVault("unguarded");
+    // Malformed config throws if loaded, so a pass proves it was not read.
+    writeFileSync(process.env.PI_OBSIDIAN_CONFIG_PATH ?? "", "{bad");
+
+    const harness = createExtensionHarness();
+
+    expect(
+      harness.toolCall({ toolName: "bash", input: { command: "ls" } }, root),
+    ).toBeUndefined();
+    expect(() =>
+      harness.toolCall({ toolName: "read", input: { path: root } }, root),
+    ).toThrow();
+  });
+
   it("reports status with config, active vault, loaded paths, and warnings", async () => {
     useTempConfig("status");
     const root = makeVault("status-root");
