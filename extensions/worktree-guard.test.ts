@@ -39,6 +39,12 @@ describe("worktree guard", () => {
     "git worktree remove $W",
     "git -C /repo worktree remove /tmp/wt",
     "cd /x &&\ngit worktree   remove /tmp/wt",
+    "sudo git worktree remove /tmp/wt",
+    "env GIT_DIR=/x/.git git worktree remove /tmp/wt",
+    "command git worktree remove /tmp/wt",
+    "time git worktree remove /tmp/wt",
+    "echo /tmp/wt | xargs git worktree remove",
+    "/usr/bin/git worktree remove /tmp/wt",
   ])("blocks %p and names the fix", (command) => {
     const result = register().handler({ toolName: "bash", input: { command } });
     expect(result?.block).toBe(true);
@@ -52,6 +58,7 @@ describe("worktree guard", () => {
     "git worktree list",
     'grep -rn "worktree remove" docs',
     "git log -G'worktree remove'",
+    "echo git worktree remove",
   ])("allows %p", (command) => {
     expect(getWorktreeRemoveMessage(command)).toBeNull();
   });

@@ -11,11 +11,14 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { isToolCallEventType } from "@earendil-works/pi-coding-agent";
 
-// `git` at the start of a shell segment, optional global options such as
-// `-C <dir>`, then `worktree remove`. Quoted mentions (grep, git log -G) do
-// not start a segment, so they pass.
+// `git` at the start of a shell segment, optionally after command wrappers
+// (sudo, env with VAR=value assignments, command, exec, time, nohup, xargs)
+// or as a path such as /usr/bin/git. Then optional global options such as
+// `-C <dir>`, then `worktree remove`. Quoted mentions (grep, git log -G,
+// echo) do not start a segment with git, so they pass. Best-effort only: a
+// shell can always hide the command (eval, aliases, scripts).
 const worktreeRemovePattern =
-  /(?:^|\n|[;|&(]{1,2})\s*git(?:\s+-[^\s]+(?:\s+[^\s-][^\s]*)?)*\s+worktree\s+remove\b/m;
+  /(?:^|\n|[;|&(]{1,2})\s*(?:(?:sudo|env|command|exec|time|nohup|xargs)(?:\s+-\S+)*\s+|[A-Za-z_][A-Za-z0-9_]*=\S*\s+)*(?:\S*\/)?git(?:\s+-[^\s]+(?:\s+[^\s-][^\s]*)?)*\s+worktree\s+remove\b/m;
 
 export function getWorktreeRemoveMessage(command: string): string | null {
   if (!worktreeRemovePattern.test(command)) {
