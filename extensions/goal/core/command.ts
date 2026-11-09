@@ -9,6 +9,7 @@ export interface GoalCommandInput {
   checkpoint: string | null;
   taskBudget: number | null;
   maxAttemptsPerTask: number;
+  runLimit: number | null;
   dryRun: boolean;
 }
 
@@ -26,6 +27,11 @@ const WHITESPACE = /\s/;
 const POSITIVE_INTEGER = /^\d+$/;
 const OBJECTIVE_WHITESPACE = /\s+/g;
 const DEFAULT_MAX_ATTEMPTS = 2;
+const COUNT_FLAGS = new Set([
+  "--tasks",
+  "--max-attempts-per-task",
+  "--max-runs",
+]);
 const ACTIONS = new Set<GoalCommandAction>([
   "resume",
   "status",
@@ -161,6 +167,7 @@ export function parseGoalCommand(rawArgs: string): Result<GoalCommandInput> {
   let checkpoint: string | null = null;
   let taskBudget: number | null = null;
   let maxAttemptsPerTask = DEFAULT_MAX_ATTEMPTS;
+  let runLimit: number | null = null;
   let dryRun = false;
   const objectiveParts: string[] = [];
 
@@ -206,34 +213,24 @@ export function parseGoalCommand(rawArgs: string): Result<GoalCommandInput> {
       }
       continue;
     }
-    if (token === "--tasks" || token === "--max-attempts-per-task") {
-      const next = tokens[index + 1];
-      if (!next) {
-        return { ok: false, error: `${token} requires a value.` };
+    const [flag = "", inlineValue] = token.split("=", 2);
+    if (COUNT_FLAGS.has(flag)) {
+      let value = inlineValue;
+      if (value === undefined) {
+        value = tokens[index + 1];
+        if (!value) {
+          return { ok: false, error: `${flag} requires a value.` };
+        }
+        index += 1;
       }
-      const parsed = parsePositiveInteger(next, token);
-      if ("error" in parsed) {
-        return { ok: false, error: parsed.error };
-      }
-      if (token === "--tasks") {
-        taskBudget = parsed.value;
-      } else {
-        maxAttemptsPerTask = parsed.value;
-      }
-      index += 1;
-      continue;
-    }
-    if (
-      token.startsWith("--tasks=") ||
-      token.startsWith("--max-attempts-per-task=")
-    ) {
-      const [flag = "", value = ""] = token.split("=", 2);
       const parsed = parsePositiveInteger(value, flag);
       if ("error" in parsed) {
         return { ok: false, error: parsed.error };
       }
       if (flag === "--tasks") {
         taskBudget = parsed.value;
+      } else if (flag === "--max-runs") {
+        runLimit = parsed.value;
       } else {
         maxAttemptsPerTask = parsed.value;
       }
@@ -274,6 +271,7 @@ export function parseGoalCommand(rawArgs: string): Result<GoalCommandInput> {
       checkpoint,
       taskBudget,
       maxAttemptsPerTask,
+      runLimit,
       dryRun,
     },
   };

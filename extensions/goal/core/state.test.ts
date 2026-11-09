@@ -35,6 +35,8 @@ function checkpoint(overrides: Partial<GoalCheckpoint> = {}): GoalCheckpoint {
     currentMilestone: "task-1",
     taskBudget: 1,
     attemptsUsed: 0,
+    runLimit: null,
+    runsUsed: 0,
     evidenceLedger: [],
     candidateFollowups: [],
     blockerState: { blocked: false, reason: null },
@@ -108,6 +110,19 @@ describe("goal core state helpers", () => {
     expect(parseGoalCheckpoint(checkpoint({ taskBudget: null }))).toEqual({
       ok: false,
       error: "Invalid goal checkpoint: task mode requires positive taskBudget.",
+    });
+  });
+
+  it("loads checkpoints written before run limits as unlimited", () => {
+    const { runLimit: _limit, runsUsed: _used, ...legacy } = checkpoint();
+    expect(parseGoalCheckpoint(legacy)).toMatchObject({
+      ok: true,
+      value: { runLimit: null, runsUsed: 0 },
+    });
+    expect(parseGoalCheckpoint({ ...legacy, runsUsed: -1 })).toEqual({
+      ok: false,
+      error:
+        "Invalid goal checkpoint: runsUsed must be a non-negative integer.",
     });
   });
 

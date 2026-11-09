@@ -15,7 +15,7 @@ Do not start the run until you can state:
 - scope in rough units, plus blockers found while grounding;
 - the rigor level. One-way doors and a wide blast radius get more gates and artifacts; reversible low-stakes steps get fewer.
 
-Show the framing and tradeoffs before a long run. Reversible work proceeds; a multi-hour run gets one checkpoint with the user first.
+Show the framing and tradeoffs before a long run. Reversible work proceeds; a multi-hour run gets one checkpoint with the user first. Give an unattended `/goal` run a run limit (`--max-runs N`) so a wrong premise stops instead of looping.
 
 ## B. Design the workflow
 

@@ -114,6 +114,7 @@ function createCheckpoint(input: {
   normalizedObjective: string;
   taskBudget: number | null;
   maxAttemptsPerTask: number;
+  runLimit: number | null;
   cwd: string;
 }): GoalCheckpoint {
   const timestamp = now();
@@ -138,6 +139,8 @@ function createCheckpoint(input: {
     currentMilestone: tasks[0]?.id ?? null,
     taskBudget: input.taskBudget,
     attemptsUsed: 0,
+    runLimit: input.runLimit,
+    runsUsed: 0,
     evidenceLedger: [],
     candidateFollowups: [],
     blockerState: { blocked: false, reason: null },
@@ -320,6 +323,47 @@ function queueContinuation(pi: ExtensionAPI, checkpoint: GoalCheckpoint): void {
   });
 }
 
+function runLimitReached(checkpoint: GoalCheckpoint): boolean {
+  return (
+    checkpoint.runLimit !== null && checkpoint.runsUsed >= checkpoint.runLimit
+  );
+}
+
+/**
+ * Counts one finished agent run. At the run limit the goal becomes
+ * budget_limited so no continuation is queued. Returns the saved checkpoint,
+ * or null when the save failed.
+ */
+function countGoalRun(
+  pi: ExtensionAPI,
+  ctx: ExtensionContext,
+  checkpoint: GoalCheckpoint,
+): GoalCheckpoint | null {
+  const counted = { ...checkpoint, runsUsed: checkpoint.runsUsed + 1 };
+  const limited = runLimitReached(counted);
+  const cwd = currentCwd(ctx);
+  const saved = saveGoal(
+    pi,
+    limited ? { ...counted, status: "budget_limited" } : counted,
+    cwd,
+  );
+  if ("error" in saved) {
+    notifySaveFailure(ctx, saved.error);
+    return null;
+  }
+  if (limited) {
+    setGoalTools(pi as PiWithActiveTools, false);
+    refreshStatus(ctx);
+    // UI-only: a session message sent from agent_end is steered into the
+    // model and costs one more response past the limit.
+    ctx.ui.notify(
+      `Goal run limit reached (${saved.value.runsUsed}/${saved.value.runLimit}): ${saved.value.objective}\nUse /goal resume --max-runs N to continue, or /goal clear to stop.`,
+      "warning",
+    );
+  }
+  return saved.value;
+}
+
 function saveGoal(
   pi: ExtensionAPI,
   checkpoint: GoalCheckpoint,
@@ -472,6 +516,12 @@ function validateCheckpointUpdate(
   }
   if (next.taskBudget !== current.taskBudget) {
     return { ok: false, error: "goal_checkpoint cannot change taskBudget." };
+  }
+  if (
+    next.runLimit !== current.runLimit ||
+    next.runsUsed !== current.runsUsed
+  ) {
+    return { ok: false, error: "goal_checkpoint cannot change run limits." };
   }
   const statusTransition = transitionGoalStatus(current.status, next.status);
   if (!statusTransition.ok) {
@@ -740,12 +790,15 @@ export default function goalExtension(pi: ExtensionAPI): void {
     if (ctx.hasPendingMessages()) {
       return;
     }
-    queueContinuation(pi, activeGoal);
+    const counted = countGoalRun(pi, ctx, activeGoal);
+    if (counted?.status === "active") {
+      queueContinuation(pi, counted);
+    }
   });
 
   pi.registerCommand("goal", {
     description:
-      "/goal <objective> | /goal task --tasks N <objective> | /goal status|pause|resume|clear|stop (clears active goal; Esc interrupts current turn)",
+      "/goal [--max-runs N] <objective> | /goal task --tasks N <objective> | /goal status|pause|resume|clear|stop (clears active goal; Esc interrupts current turn)",
     getArgumentCompletions: completeGoalCommandArguments,
     handler: (args, ctx) => {
       const parsed = parseGoalCommand(args ?? "");
@@ -797,10 +850,26 @@ export default function goalExtension(pi: ExtensionAPI): void {
         }
         if (
           checkpoint.status === "budget_limited" &&
-          input.taskBudget === null
+          checkpoint.mode === "task" &&
+          input.taskBudget === null &&
+          !runLimitReached(checkpoint)
         ) {
           ctx.ui.notify(
             "/goal resume requires --tasks N for budget-limited task goals.",
+            "warning",
+          );
+          return;
+        }
+        if (input.runLimit !== null) {
+          checkpoint = {
+            ...checkpoint,
+            runLimit:
+              (checkpoint.runLimit ?? checkpoint.runsUsed) + input.runLimit,
+          };
+        }
+        if (runLimitReached(checkpoint)) {
+          ctx.ui.notify(
+            "/goal resume requires --max-runs N for a goal that reached its run limit.",
             "warning",
           );
           return;
@@ -843,6 +912,7 @@ export default function goalExtension(pi: ExtensionAPI): void {
         normalizedObjective: input.normalizedObjective,
         taskBudget: input.taskBudget,
         maxAttemptsPerTask: input.maxAttemptsPerTask,
+        runLimit: input.runLimit,
         cwd,
       });
       const saved = saveGoal(pi, checkpoint, cwd);

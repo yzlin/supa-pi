@@ -59,7 +59,7 @@ Fast Mode persists global state and additive exact-match model support in `~/.pi
 
 `extensions/spec-log` registers the `spec_log` tool (only writer of `.pi/specs/<slug>.log.jsonl`, plus Spec lint and Snapshot refs) and `/to-spec`. `/execute` has no extension since P4; it is the `prompts/execute.md` alias to the execute Playbook. See [spec-log](../../extensions/spec-log/README.md).
 
-`extensions/goal` keeps its existing checkpoint and budget model. Task mode instructs main to use blocking executor subagents sequentially and update only `goal_checkpoint`; it does not enter the execution ledger. `/review` has no extension since P3; it is the `prompts/review.md` alias to the report-only `review-orchestration` skill.
+`extensions/goal` keeps its checkpoint and budget model, plus an optional run limit (`--max-runs N`, 2026-11-09) that the extension counts at `agent_end` and enforces in code. Task mode instructs main to use blocking executor subagents sequentially and update only `goal_checkpoint`; it does not enter the execution ledger. `/review` has no extension since P3; it is the `prompts/review.md` alias to the report-only `review-orchestration` skill.
 
 ## Prompt-pipeline command ownership
 

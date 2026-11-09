@@ -345,6 +345,15 @@ export function parseGoalCheckpoint(
       ),
       taskBudget,
       attemptsUsed: nonNegativeInteger(value.attemptsUsed, "attemptsUsed"),
+      // Absent in checkpoints written before run limits existed.
+      runLimit:
+        value.runLimit === undefined || value.runLimit === null
+          ? null
+          : nonNegativeInteger(value.runLimit, "runLimit"),
+      runsUsed:
+        value.runsUsed === undefined
+          ? 0
+          : nonNegativeInteger(value.runsUsed, "runsUsed"),
       evidenceLedger: arrayOf(
         value.evidenceLedger,
         "evidenceLedger",

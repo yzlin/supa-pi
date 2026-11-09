@@ -44,6 +44,25 @@ describe("goal command parser", () => {
     });
   });
 
+  it("parses an optional run limit in both flag forms", () => {
+    expect(parseGoalCommand("ship it")).toMatchObject({
+      ok: true,
+      value: { runLimit: null },
+    });
+    expect(parseGoalCommand("--max-runs 3 ship it")).toMatchObject({
+      ok: true,
+      value: { runLimit: 3, objective: "ship it" },
+    });
+    expect(parseGoalCommand("resume --max-runs=2")).toMatchObject({
+      ok: true,
+      value: { action: "resume", runLimit: 2 },
+    });
+    expect(parseGoalCommand("--max-runs 0 ship")).toEqual({
+      ok: false,
+      error: "Invalid --max-runs value: 0. Use a positive integer.",
+    });
+  });
+
   it("requires task mode budget and rejects legacy max-tasks flag", () => {
     expect(parseGoalCommand("task finish work")).toEqual({
       ok: false,

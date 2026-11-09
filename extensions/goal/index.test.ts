@@ -151,7 +151,9 @@ describe("goal extension", () => {
   it("registers the command and goal checkpoint tool", async () => {
     const harness = await createHarness();
 
-    expect(harness.command.description).toContain("/goal <objective>");
+    expect(harness.command.description).toContain(
+      "/goal [--max-runs N] <objective>",
+    );
     expect(harness.tools.map((tool) => tool.name)).toContain("goal_checkpoint");
   });
 
@@ -431,6 +433,97 @@ describe("goal extension", () => {
 
     expect(other.statuses.at(-1)).toBeUndefined();
     expect(other.getActiveTools()).toEqual(["bash", "read"]);
+  });
+
+  it("stops continuing at the run limit and resumes with more runs", async () => {
+    const harness = await createHarness();
+    const endRun = async () => {
+      harness.handlers.get("agent_end")?.({}, harness.ctx(true));
+      await Promise.resolve();
+    };
+
+    await harness.command.handler(
+      "--max-runs 2 write tests",
+      harness.ctx(true),
+    );
+    await endRun();
+    expect(harness.customMessages.at(-1)?.message.content).toContain(
+      "Continue working toward the active thread goal.",
+    );
+    const continuations = harness.customMessages.length;
+
+    await endRun();
+    // The limit notice must not reach the model as a session message.
+    expect(harness.customMessages.length).toBe(continuations);
+    expect(harness.notifications.at(-1)).toMatchObject({
+      level: "warning",
+      message: expect.stringContaining("Goal run limit reached (2/2)"),
+    });
+    expect(harness.statuses.at(-1)).toStartWith("goal:budget_limited");
+    expect(harness.getActiveTools()).toEqual(["bash", "read"]);
+    const state = harness.appendEntries.at(-1)?.data as { goalId: string };
+    const saved = JSON.parse(
+      readFileSync(
+        join(harness.cwd, ".pi", "goal", `${state.goalId}.json`),
+        "utf8",
+      ),
+    );
+    expect(saved).toMatchObject({
+      status: "budget_limited",
+      runLimit: 2,
+      runsUsed: 2,
+    });
+
+    await endRun();
+    expect(harness.customMessages.length).toBe(continuations);
+
+    await harness.command.handler("resume", harness.ctx(true));
+    expect(harness.notifications.at(-1)?.message).toBe(
+      "/goal resume requires --max-runs N for a goal that reached its run limit.",
+    );
+
+    await harness.command.handler("resume --max-runs 1", harness.ctx(true));
+    expect(harness.statuses.at(-1)).toStartWith("goal:active");
+    await endRun();
+    expect(harness.notifications.at(-1)?.message).toContain(
+      "Goal run limit reached (3/3)",
+    );
+  });
+
+  it("adds resume runs on top of runs a paused goal still has", async () => {
+    const harness = await createHarness();
+
+    await harness.command.handler(
+      "--max-runs 5 write tests",
+      harness.ctx(true),
+    );
+    harness.handlers.get("agent_end")?.({}, harness.ctx(true));
+    await Promise.resolve();
+    await harness.command.handler("pause", harness.ctx(true));
+    await harness.command.handler("resume --max-runs 1", harness.ctx(true));
+
+    const state = harness.appendEntries.at(-1)?.data as { goalId: string };
+    const saved = JSON.parse(
+      readFileSync(
+        join(harness.cwd, ".pi", "goal", `${state.goalId}.json`),
+        "utf8",
+      ),
+    );
+    expect(saved).toMatchObject({ status: "active", runLimit: 6, runsUsed: 1 });
+  });
+
+  it("keeps continuing without a run limit", async () => {
+    const harness = await createHarness();
+
+    await harness.command.handler("write tests", harness.ctx(true));
+    const before = harness.customMessages.length;
+    for (let run = 0; run < 5; run += 1) {
+      harness.handlers.get("agent_end")?.({}, harness.ctx(true));
+      await Promise.resolve();
+    }
+
+    expect(harness.customMessages).toHaveLength(before + 5);
+    expect(harness.statuses.at(-1)).toStartWith("goal:active");
   });
 
   it("queues autonomous continuation on agent end", async () => {

@@ -101,6 +101,9 @@ export interface GoalCheckpoint {
   currentMilestone: string | null;
   taskBudget: number | null;
   attemptsUsed: number;
+  /** Agent runs allowed before the goal becomes budget_limited; null = no limit. */
+  runLimit: number | null;
+  runsUsed: number;
   evidenceLedger: GoalEvidenceEntry[];
   candidateFollowups: string[];
   blockerState: GoalBlockerState;

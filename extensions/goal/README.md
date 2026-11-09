@@ -19,6 +19,7 @@ Options:
 
 - `--tasks N` — required for task mode start. On `/goal resume`, adds N more task slots to a budget-limited task goal.
 - `--max-attempts-per-task N` — task-mode retry budget per task. Defaults to `2`.
+- `--max-runs N` — optional limit on agent runs, for both modes. One run is one prompt or continuation, counted at `agent_end`. When `runsUsed` reaches the limit, the goal becomes `budget_limited` and no continuation is queued. On `/goal resume`, adds N runs to the current limit (on a goal with no limit, it sets a limit of N more runs); a goal stopped by its run limit requires it. Without the flag, a goal has no run limit.
 - `--checkpoint <path>` — parsed by the command layer for checkpoint-aware flows.
 - `--dry-run` — parsed by the command layer for non-mutating previews.
 
@@ -30,10 +31,12 @@ Goal task mode uses only `goal_checkpoint`, not the `spec_log` tool or retired T
 
 ## Budgets
 
-- Classic mode has no task budget.
+- Classic mode has no task budget. Either mode can have a run limit with `--max-runs N`; the checkpoint stores `runLimit` (`null` when unset) and `runsUsed`.
 - Task mode requires `--tasks N` and stores it as `taskBudget`.
 - Each task starts with `budget.maxAttempts` from `--max-attempts-per-task` and tracks `usedAttempts` plus `usedToolCalls`.
-- A task or goal can become `budget_limited` when available attempts or task budget are exhausted.
+- A task or goal can become `budget_limited` when available attempts, task budget, or the run limit are exhausted.
+- `goal_checkpoint` cannot change `runLimit` or `runsUsed`; only the extension counts runs. Checkpoints written before run limits existed load with no limit.
+- The run limit counts agent runs, not model turns, tool calls, tokens, or cost. Nothing caps spend directly.
 
 ## Statuses
 
