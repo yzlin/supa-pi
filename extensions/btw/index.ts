@@ -24,7 +24,6 @@ import {
 } from "@earendil-works/pi-coding-agent";
 import { Box, Markdown, Spacer, Text } from "@earendil-works/pi-tui";
 
-import { getProviderApiKeyForModel } from "../llm-auth";
 import {
   BTW_MESSAGE_TYPE,
   buildBtwConversationContext,
@@ -196,8 +195,8 @@ export default function (pi: ExtensionAPI) {
       ];
 
       const systemPrompt = ctx.getSystemPrompt();
-      const apiKeyResolver = (_provider: string) =>
-        getProviderApiKeyForModel(ctx.modelRegistry, targetModel!);
+      const apiKeyResolver = (provider: string) =>
+        ctx.modelRegistry.getApiKeyForProvider(provider);
 
       // Serialize current conversation context for the subagent
       const conversationContext = buildBtwConversationContext(
