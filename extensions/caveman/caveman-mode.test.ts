@@ -20,7 +20,6 @@ const {
   CAVEMAN_MODE_STATUS_TEXT,
   CAVEMAN_RPC_APPLY_CHANNEL,
   CAVEMAN_RPC_CAPABILITIES_CHANNEL,
-  isCavemanModeEnabled,
   LEGACY_CAVEMAN_MODE_CUSTOM_TYPE,
   registerCavemanMode,
 } = await import("./caveman-mode");
@@ -262,7 +261,6 @@ describe("caveman mode", () => {
     getHandler(handlers, "session_start")({ type: "session_start" }, ctx);
 
     expect(appendedEntries).toEqual([]);
-    expect(isCavemanModeEnabled()).toBe(true);
     expect(statuses).toEqual([
       { key: CAVEMAN_MODE_STATUS_KEY, text: CAVEMAN_MODE_STATUS_TEXT },
     ]);
@@ -280,7 +278,6 @@ describe("caveman mode", () => {
 
     getHandler(handlers, "session_start")({ type: "session_start" }, ctx);
 
-    expect(isCavemanModeEnabled()).toBe(true);
     expect(statuses).toEqual([
       { key: CAVEMAN_MODE_STATUS_KEY, text: CAVEMAN_MODE_STATUS_TEXT },
     ]);
@@ -300,7 +297,6 @@ describe("caveman mode", () => {
     getHandler(handlers, "session_start")({ type: "session_start" }, ctx);
 
     expect(appendedEntries).toEqual([]);
-    expect(isCavemanModeEnabled()).toBe(true);
     expect(statuses).toEqual([
       { key: CAVEMAN_MODE_STATUS_KEY, text: CAVEMAN_MODE_STATUS_TEXT },
     ]);
@@ -313,7 +309,6 @@ describe("caveman mode", () => {
 
     getHandler(handlers, "session_start")({ type: "session_start" }, ctx);
 
-    expect(isCavemanModeEnabled()).toBe(true);
     expect(statuses).toEqual([
       { key: CAVEMAN_MODE_STATUS_KEY, text: CAVEMAN_MODE_STATUS_TEXT },
     ]);
@@ -326,7 +321,6 @@ describe("caveman mode", () => {
 
     getHandler(handlers, "session_start")({ type: "session_start" }, ctx);
 
-    expect(isCavemanModeEnabled()).toBe(false);
     expect(statuses).toEqual([
       { key: CAVEMAN_MODE_STATUS_KEY, text: undefined },
     ]);
@@ -340,7 +334,6 @@ describe("caveman mode", () => {
 
     getHandler(handlers, "session_start")({ type: "session_start" }, ctx);
 
-    expect(isCavemanModeEnabled()).toBe(false);
     expect(statuses).toEqual([
       { key: CAVEMAN_MODE_STATUS_KEY, text: undefined },
     ]);
@@ -365,7 +358,6 @@ describe("caveman mode", () => {
     getHandler(handlers, "session_start")({ type: "session_start" }, ctx);
 
     expect(appendedEntries).toEqual([]);
-    expect(isCavemanModeEnabled()).toBe(false);
     expect(statuses).toEqual([
       { key: CAVEMAN_MODE_STATUS_KEY, text: undefined },
     ]);
@@ -393,7 +385,6 @@ describe("caveman mode", () => {
     expect(secondStatuses).toEqual([
       { key: CAVEMAN_MODE_STATUS_KEY, text: undefined },
     ]);
-    expect(isCavemanModeEnabled()).toBe(false);
   });
 
   it("falls back from malformed project config to global config", () => {
@@ -404,7 +395,6 @@ describe("caveman mode", () => {
 
     getHandler(handlers, "session_start")({ type: "session_start" }, ctx);
 
-    expect(isCavemanModeEnabled()).toBe(true);
     expect(statuses).toEqual([
       { key: CAVEMAN_MODE_STATUS_KEY, text: CAVEMAN_MODE_STATUS_TEXT },
     ]);
@@ -417,7 +407,6 @@ describe("caveman mode", () => {
 
     getHandler(handlers, "session_start")({ type: "session_start" }, ctx);
 
-    expect(isCavemanModeEnabled()).toBe(false);
     expect(statuses).toEqual([
       { key: CAVEMAN_MODE_STATUS_KEY, text: undefined },
     ]);
@@ -439,6 +428,32 @@ describe("caveman mode", () => {
     expect(notifications).toEqual([
       { message: "Caveman mode enabled", type: "info" },
     ]);
+  });
+
+  it("keeps state per registration", () => {
+    const enabled = setupHarness();
+    const other = setupHarness();
+    const { ctx } = createContext([
+      {
+        type: "custom",
+        customType: CAVEMAN_MODE_CUSTOM_TYPE,
+        data: { enabled: true },
+      },
+    ]);
+    getHandler(enabled.handlers, "session_start")(
+      { type: "session_start" },
+      ctx,
+    );
+    const event = {
+      type: "before_agent_start",
+      prompt: "hi",
+      systemPrompt: "base",
+      systemPromptOptions: { sections: {} as Record<string, string> },
+    };
+
+    getHandler(other.handlers, "before_agent_start")(event);
+
+    expect(event.systemPromptOptions.sections).toEqual({});
   });
 
   it("appends caveman prompt only while active", () => {

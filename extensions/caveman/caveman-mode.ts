@@ -16,7 +16,7 @@ export const CAVEMAN_MODE_CUSTOM_TYPE = "caveman:mode";
 export const LEGACY_CAVEMAN_MODE_CUSTOM_TYPE = "pieditor:caveman-mode";
 export const CAVEMAN_MODE_STATUS_KEY = "caveman";
 export const CAVEMAN_MODE_STATUS_TEXT = "🪨 caveman";
-export const CAVEMAN_RPC_VERSION = 1;
+const CAVEMAN_RPC_VERSION = 1;
 export const CAVEMAN_RPC_CAPABILITIES_CHANNEL = "caveman:rpc:capabilities";
 export const CAVEMAN_RPC_APPLY_CHANNEL = "caveman:rpc:apply";
 
@@ -47,12 +47,6 @@ interface CavemanRpcApplyData {
 type CavemanRpcResponse<T> =
   | { success: true; data: T }
   | { success: false; error: string };
-
-let cavemanModeEnabled = false;
-
-export function isCavemanModeEnabled(): boolean {
-  return cavemanModeEnabled;
-}
 
 interface SessionEntryLike {
   type?: string;
@@ -104,10 +98,7 @@ function stripCavemanPrompt(systemPrompt: string): string {
     .trim();
 }
 
-export function applyCavemanPrompt(
-  systemPrompt: string,
-  enabled: boolean,
-): string {
+function applyCavemanPrompt(systemPrompt: string, enabled: boolean): string {
   const strippedPrompt = stripCavemanPrompt(systemPrompt);
 
   if (!enabled) {
@@ -215,14 +206,14 @@ function getCavemanFlagOverride(pi: ExtensionAPI): boolean | undefined {
   }
 }
 
-function refreshCavemanStatus(ctx: ExtensionContext): void {
+function refreshCavemanStatus(ctx: ExtensionContext, enabled: boolean): void {
   if (!ctx.hasUI) {
     return;
   }
 
   ctx.ui.setStatus(
     CAVEMAN_MODE_STATUS_KEY,
-    cavemanModeEnabled ? CAVEMAN_MODE_STATUS_TEXT : undefined,
+    enabled ? CAVEMAN_MODE_STATUS_TEXT : undefined,
   );
 }
 
@@ -340,10 +331,8 @@ export function registerCavemanMode(pi: ExtensionAPI): void {
     type: "boolean",
   });
 
-  cavemanModeEnabled = resolveCavemanModeState(
-    [],
-    getCavemanFlagOverride(pi),
-  ).enabled;
+  // Per registration; session_start resolves it from the session's cwd.
+  let cavemanModeEnabled = false;
   registerCavemanRpc(pi);
 
   function setEnabled(
@@ -359,7 +348,7 @@ export function registerCavemanMode(pi: ExtensionAPI): void {
       });
     }
 
-    refreshCavemanStatus(ctx);
+    refreshCavemanStatus(ctx, cavemanModeEnabled);
   }
 
   function refreshRuntimeState(ctx: ExtensionContext): void {
@@ -410,7 +399,7 @@ export function registerCavemanMode(pi: ExtensionAPI): void {
         }
 
         case "status": {
-          refreshCavemanStatus(ctx);
+          refreshCavemanStatus(ctx, cavemanModeEnabled);
           notifyCavemanModeStatus(ctx, cavemanModeEnabled);
           return;
         }
