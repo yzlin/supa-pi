@@ -16,9 +16,9 @@ import {
 import { homedir } from "node:os";
 import { basename, dirname, join, relative, resolve, sep } from "node:path";
 
-export const SKILL_FILE_NAME = "SKILL.md";
-export const MANIFEST_VERSION = 1;
-export const SEARCH_CACHE_VERSION = 5;
+const SKILL_FILE_NAME = "SKILL.md";
+const MANIFEST_VERSION = 1;
+const SEARCH_CACHE_VERSION = 5;
 export const GITHUB_TREE_CACHE_VERSION = 3;
 export const GITHUB_TREE_CACHE_MAX_ENTRIES = 32;
 
@@ -114,15 +114,6 @@ export interface MaterializeResolvedSkillSourceOptions {
   onGithubTreeResolved?: (snapshot: GithubRepoTreeSnapshot) => void;
   githubSkillNameCache?: Map<string, string | null>;
   githubTreeCacheSession?: GithubRepoTreeCacheSession;
-}
-
-export interface SkillUpdateStatus {
-  id: string;
-  installedHash: string;
-  latestHash: string | null;
-  updateAvailable: boolean;
-  remoteManaged: boolean;
-  reason?: string;
 }
 
 export interface ManagedSkillFile {
@@ -405,7 +396,7 @@ function pruneGithubRepoTreeCache(
   };
 }
 
-export function readGithubRepoTreeCache(
+function readGithubRepoTreeCache(
   paths: SkillsManagerPaths,
 ): GithubRepoTreeCache {
   const cachePath = githubTreeCachePath(paths);
@@ -654,9 +645,7 @@ export function discoverBundledSkillPaths(skillsDir: string): string[] {
   return skillPaths;
 }
 
-export function sourceIdentityForDirectory(
-  sourceDir: string,
-): SkillSourceIdentity {
+function sourceIdentityForDirectory(sourceDir: string): SkillSourceIdentity {
   const resolvedPath = resolve(sourceDir);
   const identity = { type: "directory" as const, path: resolvedPath };
   return { ...identity, id: hashSourceIdentity(identity) };
@@ -735,7 +724,7 @@ export function parseSkillSource(source: string): ResolvedSkillSource {
   };
 }
 
-export function safeFileHash(filePath: string): ManagedSkillFile {
+function safeFileHash(filePath: string): ManagedSkillFile {
   const stats = statSync(filePath);
   if (!stats.isFile()) {
     throw new Error(`Cannot hash non-file path: ${filePath}`);
@@ -2190,41 +2179,6 @@ function skillsFromHtml(html: string): RemoteSkillMetadata[] {
     });
   }
   return results;
-}
-
-export function detectSkillUpdate(
-  entry: ManagedSkillEntry,
-  latestFiles: ManagedSkillFile[] | null,
-): SkillUpdateStatus {
-  const installedHash = filesHash(entry.files);
-  const remoteManaged = entry.source.type !== "directory";
-  if (!latestFiles) {
-    return {
-      id: entry.id,
-      installedHash,
-      latestHash: null,
-      updateAvailable: false,
-      remoteManaged,
-      reason: remoteManaged ? "latest-unavailable" : "local-source",
-    };
-  }
-  const latestHash = filesHash(latestFiles);
-  return {
-    id: entry.id,
-    installedHash,
-    latestHash,
-    updateAvailable: installedHash !== latestHash,
-    remoteManaged,
-  };
-}
-
-export function detectLocalSkillUpdate(
-  entry: ManagedSkillEntry,
-): SkillUpdateStatus {
-  if (entry.source.type !== "directory" || !existsSync(entry.source.path)) {
-    return detectSkillUpdate(entry, null);
-  }
-  return detectSkillUpdate(entry, hashSkillDirectory(entry.source.path));
 }
 
 export function withSkillsWriteLock<T>(

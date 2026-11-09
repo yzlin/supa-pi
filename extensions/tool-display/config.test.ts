@@ -1,11 +1,5 @@
 import { afterEach, describe, expect, it } from "bun:test";
-import {
-  mkdirSync,
-  mkdtempSync,
-  readFileSync,
-  rmSync,
-  writeFileSync,
-} from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -17,7 +11,6 @@ import {
   loadToolDisplayConfig,
   loadToolDisplayConfigFromLayers,
   normalizeToolDisplayConfig,
-  saveProjectToolDisplayConfig,
   TOOL_DISPLAY_FULL_READ_MAX_BYTES,
 } from "./config";
 
@@ -311,51 +304,6 @@ describe("tool-display config", () => {
     expect(config.tools.read.fullRead.warnings).not.toContain(
       "target custom: invalid source ignored",
     );
-  });
-
-  it("saves normalized project config without overwriting unrelated keys", () => {
-    const cwd = createTempDir("tool-display-cwd-");
-    const homeDir = createTempDir("tool-display-home-");
-    mkdirSync(join(cwd, ".pi"), { recursive: true });
-    writeFileSync(
-      getProjectToolDisplayConfigPath(cwd),
-      JSON.stringify({
-        unrelated: true,
-        output: { tasks: { enabled: true } },
-        tools: { search: { enabled: true } },
-        diff: { viewMode: "unified" },
-      }),
-      "utf8",
-    );
-
-    const result = saveProjectToolDisplayConfig(
-      cwd,
-      {
-        tools: { read: { enabled: false }, write: { enabled: true } },
-        diff: { indicatorMode: "none" },
-      },
-      homeDir,
-    );
-
-    expect(result).toMatchObject({ ok: true });
-    expect(loadToolDisplayConfig(cwd, homeDir).output).not.toHaveProperty(
-      "tasks",
-    );
-    expect(
-      JSON.parse(readFileSync(getProjectToolDisplayConfigPath(cwd), "utf8")),
-    ).toMatchObject({
-      unrelated: true,
-      output: { tasks: { enabled: true } },
-    });
-    expect(loadToolDisplayConfig(cwd, homeDir).tools).toMatchObject({
-      read: { enabled: false, fullRead: { enabled: true } },
-      search: { enabled: true },
-      write: { enabled: true },
-    });
-    expect(loadToolDisplayConfig(cwd, homeDir).diff).toMatchObject({
-      viewMode: "unified",
-      indicatorMode: "none",
-    });
   });
 });
 

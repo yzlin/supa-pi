@@ -801,25 +801,6 @@ export function loadToolDisplayConfig(
   );
 }
 
-function readConfigObjectForPersistence(
-  configPath: string,
-): { ok: true; value: Record<string, unknown> } | { ok: false; error: string } {
-  if (!existsSync(configPath)) {
-    return { ok: true, value: {} };
-  }
-
-  try {
-    const parsed = JSON.parse(readFileSync(configPath, "utf8"));
-    if (!isPlainObject(parsed)) {
-      return { ok: false, error: `${configPath} must contain a JSON object` };
-    }
-    return { ok: true, value: parsed };
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    return { ok: false, error: `Invalid JSON in ${configPath}: ${message}` };
-  }
-}
-
 function writeConfigObjectAtomically(
   configPath: string,
   value: Record<string, unknown>,
@@ -828,61 +809,6 @@ function writeConfigObjectAtomically(
   mkdirSync(dirname(configPath), { recursive: true });
   writeFileSync(tempPath, `${JSON.stringify(value, null, 2)}\n`, "utf8");
   renameSync(tempPath, configPath);
-}
-
-export function saveProjectToolDisplayConfig(
-  cwd: string,
-  config: unknown,
-  homeDir = homedir(),
-):
-  | { ok: true; configPath: string; config: ToolDisplayConfig }
-  | { ok: false; configPath: string; error: string } {
-  const configPath = getProjectToolDisplayConfigPath(cwd);
-  const current = readConfigObjectForPersistence(configPath);
-
-  if (!current.ok) {
-    return { ok: false, configPath, error: current.error };
-  }
-
-  const normalized = normalizeToolDisplayConfig(config);
-  const currentTools = isPlainObject(current.value.tools)
-    ? current.value.tools
-    : {};
-  const currentOutput = isPlainObject(current.value.output)
-    ? current.value.output
-    : {};
-  const currentDiff = isPlainObject(current.value.diff)
-    ? current.value.diff
-    : {};
-  const next = {
-    ...current.value,
-    ...normalized,
-    tools: {
-      ...currentTools,
-      ...normalized.tools,
-    },
-    output: {
-      ...currentOutput,
-      ...normalized.output,
-    },
-    ...(Object.keys(currentDiff).length > 0 || normalized.diff !== undefined
-      ? {
-          diff: {
-            ...currentDiff,
-            ...normalized.diff,
-          },
-        }
-      : {}),
-  };
-
-  try {
-    writeConfigObjectAtomically(configPath, next);
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    return { ok: false, configPath, error: message };
-  }
-
-  return { ok: true, configPath, config: loadToolDisplayConfig(cwd, homeDir) };
 }
 
 export function writeProjectToolDisplayConfig(

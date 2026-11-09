@@ -19,8 +19,6 @@ import {
   createGithubRepoTreeCacheSession,
   createSkillsManagerPaths,
   detectDirtySkills,
-  detectLocalSkillUpdate,
-  detectSkillUpdate,
   discoverBundledSkillPaths,
   fetchGithubRepoTreeSnapshot,
   fetchSkillsShSearchCache,
@@ -2007,36 +2005,6 @@ describe("skills core", () => {
     expect(existsSync(join(sourceRoot, "..", "escape.txt"))).toBe(false);
   });
 
-  it("computes installed and latest hashes for update detection", () => {
-    const root = tempRoot("update");
-    const source = join(root, "source");
-    const paths = createSkillsManagerPaths(join(root, ".pi", "agent"));
-    writeSkill(source);
-    const entry = copyInstallPlan(planInstallSkill(source, paths), paths);
-    const installedHash = computeSkillFilesHash(entry.files);
-
-    expect(detectLocalSkillUpdate(entry)).toMatchObject({
-      id: "demo-skill",
-      installedHash,
-      latestHash: installedHash,
-      updateAvailable: false,
-      remoteManaged: false,
-    });
-
-    writeFileSync(join(source, "extra.md"), "new file\n");
-    const latestFiles = hashSkillDirectory(source);
-    expect(detectSkillUpdate(entry, latestFiles)).toMatchObject({
-      updateAvailable: true,
-      remoteManaged: false,
-    });
-    expect(
-      detectSkillUpdate(
-        { ...entry, source: { ...entry.source, type: "github" } },
-        latestFiles,
-      ),
-    ).toMatchObject({ remoteManaged: true, updateAvailable: true });
-  });
-
   it("validates required name and description fields", () => {
     const root = tempRoot("validate-required");
     mkdirSync(root, { recursive: true });
@@ -2150,17 +2118,6 @@ describe("skills core", () => {
         changedFiles: ["README.md", "SKILL.md"],
       },
     ]);
-    expect(
-      detectLocalSkillUpdate({
-        ...entry,
-        source: { ...entry.source, type: "github" },
-      }),
-    ).toMatchObject({
-      latestHash: null,
-      updateAvailable: false,
-      remoteManaged: true,
-      reason: "latest-unavailable",
-    });
   });
 
   it("plans remove when install path is already absent", () => {
