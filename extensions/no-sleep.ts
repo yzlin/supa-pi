@@ -117,7 +117,7 @@ function start(ctx?: ExtensionContext): void {
   });
 }
 
-function stop(_ctx?: ExtensionContext): void {
+function stop(): void {
   const child = caffeinate;
   caffeinate = undefined;
 
@@ -138,14 +138,14 @@ function stop(_ctx?: ExtensionContext): void {
 
 function reconcile(ctx?: ExtensionContext): void {
   if (!enabled) {
-    stop(ctx);
+    stop();
     return;
   }
 
   if (scope === "session" || agentActive) {
     start(ctx);
   } else {
-    stop(ctx);
+    stop();
   }
 }
 
@@ -171,7 +171,7 @@ function describeState(): string {
 
 export default function noSleepExtension(pi: ExtensionAPI) {
   const cleanupOnProcessExit = () => {
-    stop(undefined);
+    stop();
   };
   process.once("exit", cleanupOnProcessExit);
 
@@ -190,9 +190,9 @@ export default function noSleepExtension(pi: ExtensionAPI) {
     reconcile(ctx);
   });
 
-  pi.on("session_shutdown", (_event, ctx) => {
+  pi.on("session_shutdown", () => {
     agentActive = false;
-    stop(ctx);
+    stop();
     process.off("exit", cleanupOnProcessExit);
   });
 
