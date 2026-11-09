@@ -173,6 +173,16 @@ describe("supapi-mode hub contract (not model adherence)", () => {
     }
   });
 
+  it("scopes unattended pushes to the run's own branch", () => {
+    const execute = read("skills/supapi-mode/playbooks/execute.md");
+    expect(execute).toContain("`agent/<slug>`");
+    expect(execute).toContain("`--force-with-lease=agent/<slug>:<sha>`");
+    expect(execute).toContain("a push you did not make");
+    expect(read("skills/figure-it-out/SKILL.md")).toContain(
+      "the execute Playbook's push scope",
+    );
+  });
+
   it("credits pstack", () => {
     expect(read("skills/supapi-mode/SKILL.md")).toContain(
       "Lauren Tan's MIT-licensed",
