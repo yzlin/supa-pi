@@ -6,15 +6,11 @@ import {
   type BashToolInput,
   type EditToolDetails,
   type FindToolDetails,
-  type FindToolInput,
   type GrepToolDetails,
-  type GrepToolInput,
   getLanguageFromPath,
   highlightCode,
   type LsToolDetails,
-  type LsToolInput,
   type ReadToolDetails,
-  type ReadToolInput,
   type WriteToolInput,
 } from "@earendil-works/pi-coding-agent";
 import {
@@ -193,26 +189,6 @@ function renderExpandedLines(
   return rendered;
 }
 
-export function renderCompactReadCall(
-  args: ReadToolInput,
-  theme: ThemeLike,
-): Text {
-  const parts: string[] = [];
-  if (args.offset !== undefined) {
-    parts.push(`offset=${args.offset}`);
-  }
-  if (args.limit !== undefined) {
-    parts.push(`limit=${args.limit}`);
-  }
-
-  const suffix = parts.length ? theme.fg("dim", ` (${parts.join(", ")})`) : "";
-  return new Text(
-    `${theme.fg("toolTitle", theme.bold("read "))}${theme.fg("accent", truncateMiddle(args.path))}${suffix}`,
-    0,
-    0,
-  );
-}
-
 export function renderCompactReadResult(
   result: ToolResultLike,
   options: RenderOptionsLike,
@@ -303,18 +279,6 @@ export function renderCompactBashResult(
   return new Text(text, 0, 0);
 }
 
-export function renderCompactGrepCall(
-  args: GrepToolInput,
-  theme: ThemeLike,
-): Text {
-  const target = args.path ?? ".";
-  return new Text(
-    `${theme.fg("toolTitle", theme.bold("grep "))}${theme.fg("accent", truncateMiddle(args.pattern))}${theme.fg("dim", ` in ${target}`)}`,
-    0,
-    0,
-  );
-}
-
 export function renderCompactGrepResult(
   result: ToolResultLike,
   options: RenderOptionsLike,
@@ -349,17 +313,6 @@ export function renderCompactGrepResult(
   return new Text(text, 0, 0);
 }
 
-export function renderCompactFindCall(
-  args: FindToolInput,
-  theme: ThemeLike,
-): Text {
-  return new Text(
-    `${theme.fg("toolTitle", theme.bold("find "))}${theme.fg("accent", truncateMiddle(args.pattern))}${theme.fg("dim", ` in ${args.path ?? "."}`)}`,
-    0,
-    0,
-  );
-}
-
 export function renderCompactFindResult(
   result: ToolResultLike,
   options: RenderOptionsLike,
@@ -391,14 +344,6 @@ export function renderCompactFindResult(
     );
   }
   return new Text(text, 0, 0);
-}
-
-export function renderCompactLsCall(args: LsToolInput, theme: ThemeLike): Text {
-  return new Text(
-    `${theme.fg("toolTitle", theme.bold("ls "))}${theme.fg("accent", truncateMiddle(args.path ?? "."))}`,
-    0,
-    0,
-  );
 }
 
 export function renderCompactLsResult(

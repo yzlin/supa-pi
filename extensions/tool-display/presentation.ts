@@ -19,13 +19,14 @@ import {
   visibleWidth,
 } from "@earendil-works/pi-tui";
 import { createTwoFilesPatch } from "diff";
-import { type Static, Type } from "typebox";
+import {
+  type Static,
+  type TObject,
+  type TProperties,
+  type TString,
+  Type,
+} from "typebox";
 
-import type {
-  TObject,
-  TProperties,
-  TString,
-} from "../../node_modules/@earendil-works/pi-ai/node_modules/typebox";
 import {
   codemodeCalls,
   isCodemodeNestedCall,
