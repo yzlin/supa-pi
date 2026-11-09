@@ -21,7 +21,7 @@ Show the framing and tradeoffs before a long run. Reversible work proceeds; a mu
 
 1. Split the work into units that each land and verify on their own. Put the riskiest unknown first, and scaffolding and verification before features.
 2. Build the verification harness before the work, with a baseline from the current state, so each check reads as old versus new.
-3. Decide what fans out. Parallelize only across disjoint write scopes with the `subagent` tool.
+3. Decide what fans out. Parallelize only across disjoint write scopes with the `subagent` tool. Give each parallel writer or throwaway experiment its own worktree, per the `separate-before-serializing-shared-state` Principle.
 4. Write the phase list down. That list is what the user reviews.
 5. When the plan must survive a fresh session, persist it with `/to-spec` and run it with `/execute`.
 

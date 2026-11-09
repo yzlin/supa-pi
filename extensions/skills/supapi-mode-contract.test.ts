@@ -154,6 +154,25 @@ describe("supapi-mode hub contract (not model adherence)", () => {
     expect(routing).toContain("Trivial edits and lookups stay direct.");
   });
 
+  it("isolates parallel writers in worktrees instead of a shared checkout", () => {
+    const principle = read(
+      "rules/principles/separate-before-serializing-shared-state.md",
+    );
+    expect(principle).toContain(".pi/worktrees/<slug>");
+    expect(principle).toContain("git worktree prune");
+    expect(principle).toContain(
+      "Do not use `git worktree remove`; it deletes permanently.",
+    );
+    for (const file of [
+      "skills/figure-it-out/SKILL.md",
+      "skills/supapi-mode/playbooks/feature.md",
+    ]) {
+      expect(read(file)).toContain(
+        "`separate-before-serializing-shared-state`",
+      );
+    }
+  });
+
   it("credits pstack", () => {
     expect(read("skills/supapi-mode/SKILL.md")).toContain(
       "Lauren Tan's MIT-licensed",

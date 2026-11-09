@@ -24,6 +24,7 @@ const PRINCIPLES = [
   "prove-it-works",
   "redesign-from-first-principles",
   "search-first",
+  "separate-before-serializing-shared-state",
   "sequence-verifiable-units",
   "subtract-before-you-add",
   "test-behavior-not-implementation",

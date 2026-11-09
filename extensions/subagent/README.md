@@ -275,7 +275,9 @@ automatic child recovery. Unexpected parent-process death can leave stale socket
 metadata; attachment rejects targets that are no longer live.
 
 Children share the checkout. Parallel writes require disjoint scopes and
-verified prerequisites. Cancellation does not undo writes or guarantee stopping
+verified prerequisites; for isolation, pass a worktree under `.pi/worktrees/<slug>`
+as `cwd` (see `rules/principles/separate-before-serializing-shared-state.md`).
+Cancellation does not undo writes or guarantee stopping
 processes independently detached by a child. Evidence can contain task/workspace
 content: keep it private and do not publish raw sessions as verification.
 
