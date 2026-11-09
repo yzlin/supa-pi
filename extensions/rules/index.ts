@@ -5,6 +5,11 @@ import * as path from "node:path";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 
 const USER_RULES_DIR = path.join(os.homedir(), ".pi", "agent", "rules");
+const PROMPT_PATH = path.join(
+  path.dirname(new URL(import.meta.url).pathname),
+  "prompt.md",
+);
+let cachedPrompt: string | undefined;
 
 /**
  * Recursively find all .md files in a directory
@@ -65,11 +70,8 @@ export default function rulesExtension(pi: ExtensionAPI) {
       return;
     }
 
-    const promptPath = path.join(
-      path.dirname(new URL(import.meta.url).pathname),
-      "prompt.md",
-    );
-    const prompt = fs.readFileSync(promptPath, "utf8").trim();
+    cachedPrompt ??= fs.readFileSync(PROMPT_PATH, "utf8").trim();
+    const prompt = cachedPrompt;
 
     // A section, not a returned systemPrompt: providers such as claude-bridge
     // forward sections but drop whole-prompt replacements. Pi wraps it in
