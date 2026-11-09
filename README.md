@@ -34,7 +34,6 @@ The configured extension set also includes workflow and utility modules such as:
 - `core-prompt` — main-agent orchestration and output guidance, including compact text diagrams when clarification is easier to scan visually
 - `rules`
 - `subagent` — repo-owned blocking tmux/Pi child runner; see [its boundary](extensions/subagent/README.md)
-- `execute`
 - `research`
 - `code-improvement`
 - `session-query`
@@ -50,12 +49,14 @@ See `package.json` for the full registration list.
 
 `agents/` ships custom subagents for common coding workflows, including:
 
-- `explorer` / `Explore`
+- `explorer`
 - `researcher`
 - `code-reviewer`
 - `security-reviewer`
 - `database-reviewer`
 - `performance-reviewer`
+- `review-verifier`
+- `spec-reviewer`
 - `executor`
 
 ## Included skills
@@ -64,7 +65,7 @@ See `package.json` for the full registration list.
 
 `skills/showing-me/SKILL.md` adapts the visual-explanation approach from HumanLayer's MIT-licensed [`show-me` skill](https://github.com/humanlayer/skills/blob/3c2629142c5d437428269b1b722b08c0b87f574d/plugins/show-me/skills/show-me/SKILL.md) at commit `3c2629142c5d437428269b1b722b08c0b87f574d`.
 
-`skills/supapi-mode/SKILL.md` is the hub router. The core prompt sends non-trivial engineering work to it; it matches one Playbook under `skills/supapi-mode/playbooks/` (investigation, diagnose, bug-fix, feature, refactoring, prototype, opening-a-pr) and falls back to `skills/figure-it-out/SKILL.md` when none fits. Playbooks are step files, not separate skills. The shape is adapted from Lauren Tan's MIT-licensed [pstack](https://github.com/cursor/plugins/tree/main/pstack).
+`skills/supapi-mode/SKILL.md` is the hub router. The core prompt sends non-trivial engineering work to it; it matches one Playbook under `skills/supapi-mode/playbooks/` (investigation, diagnose, bug-fix, feature, refactoring, prototype, execute, correct, fix-review-findings, opening-a-pr) and falls back to `skills/figure-it-out/SKILL.md` when none fits. Playbooks are step files, not separate skills. The shape is adapted from Lauren Tan's MIT-licensed [pstack](https://github.com/cursor/plugins/tree/main/pstack).
 
 `skills/e2e-testing/SKILL.md` is the canonical main-session Playwright E2E workflow, including test guardrails, artifact handling, and reporting; no dedicated E2E agent is shipped.
 
@@ -236,7 +237,7 @@ Use this repo if you want a Pi setup with:
 
 - stronger orchestration defaults
 - local workflow extensions
-- built-in research/PRD/review helpers
+- built-in research, Spec, and review helpers
 - custom skills and rules for multiple languages
 - improved editor and memory ergonomics
 
