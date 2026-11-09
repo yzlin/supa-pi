@@ -272,6 +272,16 @@ Approved by `/grill-me` on 2026-10-31 and implemented via `/execute` on 2026-10-
 - Showing and checking stay separate. `architecture-diagrams` owns state-diagram wording rules: states are what the reader sees, arrows are events in user words with a `[condition]` when it matters, states that act the same are merged (about 20 arrows or fewer), and inferred parts are marked. It points to `/statechart` when a flow needs checking. `showing-me` gets these through its existing Mermaid route.
 - No ADR: each part is cheap to undo (one skill install, one prompt, one small fix).
 
+## Formal verification skills: implemented direction
+
+Decided 2026-11-09 in chat, by user choice: install, do not vendor (same as statechart). Reviewed upstream at `create-formal-verification-skill` commit `34b1b7c96f09f81a21a6c78f65b7833f7dcb5b24` and `maintain-formal-verification-skill` commit `7b353f78f6ec193bdbe48ed8059444eb09b6878e` (`cursor/plugins`, MIT, Copyright (c) 2026 Lauren Tan). Each is a single `SKILL.md` with upstream `disable-model-invocation: true`.
+
+- **Verify skill** — a project-local skill that `/create-formal-verification-skill` generates for one area. It records the property, the covered files and functions, the bounds, one run command, and a sync commit. _Avoid_: formal skill, proof skill.
+- Entry: `prompts/create-formal-verification-skill.md` and `prompts/maintain-formal-verification-skill.md` are thin wrappers. Without the skill they stop and print the `/skill install` command. Updates track `main`; `setup.sh` does not install them.
+- When to run maintain: verified code changed without the verify skill (merges, rebases, refactors that move covered code, new code that writes guarded state, drift across commits). A change made while the verify skill is loaded is that skill's job.
+- Review and context-review: not wired yet. Planned direction is a read-only overlap check (covered files vs. changed paths, `git diff <sync>..HEAD`) that reports "possibly stale, run maintain" and never runs maintain, because maintain edits verification files and `/review` is report-only. Deferred until the first real verify skill exists (`subtract-before-you-add`).
+- Not verified: where Pi discovers a generated verify skill (upstream says only "project-local"; Pi docs list project skill directories and `.agents/skills/`), and an end-to-end run of either skill.
+
 ## Playbook architecture: implemented; ADR 0005 accepted
 
 Approved through `/grill-me` on 2026-11-04. Inspired by Lauren Tan's MIT-licensed [pstack](https://github.com/cursor/plugins/tree/main/pstack) (`poteto-mode` hub, playbooks, `principle-*` skills). Shape: orchestrator → Playbooks → Workflow skills + Principles → subagents.

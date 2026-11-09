@@ -20,7 +20,7 @@
 ## Context notes
 
 - `docs/context/` — longer durable notes that should not live in chat only.
-- `docs/context/subsystems.md` — read before changing a subsystem named in its headings (oversight output, Sift, PR workflow, model profiles, codemode, tool rendering, retro, subagents, Spec workflow, local context overlay, Claude provider, statechart, Playbooks, skill CLI); holds the implemented directions moved out of `CONTEXT.md`.
+- `docs/context/subsystems.md` — read before changing a subsystem named in its headings (oversight output, Sift, PR workflow, model profiles, codemode, tool rendering, retro, subagents, Spec workflow, local context overlay, Claude provider, statechart, formal verification skills, Playbooks, skill CLI); holds the implemented directions moved out of `CONTEXT.md`.
 - `docs/context/extension-registration.md` — read before changing `package.json -> pi.extensions`, documenting active Extensions, or reasoning about disabled Extension code.
 - `docs/context/ask.md` — read before changing the active Ask Extension, its public `ask` tool or `/ask-stats` command, schema/result shape, keyboard behavior, validation, or rpiv-divergence documentation.
 - `docs/context/code-improvement.md` — read before changing `/simplify`, `/improve-codebase-architecture`, or code-improvement prompt files.
@@ -56,6 +56,7 @@
 - `skills/ketchup/SKILL.md` and `prompts/ketchup.md` — read before changing `/ketchup`, what counts as an action item, or how it differs from `/wait-what`.
 - `skills/blast-radius/SKILL.md` and `prompts/blast-radius.md` — read before changing `/blast-radius`, its proof ladder, or where its probes run.
 - `prompts/statechart.md` and `docs/context/subsystems.md` "Statechart: implemented direction" — read before changing `/statechart`, the external statechart skill install, `/skill install` file-mode handling, or state-diagram guidance in `skills/architecture-diagrams/SKILL.md`.
+- `prompts/create-formal-verification-skill.md`, `prompts/maintain-formal-verification-skill.md`, and `docs/context/subsystems.md` "Formal verification skills: implemented direction" — read before changing the external formal verification skill installs, generated verify skills, or wiring them into `/review` or `/context-review`.
 - `docs/context/subsystems.md` "Skill CLI: implemented direction", `extensions/skills/ops.ts`, and `extensions/skills/core.ts` — read before changing `/skill`, the `pi-skill` CLI (`scripts/pi-skill.ts`), the shared Prompter-based skill orchestration, or skill-manifest write locking.
 - `skills/supapi-mode/playbooks/opening-a-pr.md` and `prompts/pr.md` — read before changing `/pr`, PR-body format, PR submission gates, or `rules/common/git-workflow.md` PR guidance.
 - `skills/retro/SKILL.md` and `prompts/retro.md` — read before changing `/retro`, session selection and evidence, report-only boundaries, or agent-environment recommendation routing.
