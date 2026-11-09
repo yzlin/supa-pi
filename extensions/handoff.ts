@@ -173,15 +173,6 @@ interface SessionManagerWithNewSession {
   newSession(options: { parentSession: string | undefined }): void;
 }
 
-function onSessionSwitch(pi: ExtensionAPI, listener: () => void): void {
-  const on = pi.on.bind(pi) as unknown as (
-    event: "session_switch",
-    handler: () => void,
-  ) => void;
-
-  on("session_switch", listener);
-}
-
 function buildHandoffPrompt(
   goal: string,
   handoffPath: string,
@@ -437,9 +428,8 @@ export default function (pi: ExtensionAPI) {
   //    auto-compaction checks assistant usage tokens rather than the messages
   //    array length.
   //
-  // 3. session_switch: Clears the context filter when a proper session switch
-  //    occurs (e.g., /new), since those fully reset agent.state.messages and
-  //    our filter would incorrectly hide the new session's messages.
+  // A proper session replacement (e.g., /new, /resume, /fork) tears down and
+  // rebuilds this extension runtime, so the filter starts cleared there.
 
   // After the agent loop ends, perform the deferred session switch.
   // At this point:
@@ -519,13 +509,6 @@ export default function (pi: ExtensionAPI) {
     }
     // No messages pass the filter - shouldn't happen in normal flow,
     // but don't break things by returning empty messages
-  });
-
-  // When a proper session switch occurs (e.g., /new, tree navigation, /switch),
-  // agent.state.messages is fully reset by AgentSession.newSession(). Clear our
-  // filter so we don't interfere with the properly-reset state.
-  onSessionSwitch(pi, () => {
-    handoffTimestamp = null;
   });
 
   // /handoff command

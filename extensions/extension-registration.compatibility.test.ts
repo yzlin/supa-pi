@@ -167,7 +167,7 @@ describe("extension registration compatibility", () => {
       edit: { enabled: true },
       write: { enabled: false },
     });
-    for (const handler of harness.eventHandlers.get("session_switch") ?? []) {
+    for (const handler of harness.eventHandlers.get("session_start") ?? []) {
       handler({}, { cwd });
     }
     const edit = harness.tools.findLast((tool) => tool.name === "edit");

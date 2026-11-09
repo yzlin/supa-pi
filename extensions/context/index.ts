@@ -19,10 +19,6 @@ export default function (pi: ExtensionAPI) {
     cachedContextSnapshot = captureContextEventSnapshot(ctx, event.messages);
   });
 
-  pi.on("session_switch", () => {
-    cachedContextSnapshot = null;
-  });
-
   pi.on("session_shutdown", () => {
     cachedContextSnapshot = null;
   });

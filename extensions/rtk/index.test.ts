@@ -346,8 +346,8 @@ describe("RTK bash execution contract", () => {
 
     expect(await readMarker()).toBe("first");
     writeDisplayConfig(otherCwd, false);
-    for (const handler of handlers.get("session_switch") ?? []) {
-      handler({ type: "session_switch" }, { cwd: otherCwd });
+    for (const handler of handlers.get("session_start") ?? []) {
+      handler({ type: "session_start" }, { cwd: otherCwd });
     }
     expect(await readMarker()).toBe("second");
     expect(registry?.renderShell).toBeUndefined();

@@ -754,9 +754,6 @@ export default function goalExtension(pi: ExtensionAPI): void {
   pi.on("session_start", (event, ctx) =>
     restoreGoalFromSession(pi, event, ctx),
   );
-  pi.on("session_switch", (_event, ctx) =>
-    restoreGoalFromSession(pi, { reason: "resume" }, ctx),
-  );
   pi.on("session_shutdown", () => {
     forgetActiveGoal();
     continuationQueued = false;

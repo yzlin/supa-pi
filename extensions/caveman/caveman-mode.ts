@@ -375,10 +375,6 @@ export function registerCavemanMode(pi: ExtensionAPI): void {
     refreshRuntimeState(ctx);
   });
 
-  pi.on("session_switch", (_event, ctx) => {
-    refreshRuntimeState(ctx);
-  });
-
   // A section, not a returned systemPrompt: providers such as claude-bridge
   // forward sections but drop whole-prompt replacements. Sections are rebuilt
   // every run, so an inactive mode needs no stripping.

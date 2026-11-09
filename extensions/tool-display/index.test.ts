@@ -311,7 +311,7 @@ test("nested previews isolate parents and children, ignore bad events, and clear
   });
   expect(a()).not.toContain("SECOND_CHILD");
   expect(b()).toContain("OTHER_PARENT");
-  for (const type of ["session_switch", "session_start", "session_shutdown"]) {
+  for (const type of ["session_start", "session_shutdown"]) {
     const parentId = `lifecycle-${type}`;
     const rows = create(parentId);
     update(parentId, `${parentId}/1`, "LIVE_PREVIEW");
@@ -433,7 +433,7 @@ describe("renderer resolver", () => {
         diff: { enabled: false },
       }),
     );
-    for (const handler of h.handlers.get("session_switch") ?? []) {
+    for (const handler of h.handlers.get("session_start") ?? []) {
       handler({}, { cwd: h.cwd });
     }
     for (const name of [...owned, "mcp__figma__get_file"]) {
@@ -664,7 +664,7 @@ describe("execution registration", () => {
       expect(tool.renderCall).toBeUndefined();
       expect(tool.renderResult).toBeUndefined();
     }
-    for (const handler of h.handlers.get("session_switch") ?? []) {
+    for (const handler of h.handlers.get("session_start") ?? []) {
       handler({}, { cwd: projectConfig(true) });
     }
     const edit = h.tools.find((t) => t.name === "edit");
@@ -677,14 +677,14 @@ describe("execution registration", () => {
   test("restores effective native edit schema and execution after disabling candidate edit", async () => {
     const h = harness();
     const candidateCwd = projectConfig(true);
-    for (const handler of h.handlers.get("session_switch") ?? []) {
+    for (const handler of h.handlers.get("session_start") ?? []) {
       handler({}, { cwd: candidateCwd });
     }
     expect(
       Object.keys(h.effectiveTools.get("edit")?.parameters.properties ?? {}),
     ).toEqual(["text"]);
 
-    for (const handler of h.handlers.get("session_switch") ?? []) {
+    for (const handler of h.handlers.get("session_start") ?? []) {
       handler({}, { cwd: h.cwd });
     }
     const restored = h.effectiveTools.get("edit");
@@ -713,7 +713,7 @@ describe("execution registration", () => {
 
     const nextCwd = projectConfig(false);
     writeFileSync(join(nextCwd, "a.ts"), "old\n");
-    for (const handler of h.handlers.get("session_switch") ?? []) {
+    for (const handler of h.handlers.get("session_start") ?? []) {
       handler({}, { cwd: nextCwd });
     }
     await h.effectiveTools

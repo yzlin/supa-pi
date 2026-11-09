@@ -371,21 +371,20 @@ describe("caveman mode", () => {
     ]);
   });
 
-  it("recomputes config-derived state on session_switch", () => {
+  it("recomputes config-derived state on each session_start", () => {
     writeProjectConfig(testProjectDir, { enabled: true });
     const otherProjectDir = join(testRootDir, "other-project");
     mkdirSync(otherProjectDir, { recursive: true });
     writeProjectConfig(otherProjectDir, { enabled: false });
     const { handlers, appendedEntries } = setupHarness();
     const sessionStart = getHandler(handlers, "session_start");
-    const sessionSwitch = getHandler(handlers, "session_switch");
     const { ctx: firstCtx, statuses: firstStatuses } = createContext();
     const { ctx: secondCtx, statuses: secondStatuses } = createContext([], {
       cwd: otherProjectDir,
     });
 
-    sessionStart({ type: "session_start" }, firstCtx);
-    sessionSwitch({ type: "session_switch" }, secondCtx);
+    sessionStart({ type: "session_start", reason: "startup" }, firstCtx);
+    sessionStart({ type: "session_start", reason: "resume" }, secondCtx);
 
     expect(appendedEntries).toEqual([]);
     expect(firstStatuses).toEqual([

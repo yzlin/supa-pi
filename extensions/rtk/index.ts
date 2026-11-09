@@ -107,19 +107,6 @@ export default function rtkExtension(pi: ExtensionAPI): void {
     reloadSession(ctx.cwd);
     pi.registerTool(registeredDefinition);
   });
-  const sessionSwitchApi = pi as ExtensionAPI & {
-    on(
-      event: "session_switch",
-      handler: (
-        event: { type: "session_switch" },
-        ctx: ExtensionContext,
-      ) => void,
-    ): void;
-  };
-  sessionSwitchApi.on("session_switch", (_event, ctx) => {
-    reloadSession(ctx.cwd);
-    pi.registerTool(registeredDefinition);
-  });
   pi.registerTool(registeredDefinition);
 
   pi.on("tool_execution_start", createRtkToolExecutionStartHandler(runtime));
