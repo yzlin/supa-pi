@@ -49,11 +49,9 @@ function addPromptObserver(owner: PromptOwner, observer: PromptObserver): void {
   const prompt: PromptMethod = function observedPrompt(text, options) {
     return registry.originalPrompt.call(this, text, {
       ...options,
-      preflightResult: (accepted: boolean) => {
-        options?.preflightResult?.(accepted);
-        if (!accepted) {
-          return;
-        }
+      // Pi calls preflightResult only for accepted prompts.
+      preflightResult: (disposition) => {
+        options?.preflightResult?.(disposition);
         for (const currentObserver of registry.owners.values()) {
           currentObserver(this, text, options);
         }
