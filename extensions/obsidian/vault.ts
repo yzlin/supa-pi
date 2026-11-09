@@ -1,5 +1,5 @@
 import { existsSync, realpathSync } from "node:fs";
-import { dirname, isAbsolute, relative, resolve } from "node:path";
+import { dirname, isAbsolute, relative, resolve, sep } from "node:path";
 
 import type { ValidatedVault } from "./config";
 
@@ -12,7 +12,11 @@ function contains(root: string, target: string): boolean {
   const relativePath = relative(root, target);
   return (
     relativePath === "" ||
-    !(relativePath.startsWith("..") || isAbsolute(relativePath))
+    !(
+      relativePath === ".." ||
+      relativePath.startsWith(`..${sep}`) ||
+      isAbsolute(relativePath)
+    )
   );
 }
 

@@ -311,6 +311,16 @@ describe("obsidian vault resolution", () => {
     expect(resolveActiveVault(link, [realVault(root)])).toBeNull();
   });
 
+  it("treats vault children whose names start with two dots as inside", () => {
+    const root = makeVault("dotdot");
+    const child = join(root, "..notes");
+    mkdirSync(child);
+
+    expect(assertContained(realVault(root), child)).toBe(true);
+    expect(resolveActiveVault(child, [realVault(root)])).not.toBeNull();
+    expect(assertContained(realVault(root), join(root, ".."))).toBe(false);
+  });
+
   it("stays inactive outside configured vault cwd", () => {
     useTempConfig("outside");
     const root = makeVault("outside-vault");
