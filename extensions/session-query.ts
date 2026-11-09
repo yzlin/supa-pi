@@ -35,7 +35,7 @@ Be concise and direct. If the information isn't in the session, say so.`;
 
 function errorText(error: unknown): string {
   if (error instanceof Error) {
-    return String(error);
+    return error.message;
   }
   return typeof error === "object" && error !== null
     ? JSON.stringify(error)
