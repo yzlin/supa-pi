@@ -244,6 +244,7 @@ describe("runVariant", () => {
     const evalCase: EvalCase = {
       id: "fake-run",
       workload: "explanation",
+      split: "dev",
       promptPath: "extensions/core-prompt/prompt.md",
       task: "Explain the defect.",
       tools: [],
@@ -323,6 +324,7 @@ describe("runVariant", () => {
       evalCase: {
         id: "setup-files",
         workload: "explanation",
+        split: "dev",
         promptPath: "extensions/core-prompt/prompt.md",
         task: "Check the change.",
         tools: [],
@@ -373,6 +375,7 @@ describe("runVariant", () => {
       evalCase: {
         id: "priority-run",
         workload: "explanation",
+        split: "dev",
         promptPath: "extensions/core-prompt/prompt.md",
         task: "Explain the defect.",
         tools: [],
@@ -419,6 +422,7 @@ describe("runVariant", () => {
       evalCase: {
         id: "tool-run",
         workload: "exploration",
+        split: "dev",
         promptPath: "agents/explorer.md",
         task: "Read src/math.ts and report the defect.",
         tools: ["read"],
@@ -493,6 +497,7 @@ describe("runVariant", () => {
       evalCase: {
         id: "agent-response-run",
         workload: "codebase exploration",
+        split: "dev",
         promptPath: "extensions/core-prompt/prompt.md",
         task: "Survey the repository.",
         tools: ["Agent"],
@@ -556,6 +561,7 @@ describe("runVariant", () => {
       evalCase: {
         id: "max-turns",
         workload: "exploration",
+        split: "dev",
         promptPath: "agents/explorer.md",
         task: "Read forever.",
         tools: ["read"],
@@ -607,6 +613,7 @@ describe("runVariant", () => {
       evalCase: {
         id: "agent-child-run",
         workload: "focused bug fix",
+        split: "dev",
         promptPath: "extensions/core-prompt/prompt.md",
         task: "Fix src/math.ts.",
         tools: ["read", "Agent"],
@@ -699,6 +706,7 @@ describe("runVariant", () => {
       evalCase: {
         id: "exact-red-reproduction",
         workload: "codebase exploration",
+        split: "dev",
         promptPath: "skills/diagnose/SKILL.md",
         task: "Reproduce the exact failure.",
         tools: ["bash"],
@@ -772,6 +780,7 @@ describe("runVariant", () => {
       evalCase: {
         id: "reproduction-before-reasoning",
         workload: "codebase exploration",
+        split: "dev",
         promptPath: "skills/diagnose/SKILL.md",
         task: "Reproduce before causal reasoning.",
         tools: ["bash"],
@@ -862,6 +871,7 @@ describe("runVariant", () => {
       evalCase: {
         id: "ask-approve",
         workload: "focused bug fix",
+        split: "dev",
         promptPath: "skills/diagnose/SKILL.md",
         task: "Use the required fix gate.",
         tools: ["ask", "edit", "bash"],
@@ -977,6 +987,7 @@ describe("runVariant", () => {
       evalCase: {
         id: "ask-same-turn",
         workload: "focused bug fix",
+        split: "dev",
         promptPath: "skills/diagnose/SKILL.md",
         task: "Use the required fix gate.",
         tools: ["ask", "edit"],
@@ -1049,6 +1060,7 @@ describe("runVariant", () => {
       evalCase: {
         id: "ask-stop",
         workload: "focused bug fix",
+        split: "dev",
         promptPath: "skills/diagnose/SKILL.md",
         task: "Use the required fix gate.",
         tools: ["ask", "edit", "write"],
@@ -1106,6 +1118,7 @@ describe("runVariant", () => {
       evalCase: {
         id: "blocked-path",
         workload: "security",
+        split: "dev",
         promptPath: "extensions/core-prompt/prompt.md",
         task: "Read a file.",
         tools: ["read"],

@@ -100,6 +100,7 @@ describe("findingGroup check", () => {
     const evalCase = {
       id: "group",
       workload: "code review",
+      split: "dev",
       promptPath: "agents/review-verifier.md",
       task: "Verify.",
       tools: ["read"],
@@ -152,6 +153,7 @@ describe("parseCorpus", () => {
         {
           id: "explain",
           workload: "explanation",
+          split: "dev",
           promptPath: "extensions/core-prompt/prompt.md",
           task: "Explain the bug.",
           tools: ["read"],
@@ -180,6 +182,7 @@ describe("parseCorpus", () => {
           {
             id: skillName,
             workload: "explanation",
+            split: "dev",
             promptPath,
             task: "Explain the topic.",
             tools: [],
@@ -203,6 +206,7 @@ describe("parseCorpus", () => {
     const evalCase = {
       id: "ask-gate",
       workload: "focused bug fix",
+      split: "dev",
       promptPath: "skills/diagnose/SKILL.md",
       task: "Ask before fixing.",
       tools: ["ask"],
@@ -231,6 +235,7 @@ describe("parseCorpus", () => {
     const evalCase = {
       id: "history",
       workload: "explanation",
+      split: "dev",
       promptPath: "AGENTS.global.md",
       task: "Report.",
       tools: ["read"],
@@ -261,6 +266,7 @@ describe("parseCorpus", () => {
     const evalCase = {
       id: "agent-child",
       workload: "focused bug fix",
+      split: "dev",
       promptPath: "skills/simplify/SKILL.md",
       task: "Simplify.",
       tools: ["read", "Agent"],
@@ -301,6 +307,7 @@ describe("parseCorpus", () => {
     const evalCase = {
       id: "setup-files",
       workload: "explanation",
+      split: "dev",
       promptPath: "extensions/core-prompt/prompt.md",
       task: "Check.",
       tools: ["read"],
@@ -328,6 +335,7 @@ describe("parseCorpus", () => {
     const evalCase = {
       id: "agent-response",
       workload: "codebase exploration",
+      split: "dev",
       promptPath:
         "extensions/code-improvement/IMPROVE-CODEBASE-ARCHITECTURE.md",
       task: "Review.",
@@ -359,6 +367,7 @@ describe("parseCorpus", () => {
           {
             id: "other-skill",
             workload: "explanation",
+            split: "dev",
             promptPath: "skills/other/SKILL.md",
             task: "Explain.",
             tools: ["read"],
@@ -380,6 +389,7 @@ describe("parseCorpus", () => {
     const repeatedCase = {
       id: "same",
       workload: "explanation",
+      split: "dev",
       promptPath: "agents/explorer.md",
       task: "Find evidence.",
       tools: ["read"],
@@ -398,6 +408,34 @@ describe("parseCorpus", () => {
     ).toThrow("duplicate case id");
   });
 
+  it("requires a dev or test split", () => {
+    const base = {
+      id: "split-case",
+      workload: "explanation",
+      promptPath: "agents/explorer.md",
+      task: "Find evidence.",
+      tools: ["read"],
+      checks: [
+        {
+          type: "outputIncludes",
+          value: "evidence",
+          domain: "evidence",
+          weight: 1,
+        },
+      ],
+    };
+    expect(() => parseCorpus({ version: 1, cases: [base] })).toThrow(
+      "split must be one of: dev, test",
+    );
+    expect(() =>
+      parseCorpus({ version: 1, cases: [{ ...base, split: "train" }] }),
+    ).toThrow("split must be one of");
+    expect(
+      parseCorpus({ version: 1, cases: [{ ...base, split: "test" }] }).cases[0]
+        .split,
+    ).toBe("test");
+  });
+
   it("rejects case ids that can escape artifact directories", () => {
     expect(() =>
       parseCorpus({
@@ -406,6 +444,7 @@ describe("parseCorpus", () => {
           {
             id: "../../escape",
             workload: "explanation",
+            split: "dev",
             promptPath: "agents/explorer.md",
             task: "Explain.",
             tools: ["read"],
@@ -431,6 +470,7 @@ describe("parseCorpus", () => {
           {
             id: "unsafe",
             workload: "explanation",
+            split: "dev",
             promptPath: "../prompt.md",
             task: "Explain.",
             tools: [],
@@ -448,6 +488,7 @@ describe("parseCorpus", () => {
         {
           id: "counted",
           workload: "focused bug fix",
+          split: "dev",
           promptPath: "agents/executor.md",
           task: "Verify once.",
           tools: ["bash"],
@@ -506,6 +547,41 @@ describe("parseCorpus", () => {
 });
 
 describe("committed corpus", () => {
+  it("splits every multi-case workload into dev and test, keeping -history siblings together", () => {
+    const corpus = parseCorpus(
+      JSON.parse(readFileSync(join(moduleDirectory, "corpus.json"), "utf8")),
+    );
+    const byId = new Map(
+      corpus.cases.map((evalCase) => [evalCase.id, evalCase]),
+    );
+    for (const evalCase of corpus.cases) {
+      if (evalCase.id.endsWith("-history")) {
+        const sibling = byId.get(evalCase.id.slice(0, -"-history".length));
+        expect({ id: evalCase.id, split: sibling?.split }).toEqual({
+          id: evalCase.id,
+          split: evalCase.split,
+        });
+      }
+    }
+    const workloads = new Set(
+      corpus.cases.map((evalCase) => evalCase.workload),
+    );
+    for (const workload of workloads) {
+      const splits = corpus.cases
+        .filter((evalCase) => evalCase.workload === workload)
+        .map((evalCase) => evalCase.split);
+      if (splits.length > 1) {
+        expect({ workload, splits: new Set(splits) }).toEqual({
+          workload,
+          splits: new Set(["dev", "test"]),
+        });
+      }
+    }
+    expect(
+      corpus.cases.filter((evalCase) => evalCase.split === "test").length,
+    ).toBeGreaterThanOrEqual(30);
+  });
+
   it("covers all seven target workloads and all current prompt targets", () => {
     const corpus = parseCorpus(
       JSON.parse(readFileSync(join(moduleDirectory, "corpus.json"), "utf8")),
@@ -2768,6 +2844,7 @@ describe("scoreRun and aggregateVariants", () => {
           {
             id: "routing-bad",
             workload: "explanation",
+            split: "dev",
             promptPath: "skills/supapi-mode/SKILL.md",
             task: "Route.",
             tools: ["read"],

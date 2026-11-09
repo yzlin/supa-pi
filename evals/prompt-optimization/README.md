@@ -63,6 +63,24 @@ Live runs write ignored artifacts below; dry runs write none:
 
 Artifacts pin the captured `HEAD`, candidate diff, corpus, prompt hashes, comparison arms, selected cases, model, reasoning, service tier, repetitions, and limits. They exclude credentials, provider headers, environment values, and hidden reasoning. Interpret deltas as candidate minus baseline; positive score/pass deltas are better, while negative latency/token/cost deltas are better.
 
+## Reading a pass-rate delta
+
+Runs are paired by case and repetition (`stats.ts`). The summary reports the paired pass-rate delta with a 95% case-clustered bootstrap interval. It resamples whole cases, because repetitions of one case are correlated. The summary also counts improved and regressed pairs, and pass^k: the cases where every repetition passed, per arm. `summary.json` stores these under `paired`, overall and per case.
+
+- If the interval includes 0, report "no measurable difference". Do not keep a candidate on that delta.
+- A flat delta can hide trades. Read the regressed-pair count and the per-case column before you keep a candidate.
+- Dry runs and live runs print a worst-case detection floor of `1.96 / sqrt(cases)`. For 72 cases it is ±23.1 pp. Real runs with few discordant pairs resolve finer, but an effect below the floor needs more cases, not more repetitions of the same cases.
+- When you try several candidates and keep the best, confirm the winner in a fresh run before you report it.
+- When you try several candidates and keep the best, confirm the winner in a fresh run before you report it.
+
+## Dev and test splits
+
+Every case has `split: "dev"` or `split: "test"`. The split is about half per workload, and a `-history` case stays in the same split as its sibling. `--split dev|test|all` selects cases (default `all`; it cannot be combined with `--case`). A split run is partial, so it skips the changed-prompt coverage check.
+
+- Tune candidates on `--split dev`. Report the result that decides keep or revert from one `--split test` run.
+- Do not tune on test cases. If a test result changes the candidate, the next report needs fresh cases.
+- The test split has 33 cases, so its worst-case floor is ±34.1 pp. Only large effects are visible on test alone.
+
 ## Develop
 
 ```bash

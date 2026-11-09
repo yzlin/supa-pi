@@ -165,6 +165,14 @@ describe("parseCliOptions", () => {
     });
   });
 
+  it("parses --split and rejects unknown splits", () => {
+    expect(parseCliOptions([]).split).toBe("all");
+    expect(parseCliOptions(["--split", "test"]).split).toBe("test");
+    expect(() => parseCliOptions(["--split", "train"])).toThrow(
+      "--split must be dev, test, or all",
+    );
+  });
+
   it("keeps thinking shared in prompt comparison mode", () => {
     const options = parseCliOptions(["--thinking", "medium"]);
 

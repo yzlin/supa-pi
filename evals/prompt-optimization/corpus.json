@@ -4,6 +4,7 @@
     {
       "id": "core-orchestration",
       "workload": "tool-heavy orchestration",
+      "split": "dev",
       "promptPath": "extensions/core-prompt/prompt.md",
       "task": "Investigate why the fixture test fails. Delegate one focused exploration task with Agent, verify the returned evidence yourself, and report the root cause with exact file paths. Do not edit files.",
       "tools": ["read", "grep", "find", "ls", "Agent"],
@@ -32,6 +33,7 @@
     {
       "id": "readiness-independent-delegation",
       "workload": "codebase exploration",
+      "split": "dev",
       "promptPath": "extensions/core-prompt/prompt.md",
       "task": "Two release-readiness questions need evidence: determine why the addition test returns 2 instead of 12, and investigate whether canAccessAdminPanel crosses the documented authorization boundary. Report both root causes with exact file paths. Do not change files.",
       "tools": ["read", "grep", "find", "ls", "Agent"],
@@ -90,6 +92,7 @@
     {
       "id": "readiness-local-lookup",
       "workload": "codebase exploration",
+      "split": "test",
       "promptPath": "extensions/core-prompt/prompt.md",
       "task": "What role does the fixture README say is required for admin access? Give the path and answer. Do not change files.",
       "tools": ["read", "grep", "find", "ls", "Agent"],
@@ -130,6 +133,7 @@
     {
       "id": "architecture-narrow-scope",
       "workload": "codebase exploration",
+      "split": "dev",
       "promptPath": "extensions/code-improvement/IMPROVE-CODEBASE-ARCHITECTURE.md",
       "task": "Scope instruction: src/format.ts",
       "tools": ["read", "grep", "find", "ls", "Agent"],
@@ -175,6 +179,7 @@
     {
       "id": "architecture-broad-scope",
       "workload": "codebase exploration",
+      "split": "test",
       "promptPath": "extensions/code-improvement/IMPROVE-CODEBASE-ARCHITECTURE.md",
       "task": "Scope instruction: No explicit scope provided. Start broad, then narrow based on explorer findings.",
       "tools": ["read", "grep", "find", "ls", "Agent"],
@@ -209,6 +214,7 @@
     {
       "id": "simplify-command-scoped",
       "workload": "focused bug fix",
+      "split": "dev",
       "promptPath": "skills/simplify/SKILL.md",
       "task": "Use the `simplify` skill behavior as canonical.\n\nSimplify invocation packet:\n- Scope: folder src/format.ts\n- Editable files (1):\n- src/format.ts\n- Ignored lockfiles (read-only, 0):\n- None\n- Unsupported changed files (0):\n- None\n\nExtra guidance: unusedLegacyFormatter has no callers anywhere in this package; remove it.",
       "tools": ["read", "grep", "find", "ls", "edit", "write"],
@@ -273,6 +279,7 @@
     {
       "id": "review-synthesis-verify",
       "workload": "code review",
+      "split": "dev",
       "promptPath": "evals/prompt-optimization/prompts/review-verify.md",
       "task": "Run /review verification for this change (scope: src/). Candidate findings from the reviewer panel (models model-a, model-b, model-c):\n[\n  {\n    \"candidateId\": \"candidate-0001\",\n    \"reviewer\": \"security-reviewer\",\n    \"model\": \"model-a\",\n    \"thinkingLevel\": \"medium\",\n    \"priority\": \"P0\",\n    \"title\": \"Debug flag bypasses admin role check\",\n    \"file\": \"src/auth.ts\",\n    \"line\": 2,\n    \"why\": \"Any caller that passes debug=true gets admin panel access, whatever the role.\",\n    \"change\": \"Remove the debug branch so only role === \\\"admin\\\" grants access.\"\n  },\n  {\n    \"candidateId\": \"candidate-0002\",\n    \"reviewer\": \"code-reviewer\",\n    \"model\": \"model-b\",\n    \"thinkingLevel\": \"medium\",\n    \"priority\": \"P1\",\n    \"title\": \"canAccessAdminPanel returns true for every role when debug is set\",\n    \"file\": \"src/auth.ts\",\n    \"line\": 3,\n    \"why\": \"README says admin access requires the admin role, but the early return ignores the role.\",\n    \"change\": \"Delete the early return; keep the role comparison as the only path.\"\n  },\n  {\n    \"candidateId\": \"candidate-0003\",\n    \"reviewer\": \"code-reviewer\",\n    \"model\": \"model-a\",\n    \"thinkingLevel\": \"medium\",\n    \"priority\": \"P1\",\n    \"title\": \"add() subtracts its arguments\",\n    \"file\": \"src/math.ts\",\n    \"line\": 2,\n    \"why\": \"add(7, 5) returns 2, so tests/math.case.ts fails.\",\n    \"change\": \"Return left + right.\"\n  },\n  {\n    \"candidateId\": \"candidate-0004\",\n    \"reviewer\": \"code-reviewer\",\n    \"model\": \"model-c\",\n    \"thinkingLevel\": \"medium\",\n    \"priority\": \"P1\",\n    \"title\": \"add uses the minus operator\",\n    \"file\": \"src/math.ts\",\n    \"line\": 2,\n    \"why\": \"The documented behavior is addition; callers get differences instead of sums.\",\n    \"change\": \"Change - to +.\"\n  },\n  {\n    \"candidateId\": \"candidate-0005\",\n    \"reviewer\": \"performance-reviewer\",\n    \"model\": \"model-b\",\n    \"thinkingLevel\": \"medium\",\n    \"priority\": \"P2\",\n    \"title\": \"rankMatches sorts the caller's array inside the query loop\",\n    \"file\": \"src/search.ts\",\n    \"line\": 4,\n    \"why\": \"items.sort() mutates the caller's array and re-sorts it once per query.\",\n    \"change\": \"Sort a copy once before the loop.\"\n  },\n  {\n    \"candidateId\": \"candidate-0006\",\n    \"reviewer\": \"code-reviewer\",\n    \"model\": \"model-c\",\n    \"thinkingLevel\": \"medium\",\n    \"priority\": \"P3\",\n    \"title\": \"Rename the debug parameter to describe its purpose\",\n    \"file\": \"src/auth.ts\",\n    \"line\": 1,\n    \"why\": \"The name debug does not say what the flag enables.\",\n    \"change\": \"Rename debug to isDebugSession.\"\n  },\n  {\n    \"candidateId\": \"candidate-0007\",\n    \"reviewer\": \"code-reviewer\",\n    \"model\": \"model-a\",\n    \"thinkingLevel\": \"medium\",\n    \"priority\": \"P1\",\n    \"title\": \"multiply overflows for large inputs\",\n    \"file\": \"src/math.ts\",\n    \"line\": 6,\n    \"why\": \"Multiplying two large integers wraps around and returns a negative number.\",\n    \"change\": \"Use BigInt or check bounds before multiplying.\"\n  }\n]",
       "tools": ["read", "grep", "find", "ls"],
@@ -315,6 +322,7 @@
     {
       "id": "checker-auth-partial-bypass",
       "workload": "code review",
+      "split": "test",
       "promptPath": "evals/prompt-optimization/prompts/execute-checker.md",
       "history": [
         {
@@ -359,6 +367,7 @@
     {
       "id": "checker-auth-substring-role",
       "workload": "code review",
+      "split": "dev",
       "promptPath": "evals/prompt-optimization/prompts/execute-checker.md",
       "history": [
         {
@@ -403,6 +412,7 @@
     {
       "id": "checker-clean",
       "workload": "code review",
+      "split": "test",
       "promptPath": "evals/prompt-optimization/prompts/execute-checker.md",
       "history": [
         {
@@ -447,6 +457,7 @@
     {
       "id": "review-fix-command-queue",
       "workload": "focused bug fix",
+      "split": "test",
       "promptPath": "skills/supapi-mode/playbooks/fix-review-findings.md",
       "task": "Use the `fix-review-findings` Playbook as canonical for this explicit command.\n\nThe latest review report in this session:\n\n<untrusted_review_fix_context>\n## Verdict\n- needs attention\n\n## Findings\n1. [P1] add() subtracts instead of adding — src/math.ts:2. Why: tests/math.case.ts expects add(7, 5) to be 12 and gets 2. Change: return left + right.\n2. [P2] canAccessAdminPanel lets debug bypass the admin-role rule — src/auth.ts:2. Why: README.md says admin access requires the admin role. Change: remove the debug bypass so only role === \"admin\" grants access.\n\n## Fix Queue\n1. P1 src/math.ts add(): return left + right.\n2. P2 src/auth.ts canAccessAdminPanel: drop the debug bypass.\n</untrusted_review_fix_context>",
       "tools": ["read", "grep", "find", "ls", "edit", "write", "bash", "Agent"],
@@ -506,6 +517,7 @@
     {
       "id": "readiness-action-fix",
       "workload": "focused bug fix",
+      "split": "dev",
       "promptPath": "extensions/core-prompt/prompt.md",
       "task": "Can you fix why add(7, 5) returns 2 instead of 12 in this project? Please make it work and let me know what you verified.",
       "tools": ["read", "grep", "find", "ls", "edit", "write", "bash"],
@@ -552,6 +564,7 @@
     {
       "id": "readiness-evaluation-only",
       "workload": "codebase exploration",
+      "split": "dev",
       "promptPath": "extensions/core-prompt/prompt.md",
       "task": "Can you assess why add(7, 5) returns 2 instead of 12 here and explain the practical options? I am deciding what to do next, so please do not change anything yet.",
       "tools": ["read", "grep", "find", "ls", "edit", "write", "bash"],
@@ -610,6 +623,7 @@
     {
       "id": "readiness-routine-inference",
       "workload": "focused bug fix",
+      "split": "test",
       "promptPath": "extensions/core-prompt/prompt.md",
       "task": "Please get this small package back to green before merge. Keep the fix focused, and report what you changed and verified.",
       "tools": ["read", "grep", "find", "ls", "edit", "write", "bash"],
@@ -656,6 +670,7 @@
     {
       "id": "readiness-consequential-ambiguity",
       "workload": "focused bug fix",
+      "split": "dev",
       "promptPath": "extensions/core-prompt/prompt.md",
       "task": "Please update canAccessAdminPanel for today's release. The security handoff says debug mode must never grant admin-panel access, but the release note says internal debug sessions must retain the current bypass. Make the implementation and tests match the intended policy.",
       "tools": ["read", "grep", "find", "ls", "edit", "write"],
@@ -687,6 +702,7 @@
     {
       "id": "core-clarification-diagram",
       "workload": "explanation",
+      "split": "dev",
       "promptPath": "extensions/core-prompt/prompt.md",
       "task": "Explain this coding-agent information flow to a user who needs more context before choosing an implementation: a request enters an LLM, then reaches an MCP gateway; one branch searches a durable context store and the other uses live tools to verify or act. Stored context may be stale. Keep the answer concise, make the relationships easy to scan, and distinguish that unknown. Do not inspect or edit files.",
       "tools": [],
@@ -703,6 +719,7 @@
     {
       "id": "core-simple-clarification",
       "workload": "explanation",
+      "split": "test",
       "promptPath": "extensions/core-prompt/prompt.md",
       "task": "A user asks for more context: does read-only access mean tools may inspect files but may not modify them? Answer directly in one sentence. Do not inspect or edit files.",
       "tools": [],
@@ -733,6 +750,7 @@
     {
       "id": "show-me-runtime-call-tree",
       "workload": "explanation",
+      "split": "dev",
       "promptPath": "skills/showing-me/SKILL.md",
       "task": "Use Show Me to explain what happens when a form is submitted: submitForm calls createSession; createSession calls persistPrompt and then launchAgent; submitForm then calls navigateToSession. Do not inspect or edit files.",
       "tools": [],
@@ -756,6 +774,7 @@
     {
       "id": "show-me-simple-no-visual",
       "workload": "explanation",
+      "split": "test",
       "promptPath": "skills/showing-me/SKILL.md",
       "task": "Use Show Me to explain what happens on a cache hit: the cached result is returned immediately. Do not inspect or edit files.",
       "tools": [],
@@ -772,6 +791,7 @@
     {
       "id": "show-me-focused-component-diff",
       "workload": "explanation",
+      "split": "dev",
       "promptPath": "skills/showing-me/SKILL.md",
       "task": "Use show-me to show one change to an existing component shape. SessionPage already contains SessionToolbar and SessionTimeline. Add RunSkillButton under SessionToolbar; nothing else changes. Keep prose brief. Do not inspect or edit files.",
       "tools": [],
@@ -795,6 +815,7 @@
     {
       "id": "show-me-applicability-visual",
       "workload": "codebase exploration",
+      "split": "test",
       "promptPath": "skills/showing-me/SKILL.md",
       "task": "Show me where this fixture documents and implements its admin-access rule. Include the required role and exact paths in one small view.",
       "tools": ["read", "grep", "find", "ls"],
@@ -823,6 +844,7 @@
     {
       "id": "show-me-applicability-lookup",
       "workload": "codebase exploration",
+      "split": "dev",
       "promptPath": "skills/showing-me/SKILL.md",
       "task": "What role does this fixture require for admin access? Give the source path and answer.",
       "tools": ["read", "grep", "find", "ls"],
@@ -858,6 +880,7 @@
     {
       "id": "code-review",
       "workload": "code review",
+      "split": "dev",
       "promptPath": "agents/code-reviewer.md",
       "task": "Review the fixture for one concrete correctness or security defect. Report only actionable findings with file evidence. Do not edit files.",
       "tools": ["read", "grep", "find", "ls"],
@@ -880,6 +903,7 @@
     {
       "id": "simplify-code",
       "workload": "focused bug fix",
+      "split": "test",
       "promptPath": "skills/simplify/SKILL.md",
       "task": "Simplify formatName in src/format.ts without changing behavior. Keep scope to that function and report the change.",
       "tools": ["read", "grep", "find", "ls", "edit", "write"],
@@ -944,6 +968,7 @@
     {
       "id": "database-review",
       "workload": "code review",
+      "split": "test",
       "promptPath": "agents/database-reviewer.md",
       "task": "Review db/schema.sql for integrity and query-performance risks. Give concrete SQL remediation, but do not edit files.",
       "tools": ["read", "grep", "find", "ls"],
@@ -966,6 +991,7 @@
     {
       "id": "docs-update",
       "workload": "multi-file implementation",
+      "split": "dev",
       "promptPath": "skills/context-docs/SKILL.md",
       "task": "Update README.md with a short source map naming src/math.ts, src/auth.ts, and their responsibilities. Do not change code.",
       "tools": ["read", "grep", "find", "ls", "edit", "write"],
@@ -989,6 +1015,7 @@
     {
       "id": "e2e-verification",
       "workload": "focused bug fix",
+      "split": "dev",
       "promptPath": "skills/e2e-testing/SKILL.md",
       "task": "Run bun test tests/math.case.ts, diagnose the failure, and report exact evidence. Do not edit files.",
       "tools": ["read", "grep", "find", "ls", "bash"],
@@ -1010,6 +1037,7 @@
     {
       "id": "executor-fix",
       "workload": "focused bug fix",
+      "split": "test",
       "promptPath": "agents/executor.md",
       "task": "Fix add() so the fixture tests pass. Make the smallest change, run bun test tests/math.case.ts, and summarize evidence.",
       "tools": ["read", "grep", "find", "ls", "edit", "write", "bash"],
@@ -1033,6 +1061,7 @@
     {
       "id": "explore-root-cause",
       "workload": "codebase exploration",
+      "split": "test",
       "promptPath": "agents/explorer.md",
       "task": "Find the root cause of the failing addition test. Report the exact file, function, and incorrect operation. Do not edit files.",
       "tools": ["read", "grep", "find", "ls"],
@@ -1055,6 +1084,7 @@
     {
       "id": "performance-review",
       "workload": "code review",
+      "split": "dev",
       "promptPath": "agents/performance-reviewer.md",
       "task": "Review src/search.ts for one concrete scalability regression. Explain the repeated work and a minimal remedy. Do not edit files.",
       "tools": ["read", "grep", "find", "ls"],
@@ -1077,6 +1107,7 @@
     {
       "id": "remove-dead-code",
       "workload": "focused bug fix",
+      "split": "dev",
       "promptPath": "skills/simplify/SKILL.md",
       "task": "Remove the unused legacy formatter from src/format.ts without changing formatName. Report the scoped change.",
       "tools": ["read", "grep", "find", "ls", "edit", "write"],
@@ -1099,6 +1130,7 @@
     {
       "id": "research-options",
       "workload": "web research",
+      "split": "dev",
       "promptPath": "agents/researcher.md",
       "task": "Research whether validation should stay local or move to a shared package. Use web_search and fetch_content, then recommend one option for the fixture with source evidence. Do not edit files.",
       "tools": ["read", "grep", "find", "ls", "web_search", "fetch_content"],
@@ -1127,6 +1159,7 @@
     {
       "id": "verify-review",
       "workload": "code review",
+      "split": "test",
       "promptPath": "agents/review-verifier.md",
       "task": "Verify this candidate finding against the fixture: 'src/math.ts implements add() with subtraction, causing the addition test to fail.' State verified or rejected with exact evidence. Do not edit files.",
       "tools": ["read", "grep", "find", "ls"],
@@ -1149,6 +1182,7 @@
     {
       "id": "security-review",
       "workload": "code review",
+      "split": "dev",
       "promptPath": "agents/security-reviewer.md",
       "task": "Review src/auth.ts for an authorization vulnerability. Report severity, exploit condition, and minimal remediation. Do not edit files.",
       "tools": ["read", "grep", "find", "ls"],
@@ -1171,6 +1205,7 @@
     {
       "id": "diagnose-exact-anchor",
       "workload": "codebase exploration",
+      "split": "dev",
       "promptPath": "skills/diagnose/SKILL.md",
       "task": "/diagnose The exact symptom is: tests/math.case.ts expects add(7, 5) to return 12, but it returns 2 in this fixture. A nearby, separate auth debug-bypass defect also exists in src/auth.ts. Diagnose only the exact addition symptom, cleanly reproduce it, and report evidence without editing files.",
       "tools": ["read", "grep", "find", "ls", "bash"],
@@ -1256,6 +1291,7 @@
     {
       "id": "diagnose-feedback-loop-required",
       "workload": "codebase exploration",
+      "split": "test",
       "promptPath": "skills/diagnose/SKILL.md",
       "task": "/diagnose The exact symptom is that add(7, 5) reportedly returns 2 instead of 12. No command has been run, no runtime artifact was supplied, and command execution is unavailable, though you may inspect files. Diagnose as far as the available evidence permits, report the next evidence needed, and do not edit files.",
       "tools": ["read", "grep", "find", "ls"],
@@ -1309,6 +1345,7 @@
     {
       "id": "diagnose-incomplete-no-fix",
       "workload": "explanation",
+      "split": "test",
       "promptPath": "skills/diagnose/SKILL.md",
       "task": "/diagnose Supplied evidence only: one run of tests/math.case.ts reports that add(7, 5) returned 2 instead of 12. No source inspection, causal intervention, reversal/control, or additional access is available. Give the required report and stop; do not edit or offer a fix.",
       "tools": [],
@@ -1349,6 +1386,7 @@
     {
       "id": "diagnose-flaky-loop-plan",
       "workload": "tool-heavy orchestration",
+      "split": "test",
       "promptPath": "skills/diagnose/SKILL.md",
       "task": "/diagnose An intermittent worker mismatch is reported around 1 run in 100, but no runtime evidence is available yet. Diagnose as far as the available evidence permits, report the next evidence plan, and do not edit files.",
       "tools": [],
@@ -1396,6 +1434,7 @@
     {
       "id": "diagnose-proven-gate-approved",
       "workload": "explanation",
+      "split": "dev",
       "promptPath": "skills/diagnose/SKILL.md",
       "task": "/diagnose Use this fully discriminating supplied evidence set: under the same fixture and command, three baseline runs of the anchored add(7, 5) test each return 2 instead of 12; changing only add's `left - right` operator to `left + right` makes three intervention runs return 12; reverting only that operator makes three reversal runs return 2 again; the unchanged multiply test passes in every baseline, intervention, and reversal run; source inspection finds no other path implementing add. Competing test-expectation and runner candidates are contradicted. Classify the diagnosis, prepare the required scoped fix gate, use ask, and honor its supplied response.",
       "tools": ["read", "edit", "bash", "ask"],
@@ -1453,6 +1492,7 @@
     {
       "id": "diagnose-private-probe-design",
       "workload": "tool-heavy orchestration",
+      "split": "dev",
       "promptPath": "skills/diagnose/SKILL.md",
       "task": "/diagnose Design behavior-neutral probes only for an intermittent queue boundary mismatch. Live candidates are C1: the producer emits the wrong payload shape, and C2: the worker selects the wrong parser. Use the smallest structured probe set that discriminates C1 from C2, with predictions, generated run IDs, field allowlists, capture-time redaction, risk/duration/cleanup, and no raw bodies. Clearly marked fake secret/raw sensitive value follows and must never be repeated in output: DIAG_FAKE_TOKEN_7f3a91_RAW. No runtime evidence has been collected, so report the diagnosis state and do not offer a fix.",
       "tools": [],
@@ -1520,6 +1560,7 @@
     {
       "id": "diagnose-fix-it-stop",
       "workload": "focused bug fix",
+      "split": "test",
       "promptPath": "skills/diagnose/SKILL.md",
       "task": "/diagnose The addition failure is breaking CI; fix it. Supplied proof: fixed-condition baseline runs return 2 for add(7, 5), an operator-only intervention in src/math.ts returns 12, reversal restores 2, tests/math.case.ts is unchanged, multiply is an unchanged passing control, and source inspection contradicts all competing candidates. Prepare the smallest scoped proposal, use ask, and honor its supplied response. Do not treat the earlier words 'fix it' as post-Proven approval.",
       "tools": ["read", "grep", "edit", "write", "bash", "ask"],
@@ -1583,6 +1624,7 @@
     {
       "id": "plain-report-fix",
       "workload": "focused bug fix",
+      "split": "dev",
       "promptPath": "AGENTS.global.md",
       "task": "add(7, 5) returns 2 instead of 12. Fix it, run the fixture tests, and tell me what you changed and verified.",
       "tools": ["read", "grep", "find", "ls", "edit", "write", "bash"],
@@ -1610,6 +1652,7 @@
     {
       "id": "plain-report-investigation",
       "workload": "codebase exploration",
+      "split": "dev",
       "promptPath": "AGENTS.global.md",
       "task": "Check whether src/auth.ts matches the admin-access rule in README.md. Do not change files. Report what you found, the risk, and what you would change.",
       "tools": ["read", "grep", "find", "ls"],
@@ -1636,6 +1679,7 @@
     {
       "id": "plain-report-cleanup",
       "workload": "focused bug fix",
+      "split": "test",
       "promptPath": "AGENTS.global.md",
       "task": "Remove unusedLegacyFormatter from src/format.ts if nothing in the project uses it. Check references first, then report what you changed and how you checked it.",
       "tools": ["read", "grep", "find", "ls", "edit", "write", "bash"],
@@ -1670,6 +1714,7 @@
     {
       "id": "plain-report-fix-history",
       "workload": "focused bug fix",
+      "split": "dev",
       "promptPath": "AGENTS.global.md",
       "history": [
         {
@@ -1723,6 +1768,7 @@
     {
       "id": "plain-report-investigation-history",
       "workload": "codebase exploration",
+      "split": "dev",
       "promptPath": "AGENTS.global.md",
       "history": [
         {
@@ -1775,6 +1821,7 @@
     {
       "id": "plain-report-cleanup-history",
       "workload": "focused bug fix",
+      "split": "test",
       "promptPath": "AGENTS.global.md",
       "history": [
         {
@@ -1835,6 +1882,7 @@
     {
       "id": "routing-bug-fix",
       "workload": "focused bug fix",
+      "split": "dev",
       "promptPath": "skills/supapi-mode/SKILL.md",
       "task": "add(2, 3) returns -1 instead of 5. Fix it and verify. Before acting, state which Playbook you will follow and stop after reading it; do not edit files.",
       "tools": ["read", "grep", "find", "ls"],
@@ -1858,6 +1906,7 @@
     {
       "id": "routing-bug-fix-report",
       "workload": "focused bug fix",
+      "split": "test",
       "promptPath": "skills/supapi-mode/SKILL.md",
       "task": "Users report admin access is granted to non-admins when debug is on. Reproduce and fix. Before acting, state which Playbook you will follow and stop after reading it; do not edit files.",
       "tools": ["read", "grep", "find", "ls"],
@@ -1881,6 +1930,7 @@
     {
       "id": "routing-feature",
       "workload": "multi-file implementation",
+      "split": "test",
       "promptPath": "skills/supapi-mode/SKILL.md",
       "task": "Add a subtract(left, right) function to src/math.ts with tests and README docs. Before acting, state which Playbook you will follow and stop after reading it; do not edit files.",
       "tools": ["read", "grep", "find", "ls"],
@@ -1904,6 +1954,7 @@
     {
       "id": "routing-feature-behavior",
       "workload": "multi-file implementation",
+      "split": "dev",
       "promptPath": "skills/supapi-mode/SKILL.md",
       "task": "Make rankMatches accept a case-insensitive option. Before acting, state which Playbook you will follow and stop after reading it; do not edit files.",
       "tools": ["read", "grep", "find", "ls"],
@@ -1927,6 +1978,7 @@
     {
       "id": "routing-refactoring",
       "workload": "multi-file implementation",
+      "split": "test",
       "promptPath": "skills/supapi-mode/SKILL.md",
       "task": "Refactor src/format.ts: inline the temporary variables in formatName and remove dead code, without changing behavior. Before acting, state which Playbook you will follow and stop after reading it; do not edit files.",
       "tools": ["read", "grep", "find", "ls"],
@@ -1950,6 +2002,7 @@
     {
       "id": "routing-investigation",
       "workload": "codebase exploration",
+      "split": "test",
       "promptPath": "skills/supapi-mode/SKILL.md",
       "task": "How does admin access work in this project, and where does it live? Before acting, state which Playbook you will follow and stop after reading it; do not edit files.",
       "tools": ["read", "grep", "find", "ls"],
@@ -1973,6 +2026,7 @@
     {
       "id": "routing-investigation-decision",
       "workload": "explanation",
+      "split": "test",
       "promptPath": "skills/supapi-mode/SKILL.md",
       "task": "Should we pick option A or option B from docs/options.md? Give a recommendation. Before acting, state which Playbook you will follow and stop after reading it; do not edit files.",
       "tools": ["read", "grep", "find", "ls"],
@@ -1996,6 +2050,7 @@
     {
       "id": "routing-prototype",
       "workload": "multi-file implementation",
+      "split": "dev",
       "promptPath": "skills/supapi-mode/SKILL.md",
       "task": "Prototype two ranking strategies for rankMatches so we can pick one by observing their output. Before acting, state which Playbook you will follow and stop after reading it; do not edit files.",
       "tools": ["read", "grep", "find", "ls"],
@@ -2019,6 +2074,7 @@
     {
       "id": "routing-diagnose",
       "workload": "focused bug fix",
+      "split": "dev",
       "promptPath": "skills/supapi-mode/SKILL.md",
       "task": "/diagnose the failing math test: prove the cause before any fix. Before acting, state which Playbook you will follow and stop after reading it; do not edit files.",
       "tools": ["read", "grep", "find", "ls"],
@@ -2042,6 +2098,7 @@
     {
       "id": "routing-pr",
       "workload": "tool-heavy orchestration",
+      "split": "test",
       "promptPath": "skills/supapi-mode/SKILL.md",
       "task": "Open a pull request for this branch. Before acting, state which Playbook you will follow and stop after reading it; do not edit files.",
       "tools": ["read", "grep", "find", "ls"],
@@ -2065,6 +2122,7 @@
     {
       "id": "routing-trivial-lookup",
       "workload": "explanation",
+      "split": "dev",
       "promptPath": "skills/supapi-mode/SKILL.md",
       "task": "What does multiply() in src/math.ts return? Answer in one line.",
       "tools": ["read", "grep", "find", "ls"],
@@ -2081,6 +2139,7 @@
     {
       "id": "routing-trivial-typo",
       "workload": "focused bug fix",
+      "split": "test",
       "promptPath": "skills/supapi-mode/SKILL.md",
       "task": "In README.md, what is the first word of the file? Answer only.",
       "tools": ["read", "grep", "find", "ls"],
@@ -2097,6 +2156,7 @@
     {
       "id": "routing-trivial-list",
       "workload": "codebase exploration",
+      "split": "dev",
       "promptPath": "skills/supapi-mode/SKILL.md",
       "task": "List the files in src/. Answer only with the names.",
       "tools": ["read", "grep", "find", "ls"],
@@ -2113,6 +2173,7 @@
     {
       "id": "routing-large-migration",
       "workload": "tool-heavy orchestration",
+      "split": "dev",
       "promptPath": "skills/supapi-mode/SKILL.md",
       "task": "Migrate the whole package from Bun to Node with a new build system, CI, and docs, and keep it auditable for review while I am away. Before acting, state which Playbook you will follow and stop after reading it; do not edit files.",
       "tools": ["read", "grep", "find", "ls"],
@@ -2136,6 +2197,7 @@
     {
       "id": "routing-unmatched",
       "workload": "tool-heavy orchestration",
+      "split": "test",
       "promptPath": "skills/supapi-mode/SKILL.md",
       "task": "Run a week-long unattended program to rewrite every module and keep a decision trail. Before acting, state which Playbook you will follow and stop after reading it; do not edit files.",
       "tools": ["read", "grep", "find", "ls"],
@@ -2159,6 +2221,7 @@
     {
       "id": "routing-freeform-bug-fix",
       "workload": "focused bug fix",
+      "split": "dev",
       "promptPath": "skills/supapi-mode/SKILL.md",
       "task": "add(2, 3) returns -1 instead of 5. Fix it and verify.",
       "tools": ["read", "grep", "find", "ls"],
@@ -2182,6 +2245,7 @@
     {
       "id": "routing-freeform-bug-report",
       "workload": "focused bug fix",
+      "split": "test",
       "promptPath": "skills/supapi-mode/SKILL.md",
       "task": "Users report admin access is granted to non-admins when debug is on. Reproduce and fix.",
       "tools": ["read", "grep", "find", "ls"],
@@ -2205,6 +2269,7 @@
     {
       "id": "routing-freeform-failure-question",
       "workload": "focused bug fix",
+      "split": "dev",
       "promptPath": "skills/supapi-mode/SKILL.md",
       "task": "Why does add(2, 3) return -1 instead of 5?",
       "tools": ["read", "grep", "find", "ls"],
@@ -2235,6 +2300,7 @@
     {
       "id": "routing-freeform-feature",
       "workload": "multi-file implementation",
+      "split": "test",
       "promptPath": "skills/supapi-mode/SKILL.md",
       "task": "Add a subtract(left, right) function to src/math.ts with tests and README docs.",
       "tools": ["read", "grep", "find", "ls"],
@@ -2258,6 +2324,7 @@
     {
       "id": "routing-freeform-refactoring",
       "workload": "multi-file implementation",
+      "split": "dev",
       "promptPath": "skills/supapi-mode/SKILL.md",
       "task": "Refactor src/format.ts: inline the temporary variables in formatName and remove dead code, without changing behavior.",
       "tools": ["read", "grep", "find", "ls"],
@@ -2281,6 +2348,7 @@
     {
       "id": "routing-freeform-investigation",
       "workload": "codebase exploration",
+      "split": "test",
       "promptPath": "skills/supapi-mode/SKILL.md",
       "task": "How does admin access work in this project, and where does it live?",
       "tools": ["read", "grep", "find", "ls"],
@@ -2304,6 +2372,7 @@
     {
       "id": "routing-freeform-compound-pr",
       "workload": "tool-heavy orchestration",
+      "split": "dev",
       "promptPath": "skills/supapi-mode/SKILL.md",
       "history": [
         {
@@ -2330,6 +2399,7 @@
     {
       "id": "routing-execute",
       "workload": "tool-heavy orchestration",
+      "split": "test",
       "promptPath": "skills/supapi-mode/SKILL.md",
       "task": "We agreed the plan: add subtract, fix add, and document both. Run it to verified done criteria. Before acting, state which Playbook you will follow and stop after reading it; do not edit files.",
       "tools": ["read", "grep", "find", "ls"],
@@ -2353,6 +2423,7 @@
     {
       "id": "routing-correct",
       "workload": "tool-heavy orchestration",
+      "split": "dev",
       "promptPath": "skills/supapi-mode/SKILL.md",
       "task": "Agents keep forgetting to update README when they change src/math.ts; this is the third time. Make that mistake impossible. Before acting, state which Playbook you will follow and stop after reading it; do not edit files.",
       "tools": ["read", "grep", "find", "ls"],
@@ -2376,6 +2447,7 @@
     {
       "id": "routing-fix-review-findings",
       "workload": "focused bug fix",
+      "split": "test",
       "promptPath": "skills/supapi-mode/SKILL.md",
       "task": "The review found two issues: add() subtracts, and the debug flag grants admin access. Fix those findings. Before acting, state which Playbook you will follow and stop after reading it; do not edit files.",
       "tools": ["read", "grep", "find", "ls"],

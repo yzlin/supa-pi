@@ -192,6 +192,8 @@ export interface AgentChild {
 export interface EvalCase {
   id: string;
   workload: string;
+  /** `dev` cases are for tuning candidates; report results on `test`. */
+  split: CaseSplit;
   promptPath: string;
   /** Prior conversation seeded before the task; alternates user/assistant and ends with assistant. */
   history?: HistoryTurn[];
@@ -206,6 +208,9 @@ export interface EvalCase {
   setupFiles?: Record<string, string>;
   checks: EvalCheck[];
 }
+
+export const CASE_SPLITS = ["dev", "test"] as const;
+export type CaseSplit = (typeof CASE_SPLITS)[number];
 
 export interface EvalCorpus {
   version: 1;
@@ -681,6 +686,11 @@ export function parseCorpus(value: unknown): EvalCorpus {
     }
     ids.add(caseValue.id);
     assertNonEmptyString(caseValue.workload, `${label}.workload`);
+    if (!CASE_SPLITS.includes(caseValue.split as CaseSplit)) {
+      throw new Error(
+        `${label}.split must be one of: ${CASE_SPLITS.join(", ")}`,
+      );
+    }
     assertNonEmptyString(caseValue.promptPath, `${label}.promptPath`);
     if (!isSafeRelativePath(caseValue.promptPath)) {
       throw new Error(`${label}.promptPath must be repository-relative`);
@@ -764,6 +774,7 @@ export function parseCorpus(value: unknown): EvalCorpus {
     return {
       id: caseValue.id,
       workload: caseValue.workload,
+      split: caseValue.split as CaseSplit,
       promptPath: caseValue.promptPath,
       ...(history === undefined ? {} : { history: history as HistoryTurn[] }),
       task: caseValue.task,

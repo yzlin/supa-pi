@@ -16,6 +16,7 @@ import {
 import {
   type AggregateDelta,
   aggregateVariants,
+  type CaseSplit,
   CORE_EVAL_BASE_PROMPT,
   type EvalCase,
   type EvalCorpus,
@@ -30,6 +31,12 @@ import {
   type RunRecord,
   runVariant,
 } from "./runner";
+import {
+  detectionFloorMessage,
+  type PairedStats,
+  pairedStats,
+  pairedSummaryLine,
+} from "./stats";
 
 const DEFAULT_MODEL = "openai-codex/gpt-6-sol";
 const DEFAULT_THINKING: ThinkingLevel = "high";
@@ -38,6 +45,7 @@ const DEFAULT_MAX_TURNS = 20;
 
 interface CliOptions {
   caseIds: string[];
+  split: CaseSplit | "all";
   extensionPaths: string[];
   dryRun: boolean;
   help: boolean;
@@ -104,7 +112,8 @@ const THINKING_LEVELS: ThinkingLevel[] = [
 
 interface EvalSummary {
   aggregate: AggregateDelta;
-  cases: Record<string, AggregateDelta>;
+  paired: PairedStats;
+  cases: Record<string, AggregateDelta & { paired: PairedStats }>;
 }
 
 async function registerExtensionProviders(
@@ -144,6 +153,7 @@ function parsePositiveInteger(value: string | undefined, flag: string): number {
 export function parseCliOptions(args: string[]): CliOptions {
   const options: CliOptions = {
     caseIds: [],
+    split: "all",
     extensionPaths: [],
     dryRun: false,
     help: false,
@@ -166,6 +176,13 @@ export function parseCliOptions(args: string[]): CliOptions {
         if (!options.caseIds.includes(value)) {
           options.caseIds.push(value);
         }
+        index += 1;
+        break;
+      case "--split":
+        if (value !== "dev" && value !== "test" && value !== "all") {
+          throw new Error("--split must be dev, test, or all");
+        }
+        options.split = value;
         index += 1;
         break;
       case "--model":
@@ -492,6 +509,17 @@ function successfulForAggregate(record: RunRecord): boolean {
   return record.taskPassed && (record.testPassed ?? true);
 }
 
+function pairedStatsForRecords(records: RunRecord[]): PairedStats {
+  return pairedStats(
+    records.map((record) => ({
+      caseId: record.caseId,
+      repetition: record.repetition,
+      variant: record.variant,
+      succeeded: successfulForAggregate(record),
+    })),
+  );
+}
+
 function aggregateRecords(records: RunRecord[]): AggregateDelta {
   const baseline = records
     .filter((record) => record.variant === "baseline")
@@ -514,11 +542,20 @@ function createSummary(records: RunRecord[]): EvalSummary {
   const caseIds = [...new Set(records.map((record) => record.caseId))];
   return {
     aggregate: aggregateRecords(records),
+    paired: pairedStatsForRecords(records),
     cases: Object.fromEntries(
-      caseIds.map((caseId) => [
-        caseId,
-        aggregateRecords(records.filter((record) => record.caseId === caseId)),
-      ]),
+      caseIds.map((caseId) => {
+        const caseRecords = records.filter(
+          (record) => record.caseId === caseId,
+        );
+        return [
+          caseId,
+          {
+            ...aggregateRecords(caseRecords),
+            paired: pairedStatsForRecords(caseRecords),
+          },
+        ];
+      }),
     ),
   };
 }
@@ -527,7 +564,7 @@ export function plannedCallMessage(
   caseCount: number,
   repetitions: number,
 ): string {
-  return `Running ${caseCount * repetitions * 2} live calls: ${caseCount} case(s) × ${repetitions} repetition(s) × 2 variants\n`;
+  return `Running ${caseCount * repetitions * 2} live calls: ${caseCount} case(s) × ${repetitions} repetition(s) × 2 variants\nDetection floor: ${detectionFloorMessage(caseCount)}\n`;
 }
 
 function signed(value: number, digits = 2): string {
@@ -792,14 +829,19 @@ function summaryMarkdown(summary: EvalSummary, comparison: Comparison): string {
     `| Retries | ${baseline.retries.toFixed(1)} | ${candidate.retries.toFixed(1)} | ${signed(aggregate.retryDelta, 1)} |`,
     `| Cost | ${baseline.costUsd.toFixed(4)} USD | ${candidate.costUsd.toFixed(4)} USD | ${signed(aggregate.costUsdDelta, 4)} USD |`,
     "",
+    "## Paired pass-rate delta",
+    "",
+    pairedSummaryLine(summary.paired),
+    "",
     "## Per case",
     "",
-    "| Case | Pass delta | Score delta | Input token delta | Latency delta |",
-    "| --- | ---: | ---: | ---: | ---: |",
+    "| Case | Pass delta | Improved / regressed | Pass^k baseline / candidate | Score delta | Input token delta | Latency delta |",
+    "| --- | ---: | ---: | ---: | ---: | ---: | ---: |",
   ];
   for (const [caseId, result] of Object.entries(summary.cases)) {
+    const paired = result.paired;
     lines.push(
-      `| ${caseId} | ${signed(result.passRateDelta * 100, 1)} pp | ${signed(result.scoreDelta, 3)} | ${signed(result.inputTokenDelta, 0)} | ${signed(result.latencyMsDelta, 0)} ms |`,
+      `| ${caseId} | ${signed(result.passRateDelta * 100, 1)} pp | ${paired.improvedPairs} / ${paired.regressedPairs} | ${paired.baselineAllPassCases ? "yes" : "no"} / ${paired.candidateAllPassCases ? "yes" : "no"} | ${signed(result.scoreDelta, 3)} | ${signed(result.inputTokenDelta, 0)} | ${signed(result.latencyMsDelta, 0)} ms |`,
     );
   }
   return `${lines.join("\n")}\n`;
@@ -845,6 +887,7 @@ function dryRunPreview(
     `Repetitions: ${options.repetitions}`,
     `RUNS: ${totalRuns} (${selectedCases.length} case(s) × ${options.repetitions} repetition(s) × ${arms.length} arms)`,
     `MODEL RESPONSE turns: at most ${totalRuns * options.maxTurns} (${totalRuns} runs × maxTurns ${options.maxTurns})`,
+    `DETECTION FLOOR: ${detectionFloorMessage(selectedCases.length)}`,
     `maxTurns: ${options.maxTurns} per run; timeout: ${options.timeoutMs} ms per run (abort deadline)`,
     "Transport attempts/retries: not bounded by maxTurns; provider retry behavior is unresolved/unverified.",
   );
@@ -867,7 +910,7 @@ export async function main(): Promise<void> {
   const options = parseCliOptions(process.argv.slice(2));
   if (options.help) {
     process.stdout.write(
-      "Usage: bun run eval:prompts -- [options]\n\nOptions:\n  --case <id> (repeatable)\n  --model <provider/model> (baseline in model comparison)\n  --candidate-model <provider/model> (compare exact models)\n  --extension <path> (repeatable; load a Pi extension that registers a model provider)\n  --thinking <level>\n  --candidate-thinking <level>\n  --compare-service-tier\n  --repetitions <count>\n  --timeout-ms <milliseconds>\n  --max-turns <count>\n  --dry-run (offline approval preview; no model calls or artifacts)\n",
+      "Usage: bun run eval:prompts -- [options]\n\nOptions:\n  --case <id> (repeatable)\n  --split dev|test|all (default all; tune on dev, report on test; not with --case)\n  --model <provider/model> (baseline in model comparison)\n  --candidate-model <provider/model> (compare exact models)\n  --extension <path> (repeatable; load a Pi extension that registers a model provider)\n  --thinking <level>\n  --candidate-thinking <level>\n  --compare-service-tier\n  --repetitions <count>\n  --timeout-ms <milliseconds>\n  --max-turns <count>\n  --dry-run (offline approval preview; no model calls or artifacts)\n",
     );
     return;
   }
@@ -880,6 +923,9 @@ export async function main(): Promise<void> {
   const standardCorpus = parseCorpus(
     JSON.parse(await readFile(corpusPath, "utf8")),
   );
+  if (options.split !== "all" && options.caseIds.length > 0) {
+    throw new Error("--split cannot be combined with --case");
+  }
   const activeCases = standardCorpus.cases;
   const casesById = new Map(
     activeCases.map((evalCase) => [evalCase.id, evalCase]),
@@ -900,12 +946,15 @@ export async function main(): Promise<void> {
           }
           return evalCase;
         })
-      : activeCases;
+      : activeCases.filter(
+          (evalCase) =>
+            options.split === "all" || evalCase.split === options.split,
+        );
   const {
     paths: startingChangedPromptPaths,
     stateSha256: startingChangedPromptStateSha256,
   } = await establishChangedPromptSnapshot(repositoryRoot);
-  if (options.caseIds.length === 0) {
+  if (options.caseIds.length === 0 && options.split === "all") {
     assertCorpusCoverage(standardCorpus, startingChangedPromptPaths);
   }
   const selectedPromptPaths = [
@@ -1137,7 +1186,8 @@ export async function main(): Promise<void> {
     coreEvalBasePromptSha256: createHash("sha256")
       .update(CORE_EVAL_BASE_PROMPT)
       .digest("hex"),
-    partial: options.caseIds.length > 0,
+    partial: options.caseIds.length > 0 || options.split !== "all",
+    split: options.split,
     mode: "paired",
     plannedCalls: totalCalls,
     selectedCases: selectedCases.map((evalCase) => evalCase.id),

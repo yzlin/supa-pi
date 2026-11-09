@@ -769,6 +769,7 @@ async function runChildLoop(
   const childCase: EvalCase = {
     id: "agent-child",
     workload: "delegated worker",
+    split: "dev",
     promptPath: options.agentChild.promptPath,
     task: options.task,
     tools: options.agentChild.tools,
