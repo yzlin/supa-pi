@@ -216,11 +216,13 @@ The setup script installs or reconciles these Pi packages. It no longer installs
 - Active Pi registers `docs_list`, a tool for the same docs-discovery behavior. It defaults to `cwd/docs`, accepts an optional safe relative docs path, strips a leading `@`, rejects absolute or escaping paths, skips `archive` and `research` directories, and returns readable output plus structured doc metadata and front matter warnings.
 - Discover relevant docs for unfamiliar project/domain context or when scoped instructions require it. Use `docs_list` when available; otherwise run `docs-list` or inspect the docs folder. Skip obvious typos, mechanical edits, and understood local changes unless scoped instructions require discovery.
 - Linting uses type-aware oxlint; formatting uses oxfmt (TypeScript and JSON only). Both extend Ultracite presets with local overrides in `oxlint.config.ts` and `oxfmt.config.ts`.
+- Type checking uses strict `tsc` over every repo TypeScript file, tests included (`tsconfig.json`, no emit). `bun run check` runs lint, the format check, then `tsc`.
 - Development scripts:
   - `bun run format`
   - `bun run lint`
   - `bun run lint:fix`
   - `bun run check`
+  - `bun run typecheck`
   - `bun run check:write`
 - This repo uses Bun (`bun.lock` present)
 - Runtime dependency `@earendil-works/pi-schema` (exactly `1.5.0`) validates subagent `StructuredOutput` reports with the same validator Pi uses for tool arguments.
