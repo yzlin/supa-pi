@@ -121,13 +121,18 @@ describe("supapi-mode hub contract (not model adherence)", () => {
     expect(hub).toContain("**Review gate:**");
     expect(simplify).toBeGreaterThan(0);
     expect(simplify).toBeLessThan(review);
-    expect(hub).toContain(
-      "crosses a module boundary, changes a public API, or the user is away",
-    );
+    expect(hub).toContain("for every non-trivial diff");
     expect(hub).toContain("say why you skipped it");
     expect(hub).toContain(
-      "through steps 1–7 of the `fix-review-findings` Playbook",
+      "through steps 1–7 of the `fix-review-findings` Playbook in gate mode",
     );
+    expect(hub).toContain(
+      "fix what you are sure about and list the rest for the user to review",
+    );
+    const fix = read("skills/supapi-mode/playbooks/fix-review-findings.md");
+    expect(fix).toContain("**Gate mode**");
+    expect(fix).toContain("`For your review`");
+    expect(fix).toContain("Do not call `ask` in gate mode");
     for (const name of ["bug-fix", "feature", "refactoring"]) {
       const text = read(`skills/supapi-mode/playbooks/${name}.md`);
       const gate = text.indexOf(
@@ -142,6 +147,13 @@ describe("supapi-mode hub contract (not model adherence)", () => {
         "the `review-orchestration` skill on the diff",
       );
     }
+    const execute = read("skills/supapi-mode/playbooks/execute.md");
+    const finish = execute.slice(execute.indexOf("## 7. Finish"));
+    const gate = finish.indexOf(
+      "Run the review gate from the `supapi-mode` Shared rules",
+    );
+    expect(gate).toBeGreaterThan(0);
+    expect(gate).toBeLessThan(finish.indexOf("`bun run check`"));
   });
 
   it("is reached from the always-on core prompt pointer", () => {

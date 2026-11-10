@@ -35,7 +35,7 @@ Match the task to one Playbook, read that Playbook file, and follow its steps. P
 - A step is done only when its evidence exists: a command run, a file read, an output observed. A child report is a claim, not evidence.
 - Principles live in `~/.pi/agent/rules/principles/<name>.md` (repo: `rules/principles/`). Each Playbook lists the ones it applies; read a Principle when its "Apply when" fits, and name the one that changed a decision.
 - Close multi-step work with a Final report per the `plain-report` skill.
-- **Review gate:** when the diff crosses a module boundary, changes a public API, or the user is away, run the `simplify` skill on the changed files from `git status`, then the `review-orchestration` skill on the diff, fix verified findings through steps 1–7 of the `fix-review-findings` Playbook, and rerun the checks. Otherwise say why you skipped it. Playbooks that call the gate run it before their PR step.
+- **Review gate:** for every non-trivial diff, run the `simplify` skill on the changed files from `git status`, then the `review-orchestration` skill on the diff, then triage its findings through steps 1–7 of the `fix-review-findings` Playbook in gate mode: fix what you are sure about and list the rest for the user to review. Rerun the checks after the fixes. Skip the gate only for a trivial diff, such as a typo or one local line, and say why you skipped it. Playbooks that call the gate run it before their PR step.
 
 ## Attribution
 

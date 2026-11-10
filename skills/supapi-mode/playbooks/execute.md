@@ -49,7 +49,7 @@ A resumed Spec keeps its checked boxes as history, not proof of today. Re-run th
 
 ## 7. Finish
 
-`spec_log` writes `done` when every criterion is checked. Then run `bun run check` or the repository's check command once more on the final state.
+`spec_log` writes `done` when every criterion is checked. Run the review gate from the `supapi-mode` Shared rules on the run's diff. A gate fix must keep every checked criterion passing: re-run the evidence of each criterion the fix could affect. Then run `bun run check` or the repository's check command once more on the final state.
 
 **Principles:** `prove-it-works`, `sequence-verifiable-units`, `outcome-oriented-execution`, `attack-the-premise`, `never-block-on-the-human`, `guard-the-context-window`, `make-operations-idempotent`, `build-the-lever`.
 
