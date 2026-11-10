@@ -61,6 +61,13 @@ interface ArgsLike {
   patch?: string;
 }
 
+/** Pi passes model-sent tool args as unknown; read them as optional fields. */
+function argsLike(args: unknown): ArgsLike {
+  return args !== null && typeof args === "object" && !Array.isArray(args)
+    ? (args as ArgsLike)
+    : {};
+}
+
 type ReasonedSchema<P extends TProperties> = TObject<
   { reasoning: TString } & P
 >;
@@ -879,10 +886,10 @@ function genericArgsSummary(args: object): string {
 /** Fill-only presentation for tools without a registered drawing definition. */
 export function renderGenericToolCall(
   name: string,
-  args: ArgsLike,
+  rawArgs: unknown,
   theme: ThemeLike,
   context: Pick<
-    RenderContextLike<ArgsLike>,
+    RenderContextLike<unknown>,
     "state" | "invalidate" | "isPartial" | "isError"
   >,
 ): Component {
@@ -899,7 +906,7 @@ export function renderGenericToolCall(
   }
   return new HeaderComponent(
     name,
-    args,
+    argsLike(rawArgs),
     theme,
     context.state,
     context.invalidate,
@@ -953,7 +960,7 @@ export function renderGenericToolResult(
   result: ToolResultLike,
   options: RenderOptionsLike,
   theme: ThemeLike,
-  context: Pick<RenderContextLike<ArgsLike>, "args" | "state" | "isError">,
+  context: Pick<RenderContextLike<unknown>, "args" | "state" | "isError">,
   output: ToolDisplayPreviewConfig,
 ): Component {
   const body = genericResultBody(result, options, theme, output);
@@ -963,20 +970,20 @@ export function renderGenericToolResult(
     theme,
     {
       ...context,
-      args: { command: genericArgsSummary(context.args) },
+      args: { command: genericArgsSummary(argsLike(context.args)) },
     },
     body,
   );
 }
 
 export function renderBashToolCall(
-  args: ArgsLike,
+  args: unknown,
   theme: ThemeLike,
-  context: Pick<RenderContextLike<ArgsLike>, "state" | "invalidate">,
+  context: Pick<RenderContextLike<unknown>, "state" | "invalidate">,
 ): Component {
   return new HeaderComponent(
     "bash",
-    args,
+    argsLike(args),
     theme,
     context.state,
     context.invalidate,
@@ -987,7 +994,7 @@ export function renderBashToolResult(
   result: ToolResultLike,
   options: RenderOptionsLike,
   theme: ThemeLike,
-  context: Pick<RenderContextLike<ArgsLike>, "args" | "state" | "isError">,
+  context: Pick<RenderContextLike<unknown>, "args" | "state" | "isError">,
   body?: Component,
 ): Component {
   const state = stateFor(context.state);
@@ -1004,7 +1011,7 @@ export function renderBashToolResult(
     stopTimer(context.state);
   }
   const command =
-    bashCommandPreview(context.args.command ?? "") || "bash command";
+    bashCommandPreview(argsLike(context.args).command ?? "") || "bash command";
   let status = options.isPartial ? "running" : "done";
   if (error) {
     status = "error";
@@ -1029,13 +1036,14 @@ export function renderBashToolResult(
 
 export function renderOwnedToolCall(
   name: OwnedToolName,
-  args: ArgsLike,
+  rawArgs: unknown,
   theme: ThemeLike,
   context: Pick<
     RenderContextLike<ArgsLike>,
     "argsComplete" | "cwd" | "expanded" | "invalidate" | "state"
   >,
 ): Component {
+  const args = argsLike(rawArgs);
   if (name === "edit" && context.expanded === true) {
     requestEditPreview(args, context);
   }
@@ -1055,7 +1063,7 @@ export function renderOwnedToolResult(
   result: ToolResultLike,
   options: RenderOptionsLike,
   theme: ThemeLike,
-  context: Pick<RenderContextLike<ArgsLike>, "args" | "state" | "isError">,
+  context: Pick<RenderContextLike<unknown>, "args" | "state" | "isError">,
   body?: Component,
 ): Component {
   const state = stateFor(context.state);
@@ -1069,11 +1077,10 @@ export function renderOwnedToolResult(
       (state.startedAt === undefined ? 0 : Date.now() - state.startedAt);
     stopTimer(context.state);
   }
-  const target = singleLine(targetFor(name, context.args));
+  const args = argsLike(context.args);
+  const target = singleLine(targetFor(name, args));
   const resultWithError = error ? { ...result, isError: true } : result;
-  const baseSummary = singleLine(
-    summaryFor(name, context.args, resultWithError),
-  );
+  const baseSummary = singleLine(summaryFor(name, args, resultWithError));
   const summary =
     name === "edit"
       ? `${error ? "error" : "applied"} in ${formatToolDuration(state.durationMs ?? 0)} · ${baseSummary}`
@@ -1208,10 +1215,7 @@ function renderCodemodeResult(
   calls: unknown[],
   options: RenderOptionsLike,
   theme: ThemeLike,
-  context: Pick<
-    RenderContextLike<Record<string, unknown>>,
-    "args" | "state" | "isError"
-  >,
+  context: Pick<RenderContextLike<unknown>, "state" | "isError">,
   output: { collapsed: boolean; mode?: string },
 ): Component {
   const state = stateFor(context.state);
@@ -1336,7 +1340,7 @@ function companionFallbackArgs(args: unknown): Record<string, unknown> {
 /** Curated external tools use the same shell, timers, sanitization and body as Fallback. */
 export function renderCompanionToolCall(
   name: string,
-  args: Record<string, unknown>,
+  args: unknown,
   theme: ThemeLike,
   context: Pick<
     RenderContextLike<ArgsLike>,
@@ -1390,10 +1394,7 @@ export function renderCompanionToolResult(
   result: ToolResultLike,
   options: RenderOptionsLike,
   theme: ThemeLike,
-  context: Pick<
-    RenderContextLike<Record<string, unknown>>,
-    "args" | "state" | "isError"
-  >,
+  context: Pick<RenderContextLike<unknown>, "args" | "state" | "isError">,
   output: ToolDisplayPreviewConfig | ToolDisplayCodemodeOutputConfig,
 ): Component {
   const args = companionFallbackArgs(context.args);

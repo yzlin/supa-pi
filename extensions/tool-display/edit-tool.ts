@@ -12,6 +12,7 @@ import { homedir } from "node:os";
 import { dirname, isAbsolute, resolve as resolvePath } from "node:path";
 import { fileURLToPath } from "node:url";
 
+import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { createTwoFilesPatch } from "diff";
 
 import { prepareUnifiedEditArguments } from "./unified-edit-migration";
@@ -417,6 +418,16 @@ function collectFilesInOrder(results: Array<{ path: string }>): string[] {
   return [...new Set(results.map((result) => result.path))];
 }
 
+/** The parts of Pi's tool context edit reads, plus tool-display's gates. */
+interface EditToolContext {
+  cwd: string;
+  hasUI: boolean;
+  mode: ExtensionContext["mode"];
+  ui: Pick<ExtensionContext["ui"], "confirm">;
+  toolDisplayAllowPatchAdd?: boolean;
+  toolDisplayAllowPermanentDelete?: boolean;
+}
+
 export const editTool = {
   name: "edit",
   label: "edit",
@@ -427,11 +438,11 @@ export const editTool = {
   prepareArguments: prepareUnifiedEditArguments,
 
   async execute(
-    _toolCallId,
+    _toolCallId: string,
     params: UnifiedEditParameters,
-    signal,
-    _onUpdate,
-    ctx,
+    signal: AbortSignal | undefined,
+    _onUpdate: unknown,
+    ctx: EditToolContext,
   ) {
     if (signal?.aborted) {
       throw new Error("Operation aborted");

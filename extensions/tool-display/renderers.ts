@@ -157,7 +157,8 @@ function appendTruncation(
 
 function appendRtkCompactionHint(
   text: string,
-  details: RtkCompactionDetails | undefined,
+  // RTK adds rtkCompaction onto Pi's built-in tool details at runtime.
+  details: object | undefined,
   theme: ThemeLike,
   outputConfig?: ToolDisplayPreviewConfig | ToolDisplayBashOutputConfig,
 ): string {
@@ -165,7 +166,8 @@ function appendRtkCompactionHint(
     outputConfig &&
     "rtkHints" in outputConfig &&
     outputConfig.rtkHints === true;
-  const compaction = details?.rtkCompaction;
+  const compaction = (details as RtkCompactionDetails | undefined)
+    ?.rtkCompaction;
   if (!(rtkHints && compaction)) {
     return text;
   }

@@ -101,7 +101,9 @@ export interface ToolDisplayConfig {
   diff: ToolDisplayDiffConfig;
 }
 
-interface ToolDisplayFullReadConfigLayer extends Partial<ToolDisplayFullReadConfig> {
+interface ToolDisplayFullReadConfigLayer extends Partial<
+  Omit<ToolDisplayFullReadConfig, "targets">
+> {
   order?: string[];
   targets?: Partial<ToolDisplayFullReadTarget>[];
 }
