@@ -225,12 +225,12 @@ The setup script installs or reconciles these Pi packages. It no longer installs
   - `bun run typecheck`
   - `bun run check:write`
 - This repo uses Bun (`bun.lock` present)
-- Runtime dependency `@earendil-works/pi-schema` (exactly `1.5.0`) validates subagent `StructuredOutput` reports with the same validator Pi uses for tool arguments.
+- Runtime dependency `@earendil-works/pi-schema` (exactly `1.5.0`) is the repo's only runtime validator, the same one Pi uses for tool arguments. It checks subagent `StructuredOutput` reports, child result files, and Spec log events.
 - Peer dependencies include:
   - `@earendil-works/pi-coding-agent` (`>=1.0.1`)
   - `@earendil-works/pi-ai` (`>=1.0.1`)
   - `@earendil-works/pi-tui` (`>=1.0.1`)
-  - `typebox` (`^1.1.34`)
+  - `typebox` (`^1.1.34`), only for `Type.*` tool parameter schemas: Pi 1.5.x `ToolDefinition` still types `params` from TypeBox's `TSchema`. Move them to pi-schema builders when Pi's tool types accept them.
 - Pi version policy: consumers must provide Pi `1.0.1` or newer. Local development pins `@earendil-works/pi-agent-core`, `@earendil-works/pi-ai`, `@earendil-works/pi-coding-agent`, and `@earendil-works/pi-tui` together at exactly `1.5.0` (matching the live runtime), and the runtime `@earendil-works/pi-schema` dependency at the same version, because Pi does not share its copy with extensions; upgrade that set together and regenerate `bun.lock`.
 
 ## When to use this repo
