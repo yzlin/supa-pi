@@ -273,18 +273,26 @@ function refreshStatus(ctx: ExtensionCommandContext, updateCount = 0): void {
 
 async function checkRemoteUpdatesInBackground(
   ctx: ExtensionCommandContext,
+  isActive: () => boolean,
 ): Promise<void> {
+  let updateCount: number;
   try {
     const { updates } = await findRemoteUpdates({ suppressFailures: true });
-    refreshStatus(ctx, updates.length);
-    if (updates.length > 0) {
-      ctx.ui.notify(
-        `${updates.length} managed skill update${updates.length === 1 ? "" : "s"} available. Run /skill update.`,
-        "info",
-      );
-    }
+    updateCount = updates.length;
   } catch {
-    ctx.ui.setStatus(STATUS_KEY, undefined);
+    updateCount = 0;
+  }
+  // The session may have been replaced or reloaded while the check ran;
+  // its ctx then throws on every access.
+  if (!isActive()) {
+    return;
+  }
+  refreshStatus(ctx, updateCount);
+  if (updateCount > 0) {
+    ctx.ui.notify(
+      `${updateCount} managed skill update${updateCount === 1 ? "" : "s"} available. Run /skill update.`,
+      "info",
+    );
   }
 }
 
@@ -298,21 +306,21 @@ export default function skillsExtension(pi: ExtensionAPI): void {
     ],
   }));
 
+  let sessionActive = false;
   pi.on("session_start", (_event, ctx) => {
     if (!ctx.hasUI) {
       return;
     }
+    sessionActive = true;
     queueMicrotask(() => {
-      try {
-        checkRemoteUpdatesInBackground(ctx as ExtensionCommandContext).catch(
-          () => {
-            ctx.ui.setStatus(STATUS_KEY, undefined);
-          },
-        );
-      } catch {
-        ctx.ui.setStatus(STATUS_KEY, undefined);
-      }
+      checkRemoteUpdatesInBackground(
+        ctx as ExtensionCommandContext,
+        () => sessionActive,
+      ).catch(() => undefined);
     });
+  });
+  pi.on("session_shutdown", () => {
+    sessionActive = false;
   });
 
   pi.registerCommand("skill", {

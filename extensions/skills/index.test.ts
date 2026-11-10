@@ -395,3 +395,47 @@ describe("skills update batch", () => {
     expect(result.requests.get("gamma")).toBe(1);
   });
 });
+
+describe("skills background update check", () => {
+  it("does not touch a stale ctx after session_shutdown", async () => {
+    const home = mkdtempSync(join(tmpdir(), "skills-stale-ctx-"));
+    const previousHome = process.env.HOME;
+    const handlers = new Map<string, (event: unknown, ctx: unknown) => void>();
+    skillsExtension({
+      on(event: string, handler: (event: unknown, ctx: unknown) => void) {
+        handlers.set(event, handler);
+        return () => undefined;
+      },
+      registerCommand: () => undefined,
+    } as unknown as ExtensionAPI);
+    let stale = false;
+    let staleUiReads = 0;
+    const ctx = {
+      hasUI: true,
+      // Pi throws from the ui getter once the session is replaced.
+      get ui() {
+        if (stale) {
+          staleUiReads += 1;
+          throw new Error("This extension ctx is stale");
+        }
+        return { setStatus: () => undefined, notify: () => undefined };
+      },
+    };
+    const unhandled: unknown[] = [];
+    const onUnhandled = (reason: unknown) => unhandled.push(reason);
+    process.on("unhandledRejection", onUnhandled);
+    try {
+      process.env.HOME = home;
+      handlers.get("session_start")?.({ reason: "startup" }, ctx);
+      handlers.get("session_shutdown")?.({ reason: "reload" }, ctx);
+      stale = true;
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      expect(staleUiReads).toBe(0);
+      expect(unhandled).toEqual([]);
+    } finally {
+      process.off("unhandledRejection", onUnhandled);
+      process.env.HOME = previousHome;
+      rmSync(home, { recursive: true, force: true });
+    }
+  });
+});
