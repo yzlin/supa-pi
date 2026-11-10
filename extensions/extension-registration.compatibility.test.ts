@@ -11,7 +11,12 @@ import * as os from "node:os";
 import { join } from "node:path";
 
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import type { TObject } from "typebox";
+
+/** The JSON Schema keys these tests read from tool parameters. */
+interface ObjectSchema {
+  properties: Record<string, { type?: string; description?: string }>;
+  required: string[];
+}
 
 // tool-display reads ~/.pi/agent/tool-display.json, and Bun's homedir() ignores
 // runtime HOME changes; point it at a temp dir so live config stays out of tests.
@@ -163,7 +168,8 @@ describe("extension registration compatibility", () => {
     expect(initialEdit).toBeDefined();
     expect(
       Object.keys(
-        (initialEdit?.parameters as TObject | undefined)?.properties ?? {},
+        (initialEdit?.parameters as unknown as ObjectSchema | undefined)
+          ?.properties ?? {},
       ),
     ).toEqual(["text"]);
     writeToolDisplayConfig(cwd, {
@@ -202,7 +208,7 @@ describe("extension registration compatibility", () => {
 
     expect(harness.tools.map((tool) => tool.name)).toEqual(["bash"]);
     const bash = harness.tools[0];
-    const bashParams = bash?.parameters as TObject | undefined;
+    const bashParams = bash?.parameters as unknown as ObjectSchema | undefined;
     expect(
       (bashParams?.properties.reasoning as { type?: string } | undefined)?.type,
     ).toBe("string");

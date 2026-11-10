@@ -23,7 +23,6 @@ import {
   truncateToWidth,
   visibleWidth,
 } from "@earendil-works/pi-tui";
-import type { TObject } from "typebox";
 
 import { companionFixtures } from "./companion-fixtures";
 import * as configModule from "./config";
@@ -34,6 +33,12 @@ import {
   renderGenericToolResult,
   type PresentationState,
 } from "./presentation";
+
+/** The JSON Schema keys these tests read from tool parameters. */
+interface ObjectSchema {
+  properties: Record<string, { type?: string; description?: string }>;
+  required: string[];
+}
 
 /** Pi 1.5.0 no longer exports ToolRenderContext; derive it from ToolRenderers. */
 type ToolRenderContext<TState, TArgs> = Omit<
@@ -668,7 +673,7 @@ describe("execution registration", () => {
       "write",
     ]);
     for (const tool of h.tools) {
-      const params = tool.parameters as TObject;
+      const params = tool.parameters as unknown as ObjectSchema;
       expect(Object.keys(params.properties)[0]).toBe("reasoning");
       expect(params.required[0]).toBe("reasoning");
       expect(tool.renderShell).toBeUndefined();
@@ -680,7 +685,10 @@ describe("execution registration", () => {
     }
     const edit = h.tools.find((t) => t.name === "edit");
     expect(
-      Object.keys((edit?.parameters as TObject | undefined)?.properties ?? {}),
+      Object.keys(
+        (edit?.parameters as unknown as ObjectSchema | undefined)?.properties ??
+          {},
+      ),
     ).toEqual(["text"]);
     expect(edit?.renderCall).toBeUndefined();
     expect(edit?.renderResult).toBeUndefined();
@@ -695,8 +703,11 @@ describe("execution registration", () => {
     }
     expect(
       Object.keys(
-        (h.effectiveTools.get("edit")?.parameters as TObject | undefined)
-          ?.properties ?? {},
+        (
+          h.effectiveTools.get("edit")?.parameters as unknown as
+            | ObjectSchema
+            | undefined
+        )?.properties ?? {},
       ),
     ).toEqual(["text"]);
 

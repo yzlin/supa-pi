@@ -13,7 +13,6 @@ import {
   type ExtensionAPI,
   type ToolDefinition,
 } from "@earendil-works/pi-coding-agent";
-import type { TSchemaOptions } from "typebox";
 import { Type } from "typebox";
 
 import { ToolExecutionComponent } from "../../node_modules/@earendil-works/pi-coding-agent/dist/modes/interactive/components/tool-execution.js";
@@ -91,7 +90,7 @@ describe("RTK bash execution contract", () => {
     ]);
     expect(tool.parameters.required as string[]).toContain("reasoning");
     expect(
-      (tool.parameters.properties.reasoning as unknown as TSchemaOptions)
+      (tool.parameters.properties.reasoning as { description?: string })
         .description,
     ).toBe(
       "State short present-tense intent, maximum 12 words, without restating target",

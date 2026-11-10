@@ -18,7 +18,6 @@ import {
   type ToolRenderers,
 } from "@earendil-works/pi-coding-agent";
 import { Text, visibleWidth } from "@earendil-works/pi-tui";
-import type { TObject } from "typebox";
 import { Type } from "typebox";
 
 import { AuthStorage } from "../node_modules/@earendil-works/pi-coding-agent/dist/core/auth-storage.js";
@@ -30,6 +29,12 @@ import {
 } from "../node_modules/@earendil-works/pi-coding-agent/dist/modes/interactive/theme/theme.js";
 import rtkExtension from "./rtk";
 import toolDisplayExtension from "./tool-display";
+
+/** The JSON Schema keys these tests read from tool parameters. */
+interface ObjectSchema {
+  properties: Record<string, { type?: string; description?: string }>;
+  required: string[];
+}
 
 /** Pi 1.5.0 no longer exports ToolRenderContext; derive it from ToolRenderers. */
 type ToolRenderContext<TState, TArgs> = Omit<
@@ -240,9 +245,9 @@ describe("Pi 1.0.1 renderer resolver SDK probe", () => {
   test("draws bash by name both with RTK execution and without a registration", () => {
     expect(nativeRunner.getToolDefinition("bash")).toBeUndefined();
     const bash = rtkRunner.getToolDefinition("bash");
-    expect((bash?.parameters as TObject | undefined)?.required).toContain(
-      "reasoning",
-    );
+    expect(
+      (bash?.parameters as unknown as ObjectSchema | undefined)?.required,
+    ).toContain("reasoning");
     expect(bash?.renderCall).toBeUndefined();
     expect(bash?.renderResult).toBeUndefined();
     for (const runner of [nativeRunner, rtkRunner]) {

@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { Value } from "typebox/value";
+import { compile } from "@earendil-works/pi-schema";
 
 import { editTool, PATCH_EXAMPLE, ROW_EXAMPLE } from "./edit-tool";
 import { prepareUnifiedEditArguments } from "./unified-edit-migration";
@@ -11,15 +11,14 @@ import { unifiedEditSchema } from "./unified-edit-schema";
 const reader = (files: Record<string, string>) => async (path: string) =>
   files[path] ?? null;
 
+// Pi validates tool arguments with pi-schema.
+const isEditArgs = compile(unifiedEditSchema).check;
+
 describe("local unified-edit schema and argument preparation", () => {
   test("public schema is strict text-only with no reasoning", () => {
-    expect(Value.Check(unifiedEditSchema, { text: "[a]\n@APPEND\n+x" })).toBe(
-      true,
-    );
-    expect(
-      Value.Check(unifiedEditSchema, { text: "x", reasoning: "why" }),
-    ).toBe(false);
-    expect(Value.Check(unifiedEditSchema, { patch: "x" })).toBe(false);
+    expect(isEditArgs({ text: "[a]\n@APPEND\n+x" })).toBe(true);
+    expect(isEditArgs({ text: "x", reasoning: "why" })).toBe(false);
+    expect(isEditArgs({ patch: "x" })).toBe(false);
   });
 
   test("accepts upstream raw and single-alias arguments", () => {

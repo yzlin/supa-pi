@@ -18,8 +18,8 @@ import {
   SettingsManager,
   type ExtensionUIContext,
 } from "@earendil-works/pi-coding-agent";
+import { compile } from "@earendil-works/pi-schema";
 import { Type } from "typebox";
-import { Check } from "typebox/value";
 
 import { theme } from "../../node_modules/@earendil-works/pi-coding-agent/dist/modes/interactive/theme/theme.js";
 import { isRecord, THINKING_LEVELS } from "./agents";
@@ -114,7 +114,7 @@ test("native output schema and parallel contract; programmatic calls traverse pa
     throw new Error("Missing native outputSchema");
   }
   expect(
-    Check(tool.outputSchema, {
+    compile(tool.outputSchema).check({
       runId: "run",
       provider: "faux",
       model: "faux-1",
@@ -126,15 +126,15 @@ test("native output schema and parallel contract; programmatic calls traverse pa
     }),
   ).toBe(true);
   expect(
-    Check(tool.parameters, {
+    compile(tool.parameters).check({
       task: "task",
       agent: "worker",
       schema: { type: "object" },
     }),
   ).toBe(true);
-  expect(Check(tool.parameters, { task: "task", background: true })).toBe(
-    false,
-  );
+  expect(
+    compile(tool.parameters).check({ task: "task", background: true }),
+  ).toBe(false);
   const { session } = await createAgentSession({
     cwd: root,
     agentDir: root,
