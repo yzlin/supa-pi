@@ -98,6 +98,21 @@ test("malformed and mismatched evidence rejected; parent independently revalidat
   }
   expect(() => validateStructured(schema, { ok: true, extra: 1 })).toThrow();
 });
+test("child result shape is checked before metadata", () => {
+  for (const malformed of [
+    { ...report, extra: 1 },
+    { ...report, finishedAt: "1" },
+    { ...report, error: null },
+    { ...report, status: "pending" },
+  ]) {
+    expect(() => validateResult(malformed, config)).toThrow(
+      "Malformed child result",
+    );
+  }
+  expect(() =>
+    validateResult({ ...report, error: undefined }, config),
+  ).not.toThrow();
+});
 test("StructuredOutput errors use Pi's validator messages and formats", () => {
   expect(() => validateStructured(schema, { ok: "yes", extra: 1 })).toThrow(
     "Invalid StructuredOutput:\n  - /ok: expected boolean, got string\n  - /extra: unknown field",

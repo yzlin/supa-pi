@@ -203,6 +203,33 @@ describe("spec_log tool", () => {
     expect(renderSpecStatus(cwd)).toContain("greet  legacy (pre-P4): accepted");
   });
 
+  it("rejects log events with a bad timestamp, extra field, or wrong type", () => {
+    const cwd = workspace();
+    const ts = new Date().toISOString();
+    for (const event of [
+      { ts: "yesterday", event: "done" },
+      { ts, event: "done", extra: 1 },
+      { ts, event: "blocked", reason: "" },
+      {
+        ts,
+        event: "reviewed",
+        hash: "a".repeat(64),
+        decision: "ok",
+        findings: 0,
+      },
+    ]) {
+      writeFileSync(join(cwd, LOG_PATH), `${JSON.stringify(event)}\n`);
+      expect(() => readSpecLog(join(cwd, LOG_PATH))).toThrow(
+        "predates the spec_log tool",
+      );
+    }
+    writeFileSync(
+      join(cwd, LOG_PATH),
+      `${JSON.stringify({ ts, event: "accepted", hash: "a".repeat(64), criteria: ["DC-1"], content: SPEC })}\n`,
+    );
+    expect(readSpecLog(join(cwd, LOG_PATH))).toHaveLength(1);
+  });
+
   it("rejects paths outside .pi/specs", () => {
     const cwd = workspace();
     expect(

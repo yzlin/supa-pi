@@ -13,8 +13,20 @@ import {
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 
-import { type Static, Type } from "typebox";
-import { Value } from "typebox/value";
+import {
+  arr,
+  compile,
+  int,
+  lit,
+  nullable,
+  obj,
+  oneOf,
+  opt,
+  type Static,
+  str,
+  union,
+} from "@earendil-works/pi-schema";
+import { formats } from "@earendil-works/pi-schema/formats";
 
 export const SPECS_DIR = ".pi/specs";
 const SPEC_SLUG_PATTERN = /^[a-z0-9][a-z0-9-]*$/u;
@@ -36,63 +48,40 @@ const US_DEFINITION = /^(?:- |\d+\. )?(?:\*\*)?(US-[1-9][0-9]*)\b/u;
 const EVIDENCE_LINE = /^\s+Evidence: \S/u;
 const INTERNAL_STORIES = /^N\/A — internal: \S/u;
 
-const text = Type.String({ minLength: 1 });
-const hash = Type.String({ pattern: "^[a-f0-9]{64}$" });
-const ts = Type.String({ format: "date-time" });
-const closed = { additionalProperties: false };
-const SpecLogEventSchema = Type.Union([
-  Type.Object(
-    {
-      ts,
-      event: Type.Literal("accepted"),
-      hash,
-      criteria: Type.Array(text, { minItems: 1 }),
-      content: Type.String(),
-    },
-    closed,
-  ),
-  Type.Object(
-    { ts, event: Type.Literal("revised"), hash, previousHash: hash },
-    closed,
-  ),
-  Type.Object(
-    {
-      ts,
-      event: Type.Literal("reviewed"),
-      hash,
-      decision: Type.Union([
-        Type.Literal("accept"),
-        Type.Literal("revise"),
-        Type.Literal("stop"),
-      ]),
-      findings: Type.Integer({ minimum: 0 }),
-    },
-    closed,
-  ),
-  Type.Object(
-    {
-      ts,
-      event: Type.Literal("checked"),
-      id: text,
-      evidence: text,
-      head: Type.Union([text, Type.Null()]),
-      snapshot: Type.Union([text, Type.Null()]),
-      snapshotError: Type.Optional(text),
-    },
-    closed,
-  ),
-  Type.Object(
-    {
-      ts,
-      event: Type.Literal("blocked"),
-      id: Type.Optional(text),
-      reason: text,
-    },
-    closed,
-  ),
-  Type.Object({ ts, event: Type.Literal("stopped"), reason: text }, closed),
-  Type.Object({ ts, event: Type.Literal("done") }, closed),
+const text = str({ minLength: 1 });
+const hash = str({ pattern: "^[a-f0-9]{64}$" });
+const ts = str({ format: "date-time" });
+// obj() is closed (no extra properties) unless open: true.
+const SpecLogEventSchema = union([
+  obj({
+    ts,
+    event: lit("accepted"),
+    hash,
+    criteria: arr(text, { minItems: 1 }),
+    content: str(),
+  }),
+  obj({ ts, event: lit("revised"), hash, previousHash: hash }),
+  obj({
+    ts,
+    event: lit("reviewed"),
+    hash,
+    decision: oneOf(["accept", "revise", "stop"]),
+    findings: int({ minimum: 0 }),
+  }),
+  obj({
+    ts,
+    event: lit("checked"),
+    id: text,
+    evidence: text,
+    head: nullable(text),
+    snapshot: nullable(text),
+    snapshotError: opt(text),
+  }),
+  obj({ ts, event: lit("blocked"), id: opt(text), reason: text }),
+  obj({ ts, event: lit("stopped"), reason: text }),
+  obj({ ts, event: lit("done") }),
 ]);
+const isSpecLogEvent = compile(SpecLogEventSchema, { formats }).check;
 export type SpecLogEvent = Static<typeof SpecLogEventSchema>;
 type Accepted = Extract<SpecLogEvent, { event: "accepted" }>;
 
@@ -309,7 +298,7 @@ export function readSpecLog(absLogPath: string): SpecLogEvent[] {
   }
   const events: SpecLogEvent[] = [];
   for (const event of raw) {
-    if (!Value.Check(SpecLogEventSchema, event)) {
+    if (!isSpecLogEvent(event)) {
       const last = raw.at(-1) as { event?: unknown } | undefined;
       throw new LegacySpecLogError(
         absLogPath,

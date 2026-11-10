@@ -3,10 +3,19 @@ import { createHash, randomUUID } from "node:crypto";
 import { chmod, readFile, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
 
-import { compile, type JsonSchema } from "@earendil-works/pi-schema";
+import {
+  compile,
+  type JsonSchema,
+  lit,
+  num,
+  obj,
+  oneOf,
+  opt,
+  type Static,
+  str,
+  unknown,
+} from "@earendil-works/pi-schema";
 import { formats } from "@earendil-works/pi-schema/formats";
-import { Type, type Static, type TSchema } from "typebox";
-import { Check } from "typebox/value";
 
 import {
   isRecord,
@@ -39,7 +48,7 @@ function isJson(value: unknown): value is JsonValue {
   }
   return isRecord(value) && Object.values(value).every(isJson);
 }
-export function schemaHash(schema?: TSchema): string | undefined {
+export function schemaHash(schema?: JsonSchema): string | undefined {
   return schema
     ? createHash("sha256").update(JSON.stringify(schema)).digest("hex")
     : undefined;
@@ -214,31 +223,30 @@ export interface ChildConfig {
   schema?: Record<string, unknown>;
   schemaHash?: string;
 }
-const childResultSchema = Type.Object(
-  {
-    version: Type.Literal(1),
-    runId: Type.String(),
-    parentSessionId: Type.String(),
-    schemaHash: Type.Optional(Type.String()),
-    status: Type.Union([Type.Literal("completed"), Type.Literal("failed")]),
-    output: Type.String(),
-    error: Type.Optional(Type.String()),
-    provider: Type.String(),
-    model: Type.String(),
-    thinking: Type.String(),
-    agent: Type.Optional(Type.String()),
-    structuredOutput: Type.Optional(Type.Unknown()),
-    sessionFile: Type.Optional(Type.String()),
-    finishedAt: Type.Number(),
-  },
-  { additionalProperties: false },
-);
+// obj() is closed: unknown fields make the result malformed.
+const childResultSchema = obj({
+  version: lit(1),
+  runId: str(),
+  parentSessionId: str(),
+  schemaHash: opt(str()),
+  status: oneOf(["completed", "failed"]),
+  output: str(),
+  error: opt(str()),
+  provider: str(),
+  model: str(),
+  thinking: str(),
+  agent: opt(str()),
+  structuredOutput: opt(unknown()),
+  sessionFile: opt(str()),
+  finishedAt: num(),
+});
+const isChildResult = compile(childResultSchema).check;
 export type ChildResult = Static<typeof childResultSchema>;
 export function validateResult(
   raw: unknown,
   config: ChildConfig,
 ): ChildResult & { structuredOutput?: JsonValue } {
-  if (!Check(childResultSchema, raw)) {
+  if (!isChildResult(raw)) {
     throw new Error("Malformed child result");
   }
   if (
