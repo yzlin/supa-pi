@@ -1,4 +1,8 @@
-import type { ExtensionCommandContext } from "@earendil-works/pi-coding-agent";
+import type {
+  ExtensionCommandContext,
+  Theme,
+  ThemeColor,
+} from "@earendil-works/pi-coding-agent";
 import {
   Key,
   matchesKey,
@@ -26,10 +30,12 @@ const CATEGORY_ICON = "◉";
 const FREE_ICON = "⛶";
 const BUFFER_ICON = "⛝";
 
-const CATEGORY_STYLE: Record<
-  ContextDisplayCategoryKey,
-  { color: string; symbol: string }
-> = {
+interface CellStyle {
+  color: ThemeColor;
+  symbol: string;
+}
+
+const CATEGORY_STYLE: Record<ContextDisplayCategoryKey, CellStyle> = {
   system_prompt: { color: "muted", symbol: CATEGORY_ICON },
   system_tools: { color: "muted", symbol: CATEGORY_ICON },
   custom_agents: { color: "accent", symbol: CATEGORY_ICON },
@@ -39,8 +45,8 @@ const CATEGORY_STYLE: Record<
   residual: { color: "dim", symbol: CATEGORY_ICON },
 };
 
-const FREE_STYLE = { color: "dim", symbol: FREE_ICON };
-const BUFFER_STYLE = { color: "dim", symbol: BUFFER_ICON };
+const FREE_STYLE: CellStyle = { color: "dim", symbol: FREE_ICON };
+const BUFFER_STYLE: CellStyle = { color: "dim", symbol: BUFFER_ICON };
 
 function allocateCounts(
   items: Array<{ key: string; tokens: number }>,
@@ -84,9 +90,7 @@ function allocateCounts(
   return counts;
 }
 
-function buildBarCells(
-  snapshot: ContextSnapshot,
-): Array<{ color: string; symbol: string }> {
+function buildBarCells(snapshot: ContextSnapshot): Array<CellStyle> {
   const usedCells = Math.max(
     snapshot.displayUsedPercent && snapshot.displayUsedPercent > 0 ? 1 : 0,
     Math.min(
@@ -108,7 +112,7 @@ function buildBarCells(
     [...CONTEXT_DISPLAY_CATEGORY_ORDER],
   );
 
-  const cells: Array<{ color: string; symbol: string }> = [];
+  const cells: Array<CellStyle> = [];
   for (const key of CONTEXT_DISPLAY_CATEGORY_ORDER) {
     for (let index = 0; index < (categoryCounts[key] ?? 0); index += 1) {
       cells.push(CATEGORY_STYLE[key]);
@@ -130,7 +134,7 @@ function buildBarCells(
   return cells.slice(0, BAR_CELLS);
 }
 
-function renderGrid(snapshot: ContextSnapshot, theme: unknown): string[] {
+function renderGrid(snapshot: ContextSnapshot, theme: Theme): string[] {
   const cells = buildBarCells(snapshot);
   const lines: string[] = [];
 
@@ -146,7 +150,7 @@ function renderGrid(snapshot: ContextSnapshot, theme: unknown): string[] {
 
 function renderCategoryLine(
   category: ContextDisplayCategory,
-  theme: unknown,
+  theme: Theme,
 ): string {
   const style = CATEGORY_STYLE[category.key];
   return `${theme.fg(style.color, style.symbol)} ${theme.bold(category.label)}: ${formatTokens(
@@ -154,7 +158,7 @@ function renderCategoryLine(
   )} tokens (${formatPercent(category.percent)})`;
 }
 
-function renderRightPanel(snapshot: ContextSnapshot, theme: unknown): string[] {
+function renderRightPanel(snapshot: ContextSnapshot, theme: Theme): string[] {
   const lines = [
     theme.fg(
       "muted",
@@ -223,7 +227,7 @@ function renderRightPanel(snapshot: ContextSnapshot, theme: unknown): string[] {
 
 function renderGridLayout(
   snapshot: ContextSnapshot,
-  theme: unknown,
+  theme: Theme,
   width: number,
 ): string[] {
   const left = renderGrid(snapshot, theme);

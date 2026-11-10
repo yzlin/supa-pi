@@ -381,7 +381,7 @@ export function registerCavemanMode(pi: ExtensionAPI): void {
         completion.value.startsWith(prefix),
       );
     },
-    handler: (args: string, ctx: ExtensionCommandContext) => {
+    handler: async (args: string, ctx: ExtensionCommandContext) => {
       const command =
         args.trim().toLowerCase().split(TOP_LEVEL_REGEX_1)[0] || "toggle";
 

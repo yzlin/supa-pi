@@ -13,8 +13,8 @@
  * Credits: This extension was originally developed by @pasky. Modified and enhanced by @yzlin.
  */
 
-import type { AgentTool } from "@earendil-works/pi-agent-core";
-import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import type { AgentContext, AgentMessage } from "@earendil-works/pi-agent-core";
+import type { ExtensionAPI, Theme } from "@earendil-works/pi-coding-agent";
 import {
   createBashTool,
   createEditTool,
@@ -70,7 +70,7 @@ export default function (pi: ExtensionAPI) {
   // --- Filter btw messages out of LLM context (user-facing only) ---
   pi.on("context", (event) => {
     const filtered = event.messages.filter(
-      (m: unknown) =>
+      (m: AgentMessage) =>
         !(m.role === "custom" && m.customType === BTW_MESSAGE_TYPE),
     );
     if (filtered.length !== event.messages.length) {
@@ -81,7 +81,7 @@ export default function (pi: ExtensionAPI) {
   // --- Shared rendering logic for btw results ---
   function renderBtwResult(
     r: SingleResult,
-    theme: unknown,
+    theme: Theme,
     outputPad = 1,
   ): InstanceType<typeof Box> {
     const icon =
@@ -152,7 +152,7 @@ export default function (pi: ExtensionAPI) {
   pi.registerCommand("btw", {
     description:
       "Run a single-shot subagent in the background (-model <provider/id>)",
-    handler: (args, ctx) => {
+    handler: async (args, ctx) => {
       const { model: modelOpt, task } = parseBtwArgs(args);
       if (!task) {
         ctx.ui.notify("Usage: /btw [-model <provider/id>] <prompt>", "error");
@@ -187,7 +187,7 @@ export default function (pi: ExtensionAPI) {
       }
 
       // Build tools
-      const tools: AgentTool[] = [
+      const tools: NonNullable<AgentContext["tools"]> = [
         createReadTool(ctx.cwd),
         createBashTool(ctx.cwd),
         createEditTool(ctx.cwd),

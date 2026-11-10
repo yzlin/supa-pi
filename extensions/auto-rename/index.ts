@@ -15,7 +15,11 @@ import { generateSessionTitle, type NamingFailureCategory } from "./naming";
 
 type RuntimeContext = ExtensionContext | ExtensionCommandContext;
 type OperationKind = "automatic" | "regen";
-type PromptMethod = (text: string, options?: PromptOptions) => Promise<void>;
+type PromptMethod = (
+  this: AgentSession,
+  text: string,
+  options?: PromptOptions,
+) => Promise<void>;
 type PromptObserver = (
   session: AgentSession,
   text: string,
@@ -70,10 +74,10 @@ function addPromptObserver(owner: PromptOwner, observer: PromptObserver): void {
 
 function removePromptObserver(owner: PromptOwner): void {
   const globals = globalThis as GlobalWithPromptCapture;
-  const registries = globals[promptCapture];
   const prototype = AgentSession.prototype as SessionPrototype;
+  const registries = globals[promptCapture];
   const registry = registries?.get(prototype);
-  if (!registry) {
+  if (!(registries && registry)) {
     return;
   }
 

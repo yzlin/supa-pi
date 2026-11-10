@@ -438,5 +438,5 @@ export function relayDialogs(
     );
   // Not relayed: a child pane nobody watches must not wait on them.
   ui.editor = async () => undefined;
-  ui.custom = async () => undefined;
+  ui.custom = <T>(): Promise<T> => Promise.resolve(undefined as T);
 }

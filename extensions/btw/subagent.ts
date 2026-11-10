@@ -11,11 +11,11 @@ import type {
   AgentContext,
   AgentLoopConfig,
   AgentMessage,
-  AgentTool,
   StreamFn,
 } from "@earendil-works/pi-agent-core";
 import { agentLoop } from "@earendil-works/pi-agent-core";
-import { convertToLlm } from "@earendil-works/pi-coding-agent";
+import type { Api, Model } from "@earendil-works/pi-ai";
+import { convertToLlm, type ThemeColor } from "@earendil-works/pi-coding-agent";
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -142,7 +142,7 @@ export function shortenPath(p: string): string {
 export function formatToolCall(
   toolName: string,
   args: Record<string, unknown>,
-  fg: (color: unknown, text: string) => string,
+  fg: (color: ThemeColor, text: string) => string,
 ): string {
   switch (toolName) {
     case "bash": {
@@ -266,8 +266,8 @@ export function renderProgressPlainLines(
 export async function runSubagent(
   systemPrompt: string,
   task: string,
-  tools: AgentTool[],
-  model: unknown,
+  tools: NonNullable<AgentContext["tools"]>,
+  model: Model<Api>,
   thinkingLevel: string,
   apiKeyResolver: (provider: string) => Promise<string | undefined>,
   signal: AbortSignal | undefined,
@@ -335,8 +335,8 @@ export async function runSubagent(
 
       switch (event.type) {
         case "message_end": {
-          const msg = event.message as unknown;
-          if (msg.role === "assistant") {
+          const msg = event.message;
+          if ("role" in msg && msg.role === "assistant") {
             result.usage.turns++;
             const usage = msg.usage;
             if (usage) {

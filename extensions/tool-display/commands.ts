@@ -190,7 +190,7 @@ export function registerToolDisplayCommands(
   pi.registerCommand("tool-display", {
     description: "Manage tool-display settings",
     getArgumentCompletions: getToolDisplayArgumentCompletions,
-    handler: (args, ctx) => {
+    handler: async (args, ctx) => {
       const [command = "show", ...rest] = args
         .trim()
         .split(SPLIT_REGEX)

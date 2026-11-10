@@ -1,12 +1,15 @@
 import { defineConfig } from "oxfmt";
 import ultracite from "ultracite/oxfmt";
 
+const presetSortImports =
+  typeof ultracite.sortImports === "object" ? ultracite.sortImports : {};
+
 export default defineConfig({
   ...ultracite,
   trailingComma: "all",
   // Match the previous node/bun -> package -> alias -> relative import groups.
   sortImports: {
-    ...ultracite.sortImports,
+    ...presetSortImports,
     customGroups: [
       { groupName: "runtime", selector: "builtin" },
       { groupName: "runtime", elementNamePattern: ["node:*", "bun", "bun:*"] },

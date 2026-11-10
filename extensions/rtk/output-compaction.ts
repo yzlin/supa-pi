@@ -1,9 +1,9 @@
+import type { TextContent } from "@earendil-works/pi-ai";
 import {
   type ExtensionHandler,
   isBashToolResult,
   isGrepToolResult,
   isReadToolResult,
-  type TextContent,
   type ToolExecutionStartEvent,
   type ToolResultEvent,
   type ToolResultEventResult,

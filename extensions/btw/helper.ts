@@ -30,14 +30,19 @@ export interface ParsedBtwArgs {
   model?: string;
 }
 
-export interface ResolveModelResult {
-  model?: unknown;
+export interface ResolveModelResult<M> {
+  model?: M;
   thinkingLevel: string;
   error?: string;
 }
 
-interface ScopedModelEntry {
-  model: { provider: string; id: string };
+interface ModelIdentity {
+  provider: string;
+  id: string;
+}
+
+interface ScopedModelEntry<M extends ModelIdentity> {
+  model: M;
   thinkingLevel?: string;
 }
 
@@ -63,13 +68,15 @@ export function parseBtwArgs(args: string): ParsedBtwArgs {
  * Resolve a target model and thinking level from model parameters.
  * Returns an error when the requested model is invalid or unknown.
  */
-export function resolveModelAndThinking(
-  modelRegistry: { find: (provider: string, modelId: string) => unknown },
-  currentModel: unknown,
+export function resolveModelAndThinking<M extends ModelIdentity>(
+  modelRegistry: {
+    find: (provider: string, modelId: string) => M | undefined;
+  },
+  currentModel: M,
   currentThinkingLevel: string,
   params: { model?: string },
-  scopedModels: readonly ScopedModelEntry[] = [],
-): ResolveModelResult {
+  scopedModels: readonly ScopedModelEntry<M>[] = [],
+): ResolveModelResult<M> {
   if (!params.model) {
     return { model: currentModel, thinkingLevel: currentThinkingLevel };
   }

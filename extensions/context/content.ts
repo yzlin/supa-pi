@@ -287,13 +287,11 @@ export function buildContextContentSnapshot(
     ctx.sessionManager.getEntries(),
     ctx.sessionManager.getLeafId(),
   );
-  const source = isCurrentSnapshot(ctx, cachedSnapshot)
-    ? "context_event_snapshot"
-    : "reconstructed_session";
-  const rawMessages =
-    source === "context_event_snapshot"
-      ? cachedSnapshot.messages
-      : sessionContext.messages;
+  const current = isCurrentSnapshot(ctx, cachedSnapshot)
+    ? cachedSnapshot
+    : null;
+  const source = current ? "context_event_snapshot" : "reconstructed_session";
+  const rawMessages = current ? current.messages : sessionContext.messages;
   let sourceNote =
     "Source: reconstructed current session context (no cached context snapshot yet).";
   if (source === "context_event_snapshot") {

@@ -148,7 +148,7 @@ export class LspClient {
     return conn;
   }
 
-  ensureInitialized(): Promise<void> {
+  async ensureInitialized(): Promise<void> {
     if (this.initialized) {
       return;
     }
@@ -277,20 +277,6 @@ export class LspClient {
     }
 
     return uri;
-  }
-
-  closeDocument(filePath: string): Promise<void> {
-    const uri = pathToUri(resolve(this.rootPath, filePath));
-    const doc = this.openDocs.get(uri);
-    if (!doc) {
-      return;
-    }
-
-    this.connection.sendNotification("textDocument/didClose", {
-      textDocument: { uri },
-    });
-    this.openDocs.delete(uri);
-    this.diagnosticStore.delete(uri);
   }
 
   // ── Diagnostics ───────────────────────────────────────────────────────

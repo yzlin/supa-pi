@@ -83,10 +83,13 @@ function addBudgetTasks(
   const hasActiveTask = checkpoint.tasks.some(
     (task) => task.status === "active",
   );
-  const newTasks = Array.from({ length: additionalBudget }, (_, index) => ({
-    ...makeTask(startIndex + index, maxAttempts),
-    status: !hasActiveTask && index === 0 ? "active" : "pending",
-  }));
+  const newTasks = Array.from(
+    { length: additionalBudget },
+    (_, index): GoalTask => ({
+      ...makeTask(startIndex + index, maxAttempts),
+      status: !hasActiveTask && index === 0 ? "active" : "pending",
+    }),
+  );
   const tasks = [...checkpoint.tasks, ...newTasks];
   return {
     ...checkpoint,
@@ -585,12 +588,13 @@ function registerGoalCheckpointTool(pi: ExtensionAPI): void {
         }),
       ),
     }),
-    execute(_toolCallId, params, _signal, _onUpdate, ctx) {
+    async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
       const active = activeGoalForContext(ctx);
       if (!active.ok) {
         return {
           content: [{ type: "text", text: active.error }],
           isError: true,
+          details: null,
         };
       }
       let nextStatus: GoalStatus | undefined;
@@ -600,6 +604,7 @@ function registerGoalCheckpointTool(pi: ExtensionAPI): void {
           return {
             content: [{ type: "text", text: parsedStatus.error }],
             isError: true,
+            details: null,
           };
         }
         nextStatus = parsedStatus.value;
@@ -646,6 +651,7 @@ function registerGoalCheckpointTool(pi: ExtensionAPI): void {
         return {
           content: [{ type: "text", text: validated.error }],
           isError: true,
+          details: null,
         };
       }
       const saved = saveGoal(pi, checkpoint, currentCwd(ctx));
@@ -779,7 +785,7 @@ export default function goalExtension(pi: ExtensionAPI): void {
     description:
       "/goal [--max-runs N] <objective> | /goal task --tasks N <objective> | /goal status|pause|resume|clear|stop (clears active goal; Esc interrupts current turn)",
     getArgumentCompletions: completeGoalCommandArguments,
-    handler: (args, ctx) => {
+    handler: async (args, ctx) => {
       const parsed = parseGoalCommand(args ?? "");
       if (!parsed.ok) {
         ctx.ui.notify(parsed.error, "error");

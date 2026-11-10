@@ -39,12 +39,13 @@ export function buildSessionEvidencePacket({
   const messages = entries
     .filter((entry) => entry.type === "message")
     .flatMap((entry) => {
-      const role = entry.message?.role;
-      if (role !== "assistant" && role !== "user") {
+      const message = entry.message;
+      const role = message?.role;
+      if (!message || (role !== "assistant" && role !== "user")) {
         return [];
       }
 
-      const text = extractTextContent(entry.message.content);
+      const text = extractTextContent(message.content);
       return text ? [{ role, text }] : [];
     })
     .slice(-maxMessages);

@@ -506,14 +506,14 @@ function githubSkillOwnedItems(
         candidateRoot !== root && candidateRoot.startsWith(prefix),
     )
     .map((candidateRoot) => `${candidateRoot}/`);
-  return tree.filter(
-    (item) =>
-      typeof item.path === "string" &&
-      item.path.startsWith(prefix) &&
-      !nestedRootPrefixes.some((nestedPrefix) =>
-        item.path.startsWith(nestedPrefix),
-      ),
-  );
+  return tree.filter((item) => {
+    const { path } = item;
+    return (
+      typeof path === "string" &&
+      path.startsWith(prefix) &&
+      !nestedRootPrefixes.some((nestedPrefix) => path.startsWith(nestedPrefix))
+    );
+  });
 }
 
 export function githubSkillOwnedFilePaths(

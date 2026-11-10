@@ -8,7 +8,7 @@ export default defineConfig({
   extends: [core],
   // Use the preset's explicit rules, not extra category defaults from new plugins.
   categories: { correctness: "off" },
-  plugins: [...core.plugins, "react"],
+  plugins: [...(core.plugins ?? []), "react"],
   env: { node: true, bun: true },
   // Lint every TypeScript source, but not vendored JavaScript or documentation.
   ignorePatterns: [

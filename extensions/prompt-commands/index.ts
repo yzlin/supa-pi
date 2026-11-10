@@ -38,7 +38,11 @@ const COMMANDS = {
 } as const;
 
 type PromptCommandName = keyof typeof COMMANDS;
-type PromptMethod = (text: string, options?: PromptOptions) => Promise<void>;
+type PromptMethod = (
+  this: AgentSession,
+  text: string,
+  options?: PromptOptions,
+) => Promise<void>;
 type Transformer = (text: string) => string;
 type QueueOwner = symbol;
 
@@ -129,7 +133,7 @@ function removeQueueOwner(owner: QueueOwner): void {
   const registries = globals[queuePatch];
   const prototype = AgentSession.prototype as QueuePrototype;
   const registry = registries?.get(prototype);
-  if (!registry) {
+  if (!(registries && registry)) {
     return;
   }
 

@@ -184,7 +184,7 @@ async function runUpdateBatch(
   writeManagedManifest(paths.manifestPath, manifest);
   const requests = new Map<string, number>();
   const fetchSpy = spyOn(globalThis, "fetch").mockImplementation((input) => {
-    const url = String(input);
+    const url = input instanceof Request ? input.url : input.toString();
     if (url.startsWith("https://api.github.com/")) {
       return Promise.resolve(
         Response.json({ sha: "revision", tree: githubTree, truncated: false }),

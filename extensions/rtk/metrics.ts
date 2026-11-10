@@ -24,6 +24,9 @@ const COMPOUND_COMMAND_FAMILY_NAMES = [
   "cargo",
   "python",
 ] as const;
+const COMPOUND_COMMAND_FAMILIES: ReadonlySet<string> = new Set(
+  COMPOUND_COMMAND_FAMILY_NAMES,
+);
 
 interface MutableRtkCommandMetrics {
   label: string;
@@ -286,7 +289,7 @@ function getCommandFamilyLabel(
   if (
     second &&
     !second.startsWith("-") &&
-    COMPOUND_COMMAND_FAMILY_NAMES.includes(first)
+    COMPOUND_COMMAND_FAMILIES.has(first)
   ) {
     return `${first} ${second}`;
   }

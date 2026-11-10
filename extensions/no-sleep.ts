@@ -198,7 +198,7 @@ export default function noSleepExtension(pi: ExtensionAPI) {
 
   pi.registerCommand("no-sleep", {
     description: "Show or change macOS sleep-prevention status",
-    handler: (args, ctx) => {
+    handler: async (args, ctx) => {
       const command = args.trim().toLowerCase();
 
       if (command === "on" || command === "enable") {

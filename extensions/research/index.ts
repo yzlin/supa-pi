@@ -20,7 +20,7 @@ export default function researchExtension(pi: ExtensionAPI): void {
   pi.registerCommand("research", {
     description:
       "Run research through a blocking subagent with the researcher role: /research <topic>",
-    handler: (args, ctx) => {
+    handler: async (args, ctx) => {
       const topic = (args ?? "").trim();
       if (!topic) {
         ctx.ui.notify("Usage: /research <topic>", "warning");

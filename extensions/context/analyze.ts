@@ -408,7 +408,7 @@ export function analyzeMessages({
           "user_text",
           estimateTokens(message),
           currentTurn,
-          `user: ${clip(textFromBlocks(message.content as unknown))}`,
+          `user: ${clip(textFromBlocks(message.content))}`,
         );
         break;
       }

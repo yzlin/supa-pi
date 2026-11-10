@@ -418,7 +418,7 @@ function notifySecretRefusal(ctx: ExtensionContext, reason: string): void {
   ctx.ui.notify(`Refusing context-docs prompt: possible ${reason}.`, "warning");
 }
 
-function dispatchContextDocsCommand(
+async function dispatchContextDocsCommand(
   command: ContextDocsCommand,
   args: string,
   ctx: ExtensionContext,

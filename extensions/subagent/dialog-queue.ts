@@ -61,8 +61,9 @@ export function queueDialogs(ui: DialogUI): void {
   ui.editor = (title, prefill) =>
     enqueue(() => editor.call(ui, title, prefill), undefined);
   // Overlays render above the dialog slot and are never displaced, so long-lived viewers must not hold the queue.
-  ui.custom = (factory, options) =>
-    options?.overlay
-      ? custom.call(ui, factory, options)
-      : enqueue(() => custom.call(ui, factory, options), undefined);
+  // The abort value is undefined, as before; Pi's custom<T> types no fallback.
+  ui.custom = <T>(...args: Parameters<DialogUI["custom"]>): Promise<T> =>
+    args[1]?.overlay
+      ? (custom.apply(ui, args) as Promise<T>)
+      : enqueue(() => custom.apply(ui, args) as Promise<T>, undefined as T);
 }

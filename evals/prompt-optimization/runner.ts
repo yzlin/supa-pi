@@ -807,7 +807,8 @@ async function runChildLoop(
         finishTurn: maxTurnsLimit(options.maxTurns),
       },
       options.signal,
-      options.streamFn,
+      // Undefined falls back to agentLoop's default stream function at runtime.
+      options.streamFn as StreamFn,
     );
     for await (const event of eventStream) {
       metrics = reduceRunEvent(
@@ -951,8 +952,8 @@ export async function runVariant(
         finishTurn: maxTurnsLimit(options.maxTurns),
       } as AgentLoopConfig & { serviceTier?: "priority" },
       controller.signal,
-      options.streamFn ??
-        (options.serviceTier ? codexServiceTierStream : undefined),
+      (options.streamFn ??
+        (options.serviceTier ? codexServiceTierStream : undefined)) as StreamFn,
     );
 
     for await (const event of eventStream) {
