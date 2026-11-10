@@ -11,6 +11,7 @@ import * as os from "node:os";
 import { join } from "node:path";
 
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import type { TObject } from "typebox";
 
 // tool-display reads ~/.pi/agent/tool-display.json, and Bun's homedir() ignores
 // runtime HOME changes; point it at a temp dir so live config stays out of tests.
@@ -160,9 +161,11 @@ describe("extension registration compatibility", () => {
     }
     const initialEdit = harness.tools.find((tool) => tool.name === "edit");
     expect(initialEdit).toBeDefined();
-    expect(Object.keys(initialEdit?.parameters.properties ?? {})).toEqual([
-      "text",
-    ]);
+    expect(
+      Object.keys(
+        (initialEdit?.parameters as TObject | undefined)?.properties ?? {},
+      ),
+    ).toEqual(["text"]);
     writeToolDisplayConfig(cwd, {
       edit: { enabled: true },
       write: { enabled: false },
@@ -199,8 +202,11 @@ describe("extension registration compatibility", () => {
 
     expect(harness.tools.map((tool) => tool.name)).toEqual(["bash"]);
     const bash = harness.tools[0];
-    expect(bash?.parameters.properties.reasoning.type).toBe("string");
-    expect(bash?.parameters.required).toContain("reasoning");
+    const bashParams = bash?.parameters as TObject | undefined;
+    expect(
+      (bashParams?.properties.reasoning as { type?: string } | undefined)?.type,
+    ).toBe("string");
+    expect(bashParams?.required).toContain("reasoning");
     expect(bash?.renderShell).toBeUndefined();
     expect(bash?.renderCall).toBeUndefined();
     expect(bash?.renderResult).toBeUndefined();

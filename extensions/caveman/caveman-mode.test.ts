@@ -155,6 +155,7 @@ function setupHarness(
     events,
     on(eventName: string, handler: ExtensionEventHandler) {
       handlers.set(eventName, handler);
+      return () => undefined;
     },
     registerCommand(name: string, options: RegisteredCommandOptions) {
       if (name === "caveman") {
@@ -170,7 +171,7 @@ function setupHarness(
     appendEntry(customType: string, data: unknown) {
       appendedEntries.push({ customType, data });
     },
-  } as ExtensionAPI);
+  } as unknown as ExtensionAPI);
 
   if (!command) {
     throw new Error("caveman command was not registered");

@@ -2396,7 +2396,7 @@ describe("skills extension", () => {
       ).skills[0];
       expect(treeRequests).toBe(1);
       expect(installed?.skillFolderHash).toBe(
-        githubSkillFolderHash(oldTree, "skills/demo"),
+        githubSkillFolderHash(oldTree, "skills/demo") ?? undefined,
       );
       expect(
         readFileSync(join(installed?.installPath ?? "", "SKILL.md"), "utf8"),

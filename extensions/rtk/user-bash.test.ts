@@ -87,7 +87,7 @@ describe("rtk user bash", () => {
       createLocalOperations: () => ({
         exec(command) {
           executedCommand = command;
-          return { exitCode: 0 };
+          return Promise.resolve({ exitCode: 0 });
         },
       }),
       resolveCommand: () => ({
@@ -129,7 +129,7 @@ describe("rtk user bash", () => {
       createLocalOperations: () => ({
         exec(command) {
           executedCommand = command;
-          return { exitCode: 0 };
+          return Promise.resolve({ exitCode: 0 });
         },
       }),
       resolveCommand: (command) => ({

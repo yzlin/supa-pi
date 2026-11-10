@@ -182,8 +182,11 @@ describe("workspace files", () => {
 
 describe("Jev client", () => {
   it("prefers direct TypeSafe Jev, then any credentialed Jev", async () => {
-    const openrouter = { provider: "openrouter", id: "typesafe/jev-1.13" };
-    const llama = { provider: "llama-cpp", id: "qwen3" };
+    const openrouter = {
+      provider: "openrouter",
+      id: "typesafe/jev-1.13",
+    } as ClassifierModel;
+    const llama = { provider: "llama-cpp", id: "qwen3" } as ClassifierModel;
     const select = (available: { provider: string; id: string }[]) =>
       selectJevModel(fakeRegistry(() => undefined, available));
     expect(await select([llama, openrouter, JEV])).toBe(JEV);

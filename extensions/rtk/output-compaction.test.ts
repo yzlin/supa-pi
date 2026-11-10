@@ -1,6 +1,9 @@
 import { describe, expect, it } from "bun:test";
 
-import type { ToolResultEvent } from "@earendil-works/pi-coding-agent";
+import type {
+  ExtensionContext,
+  ToolResultEvent,
+} from "@earendil-works/pi-coding-agent";
 
 import { DEFAULT_RTK_CONFIG } from "./config";
 import { createRtkMetricsStore } from "./metrics";
@@ -9,6 +12,9 @@ import {
   createRtkToolResultHandler,
 } from "./output-compaction";
 import type { RtkConfig, RtkRuntime } from "./types";
+
+// RTK handlers never read the extension context.
+const ctx = {} as ExtensionContext;
 
 function createRuntime(config?: RtkConfig): RtkRuntime {
   const metrics = createRtkMetricsStore();
@@ -46,15 +52,18 @@ describe("rtk output compaction", () => {
     });
 
     const handler = createRtkToolResultHandler(runtime);
-    const result = await handler({
-      type: "tool_result",
-      toolCallId: "1",
-      toolName: "bash",
-      input: { command: "seq 1 4" },
-      content: [{ type: "text", text: "1\n2\n3\n4" }],
-      details: undefined,
-      isError: false,
-    } as any);
+    const result = await handler(
+      {
+        type: "tool_result",
+        toolCallId: "1",
+        toolName: "bash",
+        input: { command: "seq 1 4" },
+        content: [{ type: "text", text: "1\n2\n3\n4" }],
+        details: undefined,
+        isError: false,
+      } as any,
+      ctx,
+    );
 
     expect(result).toEqual({
       content: [{ type: "text", text: "3\n4" }],
@@ -97,7 +106,7 @@ describe("rtk output compaction", () => {
     };
     runtime.metrics.startCommand(event.toolCallId, "bash", "cat long.txt");
 
-    expect(await handler(event)).toBeUndefined();
+    expect(await handler(event, ctx)).toBeUndefined();
     expect(event.content).toEqual([{ type: "text", text }]);
     expect(runtime.metrics.snapshot()).toMatchObject({
       totalOriginalChars: 0,
@@ -114,11 +123,14 @@ describe("rtk output compaction", () => {
     runtime.metrics.completeCommand(event.toolCallId);
     expect(runtime.metrics.snapshot().summary.totalCommands).toBe(1);
 
-    const result = await handler({
-      ...event,
-      toolCallId: "direct",
-      parentToolCallId: undefined,
-    });
+    const result = await handler(
+      {
+        ...event,
+        toolCallId: "direct",
+        parentToolCallId: undefined,
+      },
+      ctx,
+    );
     expect(result?.content).toEqual([
       { type: "text", text: `…${"x".repeat(11_999)}` },
     ]);
@@ -143,15 +155,20 @@ describe("rtk output compaction", () => {
         details: undefined,
         isError: false,
       };
-      await createRtkToolExecutionStartHandler(runtime)({
-        type: "tool_execution_start",
-        toolCallId: event.toolCallId,
-        parentToolCallId: event.parentToolCallId,
-        toolName,
-        args: event.input,
-      });
+      await createRtkToolExecutionStartHandler(runtime)(
+        {
+          type: "tool_execution_start",
+          toolCallId: event.toolCallId,
+          parentToolCallId: event.parentToolCallId,
+          toolName,
+          args: event.input,
+        },
+        ctx,
+      );
 
-      expect(await createRtkToolResultHandler(runtime)(event)).toBeUndefined();
+      expect(
+        await createRtkToolResultHandler(runtime)(event, ctx),
+      ).toBeUndefined();
       expect(
         runtime.metrics.snapshot().toolSavingsByName[toolName]?.calls,
       ).toBe(0);
@@ -179,15 +196,18 @@ describe("rtk output compaction", () => {
     });
 
     const handler = createRtkToolResultHandler(runtime);
-    const result = await handler({
-      type: "tool_result",
-      toolCallId: "1",
-      toolName: "read",
-      input: { path: "a.txt" },
-      content: [{ type: "text", text: "1\n2\n3\n4" }],
-      details: undefined,
-      isError: false,
-    } as any);
+    const result = await handler(
+      {
+        type: "tool_result",
+        toolCallId: "1",
+        toolName: "read",
+        input: { path: "a.txt" },
+        content: [{ type: "text", text: "1\n2\n3\n4" }],
+        details: undefined,
+        isError: false,
+      } as any,
+      ctx,
+    );
 
     expect(result).toEqual({
       content: [{ type: "text", text: "1\n2" }],
@@ -215,15 +235,18 @@ describe("rtk output compaction", () => {
     });
 
     const handler = createRtkToolResultHandler(runtime);
-    const result = await handler({
-      type: "tool_result",
-      toolCallId: "1",
-      toolName: "grep",
-      input: { pattern: "x" },
-      content: [{ type: "text", text: "1\n2" }],
-      details: { truncation: { truncated: true } },
-      isError: false,
-    } as any);
+    const result = await handler(
+      {
+        type: "tool_result",
+        toolCallId: "1",
+        toolName: "grep",
+        input: { pattern: "x" },
+        content: [{ type: "text", text: "1\n2" }],
+        details: { truncation: { truncated: true } },
+        isError: false,
+      } as any,
+      ctx,
+    );
 
     expect(result).toEqual({
       content: [{ type: "text", text: "1" }],
@@ -252,15 +275,20 @@ describe("rtk output compaction", () => {
     });
 
     const handler = createRtkToolResultHandler(runtime);
-    const result = await handler({
-      type: "tool_result",
-      toolCallId: "1",
-      toolName: "read",
-      input: { path: "rules/example.md" },
-      content: [{ type: "text", text: "1\n2\n3\n4" }],
-      details: { toolDisplay: { fullRead: true, targetName: "project-rules" } },
-      isError: false,
-    } as any);
+    const result = await handler(
+      {
+        type: "tool_result",
+        toolCallId: "1",
+        toolName: "read",
+        input: { path: "rules/example.md" },
+        content: [{ type: "text", text: "1\n2\n3\n4" }],
+        details: {
+          toolDisplay: { fullRead: true, targetName: "project-rules" },
+        },
+        isError: false,
+      } as any,
+      ctx,
+    );
 
     expect(result).toBeUndefined();
   });
@@ -278,15 +306,18 @@ describe("rtk output compaction", () => {
     });
 
     const handler = createRtkToolResultHandler(runtime);
-    const result = await handler({
-      type: "tool_result",
-      toolCallId: "1",
-      toolName: "grep",
-      input: { pattern: "x" },
-      content: [{ type: "text", text: "1\n2\n3\n4" }],
-      details: undefined,
-      isError: false,
-    } as any);
+    const result = await handler(
+      {
+        type: "tool_result",
+        toolCallId: "1",
+        toolName: "grep",
+        input: { pattern: "x" },
+        content: [{ type: "text", text: "1\n2\n3\n4" }],
+        details: undefined,
+        isError: false,
+      } as any,
+      ctx,
+    );
 
     expect(result).toEqual({
       content: [{ type: "text", text: "1\n2" }],
@@ -314,15 +345,18 @@ describe("rtk output compaction", () => {
     });
 
     const handler = createRtkToolResultHandler(runtime);
-    const result = await handler({
-      type: "tool_result",
-      toolCallId: "1",
-      toolName: "grep",
-      input: { pattern: "x" },
-      content: [{ type: "text", text: "1\n2\n3\n4" }],
-      details: undefined,
-      isError: false,
-    } as any);
+    const result = await handler(
+      {
+        type: "tool_result",
+        toolCallId: "1",
+        toolName: "grep",
+        input: { pattern: "x" },
+        content: [{ type: "text", text: "1\n2\n3\n4" }],
+        details: undefined,
+        isError: false,
+      } as any,
+      ctx,
+    );
 
     expect(result).toBeUndefined();
     expect(runtime.metrics.snapshot().toolSavingsByName.grep?.calls ?? 0).toBe(
@@ -343,15 +377,18 @@ describe("rtk output compaction", () => {
     });
 
     const handler = createRtkToolResultHandler(runtime);
-    const result = await handler({
-      type: "tool_result",
-      toolCallId: "1",
-      toolName: "grep",
-      input: { pattern: "x" },
-      content: [{ type: "text", text: "1\n2\n3\n4" }],
-      details: undefined,
-      isError: false,
-    } as any);
+    const result = await handler(
+      {
+        type: "tool_result",
+        toolCallId: "1",
+        toolName: "grep",
+        input: { pattern: "x" },
+        content: [{ type: "text", text: "1\n2\n3\n4" }],
+        details: undefined,
+        isError: false,
+      } as any,
+      ctx,
+    );
 
     expect(result).toBeUndefined();
     expect(runtime.metrics.snapshot().toolSavingsByName.grep?.calls ?? 0).toBe(
@@ -373,15 +410,18 @@ describe("rtk output compaction", () => {
     });
 
     const handler = createRtkToolResultHandler(runtime);
-    const result = await handler({
-      type: "tool_result",
-      toolCallId: "1",
-      toolName: "read",
-      input: { path: "a.txt" },
-      content: [{ type: "text", text: "1\n2" }],
-      details: undefined,
-      isError: false,
-    } as any);
+    const result = await handler(
+      {
+        type: "tool_result",
+        toolCallId: "1",
+        toolName: "read",
+        input: { path: "a.txt" },
+        content: [{ type: "text", text: "1\n2" }],
+        details: undefined,
+        isError: false,
+      } as any,
+      ctx,
+    );
 
     expect(result).toBeUndefined();
     expect(runtime.metrics.snapshot().toolSavingsByName.read).toEqual({
@@ -404,15 +444,18 @@ describe("rtk output compaction", () => {
     });
 
     const handler = createRtkToolResultHandler(runtime);
-    const result = await handler({
-      type: "tool_result",
-      toolCallId: "1",
-      toolName: "read",
-      input: { path: "a.txt" },
-      content: [{ type: "text", text: "你好世界" }],
-      details: undefined,
-      isError: false,
-    } as any);
+    const result = await handler(
+      {
+        type: "tool_result",
+        toolCallId: "1",
+        toolName: "read",
+        input: { path: "a.txt" },
+        content: [{ type: "text", text: "你好世界" }],
+        details: undefined,
+        isError: false,
+      } as any,
+      ctx,
+    );
 
     expect(result).toEqual({
       content: [{ type: "text", text: "你好…" }],
@@ -440,15 +483,18 @@ describe("rtk output compaction", () => {
     });
 
     const handler = createRtkToolResultHandler(runtime);
-    const result = await handler({
-      type: "tool_result",
-      toolCallId: "1",
-      toolName: "read",
-      input: { path: "a.txt" },
-      content: [{ type: "text", text: "1234\n5678\n9999" }],
-      details: undefined,
-      isError: false,
-    } as any);
+    const result = await handler(
+      {
+        type: "tool_result",
+        toolCallId: "1",
+        toolName: "read",
+        input: { path: "a.txt" },
+        content: [{ type: "text", text: "1234\n5678\n9999" }],
+        details: undefined,
+        isError: false,
+      } as any,
+      ctx,
+    );
 
     expect(result).toEqual({
       content: [{ type: "text", text: "1234…" }],
@@ -476,18 +522,21 @@ describe("rtk output compaction", () => {
     });
 
     const handler = createRtkToolResultHandler(runtime);
-    const result = await handler({
-      type: "tool_result",
-      toolCallId: "1",
-      toolName: "read",
-      input: { path: "a.png" },
-      content: [
-        { type: "text", text: "Read image file [image/png]" },
-        { type: "image", data: "abc", mimeType: "image/png" },
-      ],
-      details: undefined,
-      isError: false,
-    } as any);
+    const result = await handler(
+      {
+        type: "tool_result",
+        toolCallId: "1",
+        toolName: "read",
+        input: { path: "a.png" },
+        content: [
+          { type: "text", text: "Read image file [image/png]" },
+          { type: "image", data: "abc", mimeType: "image/png" },
+        ],
+        details: undefined,
+        isError: false,
+      } as any,
+      ctx,
+    );
 
     expect(result).toBeUndefined();
   });

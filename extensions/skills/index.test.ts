@@ -58,7 +58,7 @@ describe("skills panel removal", () => {
         | ((args: string, ctx: ExtensionCommandContext) => Promise<void>)
         | undefined;
       skillsExtension({
-        on: () => undefined,
+        on: () => () => undefined,
         registerCommand(_name, command) {
           handler = command.handler;
         },
@@ -80,7 +80,7 @@ describe("skills panel removal", () => {
           custom(
             factory: Parameters<ExtensionCommandContext["ui"]["custom"]>[0],
           ) {
-            expect(this).toBe(ctx.ui);
+            expect(this as unknown).toBe(ctx.ui);
             return new Promise((resolve) => {
               const component = factory(
                 { mode: "regular" } as never,
@@ -183,7 +183,10 @@ async function runUpdateBatch(
   }
   writeManagedManifest(paths.manifestPath, manifest);
   const requests = new Map<string, number>();
-  const fetchSpy = spyOn(globalThis, "fetch").mockImplementation((input) => {
+  // fetch also carries Bun's preconnect; the mock only needs the call.
+  const fetchSpy = spyOn(globalThis, "fetch").mockImplementation(((
+    input: string | URL | Request,
+  ) => {
     const url = input instanceof Request ? input.url : input.toString();
     if (url.startsWith("https://api.github.com/")) {
       return Promise.resolve(
@@ -203,7 +206,7 @@ async function runUpdateBatch(
       return Promise.resolve(new Response("unavailable", { status: 503 }));
     }
     return Promise.resolve(new Response(content(name, "Updated")));
-  });
+  }) as typeof fetch);
   const notifications: Array<{ message: string; level: string | undefined }> =
     [];
   const statuses: Array<{ key: string; text: string | undefined }> = [];
@@ -212,7 +215,7 @@ async function runUpdateBatch(
     | ((args: string, ctx: ExtensionCommandContext) => Promise<void>)
     | undefined;
   skillsExtension({
-    on: () => undefined,
+    on: () => () => undefined,
     registerCommand(_name, command) {
       handler = command.handler;
     },

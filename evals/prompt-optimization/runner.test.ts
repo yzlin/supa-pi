@@ -300,7 +300,7 @@ describe("runVariant", () => {
     expect(initialSystemPrompt).toContain(
       "Do not edit, replace, or add assertions to this file.",
     );
-    expect(result.sessionId).toBe(observedSessionId);
+    expect(result.sessionId).toBe(observedSessionId!);
     expect(result.sessionId).toMatch(UUID_V7_PATTERN);
     expect(result.score.overall).toBe(1);
     expect(result.output).toContain("src/math.ts");
@@ -649,7 +649,7 @@ describe("runVariant", () => {
                 .join(""),
         );
         // 1 parent delegates, 2 child writes, 3 child reports, 4 parent answers.
-        const steps = [
+        const steps: AssistantMessage["content"] = [
           {
             type: "toolCall" as const,
             id: "agent-1",

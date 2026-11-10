@@ -2,6 +2,9 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
+import type { Component } from "@earendil-works/pi-tui";
+
+import type { ToolDisplayDiffConfig } from "./config";
 import {
   capturePreviousWriteContent,
   createWriteDiffDetails,
@@ -13,6 +16,27 @@ import {
   renderFinalDiffResult,
   renderWriteCall,
 } from "./renderers";
+
+/** Text and ResponsiveDiffText keep their source text in a `text` field. */
+function textOf(component: Component): string {
+  return (component as unknown as { text: string }).text;
+}
+
+/** Unset fields take the values the renderer uses when a field is missing. */
+function diffConfig(
+  overrides: Partial<ToolDisplayDiffConfig>,
+): ToolDisplayDiffConfig {
+  return {
+    enabled: true,
+    collapsed: false,
+    previewLines: 80,
+    viewMode: "auto",
+    splitMinWidth: 100,
+    wordWrap: true,
+    indicatorMode: "bars",
+    ...overrides,
+  };
+}
 
 const theme = {
   bold: (text: string) => text,
@@ -84,7 +108,7 @@ function renderPatchCallText(
   lineEnding = "\n",
 ): string {
   const patchText = Array.isArray(patch) ? patch.join(lineEnding) : patch;
-  return renderEditCall({ patch: patchText }, theme).text;
+  return textOf(renderEditCall({ patch: patchText }, theme));
 }
 
 function expectPatchCallText(
@@ -98,14 +122,18 @@ function expectPatchCallText(
 describe("tool-display renderers", () => {
   test("renders compact bash call and result", () => {
     expect(
-      renderCompactBashCall({ command: "echo hello", timeout: 2 }, theme).text,
+      textOf(
+        renderCompactBashCall({ command: "echo hello", timeout: 2 }, theme),
+      ),
     ).toContain("$ echo hello (2s)");
     expect(
-      renderCompactBashResult(
-        { content: [{ type: "text", text: "hello\nexit code: 0" }] },
-        {},
-        theme,
-      ).text,
+      textOf(
+        renderCompactBashResult(
+          { content: [{ type: "text", text: "hello\nexit code: 0" }] },
+          {},
+          theme,
+        ),
+      ),
     ).toContain("done (2 lines)");
   });
 
@@ -122,50 +150,62 @@ describe("tool-display renderers", () => {
     };
 
     expect(
-      renderCompactBashResult(result, {}, theme, {
-        collapsed: true,
-        mode: "compact",
-        previewLines: 20,
-        rtkHints: true,
-      }).text,
+      textOf(
+        renderCompactBashResult(result, {}, theme, {
+          enabled: true,
+          collapsed: true,
+          mode: "compact",
+          previewLines: 20,
+          rtkHints: true,
+        }),
+      ),
     ).toContain("[compacted by RTK: saved 90 chars, original 120, final 30]");
     expect(
-      renderCompactBashResult(result, {}, theme, {
-        collapsed: true,
-        mode: "compact",
-        previewLines: 20,
-        rtkHints: false,
-      }).text,
+      textOf(
+        renderCompactBashResult(result, {}, theme, {
+          enabled: true,
+          collapsed: true,
+          mode: "compact",
+          previewLines: 20,
+          rtkHints: false,
+        }),
+      ),
     ).not.toContain("compacted by RTK");
   });
 
   test("renders partial and expanded output modes", () => {
     expect(
-      renderCompactReadResult(
-        { content: [{ type: "text", text: "one\ntwo" }] },
-        { isPartial: true },
-        theme,
-      ).text,
+      textOf(
+        renderCompactReadResult(
+          { content: [{ type: "text", text: "one\ntwo" }] },
+          { isPartial: true },
+          theme,
+        ),
+      ),
     ).toBe("reading…");
     expect(
-      renderCompactReadResult(
-        { content: [{ type: "text", text: "one\ntwo" }] },
-        { expanded: true },
-        theme,
-      ).text,
+      textOf(
+        renderCompactReadResult(
+          { content: [{ type: "text", text: "one\ntwo" }] },
+          { expanded: true },
+          theme,
+        ),
+      ),
     ).toContain("\none\ntwo");
   });
 
   test("renders compact search limit summary", () => {
     expect(
-      renderCompactGrepResult(
-        {
-          content: [{ type: "text", text: "a\nb" }],
-          details: { matchLimitReached: 2 },
-        },
-        {},
-        theme,
-      ).text,
+      textOf(
+        renderCompactGrepResult(
+          {
+            content: [{ type: "text", text: "a\nb" }],
+            details: { matchLimitReached: 2 },
+          },
+          {},
+          theme,
+        ),
+      ),
     ).toContain("2 lines [limit 2]");
   });
 
@@ -179,7 +219,7 @@ describe("tool-display renderers", () => {
     expect(details.toolDisplay?.writeDiff).toContain("-old");
     expect(details.toolDisplay?.writeDiff).toContain("+new");
     expect(
-      renderFinalDiffResult({ content: [], details }, {}, theme).text,
+      textOf(renderFinalDiffResult({ content: [], details }, {}, theme)),
     ).toBe("+1 / -1 (rewrote file) line 1");
     expect(
       renderFinalDiffResult({ content: [], details }, { expanded: true }, theme)
@@ -189,18 +229,20 @@ describe("tool-display renderers", () => {
   });
 
   test("renders omitted edit diffs without zero change counts", () => {
-    const rendered = renderFinalDiffResult(
-      {
-        content: [],
-        details: {
-          diff: "[diff omitted: input exceeds limit]",
-          diffOmitted: true,
-          files: ["large.txt"],
+    const rendered = textOf(
+      renderFinalDiffResult(
+        {
+          content: [],
+          details: {
+            diff: "[diff omitted: input exceeds limit]",
+            diffOmitted: true,
+            files: ["large.txt"],
+          },
         },
-      },
-      {},
-      theme,
-    ).text;
+        {},
+        theme,
+      ),
+    );
 
     expect(rendered).toContain("diff omitted");
     expect(rendered).toContain("in large.txt");
@@ -217,22 +259,26 @@ describe("tool-display renderers", () => {
     try {
       process.stdout.columns = 80;
       expect(
-        renderFinalDiffResult(
-          { content: [], details },
-          { expanded: true },
-          theme,
-          { collapsed: true, enabled: true, previewLines: 3 },
-        ).text,
+        textOf(
+          renderFinalDiffResult(
+            { content: [], details },
+            { expanded: true },
+            theme,
+            diffConfig({ collapsed: true, enabled: true, previewLines: 3 }),
+          ),
+        ),
       ).toContain("… 4 diff lines collapsed");
 
       process.stdout.columns = 120;
       expect(
-        renderFinalDiffResult(
-          { content: [], details },
-          { expanded: true },
-          theme,
-          { collapsed: true, enabled: true, previewLines: 20 },
-        ).text,
+        textOf(
+          renderFinalDiffResult(
+            { content: [], details },
+            { expanded: true },
+            theme,
+            diffConfig({ collapsed: true, enabled: true, previewLines: 20 }),
+          ),
+        ),
       ).toContain(" │ ");
     } finally {
       process.stdout.columns = originalColumns;
@@ -255,17 +301,19 @@ describe("tool-display renderers", () => {
       ].join("\n"),
     };
 
-    const rendered = renderFinalDiffResult(
-      { content: [], details },
-      { expanded: true },
-      theme,
-      {
-        collapsed: false,
-        enabled: true,
-        previewLines: 20,
-        viewMode: "unified",
-      },
-    ).text;
+    const rendered = textOf(
+      renderFinalDiffResult(
+        { content: [], details },
+        { expanded: true },
+        theme,
+        diffConfig({
+          collapsed: false,
+          enabled: true,
+          previewLines: 20,
+          viewMode: "unified",
+        }),
+      ),
+    );
 
     expect(rendered).toContain("--- a.txt");
     expect(rendered).toContain("+++ a.txt");
@@ -284,13 +332,13 @@ describe("tool-display renderers", () => {
       { content: [], details },
       { expanded: true },
       theme,
-      {
+      diffConfig({
         collapsed: false,
         enabled: true,
         previewLines: 20,
         splitMinWidth: 100,
         viewMode: "auto",
-      },
+      }),
     );
 
     expect(component.render(120).join("\n")).toContain(" │ ");
@@ -308,13 +356,13 @@ describe("tool-display renderers", () => {
       { content: [], details },
       { expanded: true },
       theme,
-      {
+      diffConfig({
         collapsed: false,
         enabled: true,
         previewLines: 20,
         splitMinWidth: 100,
         viewMode: "split",
-      },
+      }),
     )
       .render(80)
       .join("\n");
@@ -345,13 +393,13 @@ describe("tool-display renderers", () => {
         { content: [], details },
         { expanded: true },
         theme,
-        { collapsed: false, enabled: true, previewLines: 20 },
+        diffConfig({ collapsed: false, enabled: true, previewLines: 20 }),
       );
 
-      expect(component.text).toContain(" │ ");
+      expect(textOf(component)).toContain(" │ ");
 
       const rendered = component.render(120);
-      expect(rendered).toHaveLength(component.text.split("\n").length);
+      expect(rendered).toHaveLength(textOf(component).split("\n").length);
       expect(rendered.every((line) => line.length === 120)).toBe(true);
     } finally {
       process.stdout.columns = originalColumns;
@@ -367,7 +415,7 @@ describe("tool-display renderers", () => {
       { content: [], details },
       { expanded: true },
       theme,
-      { collapsed: false, enabled: true, previewLines: 20 },
+      diffConfig({ collapsed: false, enabled: true, previewLines: 20 }),
     )
       .render(120)
       .filter((line) => line.includes(" │ "));
@@ -386,7 +434,12 @@ describe("tool-display renderers", () => {
       { content: [], details },
       { expanded: true },
       theme,
-      { collapsed: false, enabled: true, previewLines: 20, viewMode: "split" },
+      diffConfig({
+        collapsed: false,
+        enabled: true,
+        previewLines: 20,
+        viewMode: "split",
+      }),
     ).render(140);
 
     expect(rendered).toContainEqual(expect.stringContaining("▌1 │ old1"));
@@ -404,7 +457,12 @@ describe("tool-display renderers", () => {
       },
       { expanded: true },
       theme,
-      { collapsed: false, enabled: true, previewLines: 20, viewMode: "split" },
+      diffConfig({
+        collapsed: false,
+        enabled: true,
+        previewLines: 20,
+        viewMode: "split",
+      }),
     ).render(140);
     const addOnly = renderFinalDiffResult(
       {
@@ -413,7 +471,12 @@ describe("tool-display renderers", () => {
       },
       { expanded: true },
       theme,
-      { collapsed: false, enabled: true, previewLines: 20, viewMode: "split" },
+      diffConfig({
+        collapsed: false,
+        enabled: true,
+        previewLines: 20,
+        viewMode: "split",
+      }),
     ).render(140);
 
     expect(removeOnly).toContainEqual(
@@ -430,7 +493,12 @@ describe("tool-display renderers", () => {
       },
       { expanded: true },
       dimContextTheme,
-      { collapsed: false, enabled: true, previewLines: 20, viewMode: "split" },
+      diffConfig({
+        collapsed: false,
+        enabled: true,
+        previewLines: 20,
+        viewMode: "split",
+      }),
     )
       .render(140)
       .join("\n");
@@ -450,7 +518,12 @@ describe("tool-display renderers", () => {
       },
       { expanded: true },
       theme,
-      { collapsed: false, enabled: true, previewLines: 20, viewMode: "split" },
+      diffConfig({
+        collapsed: false,
+        enabled: true,
+        previewLines: 20,
+        viewMode: "split",
+      }),
     ).render(140);
 
     expect(rendered[1]?.trim()).toBe("file.txt");
@@ -469,7 +542,12 @@ describe("tool-display renderers", () => {
       },
       { expanded: true },
       theme,
-      { collapsed: false, enabled: true, previewLines: 20, viewMode: "split" },
+      diffConfig({
+        collapsed: false,
+        enabled: true,
+        previewLines: 20,
+        viewMode: "split",
+      }),
     ).render(140);
 
     expect(rendered[1]?.trim()).toBe("old.txt → new.txt");
@@ -486,7 +564,12 @@ describe("tool-display renderers", () => {
       },
       { expanded: true },
       theme,
-      { collapsed: false, enabled: true, previewLines: 20, viewMode: "split" },
+      diffConfig({
+        collapsed: false,
+        enabled: true,
+        previewLines: 20,
+        viewMode: "split",
+      }),
     )
       .render(140)
       .join("\n");
@@ -506,7 +589,12 @@ describe("tool-display renderers", () => {
       },
       { expanded: true },
       theme,
-      { collapsed: false, enabled: true, previewLines: 20, viewMode: "split" },
+      diffConfig({
+        collapsed: false,
+        enabled: true,
+        previewLines: 20,
+        viewMode: "split",
+      }),
     )
       .render(140)
       .join("\n");
@@ -529,12 +617,12 @@ describe("tool-display renderers", () => {
       },
       { expanded: true },
       theme,
-      {
+      diffConfig({
         collapsed: false,
         enabled: true,
         previewLines: 20,
         viewMode: "unified",
-      },
+      }),
     )
       .render(80)
       .join("\n");
@@ -556,7 +644,12 @@ describe("tool-display renderers", () => {
       },
       { expanded: true },
       theme,
-      { collapsed: false, enabled: true, previewLines: 20, viewMode: "split" },
+      diffConfig({
+        collapsed: false,
+        enabled: true,
+        previewLines: 20,
+        viewMode: "split",
+      }),
     )
       .render(140)
       .join("\n");
@@ -578,7 +671,7 @@ describe("tool-display renderers", () => {
       { content: [], details },
       { expanded: true },
       theme,
-      { collapsed: false, enabled: true, previewLines: 20 },
+      diffConfig({ collapsed: false, enabled: true, previewLines: 20 }),
     ).render(120);
 
     expect(rendered.filter((line) => line.includes("▌1 │ old"))).toHaveLength(
@@ -601,13 +694,13 @@ describe("tool-display renderers", () => {
       { content: [], details },
       { expanded: true },
       theme,
-      {
+      diffConfig({
         collapsed: false,
         enabled: true,
         previewLines: 20,
         viewMode: "unified",
         wordWrap: false,
-      },
+      }),
     )
       .render(80)
       .join("\n");
@@ -615,14 +708,14 @@ describe("tool-display renderers", () => {
       { content: [], details },
       { expanded: true },
       theme,
-      {
+      diffConfig({
         collapsed: false,
         enabled: true,
         indicatorMode: "classic",
         previewLines: 20,
         viewMode: "unified",
         wordWrap: false,
-      },
+      }),
     )
       .render(80)
       .join("\n");
@@ -630,14 +723,14 @@ describe("tool-display renderers", () => {
       { content: [], details },
       { expanded: true },
       theme,
-      {
+      diffConfig({
         collapsed: false,
         enabled: true,
         indicatorMode: "none",
         previewLines: 20,
         viewMode: "unified",
         wordWrap: false,
-      },
+      }),
     )
       .render(80)
       .join("\n");
@@ -666,13 +759,13 @@ describe("tool-display renderers", () => {
       { content: [], details },
       { expanded: true },
       theme,
-      {
+      diffConfig({
         collapsed: false,
         enabled: true,
         previewLines: 20,
         viewMode: "split",
         wordWrap: false,
-      },
+      }),
     )
       .render(140)
       .join("\n");
@@ -680,14 +773,14 @@ describe("tool-display renderers", () => {
       { content: [], details },
       { expanded: true },
       theme,
-      {
+      diffConfig({
         collapsed: false,
         enabled: true,
         indicatorMode: "classic",
         previewLines: 20,
         viewMode: "split",
         wordWrap: false,
-      },
+      }),
     )
       .render(140)
       .join("\n");
@@ -695,14 +788,14 @@ describe("tool-display renderers", () => {
       { content: [], details },
       { expanded: true },
       theme,
-      {
+      diffConfig({
         collapsed: false,
         enabled: true,
         indicatorMode: "none",
         previewLines: 20,
         viewMode: "split",
         wordWrap: false,
-      },
+      }),
     )
       .render(140)
       .join("\n");
@@ -730,13 +823,13 @@ describe("tool-display renderers", () => {
       { content: [], details },
       { expanded: true },
       theme,
-      {
+      diffConfig({
         collapsed: false,
         enabled: true,
         previewLines: 20,
         viewMode: "unified",
         wordWrap: false,
-      },
+      }),
     )
       .render(80)
       .join("\n");
@@ -744,13 +837,13 @@ describe("tool-display renderers", () => {
       { content: [], details },
       { expanded: true },
       theme,
-      {
+      diffConfig({
         collapsed: false,
         enabled: true,
         previewLines: 20,
         viewMode: "split",
         wordWrap: false,
-      },
+      }),
     )
       .render(140)
       .join("\n");
@@ -772,13 +865,13 @@ describe("tool-display renderers", () => {
       { content: [], details },
       { expanded: true },
       theme,
-      {
+      diffConfig({
         collapsed: false,
         enabled: true,
         previewLines: 20,
         viewMode: "split",
         wordWrap: true,
-      },
+      }),
     ).render(120);
 
     expect(rendered.filter((line) => line.includes("▌1 │ old"))).toHaveLength(
@@ -798,13 +891,13 @@ describe("tool-display renderers", () => {
       { content: [], details },
       { expanded: true },
       theme,
-      {
+      diffConfig({
         collapsed: false,
         enabled: true,
         previewLines: 20,
         viewMode: "split",
         wordWrap: false,
-      },
+      }),
     ).render(120);
 
     expect(rendered.filter((line) => line.includes("▌1 │ old"))).toHaveLength(
@@ -850,7 +943,7 @@ describe("tool-display renderers", () => {
       "previous content unavailable: nope",
     );
     expect(
-      renderFinalDiffResult({ content: [], details }, {}, theme).text,
+      textOf(renderFinalDiffResult({ content: [], details }, {}, theme)),
     ).toBe("previous content unavailable: nope");
   });
 
@@ -892,17 +985,19 @@ describe("tool-display renderers", () => {
       content: "hello old world",
     });
 
-    const rendered = renderFinalDiffResult(
-      { content: [], details },
-      { expanded: true },
-      tokenTheme,
-      {
-        collapsed: false,
-        enabled: true,
-        previewLines: 20,
-        viewMode: "unified",
-      },
-    ).text;
+    const rendered = textOf(
+      renderFinalDiffResult(
+        { content: [], details },
+        { expanded: true },
+        tokenTheme,
+        diffConfig({
+          collapsed: false,
+          enabled: true,
+          previewLines: 20,
+          viewMode: "unified",
+        }),
+      ),
+    );
 
     expect(rendered).toContain("old");
     expect(rendered).toContain("brave");
@@ -920,12 +1015,12 @@ describe("tool-display renderers", () => {
       { content: [], details },
       { expanded: true },
       ansiDiffTheme,
-      {
+      diffConfig({
         collapsed: false,
         enabled: true,
         previewLines: 20,
         viewMode: "unified",
-      },
+      }),
     )
       .render(80)
       .join("\n");
@@ -958,12 +1053,12 @@ describe("tool-display renderers", () => {
       },
       { expanded: true },
       theme,
-      {
+      diffConfig({
         collapsed: false,
         enabled: true,
         previewLines: 20,
         viewMode: "unified",
-      },
+      }),
     )
       .render(120)
       .join("\n");
@@ -987,12 +1082,12 @@ describe("tool-display renderers", () => {
       { content: [], details },
       { expanded: true },
       tokenTheme,
-      {
+      diffConfig({
         collapsed: false,
         enabled: true,
         previewLines: 20,
         viewMode: "unified",
-      },
+      }),
     )
       .render(2000)
       .join("\n");
@@ -1014,12 +1109,12 @@ describe("tool-display renderers", () => {
       { content: [], details },
       { expanded: true },
       tokenTheme,
-      {
+      diffConfig({
         collapsed: false,
         enabled: true,
         previewLines: 20,
         viewMode: "unified",
-      },
+      }),
     )
       .render(2000)
       .join("\n");
@@ -1038,13 +1133,13 @@ describe("tool-display renderers", () => {
       { content: [], details },
       { expanded: true },
       theme,
-      {
+      diffConfig({
         collapsed: true,
         enabled: true,
         previewLines: 3,
         viewMode: "split",
         wordWrap: false,
-      },
+      }),
     )
       .render(140)
       .join("\n");
@@ -1061,7 +1156,12 @@ describe("tool-display renderers", () => {
       { content: [], details: { diff } },
       { expanded: true },
       theme,
-      { collapsed: false, enabled: true, previewLines: 20, viewMode: "split" },
+      diffConfig({
+        collapsed: false,
+        enabled: true,
+        previewLines: 20,
+        viewMode: "split",
+      }),
     ).render(140);
     const writeRendered = renderFinalDiffResult(
       {
@@ -1072,48 +1172,61 @@ describe("tool-display renderers", () => {
       },
       { expanded: true },
       theme,
-      { collapsed: false, enabled: true, previewLines: 20, viewMode: "split" },
+      diffConfig({
+        collapsed: false,
+        enabled: true,
+        previewLines: 20,
+        viewMode: "split",
+      }),
     ).render(140);
 
-    expect(renderEditCall({ path: "a.txt" }, theme).text).toBe("edit a.txt");
+    expect(textOf(renderEditCall({ path: "a.txt" }, theme))).toBe("edit a.txt");
     expect(
-      renderEditCall(
-        { multi: [{ path: "a.txt" }, { path: "b.txt" }, { path: "c.txt" }] },
-        theme,
-      ).text,
+      textOf(
+        renderEditCall(
+          { multi: [{ path: "a.txt" }, { path: "b.txt" }, { path: "c.txt" }] },
+          theme,
+        ),
+      ),
     ).toBe("multi 3 a.txt, b.txt, c.txt");
     expect(
-      renderEditCall(
-        {
-          path: "top.txt",
-          oldText: "old",
-          newText: "new",
-          multi: [{ path: "b.txt" }],
-        },
-        theme,
-      ).text,
+      textOf(
+        renderEditCall(
+          {
+            path: "top.txt",
+            oldText: "old",
+            newText: "new",
+            multi: [{ path: "b.txt" }],
+          },
+          theme,
+        ),
+      ),
     ).toBe("multi 2 top.txt, b.txt");
     expect(
-      renderEditCall(
-        { edits: [{ path: "a.txt" }, { path: "b.txt" }, { path: "c.txt" }] },
-        theme,
-      ).text,
+      textOf(
+        renderEditCall(
+          { edits: [{ path: "a.txt" }, { path: "b.txt" }, { path: "c.txt" }] },
+          theme,
+        ),
+      ),
     ).toBe("multi 3 a.txt, b.txt, c.txt");
     expect(
-      renderEditCall(
-        {
-          multi: [
-            { path: "a.txt" },
-            { path: "b.txt" },
-            { path: "c.txt" },
-            { path: "d.txt" },
-            { path: "e.txt" },
-            { path: "f.txt" },
-            { path: "g.txt" },
-          ],
-        },
-        theme,
-      ).text,
+      textOf(
+        renderEditCall(
+          {
+            multi: [
+              { path: "a.txt" },
+              { path: "b.txt" },
+              { path: "c.txt" },
+              { path: "d.txt" },
+              { path: "e.txt" },
+              { path: "f.txt" },
+              { path: "g.txt" },
+            ],
+          },
+          theme,
+        ),
+      ),
     ).toBe("multi 7 a.txt, b.txt, c.txt, d.txt, e.txt +2 more");
     const hugeMulti = Array.from({ length: 100 }, (_, index) => ({
       path: `${index}.txt`,
@@ -1123,7 +1236,7 @@ describe("tool-display renderers", () => {
         throw new Error("render walked too far");
       },
     });
-    expect(renderEditCall({ multi: hugeMulti }, theme).text).toBe(
+    expect(textOf(renderEditCall({ multi: hugeMulti }, theme))).toBe(
       "multi 100 0.txt, 1.txt, 2.txt, 3.txt, 4.txt +95 more",
     );
     const duplicateMulti = Array.from({ length: 100 }, () => ({
@@ -1134,7 +1247,7 @@ describe("tool-display renderers", () => {
         throw new Error("render walked too far");
       },
     });
-    expect(renderEditCall({ multi: duplicateMulti }, theme).text).toBe(
+    expect(textOf(renderEditCall({ multi: duplicateMulti }, theme))).toBe(
       "multi 100 same.txt +95 more",
     );
     const missingPathMulti = Array.from({ length: 100 }, () => ({}));
@@ -1144,36 +1257,44 @@ describe("tool-display renderers", () => {
       },
     });
     expect(
-      renderEditCall({ path: "fallback.txt", multi: missingPathMulti }, theme)
-        .text,
+      textOf(
+        renderEditCall(
+          { path: "fallback.txt", multi: missingPathMulti },
+          theme,
+        ),
+      ),
     ).toBe("multi 100 fallback.txt +95 more");
-    expect(renderEditCall({ patch: "*** Begin Patch" }, theme).text).toBe(
+    expect(textOf(renderEditCall({ patch: "*** Begin Patch" }, theme))).toBe(
       "patch",
     );
-    expect(renderWriteCall({ content: "new", path: "a.txt" }, theme).text).toBe(
-      "write a.txt (1 lines)",
-    );
+    expect(
+      textOf(renderWriteCall({ content: "new", path: "a.txt" }, theme)),
+    ).toBe("write a.txt (1 lines)");
     expect(editRendered.slice(1)).toEqual(writeRendered.slice(1));
   });
 
   test("renders strict row and patch text targets with unique multi-file counts", () => {
     expect(
-      renderEditCall(
-        {
-          text: "[a.ts]\n@REPLACE\n-old\n+new\n[b.ts]\n@APPEND\n+tail\n[a.ts]\n@DEL 2",
-        },
-        theme,
-      ).text,
+      textOf(
+        renderEditCall(
+          {
+            text: "[a.ts]\n@REPLACE\n-old\n+new\n[b.ts]\n@APPEND\n+tail\n[a.ts]\n@DEL 2",
+          },
+          theme,
+        ),
+      ),
     ).toBe("row edit 2 a.ts, b.ts");
     expect(
-      renderEditCall(
-        {
-          text: "*** Begin Patch\n*** Update File: a.ts\n@@\n-old\n+new\n*** Delete File: b.ts\n*** End Patch",
-        },
-        theme,
-      ).text,
+      textOf(
+        renderEditCall(
+          {
+            text: "*** Begin Patch\n*** Update File: a.ts\n@@\n-old\n+new\n*** Delete File: b.ts\n*** End Patch",
+          },
+          theme,
+        ),
+      ),
     ).toBe("patch 2 a.ts, b.ts");
-    expect(renderEditCall({ text: "[partial.ts]\n@REP" }, theme).text).toBe(
+    expect(textOf(renderEditCall({ text: "[partial.ts]\n@REP" }, theme))).toBe(
       "edit",
     );
   });
@@ -1358,25 +1479,27 @@ describe("tool-display renderers", () => {
   });
 
   test("includes edited file list in collapsed multi-edit results", () => {
-    const rendered = renderFinalDiffResult(
-      {
-        content: [],
-        details: {
-          diff: "--- a.txt\n+++ a.txt\n@@ -1,1 +1,1 @@\n-old\n+new",
-          files: [
-            "a.txt",
-            "b.txt",
-            "c.txt",
-            "d.txt",
-            "e.txt",
-            "f.txt",
-            "g.txt",
-          ],
+    const rendered = textOf(
+      renderFinalDiffResult(
+        {
+          content: [],
+          details: {
+            diff: "--- a.txt\n+++ a.txt\n@@ -1,1 +1,1 @@\n-old\n+new",
+            files: [
+              "a.txt",
+              "b.txt",
+              "c.txt",
+              "d.txt",
+              "e.txt",
+              "f.txt",
+              "g.txt",
+            ],
+          },
         },
-      },
-      {},
-      theme,
-    ).text;
+        {},
+        theme,
+      ),
+    );
 
     expect(rendered).toContain("+1 / -1");
     expect(rendered).toContain("in a.txt, b.txt, c.txt, d.txt, e.txt +2 more");

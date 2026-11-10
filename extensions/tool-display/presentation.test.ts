@@ -493,7 +493,10 @@ describe("owned tool presentation", () => {
         },
       };
 
-      const call = renderOwnedToolCall(name, {}, colorTheme, context);
+      const call =
+        name === "bash"
+          ? renderBashToolCall({}, colorTheme, context)
+          : renderOwnedToolCall(name, {}, colorTheme, context);
       expect(call.render(80)[0]).toStartWith(`┊ • ${icon} ${name}`);
       expect(foregroundCalls).toContainEqual([color, icon]);
       expect(foregroundCalls).toContainEqual([color, name]);

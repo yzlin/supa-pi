@@ -1,11 +1,12 @@
 import { describe, expect, it } from "bun:test";
 
-import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import type { ToolDefinition } from "@earendil-works/pi-coding-agent";
 
 import { registerLspTool, type ServerManager } from "./tools";
 import type { Diagnostic } from "./types";
 
-type RegisteredTool = Parameters<ExtensionAPI["registerTool"]>[0];
+// Pi registerTool is generic; a capture mock must accept any instantiation.
+type RegisteredTool = ToolDefinition<any, any, any>;
 
 interface DiagnosticClientMock {
   config: { name: string };

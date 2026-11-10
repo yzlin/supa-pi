@@ -15,10 +15,10 @@ import {
   ModelRegistry,
   ModelRuntime,
   SessionManager,
-  type ToolRenderContext,
   type ToolRenderers,
 } from "@earendil-works/pi-coding-agent";
 import { Text, visibleWidth } from "@earendil-works/pi-tui";
+import type { TObject } from "typebox";
 import { Type } from "typebox";
 
 import { AuthStorage } from "../node_modules/@earendil-works/pi-coding-agent/dist/core/auth-storage.js";
@@ -30,6 +30,12 @@ import {
 } from "../node_modules/@earendil-works/pi-coding-agent/dist/modes/interactive/theme/theme.js";
 import rtkExtension from "./rtk";
 import toolDisplayExtension from "./tool-display";
+
+/** Pi 1.5.0 no longer exports ToolRenderContext; derive it from ToolRenderers. */
+type ToolRenderContext<TState, TArgs> = Omit<
+  Parameters<NonNullable<ToolRenderers["renderCall"]>>[2],
+  "args" | "state"
+> & { args: TArgs; state: TState };
 
 const ownCall: NonNullable<ToolRenderers["renderCall"]> = () =>
   new Text("custom call", 0, 0);
@@ -126,8 +132,8 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
-  await nativeRunner?.emit({ type: "session_shutdown" });
-  await rtkRunner?.emit({ type: "session_shutdown" });
+  await nativeRunner?.emit({ type: "session_shutdown", reason: "quit" });
+  await rtkRunner?.emit({ type: "session_shutdown", reason: "quit" });
   if (cwd) {
     rmSync(cwd, { recursive: true, force: true });
   }
@@ -164,6 +170,10 @@ function renderStoredCall(
     expanded: true,
     showImages: false,
     isError: false,
+    keyText: () => "",
+    keyHint: (_key, description) => description,
+    durationMs: undefined,
+    outputPad: 0,
   };
   const call = renderers.renderCall?.(args, theme, context)?.render(80) ?? [];
   const result =
@@ -230,7 +240,9 @@ describe("Pi 1.0.1 renderer resolver SDK probe", () => {
   test("draws bash by name both with RTK execution and without a registration", () => {
     expect(nativeRunner.getToolDefinition("bash")).toBeUndefined();
     const bash = rtkRunner.getToolDefinition("bash");
-    expect(bash?.parameters.required).toContain("reasoning");
+    expect((bash?.parameters as TObject | undefined)?.required).toContain(
+      "reasoning",
+    );
     expect(bash?.renderCall).toBeUndefined();
     expect(bash?.renderResult).toBeUndefined();
     for (const runner of [nativeRunner, rtkRunner]) {

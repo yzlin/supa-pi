@@ -9,7 +9,8 @@
   },
   "type": "module",
   "scripts": {
-    "check": "oxlint --type-aware && oxfmt --check",
+    "check": "oxlint --type-aware && oxfmt --check && tsc",
+    "typecheck": "tsc",
     "check:write": "oxlint --type-aware --fix && oxfmt",
     "eval:prompts": "bun scripts/eval-prompts.ts",
     "eval:prompts:test": "bun test evals/prompt-optimization",

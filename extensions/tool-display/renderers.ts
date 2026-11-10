@@ -35,8 +35,8 @@ import {
 interface ThemeLike {
   fg(token: string, text: string): string;
   bold(text: string): string;
-  getBgAnsi?(token: string): string;
-  getFgAnsi?(token: string): string;
+  getBgAnsi?(token: string): string | undefined;
+  getFgAnsi?(token: string): string | undefined;
 }
 
 interface ToolResultLike {

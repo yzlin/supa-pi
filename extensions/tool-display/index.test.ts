@@ -14,7 +14,6 @@ import {
   createEditToolDefinition,
   type ExtensionAPI,
   type ToolDefinition,
-  type ToolRenderContext,
   type ToolRenderers,
 } from "@earendil-works/pi-coding-agent";
 import {
@@ -24,6 +23,7 @@ import {
   truncateToWidth,
   visibleWidth,
 } from "@earendil-works/pi-tui";
+import type { TObject } from "typebox";
 
 import { companionFixtures } from "./companion-fixtures";
 import * as configModule from "./config";
@@ -34,6 +34,12 @@ import {
   renderGenericToolResult,
   type PresentationState,
 } from "./presentation";
+
+/** Pi 1.5.0 no longer exports ToolRenderContext; derive it from ToolRenderers. */
+type ToolRenderContext<TState, TArgs> = Omit<
+  Parameters<NonNullable<ToolRenderers["renderCall"]>>[2],
+  "args" | "state"
+> & { args: TArgs; state: TState };
 
 const plainTheme = {
   bg: (_token: string, text: string) => text.trimEnd(),
@@ -115,7 +121,7 @@ function harness(initialConfig?: object) {
       const context = {
         cwd,
         ui: { notify() {} },
-      } as Parameters<Command["handler"]>[1];
+      } as unknown as Parameters<Command["handler"]>[1];
       return commands.get("tool-display")?.handler(args, context);
     },
     resolve(
@@ -498,6 +504,10 @@ describe("renderer resolver", () => {
         expanded: false,
         showImages: false,
         isError: false,
+        keyText: () => "",
+        keyHint: (_key, description) => description,
+        durationMs: undefined,
+        outputPad: 0,
       };
       const drawCall = () =>
         r
@@ -658,8 +668,9 @@ describe("execution registration", () => {
       "write",
     ]);
     for (const tool of h.tools) {
-      expect(Object.keys(tool.parameters.properties)[0]).toBe("reasoning");
-      expect(tool.parameters.required?.[0]).toBe("reasoning");
+      const params = tool.parameters as TObject;
+      expect(Object.keys(params.properties)[0]).toBe("reasoning");
+      expect(params.required[0]).toBe("reasoning");
       expect(tool.renderShell).toBeUndefined();
       expect(tool.renderCall).toBeUndefined();
       expect(tool.renderResult).toBeUndefined();
@@ -668,7 +679,9 @@ describe("execution registration", () => {
       handler({}, { cwd: projectConfig(true) });
     }
     const edit = h.tools.find((t) => t.name === "edit");
-    expect(Object.keys(edit?.parameters.properties ?? {})).toEqual(["text"]);
+    expect(
+      Object.keys((edit?.parameters as TObject | undefined)?.properties ?? {}),
+    ).toEqual(["text"]);
     expect(edit?.renderCall).toBeUndefined();
     expect(edit?.renderResult).toBeUndefined();
     expect(edit?.renderShell).toBeUndefined();
@@ -681,7 +694,10 @@ describe("execution registration", () => {
       handler({}, { cwd: candidateCwd });
     }
     expect(
-      Object.keys(h.effectiveTools.get("edit")?.parameters.properties ?? {}),
+      Object.keys(
+        (h.effectiveTools.get("edit")?.parameters as TObject | undefined)
+          ?.properties ?? {},
+      ),
     ).toEqual(["text"]);
 
     for (const handler of h.handlers.get("session_start") ?? []) {
@@ -849,14 +865,14 @@ describe("companion renderer ownership", () => {
         );
       }
       const result = {
-        content: [{ type: "text", text: "unknown\nbody\u001b[31m" }],
+        content: [{ type: "text" as const, text: "unknown\nbody\u001b[31m" }],
         details: { unfamiliar: true },
       };
       expect(
         renderer
           .renderResult?.(
             result,
-            { expanded: false },
+            { expanded: false, isPartial: false },
             plainTheme as never,
             context as never,
           )
@@ -885,14 +901,16 @@ describe("companion renderer ownership", () => {
       context as never,
     );
     const result = {
-      content: [{ type: "text", text: "Script completed\nfull output" }],
+      content: [
+        { type: "text" as const, text: "Script completed\nfull output" },
+      ],
       details: {},
     };
     expect(
       renderer
         .renderResult?.(
           result,
-          { expanded: false },
+          { expanded: false, isPartial: false },
           plainTheme as never,
           context as never,
         )
@@ -910,7 +928,7 @@ describe("companion renderer ownership", () => {
     const expanded = renderer
       .renderResult?.(
         { ...result, details: { calls: [] } },
-        { expanded: true },
+        { expanded: true, isPartial: false },
         plainTheme as never,
         context as never,
       )
@@ -967,7 +985,9 @@ describe("companion presentation groups", () => {
     const renderer = h.resolve(fixture.name) as ToolRenderers;
     const context = { args: fixture.args, state: {}, invalidate() {} };
     const result = {
-      content: [{ type: "text", text: "Script completed\nfull output" }],
+      content: [
+        { type: "text" as const, text: "Script completed\nfull output" },
+      ],
       details: fixture.details,
     };
     const call = renderer.renderCall?.(
@@ -991,7 +1011,7 @@ describe("companion presentation groups", () => {
       renderer
         .renderResult?.(
           result,
-          { expanded: false },
+          { expanded: false, isPartial: false },
           plainTheme as never,
           context as never,
         )
@@ -1002,7 +1022,7 @@ describe("companion presentation groups", () => {
       renderer
         .renderResult?.(
           result,
-          { expanded: false },
+          { expanded: false, isPartial: false },
           plainTheme as never,
           context as never,
         )
@@ -1032,14 +1052,14 @@ test("companion call and result drift degrade independently", () => {
       .join("\n"),
   ).toContain("🔧");
   const result = {
-    content: [{ type: "text", text: "Script completed" }],
+    content: [{ type: "text" as const, text: "Script completed" }],
     details: { calls: [] },
   };
   expect(
     renderer
       .renderResult?.(
         result,
-        { expanded: false },
+        { expanded: false, isPartial: false },
         plainTheme as never,
         context as never,
       )
@@ -1064,14 +1084,14 @@ test("companion fallback safely handles malformed reasoning and non-object store
         ?.render(100),
     ).not.toThrow();
     const result = {
-      content: [{ type: "text", text: "Legacy output" }],
+      content: [{ type: "text" as const, text: "Legacy output" }],
       details: {},
     };
     expect(() =>
       renderer
         .renderResult?.(
           result,
-          { expanded: false },
+          { expanded: false, isPartial: false },
           plainTheme as never,
           context as never,
         )
@@ -1081,7 +1101,7 @@ test("companion fallback safely handles malformed reasoning and non-object store
       renderer
         .renderResult?.(
           { ...result, details: { calls: [] } },
-          { expanded: true },
+          { expanded: true, isPartial: false },
           plainTheme as never,
           context as never,
         )
@@ -1265,8 +1285,11 @@ test("retired task tools and subagent preserve supplied renderers and fill missi
     expect(
       renderer
         ?.renderResult?.(
-          { content: [{ type: "text", text: "historic output" }] },
-          { expanded: false },
+          {
+            content: [{ type: "text", text: "historic output" }],
+            details: undefined,
+          },
+          { expanded: false, isPartial: false },
           plainTheme as never,
           context as never,
         )
@@ -1284,8 +1307,11 @@ test("retired task tools and subagent preserve supplied renderers and fill missi
     expect(
       fallback
         ?.renderResult?.(
-          { content: [{ type: "text", text: "historic output" }] },
-          { expanded: false },
+          {
+            content: [{ type: "text", text: "historic output" }],
+            details: undefined,
+          },
+          { expanded: false, isPartial: false },
           plainTheme as never,
           context as never,
         )

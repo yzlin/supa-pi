@@ -252,7 +252,7 @@ describe("diagnose command", () => {
 
   it("derives and consumes a private HITL observation handoff", () => {
     const runId = `diag-test-${process.pid}`;
-    const handoffDirectory = `/tmp/supa-pi-diagnose-${process.getuid()}-${runId}`;
+    const handoffDirectory = `/tmp/supa-pi-diagnose-${process.getuid!()}-${runId}`;
     const observationFile = join(handoffDirectory, "observation.txt");
     const injectedFile = join(tmpdir(), `supa-pi-hitl-injected-${process.pid}`);
     const observation = `redacted'; touch ${injectedFile}; printf '`;
@@ -282,7 +282,7 @@ describe("diagnose command", () => {
 
   it("rejects and preserves a multiline HITL observation handoff", () => {
     const runId = `diag-multiline-${process.pid}`;
-    const handoffDirectory = `/tmp/supa-pi-diagnose-${process.getuid()}-${runId}`;
+    const handoffDirectory = `/tmp/supa-pi-diagnose-${process.getuid!()}-${runId}`;
     const observationFile = join(handoffDirectory, "observation.txt");
     const malformedObservation = "first\n\nthird\n";
     rmSync(handoffDirectory, { force: true, recursive: true });
@@ -331,7 +331,7 @@ describe("diagnose command", () => {
       (suffix) => `diag-concurrent-${process.pid}-${suffix}`,
     );
     const handoffDirectories = runIds.map(
-      (runId) => `/tmp/supa-pi-diagnose-${process.getuid()}-${runId}`,
+      (runId) => `/tmp/supa-pi-diagnose-${process.getuid!()}-${runId}`,
     );
     const observationFiles = handoffDirectories.map((directory) =>
       join(directory, "observation.txt"),

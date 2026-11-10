@@ -1,4 +1,4 @@
-import { describe, expect, it } from "bun:test";
+import { describe, expect, it, spyOn } from "bun:test";
 
 import { visibleWidth } from "@earendil-works/pi-tui";
 
@@ -63,22 +63,19 @@ const VALID_EXECUTE_PARAMS = {
   ],
 };
 
-function registerAskTool() {
-  let registeredTool: {
-    execute: (...args: unknown[]) => Promise<unknown>;
-    renderResult: (...args: unknown[]) => {
-      render(width: number): string[];
-      invalidate(): void;
-    };
-  } | null = null;
+interface RegisteredAskTool {
+  execute: (...args: unknown[]) => Promise<unknown>;
+  renderResult: (...args: unknown[]) => {
+    render(width: number): string[];
+    invalidate(): void;
+  };
+}
+
+function registerAskTool(): RegisteredAskTool {
+  // Assigned inside the registerTool callback, which control flow cannot see.
+  let registeredTool = null as RegisteredAskTool | null;
   ask({
-    registerTool(tool: {
-      execute: (...args: unknown[]) => Promise<unknown>;
-      renderResult: (...args: unknown[]) => {
-        render(width: number): string[];
-        invalidate(): void;
-      };
-    }) {
+    registerTool(tool: RegisteredAskTool) {
       registeredTool = tool;
     },
     registerCommand() {
@@ -1489,15 +1486,17 @@ describe("ask reducer and key router", () => {
         },
       ],
     };
-    // oxlint-disable-next-line typescript/unbound-method -- Preserve the prototype method and invoke it with the original receiver via .call.
-    const originalSplit = String.prototype.split;
     let largeSplitCount = 0;
-    String.prototype.split = function split(separator, limit) {
-      if (separator === "\n" && this.length > 1000) {
-        largeSplitCount++;
-      }
-      return originalSplit.call(this, separator, limit);
-    };
+    // Count large newline splits, then run the real split.
+    const realSplit: unknown = Reflect.get(String.prototype, "split");
+    const splitSpy = spyOn(String.prototype, "split").mockImplementation(
+      function split(this: string, ...args: [string, number?]) {
+        if (args[0] === "\n" && this.length > 1000) {
+          largeSplitCount++;
+        }
+        return Reflect.apply(realSplit as () => string[], this, args);
+      } as unknown as string["split"],
+    );
 
     try {
       renderAskRuntime({
@@ -1510,7 +1509,7 @@ describe("ask reducer and key router", () => {
         previewEnabled: true,
       });
     } finally {
-      String.prototype.split = originalSplit;
+      splitSpy.mockRestore();
     }
 
     expect(largeSplitCount).toBe(0);

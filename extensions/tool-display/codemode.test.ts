@@ -137,7 +137,7 @@ test("compact nested calls retain last eight, status colors and duration under w
   expect(rows.join("\n")).not.toContain("tool0");
   expect(rows.at(-1)).toContain("TAIL 42ms");
   expect(rows.every((row) => visibleWidth(row) <= 40)).toBe(true);
-  for (const entry of [
+  for (const entry of <[string, string][]>[
     ["success", "✓"],
     ["error", "✗"],
     ["warning", "…"],

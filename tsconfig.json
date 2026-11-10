@@ -1,12 +1,14 @@
 {
   "compilerOptions": {
+    "allowImportingTsExtensions": true,
     "module": "Preserve",
     "moduleResolution": "Bundler",
     "noEmit": true,
     "skipLibCheck": true,
-    "strict": false,
+    "strict": true,
     "target": "ESNext",
     "types": ["bun"]
   },
-  "include": ["**/*.test.ts"]
+  "include": ["**/*.ts"],
+  "exclude": ["node_modules"]
 }

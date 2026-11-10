@@ -2,7 +2,7 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { setTimeout as sleep } from "node:timers/promises";
 import { stripVTControlCharacters } from "node:util";
 
-import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import type { ToolDefinition } from "@earendil-works/pi-coding-agent";
 import { visibleWidth } from "@earendil-works/pi-tui";
 import { Type } from "typebox";
 
@@ -47,7 +47,8 @@ const plainTheme = {
   fg: (_token: string, text: string) => text,
 };
 
-type RegisteredTool = Parameters<ExtensionAPI["registerTool"]>[0];
+// Pi registerTool is generic; a capture mock must accept any instantiation.
+type RegisteredTool = ToolDefinition<any, any, any>;
 interface ToolResult {
   content: Array<{ type: string; text?: string }>;
   details?: unknown;
