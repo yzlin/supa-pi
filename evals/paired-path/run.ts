@@ -566,6 +566,22 @@ function mainTimeline(sessionDir: string): TimelineItem[] {
 
 const TIER_LINE = /^Tier: T(\d)\b/gmu;
 
+/**
+ * The tier a `tier` tool call declares, or undefined when its arguments are
+ * invalid. Same rule as `tierArg` in extensions/tier-guard.ts.
+ */
+function tierArg(args: Record<string, unknown>): number | undefined {
+  const { tier, reason } = args;
+  return typeof tier === "number" &&
+    Number.isInteger(tier) &&
+    tier >= 0 &&
+    tier <= 3 &&
+    typeof reason === "string" &&
+    reason.trim() !== ""
+    ? tier
+    : undefined;
+}
+
 interface TierScan {
   /** Tier digits in order, each with its timeline position. */
   tiers: { tier: number; position: number }[];
@@ -591,6 +607,13 @@ function scanTiers(timeline: TimelineItem[], tools: ToolEvent[]): TierScan {
       continue;
     }
     if (item.kind === "result") {
+      continue;
+    }
+    if (item.name === "tier") {
+      const declared = tierArg(item.args);
+      if (declared !== undefined) {
+        tiers.push({ tier: declared, position: item.position });
+      }
       continue;
     }
     const work =

@@ -9,7 +9,7 @@ Start every request that loads this skill with the triage Playbook. It picks the
 
 ## Route
 
-1. Read `playbooks/triage.md` next to this file and follow it. Your first message after sizing starts with its `Tier:` line, before any tool call that writes.
+1. Read `playbooks/triage.md` next to this file and follow it. Right after sizing, call the `tier` tool, before any tool call that writes.
 2. Read the Playbook it dispatches to before acting. Copy that Playbook's numbered steps into your working plan. Keep a skipped step in the plan with `skip: <reason>`.
 
 ## Shared rules

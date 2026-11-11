@@ -4,7 +4,7 @@ You own the choice of Playbook and of how much process the job gets. Pick the ki
 
 1. Restate the user's goal in one sentence.
 2. Explicit commands skip triage: `/execute`, `/pr`, `/diagnose`, `/correct`, and `/review-fix` open their Playbook directly.
-3. Pick the first kind below whose trigger fits. A non-build kind opens its Playbook now, with no tier, except `execute`, which is always Spec-backed: write `Tier: T2 — execute` first. The build kinds are `bug-fix`, `feature`, and `refactoring`.
+3. Pick the first kind below whose trigger fits. A non-build kind opens its Playbook now, with no tier, except `execute`, which is always Spec-backed: call the `tier` tool with tier 2 and reason `execute` first. The build kinds are `bug-fix`, `feature`, and `refactoring`.
 
    | Playbook | Trigger |
    | --- | --- |
@@ -25,14 +25,14 @@ You own the choice of Playbook and of how much process the job gets. Pick the ki
    - **T3:** the work runs unattended or across sessions, needs several phases that each land on their own, or fits no Playbook.
    - With no hard trigger, soft signals pick T1 or T2: three or more user-visible outcomes, four or more units, an area with no tests or docs, or a fix that already failed once. Name the signals you weighed.
    - **T0** only for a typo, one local line, or a lookup.
-6. Before the first edit, write one line that starts with `Tier: T<n> — ` and names the hard trigger or soft signals that set it. Your first message after sizing starts with the Tier line, before any tool call that writes, including a Spec; a Tier line written after work started does not count. The `tier-guard` extension refuses an `edit`, `write`, or `executor` call until the line exists, and at T2 refuses them outside `.pi/specs/` until `spec_log` `accept` succeeds.
+6. Before the first edit, call the `tier` tool with the tier and the hard trigger or soft signals that set it. Call it right after sizing, before any tool call that writes, including a Spec; a tier declared after work started does not count. Use the tool, not a text line: some models return prose written between tool calls as a summarized thinking block, which drops the line. The `tier-guard` extension refuses an `edit`, `write`, or `executor` call until the tier is declared, and at T2 refuses them outside `.pi/specs/` until `spec_log` `accept` succeeds.
 7. Dispatch:
    - **T0:** work directly.
    - **T1:** follow the kind Playbook. Its build steps follow the Unit loop in the `supapi-mode` Shared rules.
    - **T2:** run the kind Playbook's design steps (feature 1–3, bug-fix 1–2, refactoring 1–2), then follow the `execute` Playbook from step 1 with the plan as `/execute <plan text>`. Carry kind evidence into the Spec: a bug-fix repro becomes a Done Criterion and a `(baseline)` lane; a refactoring pin becomes a Done Criterion.
    - **T3:** load the `figure-it-out` skill.
-8. Escalate when a T1 run hits a hard trigger. Stop at the next verifiable state, write a new line that starts with `Tier: T2 — ` and names the trigger, and continue at T2 from the current workspace. The Spec names the edits made so far in its Execution Scope and Plan, and Done Criteria cover them. No `(baseline)` lane covers behavior those edits already changed, because the base snapshot already holds them. Never lower a tier on your own; a user instruction can.
+8. Escalate when a T1 run hits a hard trigger. Stop at the next verifiable state, call the `tier` tool again with tier 2 and the trigger, and continue at T2 from the current workspace. The Spec names the edits made so far in its Execution Scope and Plan, and Done Criteria cover them. No `(baseline)` lane covers behavior those edits already changed, because the base snapshot already holds them. Never lower a tier on your own; a user instruction can.
 
 **Principles:** `attack-the-premise`, `subtract-before-you-add`, `never-block-on-the-human`.
 
-**Reply:** for a build kind, start with the `Tier:` line or lines you wrote; then give the chosen Playbook's reply.
+**Reply:** for a build kind, start with a `Tier: T<n> — <reason>` line for each `tier` call you made; then give the chosen Playbook's reply.

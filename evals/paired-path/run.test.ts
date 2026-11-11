@@ -575,6 +575,48 @@ describe("triage scorers (offline)", () => {
     expect(run("triage-escalate", immediate)["tier-escalated"]).toBe(false);
   });
 
+  it("counts a valid tier call like a Tier line, in order", () => {
+    const tier = (id: string, value: unknown, reason: unknown = "signals") =>
+      call(id, "tier", { tier: value, reason });
+    expect(
+      run("triage-light", [tier("t", 1), call("a", "edit", {}), result("a")])[
+        "tier-T1"
+      ],
+    ).toBe(true);
+    expect(
+      run("triage-contract", [
+        tier("t", 2),
+        call("a", "edit", {}),
+        result("a"),
+      ])["tier-T2"],
+    ).toBe(true);
+    // Declared after the first edit: does not count.
+    expect(
+      run("triage-light", [call("a", "edit", {}), result("a"), tier("t", 1)])[
+        "tier-T1"
+      ],
+    ).toBe(false);
+    // Invalid arguments do not count.
+    for (const bad of [tier("t", 4), tier("t", "2"), tier("t", 1, " ")]) {
+      expect(
+        run("triage-light", [bad, call("a", "edit", {}), result("a")])[
+          "tier-T1"
+        ],
+      ).toBe(false);
+    }
+    const escalation = [
+      tier("t1", 1),
+      call("a", "edit", {}),
+      result("a"),
+      tier("t2", 2, "the contract check printed BREAKING"),
+      call("b", "spec_log", { action: "accept" }),
+      result("b"),
+    ];
+    const scored = run("triage-escalate", escalation);
+    expect(scored["tier-first-T1"]).toBe(true);
+    expect(scored["tier-escalated"]).toBe(true);
+  });
+
   it("counts an executor subagent call as work started for escalation", () => {
     const delegated = [
       say("Tier: T1 — small"),

@@ -11,9 +11,14 @@
  * file do not count). A `read` of a non-build Playbook after triage turns
  * the guard off for the turn. Triage sizes the `execute` kind T2.
  * Work calls: `edit`, `write`, and `subagent` with agent `executor`.
- * - No `Tier: T<n>` line yet: refuse.
- * - Latest Tier line is T2: refuse work outside `.pi/specs/` until a
- *   `spec_log` `accept` after that line succeeds.
+ * A tier is declared by a `tier` tool call (registered here) or by a text
+ * line `Tier: T<n>`. The tool exists because Claude 5 models (Opus 5.5 among
+ * them) can return prose written between tool calls as a server-summarized
+ * thinking block; session 01a1ca94 lost its Tier line that way and the guard
+ * refused the Spec write 8 times. Tool arguments are never summarized.
+ * - No tier yet: refuse.
+ * - Latest tier is T2: refuse work outside `.pi/specs/` until a
+ *   `spec_log` `accept` after that declaration succeeds.
  * Best-effort only: bash writes pass, and a later turn starts clean.
  */
 
@@ -21,12 +26,32 @@ import { existsSync, realpathSync } from "node:fs";
 import { basename, dirname, join, resolve, sep } from "node:path";
 
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import { Type } from "typebox";
 
 const TRIAGE_PATH = "supapi-mode/playbooks/triage.md";
 const NON_BUILD =
   /supapi-mode\/playbooks\/(?:investigation|diagnose|prototype|correct|fix-review-findings|opening-a-pr)\.md$/u;
 // Same rule as the eval scorer (evals/paired-path/run.ts TIER_LINE).
 const TIER_LINE = /^Tier: T(\d)\b/gmu;
+export const TIER_TOOL = "tier";
+
+/**
+ * The tier a `tier` call declares, or undefined when its arguments are
+ * invalid. Same rule as the eval scorer (evals/paired-path/run.ts tierArg).
+ * It counts before its result arrives: a later call in the same message can
+ * reach the tool_call hook first.
+ */
+function tierArg(args: Record<string, unknown>): number | undefined {
+  const { tier, reason } = args;
+  return typeof tier === "number" &&
+    Number.isInteger(tier) &&
+    tier >= 0 &&
+    tier <= 3 &&
+    typeof reason === "string" &&
+    reason.trim() !== ""
+    ? tier
+    : undefined;
+}
 
 type Part = Record<string, unknown>;
 interface Item {
@@ -138,6 +163,13 @@ export function tierRefusal(
     if (reads(item, NON_BUILD)) {
       return null;
     }
+    if (item.kind === "tool" && item.name === TIER_TOOL) {
+      const declared = tierArg(item.args ?? {});
+      if (declared !== undefined) {
+        tier = { tier: declared, at };
+      }
+      continue;
+    }
     if (item.kind !== "text") {
       continue;
     }
@@ -149,9 +181,10 @@ export function tierRefusal(
     return [
       "Refused by the tier guard: no Tier line yet.",
       "",
-      "Triage step 6: before the first edit, write, or executor call, write a",
-      "line in a message that starts with `Tier: T<n> — ` and names the hard",
-      "trigger or soft signals that set it. Then retry this call.",
+      "Triage step 6: before the first edit, write, or executor call, call the",
+      "`tier` tool with the tier and the hard trigger or soft signals that set",
+      "it (or, without that tool, write a line that starts with `Tier: T<n> — `).",
+      "Then retry this call.",
       "",
     ].join("\n");
   }
@@ -187,6 +220,27 @@ function accepted(items: Item[]): boolean {
 }
 
 export default function (pi: ExtensionAPI) {
+  pi.registerTool({
+    name: TIER_TOOL,
+    label: "Tier",
+    description:
+      "Declare the triage size tier (T0–T3) and the hard trigger or soft signals that set it. Call once after sizing, before the first edit, write, or executor call; call again to escalate.",
+    parameters: Type.Object({
+      tier: Type.Integer({ minimum: 0, maximum: 3, description: "Tier 0–3" }),
+      reason: Type.String({
+        minLength: 1,
+        description: "The hard trigger or soft signals that set the tier",
+      }),
+    }),
+    async execute(_id, params) {
+      return {
+        content: [
+          { type: "text", text: `Tier: T${params.tier} — ${params.reason}` },
+        ],
+        details: {},
+      };
+    },
+  });
   pi.on("tool_call", (event, ctx) => {
     const reason = tierRefusal(
       flatten(ctx.sessionManager.getBranch() as unknown[]),

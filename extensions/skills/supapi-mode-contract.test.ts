@@ -60,23 +60,27 @@ describe("supapi-mode hub contract (not model adherence)", () => {
     expect(files.toSorted()).toEqual(PLAYBOOKS);
   });
 
-  it("triage orders bypass, kind, learn, size, tier line, dispatch, escalate", () => {
+  it("triage orders bypass, kind, learn, size, tier call, dispatch, escalate", () => {
     const triage = read("skills/supapi-mode/playbooks/triage.md");
     const steps = [
       "2. Explicit commands skip triage",
       "3. Pick the first kind below",
       "4. Learn before you size",
       "5. Size the job.",
-      "6. Before the first edit, write one line that starts with `Tier: T<n> — `",
-      "Your first message after sizing starts with the Tier line, before any tool call that writes, including a Spec",
-      "a Tier line written after work started does not count",
+      "6. Before the first edit, call the `tier` tool with the tier and the hard trigger or soft signals that set it.",
+      "Call it right after sizing, before any tool call that writes, including a Spec",
+      "a tier declared after work started does not count",
+      "Use the tool, not a text line: some models return prose written between tool calls as a summarized thinking block",
       "7. Dispatch:",
       "8. Escalate when a T1 run hits a hard trigger.",
+      "call the `tier` tool again with tier 2 and the trigger",
+      "**Reply:** for a build kind, start with a `Tier: T<n> — <reason>` line for each `tier` call you made",
     ].map((step) => triage.indexOf(step));
     for (const [index, position] of steps.entries()) {
       expect(position).toBeGreaterThan(index ? (steps[index - 1] ?? -1) : 0);
     }
     for (const rule of [
+      "except `execute`, which is always Spec-backed: call the `tier` tool with tier 2 and reason `execute` first",
       "`/execute`, `/pr`, `/diagnose`, `/correct`, and `/review-fix` open their Playbook directly",
       "**T2 or higher:** a one-way door",
       "a change to a public API, file format, or output that code outside this repository reads",
@@ -96,6 +100,10 @@ describe("supapi-mode hub contract (not model adherence)", () => {
     ]) {
       expect(triage).toContain(rule);
     }
+    expect(triage).not.toContain("write one line that starts with `Tier:");
+    expect(read("skills/supapi-mode/SKILL.md")).toContain(
+      "Right after sizing, call the `tier` tool, before any tool call that writes.",
+    );
   });
 
   it("falls back to figure-it-out and keeps trivial work direct", () => {
