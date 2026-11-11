@@ -57,7 +57,7 @@ See `package.json` for the full registration list.
 - `performance-reviewer`
 - `review-verifier`
 - `spec-reviewer`
-- `dc-verifier` (independent Finish verifier for `/execute`, on `openai-codex/gpt-6-sol`)
+- `dc-verifier` (independent Finish verifier for `/execute`, on `claude-code/claude-opus-5-5`)
 - `executor`
 
 ## Included skills

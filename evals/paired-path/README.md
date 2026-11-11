@@ -19,7 +19,7 @@ Dialogs (`confirm`, `select`, `input`) are answered from each case's `dialogs` r
 
 `cases.ts`: two execute cases (a two-criterion Spec, an inline plan) and two review cases (three seeded defects, a clean change). Scoring is offline, in `score()`:
 
-- execute: `bun test`, hidden probe tests written only at scoring time, changed paths within `src/`, `tests/`, `.pi/`, a Spec log ending in `done`, and a main `bash` test command after the last edit or child call. Since ADR 0006 the new arm writes `done` only on `spec_log` `verify pass`, after a live `dc-verifier` (`openai-codex/gpt-6-sol`) run, so a live rerun costs one more child per execute case. The fixture Specs carry `## Live Lanes` for that verifier; the old arm `a503abd` checks only its required headings and ignores the section. No live rerun has been done since this change;
+- execute: `bun test`, hidden probe tests written only at scoring time, changed paths within `src/`, `tests/`, `.pi/`, a Spec log ending in `done`, and a main `bash` test command after the last edit or child call. Since ADR 0006 the new arm writes `done` only on `spec_log` `verify pass`, after a live `dc-verifier` (`claude-code/claude-opus-5-5`) run, so a live rerun costs one more child per execute case. The fixture Specs carry `## Live Lanes` for that verifier; the old arm `a503abd` checks only its required headings and ignores the section. No live rerun has been done since this change;
 - review: regex over the main report text for each seeded defect, unchanged tree, and no critical/high/blocking claim on the clean change.
 
 The scorers are coarse. Read the reports for close calls.

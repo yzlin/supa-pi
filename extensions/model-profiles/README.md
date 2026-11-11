@@ -38,7 +38,7 @@ For example:
   "active": "focused",
   "profiles": {
     "focused": {
-      "main": { "model": "openai-codex/gpt-6-sol", "thinking": "high" },
+      "main": { "model": "claude-code/claude-opus-5-5", "thinking": "high" },
       "agents": {
         "*": { "thinking": "low" },
         "executor": { "thinking": "high" }

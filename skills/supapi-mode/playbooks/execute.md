@@ -55,7 +55,7 @@ A resumed Spec keeps its checked boxes as history, not proof of today. Re-run th
 2. Run `bun run check` or the repository's check command on the final state.
 3. Re-check every Done Criterion: re-run its evidence after the last edit and call `spec_log` `check` again. `spec_log` `status` must show no `[~]`.
 4. Record `git status --porcelain --untracked-files=all`.
-5. Call one blocking `subagent` with agent `dc-verifier` and `schema` from `../schemas/dc-verify.schema.json`. The task gives: the repository path as `cwd`, the Spec path, the base `head` and `snapshot` from the `accepted` event, the current `git rev-parse HEAD`, and the artifact directory `$TMPDIR/pi-verify/<slug>/`, emptied first. The verifier did not write the code and runs on another model family.
+5. Call one blocking `subagent` with agent `dc-verifier` and `schema` from `../schemas/dc-verify.schema.json`. The task gives: the repository path as `cwd`, the Spec path, the base `head` and `snapshot` from the `accepted` event, the current `git rev-parse HEAD`, and the artifact directory `$TMPDIR/pi-verify/<slug>/`, emptied first. The verifier did not write the code.
 6. Run `git status --porcelain --untracked-files=all` again. Revert and report any workspace change the verifier made.
 7. Re-read every `ISSUES` criterion, lane, and finding against the code yourself. A verifier finding is a claim until you see it.
 8. Call `spec_log` `verify` with `verdict`, the count of `findings` you confirmed, and `evidence`: the run ID and each criterion's and lane's result as you re-read them.

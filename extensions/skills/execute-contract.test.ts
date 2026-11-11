@@ -94,14 +94,14 @@ describe("execute Playbook contract (wiring, not model adherence)", () => {
     );
   });
 
-  it("defines a read-only dc-verifier on another model family", () => {
+  it("defines a read-only dc-verifier", () => {
     const agent = read("agents/dc-verifier.md");
     for (const line of [
       "tools: read, grep, find, ls, bash",
       "extensions: false",
       "skills: false",
       "disallowed_tools: spec_log, goal_checkpoint, subagent",
-      "model: openai-codex/gpt-6-sol",
+      "model: claude-code/claude-opus-5-5",
       "thinking: high",
     ]) {
       expect(agent).toContain(line);

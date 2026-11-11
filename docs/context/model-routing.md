@@ -13,7 +13,7 @@ These are repository defaults, not the effective settings of a running Pi sessio
 | First-run main session | `claude-code/claude-opus-5-5`, `high` | [`setup.sh`](../../setup.sh) |
 | Direct executor agent | `claude-code/claude-opus-5-5`, `high` | [`agents/executor.md`](../../agents/executor.md) |
 | Direct explorer agent | `claude-code/claude-sonnet-5-5`, `low` | [`agents/explorer.md`](../../agents/explorer.md) |
-| Prompt-eval CLI | `openai-codex/gpt-6-sol`, `high` | [`cli.ts`](../../evals/prompt-optimization/cli.ts) |
+| Prompt-eval CLI | `claude-code/claude-opus-5-5`, `high` | [`cli.ts`](../../evals/prompt-optimization/cli.ts) |
 
 Other direct agent defaults live in their [`agents/` frontmatter](../../agents/). `/review` uses each reviewer and verifier agent's own model unless the user names models in the request; `~/.pi/agent/review.json` is no longer read.
 

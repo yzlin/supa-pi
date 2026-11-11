@@ -38,7 +38,7 @@ import {
   pairedSummaryLine,
 } from "./stats";
 
-const DEFAULT_MODEL = "openai-codex/gpt-6-sol";
+const DEFAULT_MODEL = "claude-code/claude-opus-5-5";
 const DEFAULT_THINKING: ThinkingLevel = "high";
 const DEFAULT_TIMEOUT_MS = 300_000;
 const DEFAULT_MAX_TURNS = 20;

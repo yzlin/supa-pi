@@ -158,9 +158,9 @@ describe("dry-run CLI", () => {
 });
 
 describe("parseCliOptions", () => {
-  it("uses the GPT-6 Sol high default", () => {
+  it("uses the Claude Opus 5.5 high default", () => {
     expect(parseCliOptions([])).toMatchObject({
-      model: "openai-codex/gpt-6-sol",
+      model: "claude-code/claude-opus-5-5",
       thinking: "high",
     });
   });

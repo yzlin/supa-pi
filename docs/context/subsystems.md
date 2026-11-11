@@ -190,7 +190,7 @@ Implemented 2026-11-11 via `/execute` (`.pi/specs/pstack-verify.md`); decision i
 
 - **Live Lane** — a `- LANE-n: <scenario> (DC-n)` row in a Spec's `## Live Lanes`, with `Drive:`, `Artifact:`, and `Pass when:`; a `(baseline)` lane adds `Baseline:` for the same scenario at the base snapshot. Required (at least one lane; baseline optional, for changed existing behavior) unless User Stories is internal-only. _Avoid_: test case.
 - **Stale check** — a checked Done Criterion whose Snapshot ref tree differs from the current workspace tree outside `.pi/specs/`; shown as `[~]` with the changed files. Whole-tree, so any edit makes every earlier check stale. _Avoid_: expired, outdated.
-- **Finish verifier** — the `dc-verifier` agent (`openai-codex/gpt-6-sol`, read-only on the workspace) that the execute Playbook runs once at Finish after re-checking every criterion. It re-runs criteria and lanes, runs baseline lanes in a detached worktree of `refs/pi-specs/<slug>/0`, and audits the diff for defects no criterion states.
+- **Finish verifier** — the `dc-verifier` agent (`claude-code/claude-opus-5-5`, read-only on the workspace) that the execute Playbook runs once at Finish after re-checking every criterion. It re-runs criteria and lanes, runs baseline lanes in a detached worktree of `refs/pi-specs/<slug>/0`, and audits the diff for defects no criterion states.
 - Log: `accepted` gains optional `head`/`snapshot` (base, ref `/0`, kept on revise); new `verified {verdict, findings, evidence, head, snapshot}`. `check` and `verify` share one ref counter. Only `verify pass` writes `done`, refused while any check is stale.
 - Not enforced in code: that a verifier ran, or that the recorded verdict is its verdict (ADR 0005 prose gate).
 
