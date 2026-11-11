@@ -31,10 +31,7 @@ import {
   visibleConversationText,
 } from "./item-references";
 import { createAskEnvelope } from "./response";
-import {
-  lacksVisibleContext,
-  NO_VISIBLE_CONTEXT_ERROR,
-} from "./visible-context";
+import { visibleContextError } from "./visible-context";
 
 export { getRenderOptions } from "../shared/ask-ui/dialog";
 
@@ -409,8 +406,9 @@ export default function ask(pi: ExtensionAPI): void {
       }
       const branch = ctx.sessionManager?.getBranch?.();
       if (branch) {
-        if (lacksVisibleContext(validation.questions, branch)) {
-          return errorResult(NO_VISIBLE_CONTEXT_ERROR);
+        const contextError = visibleContextError(validation.questions, branch);
+        if (contextError) {
+          return errorResult(contextError);
         }
         const problems = findUndefinedItemReferences(
           validation.questions,

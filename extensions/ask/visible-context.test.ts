@@ -99,6 +99,10 @@ async function execute(params: unknown, branch: unknown[]) {
   return { value, opened };
 }
 
+function textOf(value: unknown): string | undefined {
+  return (value as { content: { text: string }[] }).content[0]?.text;
+}
+
 describe("ask visible context", () => {
   it("refuses an ask whose reply has no visible text", async () => {
     const { value, opened } = await execute(
@@ -115,6 +119,69 @@ describe("ask visible context", () => {
       ],
       details: { cancelled: true },
     });
+  });
+
+  // Session 01a1ca6f: the agent put its explanation in thinking four times in a
+  // row, because the refusal never said thinking is hidden from the user.
+  it("says the explanation went to hidden thinking when only thinking has it", async () => {
+    const { value } = await execute(COSTS_ASK, branchEndingWith(assistant()));
+    expect(value).toMatchObject({
+      content: [
+        {
+          type: "text",
+          text: expect.stringContaining("is in a thinking block"),
+        },
+      ],
+    });
+  });
+
+  it("omits the thinking hint when the reply has no thinking", async () => {
+    const bare = {
+      type: "message",
+      message: {
+        role: "assistant",
+        content: [{ type: "toolCall", name: "ask", arguments: {} }],
+      },
+    };
+    const { value, opened } = await execute(COSTS_ASK, [
+      ...branchEndingWith(assistant("note")).slice(0, -1),
+      bare,
+    ]);
+    expect(opened).toBe(false);
+    const text = textOf(value);
+    expect(text).toContain("this reply has no visible text");
+    expect(text).not.toContain("thinking block");
+  });
+
+  it("tells the agent to stop calling ask on a repeat refusal in the same turn", async () => {
+    const first = await execute(COSTS_ASK, branchEndingWith(assistant()));
+    const firstText = textOf(first.value);
+    expect(firstText).not.toContain("do not call ask again");
+
+    const refusal = {
+      type: "message",
+      message: {
+        role: "toolResult",
+        toolName: "ask",
+        content: [{ type: "text", text: firstText }],
+      },
+    };
+    const second = await execute(COSTS_ASK, [
+      ...branchEndingWith(assistant()),
+      refusal,
+      assistant(),
+    ]);
+    expect(second.opened).toBe(false);
+    expect(textOf(second.value)).toContain("do not call ask again");
+
+    // A new user message starts a new turn, so the count resets.
+    const nextTurn = await execute(COSTS_ASK, [
+      ...branchEndingWith(assistant()),
+      refusal,
+      { type: "message", message: { role: "user", content: "continue" } },
+      assistant(),
+    ]);
+    expect(textOf(nextTurn.value)).not.toContain("do not call ask again");
   });
 
   it("refuses when only earlier tool calls in the same reply have results", async () => {
