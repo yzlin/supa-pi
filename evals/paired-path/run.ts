@@ -440,6 +440,7 @@ export function runOne(
 // ---------- offline scoring ----------
 
 interface ToolEvent {
+  id: string;
   name: string;
   args: Record<string, unknown>;
   isError: boolean;
@@ -508,6 +509,132 @@ export function mainToolEvents(sessionDir: string): ToolEvent[] {
     });
   }
   return events;
+}
+
+type TimelineItem =
+  | { kind: "text"; text: string; position: number }
+  | { kind: "result"; id: string; position: number }
+  | {
+      kind: "tool";
+      id: string;
+      name: string;
+      args: Record<string, unknown>;
+      position: number;
+    };
+
+/**
+ * Main-session assistant text parts and tool calls on one shared position:
+ * sorted session file, then entry, then content part. Custom messages and
+ * non-assistant text are left out.
+ */
+function mainTimeline(sessionDir: string): TimelineItem[] {
+  const items: TimelineItem[] = [];
+  for (const path of listFiles(sessionDir, ".jsonl").toSorted()) {
+    for (const entry of jsonl(path)) {
+      const message = (entry as { message?: Record<string, unknown> }).message;
+      if (entry.type === "message" && message?.role === "toolResult") {
+        items.push({
+          kind: "result",
+          id: message.toolCallId as string,
+          position: items.length,
+        });
+        continue;
+      }
+      if (entry.type !== "message" || message?.role !== "assistant") {
+        continue;
+      }
+      for (const part of (message.content as
+        | Record<string, unknown>[]
+        | undefined) ?? []) {
+        const position = items.length;
+        if (part.type === "text" && typeof part.text === "string") {
+          items.push({ kind: "text", text: part.text, position });
+        } else if (part.type === "toolCall") {
+          items.push({
+            kind: "tool",
+            id: part.id as string,
+            name: part.name as string,
+            args: (part.arguments as Record<string, unknown>) ?? {},
+            position,
+          });
+        }
+      }
+    }
+  }
+  return items;
+}
+
+const TIER_LINE = /^Tier: T(\d)\b/gmu;
+
+interface TierScan {
+  /** Tier digits in order, each with its timeline position. */
+  tiers: { tier: number; position: number }[];
+  /** Position of the first edit, write, or executor call; Infinity when none. */
+  workStarted: number;
+  /** Positions of successful spec_log accept calls. */
+  accepts: number[];
+}
+
+function scanTiers(timeline: TimelineItem[], tools: ToolEvent[]): TierScan {
+  const failed = new Set(tools.filter((t) => t.isError).map((t) => t.id));
+  const answered = new Set(
+    timeline.flatMap((item) => (item.kind === "result" ? [item.id] : [])),
+  );
+  const tiers: TierScan["tiers"] = [];
+  let workStarted = Number.POSITIVE_INFINITY;
+  const accepts: number[] = [];
+  for (const item of timeline) {
+    if (item.kind === "text") {
+      for (const match of item.text.matchAll(TIER_LINE)) {
+        tiers.push({ tier: Number(match[1]), position: item.position });
+      }
+      continue;
+    }
+    if (item.kind === "result") {
+      continue;
+    }
+    const work =
+      EDIT_TOOLS.has(item.name) ||
+      (item.name === "subagent" && item.args.agent === "executor");
+    if (work && item.position < workStarted) {
+      workStarted = item.position;
+    }
+    if (
+      item.name === "spec_log" &&
+      item.args.action === "accept" &&
+      answered.has(item.id) &&
+      !failed.has(item.id)
+    ) {
+      accepts.push(item.position);
+    }
+  }
+  return { tiers, workStarted, accepts };
+}
+
+function firstTierIs(scan: TierScan, tier: number): boolean {
+  const first = scan.tiers[0];
+  return first?.tier === tier && first.position < scan.workStarted;
+}
+
+function escalated(scan: TierScan): boolean {
+  const firstT1 = scan.tiers.find((t) => t.tier === 1);
+  if (!firstT1) {
+    return false;
+  }
+  return scan.tiers.some(
+    (t) =>
+      t.tier === 2 &&
+      t.position > firstT1.position &&
+      t.position > scan.workStarted &&
+      scan.accepts.some((accept) => accept > t.position),
+  );
+}
+
+function hasSpecFile(workspace: string): boolean {
+  const dir = join(workspace, ".pi", "specs");
+  return (
+    existsSync(dir) && readdirSync(dir).some((name) => name.endsWith(".md"))
+  );
 }
 
 /** Final assistant text plus any custom report messages from the main session. */
@@ -601,7 +728,8 @@ function specLogs(workspace: string): Record<string, unknown>[][] {
 }
 
 // Both runtimes append `done` only after every Done Criterion is verified
-// (old: ledger completion; new: spec_log check of the last criterion).
+// (old: ledger completion; new since ADR 0006: spec_log verify pass after a
+// live dc-verifier run, once every criterion is checked and none is stale).
 function logDone(workspace: string, sessionDir: string): boolean {
   if (specLogs(workspace).some((events) => events.at(-1)?.event === "done")) {
     return true;
@@ -675,6 +803,7 @@ export function score(
 ): Record<string, boolean> {
   const sessions = join(dir, "sessions");
   const tools = mainToolEvents(sessions);
+  const tiers = scanTiers(mainTimeline(sessions), tools);
   const text = reportText(sessions);
   const changed = changedPaths(workspace);
   const result: Record<string, boolean> = {};
@@ -710,6 +839,25 @@ export function score(
         );
         break;
       }
+      case "no-spec":
+        result[check.id] =
+          !tools.some(
+            (t) => t.name === "spec_log" && t.args.action === "accept",
+          ) && !hasSpecFile(workspace);
+        break;
+      case "spec-path":
+        result[check.id] = tiers.accepts.length > 0;
+        break;
+      case "tier-T1":
+      case "tier-first-T1":
+        result[check.id] = firstTierIs(tiers, 1);
+        break;
+      case "tier-T2":
+        result[check.id] = firstTierIs(tiers, 2);
+        break;
+      case "tier-escalated":
+        result[check.id] = escalated(tiers);
+        break;
       case "security-reviewer-ran":
         result[check.id] = reviewers(tools).includes("security-reviewer");
         break;

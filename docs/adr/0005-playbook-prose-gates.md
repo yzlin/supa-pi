@@ -11,7 +11,7 @@ read_when:
 - Date: 2026-11-04
 - Deciders: Ethan
 - Supersedes: ADR 0003, ADR 0004
-- Superseded by: none
+- Superseded by: ADR 0006 (in part: `spec_log` `verify` gates `done` in code)
 
 ## Context
 

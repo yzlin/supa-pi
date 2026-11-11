@@ -1,11 +1,11 @@
 ---
 name: figure-it-out
-description: Design an auditable workflow when no supapi-mode Playbook fits, such as a large migration, an ambitious multi-part change, or work the user reviews after stepping away. Use for /skill:figure-it-out, "figure it out", or supapi-mode fallback.
+description: Triage tier T3. Design an auditable workflow when work runs unattended or across sessions, needs several phases that each land on their own, or no Playbook fits, such as a large migration or an ambitious multi-part change. Use for /skill:figure-it-out, "figure it out", or a T3 dispatch from the supapi-mode triage Playbook.
 ---
 
 # Figure it out
 
-When no Playbook fits, design one. The first deliverable is the workflow itself: phases that scale rigor to the task and leave a trail the user can audit later.
+This is triage tier T3: the work runs unattended or across sessions, needs several phases that each land on their own, or no Playbook fits. Design the workflow. The first deliverable is the workflow itself: phases that scale rigor to the task and leave a trail the user can audit later.
 
 ## A. Frame
 

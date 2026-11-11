@@ -22,14 +22,14 @@ A `legacy (pre-P4)` log cannot resume. Say so and ask for a new slug.
 
 ## 3. Plan the work
 
-Split the Plan into units that each prove one or more Done Criteria. Order them by dependency; put the riskiest unknown first. Write the unit list into your working plan with the criteria each one proves.
+Split the Plan into units per the Unit loop in the `supapi-mode` Shared rules; each unit proves one or more Done Criteria. Order them by dependency; put the riskiest unknown first. Write the unit list into your working plan with the criteria each one proves.
 
 Run units in the main session by default. Use a child only for independent units with disjoint write scopes that can run in parallel, for work that would flood this context, or for a unit whose directory is outside the workspace.
 
 ## 4. Run each unit
 
 - **In main:** edit only the unit's declared paths. Keep shell commands read-only or inside the scope, and check `git status` before verifying.
-- **Delegated:** call one blocking `subagent` with agent `executor` and `schema` from `../schemas/executor-report.schema.json`. The task is self-contained: goal, exact write scope, the Done Criteria it proves, references with verified paths, safety gates, and TDD guidance for behavior changes (`skills/tdd-workflow/SKILL.md`). Run at most four children at once, only across disjoint scopes. Read the report from the "Validated StructuredOutput" JSON in the tool result; do not open `result.json` unless it says the report was capped. A `done` is a claim.
+- **Delegated:** call one blocking `subagent` with agent `executor` and `schema` from `../schemas/executor-report.schema.json`. The task is self-contained: goal, exact write scope, the Done Criteria it proves, references with verified paths, safety gates, and TDD guidance for behavior changes (`skills/tdd-workflow/SKILL.md`). Run at most four children at once, only across disjoint scopes, each in its own worktree when it builds, installs, or formats (the Unit loop). Read the report from the "Validated StructuredOutput" JSON in the tool result; do not open `result.json` unless it says the report was capped. A `done` is a claim.
 
 ## 5. Verify and record
 
@@ -49,7 +49,19 @@ A resumed Spec keeps its checked boxes as history, not proof of today. Re-run th
 
 ## 7. Finish
 
-`spec_log` writes `done` when every criterion is checked. Run the review gate from the `supapi-mode` Shared rules on the run's diff. A gate fix must keep every checked criterion passing: re-run the evidence of each criterion the fix could affect. Then run `bun run check` or the repository's check command once more on the final state.
+`spec_log` `verify` with verdict `pass` is the only writer of `done`; the last `check` is not. `verify pass` refuses while any criterion is stale. A criterion is stale (`[~]` in `spec_log` `status`, with the changed files) when any workspace file outside `.pi/specs/` changed after its check, so any edit makes every earlier check stale.
+
+1. Run the review gate from the `supapi-mode` Shared rules on the run's diff.
+2. Run `bun run check` or the repository's check command on the final state.
+3. Re-check every Done Criterion: re-run its evidence after the last edit and call `spec_log` `check` again. `spec_log` `status` must show no `[~]`.
+4. Record `git status --porcelain --untracked-files=all`.
+5. Call one blocking `subagent` with agent `dc-verifier` and `schema` from `../schemas/dc-verify.schema.json`. The task gives: the repository path as `cwd`, the Spec path, the base `head` and `snapshot` from the `accepted` event, the current `git rev-parse HEAD`, and the artifact directory `$TMPDIR/pi-verify/<slug>/`, emptied first. The verifier did not write the code and runs on another model family.
+6. Run `git status --porcelain --untracked-files=all` again. Revert and report any workspace change the verifier made.
+7. Re-read every `ISSUES` criterion, lane, and finding against the code yourself. A verifier finding is a claim until you see it.
+8. Call `spec_log` `verify` with `verdict`, the count of `findings` you confirmed, and `evidence`: the run ID and each criterion's and lane's result as you re-read them.
+   - `pass` writes `done`.
+   - `issues`: repair, re-run and re-`check` every criterion (any edit makes all of them stale), and run the verifier again. Allow at most two verifier rounds after the first; after that, call `spec_log` `block` with the open findings.
+   - The verifier's `blocked` goes to `spec_log` `block` with its reason, never to `verify pass`.
 
 **Principles:** `prove-it-works`, `sequence-verifiable-units`, `outcome-oriented-execution`, `attack-the-premise`, `never-block-on-the-human`, `guard-the-context-window`, `make-operations-idempotent`, `build-the-lever`.
 
@@ -57,4 +69,4 @@ A resumed Spec keeps its checked boxes as history, not proof of today. Re-run th
 
 ## Not guaranteed
 
-Since P4 no runtime gate enforces scope, repair limits, verification order, or approval. `spec_log` checks only Spec shape, the accepted hash, and that a check names a criterion and has evidence text. Whether that evidence is real is your responsibility.
+Since P4 no runtime gate enforces scope, repair limits, verification order, or approval. `spec_log` checks Spec shape (including Live Lanes), the accepted hash, that a check names a criterion and has evidence text, and that `verify pass` comes after every criterion is checked and none is stale (ADR 0006). It does not check that a `dc-verifier` ran or that the verdict you pass is the one it returned. Whether that evidence is real is your responsibility.

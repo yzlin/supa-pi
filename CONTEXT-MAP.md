@@ -60,6 +60,7 @@
 - `docs/context/subsystems.md` "Skill CLI: implemented direction", `extensions/skills/ops.ts`, and `extensions/skills/core.ts` — read before changing `/skill`, the `pi-skill` CLI (`scripts/pi-skill.ts`), the shared Prompter-based skill orchestration, or skill-manifest write locking.
 - `skills/supapi-mode/playbooks/opening-a-pr.md` and `prompts/pr.md` — read before changing `/pr`, PR-body format, PR submission gates, or `rules/common/git-workflow.md` PR guidance.
 - `skills/retro/SKILL.md` and `prompts/retro.md` — read before changing `/retro`, session selection and evidence, report-only boundaries, or agent-environment recommendation routing.
+- `skills/supapi-mode/playbooks/triage.md` and the hub `**Unit loop:**` rule in `skills/supapi-mode/SKILL.md` — read before changing how requests pick a Playbook or a size tier, the hard triggers, escalation, or the shared build loop; the triage eval cases live in `evals/paired-path/cases.ts`.
 - `skills/supapi-mode/playbooks/execute.md` and `prompts/execute.md` — read before changing `/execute` or execute orchestration behavior.
 - `skills/to-spec/SKILL.md` and `extensions/spec-log/README.md` — read before changing `/to-spec`, Spec format, Spec log, Snapshot refs, or Spec resume.
 - `extensions/goal/README.md` — read before changing `/goal`, goal task mode, goal checkpoint behavior, goal status rendering, or Goal Extension registration.

@@ -57,6 +57,7 @@ See `package.json` for the full registration list.
 - `performance-reviewer`
 - `review-verifier`
 - `spec-reviewer`
+- `dc-verifier` (independent Finish verifier for `/execute`, on `openai-codex/gpt-6-sol`)
 - `executor`
 
 ## Included skills
@@ -65,7 +66,7 @@ See `package.json` for the full registration list.
 
 `skills/showing-me/SKILL.md` adapts the visual-explanation approach from HumanLayer's MIT-licensed [`show-me` skill](https://github.com/humanlayer/skills/blob/3c2629142c5d437428269b1b722b08c0b87f574d/plugins/show-me/skills/show-me/SKILL.md) at commit `3c2629142c5d437428269b1b722b08c0b87f574d`.
 
-`skills/supapi-mode/SKILL.md` is the hub router. The core prompt sends non-trivial engineering work to it; it matches one Playbook under `skills/supapi-mode/playbooks/` (investigation, diagnose, bug-fix, feature, refactoring, prototype, execute, correct, fix-review-findings, opening-a-pr) and falls back to `skills/figure-it-out/SKILL.md` when none fits. Playbooks are step files, not separate skills. The shape is adapted from Lauren Tan's MIT-licensed [pstack](https://github.com/cursor/plugins/tree/main/pstack).
+`skills/supapi-mode/SKILL.md` is the hub router. The core prompt sends non-trivial engineering work to it; it starts each request with the triage Playbook, `skills/supapi-mode/playbooks/triage.md` (explicit commands such as `/execute`, `/pr`, and `/diagnose` skip it), which picks one of the other ten Playbooks in that directory (investigation, diagnose, bug-fix, feature, refactoring, prototype, execute, correct, fix-review-findings, opening-a-pr) and, for build work, a size tier T0–T3. Tier T3 hands the work to `skills/figure-it-out/SKILL.md`. Playbooks are step files, not separate skills. The shape is adapted from Lauren Tan's MIT-licensed [pstack](https://github.com/cursor/plugins/tree/main/pstack).
 
 `skills/e2e-testing/SKILL.md` is the canonical main-session Playwright E2E workflow, including test guardrails, artifact handling, and reporting; no dedicated E2E agent is shipped.
 

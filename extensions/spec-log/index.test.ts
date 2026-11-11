@@ -14,7 +14,7 @@ import { stripVTControlCharacters } from "node:util";
 import { initTheme } from "@earendil-works/pi-coding-agent";
 
 import { runSpecLog, SpecLogResult, specLogCallLabel } from "./index";
-import { lintSpec, readSpecLog, renderSpecStatus } from "./spec";
+import { hashSpec, lintSpec, readSpecLog, renderSpecStatus } from "./spec";
 
 const SPEC = `# Execution Brief
 
@@ -32,6 +32,21 @@ Add a greeting.
   Evidence: bun test tests/greet.test.ts passes
 - DC-2: repository check passes (technical)
   Evidence: bun run check exits 0
+
+## Live Lanes
+- LANE-1: run the greeting CLI (DC-1) (baseline)
+  Drive: bun src/cli.ts
+  Artifact: $TMPDIR/pi-verify/greet/cli.txt
+  Pass when: output is "hi"
+  Baseline: the same command at the base prints nothing
+- LANE-2: import greet in a REPL (DC-1)
+  Drive: bun -e 'import {greet} from "./src/greet"; console.log(greet())'
+  Artifact: $TMPDIR/pi-verify/greet/repl.txt
+  Pass when: output is "hi"
+- LANE-3: run the full check (DC-2)
+  Drive: bun run check
+  Artifact: $TMPDIR/pi-verify/greet/check.txt
+  Pass when: exit 0
 
 ## Verification
 Run the commands above.
@@ -100,8 +115,129 @@ describe("lintSpec", () => {
   });
 });
 
+describe("lintSpec Live Lanes", () => {
+  const LANES_START = SPEC.indexOf("## Live Lanes");
+  const LANES_END = SPEC.indexOf("## Verification");
+  const withLanes = (lanes: string) =>
+    `${SPEC.slice(0, LANES_START)}## Live Lanes\n${lanes}\n${SPEC.slice(LANES_END)}`;
+  const lane = (n: number, tail = "(DC-1)", extra = "") =>
+    `- LANE-${n}: scenario ${n} ${tail}\n  Drive: run ${n}\n  Artifact: /tmp/a${n}.txt\n  Pass when: ok${extra}\n`;
+  const BASE = `${lane(1, "(DC-1) (baseline)", "\n  Baseline: base prints nothing")}${lane(2)}${lane(3, "(DC-2)")}`;
+  const internalSpec = (content: string) =>
+    content
+      .replace(
+        "- US-1: As a user, I want a greeting, so that I feel welcome.",
+        "N/A — internal: refactor only",
+      )
+      .replace("(US-1)", "(technical)");
+
+  it("Live Lanes: accepts three valid lanes with one baseline", () => {
+    expect(lintSpec(withLanes(BASE))).toEqual([]);
+  });
+
+  it("Live Lanes: requires the section when stories are not internal", () => {
+    const without = SPEC.slice(0, LANES_START) + SPEC.slice(LANES_END);
+    expect(lintSpec(without)).toContain(
+      "Missing section: ## Live Lanes (required unless User Stories is `N/A — internal: <reason>`).",
+    );
+  });
+
+  it("Live Lanes: an internal-only Spec without the section passes", () => {
+    const without = SPEC.slice(0, LANES_START) + SPEC.slice(LANES_END);
+    expect(lintSpec(internalSpec(without))).toEqual([]);
+  });
+
+  it("Live Lanes: an internal-only Spec with an invalid section fails", () => {
+    expect(lintSpec(internalSpec(withLanes(lane(1, "(DC-9)"))))).toContain(
+      "LANE-1 cites unknown Done Criterion DC-9.",
+    );
+  });
+
+  it("Live Lanes: accepts one plain lane with no baseline", () => {
+    expect(lintSpec(withLanes(lane(1)))).toEqual([]);
+  });
+
+  it("Live Lanes: accepts one baseline lane with a Baseline: line", () => {
+    const one = lane(
+      1,
+      "(DC-1) (baseline)",
+      "\n  Baseline: base prints nothing",
+    );
+    expect(lintSpec(withLanes(one))).toEqual([]);
+  });
+
+  it("Live Lanes: rejects an empty section", () => {
+    expect(lintSpec(withLanes(""))).toContain(
+      "## Live Lanes needs at least 1 lane; found 0.",
+    );
+  });
+
+  for (const field of ["Drive", "Artifact", "Pass when"]) {
+    it(`Live Lanes: rejects a lane missing ${field}:`, () => {
+      const broken = BASE.replace(
+        new RegExp(`\\n  ${field}: [^\\n]*`, "u"),
+        "",
+      );
+      expect(lintSpec(withLanes(broken))).toContain(
+        `LANE-1 has no indented \`${field}:\` line.`,
+      );
+    });
+  }
+
+  it("Live Lanes: rejects (baseline) without a Baseline: line", () => {
+    const broken = BASE.replace("\n  Baseline: base prints nothing", "");
+    expect(lintSpec(withLanes(broken))).toContain(
+      "LANE-1 is a (baseline) lane with no `Baseline:` line.",
+    );
+  });
+
+  it("Live Lanes: rejects a Baseline: line without the (baseline) tag", () => {
+    const broken = `${BASE}${lane(4, "(DC-1)", "\n  Baseline: b")}`;
+    expect(lintSpec(withLanes(broken))).toContain(
+      "LANE-4 has a `Baseline:` line but no (baseline) tag.",
+    );
+  });
+
+  it("Live Lanes: rejects a repeated LANE-n label", () => {
+    expect(lintSpec(withLanes(`${BASE}${lane(2)}`))).toContain(
+      "Repeated Live Lane label: LANE-2",
+    );
+  });
+
+  it("Live Lanes: rejects a lane with no (DC-n) citation", () => {
+    expect(lintSpec(withLanes(`${BASE}${lane(4, "")}`))).toContain(
+      "LANE-4 must cite at least one Done Criterion as (DC-n).",
+    );
+  });
+
+  it("Live Lanes: rejects a lane citing an unknown DC", () => {
+    expect(lintSpec(withLanes(`${BASE}${lane(4, "(DC-9)")}`))).toContain(
+      "LANE-4 cites unknown Done Criterion DC-9.",
+    );
+  });
+
+  it("Live Lanes: rejects wrong section order", () => {
+    const without = SPEC.slice(0, LANES_START) + SPEC.slice(LANES_END);
+    const misplaced = without.replace(
+      "## Plan",
+      `## Live Lanes\n${BASE}\n## Plan`,
+    );
+    expect(
+      lintSpec(misplaced).some((error) =>
+        error.startsWith("Sections must appear in order:"),
+      ),
+    ).toBe(true);
+  });
+
+  it("Live Lanes: rejects an unlabeled lane row", () => {
+    expect(lintSpec(withLanes(`${BASE}- a lane\n`))).toContain(
+      "Live Lanes row lacks a `- LANE-n: ` label: - a lane",
+    );
+  });
+});
+
 describe("spec_log tool", () => {
-  it("accepts, checks each criterion with evidence, and writes done", () => {
+  it("check does not write done; verify pass writes done", () => {
     const cwd = workspace(true);
     expect(run(cwd, { action: "accept" }).isError).toBe(false);
     expect(
@@ -119,8 +255,29 @@ describe("spec_log tool", () => {
       id: "DC-2",
       evidence: "bun run check: exit 0",
     });
-    const events = readSpecLog(join(cwd, LOG_PATH)).map((event) => event.event);
-    expect(events).toEqual(["accepted", "checked", "checked", "done"]);
+    const kinds = () =>
+      readSpecLog(join(cwd, LOG_PATH)).map((event) => event.event);
+    expect(kinds()).toEqual(["accepted", "checked", "checked"]);
+    const passed = run(cwd, {
+      action: "verify",
+      verdict: "pass",
+      findings: 0,
+      evidence: "dc-verifier run-1: DC-1 PASS, DC-2 PASS",
+    });
+    expect(passed.isError).toBe(false);
+    expect(kinds()).toEqual([
+      "accepted",
+      "checked",
+      "checked",
+      "verified",
+      "done",
+    ]);
+    expect(readSpecLog(join(cwd, LOG_PATH)).at(-2)).toMatchObject({
+      event: "verified",
+      verdict: "pass",
+      head: null,
+      snapshot: "refs/pi-specs/greet/3",
+    });
     const refs = execFileSync("git", [
       "-C",
       cwd,
@@ -139,6 +296,231 @@ describe("spec_log tool", () => {
       event: "checked",
       snapshot: "refs/pi-specs/greet/1",
     });
+  });
+
+  it("base snapshot: first accept records ref 0; revise keeps it", () => {
+    const cwd = workspace(true);
+    run(cwd, { action: "accept" });
+    const [accepted] = readSpecLog(join(cwd, LOG_PATH));
+    expect(accepted).toMatchObject({
+      event: "accepted",
+      head: null,
+      snapshot: "refs/pi-specs/greet/0",
+    });
+    writeFileSync(join(cwd, "later.txt"), "after the base");
+    writeFileSync(join(cwd, SPEC_PATH), SPEC.replace("Localization.", "i18n."));
+    run(cwd, { action: "accept", revise: true });
+    expect(readSpecLog(join(cwd, LOG_PATH)).at(-1)).toMatchObject({
+      event: "accepted",
+      snapshot: "refs/pi-specs/greet/0",
+    });
+    const baseFiles = execFileSync("git", [
+      "-C",
+      cwd,
+      "ls-tree",
+      "-r",
+      "--name-only",
+      "refs/pi-specs/greet/0",
+    ]).toString();
+    expect(baseFiles).toContain(SPEC_PATH);
+    expect(baseFiles).not.toContain("later.txt");
+  });
+
+  it("base snapshot: a non-git workspace stores null", () => {
+    const cwd = workspace();
+    run(cwd, { action: "accept" });
+    expect(readSpecLog(join(cwd, LOG_PATH))[0]).toMatchObject({
+      head: null,
+      snapshot: null,
+    });
+  });
+
+  it("base snapshot: a log without base fields still parses", () => {
+    const cwd = workspace();
+    const content = readFileSync(join(cwd, SPEC_PATH), "utf8");
+    writeFileSync(
+      join(cwd, LOG_PATH),
+      `${JSON.stringify({ ts: new Date().toISOString(), event: "accepted", hash: hashSpec(content), criteria: ["DC-1", "DC-2"], content })}\n`,
+    );
+    expect(
+      run(cwd, { action: "check", id: "DC-1", evidence: "seen" }).isError,
+    ).toBe(false);
+  });
+
+  it("stale: a tracked or untracked change after a check marks it [~] with files", () => {
+    const cwd = workspace(true);
+    writeFileSync(join(cwd, "tracked.txt"), "v1");
+    execFileSync("git", ["-C", cwd, "add", "tracked.txt"]);
+    run(cwd, { action: "accept" });
+    run(cwd, { action: "check", id: "DC-1", evidence: "seen" });
+    expect(renderSpecStatus(cwd, "greet")).toContain("- [x] DC-1");
+    writeFileSync(join(cwd, "tracked.txt"), "v2");
+    writeFileSync(join(cwd, "new.txt"), "untracked");
+    const status = renderSpecStatus(cwd, "greet");
+    expect(status).toContain("- [~] DC-1");
+    expect(status).toContain("  Stale: new.txt, tracked.txt");
+  });
+
+  it("stale: .pi/specs changes never count, even without .gitignore", () => {
+    const cwd = workspace(true);
+    run(cwd, { action: "accept" });
+    run(cwd, { action: "check", id: "DC-1", evidence: "seen" });
+    run(cwd, { action: "block", reason: "keeps the Spec open" });
+    writeFileSync(join(cwd, ".pi", "specs", "other.md"), "x");
+    const status = renderSpecStatus(cwd, "greet");
+    expect(status).toContain("- [x] DC-1");
+    expect(status).not.toContain("Stale:");
+  });
+
+  it("stale: checking DC-1 then DC-2 leaves DC-1 unchanged in a repo with no .gitignore", () => {
+    const cwd = workspace(true);
+    run(cwd, { action: "accept" });
+    run(cwd, { action: "check", id: "DC-1", evidence: "seen" });
+    const after = run(cwd, { action: "check", id: "DC-2", evidence: "seen" });
+    expect(after.text).not.toContain("[~]");
+  });
+
+  it("stale: a check with no snapshot shows unknown, not stale", () => {
+    const cwd = workspace();
+    run(cwd, { action: "accept" });
+    run(cwd, { action: "check", id: "DC-1", evidence: "seen" });
+    const status = renderSpecStatus(cwd, "greet");
+    expect(status).toContain("- [x] DC-1");
+    expect(status).toContain("  Stale: unknown (no snapshot to compare)");
+  });
+
+  it("stale: a done Spec shows no stale marks", () => {
+    const cwd = workspace(true);
+    run(cwd, { action: "accept" });
+    run(cwd, { action: "check", id: "DC-1", evidence: "seen" });
+    run(cwd, { action: "check", id: "DC-2", evidence: "seen" });
+    run(cwd, {
+      action: "verify",
+      verdict: "pass",
+      findings: 0,
+      evidence: "dc-verifier run: all PASS",
+    });
+    writeFileSync(join(cwd, "late.txt"), "after done");
+    const status = renderSpecStatus(cwd, "greet");
+    expect(status).toContain("Status: done");
+    expect(status).not.toContain("[~]");
+    expect(status).not.toContain("Stale:");
+  });
+
+  const checkAll = (cwd: string) => {
+    run(cwd, { action: "accept" });
+    run(cwd, { action: "check", id: "DC-1", evidence: "seen" });
+    run(cwd, { action: "check", id: "DC-2", evidence: "seen" });
+  };
+  const PASS = {
+    action: "verify",
+    verdict: "pass",
+    findings: 0,
+    evidence: "dc-verifier: all PASS",
+  };
+  const logLength = (cwd: string) => readSpecLog(join(cwd, LOG_PATH)).length;
+
+  it("verify: fails and writes nothing while a criterion is open", () => {
+    const cwd = workspace(true);
+    run(cwd, { action: "accept" });
+    run(cwd, { action: "check", id: "DC-1", evidence: "seen" });
+    const before = logLength(cwd);
+    const outcome = run(cwd, PASS);
+    expect(outcome.isError).toBe(true);
+    expect(outcome.text).toContain("open or blocked: DC-2");
+    expect(logLength(cwd)).toBe(before);
+  });
+
+  it("verify: fails and writes nothing on a changed Spec, blank evidence, or missing verdict/findings", () => {
+    const cwd = workspace(true);
+    checkAll(cwd);
+    const before = logLength(cwd);
+    for (const params of [
+      { ...PASS, evidence: "  " },
+      { action: "verify", findings: 0, evidence: "x" },
+      { action: "verify", verdict: "pass", evidence: "x" },
+    ]) {
+      expect(run(cwd, params).isError).toBe(true);
+    }
+    writeFileSync(join(cwd, SPEC_PATH), SPEC.replace("Localization.", "i18n."));
+    expect(run(cwd, PASS).text).toContain("changed since acceptance");
+    expect(logLength(cwd)).toBe(before);
+  });
+
+  it("verify: issues records verified without done", () => {
+    const cwd = workspace(true);
+    checkAll(cwd);
+    run(cwd, { ...PASS, verdict: "issues", findings: 2 });
+    const tail = readSpecLog(join(cwd, LOG_PATH)).at(-1);
+    expect(tail).toMatchObject({
+      event: "verified",
+      verdict: "issues",
+      findings: 2,
+    });
+    expect(renderSpecStatus(cwd, "greet")).toContain("Status: accepted");
+  });
+
+  it("verify: pass is refused while a criterion is stale, names it, and writes nothing", () => {
+    const cwd = workspace(true);
+    checkAll(cwd);
+    writeFileSync(join(cwd, "src.ts"), "changed after checks");
+    const before = logLength(cwd);
+    const outcome = run(cwd, PASS);
+    expect(outcome.isError).toBe(true);
+    expect(outcome.text).toContain("- DC-1: src.ts");
+    expect(outcome.text).toContain("- DC-2: src.ts");
+    expect(logLength(cwd)).toBe(before);
+  });
+
+  it("verify: pass is refused when a recorded snapshot ref is gone, and status says so", () => {
+    const cwd = workspace(true);
+    checkAll(cwd);
+    execFileSync("git", [
+      "-C",
+      cwd,
+      "update-ref",
+      "-d",
+      "refs/pi-specs/greet/1",
+    ]);
+    const status = renderSpecStatus(cwd, "greet");
+    expect(status).toContain("- [~] DC-1");
+    expect(status).toContain(
+      "  Stale: error: cannot compare with refs/pi-specs/greet/1",
+    );
+    const before = logLength(cwd);
+    const outcome = run(cwd, PASS);
+    expect(outcome.isError).toBe(true);
+    expect(outcome.text).toContain(
+      "- DC-1: error: cannot compare with refs/pi-specs/greet/1",
+    );
+    expect(logLength(cwd)).toBe(before);
+  });
+
+  it("verify: a check after verify uses a new ref, then verify pass writes done", () => {
+    const cwd = workspace(true);
+    checkAll(cwd);
+    run(cwd, { ...PASS, verdict: "issues", findings: 1 });
+    writeFileSync(join(cwd, "fix.ts"), "repair");
+    run(cwd, { action: "check", id: "DC-1", evidence: "re-run" });
+    run(cwd, { action: "check", id: "DC-2", evidence: "re-run" });
+    const events = readSpecLog(join(cwd, LOG_PATH));
+    expect(events.find((event) => event.event === "verified")).toMatchObject({
+      snapshot: "refs/pi-specs/greet/3",
+    });
+    expect(events.at(-2)).toMatchObject({
+      event: "checked",
+      snapshot: "refs/pi-specs/greet/4",
+    });
+    expect(run(cwd, PASS).isError).toBe(false);
+    expect(readSpecLog(join(cwd, LOG_PATH)).at(-1)?.event).toBe("done");
+    expect(
+      execFileSync("git", [
+        "-C",
+        cwd,
+        "for-each-ref",
+        "refs/pi-specs/",
+      ]).toString(),
+    ).toBe("");
   });
 
   it("refuses accept on lint failure and check before accept", () => {

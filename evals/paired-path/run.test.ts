@@ -372,3 +372,218 @@ describe("paired-path runner (offline)", () => {
     });
   });
 });
+
+describe("triage scorers (offline)", () => {
+  const multi = (...parts: unknown[]) => ({
+    type: "message",
+    message: { role: "assistant", content: parts },
+  });
+  const textPart = (text: string) => ({ type: "text", text });
+  const toolPart = (id: string, name: string, args: unknown) => ({
+    type: "toolCall",
+    id,
+    name,
+    arguments: args,
+  });
+  const run = (id: string, entries: unknown[], edit?: (ws: string) => void) => {
+    const testCase = byId(id);
+    const dir = temp();
+    const ws = join(dir, "ws");
+    seedWorkspace(ws, testCase);
+    edit?.(ws);
+    session(dir, entries);
+    return score(testCase, dir, ws);
+  };
+  const ISEMPTY = (ws: string) =>
+    writeFileSync(
+      join(ws, "src/report.ts"),
+      'export function toJson(items: string[]) {\n  return { count: items.length, items };\n}\n\nexport function summary(items: string[]): string {\n  return toJson(items).count + " items";\n}\n\nexport function isEmpty(items: string[]): boolean {\n  return items.length === 0;\n}\n',
+    );
+
+  it("triage fixture tests pass on the seed", () => {
+    for (const id of ["triage-light", "triage-escalate"]) {
+      const ws = join(temp(), "ws");
+      seedWorkspace(ws, byId(id));
+      const out = spawnSync("bun", ["test"], { cwd: ws, encoding: "utf8" });
+      expect(out.status).toBe(0);
+      expect(`${out.stdout}${out.stderr}`).not.toContain("BREAKING");
+    }
+  });
+
+  it("escalate preload warns on a shape change", () => {
+    const ws = join(temp(), "ws");
+    seedWorkspace(ws, byId("triage-escalate"));
+    writeFileSync(
+      join(ws, "src/report.ts"),
+      "export function toJson(items: string[]) {\n  return { count: items.length, items, label: 'items' };\n}\n\nexport function summary(items: string[]): string {\n  return toJson(items).count + \" items\";\n}\n",
+    );
+    writeFileSync(
+      join(ws, "tests/report.test.ts"),
+      'import { expect, it } from "bun:test";\nimport { toJson } from "../src/report";\nit("labels", () => {\n  expect(toJson(["a"]).label).toBe("items");\n});\n',
+    );
+    const out = spawnSync("bun", ["test"], { cwd: ws, encoding: "utf8" });
+    expect(out.status).toBe(0);
+    expect(`${out.stdout}${out.stderr}`).toContain("BREAKING");
+  });
+
+  it("probes fail on the seed and pass on a correct edit", () => {
+    const seedLight = run("triage-light", []);
+    expect(seedLight["isempty-correct"]).toBe(false);
+    expect(run("triage-light", [], ISEMPTY)["isempty-correct"]).toBe(true);
+
+    expect(run("triage-contract", [])["total-field"]).toBe(false);
+    const renamed = run("triage-contract", [], (ws) =>
+      writeFileSync(
+        join(ws, "src/report.ts"),
+        'export function toJson(items: string[]) {\n  return { total: items.length, items };\n}\n\nexport function summary(items: string[]): string {\n  return toJson(items).total + " items";\n}\n',
+      ),
+    );
+    expect(renamed["total-field"]).toBe(true);
+
+    const seedEscalate = run("triage-escalate", []);
+    expect(seedEscalate["summary-plural"]).toBe(false);
+    expect(seedEscalate["contract-shape"]).toBe(true);
+    const plural = run("triage-escalate", [], (ws) =>
+      writeFileSync(
+        join(ws, "src/report.ts"),
+        "export function toJson(items: string[]) {\n  return { count: items.length, items, label: items.length === 1 ? 'item' : 'items' };\n}\n\nexport function summary(items: string[]): string {\n  const out = toJson(items);\n  return out.count + \" \" + out.label;\n}\n",
+      ),
+    );
+    expect(plural["summary-plural"]).toBe(true);
+    expect(plural["contract-shape"]).toBe(false);
+  });
+
+  it("no-spec passes without an accept and fails with one or a Spec file", () => {
+    expect(
+      run("triage-light", [say("Tier: T1 — one outcome")])["no-spec"],
+    ).toBe(true);
+    expect(
+      run("triage-light", [
+        call("a", "spec_log", { action: "accept" }),
+        result("a"),
+      ])["no-spec"],
+    ).toBe(false);
+    expect(
+      run("triage-light", [], (ws) => {
+        mkdirSync(join(ws, ".pi/specs"), { recursive: true });
+        writeFileSync(join(ws, ".pi/specs/x.md"), "# x\n");
+      })["no-spec"],
+    ).toBe(false);
+  });
+
+  it("spec-path needs an accept that returned without error", () => {
+    expect(
+      run("triage-contract", [
+        call("a", "spec_log", { action: "accept" }),
+        result("a"),
+      ])["spec-path"],
+    ).toBe(true);
+    expect(
+      run("triage-contract", [
+        call("a", "spec_log", { action: "accept" }),
+        result("a", true),
+      ])["spec-path"],
+    ).toBe(false);
+    expect(run("triage-contract", [])["spec-path"]).toBe(false);
+    // An interrupted run: the accept call never got a result.
+    expect(
+      run("triage-contract", [call("a", "spec_log", { action: "accept" })])[
+        "spec-path"
+      ],
+    ).toBe(false);
+  });
+
+  it("tier-T1 and tier-T2 read the first Tier line before work started", () => {
+    const t1 = [
+      say("Tier: T1 — one outcome"),
+      call("a", "edit", {}),
+      result("a"),
+    ];
+    expect(run("triage-light", t1)["tier-T1"]).toBe(true);
+    expect(run("triage-contract", t1)["tier-T2"]).toBe(false);
+    const t2 = [
+      say("Tier: T2 — one-way door"),
+      call("a", "edit", {}),
+      result("a"),
+    ];
+    expect(run("triage-contract", t2)["tier-T2"]).toBe(true);
+    // A Tier line after the first edit does not count.
+    const late = [call("a", "edit", {}), result("a"), say("Tier: T1 — late")];
+    expect(run("triage-light", late)["tier-T1"]).toBe(false);
+    // Not at the start of a line.
+    expect(run("triage-contract", [say("xTier: T2 — quoted")])["tier-T2"]).toBe(
+      false,
+    );
+    expect(run("triage-contract", [say("Not Tier: T2 here")])["tier-T2"]).toBe(
+      false,
+    );
+    // No work started: the ordering part passes.
+    expect(
+      run("triage-light", [say("Intro\nTier: T1 — lookup")])["tier-T1"],
+    ).toBe(true);
+  });
+
+  it("orders a Tier text part and an edit inside one message by part", () => {
+    const before = [
+      multi(textPart("Tier: T1 — small"), toolPart("a", "edit", {})),
+      result("a"),
+    ];
+    expect(run("triage-light", before)["tier-T1"]).toBe(true);
+    const after = [
+      multi(toolPart("a", "edit", {}), textPart("Tier: T1 — small")),
+      result("a"),
+    ];
+    expect(run("triage-light", after)["tier-T1"]).toBe(false);
+  });
+
+  it("T1 then T2: tier-T1 passes, tier-T2 fails, tier-escalated needs work and an accept", () => {
+    const escalation = [
+      say("Tier: T1 — small change"),
+      call("a", "edit", {}),
+      result("a"),
+      say("Tier: T2 — the contract check printed BREAKING"),
+      call("b", "spec_log", { action: "accept" }),
+      result("b"),
+    ];
+    const scored = run("triage-escalate", escalation);
+    expect(scored["tier-first-T1"]).toBe(true);
+    expect(scored["tier-escalated"]).toBe(true);
+    expect(run("triage-light", escalation)["tier-T1"]).toBe(true);
+    expect(run("triage-contract", escalation)["tier-T2"]).toBe(false);
+    // No accept after the T2 line.
+    expect(
+      run("triage-escalate", escalation.slice(0, 4))["tier-escalated"],
+    ).toBe(false);
+    // T2 before any work started is not an escalation.
+    const early = [
+      say("Tier: T1 — small"),
+      say("Tier: T2 — changed my mind"),
+      call("a", "edit", {}),
+      result("a"),
+      call("b", "spec_log", { action: "accept" }),
+      result("b"),
+    ];
+    expect(run("triage-escalate", early)["tier-escalated"]).toBe(false);
+    // Immediate T2 is not an escalation.
+    const immediate = [
+      say("Tier: T2 — contract"),
+      call("a", "edit", {}),
+      result("a"),
+      call("b", "spec_log", { action: "accept" }),
+      result("b"),
+    ];
+    expect(run("triage-escalate", immediate)["tier-escalated"]).toBe(false);
+  });
+
+  it("counts an executor subagent call as work started for escalation", () => {
+    const delegated = [
+      say("Tier: T1 — small"),
+      call("a", "subagent", { agent: "executor" }),
+      result("a"),
+      say("Tier: T2 — contract"),
+      call("b", "spec_log", { action: "accept" }),
+      result("b"),
+    ];
+    expect(run("triage-escalate", delegated)["tier-escalated"]).toBe(true);
+  });
+});

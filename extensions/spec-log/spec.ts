@@ -37,12 +37,17 @@ const SECTIONS = [
   "User Stories",
   "Plan",
   "Done Criteria",
+  "Live Lanes",
   "Verification",
   "Testing Seams",
   "Out of Scope",
 ] as const;
-const OPTIONAL_SECTIONS = new Set<string>(["Testing Seams"]);
+const OPTIONAL_SECTIONS = new Set<string>(["Live Lanes", "Testing Seams"]);
 const DC_ROW = /^- (DC-[1-9][0-9]*): (\S.*)$/u;
+const LANE_ROW = /^- (LANE-[1-9][0-9]*): (\S.*)$/u;
+const LANE_CITATION = /\((DC-[1-9][0-9]*)\)/gu;
+const LANE_FIELD = /^\s+(Drive|Artifact|Pass when|Baseline): \S/u;
+const LANE_FIELDS = ["Drive", "Artifact", "Pass when"] as const;
 const US_ID = /\bUS-[1-9][0-9]*\b/gu;
 const US_DEFINITION = /^(?:- |\d+\. )?(?:\*\*)?(US-[1-9][0-9]*)\b/u;
 const EVIDENCE_LINE = /^\s+Evidence: \S/u;
@@ -59,6 +64,10 @@ const SpecLogEventSchema = union([
     hash,
     criteria: arr(text, { minItems: 1 }),
     content: str(),
+    // Base snapshot of the workspace at first acceptance; optional so pre-base logs parse.
+    head: opt(nullable(text)),
+    snapshot: opt(nullable(text)),
+    snapshotError: opt(text),
   }),
   obj({ ts, event: lit("revised"), hash, previousHash: hash }),
   obj({
@@ -78,6 +87,16 @@ const SpecLogEventSchema = union([
     snapshotError: opt(text),
   }),
   obj({ ts, event: lit("blocked"), id: opt(text), reason: text }),
+  obj({
+    ts,
+    event: lit("verified"),
+    verdict: oneOf(["pass", "issues"]),
+    findings: int({ minimum: 0 }),
+    evidence: text,
+    head: nullable(text),
+    snapshot: nullable(text),
+    snapshotError: opt(text),
+  }),
   obj({ ts, event: lit("stopped"), reason: text }),
   obj({ ts, event: lit("done") }),
 ]);
@@ -241,9 +260,9 @@ export function lintSpec(content: string): string[] {
   const stories = (found.get("User Stories") ?? []).filter((line) =>
     line.trim(),
   );
+  let internal = false;
   if (found.has("User Stories")) {
-    const internal =
-      stories.length === 1 && INTERNAL_STORIES.test(stories[0] ?? "");
+    internal = stories.length === 1 && INTERNAL_STORIES.test(stories[0] ?? "");
     const defined = new Set(
       stories.flatMap((line) => {
         const id = US_DEFINITION.exec(line)?.[1];
@@ -265,6 +284,83 @@ export function lintSpec(content: string): string[] {
         errors.push(`A Done Criterion cites unknown story ${ref}.`);
       }
     }
+  }
+  const lanes = found.get("Live Lanes");
+  if (lanes) {
+    errors.push(...lintLanes(lanes, new Set(ids)));
+  } else if (found.has("User Stories") && !internal) {
+    errors.push(
+      "Missing section: ## Live Lanes (required unless User Stories is `N/A — internal: <reason>`).",
+    );
+  }
+  return errors;
+}
+
+interface Lane {
+  id: string;
+  baseline: boolean;
+  fields: Set<string>;
+}
+
+/** Lints `## Live Lanes`: labeled rows, DC citations, required fields, and lane counts. */
+function lintLanes(rows: string[], dcIds: Set<string>): string[] {
+  const errors: string[] = [];
+  const lanes: Lane[] = [];
+  for (const line of rows) {
+    if (!line.trim()) {
+      continue;
+    }
+    if (/^\s/u.test(line)) {
+      const field = LANE_FIELD.exec(line)?.[1];
+      if (field) {
+        lanes.at(-1)?.fields.add(field);
+      }
+      continue;
+    }
+    const match = LANE_ROW.exec(line);
+    if (!match) {
+      errors.push(`Live Lanes row lacks a \`- LANE-n: \` label: ${line}`);
+      continue;
+    }
+    const id = match[1] as string;
+    if (lanes.some((lane) => lane.id === id)) {
+      errors.push(`Repeated Live Lane label: ${id}`);
+    }
+    const scenario = match[2] as string;
+    const cited = [...scenario.matchAll(LANE_CITATION)].map(
+      (item) => item[1] as string,
+    );
+    if (!cited.length) {
+      errors.push(`${id} must cite at least one Done Criterion as (DC-n).`);
+    }
+    for (const ref of cited) {
+      if (!dcIds.has(ref)) {
+        errors.push(`${id} cites unknown Done Criterion ${ref}.`);
+      }
+    }
+    lanes.push({
+      id,
+      baseline: /\(baseline\)\s*$/u.test(scenario),
+      fields: new Set(),
+    });
+  }
+  for (const lane of lanes) {
+    for (const field of LANE_FIELDS) {
+      if (!lane.fields.has(field)) {
+        errors.push(`${lane.id} has no indented \`${field}:\` line.`);
+      }
+    }
+    if (lane.baseline && !lane.fields.has("Baseline")) {
+      errors.push(
+        `${lane.id} is a (baseline) lane with no \`Baseline:\` line.`,
+      );
+    }
+    if (!lane.baseline && lane.fields.has("Baseline")) {
+      errors.push(`${lane.id} has a \`Baseline:\` line but no (baseline) tag.`);
+    }
+  }
+  if (!lanes.length) {
+    errors.push("## Live Lanes needs at least 1 lane; found 0.");
   }
   return errors;
 }
@@ -372,7 +468,8 @@ export interface SpecState {
   accepted: Accepted | null;
   criteria: Map<string, CriterionState>;
   blockers: string[];
-  checkedCount: number;
+  /** Snapshot refs written so far by `check` and `verify`; the next ref is this + 1. */
+  snapshotCount: number;
 }
 
 /** Derives the current state. Only events after the latest acceptance count. */
@@ -413,15 +510,10 @@ export function deriveSpecState(events: SpecLogEvent[]): SpecState {
     accepted,
     criteria,
     blockers,
-    checkedCount: events.filter((event) => event.event === "checked").length,
+    snapshotCount: events.filter(
+      (event) => event.event === "checked" || event.event === "verified",
+    ).length,
   };
-}
-
-export function allChecked(state: SpecState): boolean {
-  return (
-    state.criteria.size > 0 &&
-    [...state.criteria.values()].every((item) => item.state === "checked")
-  );
 }
 
 function git(cwd: string, args: string[], env = process.env): string {
@@ -455,20 +547,8 @@ export function snapshotWorkspace(
   } catch {
     // An unborn work tree has no HEAD yet.
   }
-  let temporary: string | null = null;
   try {
-    temporary = mkdtempSync(join(tmpdir(), "pi-spec-index-"));
-    const index = join(temporary, "index");
-    const realIndex = resolve(
-      cwd,
-      git(cwd, ["rev-parse", "--git-path", "index"]),
-    );
-    if (existsSync(realIndex)) {
-      copyFileSync(realIndex, index);
-    }
-    const env = { ...process.env, GIT_INDEX_FILE: index };
-    git(cwd, ["add", "-A", ":/"], env);
-    const tree = git(cwd, ["write-tree"], env);
+    const tree = writeWorkspaceTree(cwd);
     const commit = git(
       cwd,
       [
@@ -479,7 +559,7 @@ export function snapshotWorkspace(
         `pi-spec ${slug} #${n}`,
       ],
       {
-        ...env,
+        ...process.env,
         GIT_AUTHOR_NAME: "pi-spec",
         GIT_AUTHOR_EMAIL: "pi-spec@localhost",
         GIT_COMMITTER_NAME: "pi-spec",
@@ -495,11 +575,108 @@ export function snapshotWorkspace(
       snapshot: null,
       snapshotError: error instanceof Error ? error.message : String(error),
     };
+  }
+}
+
+/** Writes the working tree (tracked + untracked, non-ignored) as a git tree, without touching the real index. */
+function writeWorkspaceTree(cwd: string): string {
+  const temporary = mkdtempSync(join(tmpdir(), "pi-spec-index-"));
+  try {
+    const index = join(temporary, "index");
+    const realIndex = resolve(
+      cwd,
+      git(cwd, ["rev-parse", "--git-path", "index"]),
+    );
+    if (existsSync(realIndex)) {
+      copyFileSync(realIndex, index);
+    }
+    const env = { ...process.env, GIT_INDEX_FILE: index };
+    git(cwd, ["add", "-A", ":/"], env);
+    return git(cwd, ["write-tree"], env);
   } finally {
-    if (temporary) {
-      rmSync(temporary, { recursive: true, force: true });
+    rmSync(temporary, { recursive: true, force: true });
+  }
+}
+
+/**
+ * Per checked DC: changed files since its snapshot (stale when non-empty);
+ * `{ error }` when a recorded snapshot cannot be compared (blocks like stale);
+ * or null when the check has no snapshot or the cwd is not a work tree.
+ */
+export type Staleness = Map<string, string[] | { error: string } | null>;
+
+/** True when a staleness entry blocks `verify pass`: changed files or a compare error. */
+export function blocksVerify(
+  entry: string[] | { error: string } | null | undefined,
+): boolean {
+  return Array.isArray(entry) ? entry.length > 0 : Boolean(entry);
+}
+
+/** One-line description of a blocking staleness entry. */
+export function describeStale(entry: string[] | { error: string }): string {
+  return Array.isArray(entry) ? entry.join(", ") : `error: ${entry.error}`;
+}
+
+function message(error: unknown): string {
+  const raw = error instanceof Error ? error.message : String(error);
+  return (
+    raw
+      .split("\n")
+      .find((line) => line.trim())
+      ?.trim() ?? raw
+  );
+}
+
+/**
+ * Compares each checked DC's snapshot tree with the current workspace tree.
+ * `.pi/specs/` never counts: `check` writes the Spec log right after its snapshot.
+ * The current tree is written once per call.
+ */
+export function staleCriteria(cwd: string, state: SpecState): Staleness {
+  const result: Staleness = new Map();
+  const checked = [...state.criteria].filter(
+    (entry): entry is [string, Extract<CriterionState, { state: "checked" }>] =>
+      entry[1].state === "checked",
+  );
+  if (state.phase === "done" || !checked.length) {
+    return result;
+  }
+  const workTree = checked.some(([, item]) => item.snapshot) && isWorkTree(cwd);
+  let current: string | { error: string } | null = null;
+  if (workTree) {
+    try {
+      current = writeWorkspaceTree(cwd);
+    } catch (error) {
+      current = { error: `cannot write the current tree: ${message(error)}` };
     }
   }
+  for (const [id, item] of checked) {
+    if (!(item.snapshot && current)) {
+      result.set(id, null);
+      continue;
+    }
+    if (typeof current !== "string") {
+      result.set(id, current);
+      continue;
+    }
+    try {
+      const files = git(cwd, [
+        "diff",
+        "--name-only",
+        `${item.snapshot}^{tree}`,
+        current,
+        "--",
+        ".",
+        `:(exclude)${SPECS_DIR}`,
+      ]);
+      result.set(id, files.split("\n").filter(Boolean));
+    } catch (error) {
+      result.set(id, {
+        error: `cannot compare with ${item.snapshot}: ${message(error)}`,
+      });
+    }
+  }
+  return result;
 }
 
 export function deleteSnapshotRefs(cwd: string, slug: string): void {
@@ -578,10 +755,23 @@ export function renderSpecStatus(cwd: string, slug?: string): string {
   if (state.accepted && hashSpec(current) !== state.accepted.hash) {
     lines.push("Warning: the Spec file changed since acceptance.");
   }
+  const staleness = staleCriteria(cwd, state);
   for (const [id, item] of state.criteria) {
     const label = `${id}: ${textById.get(id) ?? ""}`.trimEnd();
     if (item.state === "checked") {
-      lines.push(`- [x] ${label}`, `  Evidence: ${item.evidence}`);
+      const files = staleness.get(id);
+      if (files && blocksVerify(files)) {
+        lines.push(
+          `- [~] ${label}`,
+          `  Evidence: ${item.evidence}`,
+          `  Stale: ${describeStale(files)}`,
+        );
+      } else {
+        lines.push(`- [x] ${label}`, `  Evidence: ${item.evidence}`);
+        if (files === null) {
+          lines.push("  Stale: unknown (no snapshot to compare)");
+        }
+      }
     } else if (item.state === "blocked") {
       lines.push(`- [!] ${label}`, `  Blocked: ${item.reason}`);
     } else {

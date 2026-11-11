@@ -1,32 +1,16 @@
 ---
 name: supapi-mode
-description: "Hub router: read before the first tool call on any bug fix, feature, refactor, prototype, diagnosis, PR, or how/why question about code, however small the change looks. Check again on every later request in a session and on each step of a multi-step request: in \"simplify, commit and open pr\", the PR step still needs its Playbook, and a skill loaded for another step does not replace it. Matches the task to one Playbook under playbooks/, then follows its steps. Skip only a one-line answer from one file or a typo fix."
+description: "Hub router: read before the first tool call on any bug fix, feature, refactor, prototype, diagnosis, PR, or how/why question about code, however small the change looks. Check again on every later request in a session and on each step of a multi-step request: in \"simplify, commit and open pr\", the PR step still needs its Playbook, and a skill loaded for another step does not replace it. Starts with the triage Playbook, which picks the kind (and, for build work, a size tier) and dispatches to one Playbook under playbooks/, then follows its steps. Skip only a one-line answer from one file or a typo fix."
 ---
 
 # SupaPi mode
 
-Match the task to one Playbook, read that Playbook file, and follow its steps. Playbooks live at `playbooks/<name>.md` next to this file; resolve them against this skill's directory.
+Start every request that loads this skill with the triage Playbook. It picks the kind and, for build work, the size tier, then names the Playbook to follow. Playbooks live at `playbooks/<name>.md` next to this file; resolve them against this skill's directory.
 
 ## Route
 
-1. Restate the user's goal in one sentence.
-2. Pick the first Playbook below whose trigger fits. Read its file before acting.
-3. Copy the Playbook's numbered steps into your working plan. Keep a skipped step in the plan with `skip: <reason>`.
-4. If no Playbook fits, or the work is large, cross-cutting, or will run unattended, load the `figure-it-out` skill instead.
-5. If the task turns out to be trivial, say so and work directly.
-
-| Playbook | Trigger |
-| --- | --- |
-| `investigation` | Read-only question with no failing behavior: how X works, why Y is shaped this way, should we do X or Y. A question about why something fails is not an investigation. |
-| `diagnose` | Explicit only: `/diagnose`, or a request that names the Diagnose skill. Other failures route to `bug-fix`. |
-| `bug-fix` | A reported defect to reproduce, root-cause, fix, and verify. |
-| `feature` | New or changed behavior. |
-| `refactoring` | Behavior-preserving change to structure: rename, extract, inline, dedupe, move, simplify. |
-| `prototype` | A throwaway sketch to settle a design or empirical fork by observation. |
-| `execute` | `/execute`, or running a Spec or an accepted multi-step plan to verified Done Criteria. |
-| `correct` | `/correct`, or making a repeated agent mistake impossible with a structural check. |
-| `fix-review-findings` | `/review-fix`, or fixing findings from a review report. A request for a review alone loads the `review-orchestration` skill instead. |
-| `opening-a-pr` | `/pr`, or writing, opening, or submitting a pull request. Other Playbooks end here when the user asks for a PR. |
+1. Read `playbooks/triage.md` next to this file and follow it. Your first message after sizing starts with its `Tier:` line, before any tool call that writes.
+2. Read the Playbook it dispatches to before acting. Copy that Playbook's numbered steps into your working plan. Keep a skipped step in the plan with `skip: <reason>`.
 
 ## Shared rules
 
@@ -35,6 +19,7 @@ Match the task to one Playbook, read that Playbook file, and follow its steps. P
 - A step is done only when its evidence exists: a command run, a file read, an output observed. A child report is a claim, not evidence.
 - Principles live in `~/.pi/agent/rules/principles/<name>.md` (repo: `rules/principles/`). Each Playbook lists the ones it applies; read a Principle when its "Apply when" fits, and name the one that changed a decision.
 - Close multi-step work with a Final report per the `plain-report` skill.
+- **Unit loop:** split the work into units that each end in a verifiable state, in dependency order, riskiest unknown first. Run units in the main session by default; delegate only parallel units with disjoint write scopes, or work that would flood the context. A child that builds, installs, or formats works in its own worktree, per `separate-before-serializing-shared-state`. After each unit, run its check yourself: a child's report is a claim. Allow at most two repair attempts per unit after the first try; then stop and report the unit as blocked (at T2, with `spec_log` `block`). Before you verify a change that renames or moves strings, formats, or files other code may read, run the `blast-radius` skill on the change.
 - **Review gate:** for every non-trivial diff, run the `simplify` skill on the changed files from `git status`, then the `review-orchestration` skill on the diff, then triage its findings through steps 1–7 of the `fix-review-findings` Playbook in gate mode: fix what you are sure about and list the rest for the user to review. Rerun the checks after the fixes. Skip the gate only for a trivial diff, such as a typo or one local line, and say why you skipped it. Playbooks that call the gate run it before their PR step.
 
 ## Attribution

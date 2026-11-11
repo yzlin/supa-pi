@@ -54,7 +54,7 @@ describe("blast-radius skill contract (wiring, not model adherence)", () => {
     }
   });
 
-  it("is reached from /blast-radius, review, refactoring, and feature", () => {
+  it("is reached from /blast-radius, review, and the hub Unit loop", () => {
     const alias = read("prompts/blast-radius.md");
     expect(alias).toContain("Use the `blast-radius` skill as canonical");
     expect(alias).toContain(
@@ -64,12 +64,17 @@ describe("blast-radius skill contract (wiring, not model adherence)", () => {
     expect(read("skills/review-orchestration/SKILL.md")).toContain(
       "use the `blast-radius` skill instead",
     );
-    expect(read("skills/supapi-mode/playbooks/refactoring.md")).toContain(
-      "run the `blast-radius` skill on the change first",
+    const hub = read("skills/supapi-mode/SKILL.md");
+    const loop = hub.slice(
+      hub.indexOf("- **Unit loop:**"),
+      hub.indexOf("- **Review gate:**"),
     );
-    expect(read("skills/supapi-mode/playbooks/feature.md")).toContain(
-      "run the `blast-radius` skill on the change first",
-    );
+    expect(loop).toContain("run the `blast-radius` skill on the change");
+    for (const name of ["feature", "refactoring"]) {
+      expect(read(`skills/supapi-mode/playbooks/${name}.md`)).not.toContain(
+        "blast-radius",
+      );
+    }
   });
 
   it("credits pstack", () => {

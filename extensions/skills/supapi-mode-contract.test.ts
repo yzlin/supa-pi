@@ -19,6 +19,7 @@ const PLAYBOOKS = [
   "opening-a-pr",
   "prototype",
   "refactoring",
+  "triage",
 ];
 
 function read(path: string): string {
@@ -39,20 +40,81 @@ describe("supapi-mode hub contract (not model adherence)", () => {
     ).toEqual([]);
   });
 
-  it("routes to exactly the playbook files that exist", () => {
+  it("routes through triage to exactly the playbook files that exist", () => {
     const hub = read("skills/supapi-mode/SKILL.md");
-    const routed = Array.from(hub.matchAll(playbookRow), ([, name]) => name);
+    expect(hub).toContain(
+      "Read `playbooks/triage.md` next to this file and follow it.",
+    );
+    expect(Array.from(hub.matchAll(playbookRow))).toEqual([]);
+    const triage = read("skills/supapi-mode/playbooks/triage.md");
+    const routed = Array.from(
+      triage.matchAll(/^ {3}\| `([a-z-]+)` \|/gmu),
+      ([, name]) => name,
+    );
     const files = readdirSync(playbookDir)
       .filter((file) => file.endsWith(".md"))
       .map((file) => file.replace(/\.md$/u, ""));
-    expect(routed.toSorted()).toEqual(PLAYBOOKS);
+    expect(routed.toSorted()).toEqual(
+      PLAYBOOKS.filter((name) => name !== "triage"),
+    );
     expect(files.toSorted()).toEqual(PLAYBOOKS);
   });
 
+  it("triage orders bypass, kind, learn, size, tier line, dispatch, escalate", () => {
+    const triage = read("skills/supapi-mode/playbooks/triage.md");
+    const steps = [
+      "2. Explicit commands skip triage",
+      "3. Pick the first kind below",
+      "4. Learn before you size",
+      "5. Size the job.",
+      "6. Before the first edit, write one line that starts with `Tier: T<n> — `",
+      "Your first message after sizing starts with the Tier line, before any tool call that writes, including a Spec",
+      "a Tier line written after work started does not count",
+      "7. Dispatch:",
+      "8. Escalate when a T1 run hits a hard trigger.",
+    ].map((step) => triage.indexOf(step));
+    for (const [index, position] of steps.entries()) {
+      expect(position).toBeGreaterThan(index ? (steps[index - 1] ?? -1) : 0);
+    }
+    for (const rule of [
+      "`/execute`, `/pr`, `/diagnose`, `/correct`, and `/review-fix` open their Playbook directly",
+      "**T2 or higher:** a one-way door",
+      "a change to a public API, file format, or output that code outside this repository reads",
+      "the user asks for a Spec, proof, or `/execute`",
+      "two or more subsystems that `CONTEXT-MAP.md` lists separately",
+      "**T3:** the work runs unattended or across sessions",
+      "three or more user-visible outcomes, four or more units, an area with no tests or docs, or a fix that already failed once",
+      "**T0** only for a typo, one local line, or a lookup",
+      "**T0:** work directly.",
+      "**T1:** follow the kind Playbook. Its build steps follow the Unit loop",
+      "**T2:** run the kind Playbook's design steps (feature 1–3, bug-fix 1–2, refactoring 1–2), then follow the `execute` Playbook from step 1 with the plan as `/execute <plan text>`",
+      "a bug-fix repro becomes a Done Criterion and a `(baseline)` lane; a refactoring pin becomes a Done Criterion",
+      "**T3:** load the `figure-it-out` skill.",
+      "The Spec names the edits made so far in its Execution Scope and Plan",
+      "No `(baseline)` lane covers behavior those edits already changed",
+      "Never lower a tier on your own",
+    ]) {
+      expect(triage).toContain(rule);
+    }
+  });
+
   it("falls back to figure-it-out and keeps trivial work direct", () => {
-    const hub = read("skills/supapi-mode/SKILL.md");
-    expect(hub).toContain("load the `figure-it-out` skill instead");
-    expect(hub).toContain("If the task turns out to be trivial");
+    const triage = read("skills/supapi-mode/playbooks/triage.md");
+    expect(triage).toContain("**T3:** load the `figure-it-out` skill.");
+    expect(triage).toContain("**T0:** work directly.");
+    const figure = read("skills/figure-it-out/SKILL.md");
+    expect(figure).not.toContain("supapi-mode fallback");
+    const [, frontmatter = "", body = ""] = figure.split("---");
+    const opening =
+      body
+        .split("\n\n")
+        .map((part) => part.trim())
+        .find((part) => part && !part.startsWith("#")) ?? "";
+    for (const part of [frontmatter, opening]) {
+      expect(part).toContain("tier T3");
+      expect(part).toContain("unattended or across sessions");
+      expect(part).toContain("no Playbook fits");
+    }
     expect(existsSync(join(root, "skills", "figure-it-out", "SKILL.md"))).toBe(
       true,
     );
@@ -68,9 +130,11 @@ describe("supapi-mode hub contract (not model adherence)", () => {
   });
 
   it("keeps investigation and diagnose triggers disjoint", () => {
-    const hub = read("skills/supapi-mode/SKILL.md");
+    const triage = read("skills/supapi-mode/playbooks/triage.md");
     const trigger = (name: string) =>
-      hub.split("\n").find((line) => line.startsWith(`| \`${name}\` |`)) ?? "";
+      triage
+        .split("\n")
+        .find((line) => line.trimStart().startsWith(`| \`${name}\` |`)) ?? "";
     expect(trigger("investigation")).toContain("no failing behavior");
     expect(trigger("investigation")).toContain(
       "A question about why something fails is not an investigation.",
@@ -177,10 +241,33 @@ describe("supapi-mode hub contract (not model adherence)", () => {
     );
     for (const file of [
       "skills/figure-it-out/SKILL.md",
-      "skills/supapi-mode/playbooks/feature.md",
+      "skills/supapi-mode/SKILL.md",
     ]) {
       expect(read(file)).toContain(
         "`separate-before-serializing-shared-state`",
+      );
+    }
+  });
+
+  it("keeps one Unit loop in the hub", () => {
+    const hub = read("skills/supapi-mode/SKILL.md");
+    const loop = hub.slice(
+      hub.indexOf("- **Unit loop:**"),
+      hub.indexOf("- **Review gate:**"),
+    );
+    expect(loop.length).toBeGreaterThan(0);
+    for (const phrase of [
+      "riskiest unknown first",
+      "own worktree",
+      "a child's report is a claim",
+      "two repair attempts",
+      "blast-radius",
+    ]) {
+      expect(loop).toContain(phrase);
+    }
+    for (const name of ["feature", "refactoring", "execute"]) {
+      expect(read(`skills/supapi-mode/playbooks/${name}.md`)).toContain(
+        "Unit loop",
       );
     }
   });

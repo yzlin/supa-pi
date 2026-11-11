@@ -73,6 +73,7 @@ describe("to-spec resource and instruction contract (not model adherence)", () =
       "User Stories",
       "Plan",
       "Done Criteria",
+      "Live Lanes",
       "Verification",
       "Testing Seams",
       "Out of Scope",
@@ -88,6 +89,18 @@ describe("to-spec resource and instruction contract (not model adherence)", () =
   });
 
   it("requires minimal user stories and bidirectional done-criterion coverage before writing", () => {
+    expectInstructions([
+      "`Live Lanes` is required unless `User Stories` is the `N/A — internal: <reason>` line",
+      "- Each row is `- LANE-n: <scenario> (DC-n)`",
+      "indented `Drive:`",
+      "`Artifact:`",
+      "`Pass when:`",
+      "the artifact directory `$TMPDIR/pi-verify/<slug>/`, outside the workspace",
+      "Write at least one lane",
+      "When the change alters existing behavior, add a `(baseline)` lane",
+      "give it a `Baseline:` line",
+      "Skip the baseline lane for a new feature",
+    ]);
     expectInstructions([
       "user- or caller-visible behavior changes",
       "US-1",

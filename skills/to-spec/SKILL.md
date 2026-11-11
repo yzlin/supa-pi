@@ -35,6 +35,17 @@ Write plain Markdown, no frontmatter; status lives in the Spec log. Start with `
 - DC-2: <necessary technical criterion> (technical)
   Evidence: <exact command or check that proves it>
 
+## Live Lanes
+- LANE-1: <scenario a user would run> (DC-1)
+  Drive: <exact command or driver>
+  Artifact: $TMPDIR/pi-verify/<slug>/<file>
+  Pass when: <observable predicate>
+- LANE-2: <scenario whose existing behavior changes; omit this lane for a new feature> (DC-2) (baseline)
+  Drive: <exact command or driver>
+  Artifact: $TMPDIR/pi-verify/<slug>/<file>
+  Pass when: <observable predicate>
+  Baseline: <same scenario at the base snapshot, and the expected base result>
+
 ## Verification
 <Actual commands or checks, expected evidence, and who verifies it.>
 
@@ -45,7 +56,7 @@ Write plain Markdown, no frontmatter; status lives in the Spec log. Start with `
 <Explicit exclusions and deferred work.>
 ```
 
-`Testing Seams` is optional; omit its heading when not needed. `Execution Scope`, `Plan`, `Done Criteria`, `Verification`, and `Out of Scope` are required; `spec_log` `lint` rejects a Spec without them. Keep `User Stories` even for internal-only work.
+`Testing Seams` is optional; omit its heading when not needed. `Execution Scope`, `Plan`, `Done Criteria`, `Verification`, and `Out of Scope` are required; `spec_log` `lint` rejects a Spec without them. `Live Lanes` is required unless `User Stories` is the `N/A — internal: <reason>` line. Keep `User Stories` even for internal-only work.
 
 Plan uses literal workspace-relative paths where known, needed for `/execute` write scopes. Do not follow upstream's no-file-path rule. Make the Brief self-contained for a fresh session: include the locked decisions and evidence needed to execute without the old conversation. Verification uses existing commands and the highest practical seams, not speculative tests.
 
@@ -63,6 +74,16 @@ Before writing, check coverage in both directions:
 Each Done Criterion row is `- DC-n: <criterion> (US-n)` or `- DC-n: <criterion> (technical)`. Follow each row with an indented `Evidence: <exact command or check>` line naming how the execute Playbook proves it; `spec_log` `check` later records what was actually observed. Number labels `DC-1` through `DC-n`, each unique. Start every top-level line in `## Done Criteria` with its label; indent continuation lines. `spec_log` `lint` rejects a Spec with an unlabeled row, a repeated label, a row without an `Evidence:` line, or no rows.
 
 Fix gaps before writing. Internal-only work uses `(technical)` for every Done Criterion.
+
+## Live Lanes
+
+Live Lanes are the scenarios the `dc-verifier` runs on the real surface at Finish, as pstack's live lanes do. Write them when user- or caller-visible behavior changes; `spec_log` `lint` requires the section unless `User Stories` is the internal-only line, and checks it whenever it is present.
+
+- Each row is `- LANE-n: <scenario> (DC-n)`, with a unique label and at least one `(DC-n)` citation of an existing Done Criterion.
+- Each lane has indented `Drive:` (the exact command or driver: shell command, tmux keys, `web-browser` skill, `glimpse`), `Artifact:` (where the verifier saves the output, under the artifact directory `$TMPDIR/pi-verify/<slug>/`, outside the workspace so it never makes a check stale), and `Pass when:` (an observable predicate) lines.
+- Write at least one lane, usually one per user-visible outcome.
+- When the change alters existing behavior, add a `(baseline)` lane: end its row with `(baseline)` and give it a `Baseline:` line with the same scenario at the base snapshot recorded at accept and the expected base result. Skip the baseline lane for a new feature. A `Baseline:` line needs the `(baseline)` tag.
+- Pick scenarios a user or caller would run, not unit tests; Done Criteria already name those.
 
 ## Slug and Collision Rules
 

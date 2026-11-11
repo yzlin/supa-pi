@@ -11,7 +11,6 @@ import { createTwoFilesPatch } from "diff";
 import { Type } from "typebox";
 
 import {
-  allChecked,
   appendSpecEvents,
   deleteSnapshotRefs,
   deriveSpecState,
@@ -25,6 +24,9 @@ import {
   SPECS_DIR,
   type SpecLogEvent,
   snapshotWorkspace,
+  staleCriteria,
+  blocksVerify,
+  describeStale,
   validSlug,
 } from "./spec";
 
@@ -42,6 +44,7 @@ const ACTIONS = [
   "review",
   "accept",
   "check",
+  "verify",
   "block",
   "stop",
 ] as const;
@@ -60,7 +63,7 @@ const SpecLogParametersSchema = Type.Object({
   evidence: Type.Optional(
     Type.String({
       description:
-        "check: the command run and its observed result, or the file inspected.",
+        "check: the command run and its observed result, or the file inspected. verify: the dc-verifier run and its results as you re-read them.",
     }),
   ),
   reason: Type.Optional(Type.String({ description: "block / stop reason." })),
@@ -72,6 +75,12 @@ const SpecLogParametersSchema = Type.Object({
     ]),
   ),
   findings: Type.Optional(Type.Integer({ minimum: 0 })),
+  verdict: Type.Optional(
+    Type.Union([Type.Literal("pass"), Type.Literal("issues")], {
+      description:
+        "verify only: the dc-verifier verdict as main re-read it. pass writes done when no checked criterion is stale.",
+    }),
+  ),
   revise: Type.Optional(
     Type.Boolean({
       description:
@@ -87,6 +96,7 @@ interface Params {
   reason?: string;
   decision?: "accept" | "revise" | "stop";
   findings?: number;
+  verdict?: "pass" | "issues";
   revise?: boolean;
 }
 
@@ -115,6 +125,18 @@ function revisionDiff(path: string, before: string, after: string): string {
   );
   const fence = "`".repeat(Math.max(3, longestRun + 1));
   return `${fence}diff\n${patch.trimEnd()}\n${fence}`;
+}
+
+/** The base snapshot fields of an accepted event, carried onto a revised re-accept. */
+function baseOf(
+  accepted: Extract<SpecLogEvent, { event: "accepted" }>,
+): Partial<Extract<SpecLogEvent, { event: "accepted" }>> {
+  const { head, snapshot, snapshotError } = accepted;
+  return {
+    ...(head === undefined ? {} : { head }),
+    ...(snapshot === undefined ? {} : { snapshot }),
+    ...(snapshotError === undefined ? {} : { snapshotError }),
+  };
 }
 
 /** Runs one spec_log action. Exported for tests; the tool wraps it. */
@@ -215,14 +237,28 @@ export function runSpecLog(
       }
       append(
         { ts, event: "revised", hash, previousHash: state.accepted.hash },
-        { ts, event: "accepted", hash, criteria, content },
+        {
+          ts,
+          event: "accepted",
+          hash,
+          criteria,
+          content,
+          ...baseOf(state.accepted),
+        },
       );
       return {
         text: `Re-accepted revised Spec. Every Done Criterion is open again; verify each one fresh.\n\n${diff}`,
         isError: false,
       };
     }
-    append({ ts, event: "accepted", hash, criteria, content });
+    append({
+      ts,
+      event: "accepted",
+      hash,
+      criteria,
+      content,
+      ...snapshotWorkspace(cwd, paths.slug, 0),
+    });
     return {
       text: `Accepted ${paths.specPath} with ${criteria.length} Done Criteria.`,
       isError: false,
@@ -259,11 +295,52 @@ export function runSpecLog(
       event: "checked",
       id: params.id,
       evidence: params.evidence.trim(),
-      ...snapshotWorkspace(cwd, paths.slug, state.checkedCount + 1),
+      ...snapshotWorkspace(cwd, paths.slug, state.snapshotCount + 1),
     });
-    const after = deriveSpecState(readSpecLog(absLog));
+    return { text: renderSpecStatus(cwd, paths.slug), isError: false };
+  }
+
+  if (params.action === "verify") {
+    const open = [...state.criteria]
+      .filter(([, item]) => item.state !== "checked")
+      .map(([id]) => id);
+    if (open.length) {
+      return fail(
+        `verify requires every Done Criterion checked; open or blocked: ${open.join(", ")}.`,
+      );
+    }
+    if (!params.verdict || params.findings === undefined) {
+      return fail("verify requires verdict and findings.");
+    }
+    if (!nonBlank(params.evidence)) {
+      return fail(
+        "verify requires evidence: the dc-verifier run and its per-criterion and per-lane results as you re-read them.",
+      );
+    }
+    if (params.verdict === "pass") {
+      const stale = [...staleCriteria(cwd, state)].flatMap(([id, entry]) =>
+        entry && blocksVerify(entry)
+          ? [[id, describeStale(entry)] as const]
+          : [],
+      );
+      if (stale.length) {
+        return fail(
+          `verify pass refused: re-run and re-check stale criteria first.\n${stale
+            .map(([id, detail]) => `- ${id}: ${detail}`)
+            .join("\n")}`,
+        );
+      }
+    }
+    append({
+      ts,
+      event: "verified",
+      verdict: params.verdict,
+      findings: params.findings,
+      evidence: params.evidence.trim(),
+      ...snapshotWorkspace(cwd, paths.slug, state.snapshotCount + 1),
+    });
     let suffix = "";
-    if (allChecked(after)) {
+    if (params.verdict === "pass") {
       append({ ts, event: "done" });
       try {
         deleteSnapshotRefs(cwd, paths.slug);
@@ -356,7 +433,7 @@ export default function specLogExtension(pi: ExtensionAPI): void {
     name: SPEC_LOG_TOOL_NAME,
     label: "Spec log",
     description:
-      "Only writer of `.pi/specs/<slug>.log.jsonl`. lint checks Spec shape; status shows checkboxes; review records a Spec review decision; accept records the accepted Spec (revise: true after a user-approved change); check records one verified Done Criterion with the evidence you observed and snapshots the workspace; block and stop record blockers. Writes `done` when every criterion is checked.",
+      "Only writer of `.pi/specs/<slug>.log.jsonl`. Only `verify pass` writes `done`, and it refuses while any criterion is stale. lint checks Spec shape; status shows checkboxes and marks a checked criterion stale ([~]) when files changed since its check; review records a Spec review decision; accept records the accepted Spec and its base snapshot (revise: true after a user-approved change); check records one verified Done Criterion with the evidence you observed and snapshots the workspace; verify records the dc-verifier verdict once every criterion is checked; block and stop record blockers.",
     parameters: SpecLogParametersSchema,
     execute(_toolCallId, params, _signal, _onUpdate, ctx) {
       const outcome = runSpecLog(ctx.cwd, params as Params);

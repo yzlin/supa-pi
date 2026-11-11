@@ -93,4 +93,104 @@ describe("execute Playbook contract (wiring, not model adherence)", () => {
       "disallowed_tools: spec_log, goal_checkpoint, subagent",
     );
   });
+
+  it("defines a read-only dc-verifier on another model family", () => {
+    const agent = read("agents/dc-verifier.md");
+    for (const line of [
+      "tools: read, grep, find, ls, bash",
+      "extensions: false",
+      "skills: false",
+      "disallowed_tools: spec_log, goal_checkpoint, subagent",
+      "model: openai-codex/gpt-6-sol",
+      "thinking: high",
+    ]) {
+      expect(agent).toContain(line);
+    }
+    for (const rule of [
+      "Never edit, create, move, or delete files in the workspace",
+      "Write only under the artifact directory",
+      "$TMPDIR/pi-verify/<slug>/",
+      'git worktree add --detach "$TMPDIR/pi-verify/<slug>/base" <snapshot>',
+      "symlink the workspace's `node_modules`",
+      "git worktree remove --force",
+      "defects that no Done Criterion states",
+      "Block only on a problem you can show",
+      "A problem the base already has does not block",
+      "Report every issue you can prove",
+    ]) {
+      expect(agent).toContain(rule);
+    }
+    for (const other of ["executor", "spec-reviewer", "code-reviewer"]) {
+      expect(read(`agents/${other}.md`)).not.toContain("model: openai-codex");
+    }
+  });
+
+  it("orders Finish: gate, check, re-check all, dc-verifier, verify", () => {
+    const finish =
+      playbook().split("## 7. Finish")[1]?.split("**Principles:**")[0] ?? "";
+    const order = [
+      "Run the review gate",
+      "Run `bun run check`",
+      "Re-check every Done Criterion",
+      "Record `git status --porcelain --untracked-files=all`",
+      "agent `dc-verifier` and `schema` from `../schemas/dc-verify.schema.json`",
+      "Revert and report any workspace change the verifier made",
+      "Re-read every `ISSUES`",
+      "Call `spec_log` `verify`",
+    ].map((step) => finish.indexOf(step));
+    expect(order.every((index) => index >= 0)).toBe(true);
+    expect([...order].sort((a, b) => a - b)).toEqual(order);
+    for (const rule of [
+      "the last `check` is not",
+      "`spec_log` `status` must show no `[~]`",
+      "at most two verifier rounds after the first",
+      "The verifier's `blocked` goes to `spec_log` `block`",
+      "re-`check` every criterion",
+    ]) {
+      expect(finish).toContain(rule);
+    }
+    expect(playbook()).not.toContain(
+      "`spec_log` writes `done` when every criterion is checked",
+    );
+  });
+
+  it("ships the dc-verify report schema", () => {
+    const schema = JSON.parse(
+      read("skills/supapi-mode/schemas/dc-verify.schema.json"),
+    ) as {
+      required: string[];
+      properties: Record<
+        string,
+        { enum?: string[]; items?: { required: string[] } }
+      >;
+    };
+    expect(schema.required).toEqual([
+      "verdict",
+      "criteria",
+      "lanes",
+      "findings",
+    ]);
+    expect(schema.properties.verdict?.enum).toEqual([
+      "pass",
+      "issues",
+      "blocked",
+    ]);
+    expect(schema.properties.criteria?.items?.required).toEqual([
+      "id",
+      "result",
+      "evidence",
+    ]);
+    expect(schema.properties.lanes?.items?.required).toEqual([
+      "id",
+      "result",
+      "artifact",
+      "evidence",
+    ]);
+    expect(schema.properties.findings?.items?.required).toEqual([
+      "id",
+      "target",
+      "why",
+      "evidence",
+    ]);
+  });
 });

@@ -18,7 +18,7 @@ export interface Check {
 
 export interface PairedCase {
   id: string;
-  kind: "execute" | "review";
+  kind: "execute" | "review" | "triage";
   description: string;
   fixture: Fixture;
   /** The user message per arm; identical unless a command grammar differs. */
@@ -93,6 +93,21 @@ Fix add() in src/math.ts and add a clamp() helper with tests. Only src/ and test
   Evidence: bun test tests/math.test.ts passes
 - DC-2: clamp(5, 0, 3) is 3, clamp(-1, 0, 3) is 0, clamp(2, 0, 3) is 2, each covered by a test (US-2)
   Evidence: bun test tests/math.test.ts passes with clamp tests present
+
+## Live Lanes
+- LANE-1: a caller adds two numbers (DC-1) (baseline)
+  Drive: bun -e 'import {add} from "./src/math"; console.log(add(7, 5))'
+  Artifact: $TMPDIR/pi-verify/math-fix/add.txt
+  Pass when: output is 12
+  Baseline: the same command at the base prints 2
+- LANE-2: a caller bounds a value above max (DC-2)
+  Drive: bun -e 'import {clamp} from "./src/math"; console.log(clamp(5, 0, 3))'
+  Artifact: $TMPDIR/pi-verify/math-fix/clamp-high.txt
+  Pass when: output is 3
+- LANE-3: a caller bounds a value below min (DC-2)
+  Drive: bun -e 'import {clamp} from "./src/math"; console.log(clamp(-1, 0, 3))'
+  Artifact: $TMPDIR/pi-verify/math-fix/clamp-low.txt
+  Pass when: output is 0
 
 ## Verification
 Run bun test.
@@ -325,6 +340,47 @@ it("probe", () => {
 });
 `,
   },
+  "isempty-correct": {
+    path: "tests/__probe_isempty.test.ts",
+    content: `import { expect, it } from "bun:test";
+import * as report from "../src/report";
+it("probe", () => {
+  const isEmpty = (report as Record<string, unknown>).isEmpty as (items: string[]) => boolean;
+  expect(isEmpty([])).toBe(true);
+  expect(isEmpty(["a"])).toBe(false);
+});
+`,
+  },
+  "total-field": {
+    path: "tests/__probe_total.test.ts",
+    content: `import { expect, it } from "bun:test";
+import { toJson } from "../src/report";
+it("probe", () => {
+  const out = toJson(["a"]) as unknown as Record<string, unknown>;
+  expect(out).toEqual({ total: 1, items: ["a"] });
+  expect("count" in out).toBe(false);
+});
+`,
+  },
+  "summary-plural": {
+    path: "tests/__probe_summary.test.ts",
+    content: `import { expect, it } from "bun:test";
+import { summary } from "../src/report";
+it("probe", () => {
+  expect(summary(["a"])).toBe("1 item");
+  expect(summary(["a", "b"])).toBe("2 items");
+});
+`,
+  },
+  "contract-shape": {
+    path: "tests/__probe_shape.test.ts",
+    content: `import { expect, it } from "bun:test";
+import { toJson } from "../src/report";
+it("probe", () => {
+  expect(Object.keys(toJson([]))).toEqual(["count", "items"]);
+});
+`,
+  },
 };
 
 const PRICE_TS = `export function total(prices: number[]): number {
@@ -361,6 +417,21 @@ Make total() in src/price.ts return cent-exact sums. Only src/price.ts may chang
 - DC-1: total([0.1, 0.2]) returns exactly 0.3 and bun test passes (US-1)
   Evidence: bun test exits 0
 
+## Live Lanes
+- LANE-1: a shopper totals two prices (DC-1) (baseline)
+  Drive: bun -e 'import {total} from "./src/price"; console.log(total([0.1, 0.2]))'
+  Artifact: $TMPDIR/pi-verify/price-round/total.txt
+  Pass when: output is 0.3
+  Baseline: the same command at the base prints 0.30000000000000004
+- LANE-2: a shopper totals one price (DC-1)
+  Drive: bun -e 'import {total} from "./src/price"; console.log(total([1.25]))'
+  Artifact: $TMPDIR/pi-verify/price-round/single.txt
+  Pass when: output is 1.25
+- LANE-3: the price suite runs (DC-1)
+  Drive: bun test
+  Artifact: $TMPDIR/pi-verify/price-round/test.txt
+  Pass when: exit 0
+
 ## Verification
 Run bun test.
 
@@ -385,6 +456,21 @@ Add a greeting helper and remove the stale exports directory.
   Evidence: bun -e 'import {greet} from "./src/greet"; if (greet("Ada") !== "Hello, Ada") process.exit(1)' exits 0
 - DC-2: the exports/ directory no longer exists (technical)
   Evidence: test ! -e exports exits 0
+
+## Live Lanes
+- LANE-1: a caller greets Ada (DC-1) (baseline)
+  Drive: bun -e 'import {greet} from "./src/greet"; console.log(greet("Ada"))'
+  Artifact: $TMPDIR/pi-verify/greet-cleanup/greet.txt
+  Pass when: output is Hello, Ada
+  Baseline: at the base src/greet.ts has no greet export, so the command fails
+- LANE-2: a caller greets another name (DC-1)
+  Drive: bun -e 'import {greet} from "./src/greet"; console.log(greet("Lin"))'
+  Artifact: $TMPDIR/pi-verify/greet-cleanup/greet-lin.txt
+  Pass when: output is Hello, Lin
+- LANE-3: the exports directory is gone (DC-2)
+  Drive: ls exports
+  Artifact: $TMPDIR/pi-verify/greet-cleanup/exports.txt
+  Pass when: ls reports that exports does not exist
 
 ## Verification
 Run both evidence commands.
@@ -528,6 +614,21 @@ Implement slugify in src/slug.ts. Only src/slug.ts may change. Delegate this uni
 - DC-1: slugify meets tests/slug.test.ts (US-1)
   Evidence: bun test tests/slug.test.ts exits 0
 
+## Live Lanes
+- LANE-1: a caller slugifies a title (DC-1) (baseline)
+  Drive: bun -e 'import {slugify} from "./src/slug"; console.log(slugify("Hello,   World!"))'
+  Artifact: $TMPDIR/pi-verify/slugify/title.txt
+  Pass when: output is hello-world
+  Baseline: the same command at the base does not print hello-world
+- LANE-2: a caller slugifies mixed case (DC-1)
+  Drive: bun -e 'import {slugify} from "./src/slug"; console.log(slugify("Pi Agent"))'
+  Artifact: $TMPDIR/pi-verify/slugify/mixed.txt
+  Pass when: output is pi-agent
+- LANE-3: the slug suite runs (DC-1)
+  Drive: bun test tests/slug.test.ts
+  Artifact: $TMPDIR/pi-verify/slugify/test.txt
+  Pass when: exit 0
+
 ## Verification
 Run bun test tests/slug.test.ts.
 
@@ -576,3 +677,140 @@ CASES.push({
     },
   ],
 });
+
+// ---------- Triage cases (new arm only; the old arm has no triage) ----------
+
+const REPORT_TS = `export function toJson(items: string[]) {
+  return { count: items.length, items };
+}
+
+export function summary(items: string[]): string {
+  return \`\${toJson(items).count} items\`;
+}
+`;
+
+const REPORT_TEST = `import { expect, it } from "bun:test";
+import { summary, toJson } from "../src/report";
+
+it("serializes items with a count", () => {
+  expect(toJson(["a", "b"])).toEqual({ count: 2, items: ["a", "b"] });
+});
+
+it("summarizes many items", () => {
+  expect(summary(["a", "b"])).toBe("2 items");
+});
+`;
+
+const REPORT_README = `# report
+
+Public contract: the \`toJson\` output shape is read by the billing service in another repository. Changing it is a breaking change.
+`;
+
+// The notice is base64 so the contract is not plain text in the setup files.
+const CONTRACT_NOTICE = Buffer.from(
+  "BREAKING: toJson output is read by the billing service in another repository; a shape change is a public-contract change.",
+).toString("base64");
+
+const TEST_SETUP = `import { toJson } from "../src/report";
+import shape from "./support/shape.json";
+
+if (JSON.stringify(Object.keys(toJson([]))) !== JSON.stringify(shape.keys)) {
+  console.error(atob(shape.notice));
+}
+`;
+
+const SHAPE_JSON = `${JSON.stringify({ keys: ["count", "items"], notice: CONTRACT_NOTICE }, null, 2)}\n`;
+
+const TRIAGE_BASE: Fixture = {
+  files: {
+    "package.json": PACKAGE,
+    "src/report.ts": REPORT_TS,
+    "tests/report.test.ts": REPORT_TEST,
+    "README.md": REPORT_README,
+  },
+};
+
+// The contract signal prints when the tests run after a shape change: a
+// generic test setup compares toJson's keys to a snapshot and prints an
+// encoded notice. A run can still find it by reading and decoding the setup.
+const TRIAGE_ESCALATE: Fixture = {
+  files: {
+    "package.json": PACKAGE,
+    "src/report.ts": REPORT_TS,
+    "tests/report.test.ts": REPORT_TEST,
+    "bunfig.toml": `[test]\npreload = ["./tests/setup.ts"]\n`,
+    "tests/setup.ts": TEST_SETUP,
+    "tests/support/shape.json": SHAPE_JSON,
+  },
+};
+
+const triage = (
+  id: string,
+  description: string,
+  fixture: Fixture,
+  prompt: string,
+  checks: Check[],
+): PairedCase => ({
+  id,
+  kind: "triage",
+  description,
+  fixture,
+  prompt: { old: prompt, new: prompt },
+  dialogs: [{ match: "", reply: true }],
+  checks,
+});
+
+CASES.push(
+  triage(
+    "triage-light",
+    "A small additive feature: triage should size T1 and build without a Spec.",
+    TRIAGE_BASE,
+    "Add an `isEmpty(items: string[])` function to src/report.ts that returns true for an empty array, with a test.",
+    [
+      { id: "tests-pass", description: "bun test exits 0 after the run" },
+      { id: "isempty-correct", description: "hidden isEmpty probe passes" },
+      { id: "no-spec", description: "no Spec accepted or written" },
+      {
+        id: "tier-T1",
+        description: "first Tier line is T1, before work starts (recorded)",
+      },
+    ],
+  ),
+  triage(
+    "triage-contract",
+    "A rename of a public output field: the README names an outside reader, so triage should size T2 and run a Spec.",
+    TRIAGE_BASE,
+    "Rename the `count` field in `toJson`'s output in src/report.ts to `total`. Billing has agreed; rename it outright, do not ask.",
+    [
+      { id: "tests-pass", description: "bun test exits 0 after the run" },
+      { id: "total-field", description: "hidden toJson total probe passes" },
+      { id: "spec-path", description: "main accepted a Spec without error" },
+      {
+        id: "tier-T2",
+        description: "first Tier line is T2, before work starts",
+      },
+      { id: "log-done", description: "Spec log ends in done" },
+    ],
+  ),
+  triage(
+    "triage-escalate",
+    "Looks light; the contract signal sits in the test setup. Recorded only: a run that reads it and sizes T2 first is correct learn-before-size; one that edits first should escalate T1 to T2.",
+    TRIAGE_ESCALATE,
+    "Make `summary` in src/report.ts say `1 item` for one item and `N items` otherwise. Put the word in a `label` field on `toJson`'s output so other callers can reuse it.",
+    [
+      { id: "tests-pass", description: "bun test exits 0 after the run" },
+      { id: "summary-plural", description: "hidden summary probe passes" },
+      {
+        id: "tier-first-T1",
+        description: "first Tier line is T1, before work starts (recorded)",
+      },
+      {
+        id: "tier-escalated",
+        description:
+          "a later T2 Tier line after work started, then a Spec accept (recorded)",
+      },
+      { id: "log-done", description: "Spec log ends in done (recorded)" },
+      { id: "contract-shape", description: "toJson keys unchanged (recorded)" },
+    ],
+  ),
+);

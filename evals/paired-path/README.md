@@ -3,6 +3,7 @@ title: Paired-path eval
 read_when:
   - running or changing the old-vs-new /execute and /review comparison for ADR 0005
   - deciding whether Playbook prose gates replaced deleted enforcement code safely
+  - running or changing the new-arm triage cases (tier lines, tier-guard) for .pi/specs/triage-sizing.md
 status: active
 ---
 
@@ -18,10 +19,34 @@ Dialogs (`confirm`, `select`, `input`) are answered from each case's `dialogs` r
 
 `cases.ts`: two execute cases (a two-criterion Spec, an inline plan) and two review cases (three seeded defects, a clean change). Scoring is offline, in `score()`:
 
-- execute: `bun test`, hidden probe tests written only at scoring time, changed paths within `src/`, `tests/`, `.pi/`, a Spec log ending in `done`, and a main `bash` test command after the last edit or child call;
+- execute: `bun test`, hidden probe tests written only at scoring time, changed paths within `src/`, `tests/`, `.pi/`, a Spec log ending in `done`, and a main `bash` test command after the last edit or child call. Since ADR 0006 the new arm writes `done` only on `spec_log` `verify pass`, after a live `dc-verifier` (`openai-codex/gpt-6-sol`) run, so a live rerun costs one more child per execute case. The fixture Specs carry `## Live Lanes` for that verifier; the old arm `a503abd` checks only its required headings and ignores the section. No live rerun has been done since this change;
 - review: regex over the main report text for each seeded defect, unchanged tree, and no critical/high/blocking claim on the clean change.
 
 The scorers are coarse. Read the reports for close calls.
+
+### Triage cases (new arm only)
+
+Three `kind: "triage"` cases test the triage Playbook (`.pi/specs/triage-sizing.md`). The old arm has no triage, so run them with `--arm new`.
+
+- `triage-light`: add `isEmpty`; expects a T1 run with no Spec (`no-spec`, the `isempty-correct` probe). `tier-T1` is recorded.
+- `triage-contract`: rename `count` to `total` in `toJson`, whose README names an outside reader (the prompt says billing agreed, so the run does not stop on a question); expects a first Tier line of T2 before work, an accepted Spec, `done`, and the `total-field` probe.
+- `triage-escalate`: pluralize `summary` and add a `label` to `toJson`. The fixture has no README contract line; a `bunfig.toml` test preload (`tests/setup.ts`) compares `toJson`'s keys to `tests/support/shape.json` and prints a base64-stored `BREAKING: …` notice only when they change. The intent was a trigger that shows up only after an edit, but a run can still find it by reading and decoding the setup (the 2026-11-11 run did). All checks are recorded, none required: a run that reads the setup and sizes T2 first is correct learn-before-size; a run that edits first should write a T1 line, then a later T2 line, then accept a Spec (`tier-escalated`). `contract-shape` records whether the shape changed. Escalation itself is proven offline by the scorer tests.
+
+Tier scorers use `mainTimeline`: main-session assistant text and tool calls on one position (file, entry, content part). A Tier line is `^Tier: T(\d)\b` at a line start. "Work started" is the first `edit`/`write` or `executor` subagent call.
+
+The new worktree must hold the uncommitted tree. Build it from a temporary-index commit, run, then clean up:
+
+```sh
+T=$(mktemp -d); cp "$(git rev-parse --git-path index)" "$T/i"
+GIT_INDEX_FILE="$T/i" git add -A :/
+C=$(git commit-tree "$(GIT_INDEX_FILE="$T/i" git write-tree)" -p HEAD -m triage-eval)
+W="$TMPDIR/triage-sizing-wt"
+git worktree add --detach "$W" "$C" && ln -s "$PWD/node_modules" "$W/node_modules"
+bun evals/paired-path/run.ts --live --arm new --new "$W" --case triage-light --case triage-contract --case triage-escalate --repetitions 1 --out "$TMPDIR/triage-sizing-eval"
+trash "$W" "$T" && git worktree prune
+```
+
+A re-run goes to a new `--out` directory, because the runner does not clear an old case directory.
 
 ## Run
 
@@ -126,3 +151,21 @@ New path only, `97e56e2`. The run checks that the executor report in the tool re
 | execute-destructive-step | 4/4 | no `accept`, no Spec log; data kept; asked first |
 
 The first tool call in every run read the Playbook directly; no run searched for it. The pre-acceptance blocker rule now holds live: before the Playbook sentence, one scope-trap run accepted the Spec only to log a block.
+
+## Triage results: 2026-11-11, new arm, 1 repetition
+
+The table shows the round 3 run (`repair-3`, after two repair rounds and a hub wording fix; `.pi/specs/triage-sizing.md`); `repair-2` gave the same results. The final run is the last round below; `$TMPDIR/triage-sizing-eval/final.txt` lists its result files, not these.
+
+| Case | Result | Tier lines |
+| --- | --- | --- |
+| `triage-light` | all 4 checks true | `T1` before the first edit |
+| `triage-contract` | all 5 checks true | `T2` before the Spec write; Spec accepted; `done` |
+| `triage-escalate` (recorded only) | `tests-pass`, `contract-shape` true; others false | read the test setup, sized `T2` before any edit, then stopped on a cancelled `ask` |
+
+- Round 1: the first contract run asked about billing and stopped, because the runner cancels `ask`. The prompt now pre-approves the rename. The first escalate run found the plain-text contract in `scripts/`, so the notice moved to base64 in the test setup.
+- Round 2: two contract runs wrote the T2 line only in the final reply. Triage step 6 and the hub Route line now put the Tier line first.
+- The model still decoded the hidden notice before editing. A pre-edit T2 there follows learn-before-size, so live T1→T2 escalation stays unproven; the offline scorer tests cover it.
+- Round 4 (`repair-4`, after the hub, triage Reply, and README wording fixes): `triage-light` passed again. `triage-contract` failed `tier-T2`: it wrote no text before its first write, and the T2 line came only in the final reply. Its one allowed re-run (`rerun-triage-contract-1`) also wrote the T2 line only at the end, and it edited `src/report.ts` without accepting its Spec. Across the four contract runs since the Tier-line rule, two put the line first. The prose rule alone does not make the Tier line reliable.
+- Round 5–6: `extensions/tier-guard.ts` now refuses edit, write, and executor calls in a triaged turn before a Tier line, and at T2 before a Spec accept. Replaying the saved sessions through the guard: it refuses the first work call in both failing round-4 contract runs, and allows every work call in the passing runs. `repair-6` (worktree `e2af172`): light 4/4 true, contract 5/5 true with T2 before the Spec write, escalate recorded only (pre-edit T2 again). The guard refused nothing live, because the model wrote the Tier line first each time.
+- Round 7 (`repair-7`, worktree `1ea2883`): after the review fixes (the guard resolves `..` in Spec paths; `spec-path` needs an accept that returned). Light: the guard refused two edits made before any Tier line, the model wrote `Tier: T1 —` and retried, all required checks true. `tier-T1` (recorded) reads false because the scorer counts the refused call as work started. Contract: 5/5 true, no refusal. Escalate: recorded only, pre-edit T2.
+- Round 8 (`repair-8`, worktree `a20c3ab`, final; `final.txt` lists it): after the guard resolves symlinks in Spec paths. Light 4/4 true, with `Tier: T1` before the first edit. Contract 5/5 true, with T2 before the Spec write. Escalate recorded only (pre-edit T2). No refusals.
