@@ -36,7 +36,6 @@
 ## Major extension docs
 
 - `extensions/subagent/README.md` — read before changing blocking delegation, trusted parent agent discovery, role controls/settings precedence, task-only children, reporting/evidence, cancellation, or tmux/Pi lifecycle boundaries.
-- `extensions/model-profiles/README.md` — read before changing `/profile`, `model-profiles.json`, Generated agent overrides, or live `~/.pi/agent/agents` file ownership.
 - `extensions/auto-rename/README.md` — read before changing automatic session naming, `/auto-rename`, its global configuration, title safety/privacy boundaries, or session/tree concurrency protections.
 - `extensions/sift/README.md` — read before changing Sift, `sift_files`, `/sift`, TypeSafe authentication/consent, data-transfer limits, or its security boundary.
 - `extensions/caveman/README.md` — read before changing `/caveman`, caveman-mode persistence, or generic extension status behavior.

@@ -67,9 +67,9 @@ The canonical `opening-a-pr` Playbook (`skills/supapi-mode/playbooks/opening-a-p
 - `rules/common/git-workflow.md` PR guidance defers to the `opening-a-pr` Playbook as the single PR-body source.
 - Adapted from [Matt Pocock's MIT-licensed in-progress `pr` skill at commit `c55ee46073ed923f86ce59a5eb3b6d895095d1b7`](https://github.com/mattpocock/skills/tree/c55ee46073ed923f86ce59a5eb3b6d895095d1b7/skills/in-progress/pr); its HumanLayer `show-me` credit is carried by `showing-me`.
 
-## Model profiles: implemented product direction
+## Model profiles: removed
 
-Approved by `/grill-me` on 2026-09-30; implemented and registered as an active Extension `extensions/model-profiles` with command `/profile`, with focused tests. Live `/profile` use and E2E subagent spawning remain unverified. See `extensions/model-profiles/README.md` for the implemented contract.
+Approved by `/grill-me` on 2026-09-30 and implemented as `extensions/model-profiles` with command `/profile`. Removed on 2026-11-11; the notes below are historical.
 
 - Scope: main-session model/thinking and agent model/thinking only. `/review` passes explicit stage choices through `subagent`, ahead of role defaults. The earlier pi-subagents 0.19.0 precedence inference is historical; it is not evidence for the replacement.
 - Config: machine-local `~/.pi/agent/model-profiles.json` with a schema. Shape `{$schema?, active?, defaultMain?: {model?, thinking?}, profiles: {<name>: {main?: {model?, thinking?}, agents?: {"*"?: {...}, <agent>?: {...}}}}}`; absent `active` means `default`. Per field, named agent > `*` > repo frontmatter. Repo `agents/*.md` stay the canonical baseline.

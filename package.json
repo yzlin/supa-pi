@@ -76,7 +76,6 @@
       "./extensions/trust-github-repos",
       "./extensions/whimsical",
       "./extensions/fast",
-      "./extensions/model-profiles",
       "./extensions/uv.ts",
       "./extensions/worktree-guard.ts",
       "./extensions/tier-guard.ts",

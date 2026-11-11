@@ -34,9 +34,6 @@ The repository is optimized for local workflow quality and maintainable agent be
 - **Sift** — an active SupaPi Extension that screens explicit workspace file candidates for relevance before the main agent reads their full contents. _Avoid_: search, index.
 - **File judgment** — one independent Jev evaluation assigning a probability of relevance to one bounded file against the caller's query. _Avoid_: proof, authorization.
 - **Matt-compatible context docs** — `CONTEXT.md`, `CONTEXT-MAP.md`, `docs/adr/`, and optional `docs/context/` notes.
-- **Model profile** — a named, machine-local set of main-session and agent model/thinking choices that `/profile` applies in one switch. _Avoid_: mode, loadout, preset.
-- **Default profile** — the reserved Model profile that restores repo `agents/*.md` frontmatter and any captured `defaultMain` model/thinking choices, then clears that snapshot; without a snapshot, main remains unchanged. It cannot be defined in profile config. _Avoid_: reset profile, base profile.
-- **Generated agent override** — a live agent file rendered from a repo agent plus the active Model profile, replacing only `model`/`thinking`. _Avoid_: agent patch, frontmatter rewrite.
 - **Final report** — the reply that closes multi-step work: edits, investigations, delegated work, or review, diagnose, and grill summaries. One-line answers and lookups are not Final reports. _Avoid_: summary turn, any long reply.
 - **Plain report** — the output style for Final reports and reviewer `why`/`change` text: roughly 80% of ASD-STE100 Simplified Technical English, using `CONTEXT.md` vocabulary. _Avoid_: STE mode, caveman.
 - **Explainer rung** — one output format on the `/show-me` ladder: text, diagram, or HTML. Video is a deferred rung. _Avoid_: view mode.
@@ -63,7 +60,6 @@ The repository is optimized for local workflow quality and maintainable agent be
 ## Open questions
 
 - Extension isolation (resolved 2026-10-04): no approved exception; RTK's tool-display dependency is removed under "Tool rendering: implemented product direction" in `docs/context/subsystems.md`.
-- Model profiles (deferred): stale Generated agent overrides after disabling the Extension (documented; run Default profile first to clean up); status rendering when manual `/model` drifts from the active profile.
 - PR workflow (deferred): feasibility of cheap base-branch Before evidence, screenshots, and fork→upstream PR support.
 - Oversight output: it is not verified whether reviewer subagents receive the core prompt; agent files therefore reference `plain-report` directly. Deferred: the video Explainer rung (Manim, ffmpeg, TTS), an HTML review-report view, and a readability eval.
 
