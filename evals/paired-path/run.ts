@@ -635,8 +635,13 @@ function scanTiers(timeline: TimelineItem[], tools: ToolEvent[]): TierScan {
 }
 
 function firstTierIs(scan: TierScan, tier: number): boolean {
+  return firstTierBeforeWork(scan) === tier;
+}
+
+/** The first declared tier when it came before work started; else undefined. */
+function firstTierBeforeWork(scan: TierScan): number | undefined {
   const first = scan.tiers[0];
-  return first?.tier === tier && first.position < scan.workStarted;
+  return first && first.position < scan.workStarted ? first.tier : undefined;
 }
 
 function escalated(scan: TierScan): boolean {
@@ -819,6 +824,11 @@ const FINDING_PATTERNS: Record<string, RegExp> = {
   "finds-sql-injection": /SQL\s*injection|injection|parameteri[sz]ed/iu,
 };
 
+// Re-pick evidence in the reply. "intended" and "on purpose" are left out:
+// the fixture's test comment uses them, so a reply quoting it matched.
+const REPICK_PATTERN =
+  /\b(re-?pick(ed)?|not a (bug|defect)|by design|feature\b)/iu;
+
 export function score(
   testCase: PairedCase,
   dir: string,
@@ -880,6 +890,15 @@ export function score(
         break;
       case "tier-escalated":
         result[check.id] = escalated(tiers);
+        break;
+      case "tier-before-work":
+        result[check.id] = firstTierBeforeWork(tiers) !== undefined;
+        break;
+      case "tier-not-T0":
+        result[check.id] = (firstTierBeforeWork(tiers) ?? 0) >= 1;
+        break;
+      case "repicked":
+        result[check.id] = REPICK_PATTERN.test(text);
         break;
       case "security-reviewer-ran":
         result[check.id] = reviewers(tools).includes("security-reviewer");

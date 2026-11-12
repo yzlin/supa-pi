@@ -381,6 +381,27 @@ it("probe", () => {
 });
 `,
   },
+  "label-renamed": {
+    path: "tests/__probe_label.test.ts",
+    content: `import { expect, it } from "bun:test";
+import { LABELS } from "../src/labels";
+import { summary } from "../src/report";
+it("probe", () => {
+  expect(LABELS as Record<string, string>).toEqual({ items: "items" });
+  expect(summary(["a", "b"])).toBe("2 items");
+});
+`,
+  },
+  "no-items": {
+    path: "tests/__probe_noitems.test.ts",
+    content: `import { expect, it } from "bun:test";
+import { summary } from "../src/report";
+it("probe", () => {
+  expect(summary([])).toBe("no items");
+  expect(summary(["a", "b"])).toBe("2 items");
+});
+`,
+  },
 };
 
 const PRICE_TS = `export function total(prices: number[]): number {
@@ -744,6 +765,57 @@ const TRIAGE_ESCALATE: Fixture = {
   },
 };
 
+// Re-pick: the "bug" is pinned on purpose by a test, so learning shows it is
+// changed behavior (feature), not a defect.
+const REPICK_TEST = `import { expect, it } from "bun:test";
+import { summary } from "../src/report";
+
+// Intended: every count uses the same "N items" form, including zero.
+it("uses the N items form for an empty list on purpose", () => {
+  expect(summary([])).toBe("0 items");
+});
+
+it("summarizes many items", () => {
+  expect(summary(["a", "b"])).toBe("2 items");
+});
+`;
+
+const TRIAGE_REPICK: Fixture = {
+  files: {
+    "package.json": PACKAGE,
+    "src/report.ts": REPORT_TS,
+    "tests/report.test.ts": REPICK_TEST,
+  },
+};
+
+// One-line rename whose key another module reads: the pre-T0 search must find it.
+const LABELS_TS = `export const LABELS = { item_plural: "items" };
+`;
+
+const LABELED_REPORT_TS = `import { LABELS } from "./labels";
+
+export function summary(items: string[]): string {
+  return \`\${items.length} \${LABELS.item_plural}\`;
+}
+`;
+
+const LABELED_TEST = `import { expect, it } from "bun:test";
+import { summary } from "../src/report";
+
+it("summarizes many items", () => {
+  expect(summary(["a", "b"])).toBe("2 items");
+});
+`;
+
+const TRIAGE_ONELINE: Fixture = {
+  files: {
+    "package.json": PACKAGE,
+    "src/labels.ts": LABELS_TS,
+    "src/report.ts": LABELED_REPORT_TS,
+    "tests/report.test.ts": LABELED_TEST,
+  },
+};
+
 const triage = (
   id: string,
   description: string,
@@ -811,6 +883,39 @@ CASES.push(
       },
       { id: "log-done", description: "Spec log ends in done (recorded)" },
       { id: "contract-shape", description: "toJson keys unchanged (recorded)" },
+    ],
+  ),
+  triage(
+    "triage-repick",
+    "Reported as a bug, but a test pins the behavior on purpose: learning should re-pick the kind as a feature (changed behavior). Re-pick is recorded only.",
+    TRIAGE_REPICK,
+    "Bug: `summary([])` in src/report.ts returns `0 items`. It should return `no items`. Fix it.",
+    [
+      { id: "tests-pass", description: "bun test exits 0 after the run" },
+      { id: "no-items", description: "hidden empty-summary probe passes" },
+      {
+        id: "tier-before-work",
+        description: "a Tier line exists before work starts",
+      },
+      {
+        id: "repicked",
+        description:
+          "the reply names the behavior as intended or a feature, not a defect (recorded)",
+      },
+    ],
+  ),
+  triage(
+    "triage-oneline-reader",
+    "A one-line key rename that another module reads: the pre-T0 search should find the reader, so the run sizes above T0 and updates the reader.",
+    TRIAGE_ONELINE,
+    "In src/labels.ts, rename the `item_plural` key to `items`. It is a one-line change.",
+    [
+      { id: "tests-pass", description: "bun test exits 0 after the run" },
+      { id: "label-renamed", description: "hidden label probe passes" },
+      {
+        id: "tier-not-T0",
+        description: "first Tier line is T1 or higher, before work starts",
+      },
     ],
   ),
 );

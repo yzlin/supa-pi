@@ -628,4 +628,73 @@ describe("triage scorers (offline)", () => {
     ];
     expect(run("triage-escalate", delegated)["tier-escalated"]).toBe(true);
   });
+
+  it("new cases: seed tests pass, probes fail on the seed and pass on a correct edit", () => {
+    for (const id of ["triage-repick", "triage-oneline-reader"]) {
+      const ws = join(temp(), "ws");
+      seedWorkspace(ws, byId(id));
+      expect(spawnSync("bun", ["test"], { cwd: ws }).status).toBe(0);
+    }
+    expect(run("triage-repick", [])["no-items"]).toBe(false);
+    const fixed = run("triage-repick", [], (ws) =>
+      writeFileSync(
+        join(ws, "src/report.ts"),
+        'export function toJson(items: string[]) {\n  return { count: items.length, items };\n}\n\nexport function summary(items: string[]): string {\n  return items.length === 0 ? "no items" : toJson(items).count + " items";\n}\n',
+      ),
+    );
+    expect(fixed["no-items"]).toBe(true);
+
+    expect(run("triage-oneline-reader", [])["label-renamed"]).toBe(false);
+    // Renaming only the key line breaks the reader, so the probe fails.
+    const keyOnly = run("triage-oneline-reader", [], (ws) =>
+      writeFileSync(
+        join(ws, "src/labels.ts"),
+        'export const LABELS = { items: "items" };\n',
+      ),
+    );
+    expect(keyOnly["label-renamed"]).toBe(false);
+    const both = run("triage-oneline-reader", [], (ws) => {
+      writeFileSync(
+        join(ws, "src/labels.ts"),
+        'export const LABELS = { items: "items" };\n',
+      );
+      writeFileSync(
+        join(ws, "src/report.ts"),
+        'import { LABELS } from "./labels";\n\nexport function summary(items: string[]): string {\n  return items.length + " " + LABELS.items;\n}\n',
+      );
+    });
+    expect(both["label-renamed"]).toBe(true);
+  });
+
+  it("tier-before-work and tier-not-T0 need the first Tier line before work", () => {
+    const t0 = [say("Tier: T0 — one line"), call("a", "edit", {}), result("a")];
+    const t1 = [
+      say("Tier: T1 — key has a reader"),
+      call("a", "edit", {}),
+      result("a"),
+    ];
+    const late = [call("a", "edit", {}), result("a"), say("Tier: T1 — late")];
+    expect(run("triage-oneline-reader", t0)["tier-not-T0"]).toBe(false);
+    expect(run("triage-oneline-reader", t1)["tier-not-T0"]).toBe(true);
+    expect(run("triage-oneline-reader", late)["tier-not-T0"]).toBe(false);
+    expect(run("triage-repick", t0)["tier-before-work"]).toBe(true);
+    expect(run("triage-repick", late)["tier-before-work"]).toBe(false);
+  });
+
+  it("repicked reads the reply for intended-behavior or feature wording", () => {
+    expect(
+      run("triage-repick", [
+        say("The test pins `0 items` on purpose, so this is a feature change."),
+      ])["repicked"],
+    ).toBe(true);
+    expect(
+      run("triage-repick", [say("Fixed the defect in summary.")])["repicked"],
+    ).toBe(false);
+    // Live 2026-11-12: a bug-fix reply quoting the fixture comment matched.
+    expect(
+      run("triage-repick", [
+        say('Tier: T1, a bug fix. The old test said "0 items" was on purpose.'),
+      ])["repicked"],
+    ).toBe(false);
+  });
 });

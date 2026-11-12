@@ -26,11 +26,13 @@ The scorers are coarse. Read the reports for close calls.
 
 ### Triage cases (new arm only)
 
-Three `kind: "triage"` cases test the triage Playbook (`.pi/specs/triage-sizing.md`). The old arm has no triage, so run them with `--arm new`.
+Five `kind: "triage"` cases test the triage Playbook (`.pi/specs/triage-sizing.md`). The old arm has no triage, so run them with `--arm new`.
 
 - `triage-light`: add `isEmpty`; expects a T1 run with no Spec (`no-spec`, the `isempty-correct` probe). `tier-T1` is recorded.
 - `triage-contract`: rename `count` to `total` in `toJson`, whose README names an outside reader (the prompt says billing agreed, so the run does not stop on a question); expects a first Tier line of T2 before work, an accepted Spec, `done`, and the `total-field` probe.
 - `triage-escalate`: pluralize `summary` and add a `label` to `toJson`. The fixture has no README contract line; a `bunfig.toml` test preload (`tests/setup.ts`) compares `toJson`'s keys to `tests/support/shape.json` and prints a base64-stored `BREAKING: …` notice only when they change. The intent was a trigger that shows up only after an edit, but a run can still find it by reading and decoding the setup (the 2026-11-11 run did). All checks are recorded, none required: a run that reads the setup and sizes T2 first is correct learn-before-size; a run that edits first should write a T1 line, then a later T2 line, then accept a Spec (`tier-escalated`). `contract-shape` records whether the shape changed. Escalation itself is proven offline by the scorer tests.
+- `triage-repick`: the prompt reports `summary([])` returning `0 items` as a bug, but a test pins that output on purpose. Triage step 4 should re-pick the kind from `bug-fix` to `feature`. Required: `tests-pass`, the `no-items` probe, and `tier-before-work`. `repicked` is recorded only: it is a regex over the reply for intended-behavior or feature wording, and it is coarse.
+- `triage-oneline-reader`: the prompt asks for a one-line rename of the `item_plural` key in `src/labels.ts`, but `src/report.ts` reads that key. The search before T0 in step 4 should find the reader. Required: `tests-pass`, the `label-renamed` probe (it fails if only the key line changes), and `tier-not-T0` (the first Tier line is T1 or higher, before work starts).
 
 Tier scorers use `mainTimeline`: main-session assistant text and tool calls on one position (file, entry, content part). A tier is a call to the `tier` tool whose `tier` is an integer 0–3 and whose `reason` is non-empty, or a text line `^Tier: T(\d)\b` at a line start. "Work started" is the first `edit`/`write` or `executor` subagent call.
 
@@ -169,3 +171,26 @@ The table shows the round 3 run (`repair-3`, after two repair rounds and a hub w
 - Round 5–6: `extensions/tier-guard.ts` now refuses edit, write, and executor calls in a triaged turn before a Tier line, and at T2 before a Spec accept. Replaying the saved sessions through the guard: it refuses the first work call in both failing round-4 contract runs, and allows every work call in the passing runs. `repair-6` (worktree `e2af172`): light 4/4 true, contract 5/5 true with T2 before the Spec write, escalate recorded only (pre-edit T2 again). The guard refused nothing live, because the model wrote the Tier line first each time.
 - Round 7 (`repair-7`, worktree `1ea2883`): after the review fixes (the guard resolves `..` in Spec paths; `spec-path` needs an accept that returned). Light: the guard refused two edits made before any Tier line, the model wrote `Tier: T1 —` and retried, all required checks true. `tier-T1` (recorded) reads false because the scorer counts the refused call as work started. Contract: 5/5 true, no refusal. Escalate: recorded only, pre-edit T2.
 - Round 8 (`repair-8`, worktree `a20c3ab`, final; `final.txt` lists it): after the guard resolves symlinks in Spec paths. Light 4/4 true, with `Tier: T1` before the first edit. Contract 5/5 true, with T2 before the Spec write. Escalate recorded only (pre-edit T2). No refusals.
+
+## Triage re-pick and pre-T0 search: 2026-11-12, new arm, 1 repetition
+
+Uncommitted tree with the step 4 re-pick and pre-T0 search rules. Output: `$TMPDIR/triage-relearn-eval-1794455826`.
+
+| Case | Result | Behavior |
+| --- | --- | --- |
+| `triage-repick` | 3/3 required true; `repicked` true at run time, false under the fixed scorer | Read triage and the pinning test, asked whether to change it (cancelled in RPC), then sized `T1` as a **bug-fix**. No re-pick. |
+| `triage-oneline-reader` | `tests-pass`, `label-renamed` true; `tier-not-T0` false | Never read the hub or triage. Grepped `item_plural`, found the reader in `src/report.ts`, declared `T0` ("one definition + one caller"), updated both lines. |
+
+- Re-pick: the model saw the conflict and reported it, but kept the kind. The prompt says "Bug:" and "Fix it". The re-pick rule did not change the label the model used.
+- `repicked` matched only because the reply quoted the fixture comment ("on purpose"). The scorer now leaves out "intended" and "on purpose".
+- Pre-T0 search: the outcome was right (the reader was found and updated), but the run skipped supapi-mode entirely, because the core prompt lets trivial work stay direct. T0 with a known reader breaks the rule's text ("if nothing else reads it"). The search that found the reader was the model's own habit, not the Playbook.
+
+### Follow-up: T0 rule in the `tier` tool description, 3 repetitions
+
+The description of the `tier` tool in `extensions/tier-guard.ts` now ends: "T0 only when a search finds no other reader of the changed line; a change other code reads is T1 or higher." The one-line run calls this tool even when it skips triage. Output: `$TMPDIR/triage-t0-eval-1794459440`.
+
+| Case | Result | Behavior |
+| --- | --- | --- |
+| `triage-oneline-reader` | 3/3 runs, all checks true | Each run grepped `item_plural` first, then declared `T1` with a reason naming `src/report.ts`, then updated both lines. None read triage. |
+
+Before the change, 1 of 1 runs declared T0. The sample is small. The model did the search itself every time; the description changed only the tier it chose after the search.
