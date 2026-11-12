@@ -224,7 +224,7 @@ export default function (pi: ExtensionAPI) {
     name: TIER_TOOL,
     label: "Tier",
     description:
-      "Declare the triage size tier (T0–T3) and the hard trigger or soft signals that set it. Call once after sizing, before the first edit, write, or executor call; call again to escalate.",
+      "Declare the triage size tier (T0–T3) and the hard trigger or soft signals that set it. Call once after sizing, before the first edit, write, or executor call; call again to escalate. T0 only when a search finds no other reader of the changed line; a change other code reads is T1 or higher.",
     parameters: Type.Object({
       tier: Type.Integer({ minimum: 0, maximum: 3, description: "Tier 0–3" }),
       reason: Type.String({

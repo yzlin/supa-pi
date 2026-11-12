@@ -333,6 +333,7 @@ describe("tier guard", () => {
       | undefined;
     const tools: {
       name: string;
+      description: string;
       parameters: {
         properties: Record<string, Record<string, unknown>>;
         required?: string[];
@@ -354,6 +355,10 @@ describe("tier guard", () => {
     } as unknown as ExtensionAPI);
     expect(tools.map((t) => t.name)).toEqual(["tier"]);
     const tier = tools[0];
+    // Live 2026-11-12: a direct-path run declared T0 for a key with a known reader.
+    expect(tier?.description).toContain(
+      "T0 only when a search finds no other reader of the changed line; a change other code reads is T1 or higher.",
+    );
     expect(tier?.parameters.properties.tier).toMatchObject({
       type: "integer",
       minimum: 0,
