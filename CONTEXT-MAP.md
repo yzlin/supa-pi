@@ -14,7 +14,8 @@
 - `docs/adr/0002-use-pi-fullscreen.md` — read before changing Pi version support, setup TUI defaults, fullscreen/regular compatibility, or pieditor viewport ownership.
 - `docs/adr/0003-main-executed-execute-attempts.md` — read before changing `/execute` start or verify rules, the `executor` ledger field, main-attempt guards, or when `/execute` delegates to children (superseded by ADR 0005; history only).
 - `docs/adr/0004-merged-review-verifier.md` — read before changing `/review` grouping, the verifier schema or prompt, rejected-candidate handling, or review model configuration (superseded by ADR 0005; history only).
-- `docs/adr/0005-playbook-prose-gates.md` — read before moving `/execute`, `/review`, or `/goal` gates into Playbook prose, or deleting their enforcement code (accepted; supersedes 0003/0004).
+- `docs/adr/0005-playbook-prose-gates.md` — read before moving `/execute`, `/review`, or `/goal` gates into Playbook prose, or deleting their enforcement code (accepted; supersedes 0003/0004; superseded in part by 0006).
+- `docs/adr/0006-finish-verifier-and-live-lanes.md` — read before changing the execute Playbook's Finish step, the `dc-verifier` agent or its report schema, `spec_log` `check`/`verify`/`done`, the stale rule, or Live Lanes lint (accepted).
 - `evals/paired-path/README.md` — read before running or changing the old-vs-new execute and review comparison.
 
 ## Context notes
@@ -59,7 +60,7 @@
 - `docs/context/subsystems.md` "Skill CLI: implemented direction", `extensions/skills/ops.ts`, and `extensions/skills/core.ts` — read before changing `/skill`, the `pi-skill` CLI (`scripts/pi-skill.ts`), the shared Prompter-based skill orchestration, or skill-manifest write locking.
 - `skills/supapi-mode/playbooks/opening-a-pr.md` and `prompts/pr.md` — read before changing `/pr`, PR-body format, PR submission gates, or `rules/common/git-workflow.md` PR guidance.
 - `skills/retro/SKILL.md` and `prompts/retro.md` — read before changing `/retro`, session selection and evidence, report-only boundaries, or agent-environment recommendation routing.
-- `skills/supapi-mode/playbooks/triage.md` and the hub `**Unit loop:**` rule in `skills/supapi-mode/SKILL.md` — read before changing how requests pick a Playbook or a size tier, the hard triggers, escalation, or the shared build loop; the triage eval cases live in `evals/paired-path/cases.ts`.
+- `skills/supapi-mode/playbooks/triage.md` and the hub `**Unit loop:**` rule in `skills/supapi-mode/SKILL.md` — read before changing how requests pick a Playbook or a size tier, the hard triggers, escalation, or the shared build loop; the triage eval cases live in `evals/paired-path/cases.ts`. `extensions/tier-guard.ts` enforces the tier declaration and the T2 Spec gate in code; keep it aligned with triage steps 6–7.
 - `skills/supapi-mode/playbooks/execute.md` and `prompts/execute.md` — read before changing `/execute` or execute orchestration behavior.
 - `skills/to-spec/SKILL.md` and `extensions/spec-log/README.md` — read before changing `/to-spec`, Spec format, Spec log, Snapshot refs, or Spec resume.
 - `extensions/goal/README.md` — read before changing `/goal`, goal task mode, goal checkpoint behavior, goal status rendering, or Goal Extension registration.
