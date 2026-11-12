@@ -583,8 +583,8 @@ function tierArg(args: Record<string, unknown>): number | undefined {
 }
 
 interface TierScan {
-  /** Tier digits in order, each with its timeline position. */
-  tiers: { tier: number; position: number }[];
+  /** Tier digits in order, each with its timeline position and reason text. */
+  tiers: { tier: number; position: number; reason: string }[];
   /** Position of the first edit, write, or executor call; Infinity when none. */
   workStarted: number;
   /** Positions of successful spec_log accept calls. */
@@ -602,7 +602,12 @@ function scanTiers(timeline: TimelineItem[], tools: ToolEvent[]): TierScan {
   for (const item of timeline) {
     if (item.kind === "text") {
       for (const match of item.text.matchAll(TIER_LINE)) {
-        tiers.push({ tier: Number(match[1]), position: item.position });
+        const line = item.text.slice(match.index).split("\n", 1)[0] ?? "";
+        tiers.push({
+          tier: Number(match[1]),
+          position: item.position,
+          reason: line.replace(/^Tier: T\d\b\s*[—–:-]?\s*/u, ""),
+        });
       }
       continue;
     }
@@ -612,7 +617,11 @@ function scanTiers(timeline: TimelineItem[], tools: ToolEvent[]): TierScan {
     if (item.name === "tier") {
       const declared = tierArg(item.args);
       if (declared !== undefined) {
-        tiers.push({ tier: declared, position: item.position });
+        tiers.push({
+          tier: declared,
+          position: item.position,
+          reason: String(item.args.reason),
+        });
       }
       continue;
     }
@@ -824,11 +833,6 @@ const FINDING_PATTERNS: Record<string, RegExp> = {
   "finds-sql-injection": /SQL\s*injection|injection|parameteri[sz]ed/iu,
 };
 
-// Re-pick evidence in the reply. "intended" and "on purpose" are left out:
-// the fixture's test comment uses them, so a reply quoting it matched.
-const REPICK_PATTERN =
-  /\b(re-?pick(ed)?|not a (bug|defect)|by design|feature\b)/iu;
-
 export function score(
   testCase: PairedCase,
   dir: string,
@@ -898,7 +902,7 @@ export function score(
         result[check.id] = (firstTierBeforeWork(tiers) ?? 0) >= 1;
         break;
       case "repicked":
-        result[check.id] = REPICK_PATTERN.test(text);
+        result[check.id] = /^\s*feature\b/iu.test(tiers.tiers[0]?.reason ?? "");
         break;
       case "security-reviewer-ran":
         result[check.id] = reviewers(tools).includes("security-reviewer");

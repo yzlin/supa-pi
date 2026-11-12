@@ -82,6 +82,8 @@ describe("supapi-mode hub contract (not model adherence)", () => {
     for (const rule of [
       "except `execute`, which is always Spec-backed: call the `tier` tool with tier 2 and reason `execute` first",
       "If what you learned contradicts the kind, re-pick it from the table; a non-build kind then opens its Playbook as in step 3.",
+      "| `feature` | New or changed behavior, including a change to behavior that tests or docs pin as intended, whatever the user calls it. |",
+      "Start the reason with the kind, such as `feature:`.",
       "When the request names a typo or one local line, read that line and search for its other uses; if nothing else reads it, size it T0 and skip the rest of this step.",
       "it counts as the chosen Playbook's learning step, including bug-fix step 2's code reading and investigation step 2's search; do not repeat it",
       "`/execute`, `/pr`, `/diagnose`, `/correct`, and `/review-fix` open their Playbook directly",

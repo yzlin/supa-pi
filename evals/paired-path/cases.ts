@@ -887,7 +887,7 @@ CASES.push(
   ),
   triage(
     "triage-repick",
-    "Reported as a bug, but a test pins the behavior on purpose: learning should re-pick the kind as a feature (changed behavior). Re-pick is recorded only.",
+    "Reported as a bug, but a test pins the behavior on purpose: learning should re-pick the kind as a feature (changed behavior), named at the start of the first tier reason.",
     TRIAGE_REPICK,
     "Bug: `summary([])` in src/report.ts returns `0 items`. It should return `no items`. Fix it.",
     [
@@ -899,8 +899,7 @@ CASES.push(
       },
       {
         id: "repicked",
-        description:
-          "the reply names the behavior as intended or a feature, not a defect (recorded)",
+        description: "the first tier reason starts with `feature`",
       },
     ],
   ),

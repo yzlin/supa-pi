@@ -681,20 +681,22 @@ describe("triage scorers (offline)", () => {
     expect(run("triage-repick", late)["tier-before-work"]).toBe(false);
   });
 
-  it("repicked reads the reply for intended-behavior or feature wording", () => {
+  it("repicked reads the kind from the first tier reason", () => {
+    const tier = (id: string, t: number, reason: string) =>
+      call(id, "tier", { tier: t, reason });
+    const repicked = (entries: unknown[]) =>
+      run("triage-repick", entries)["repicked"];
+    expect(repicked([tier("t", 1, "feature: test pins 0 items")])).toBe(true);
+    expect(repicked([say("Tier: T1 — feature: pinned on purpose")])).toBe(true);
+    expect(repicked([say("Tier: T1 – feature: en dash")])).toBe(true);
+    expect(repicked([say("Tier: T1: feature, colon")])).toBe(true);
+    expect(repicked([tier("t", 1, "bug-fix: summary is wrong")])).toBe(false);
+    // Live 2026-11-12: a bug-fix run whose reply quoted "on purpose" matched the old reply regex.
     expect(
-      run("triage-repick", [
-        say("The test pins `0 items` on purpose, so this is a feature change."),
-      ])["repicked"],
-    ).toBe(true);
-    expect(
-      run("triage-repick", [say("Fixed the defect in summary.")])["repicked"],
-    ).toBe(false);
-    // Live 2026-11-12: a bug-fix reply quoting the fixture comment matched.
-    expect(
-      run("triage-repick", [
-        say('Tier: T1, a bug fix. The old test said "0 items" was on purpose.'),
-      ])["repicked"],
+      repicked([
+        tier("t", 1, "bug-fix, one function plus its pinning test"),
+        say("A feature change per the test that says on purpose."),
+      ]),
     ).toBe(false);
   });
 });

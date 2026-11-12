@@ -31,7 +31,7 @@ Five `kind: "triage"` cases test the triage Playbook (`.pi/specs/triage-sizing.m
 - `triage-light`: add `isEmpty`; expects a T1 run with no Spec (`no-spec`, the `isempty-correct` probe). `tier-T1` is recorded.
 - `triage-contract`: rename `count` to `total` in `toJson`, whose README names an outside reader (the prompt says billing agreed, so the run does not stop on a question); expects a first Tier line of T2 before work, an accepted Spec, `done`, and the `total-field` probe.
 - `triage-escalate`: pluralize `summary` and add a `label` to `toJson`. The fixture has no README contract line; a `bunfig.toml` test preload (`tests/setup.ts`) compares `toJson`'s keys to `tests/support/shape.json` and prints a base64-stored `BREAKING: …` notice only when they change. The intent was a trigger that shows up only after an edit, but a run can still find it by reading and decoding the setup (the 2026-11-11 run did). All checks are recorded, none required: a run that reads the setup and sizes T2 first is correct learn-before-size; a run that edits first should write a T1 line, then a later T2 line, then accept a Spec (`tier-escalated`). `contract-shape` records whether the shape changed. Escalation itself is proven offline by the scorer tests.
-- `triage-repick`: the prompt reports `summary([])` returning `0 items` as a bug, but a test pins that output on purpose. Triage step 4 should re-pick the kind from `bug-fix` to `feature`. Required: `tests-pass`, the `no-items` probe, and `tier-before-work`. `repicked` is recorded only: it is a regex over the reply for intended-behavior or feature wording, and it is coarse.
+- `triage-repick`: the prompt reports `summary([])` returning `0 items` as a bug, but a test pins that output on purpose. Triage step 4 should re-pick the kind from `bug-fix` to `feature`. Required: `tests-pass`, the `no-items` probe, `tier-before-work`, and `repicked` (the first tier reason starts with `feature`; triage step 6 asks the reason to start with the kind).
 - `triage-oneline-reader`: the prompt asks for a one-line rename of the `item_plural` key in `src/labels.ts`, but `src/report.ts` reads that key. The search before T0 in step 4 should find the reader. Required: `tests-pass`, the `label-renamed` probe (it fails if only the key line changes), and `tier-not-T0` (the first Tier line is T1 or higher, before work starts).
 
 Tier scorers use `mainTimeline`: main-session assistant text and tool calls on one position (file, entry, content part). A tier is a call to the `tier` tool whose `tier` is an integer 0–3 and whose `reason` is non-empty, or a text line `^Tier: T(\d)\b` at a line start. "Work started" is the first `edit`/`write` or `executor` subagent call.
@@ -194,3 +194,14 @@ The description of the `tier` tool in `extensions/tier-guard.ts` now ends: "T0 o
 | `triage-oneline-reader` | 3/3 runs, all checks true | Each run grepped `item_plural` first, then declared `T1` with a reason naming `src/report.ts`, then updated both lines. None read triage. |
 
 Before the change, 1 of 1 runs declared T0. The sample is small. The model did the search itself every time; the description changed only the tier it chose after the search.
+
+### Follow-up: kind defined by intent, kind in the tier reason, 3 repetitions
+
+The triage kind table now defines `bug-fix` as behavior that contradicts what the code, tests, or docs intend, and `feature` as including a change to behavior that tests or docs pin as intended, "whatever the user calls it". Step 6 asks the `tier` reason to start with the kind. `repicked` now reads that reason instead of the reply, and is required. Output: `$TMPDIR/triage-repick-eval-1794461098`.
+
+| Case | Result | Behavior |
+| --- | --- | --- |
+| `triage-repick` | 3/3 runs, all 4 checks true | Every first tier reason started `feature:`; two said "re-picked from bug-fix because tests/report.test.ts pins \"0 items\" as intended". No run asked. |
+| `triage-oneline-reader` (regression check) | 2/2 runs, all checks true | T1 with the reader named, as before. |
+
+Before the change, 1 of 1 runs kept `bug-fix`. The sample is small.
