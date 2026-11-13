@@ -57,6 +57,20 @@ let btwCounter = 0;
 export default function (pi: ExtensionAPI) {
   // Track btw widgets waiting for turn_end to remove themselves
   const pendingWidgetRemovals = new Map<string, () => void>();
+  // Running btw subagents. A captured command ctx throws once its session
+  // ends, so session_shutdown aborts them and their callbacks stop touching it.
+  const running = new Set<AbortController>();
+
+  pi.on("session_shutdown", () => {
+    for (const controller of running) {
+      controller.abort();
+    }
+    running.clear();
+    for (const [, resolve] of pendingWidgetRemovals) {
+      resolve();
+    }
+    pendingWidgetRemovals.clear();
+  });
 
   pi.on("turn_end", () => {
     // Resolve all pending widget removal promises - the steered custom
@@ -211,6 +225,9 @@ export default function (pi: ExtensionAPI) {
 
       // Unique widget key per invocation so multiple /btw's don't clobber each other
       const widgetKey = `btw-${++btwCounter}`;
+      const controller = new AbortController();
+      running.add(controller);
+      const sessionEnded = () => controller.signal.aborted;
 
       // Show initial status widget
       const taskPreview = btwTaskPreview(task);
@@ -226,8 +243,11 @@ export default function (pi: ExtensionAPI) {
         targetModel,
         thinkingLevel,
         apiKeyResolver,
-        undefined, // no abort signal - runs to completion
+        controller.signal, // aborted only by session_shutdown
         (progressResult) => {
+          if (sessionEnded()) {
+            return;
+          }
           // Update widget with live tool call feed
           ctx.ui.setWidget(
             widgetKey,
@@ -241,6 +261,9 @@ export default function (pi: ExtensionAPI) {
           ctx.modelRegistry.streamSimple(model, context, options),
       )
         .then(async (result) => {
+          if (sessionEnded()) {
+            return;
+          }
           // Override result.task with the short user prompt (not the context-enriched one)
           result.task = task;
 
@@ -273,16 +296,23 @@ export default function (pi: ExtensionAPI) {
             await new Promise<void>((resolve) => {
               pendingWidgetRemovals.set(widgetKey, resolve);
             });
+            if (sessionEnded()) {
+              return;
+            }
           }
           ctx.ui.setWidget(widgetKey, undefined);
         })
         .catch((err: unknown) => {
+          if (sessionEnded()) {
+            return;
+          }
           ctx.ui.setWidget(widgetKey, undefined);
           ctx.ui.notify(
             `btw failed: ${err instanceof Error ? err.message : String(err)}`,
             "error",
           );
-        });
+        })
+        .finally(() => running.delete(controller));
 
       // Command returns immediately - subagent runs in background
     },
