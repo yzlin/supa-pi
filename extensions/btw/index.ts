@@ -235,6 +235,10 @@ export default function (pi: ExtensionAPI) {
             { placement: "aboveEditor" },
           );
         },
+        // Stream through the model registry: pi-ai/compat's default stream
+        // cannot see providers registered with pi.registerProvider().
+        (model, context, options) =>
+          ctx.modelRegistry.streamSimple(model, context, options),
       )
         .then(async (result) => {
           // Override result.task with the short user prompt (not the context-enriched one)
