@@ -13,7 +13,7 @@ import type {
   AgentMessage,
   StreamFn,
 } from "@earendil-works/pi-agent-core";
-import { agentLoop } from "@earendil-works/pi-agent-core";
+import { runAgentLoop } from "@earendil-works/pi-agent-core";
 import type { Api, Model } from "@earendil-works/pi-ai";
 import { convertToLlm, type ThemeColor } from "@earendil-works/pi-coding-agent";
 
@@ -320,78 +320,80 @@ export async function runSubagent(
   };
 
   try {
-    const stream = agentLoop(
+    // runAgentLoop (not agentLoop): agentLoop runs the loop as a detached
+    // promise, so a stream setup error becomes an unhandled rejection that
+    // crashes pi. Awaiting runAgentLoop routes it to the catch below.
+    await runAgentLoop(
       [subagentPrompt],
       context,
       config,
+      (event) => {
+        if (signal?.aborted) {
+          return;
+        }
+
+        switch (event.type) {
+          case "message_end": {
+            const msg = event.message;
+            if ("role" in msg && msg.role === "assistant") {
+              result.usage.turns++;
+              const usage = msg.usage;
+              if (usage) {
+                result.usage.input += usage.input || 0;
+                result.usage.output += usage.output || 0;
+                result.usage.cacheRead += usage.cacheRead || 0;
+                result.usage.cacheWrite += usage.cacheWrite || 0;
+                result.usage.cost += usage.cost?.total || 0;
+                result.usage.contextTokens = usage.totalTokens || 0;
+              }
+              if (msg.model) {
+                result.model = msg.model;
+              }
+              if (msg.stopReason) {
+                result.stopReason = msg.stopReason;
+              }
+              if (msg.errorMessage) {
+                result.errorMessage = msg.errorMessage;
+              }
+
+              for (const part of msg.content) {
+                if (part.type === "text") {
+                  result.displayItems.push({ type: "text", text: part.text });
+                  result.finalOutput = appendFinalOutput(
+                    result.finalOutput,
+                    part.text,
+                  );
+                } else if (part.type === "toolCall") {
+                  result.displayItems.push({
+                    type: "toolCall",
+                    name: part.name,
+                    args: part.arguments,
+                  });
+                }
+              }
+            }
+            onProgress(result);
+            break;
+          }
+          case "tool_execution_end": {
+            onProgress(result);
+            break;
+          }
+          case "agent_end":
+          case "agent_start":
+          case "message_start":
+          case "message_update":
+          case "tool_execution_start":
+          case "tool_execution_update":
+          case "turn_end":
+          case "turn_start":
+            // Other streaming events do not change the display or usage totals.
+            break;
+        }
+      },
       signal,
       streamFn as StreamFn,
     );
-
-    for await (const event of stream) {
-      if (signal?.aborted) {
-        break;
-      }
-
-      switch (event.type) {
-        case "message_end": {
-          const msg = event.message;
-          if ("role" in msg && msg.role === "assistant") {
-            result.usage.turns++;
-            const usage = msg.usage;
-            if (usage) {
-              result.usage.input += usage.input || 0;
-              result.usage.output += usage.output || 0;
-              result.usage.cacheRead += usage.cacheRead || 0;
-              result.usage.cacheWrite += usage.cacheWrite || 0;
-              result.usage.cost += usage.cost?.total || 0;
-              result.usage.contextTokens = usage.totalTokens || 0;
-            }
-            if (msg.model) {
-              result.model = msg.model;
-            }
-            if (msg.stopReason) {
-              result.stopReason = msg.stopReason;
-            }
-            if (msg.errorMessage) {
-              result.errorMessage = msg.errorMessage;
-            }
-
-            for (const part of msg.content) {
-              if (part.type === "text") {
-                result.displayItems.push({ type: "text", text: part.text });
-                result.finalOutput = appendFinalOutput(
-                  result.finalOutput,
-                  part.text,
-                );
-              } else if (part.type === "toolCall") {
-                result.displayItems.push({
-                  type: "toolCall",
-                  name: part.name,
-                  args: part.arguments,
-                });
-              }
-            }
-          }
-          onProgress(result);
-          break;
-        }
-        case "tool_execution_end": {
-          onProgress(result);
-          break;
-        }
-        case "agent_end":
-        case "agent_start":
-        case "message_start":
-        case "message_update":
-        case "tool_execution_start":
-        case "tool_execution_update":
-        case "turn_end":
-        case "turn_start":
-          // Other streaming events do not change the display or usage totals.
-          break;
-      }
-    }
 
     if (signal?.aborted) {
       result.stopReason = "aborted";

@@ -74,6 +74,46 @@ describe("runSubagent", () => {
     expect(providerMessages[0]?.content).toBe("Inherited parent instructions");
     expect(result.finalOutput).toBe("done");
   });
+
+  it("reports a stream setup failure as a failed result instead of rejecting unhandled", async () => {
+    const model = modelRegistry.find("openai", "gpt-4o");
+    if (!model) {
+      throw new Error("test model is unavailable");
+    }
+
+    const unhandled: unknown[] = [];
+    const onUnhandled = (reason: unknown) => unhandled.push(reason);
+    process.on("unhandledRejection", onUnhandled);
+    try {
+      const result = await Promise.race([
+        runSubagent(
+          "system",
+          "task",
+          [],
+          model,
+          "off",
+          () => Promise.resolve("test-key"),
+          undefined,
+          () => undefined,
+          () => {
+            throw new Error("No API provider registered for api: x");
+          },
+        ),
+        new Promise<"hung">((resolve) =>
+          setTimeout(() => resolve("hung"), 500),
+        ),
+      ]);
+      await new Promise((resolve) => setTimeout(resolve, 0));
+
+      expect(unhandled).toEqual([]);
+      expect(result).toMatchObject({
+        exitCode: 1,
+        errorMessage: "No API provider registered for api: x",
+      });
+    } finally {
+      process.off("unhandledRejection", onUnhandled);
+    }
+  });
 });
 
 describe("renderProgressPlainLines", () => {
