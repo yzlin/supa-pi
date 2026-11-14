@@ -29,12 +29,28 @@ Use its completed packet to guide subsequent interview questions while preservin
 - Use the public `ask` tool for user answers when interactive UI is available.
 - When using `ask`, ask one to three single-select questions per call; do not use `multiSelect`.
 - Add `preview` to every caller-supplied option; the injected custom answer row is the only no-preview exception.
-- Keep every preview concise and decision-ready; do not merely repeat the label. For simple choices, use a short plain-language preview without required field labels. For consequential tradeoffs, use explicit `Meaning:`, `Outcome:`, and `Tradeoff:` parts.
+- Write a Decision brief (below) for every consequential question. Keep every preview concise and decision-ready; do not merely repeat the label. For simple choices, use a short plain-language preview without required field labels. For consequential tradeoffs, use explicit `Meaning:`, `Outcome:`, and `Tradeoff:` parts, each one short phrase drawn from the brief.
 - For each question, recommend an option. Do not put a recommendation in the ask prompt or question description. Prefix the recommended option label with `Recommend:` and give a brief reason in its preview tied to known goals or constraints rather than personal preference.
-- When a decision involves flows, boundaries, states, hierarchies, or comparisons, include a compact unfenced plain-text diagram. Simple choices need no decorative diagram.
+- When a decision involves flows, boundaries, states, hierarchies, or comparisons, include a compact unfenced plain-text diagram in the brief's **Where:** and **Changes:** parts. Simple choices need no decorative diagram.
 - The user sees only visible assistant text and the `ask` dialog, never your reasoning. Put a shared diagram or finding in visible text in the same reply as the `ask` call, or in option previews; `ask` refuses a call with neither. Do not refer to "that graph", "above", or other context the user has not seen.
 - Never re-ask an answered question. If it was asked in plain text, accept the answer without repeating it with `ask`; briefly summarize it, then move to the next unresolved decision.
 - Start with the highest-leverage unresolved question. Continue in descending leverage until the plan is clear, risks are exposed, tradeoffs are explicit, and all major decisions are resolved.
+
+## Decision brief
+
+The user should be able to decide from the brief alone, without asking for more detail or a visual. Write it in visible text before the `ask` call, one brief per question. The `ask` side column is narrow, so previews point back to the brief: short phrases naming the option's effect, not a copy of its sketches or lists.
+
+- **Problem:** what is wrong or undecided today, and why it must be decided now, in one or two sentences. Name the evidence: `path:line`, a `DC-n`, or the finding.
+- **Where:** a small sketch of the current flow, call tree, or module layout, with the spot the decision changes marked. Use real names; label unknown parts.
+- For each option:
+  - **Changes:** what the flow or structure becomes, as a before → after sketch or a focused diff. When several options change the same flow, draw it once and mark how each option differs.
+  - **Affects:** the files, components, Done Criteria, and later decisions it touches or rules out.
+  - **Cost:** effort, risk, and whether it can be undone. Flag a one-way door: a migration, a public API or file format, or a deletion.
+- **Recommend:** the option you recommend and why, tied to the stated goal or a constraint.
+
+When options differ on three or more of the same attributes, add a compact table of options against those attributes after the option parts.
+
+A simple choice needs only the problem in one line and short previews: naming, an order of steps, or a choice with no effect on flow or structure. Do not pad a simple choice into a full brief.
 
 ## Risk Taxonomy
 

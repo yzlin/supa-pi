@@ -55,7 +55,7 @@
       "type": "array",
       "items": {
         "type": "object",
-        "required": ["id", "question", "options"],
+        "required": ["id", "question", "problem", "evidence", "options"],
         "properties": {
           "id": {
             "type": "string",
@@ -69,13 +69,51 @@
             "maxLength": 32000,
             "pattern": "\\S"
           },
+          "problem": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 32000,
+            "pattern": "\\S"
+          },
+          "evidence": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 32000,
+            "pattern": "\\S"
+          },
           "options": {
             "type": "array",
             "items": {
-              "type": "string",
-              "minLength": 1,
-              "maxLength": 32000,
-              "pattern": "\\S"
+              "type": "object",
+              "required": ["label", "effect", "affects", "reversible"],
+              "properties": {
+                "label": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 32000,
+                  "pattern": "\\S"
+                },
+                "effect": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 32000,
+                  "pattern": "\\S"
+                },
+                "affects": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 32000,
+                    "pattern": "\\S"
+                  },
+                  "maxItems": 20
+                },
+                "reversible": {
+                  "type": "boolean"
+                }
+              },
+              "additionalProperties": false
             },
             "minItems": 2,
             "maxItems": 4

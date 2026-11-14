@@ -78,6 +78,29 @@ describe("grilling skill contract", () => {
     }
   });
 
+  it("defines a Decision brief that explains the problem and each option's effects", () => {
+    const skill = readRepositoryFile("skills", "grilling", "SKILL.md");
+    const start = skill.indexOf("## Decision brief");
+    const end = skill.indexOf("## Risk Taxonomy");
+    expect(start).toBeGreaterThan(-1);
+    expect(end).toBeGreaterThan(start);
+    const brief = skill.slice(start, end);
+    for (const text of [
+      "**Problem:**",
+      "**Where:**",
+      "**Changes:**",
+      "**Affects:**",
+      "**Cost:**",
+      "**Recommend:**",
+      "one-way door",
+      "visible text before the `ask` call",
+      "previews point back to the brief",
+      "A simple choice needs only",
+    ]) {
+      expect(brief).toContain(text);
+    }
+  });
+
   it("keeps context that a question depends on visible to the user", () => {
     const skill = readRepositoryFile("skills", "grilling", "SKILL.md");
 

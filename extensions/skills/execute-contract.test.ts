@@ -88,6 +88,38 @@ describe("execute Playbook contract (wiring, not model adherence)", () => {
     expect(playbook()).toContain("../schemas/executor-report.schema.json");
   });
 
+  it("carries each Spec review question's problem and per-option effects", () => {
+    const schema = JSON.parse(
+      read("skills/supapi-mode/schemas/spec-review.schema.json"),
+    );
+    const question = schema.properties.questions.items;
+    expect(question.required).toEqual([
+      "id",
+      "question",
+      "problem",
+      "evidence",
+      "options",
+    ]);
+    expect(question.additionalProperties).toBe(false);
+    const option = question.properties.options.items;
+    expect(option.type).toBe("object");
+    expect(option.required).toEqual([
+      "label",
+      "effect",
+      "affects",
+      "reversible",
+    ]);
+    expect(option.additionalProperties).toBe(false);
+    expect(option.properties.affects.type).toBe("array");
+    expect(option.properties.reversible.type).toBe("boolean");
+  });
+
+  it("builds a Decision brief from each reviewer question", () => {
+    const text = playbook();
+    expect(text).toContain("Decision brief");
+    expect(text).toContain("`problem`, `evidence`");
+  });
+
   it("forbids detached executors from writing the Spec log", () => {
     expect(read("agents/executor.md")).toContain(
       "disallowed_tools: spec_log, goal_checkpoint, subagent",

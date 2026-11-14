@@ -11,7 +11,7 @@ The `spec-log` Extension's `/to-spec` packet supplies an optional slug and may s
 
 Synthesize from the current conversation and codebase understanding. Do not interview. Preserve locked decisions, scope, constraints, and deferred items. Use `CONTEXT.md` glossary vocabulary and respect ADRs in the touched area. Read targeted code and existing tests to resolve facts rather than asking the user. Do not invent unresolved decisions; if the plan is not locked or a non-testing blocker remains, stop and report the gap instead of writing a guessed Spec.
 
-Ask exactly one testing-seam question with the `ask` tool only when Verification would otherwise be a guess; prefer existing, highest seams. Wait for the answer before writing. This is not another plan interview. Overwrite confirmation below is a separate file-safety gate.
+Ask exactly one testing-seam question with the `ask` tool only when Verification would otherwise be a guess; prefer existing, highest seams. Write a Decision brief per the `grilling` skill before it, naming the seams each option exercises and what it leaves unproven. Wait for the answer before writing. This is not another plan interview. Overwrite confirmation below is a separate file-safety gate.
 
 ## Execution Brief Format
 
