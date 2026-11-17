@@ -435,6 +435,18 @@ export default function autoRenameExtension(pi: ExtensionAPI): void {
   pi.registerCommand("auto-rename", {
     description:
       "Show auto-rename status or regenerate the current session name",
+    getArgumentCompletions(argumentPrefix) {
+      const prefix = argumentPrefix.trim().toLowerCase();
+      const items = [
+        { value: "status", label: "status", description: "Show state" },
+        {
+          value: "regen",
+          label: "regen",
+          description: "Regenerate the session name",
+        },
+      ].filter((item) => item.value.startsWith(prefix));
+      return items.length > 0 ? items : null;
+    },
     handler: async (args, ctx) => {
       const argument = (args ?? "").trim().toLowerCase();
       if (!argument || argument === "status") {

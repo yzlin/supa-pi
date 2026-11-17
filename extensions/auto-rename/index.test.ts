@@ -21,6 +21,7 @@ type SessionModel = NonNullable<
 >["model"];
 interface Command {
   handler: (args: string, ctx: any) => unknown;
+  getArgumentCompletions?: (prefix: string) => unknown;
 }
 
 const FALLBACK_NAME_PATTERN = /^session-[0-9a-f]{8}$/;
@@ -719,6 +720,19 @@ describe("/auto-rename command and configuration", () => {
     expect(h.notifications).toEqual([
       { message: "Usage: /auto-rename [status|regen]", level: "warning" },
     ]);
+  });
+
+  it("completes status and regen subcommands by prefix", () => {
+    const complete =
+      harness().commands.get("auto-rename")?.getArgumentCompletions;
+    expect(complete?.("")).toEqual([
+      expect.objectContaining({ value: "status", label: "status" }),
+      expect.objectContaining({ value: "regen", label: "regen" }),
+    ]);
+    expect(complete?.("RE")).toEqual([
+      expect.objectContaining({ value: "regen" }),
+    ]);
+    expect(complete?.("x")).toBeNull();
   });
 
   it("invalid config disables naming and warns once in UI without leaking details", async () => {

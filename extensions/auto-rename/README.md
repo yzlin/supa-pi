@@ -16,6 +16,7 @@ Automatic naming preserves every existing or manually assigned name, including a
 - `/auto-rename regen` explicitly replaces the current name using the retained raw request or persisted fallback. Missing session/source and concurrent-operation cases are reported without changing the name.
 
 Other arguments show `/auto-rename [status|regen]` usage.
+Typing `/auto-rename ` suggests `status` and `regen`, filtered by prefix.
 
 ## Configuration
 
