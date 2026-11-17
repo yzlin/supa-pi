@@ -82,10 +82,23 @@ describe("normalizeAndValidateTitle", () => {
     );
   });
 
+  it("accepts titles that overshoot the prompt's 3–6 words by up to two", () => {
+    // Regression: claude-opus-5-5 returned this 7-word title and it fell back.
+    expect(
+      normalizeAndValidateTitle(
+        "Golf Holiday Pages Search And Courses Updates",
+        80,
+      ),
+    ).toBe("Golf Holiday Pages Search And Courses Updates");
+    expect(
+      normalizeAndValidateTitle("One Two Three Four Five Six Seven Eight", 80),
+    ).toBe("One Two Three Four Five Six Seven Eight");
+  });
+
   it.each([
     ["", "empty"],
     ["Only Two", "too few words"],
-    ["One Two Three Four Five Six Seven", "too many words"],
+    ["One Two Three Four Five Six Seven Eight Nine", "too many words"],
     ["First Safe Line\nReasoning: hidden", "multiline reasoning"],
     ["**Build Safe Model Titles**", "markup"],
     ["``` Safe Model Title ```", "code fence"],

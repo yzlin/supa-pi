@@ -4,6 +4,9 @@ import type { Api, Context, Model } from "@earendil-works/pi-ai";
 import type { ModelRegistry } from "@earendil-works/pi-coding-agent";
 
 const ABSOLUTE_MAX_NAME_LENGTH = 80;
+// The prompt asks for 3–6 words; models often overshoot by a word or two.
+const MIN_TITLE_WORDS = 3;
+const MAX_TITLE_WORDS = 8;
 const MAX_TITLE_TOKENS = 32;
 const TRAILING_PUNCTUATION_PATTERN = /[.!?,;:]+$/u;
 const UNSAFE_MARKUP_PATTERN = /[`#*_~|\\<>()[\]{}]/u;
@@ -132,7 +135,7 @@ export function normalizeAndValidateTitle(
   }
 
   const words = title.match(WORD_PATTERN) ?? [];
-  if (words.length < 3 || words.length > 6) {
+  if (words.length < MIN_TITLE_WORDS || words.length > MAX_TITLE_WORDS) {
     return null;
   }
 
