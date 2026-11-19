@@ -1,12 +1,12 @@
 ---
 name: showing-me
-description: Use when the user explicitly asks for show-me, a visual explanation, a diagram, or a code-shape sketch; choose the smallest useful visual.
+description: Use when the user explicitly asks for show-me, a visual explanation, a diagram, or a code-shape sketch, or when a Playbook step calls it; choose the smallest useful visual.
 origin: HumanLayer show-me, adapted
 ---
 
 # Show Me
 
-Use only when the user explicitly asks for Show Me or a visual explanation, diagram, or code-shape sketch.
+Use only when the user explicitly asks for Show Me or a visual explanation, diagram, or code-shape sketch, or when a Playbook or skill step calls it.
 
 Make the current topic easy to scan. Skip the preamble and keep prose brief. Pick one view by default; combine views only when each answers a different part of the question.
 

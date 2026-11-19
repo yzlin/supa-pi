@@ -14,4 +14,4 @@ You own the fix and its proof. Every shipped line traces to runtime evidence. A 
 
 **Principles:** `fix-root-causes`, `attack-the-premise`, `prove-it-works`, `test-behavior-not-implementation`, `encode-lessons-in-structure`.
 
-**Reply:** what was broken, the root cause, the fix, and failing-then-passing output.
+**Reply:** what was broken, the root cause, the fix, and failing-then-passing output. End with one visual of what you changed: apply the `showing-me` skill to the diff and pick the smallest useful view.

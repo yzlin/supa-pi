@@ -163,6 +163,21 @@ describe("supapi-mode hub contract (not model adherence)", () => {
     );
   });
 
+  it("ends bug-fix and feature replies with a showing-me visual of the change", () => {
+    for (const name of ["bug-fix", "feature"]) {
+      const reply =
+        read(`skills/supapi-mode/playbooks/${name}.md`)
+          .split("\n")
+          .find((line) => line.startsWith("**Reply:**")) ?? "";
+      expect(reply).toContain(
+        "End with one visual of what you changed: apply the `showing-me` skill to the diff",
+      );
+    }
+    expect(read("skills/showing-me/SKILL.md")).toContain(
+      "or when a Playbook or skill step calls it",
+    );
+  });
+
   it("sizes how-it-works questions and reuses that step from other Playbooks", () => {
     const playbook = (name: string) =>
       readFileSync(
