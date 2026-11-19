@@ -671,10 +671,53 @@ function registerGoalCheckpointTool(pi: ExtensionAPI): void {
         isError: saved.ok ? undefined : true,
       };
     },
-    renderCall(_args, theme) {
-      return new Text(theme.fg("toolTitle", "goal checkpoint"), 0, 0);
+    renderCall(args, theme, context) {
+      return new Text(
+        `${checkpointMark(theme, context)} ${theme.fg("toolTitle", theme.bold("goal checkpoint"))}${checkpointSummary(args)}`,
+        0,
+        0,
+      );
+    },
+    // The result only echoes {ok,status}; show the text on error alone.
+    renderResult(result, _options, theme, context) {
+      const text = result.content.find((item) => item.type === "text");
+      return new Text(
+        context.isError && text?.type === "text"
+          ? theme.fg("error", text.text)
+          : "",
+        0,
+        0,
+      );
     },
   });
+}
+
+function checkpointMark(
+  theme: { fg: (token: "warning" | "error" | "success", s: string) => string },
+  context: { isPartial: boolean; isError: boolean },
+): string {
+  if (context.isPartial) {
+    return theme.fg("warning", "•");
+  }
+  return context.isError ? theme.fg("error", "✗") : theme.fg("success", "✓");
+}
+
+/** Name the fields a checkpoint call updates, with the short ones' values. */
+export function checkpointSummary(args: Record<string, unknown>): string {
+  const parts: string[] = [];
+  for (const [key, value] of Object.entries(args)) {
+    if (value === undefined) {
+      continue;
+    }
+    if (Array.isArray(value)) {
+      parts.push(`${key} (${value.length})`);
+    } else if (typeof value === "string" || typeof value === "number") {
+      parts.push(`${key}=${String(value) || "∅"}`);
+    } else {
+      parts.push(key);
+    }
+  }
+  return parts.length > 0 ? ` ${parts.join(" · ")}` : "";
 }
 
 function clearActiveGoal(pi: ExtensionAPI, ctx: ExtensionContext): void {

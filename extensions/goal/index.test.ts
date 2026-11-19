@@ -9,7 +9,7 @@ import type {
   ExtensionToolContext,
 } from "@earendil-works/pi-coding-agent";
 
-import goalExtension from "./index";
+import goalExtension, { checkpointSummary } from "./index";
 
 type CommandOptions = Parameters<ExtensionAPI["registerCommand"]>[1] & {
   handler: NonNullable<
@@ -540,5 +540,21 @@ describe("goal extension", () => {
     expect(harness.customMessages.at(-1)?.message.content).toContain(
       "Continue working toward the active thread goal.",
     );
+  });
+});
+
+describe("goal checkpoint row", () => {
+  // Live 2026-11-18: the row showed the args twice and the JSON result.
+  it("names updated fields, with short values and list sizes", () => {
+    expect(
+      checkpointSummary({
+        status: "active",
+        currentMilestone: "",
+        tasks: [{}, {}],
+        blockerState: { blocked: false, reason: "" },
+        attemptsUsed: undefined,
+      }),
+    ).toBe(" status=active · currentMilestone=∅ · tasks (2) · blockerState");
+    expect(checkpointSummary({})).toBe("");
   });
 });

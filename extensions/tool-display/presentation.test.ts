@@ -12,6 +12,8 @@ import {
   formatToolDuration,
   type PresentationState,
   renderBashToolCall,
+  renderGenericToolCall,
+  renderGenericToolResult,
   renderOwnedToolCall,
   renderOwnedToolResult,
   toolResultBody,
@@ -515,5 +517,44 @@ describe("owned tool presentation", () => {
     expect(formatToolDuration(9100)).toBe("9s");
     expect(formatToolDuration(65_000)).toBe("1m 05s");
     expect(formatToolDuration(3_661_000)).toBe("1h 01m 01s");
+  });
+});
+
+describe("generic fallback rows", () => {
+  const output = { mode: "compact", collapsed: true, previewLines: 5 } as const;
+  const rows = (args: Record<string, unknown>, isPartial: boolean) => {
+    const context = { args, state: {}, invalidate() {}, isPartial };
+    const call = renderGenericToolCall("tool", args, plainTheme, context);
+    if (isPartial) {
+      return call.render(120);
+    }
+    const result = renderGenericToolResult(
+      "tool",
+      { content: [{ type: "text", text: "body" }] },
+      { expanded: false, isPartial: false },
+      plainTheme,
+      context,
+      output,
+    );
+    return [...call.render(120), ...result.render(120)];
+  };
+
+  // Live 2026-11-18: tools without reasoning drew their args on two rows.
+  test("show args once when the header already shows them", () => {
+    expect(rows({ goal: "ship it" }, false)).toEqual([
+      "┊ ✓ 🔧 tool goal=ship it",
+      "┊   → done in <1s",
+      "body",
+    ]);
+    expect(rows({ goal: "ship it" }, true)[1]).toMatch(/^┊ {3}→ \S/u);
+  });
+
+  test("keep args on the second row when the header shows reasoning", () => {
+    const args = { reasoning: "Ship the fix", goal: "ship it" };
+    expect(rows(args, false).slice(0, 2)).toEqual([
+      "┊ ✓ 🔧 tool Ship the fix",
+      "┊   goal=ship it → done in <1s",
+    ]);
+    expect(rows(args, true)[1]).toStartWith("┊   goal=ship it → ");
   });
 });

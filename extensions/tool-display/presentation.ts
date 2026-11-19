@@ -740,11 +740,13 @@ class HeaderComponent implements Component {
     const lines = [first];
     if (!state.settled) {
       const elapsed = Date.now() - (state.startedAt ?? Date.now());
+      // A generic headline without reasoning already is the args summary.
+      const middle = this.generic && headline === target ? "" : target;
       lines.push(
         fitMiddle(
           this.theme.fg("dim", "┊   "),
-          target,
-          ` ${this.theme.fg("dim", `→ ${formatToolDuration(elapsed)}`)}`,
+          middle,
+          `${middle ? " " : ""}${this.theme.fg("dim", `→ ${formatToolDuration(elapsed)}`)}`,
           width,
         ),
       );
@@ -964,16 +966,13 @@ export function renderGenericToolResult(
   output: ToolDisplayPreviewConfig,
 ): Component {
   const body = genericResultBody(result, options, theme, output);
-  return renderBashToolResult(
-    result,
-    options,
-    theme,
-    {
-      ...context,
-      args: { command: genericArgsSummary(argsLike(context.args)) },
-    },
-    body,
-  );
+  const args = argsLike(context.args);
+  // The header shows reasoning, or the args summary when there is none; repeat
+  // the args on the status line only when the header did not show them.
+  const target = singleLine(args.reasoning ?? "")
+    ? genericArgsSummary(args)
+    : "";
+  return settledResult(result, options, theme, context, target, body);
 }
 
 export function renderBashToolCall(
@@ -997,6 +996,24 @@ export function renderBashToolResult(
   context: Pick<RenderContextLike<unknown>, "args" | "state" | "isError">,
   body?: Component,
 ): Component {
+  return settledResult(
+    result,
+    options,
+    theme,
+    context,
+    bashCommandPreview(argsLike(context.args).command ?? "") || "bash command",
+    body,
+  );
+}
+
+function settledResult(
+  result: ToolResultLike,
+  options: RenderOptionsLike,
+  theme: ThemeLike,
+  context: Pick<RenderContextLike<unknown>, "state" | "isError">,
+  target: string,
+  body?: Component,
+): Component {
   const state = stateFor(context.state);
   const details = (result.details ?? {}) as ToolDisplayDetails;
   const durationMs =
@@ -1010,8 +1027,6 @@ export function renderBashToolResult(
     state.durationMs = durationMs;
     stopTimer(context.state);
   }
-  const command =
-    bashCommandPreview(argsLike(context.args).command ?? "") || "bash command";
   let status = options.isPartial ? "running" : "done";
   if (error) {
     status = "error";
@@ -1022,8 +1037,8 @@ export function renderBashToolResult(
     (width) =>
       fitMiddle(
         theme.fg("dim", "┊   "),
-        command,
-        ` ${theme.fg("dim", "→")} ${theme.fg(token, `${status} in ${formatToolDuration(durationMs)}${badges}`)}`,
+        target,
+        `${target ? " " : ""}${theme.fg("dim", "→")} ${theme.fg(token, `${status} in ${formatToolDuration(durationMs)}${badges}`)}`,
         width,
       ),
     theme,

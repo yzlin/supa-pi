@@ -8,6 +8,7 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { stripVTControlCharacters } from "node:util";
 
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 
@@ -342,6 +343,17 @@ describe("tier guard", () => {
         id: string,
         params: Record<string, unknown>,
       ) => Promise<{ content: { type: string; text: string }[] }>;
+      renderCall: (
+        args: Record<string, unknown>,
+        theme: unknown,
+        context: Record<string, unknown>,
+      ) => { render: (width: number) => string[] };
+      renderResult: (
+        result: unknown,
+        options: unknown,
+        theme: unknown,
+        context: Record<string, unknown>,
+      ) => { render: (width: number) => string[] };
     }[] = [];
     tierGuard({
       on(event: string, cb: typeof handler) {
@@ -371,6 +383,39 @@ describe("tier guard", () => {
     expect(tier?.parameters.required?.toSorted()).toEqual(["reason", "tier"]);
     const echoed = await tier?.execute("t", { tier: 2, reason: "x" });
     expect(echoed?.content[0]?.text).toBe("Tier: T2 — x");
+    // Live 2026-11-18: the generic row drew the args three times.
+    const plain = {
+      fg: (_c: string, s: string) => s,
+      bold: (s: string) => s,
+    };
+    const settled = { isPartial: false, isError: false, expanded: false };
+    const reason = "one hook change read by three pages ".repeat(4).trim();
+    expect(
+      tier
+        ?.renderCall({ tier: 1, reason }, plain, settled)
+        .render(40)
+        .map((l) => stripVTControlCharacters(l)),
+    ).toEqual(["✓ 🔧 tier T1 — one hook change read b..."]);
+    expect(
+      tier
+        ?.renderCall({ tier: 1, reason }, plain, { ...settled, expanded: true })
+        .render(200)
+        .map((l) => l.trimEnd()),
+    ).toEqual([`✓ 🔧 tier T1 — ${reason}`]);
+    expect(
+      tier?.renderResult(echoed, { expanded: true }, plain, settled).render(80),
+    ).toEqual([]);
+    expect(
+      tier
+        ?.renderResult(
+          { content: [{ type: "text", text: "bad" }] },
+          {},
+          plain,
+          { ...settled, isError: true },
+        )
+        .render(80)
+        .map((l) => l.trim()),
+    ).toEqual(["bad"]);
     const branch = [user(), readTriage(), call("edit", { path: "a" }, "e")];
     const ctx = { cwd: "/ws", sessionManager: { getBranch: () => branch } };
     expect(

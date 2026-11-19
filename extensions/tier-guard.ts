@@ -26,6 +26,7 @@ import { existsSync, realpathSync } from "node:fs";
 import { basename, dirname, join, resolve, sep } from "node:path";
 
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import { Text, truncateToWidth } from "@earendil-works/pi-tui";
 import { Type } from "typebox";
 
 const TRIAGE_PATH = "supapi-mode/playbooks/triage.md";
@@ -239,6 +240,36 @@ export default function (pi: ExtensionAPI) {
         ],
         details: {},
       };
+    },
+    // One row: the result only echoes the args, so draw it once.
+    renderCall(args, theme, context) {
+      const tier = typeof args.tier === "number" ? `T${args.tier}` : "T?";
+      const reason = typeof args.reason === "string" ? args.reason : "";
+      let status = theme.fg("warning", "•");
+      if (context.isPartial === false) {
+        status = context.isError
+          ? theme.fg("error", "✗")
+          : theme.fg("success", "✓");
+      }
+      const line = `${status} ${theme.fg("accent", `🔧 ${theme.bold("tier")}`)} ${theme.fg("accent", tier)}${reason ? ` ${theme.fg("dim", "—")} ${reason}` : ""}`;
+      return context.expanded
+        ? new Text(line, 0, 0)
+        : {
+            invalidate() {
+              return;
+            },
+            render: (width: number) => [truncateToWidth(line, width)],
+          };
+    },
+    renderResult(result, _options, theme, context) {
+      const text = result.content.find((item) => item.type === "text");
+      return new Text(
+        context.isError && text?.type === "text"
+          ? theme.fg("error", text.text)
+          : "",
+        0,
+        0,
+      );
     },
   });
   pi.on("tool_call", (event, ctx) => {
