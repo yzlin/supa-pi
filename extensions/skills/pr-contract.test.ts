@@ -55,6 +55,7 @@ describe("opening-a-pr Playbook contract", () => {
     "## Scope",
     "## Tradeoffs",
     "Drop any section with nothing to say",
+    "Keep the body to 40 lines at most",
     "reuse its stated goal and verification evidence",
     "Apply the `showing-me` skill to the diff",
     "Choose the smallest useful view",

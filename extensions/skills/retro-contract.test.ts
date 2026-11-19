@@ -160,6 +160,7 @@ describe("retro resource and instruction contract (not model adherence)", () => 
     ]);
     expectInstructions([
       "highest severity first",
+      "will still hold in six months and would change what a future agent does",
       "Critical > High > Medium > Low",
       "`oxlint.config.ts`",
       "`bun run check`",

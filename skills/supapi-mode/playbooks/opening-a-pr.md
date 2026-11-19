@@ -45,6 +45,7 @@ Use a conventional-commit title:
 Allowed types: feat, fix, refactor, build, ci, chore, docs, style, perf, test. Keep the description specific and brief.
 
 Write the body with no preamble and brief prose. Drop any section with nothing to say, except Summary, Evidence, and Merge Danger:
+Keep the body to 40 lines at most. Put long logs, run histories, and long tables in a PR comment or a linked file, and link to them from the body.
 
 ```markdown
 ## Why

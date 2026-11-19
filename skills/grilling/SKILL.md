@@ -13,6 +13,7 @@ Question cadence inspired by [mitsuhiko/agent-stuff's `/discuss`](https://github
 
 - Walk the user through the decision tree, resolving dependencies between decisions one branch at a time.
 - Discover facts from the environment instead of asking the user. Inspect available code, documentation, configuration, and other evidence when they can answer a question.
+- When a fork turns on behavior a run can observe (output, timing, layout, performance), settle it with a throwaway sketch per the `prototype` Playbook and recommend from what you observed. The sketch is evidence, not acting on the plan. Ask the user only about product or preference calls.
 - The user owns every decision. Give clear recommendations and tradeoffs, but never silently decide for them.
 - Do not act on the plan or make implementation changes before the user confirms the final lock.
 

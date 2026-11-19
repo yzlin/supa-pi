@@ -44,6 +44,7 @@ For a full harness audit, point the user to the installed `harness-checklist` sk
 
 Keep all seven upstream categories. Support each candidate with an observed session cost or failure; do not force one finding per category.
 Inspect existing destination files and relevant wiring before recommending a change. Reuse the current owner rather than duplicate rules.
+Keep a candidate only if it will still hold in six months and would change what a future agent does. Leave out details that drift, such as commit hashes, versions, counts, and function names; name the stable behavior instead.
 
 ### Navigation
 

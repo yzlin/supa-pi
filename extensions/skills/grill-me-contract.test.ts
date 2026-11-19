@@ -18,6 +18,7 @@ describe("grilling skill contract", () => {
       "plans, decisions, and ideas",
       "decision tree",
       "Discover facts from the environment instead of asking the user",
+      "settle it with a throwaway sketch per the `prototype` Playbook",
       "The user owns every decision",
       "Do not act on the plan or make implementation changes before the user confirms the final lock",
       "Ask one to three focused questions per round",

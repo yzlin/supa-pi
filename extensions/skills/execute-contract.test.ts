@@ -126,6 +126,14 @@ describe("execute Playbook contract (wiring, not model adherence)", () => {
     );
   });
 
+  it("keeps detached executors to the bar in their task", () => {
+    const agent = read("agents/executor.md");
+    expect(agent).toContain("The bar in the task is the whole bar");
+    expect(agent).toContain(
+      "Report `blocked` only for a failure at the current head or a bug a user would hit",
+    );
+  });
+
   it("defines a read-only dc-verifier", () => {
     const agent = read("agents/dc-verifier.md");
     for (const line of [
