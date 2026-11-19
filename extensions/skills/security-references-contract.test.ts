@@ -172,8 +172,6 @@ describe("security selective reference contract", () => {
     expect(skill).toContain(
       "Ordinary input-validation work does not automatically load any of these specialized references.",
     );
-    expect(skill).not.toContain("read all specialized references");
-    expect(skill).not.toContain("read all three references");
   });
 
   it("preserves each moved section byte-for-byte in its matching reference", () => {

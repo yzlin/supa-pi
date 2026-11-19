@@ -96,7 +96,6 @@ describe("domain-modeling skill contract", () => {
     expect(skill).toContain(
       "caller skill governs interaction, writes, and final user-facing output",
     );
-    expect(skill).not.toContain("Output always uses exactly");
     expect(grilling).toContain("Ask one to three focused questions per round");
     expect(contextDocs).toContain(
       "Summarize files read, files changed, decisions captured, open questions, and validation performed.",

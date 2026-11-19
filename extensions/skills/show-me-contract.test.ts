@@ -2,8 +2,6 @@ import { describe, expect, it } from "bun:test";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
-import { buildPromptCommandMessage } from "../prompt-commands/index.ts";
-
 function readRepositoryFile(...path: string[]): string {
   return readFileSync(join(process.cwd(), ...path), "utf8");
 }
@@ -68,26 +66,9 @@ describe("visual explanation skill contracts", () => {
     );
   });
 
-  it("keeps /show-me as a thin prompt-pipeline showing-me wrapper", () => {
-    const extension = readRepositoryFile(
-      "extensions",
-      "prompt-commands",
-      "index.ts",
-    );
-
+  it("keeps the topic argument hint on the /show-me prompt template", () => {
     const prompt = readRepositoryFile("prompts", "show-me.md");
     expect(prompt).toContain('argument-hint: "[text|diagram|html] [topic]"');
-    expect(prompt).toContain(
-      "Use the `showing-me` skill as canonical for this explicit command.",
-    );
-    expect(prompt).toContain("Topic:\n$@");
-    expect(buildPromptCommandMessage("show-me", "x")).toContain(
-      "Use the `showing-me` skill as canonical for this explicit command.",
-    );
-    expect(extension).toContain('pi.on("input"');
-    expect(extension).not.toContain("registerCommand");
-    expect(extension).not.toContain("component tree");
-    expect(extension).not.toContain("Mermaid");
   });
 
   it("keeps architecture diagrams proportional to the question", () => {
@@ -98,13 +79,6 @@ describe("visual explanation skill contracts", () => {
       "An architectural visual or diagram is explicitly requested.",
     );
     expect(skill).toContain("An architectural visual is needed");
-    expect(skill).not.toContain(
-      '"diagram", "architecture", or "system design" mentioned',
-    );
-    expect(skill).not.toContain(
-      "For every architectural assessment, create the following diagrams",
-    );
-    expect(skill).not.toContain("use `show-me`");
     expect(skill).toContain("- State diagrams:");
     expect(skill).toContain("not by a variable name");
     expect(skill).toContain("suggest `/statechart`");

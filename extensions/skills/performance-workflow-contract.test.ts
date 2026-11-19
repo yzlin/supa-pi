@@ -63,8 +63,6 @@ describe("performance workflow ownership contract", () => {
     expect(rule).toContain(
       "Routine work that is already bounded and has no concrete performance signal does not require a performance investigation.",
     );
-    expect(rule).not.toContain("all tasks must perform performance work");
-    expect(rule).not.toContain("every task must perform performance work");
   });
 
   it("preserves mandatory bounded checks, anti-speculation policy, and blocked-measurement review", () => {

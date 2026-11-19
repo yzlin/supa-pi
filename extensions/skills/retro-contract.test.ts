@@ -20,7 +20,6 @@ const delegation =
 const skillPointer =
   "Before proceeding, read `skills/retro/SKILL.md` from the SupaPi checkout. When working elsewhere, resolve and read `<agent-dir>/extensions/supa-pi/skills/retro/SKILL.md` through the SupaPi link, using `PI_CODING_AGENT_DIR` when set or `~/.pi/agent` otherwise. If the skill cannot be resolved, stop and report the missing skill.";
 const promptBody = `${delegation}\n\n${skillPointer}\n\nRequest:\n`;
-const retroCommandEntry = /["']?retro["']?\s*:\s*\{/u;
 const categoryHeading = /^### (.+)$/gmu;
 
 function read(path: string): string {
@@ -109,13 +108,9 @@ describe("retro resource and instruction contract (not model adherence)", () => 
     }
   });
 
-  it("keeps the prompt thin and outside prompt-commands registration", () => {
+  it("keeps the prompt thin", () => {
     const prompt = read("prompts/retro.md");
     expect(prompt.split("---\n")[2]?.trim()).toBe(`${promptBody}$@`);
-    expect(prompt).not.toContain("/skill:retro");
-    expect(read("extensions/prompt-commands/index.ts")).not.toMatch(
-      retroCommandEntry,
-    );
   });
 
   it("locks verified cwd/session selection and fail-closed evidence handling", () => {

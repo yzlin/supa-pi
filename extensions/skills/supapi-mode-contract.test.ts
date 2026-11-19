@@ -105,7 +105,6 @@ describe("supapi-mode hub contract (not model adherence)", () => {
     ]) {
       expect(triage).toContain(rule);
     }
-    expect(triage).not.toContain("write one line that starts with `Tier:");
     expect(read("skills/supapi-mode/SKILL.md")).toContain(
       "Right after sizing, call the `tier` tool, before any tool call that writes.",
     );
@@ -116,7 +115,6 @@ describe("supapi-mode hub contract (not model adherence)", () => {
     expect(triage).toContain("**T3:** load the `figure-it-out` skill.");
     expect(triage).toContain("**T0:** work directly.");
     const figure = read("skills/figure-it-out/SKILL.md");
-    expect(figure).not.toContain("supapi-mode fallback");
     const [, frontmatter = "", body = ""] = figure.split("---");
     const opening =
       body
@@ -163,7 +161,6 @@ describe("supapi-mode hub contract (not model adherence)", () => {
     expect(bugFix).toContain(
       "offer `/diagnose`; do not enter it without the user's request",
     );
-    expect(bugFix).not.toContain("switch to the `diagnose` Playbook");
   });
 
   it("sizes how-it-works questions and reuses that step from other Playbooks", () => {

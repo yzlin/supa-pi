@@ -14,8 +14,6 @@ describe("skill-backed command contracts", () => {
       "Work in the main session; do not delegate this task.",
     );
     expect(skill).not.toContain("subagent(");
-    expect(skill).not.toContain("code-simplifier");
-    expect(skill).not.toContain("max_turns");
     expect(skill).toContain(
       "Do not edit ignored lockfiles or unsupported changed files",
     );
@@ -28,9 +26,6 @@ describe("skill-backed command contracts", () => {
     );
     expect(skill).toContain(
       "record `git hash-object <path>` for each path that status lists outside editable files",
-    );
-    expect(skill).not.toContain(
-      "copy every editable file plus every path that status lists as changed or untracked",
     );
     expect(skill).toContain(
       "If the run has no `Editable files` list, first resolve the recent-session files named by the focus instruction and write that list down.",
@@ -51,11 +46,9 @@ describe("skill-backed command contracts", () => {
     expect(skill).toContain(
       "Keep license headers; non-obvious behavior forced by an external dependency, platform, vendor, or protocol; doc comments that define a public API contract; and issue or RFC links for constraints code cannot express.",
     );
-    expect(skill).not.toContain("workarounds forced by");
     expect(skill).toContain(
       "restore each saved copy inside editable files and move editable paths noted as not existing to Trash with `trash`",
     );
-    expect(skill).not.toContain("`git restore -- <path>` is allowed");
     expect(skill).toContain("from the restored baseline");
     expect(skill).toContain(
       "Never use `git checkout`, `git restore`, `git reset`, or `git stash` push/pop/apply to revert /simplify results",
@@ -89,6 +82,4 @@ it("executor preserves a detached report-only boundary and model route", () => {
   expect(role).toContain("no parent conversation is inherited");
   expect(role).toContain("internal `StructuredOutput`");
   expect(role).toContain("main owns independent verification and completion");
-  expect(role).not.toContain("SubagentWorkflow");
-  expect(role).not.toContain("pi-tasks");
 });

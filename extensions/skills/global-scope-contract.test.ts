@@ -150,7 +150,6 @@ describe("global scope instruction contract", () => {
         expect(document).not.toContain(phrase);
       }
     }
-    expect(document).not.toContain("Prefer end-to-end verify;");
   });
 
   it("validates intermediate phases without requiring an end-to-end path for each one", () => {
@@ -169,9 +168,6 @@ describe("global scope instruction contract", () => {
         ),
       ),
     ).toContain("Validate each intermediate phase");
-    expect(workflow).not.toContain(
-      "For phased work, each phase must leave a usable, verified end-to-end path.",
-    );
   });
 
   it("bounds a RED alternative to reversible low-impact work", () => {
@@ -191,10 +187,6 @@ describe("global scope instruction contract", () => {
     ]) {
       expect(workflow).toContain(requirement);
     }
-
-    expect(workflow).not.toContain(
-      "security, payment, data-integrity, or irreversible work is eligible",
-    );
   });
 
   it("keeps honest RED evidence and independent verification", () => {

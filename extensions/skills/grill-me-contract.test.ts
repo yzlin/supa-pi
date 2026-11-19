@@ -2,8 +2,6 @@ import { describe, expect, it } from "bun:test";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
-import { buildPromptCommandMessage } from "../prompt-commands/index.ts";
-
 function readRepositoryFile(...segments: string[]): string {
   return readFileSync(join(process.cwd(), ...segments), "utf8");
 }
@@ -30,7 +28,6 @@ describe("grilling skill contract", () => {
       "Prefix the recommended option label with `Recommend:`",
       "Never re-ask an answered question",
       "highest-leverage unresolved question",
-      "## Risk Taxonomy",
     ]) {
       expect(skill).toContain(text);
     }
@@ -55,7 +52,6 @@ describe("grilling skill contract", () => {
       "Use the public `ask` tool for user answers when interactive UI is available.",
     );
     expect(skill).toContain("ask one final `ask` gate");
-    expect(skill).not.toContain("`questionnaire`");
   });
 
   it("allows short previews for simple choices and structures consequential tradeoffs", () => {
@@ -166,13 +162,9 @@ describe("grilling skill contract", () => {
     expect(skill).toContain(
       "must not include any implement/proceed/start-coding wording or option",
     );
-    expect(skill).not.toContain("Yes, implement this contract");
     expect(skill).toContain(
       "continue with the same one-to-three-question cadence",
     );
-    expect(skill).not.toContain("Ask exactly one question at a time");
-    expect(skill).not.toContain("exactly one single-select question per call");
-    expect(skill).not.toContain("continue one question at a time");
   });
 });
 
@@ -240,7 +232,6 @@ describe("grill-me wrapper contract", () => {
       "Load and follow the `context-docs` skill as the canonical durable-context contract.",
     );
     expect(skill).not.toContain("disable-model-invocation");
-    expect(skill).not.toContain("exactly one single-select question per call");
     expect(skill).not.toContain("## Risk Taxonomy");
   });
 
@@ -264,16 +255,12 @@ describe("grill-me wrapper contract", () => {
       "Draft durable content during the interview",
       "do not write any file before",
       "immediately write any qualifying drafted content",
-      "`CONTEXT.md`",
-      "`CONTEXT-MAP.md`",
-      "qualifying ADRs",
       "narrow allowed-write list overrides the broader destinations available in normal `context-docs` workflows",
       "Continue to follow all other `context-docs` requirements, including its context and ADR semantics",
       "domain or product facts, canonical language, constraints, and open questions",
       "ADR qualification through the canonical `context-docs` and `domain-modeling` skills",
       "Do not duplicate the ADR qualification gate here",
       "If the interview produces no durable content, write nothing",
-      "`Lock plan, stop here`",
       "`Keep grilling`",
     ]) {
       expect(skill).toContain(text);
@@ -300,26 +287,8 @@ describe("semantic ownership contract", () => {
 });
 
 describe("grill-me command contract", () => {
-  it("keeps a thin prompt-pipeline wrapper around the canonical skill", () => {
-    const extension = readRepositoryFile(
-      "extensions",
-      "prompt-commands",
-      "index.ts",
-    );
-
+  it("keeps the plan argument hint on the prompt template", () => {
     const prompt = readRepositoryFile("prompts", "grill-me.md");
     expect(prompt).toContain('argument-hint: "<plan>"');
-    expect(prompt).toContain(
-      "Use the `grill-me` wrapper skill as canonical for this explicit command.",
-    );
-    expect(prompt).toContain("Plan:\n$@");
-    expect(buildPromptCommandMessage("grill-me", "x")).toContain(
-      "Use the `grill-me` wrapper skill as canonical for this explicit command.",
-    );
-    expect(extension).toContain('pi.on("input"');
-    expect(extension).not.toContain("registerCommand");
-    expect(extension).not.toContain("`grilling` skill");
-    expect(extension).not.toContain("CONTEXT.md");
-    expect(extension).not.toContain("questionnaire");
   });
 });

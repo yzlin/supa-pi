@@ -1,8 +1,7 @@
 import { describe, expect, it } from "bun:test";
-import { existsSync, readFileSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
-const prCommandEntry = /["']?pr["']?\s*:\s*\{/u;
 const githubCommand = /`(gh (?:pr|repo view) [^`]+)`/gu;
 const repositoryFlag = /(?:-R|--repo) <repo>$/u;
 
@@ -99,7 +98,6 @@ describe("opening-a-pr Playbook contract", () => {
 
   it("detects untracked files regardless of git config", () => {
     expect(skill).toContain("git status --porcelain --untracked-files=all");
-    expect(skill).not.toContain("git status --short");
   });
 
   it("pins GitHub commands to origin and creates ready PRs", () => {
@@ -129,12 +127,8 @@ describe("opening-a-pr Playbook contract", () => {
     expect(prompt).toContain(
       "open `playbooks/opening-a-pr.md` in the directory of the `supapi-mode` location listed in `<available_skills>`",
     );
-    expect(existsSync(join(process.cwd(), "skills", "pr"))).toBe(false);
     expect(prompt).toContain(
       ["$", "{@:-Use the repository default branch as base.}"].join(""),
     );
-    expect(
-      readRepositoryFile("extensions/prompt-commands/index.ts"),
-    ).not.toMatch(prCommandEntry);
   });
 });

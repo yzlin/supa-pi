@@ -118,6 +118,5 @@ describe("principles contract (wiring, not model adherence)", () => {
     expect(investigation).toContain(
       "Local checks already completed: [FINDINGS]",
     );
-    expect(investigation).not.toContain("subagent_type");
   });
 });

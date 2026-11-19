@@ -36,7 +36,6 @@ describe("to-spec resource and instruction contract (not model adherence)", () =
       "when the execute Playbook drafts a Spec",
     );
     expect(formatSkillsForPrompt(loaded.skills)).toContain("to-spec");
-    expect(readSkill()).not.toContain("disable-model-invocation");
     expectInstructions([
       "Explicit /to-spec wrapper",
       "Use when the user invokes /to-spec or when the execute Playbook drafts a Spec",

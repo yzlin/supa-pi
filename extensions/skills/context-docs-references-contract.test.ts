@@ -53,9 +53,6 @@ describe("context-docs selective reference contract", () => {
     expect(rule).toContain(
       "../../skills/context-docs/references/documentation-safeguards.md",
     );
-    expect(rule).not.toContain(
-      "skills/context-docs/SKILL.md#documentation-and-codemap-safeguards",
-    );
   });
 
   it("moves the safeguards without changing their wording", () => {

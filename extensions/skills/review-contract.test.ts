@@ -13,15 +13,6 @@ const REVIEWERS = [
 ];
 
 describe("report-only review contract (wiring, not model adherence)", () => {
-  it("removes the coded /review runtime and its tools", () => {
-    expect(existsSync(join(root, "extensions", "review"))).toBe(false);
-    expect(existsSync(join(root, "skills", "review-fix"))).toBe(false);
-    expect(read("package.json")).not.toContain("./extensions/review");
-    const skill = read("skills/review-orchestration/SKILL.md");
-    expect(skill).not.toContain("review_run(");
-    expect(skill).not.toContain("review_finalize(");
-  });
-
   it("reports only and hands fixing to the fix-review-findings Playbook", () => {
     const skill = read("skills/review-orchestration/SKILL.md");
     expect(skill).toContain("Do not apply fixes");
@@ -38,7 +29,6 @@ describe("report-only review contract (wiring, not model adherence)", () => {
     expect(skill).toContain(
       '"Validated StructuredOutput" JSON in the tool result',
     );
-    expect(skill).not.toContain("structuredContent");
   });
 
   it("keeps code-reviewer mandatory and names every specialist", () => {

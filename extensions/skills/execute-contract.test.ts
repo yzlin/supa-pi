@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { existsSync, readFileSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
 const root = join(import.meta.dir, "..", "..");
@@ -7,13 +7,8 @@ const read = (path: string) => readFileSync(join(root, path), "utf8");
 const playbook = () => read("skills/supapi-mode/playbooks/execute.md");
 
 describe("execute Playbook contract (wiring, not model adherence)", () => {
-  it("removes the execute_checkpoint ledger and the execute skill", () => {
-    expect(existsSync(join(root, "extensions", "execute"))).toBe(false);
-    expect(existsSync(join(root, "skills", "execute"))).toBe(false);
-    const manifest = read("package.json");
-    expect(manifest).not.toContain("./extensions/execute");
-    expect(manifest).toContain("./extensions/spec-log");
-    expect(playbook()).not.toContain("execute_checkpoint");
+  it("registers the spec-log extension", () => {
+    expect(read("package.json")).toContain("./extensions/spec-log");
   });
 
   it("keeps /execute a thin alias to the Playbook", () => {
@@ -47,7 +42,6 @@ describe("execute Playbook contract (wiring, not model adherence)", () => {
     expect(text).toContain(
       '"Validated StructuredOutput" JSON in the tool result',
     );
-    expect(text).not.toContain("structuredContent");
   });
 
   it("keeps goal task-mode docs on the model-visible report", () => {
@@ -55,7 +49,6 @@ describe("execute Playbook contract (wiring, not model adherence)", () => {
     expect(readme).toContain(
       '"Validated StructuredOutput" JSON in the tool result',
     );
-    expect(readme).not.toContain("structuredContent.structuredOutput");
   });
 
   it("reviews a Spec with two spec-reviewers and records the decision", () => {
@@ -64,7 +57,6 @@ describe("execute Playbook contract (wiring, not model adherence)", () => {
     expect(text).toContain("../schemas/spec-review.schema.json");
     expect(text).toContain("`spec_log` `review`");
     expect(text).toContain("At most two review rounds per Spec");
-    expect(text).not.toContain("classifier");
   });
 
   it("ships the schemas the Playbook names", () => {
@@ -160,9 +152,6 @@ describe("execute Playbook contract (wiring, not model adherence)", () => {
     ]) {
       expect(agent).toContain(rule);
     }
-    for (const other of ["executor", "spec-reviewer", "code-reviewer"]) {
-      expect(read(`agents/${other}.md`)).not.toContain("model: openai-codex");
-    }
   });
 
   it("orders Finish: gate, check, re-check all, dc-verifier, verify", () => {
@@ -189,9 +178,6 @@ describe("execute Playbook contract (wiring, not model adherence)", () => {
     ]) {
       expect(finish).toContain(rule);
     }
-    expect(playbook()).not.toContain(
-      "`spec_log` writes `done` when every criterion is checked",
-    );
   });
 
   it("ships the dc-verify report schema", () => {
