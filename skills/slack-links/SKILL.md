@@ -12,7 +12,7 @@ Slack pages need a signed-in session, so `fetch_content`, `web_search`, and brow
 Run everything in one `tools.mcp__executor__execute({ code })` program from codemode, and return only the fields needed.
 
 1. Parse the URL `https://<workspace>.slack.com/archives/<channel>/p<16 digits>`:
-   - `ts` = the first 10 digits + `.` + the last 6 digits.
+   - `ts` = the first 10 digits + `.` + the last 6 digits. Pass it to `conversations.replies` as a number (`1795157298.496259`), not a string; a string fails with `InputInvalid: input.input.query.ts: Expected number`.
    - If the query string has `thread_ts`, the link is a reply; use `thread_ts` as the thread ts.
 2. Pick the account for `<workspace>`: `tools.search({ namespace: "slack", query: "conversations replies", limit: 1 })` lists the linked account IDs in the item's `input` (`accountId: "acc_…" | "acc_…"`). Call `tools.slack.auth.test({ accountId, input: {} })` for each, and use the one whose `url` matches the workspace.
 3. Fetch:
