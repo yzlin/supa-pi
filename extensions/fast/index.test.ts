@@ -439,6 +439,8 @@ describe("fast mode", () => {
       "gpt-6-luna",
       "gpt-6-sol",
       "gpt-6.1-sol",
+      "gpt-6.2-astra",
+      "gpt-6.2-sol",
     ]) {
       expect(
         applyFastModeToPayload({}, true, { provider: "openai-codex", id }),
@@ -452,6 +454,7 @@ describe("fast mode", () => {
       { provider: "openai", id: "gpt-5.6-sol" },
       { provider: "openai", id: "gpt-6-astra" },
       { provider: "openai", id: "gpt-6.1-sol" },
+      { provider: "openai", id: "gpt-6.2-sol" },
     ]) {
       expect(applyFastModeToPayload({}, true, model)).toBeUndefined();
     }
