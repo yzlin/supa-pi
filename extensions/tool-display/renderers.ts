@@ -1623,7 +1623,7 @@ class ResponsiveDiffText implements Component {
     );
   }
 
-  render(width: number): string[] {
+  render(width: number): readonly string[] {
     this.text = renderFinalDiffText(
       this.result,
       this.options,

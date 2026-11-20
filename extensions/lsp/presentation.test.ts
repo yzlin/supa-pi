@@ -262,7 +262,7 @@ function renderResult(
   options: { expanded: boolean; isPartial?: boolean } = { expanded: false },
   state: LspPresentationState = {},
   toolCallId = "render-call",
-): string[] {
+): readonly string[] {
   const component = tool.renderResult?.(
     result as never,
     { expanded: options.expanded, isPartial: options.isPartial ?? false },

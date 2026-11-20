@@ -37,7 +37,7 @@ afterEach(() => {
   cleanupToolDisplayTimers();
   tokens.length = 0;
 });
-const clean = (rows: string[]) => rows.map(stripVTControlCharacters);
+const clean = (rows: readonly string[]) => rows.map(stripVTControlCharacters);
 const header = "Script completed\nWall time 1.234 seconds\nOutput:\n";
 function setup(code = "const value = 1;", collapsed = true) {
   const state: PresentationState = {
@@ -196,7 +196,7 @@ const injectedControls = [
   "\u001b7",
 ];
 const unsafeText = injectedControls.join("");
-function expectSafeRows(rows: string[]) {
+function expectSafeRows(rows: readonly string[]) {
   const text = rows.join("\n");
   for (const control of injectedControls) {
     expect(text).not.toContain(control);

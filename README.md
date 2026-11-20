@@ -230,7 +230,7 @@ The setup script installs or reconciles these Pi packages. It no longer installs
   - `bun run typecheck`
   - `bun run check:write`
 - This repo uses Bun (`bun.lock` present)
-- Runtime dependency `@earendil-works/pi-schema` (exactly `1.5.0`) is the repo's only runtime validator, the same one Pi uses for tool arguments. It checks subagent `StructuredOutput` reports, child result files, and Spec log events.
+- Runtime dependency `@earendil-works/pi-schema` (exactly `1.6.0`) is the repo's only runtime validator, the same one Pi uses for tool arguments. It checks subagent `StructuredOutput` reports, child result files, and Spec log events.
 - Peer dependencies include:
   - `@earendil-works/pi-coding-agent` (`>=1.0.1`)
   - `@earendil-works/pi-ai` (`>=1.0.1`)

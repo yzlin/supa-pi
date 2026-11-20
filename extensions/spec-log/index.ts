@@ -403,7 +403,7 @@ export class SpecLogResult implements Component {
     this.moreHint = moreHint;
   }
 
-  render(width: number): string[] {
+  render(width: number): readonly string[] {
     const lines = this.markdown.render(width);
     if (this.expanded || lines.length <= COLLAPSED_RESULT_LINES) {
       return lines;

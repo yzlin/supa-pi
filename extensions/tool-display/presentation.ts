@@ -797,7 +797,7 @@ class ResultComponent implements Component {
     this.body?.invalidate();
   }
   render(width: number): string[] {
-    let bodyLines: string[] | undefined;
+    let bodyLines: readonly string[] | undefined;
     let bodyStart = 0;
     if (this.body instanceof ResultBodyComponent) {
       const body = this.body.renderForParent(width);
@@ -842,7 +842,7 @@ class ResultBodyComponent implements Component {
   invalidate(): void {
     this.component.invalidate();
   }
-  render(width: number): string[] {
+  render(width: number): readonly string[] {
     const { lines, start } = this.renderForParent(width);
     if (start === 0) {
       return lines;
@@ -855,7 +855,7 @@ class ResultBodyComponent implements Component {
     }
     return output;
   }
-  renderForParent(width: number): { lines: string[]; start: number } {
+  renderForParent(width: number): { lines: readonly string[]; start: number } {
     return {
       lines: this.component.render(width),
       start: this.dropsSummary ? 1 : 0,

@@ -51,7 +51,7 @@ Sync commit: `1103ff13465ed16374df262d3d34c0514431c06c` (last commit at which th
 | `extensions/subagent/dialog-queue.ts` `queueDialogs` `enqueue` | `Enqueue`, `Advance`, `AbortDialogs` |
 | `extensions/subagent/runner.ts` `startDialogRelay(...)` call, `await relay?.close()` | `ui`, `ToolAborts`, `RelayCloses` |
 | `extensions/subagent/index.ts` `queueDialogs(ctx.ui)`; `extensions/subagent/child.ts` `relayDialogs(ctx.ui, ...)` | wiring assumed by every action |
-| Pi `showExtensionSelector`/`showExtensionInput` (pi-coding-agent 1.5.0): abort closes the dialog | `AbortDialogs` |
+| Pi `showExtensionSelector`/`showExtensionInput` (pi-coding-agent 1.6.0): abort closes the dialog | `AbortDialogs` |
 
 To see if covered code moved since the sync commit:
 

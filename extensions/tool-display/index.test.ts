@@ -1158,7 +1158,7 @@ describe("tool block background", () => {
     return missing;
   }
 
-  function inHostShell(component: Component | undefined): string[] {
+  function inHostShell(component: Component | undefined): readonly string[] {
     const box = new Box(1, 0, (text) => ansiTheme.bg("toolSuccessBg", text));
     if (component) {
       box.addChild(component);
