@@ -12,9 +12,20 @@ Make the current topic easy to scan. Skip the preamble and keep prose brief. Pic
 
 Do not force a visual when one direct sentence is clearer.
 
+## Depth
+
+Pick the depth before the rung: `/show-me [teach|quick] [text|diagram|html] [topic]`.
+
+- First argument `teach`: follow the `teach` skill for the rest of the topic.
+- First argument `quick`: skip the `teach` skill; read only what the view itself needs.
+- Otherwise, on the `/show-me` command, follow the `teach` skill when this session has not read the topic's code, or when the request asks how or why something works or asks to understand it. Else stay quick.
+- When you pick the depth yourself, open the reply with two lines before any tool call: `Understood: <the question in your words>` and `Path: teach|quick — <the reason>`. A forced `teach` or `quick` skips these lines.
+- When another skill or Playbook step applies this skill, never escalate.
+- A depth word with no topic applies that depth to the latest result in this session.
+
 ## Explainer Ladder
 
-If the first argument is `text`, `diagram`, or `html`, render at that Explainer rung.
+If the first argument after any depth word is `text`, `diagram`, or `html`, render at that Explainer rung.
 Otherwise, keep the existing smallest-useful choice.
 If no topic follows, re-render the latest result in this session.
 
@@ -58,3 +69,4 @@ An explicit `html` request overrides this default.
 ## Stop Condition
 
 Stop when the key relationship or change is visible. Do not repeat the same information as a diagram, tree, and prose summary.
+When the `teach` skill applies this skill, its diagram series overrides "Pick one view by default" and this stop rule.

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
 const root = join(import.meta.dir, "..", "..");
@@ -23,13 +23,12 @@ describe("teach skill contract (wiring, not model adherence)", () => {
     expect(skill).toContain("each diagram redraws the last and adds one part");
   });
 
-  it("is reached from /teach", () => {
-    const alias = read("prompts/teach.md");
-    expect(alias).toContain("Use the `teach` skill as canonical");
-    expect(alias).toContain(
-      "listed in `<available_skills>` directly; do not search for it.",
+  it("is reached from /show-me, not its own alias", () => {
+    expect(existsSync(join(root, "prompts/teach.md"))).toBe(false);
+    expect(skill).toContain("This skill has no command of its own.");
+    expect(read("skills/showing-me/SKILL.md")).toContain(
+      "First argument `teach`: follow the `teach` skill",
     );
-    expect(alias.split("\n").length).toBeLessThan(16);
   });
 
   it("credits pstack", () => {

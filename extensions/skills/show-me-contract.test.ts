@@ -30,7 +30,7 @@ describe("visual explanation skill contracts", () => {
 
     expect(skill).toContain("## Explainer Ladder");
     expect(skill).toContain(
-      "If the first argument is `text`, `diagram`, or `html`, render at that Explainer rung.",
+      "If the first argument after any depth word is `text`, `diagram`, or `html`, render at that Explainer rung.",
     );
     expect(skill).toContain(
       "Otherwise, keep the existing smallest-useful choice.",
@@ -68,7 +68,32 @@ describe("visual explanation skill contracts", () => {
 
   it("keeps the topic argument hint on the /show-me prompt template", () => {
     const prompt = readRepositoryFile("prompts", "show-me.md");
-    expect(prompt).toContain('argument-hint: "[text|diagram|html] [topic]"');
+    expect(prompt).toContain(
+      'argument-hint: "[teach|quick] [text|diagram|html] [topic]"',
+    );
+  });
+
+  it("escalates /show-me to teach by depth, never for skill callers", () => {
+    const depth = readSkill("showing-me")
+      .split("## Depth")[1]
+      ?.split("\n## ")[0];
+
+    expect(depth).toContain("First argument `teach`: follow the `teach` skill");
+    expect(depth).toContain(
+      "First argument `quick`: skip the `teach` skill; read only what the view itself needs.",
+    );
+    expect(depth).toContain(
+      "when this session has not read the topic's code, or when the request asks how or why",
+    );
+    expect(depth).toContain(
+      "When another skill or Playbook step applies this skill, never escalate.",
+    );
+    expect(depth).toContain(
+      "open the reply with two lines before any tool call: `Understood: <the question in your words>` and `Path: teach|quick — <the reason>`.",
+    );
+    expect(readSkill("showing-me")).toContain(
+      "When the `teach` skill applies this skill, its diagram series overrides",
+    );
   });
 
   it("keeps architecture diagrams proportional to the question", () => {

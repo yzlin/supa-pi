@@ -50,9 +50,9 @@
 - `skills/grilling/SKILL.md` — read before changing natural-language adversarial interviews or the shared grilling contract.
 - `docs/context/subsystems.md` "Playbook architecture: implemented; ADR 0005 accepted", `skills/supapi-mode/`, and `rules/principles/` — read before adding the Hub skill, Playbooks, Principles, the core-prompt routing pointer, or converting commands into Playbooks.
 - `skills/grill-me/SKILL.md`, `prompts/grill-me.md`, and `extensions/prompt-commands/index.ts` — read before changing explicit `/grill-me <plan>` behavior. The prompt entrypoint stays queueable and retains a functional no-Extension fallback while the active Extension preserves its raw multiline argument before normal expansion; the command skill permits only lock-gated, qualifying changes to `CONTEXT.md`, `CONTEXT-MAP.md`, and ADRs.
-- `skills/showing-me/SKILL.md` and `prompts/show-me.md` — read before changing `/show-me`, its Explainer ladder, or where discardable HTML explainers are written.
+- `skills/showing-me/SKILL.md` and `prompts/show-me.md` — read before changing `/show-me`, its Depth routing to `teach`, its Explainer ladder, or where discardable HTML explainers are written.
 - `skills/why/SKILL.md` and `prompts/why.md` — read before changing `/why`, its evidence tiers, or which sources it searches by default.
-- `skills/teach/SKILL.md` and `prompts/teach.md` — read before changing `/teach` or how it reuses the investigation how-it-works step and `why`.
+- `skills/teach/SKILL.md` — read before changing `/show-me teach` or how it reuses the investigation how-it-works step and `why`.
 - `skills/ketchup/SKILL.md` and `prompts/ketchup.md` — read before changing `/ketchup`, what counts as an action item, or how it differs from `/wait-what`.
 - `skills/take-over/SKILL.md` and `prompts/take-over.md` — read before changing `/take-over`, its restate, gap-interview, and example phases, the Process brief, or its read-only-until-lock rule.
 - `skills/blast-radius/SKILL.md` and `prompts/blast-radius.md` — read before changing `/blast-radius`, its proof ladder, or where its probes run.

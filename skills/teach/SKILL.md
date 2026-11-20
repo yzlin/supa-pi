@@ -1,11 +1,13 @@
 ---
 name: teach
-description: "Explain code, a subsystem, or a change so the user understands what it is, how it works, and why it is built that way, at their pace. Gathers facts first through the investigation Playbook's how-it-works step and the why skill. Use for /teach, 'teach me this', or 'help me really understand X'. Use /wait-what to re-explain your last message and /show-me for a visual alone."
+description: "Explain code, a subsystem, or a change so the user understands what it is, how it works, and why it is built that way, at their pace. Gathers facts first through the investigation Playbook's how-it-works step and the why skill. Use for /show-me teach, when /show-me escalates to it, or for 'teach me this' and 'help me really understand X'. Use /wait-what to re-explain your last message and /show-me quick for a visual alone."
 ---
 
 # Teach
 
 Explain what a thing is, how it works, and why it is built that way, in one plain account at the user's pace. The goal is understanding. Make no edits.
+
+This skill has no command of its own. `/show-me teach` forces it, and `/show-me` escalates to it per the `showing-me` skill's Depth section.
 
 Teach sits on top of two fact-gathering steps. Do not redo their work:
 
