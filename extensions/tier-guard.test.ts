@@ -43,6 +43,7 @@ const result = (id: string, isError = false) => ({
 const readTriage = () => call("read", { path: TRIAGE });
 const tierCall = (tier: unknown, reason: unknown = "signals named") =>
   call("tier", { tier, reason });
+const asked = () => call("ask", { questions: [] });
 
 /** Append the work call and ask the guard about it. */
 function refuse(
@@ -104,7 +105,7 @@ describe("tier guard", () => {
   });
 
   it("a tier T2 call gates work until accept", () => {
-    const base = [user(), readTriage(), tierCall(2, "two subsystems")];
+    const base = [user(), readTriage(), tierCall(2, "two subsystems"), asked()];
     expect(refuse(base, "write", { path: ".pi/specs/x.md" })).toBeNull();
     expect(refuse(base)).toContain("no accepted Spec");
     expect(
@@ -192,7 +193,9 @@ describe("tier guard", () => {
       result("w1", true),
     ];
     expect(refuse(entries, "write", spec)).toContain("no Tier line");
-    expect(refuse([...entries, tierCall(2)], "write", spec)).toBeNull();
+    expect(
+      refuse([...entries, tierCall(2), asked()], "write", spec),
+    ).toBeNull();
   });
 
   it("allows non-work tools before a Tier line", () => {
@@ -218,7 +221,12 @@ describe("tier guard", () => {
   });
 
   it("at T2 allows Spec writes but refuses other work until accept", () => {
-    const entries = [user(), readTriage(), said("Tier: T2 — one-way door")];
+    const entries = [
+      user(),
+      readTriage(),
+      said("Tier: T2 — one-way door"),
+      asked(),
+    ];
     expect(refuse(entries, "write", { path: ".pi/specs/x.md" })).toBeNull();
     expect(refuse(entries, "edit", { path: "/ws/.pi/specs/x.md" })).toBeNull();
     expect(
@@ -231,7 +239,12 @@ describe("tier guard", () => {
   });
 
   it("at T2 allows work after a successful accept, not a failed one", () => {
-    const base = [user(), readTriage(), said("Tier: T2 — one-way door")];
+    const base = [
+      user(),
+      readTriage(),
+      said("Tier: T2 — one-way door"),
+      asked(),
+    ];
     expect(
       refuse([
         ...base,
@@ -311,7 +324,12 @@ describe("tier guard", () => {
     mkdirSync(join(root, ".pi/specs"), { recursive: true });
     mkdirSync(join(root, "outside"));
     symlinkSync(join(root, "outside"), join(root, ".pi/specs/linked"));
-    const entries = [user(), readTriage(), said("Tier: T2 — one-way door")];
+    const entries = [
+      user(),
+      readTriage(),
+      said("Tier: T2 — one-way door"),
+      asked(),
+    ];
     const ask = (path: string) =>
       tierRefusal(
         flatten([...entries, call("write", { path }, "w")]),
@@ -323,6 +341,67 @@ describe("tier guard", () => {
     expect(ask(".pi/specs/linked/report.ts")).toContain("no accepted Spec");
     expect(ask(".pi/specs/new-spec.md")).toBeNull();
     rmSync(root, { recursive: true });
+  });
+
+  it("first tier T2 or T3 refuses all work, Spec writes too, until an ask", () => {
+    const spec = { path: ".pi/specs/x.md" };
+    for (const declare of [tierCall(2), tierCall(3), said("Tier: T3 — x")]) {
+      const base = [user(), readTriage(), declare];
+      expect(refuse(base)).toContain("no confirmed Issue line");
+      expect(refuse(base, "write", spec)).toContain("no confirmed Issue line");
+    }
+    // A cancelled ask counts: the RPC eval runner cancels every ask.
+    const asks = [user(), readTriage(), tierCall(2), asked()];
+    expect(refuse(asks, "write", spec)).toBeNull();
+    expect(refuse([user(), readTriage(), tierCall(3), asked()])).toBeNull();
+    // An ask before the tier does not count.
+    expect(refuse([user(), readTriage(), asked(), tierCall(2)])).toContain(
+      "no confirmed Issue line",
+    );
+  });
+
+  it("skipConfirm on a tier call clears the confirmation gate", () => {
+    const spec = { path: ".pi/specs/x.md" };
+    const skip = (reason: unknown) =>
+      call("tier", { tier: 2, reason: "one-way door", skipConfirm: reason });
+    expect(
+      refuse(
+        [user(), readTriage(), skip("user said do not ask")],
+        "write",
+        spec,
+      ),
+    ).toBeNull();
+    expect(
+      refuse(
+        [user(), readTriage(), tierCall(2), skip("no live user")],
+        "write",
+        spec,
+      ),
+    ).toBeNull();
+    expect(refuse([user(), readTriage(), skip("  ")], "write", spec)).toContain(
+      "no confirmed Issue line",
+    );
+  });
+
+  it("an escalation from a lower first tier and the execute kind skip the confirmation", () => {
+    const spec = { path: ".pi/specs/x.md" };
+    expect(
+      refuse(
+        [user(), readTriage(), tierCall(1), tierCall(2, "public contract")],
+        "write",
+        spec,
+      ),
+    ).toBeNull();
+    expect(
+      refuse([user(), readTriage(), tierCall(2, "execute")], "write", spec),
+    ).toBeNull();
+    expect(
+      refuse(
+        [user(), readTriage(), said("Tier: T2 — execute kind, Spec-backed")],
+        "write",
+        spec,
+      ),
+    ).toBeNull();
   });
 
   it("hooks tool_call and reads the session branch", async () => {

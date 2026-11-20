@@ -17,6 +17,13 @@
  * thinking block; session 01a1ca94 lost its Tier line that way and the guard
  * refused the Spec write 8 times. Tool arguments are never summarized.
  * - No tier yet: refuse.
+ * - First tier this turn is T2 or T3: refuse all work, Spec writes included,
+ *   until an `ask` call after it (a cancelled ask counts: the paired-path RPC
+ *   runner cancels every ask) or that `tier` call names a `skipConfirm`
+ *   reason. Triage step 7 confirms the `Issue:` line there. A later T2 after
+ *   a lower first tier is an escalation and is not gated (step 7). The
+ *   `execute` kind (reason starts with `execute`) opens at step 3, before
+ *   step 7, and is not gated either.
  * - Latest tier is T2: refuse work outside `.pi/specs/` until a
  *   `spec_log` `accept` after that declaration succeeds.
  * Best-effort only: bash writes pass, and a later turn starts clean.
@@ -33,7 +40,7 @@ const TRIAGE_PATH = "supapi-mode/playbooks/triage.md";
 const NON_BUILD =
   /supapi-mode\/playbooks\/(?:investigation|diagnose|prototype|correct|fix-review-findings|opening-a-pr)\.md$/u;
 // Same rule as the eval scorer (evals/paired-path/run.ts TIER_LINE).
-const TIER_LINE = /^Tier: T(\d)\b/gmu;
+const TIER_LINE = /^Tier: T(\d)\b(?: — (.*))?/gmu;
 export const TIER_TOOL = "tier";
 
 /**
@@ -160,6 +167,8 @@ export function tierRefusal(
   }
   const after = turn.slice(triage + 1);
   let tier: { tier: number; at: number } | undefined;
+  let first: { tier: number; at: number; reason: string } | undefined;
+  let skipped = false;
   for (const [at, item] of after.entries()) {
     if (reads(item, NON_BUILD)) {
       return null;
@@ -168,6 +177,8 @@ export function tierRefusal(
       const declared = tierArg(item.args ?? {});
       if (declared !== undefined) {
         tier = { tier: declared, at };
+        first ??= { ...tier, reason: str(item.args?.reason) };
+        skipped ||= str(item.args?.skipConfirm).trim() !== "";
       }
       continue;
     }
@@ -176,6 +187,7 @@ export function tierRefusal(
     }
     for (const match of (item.text ?? "").matchAll(TIER_LINE)) {
       tier = { tier: Number(match[1]), at };
+      first ??= { ...tier, reason: match[2] ?? "" };
     }
   }
   if (!tier) {
@@ -186,6 +198,25 @@ export function tierRefusal(
       "`tier` tool with the tier and the hard trigger or soft signals that set",
       "it (or, without that tool, write a line that starts with `Tier: T<n> — `).",
       "Then retry this call.",
+      "",
+    ].join("\n");
+  }
+  if (
+    first &&
+    first.tier >= 2 &&
+    !/^\s*execute\b/u.test(first.reason) &&
+    !skipped &&
+    !after
+      .slice(first.at + 1)
+      .some((item) => item.kind === "tool" && item.name === "ask")
+  ) {
+    return [
+      `Refused by the tier guard: tier T${first.tier} has no confirmed Issue line yet.`,
+      "",
+      "Triage step 7: before T2 or T3 work, show the `Issue:` line and confirm",
+      "it with one `ask`. If the user said not to ask or no live user is",
+      "present, call the `tier` tool again with `skipConfirm` set to that",
+      "reason. Then retry this call.",
       "",
     ].join("\n");
   }
@@ -232,11 +263,23 @@ export default function (pi: ExtensionAPI) {
         minLength: 1,
         description: "The hard trigger or soft signals that set the tier",
       }),
+      skipConfirm: Type.Optional(
+        Type.String({
+          description:
+            "T2/T3 only: why the Issue-line confirmation ask is skipped (the user said not to ask, or no live user is present)",
+        }),
+      ),
     }),
     async execute(_id, params) {
+      const skip = params.skipConfirm?.trim()
+        ? `\nIssue line not confirmed: ${params.skipConfirm.trim()}`
+        : "";
       return {
         content: [
-          { type: "text", text: `Tier: T${params.tier} — ${params.reason}` },
+          {
+            type: "text",
+            text: `Tier: T${params.tier} — ${params.reason}${skip}`,
+          },
         ],
         details: {},
       };
