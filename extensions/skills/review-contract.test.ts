@@ -122,6 +122,7 @@ describe("report-only review contract (wiring, not model adherence)", () => {
       "teach",
       "ketchup",
       "blast-radius",
+      "take-over",
       "grill-me",
       "show-me",
     ]) {

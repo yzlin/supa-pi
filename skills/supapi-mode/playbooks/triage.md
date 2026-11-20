@@ -2,7 +2,7 @@
 
 You own the choice of Playbook and of how much process the job gets. Pick the kind, learn enough to size it, state the tier, then dispatch.
 
-1. Restate the user's goal in one sentence.
+1. Restate the underlying issue in plain words, in one line that starts with `Issue: `. Say what is actually wrong or wanted, which can differ from the literal request or the thread it came from. Mark a guess as a guess.
 2. Explicit commands skip triage: `/execute`, `/pr`, `/diagnose`, `/correct`, and `/review-fix` open their Playbook directly.
 3. Pick the first kind below whose trigger fits. A non-build kind opens its Playbook now, with no tier, except `execute`, which is always Spec-backed: call the `tier` tool with tier 2 and reason `execute` first. The build kinds are `bug-fix`, `feature`, and `refactoring`.
 
@@ -31,6 +31,8 @@ You own the choice of Playbook and of how much process the job gets. Pick the ki
    - **T1:** follow the kind Playbook. Its build steps follow the Unit loop in the `supapi-mode` Shared rules.
    - **T2:** run the kind Playbook's design steps (feature 1–3, bug-fix 1–2, refactoring 1–2), then follow the `execute` Playbook from step 1 with the plan as `/execute <plan text>`. Carry kind evidence into the Spec: a bug-fix repro becomes a Done Criterion and a `(baseline)` lane; a refactoring pin becomes a Done Criterion.
    - **T3:** load the `figure-it-out` skill.
+
+   Confirm before T2 or T3 work: show the `Issue:` line and confirm it with one `ask` (confirm, or correct it) before you draft a Spec or design a workflow. This is the product-direction question that `never-block-on-the-human` allows: a wrong premise costs a whole Spec, and one line is cheap to correct. On a correction, restate, then re-pick the kind and re-size from step 3. Skip the `ask` when the user said not to ask or no live user is present. When you skip it, or the `ask` returns cancelled, proceed on the stated line and say it was not confirmed. A step 8 escalation does not ask again. T0 and T1 state the line and keep going.
 8. Escalate when a T1 run hits a hard trigger. Stop at the next verifiable state, call the `tier` tool again with tier 2 and the trigger, and continue at T2 from the current workspace. The Spec names the edits made so far in its Execution Scope and Plan, and Done Criteria cover them. No `(baseline)` lane covers behavior those edits already changed, because the base snapshot already holds them. Never lower a tier on your own; a user instruction can.
 
 **Principles:** `attack-the-premise`, `subtract-before-you-add`, `never-block-on-the-human`.

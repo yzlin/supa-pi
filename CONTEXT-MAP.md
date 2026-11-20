@@ -54,6 +54,7 @@
 - `skills/why/SKILL.md` and `prompts/why.md` — read before changing `/why`, its evidence tiers, or which sources it searches by default.
 - `skills/teach/SKILL.md` and `prompts/teach.md` — read before changing `/teach` or how it reuses the investigation how-it-works step and `why`.
 - `skills/ketchup/SKILL.md` and `prompts/ketchup.md` — read before changing `/ketchup`, what counts as an action item, or how it differs from `/wait-what`.
+- `skills/take-over/SKILL.md` and `prompts/take-over.md` — read before changing `/take-over`, its restate, gap-interview, and example phases, the Process brief, or its read-only-until-lock rule.
 - `skills/blast-radius/SKILL.md` and `prompts/blast-radius.md` — read before changing `/blast-radius`, its proof ladder, or where its probes run.
 - `skills/prune-tests/SKILL.md` and `prompts/prune-tests.md` — read before changing `/prune-tests`, its classification order, the negative-assertion rule for contract tests, or its edit boundary.
 - `prompts/statechart.md` and `docs/context/subsystems.md` "Statechart: implemented direction" — read before changing `/statechart`, the external statechart skill install, `/skill install` file-mode handling, or state-diagram guidance in `skills/architecture-diagrams/SKILL.md`.

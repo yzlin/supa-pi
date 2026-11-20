@@ -23,6 +23,16 @@ Run everything in one `tools.mcp__executor__execute({ code })` program from code
 
 Read exact signatures with `tools.search.describe` before calling a tool you have not used in this session. Tool inputs nest Slack arguments under `input.query`; never pass a `token`.
 
+## Restate
+
+Unless the user asked only for the raw messages, open the reply with a line that starts with `Issue: `: the problem behind the thread, in plain English and your own words. Then add up to three short lines:
+
+- what the thread asks for;
+- the problem behind the ask, which can differ from it;
+- what is still open or disputed, and who owns it.
+
+Label each inference as an inference. Do not restate the messages one by one. When the thread starts build work, this `Issue:` line is the triage Playbook's step 1 restatement.
+
 ## Failures
 
 - `slack` tools missing, or `AccountRequired`: tell the user to link the workspace's Slack account to the Executor Slack app.

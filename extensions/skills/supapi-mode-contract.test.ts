@@ -63,6 +63,7 @@ describe("supapi-mode hub contract (not model adherence)", () => {
   it("triage orders bypass, kind, learn, size, tier call, dispatch, escalate", () => {
     const triage = read("skills/supapi-mode/playbooks/triage.md");
     const steps = [
+      "1. Restate the underlying issue in plain words, in one line that starts with `Issue: `.",
       "2. Explicit commands skip triage",
       "3. Pick the first kind below",
       "4. Learn before you size",
@@ -72,6 +73,7 @@ describe("supapi-mode hub contract (not model adherence)", () => {
       "a tier declared after work started does not count",
       "Use the tool, not a text line: some models return prose written between tool calls as a summarized thinking block",
       "7. Dispatch:",
+      "Confirm before T2 or T3 work: show the `Issue:` line and confirm it with one `ask`",
       "8. Escalate when a T1 run hits a hard trigger.",
       "call the `tier` tool again with tier 2 and the trigger",
       "**Reply:** for a build kind, start with a `Tier: T<n> — <reason>` line for each `tier` call you made",
@@ -80,6 +82,13 @@ describe("supapi-mode hub contract (not model adherence)", () => {
       expect(position).toBeGreaterThan(index ? (steps[index - 1] ?? -1) : 0);
     }
     for (const rule of [
+      "which can differ from the literal request or the thread it came from",
+      "On a correction, restate, then re-pick the kind and re-size from step 3.",
+      "This is the product-direction question that `never-block-on-the-human` allows",
+      "Skip the `ask` when the user said not to ask or no live user is present.",
+      "When you skip it, or the `ask` returns cancelled, proceed on the stated line and say it was not confirmed.",
+      "A step 8 escalation does not ask again.",
+      "T0 and T1 state the line and keep going.",
       "except `execute`, which is always Spec-backed: call the `tier` tool with tier 2 and reason `execute` first",
       "If what you learned contradicts the kind, re-pick it from the table; a non-build kind then opens its Playbook as in step 3.",
       "| `feature` | New or changed behavior, including a change to behavior that tests or docs pin as intended, whatever the user calls it. |",
