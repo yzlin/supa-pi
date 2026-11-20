@@ -172,6 +172,20 @@ The table shows the round 3 run (`repair-3`, after two repair rounds and a hub w
 - Round 7 (`repair-7`, worktree `1ea2883`): after the review fixes (the guard resolves `..` in Spec paths; `spec-path` needs an accept that returned). Light: the guard refused two edits made before any Tier line, the model wrote `Tier: T1 —` and retried, all required checks true. `tier-T1` (recorded) reads false because the scorer counts the refused call as work started. Contract: 5/5 true, no refusal. Escalate: recorded only, pre-edit T2.
 - Round 8 (`repair-8`, worktree `a20c3ab`, final; `final.txt` lists it): after the guard resolves symlinks in Spec paths. Light 4/4 true, with `Tier: T1` before the first edit. Contract 5/5 true, with T2 before the Spec write. Escalate recorded only (pre-edit T2). No refusals.
 
+## Triage with the `Issue:` line and confirmation gate: 2026-11-20, new arm, 1 repetition
+
+Worktree `d1d3e190`: triage step 1 writes an `Issue:` line, and `tier-guard` refuses work after a first T2 or T3 tier until an `ask` or a `skipConfirm` call. Output: `$TMPDIR/restate-eval`.
+
+| Case | Result | Behavior |
+| --- | --- | --- |
+| `triage-light` | 4/4 true | `Issue:` line, then `T1`. No `ask`, no refusal. |
+| `triage-contract` | 5/5 true | `Issue:` line, then `T2` with `skipConfirm` ("User said rename outright, do not ask"). Spec accepted, `done`. No refusal. |
+| `triage-escalate` (recorded only) | `tests-pass`, `contract-shape` true; others false | Decoded the notice, sized `T2` before any edit, and asked to confirm the `Issue:` line. The ask was cancelled (RPC). The model then stopped with no edits to get approval for the contract change. Same outcome as 2026-11-11. |
+| `triage-repick` | 3/3 required true, `repicked` true | `Issue:` line naming the pinning test, then `T1` as a **feature**. |
+
+- Every run wrote an `Issue:` line. The guard refused nothing. The one run that skipped the `ask` passed `skipConfirm` with the user's "do not ask".
+- A cancelled `ask` unlocks the guard, but the model can still stop on its own. Here it stopped because it judged that it had no approval for the contract change.
+
 ## Triage re-pick and pre-T0 search: 2026-11-12, new arm, 1 repetition
 
 Uncommitted tree with the step 4 re-pick and pre-T0 search rules. Output: `$TMPDIR/triage-relearn-eval-1794455826`.
