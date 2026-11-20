@@ -271,7 +271,7 @@ export function lintSpec(content: string): string[] {
     );
     if (!(internal || defined.size)) {
       errors.push(
-        "## User Stories needs numbered US-n stories or exactly `N/A — internal: <reason>`.",
+        "## User Stories needs story lines that start with a US-n label (for example `1. US-1: As a …`) or exactly `N/A — internal: <reason>`.",
       );
     }
     for (const story of defined) {

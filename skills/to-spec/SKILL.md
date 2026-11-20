@@ -24,7 +24,9 @@ Write plain Markdown, no frontmatter; status lives in the Spec log. Start with `
 <Goal, locked constraints, and touched boundaries.>
 
 ## User Stories
-<Numbered stories, or the internal-only N/A line below.>
+1. US-1: As a <actor>, I want <capability>, so that <benefit>.
+2. US-2: As a <actor>, I want <capability>, so that <benefit>.
+<Or, for internal-only work, replace all stories with the single N/A line below.>
 
 ## Plan
 <Ordered work, dependencies, and literal workspace-relative paths.>
@@ -62,7 +64,7 @@ Plan uses literal workspace-relative paths where known, needed for `/execute` wr
 
 ## User Stories and Coverage
 
-User Stories are required when user- or caller-visible behavior changes. Number them `US-1` through `US-n`, using `As a <actor>, I want <capability>, so that <benefit>`. Keep one story per distinct actor+outcome, no padding.
+User Stories are required when user- or caller-visible behavior changes. Start every story line with its label `US-1` through `US-n` (`1. US-1: As a <actor>, I want <capability>, so that <benefit>.`; `- US-1: …` also works). A list number alone (`1. As a …`) is not a label, and `spec_log` `lint` rejects it. Keep one story per distinct actor+outcome, no padding.
 
 Otherwise the section is exactly one line: `N/A — internal: <reason>`. Replace `<reason>` with the concrete internal-only reason; do not add stories or extra prose to that section.
 
