@@ -25,11 +25,53 @@ describe("enforced-rules table contract", () => {
     }
   });
 
-  it("gives every row a level, with prose-only rows marked as such", () => {
+  it("gives every row a level that is a rung of the correct Playbook ladders", () => {
+    const playbook = read("skills/supapi-mode/playbooks/correct.md");
+    const ladder = (heading: string) => {
+      const start = playbook.indexOf(`**${heading}:**`);
+      expect(start).toBeGreaterThanOrEqual(0);
+      const block = playbook.slice(start).split("\n\n")[0] ?? "";
+      return [...block.matchAll(/^\s+\d\. \*\*([^:*]+?)[:,]?\*\*/gmu)].map(
+        ([, rung]) => rung?.toLowerCase(),
+      );
+    };
+    const rungs = {
+      code: ladder("Code mistakes"),
+      action: ladder("Action mistakes"),
+    };
+    expect(rungs).toEqual({
+      code: [
+        "architecture",
+        "types",
+        "a check whose failure names the fix",
+        "a behavior test",
+        "prose",
+      ],
+      action: [
+        "remove the affordance",
+        "typed-tool refusal",
+        "shell-command refusal",
+        "eval or session detector",
+        "prose",
+      ],
+    });
+    const allowed = new Set([
+      "code: architecture",
+      "code: types",
+      "code: check",
+      "code: behavior test",
+      "code: prose",
+      ...rungs.action.map((rung) => `action: ${rung}`),
+    ]);
     for (const row of rows) {
       const cells = row.split(" | ");
       expect(cells).toHaveLength(3);
-      expect(cells[2]?.replace(/ \|$/u, "").trim()).not.toBe("");
+      const level = cells[2]?.replace(/ \|$/u, "").trim();
+      expect({ row, level, allowed: allowed.has(level ?? "") }).toEqual({
+        row,
+        level,
+        allowed: true,
+      });
     }
   });
 
@@ -48,10 +90,18 @@ describe("enforced-rules table contract", () => {
     expect(alias).toContain(
       "listed in `<available_skills>` directly; do not search for it.",
     );
-    expect(read("CONTEXT-MAP.md")).toContain("docs/context/enforced-rules.md");
-    expect(read("skills/retro/SKILL.md")).toContain(
-      "name `/correct` as its separate work",
+    expect(playbook).toContain(
+      "Query recent Pi sessions for this cwd with `session_query`",
     );
-    expect(read("skills/retro/SKILL.md")).toContain("Retro stays report-only.");
+    expect(playbook).toContain(
+      "a reason, an expiry date, and the user's approval",
+    );
+    expect(playbook).toContain(
+      "A test that only checks that a sentence is present counts as prose",
+    );
+    expect(read("CONTEXT-MAP.md")).toContain("docs/context/enforced-rules.md");
+    expect(read("AGENTS.global.md")).toContain(
+      "Corrected a mistake: check `docs/context/enforced-rules.md`",
+    );
   });
 });

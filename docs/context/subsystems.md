@@ -126,21 +126,9 @@ Implemented 2026-10-04; unit/resolver tests and TUI smoke verify drawing; live T
 - Verification: per-tool args/details fixtures recorded from installed package versions; resolver tests for owned drawing, gate-off passthrough, unknown-shape Fallback, and `mcp__` prefix matching; extended TUI smoke; `bun run check`.
 - Open: none besides live TUI. The web name list and codemode missing-calls behavior are resolved; provider renderers are replaced under the same gate. Not an ADR: reversible through gates, like the parent decision.
 
-## Retro: implemented product direction
+## Retro: removed
 
-Approved by `/grill-me` on 2026-10-05; implemented as skill and native prompt text. Static contract validation does not prove model adherence or live session-review quality.
-
-- **Retro** — an explicit-only, report-only review of one or more Pi sessions that proposes changes to the agent environment, not to product code. _Avoid_: postmortem, session diagnosis.
-- Form: adapted local skill `skills/retro/SKILL.md` from Matt Pocock's MIT-licensed `skills/engineering/retro` at pinned commit `a7d038f6bf7f01b516408e95e2fb56e0b338fa6f`, with the retained notice in `skills/retro/LICENSE.upstream`. Keeps the seven upstream categories (navigation, automated checks, coding standards, steering size, tool economy, no-ops, information access) and presents candidates in severity order.
-- Invocation: `disable-model-invocation: true`; native entrypoint `prompts/retro.md` delegates to the skill like `/pr`. No `extensions/prompt-commands` entry or automatic audit or repair.
-- Target: the current session by default. Prefer available session identity; corroborate a newest-file candidate against that identity and session metadata, not recency alone. Ask if identity remains ambiguous. `/retro <session path | "last N"> [-- focus]` selects a session or cohort and optional focus. Select sessions from the current cwd and honor the configured Pi agent directory; read selected contents through `session_query`.
-- Output: report only. Each candidate has severity, category, session-and-turn evidence, destination, proposed change, and confidence. Distinguish verified facts, inference, and missing evidence; never invent entry or turn citations or quote secrets. Single-run instruction findings have low confidence. The user chooses fixes as separate work; the Final report follows `plain-report`.
-- Routing map: mechanical rule → `oxlint.config.ts`, `bun run check`, hook, or CI, after inspecting existing checks; judgement call → `rules/` plus `agents/*-reviewer.md`; navigation → `CONTEXT-MAP.md` pointer only for a real project boundary; steering bloat or no-op → trim `AGENTS.md`, `AGENTS.global.md`, or `CONTEXT.md` while preserving its product/domain purpose; recurring task → skill or prompt; tool cost or information gap → extension, CLI, or log access. Keep root/global steering spare. No `CODING_STANDARDS.md`.
-- Context pressure: implementation carries exploration, edits, and debugging; review starts with a diff and usually has less context pressure. Put judgement standards in review guidance, not always-on implementation steering.
-- Reuse: a five-line inline lens paraphrased and credited to upstream `writing-for-agents` at the same pinned commit replaces loading or vendoring that skill. Cohort tracing follows installed `agent-session-diagnostics` at its exposed skill location; full audits point to `harness-checklist` as separate work. If a specialist or required tool is unavailable, report the gap and use only supported evidence, without inventing a workflow or auditing automatically.
-- Verification surfaces: `extensions/skills/retro-contract.test.ts`, native Pi loader/template checks, README attribution, and the `CONTEXT-MAP.md` read-before entry. Contract tests check text and wiring, not live model behavior.
-- Deferred: the first `/retro` run on supa-pi, vendoring `writing-for-agents`, a `prompt-commands` entry, and a codemode cohort recipe. Not an ADR: additive and reversible.
-
+Removed 2026-11-21 at the user's request (rarely used; its repeated-mistake findings already went to `/correct`). The `retro` skill, its prompt, and its contract test are gone. Its unique input, Pi session evidence through `session_query`, moved into step 1 of the `correct` Playbook. For a broad environment audit, use the installed `harness-checklist` or `agent-session-diagnostics` skills.
 
 ## Subagent replacement: implemented and live
 
@@ -334,7 +322,7 @@ P4 status (2026-11-04): implemented ahead of the paired eval, by user decision. 
   - Playbooks: P1 opening-a-pr (from `pr`), diagnose, refactoring, bug-fix, feature, investigation, prototype; P3 fix-review-findings (from `review-fix`); P4 execute.
   - Technique skills (stay): tdd-workflow, diagnose and simplify (behind the explicit `/diagnose` and `/simplify` commands; their Playbooks stay thin and load them, as pstack Playbooks load technique skills; decided 2026-11-04), grilling, grill-me, domain-modeling, plain-report, showing-me, architecture-diagrams, context-docs, research-mode, to-spec, review-orchestration (report-only in P3), and the new `figure-it-out` (`skills/figure-it-out/`), which the Hub skill routes unmatched or large work to.
   - Reference skills (stay): react-best-practices, react-native-skills, react-view-transitions, composition-patterns, e2e-testing, security-review, performance-optimization, regex-vs-llm-structured-text, web-browser, slack-links, session-query.
-  - Utility skills (stay): retro.
+  - Removed 2026-11-21: `retro` (see "Retro: removed").
   - Principle (P2): `search-first` becomes `rules/principles/search-first.md`; its delegation steps move into the investigation Playbook.
   - Removed 2026-11-04: `wayfinder`.
 - Phases, each passing `bun run check` and its eval: P1 Hub skill, core-prompt pointer, Playbooks investigation, bug-fix, feature, refactoring, prototype, opening-a-pr, plus the `figure-it-out` Workflow skill as fallback; P2 Principles and `AGENTS.global.md` pointers; P3 review rewrite; P4 execute and goal rewrite.

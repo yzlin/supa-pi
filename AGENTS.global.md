@@ -29,6 +29,7 @@
 - Conflicts: call out; pick safer path.
 - Unrecognized changes: assume other agent; keep going; focus your changes. If it causes issues, stop + ask user.
 - Leave breadcrumb notes in thread.
+- Corrected a mistake: check `docs/context/enforced-rules.md` if the repo has one; repeat of a prose rule → fix it higher via `/correct`.
 
 ## Evidence baseline
 
