@@ -49,10 +49,11 @@ function successfulStream(selected: Model<Api>, ready: Promise<void>) {
 }
 
 /** Load the extension against a fake pi and command ctx. */
-function setup(streamReady: Promise<void> = Promise.resolve()) {
+function setup(streamReady: Promise<void> = Promise.resolve(), hasUI = false) {
   let command: CommandHandler | undefined;
   const handlers = new Map<string, EventHandler[]>();
   const sentMessages: Array<{ details?: unknown }> = [];
+  const execCalls: string[][] = [];
   let stale = false;
   const assertActive = () => {
     if (stale) {
@@ -71,6 +72,21 @@ function setup(streamReady: Promise<void> = Promise.resolve()) {
       }
     },
     getThinkingLevel: () => "off",
+    exec: (_program: string, args: string[]) => {
+      execCalls.push(args);
+      const stdout =
+        args[4] === "session.view"
+          ? JSON.stringify({
+              windows: [
+                {
+                  window_id: "window:parent",
+                  layers: [{ blocks: [{ block_id: process.env.REX_BLOCK }] }],
+                },
+              ],
+            })
+          : JSON.stringify({ layer_id: "layer:btw", block_ids: ["block:btw"] });
+      return Promise.resolve({ code: 0, stdout, stderr: "", killed: false });
+    },
     sendMessage: (message: { details?: unknown }) => {
       assertActive();
       sentMessages.push(message);
@@ -82,6 +98,7 @@ function setup(streamReady: Promise<void> = Promise.resolve()) {
   const ui = { notify: () => undefined, setWidget: () => undefined };
   const ctx = {
     model,
+    hasUI,
     scopedModels: [],
     cwd: process.cwd(),
     getSystemPrompt: () => "system",
@@ -112,6 +129,7 @@ function setup(streamReady: Promise<void> = Promise.resolve()) {
     },
     sentMessages,
     streamedApis,
+    execCalls,
   };
 }
 
@@ -122,6 +140,26 @@ async function settle() {
 }
 
 describe("/btw", () => {
+  it("opens a Rex float instead of an in-session block inside Rex", async () => {
+    const saved = { ...process.env };
+    process.env.REX_SESSION = "session:test";
+    process.env.REX_BLOCK = "block:parent";
+    try {
+      const harness = setup(Promise.resolve(), true);
+      await harness.run("say hi");
+      await settle();
+
+      expect(harness.execCalls.map((args) => args[4])).toEqual([
+        "session.view",
+        "session.new_layer",
+      ]);
+      expect(harness.streamedApis).toEqual([]);
+      expect(harness.sentMessages).toEqual([]);
+    } finally {
+      process.env = saved;
+    }
+  });
+
   it("streams through the model registry so extension-registered APIs resolve", async () => {
     const harness = setup();
 

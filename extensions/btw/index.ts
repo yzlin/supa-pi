@@ -5,10 +5,10 @@
  *   /btw check if there are any TODO comments in src/
  *   /btw -model anthropic/claude-haiku-4-5 count lines of code
  *
- * Fires off an in-process subagent (same infra as the subagent tool) and
- * shows live progress in a widget above the editor. When finished, the
- * widget is replaced by a fully rendered custom message in the chat
- * (identical to the subagent tool's result rendering).
+ * Inside a Rex terminal (REX_SESSION/REX_BLOCK set), opens a child Pi in a
+ * Rex floating layer with a snapshot of the conversation; follow-ups stay in
+ * the float. Outside Rex, fires off an in-process subagent and shows live
+ * progress in a widget above the editor, then a rendered custom message.
  *
  * Credits: This extension was originally developed by @pasky. Modified and enhanced by @yzlin.
  */
@@ -30,6 +30,7 @@ import {
   parseBtwArgs,
   resolveModelAndThinking,
 } from "./helper";
+import { openBtwFloat, rexTarget } from "./rex";
 import {
   btwTaskPreview,
   formatToolCall,
@@ -197,6 +198,31 @@ export default function (pi: ExtensionAPI) {
 
       if (!targetModel) {
         ctx.ui.notify("No model available.", "error");
+        return;
+      }
+
+      // Inside Rex, run /btw as a child Pi in a floating layer instead of an
+      // in-session block. Outside Rex, fall back to the in-session subagent.
+      const rex = ctx.hasUI ? rexTarget() : undefined;
+      if (rex) {
+        try {
+          await openBtwFloat(pi, rex, {
+            cwd: ctx.cwd,
+            task,
+            provider: targetModel.provider,
+            model: targetModel.id,
+            thinkingLevel,
+            conversationContext: buildBtwConversationContext(
+              ctx.sessionManager.getEntries(),
+              ctx.sessionManager.getLeafId(),
+            ),
+          });
+        } catch (err) {
+          ctx.ui.notify(
+            `btw float failed: ${err instanceof Error ? err.message : String(err)}`,
+            "error",
+          );
+        }
         return;
       }
 

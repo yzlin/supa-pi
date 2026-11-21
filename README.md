@@ -39,7 +39,7 @@ The configured extension set also includes workflow and utility modules such as:
 - `session-query`
 - `handoff`
 - `context`
-- `btw`
+- `btw` — side question; inside Rex it opens a child Pi in a floating layer, otherwise it runs an in-session subagent
 - `tool-display`
 - `skills`
 
