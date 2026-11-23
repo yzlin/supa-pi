@@ -79,6 +79,7 @@
       "./extensions/uv.ts",
       "./extensions/worktree-guard.ts",
       "./extensions/tier-guard.ts",
+      "./extensions/default-model.ts",
       "./extensions/agents-local"
     ]
   },
