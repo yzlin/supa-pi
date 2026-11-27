@@ -73,6 +73,7 @@
       "./extensions/notify.ts",
       "./extensions/view-image.ts",
       "./extensions/no-sleep.ts",
+      "./extensions/program-resume",
       "./extensions/trust-github-repos",
       "./extensions/whimsical",
       "./extensions/fast",
